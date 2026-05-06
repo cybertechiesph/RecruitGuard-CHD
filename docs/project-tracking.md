@@ -6,9 +6,10 @@ RecruitGuard-CHD uses GitHub Issues as the free source of truth for development 
 
 Create one GitHub Project for the repository named `RecruitGuard-CHD Development` with these views:
 
-- Board grouped by `Status`
-- Table sorted by priority, module, and updated date
-- Roadmap grouped by milestone or phase
+- `By FRS Module`: Board or table grouped by the `Module` field
+- `Module Table`: Table sorted by `Module`, priority, and updated date
+- `Workflow Board`: Board grouped by `Status`
+- optional `Roadmap`: grouped by milestone or phase
 
 Project URL:
 
@@ -23,6 +24,20 @@ Recommended status values:
 - Testing
 - Blocked
 - Done
+
+## FRS Module Review View
+
+The professor-facing view should be grouped by functional module, not only by task status.
+
+Recommended setup:
+
+- view name: `By FRS Module`
+- layout: board or table
+- group by: `Module`
+- visible fields: `Status`, `Assignees`, `Labels`, `Linked pull requests`
+- filter: open issues only, if you want to hide completed review history
+
+The repository includes `.github/workflows/project-module-sync.yml`, which creates and maintains the project `Module` field. It maps issues and pull requests to the closest FRS module using the issue title, body, and labels.
 
 ## Labels
 
@@ -137,3 +152,10 @@ Recommended classic token setup:
 - avoid broad scopes such as `repo`, `admin:repo_hook`, `workflow`, `delete_repo`, `admin:org`, or `user`
 
 After the secret is added, new issues and pull requests should be added to `https://github.com/users/cybertechiesph/projects/1` automatically.
+
+The `.github/workflows/project-module-sync.yml` workflow uses the same secret to:
+
+- create the `Module` project field if it does not exist
+- add open issues and pull requests to the project if missing
+- assign each item to the matching FRS module
+- keep future issue and pull request module values synced
