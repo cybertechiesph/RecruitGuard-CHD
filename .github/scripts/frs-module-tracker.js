@@ -247,7 +247,7 @@ const modules = [
     number: 7,
     title: "Examination Management",
     label: "module:examination",
-    status: "Done",
+    status: "In Progress",
     groups: [
       "Examination Record Handling",
       "Examination Status and Validity",
@@ -274,7 +274,7 @@ const modules = [
     number: 8,
     title: "Interview and Rating Management",
     label: "module:interview-rating",
-    status: "Done",
+    status: "In Progress",
     groups: [
       "Interview Scheduling",
       "Interview Ratings",
@@ -302,7 +302,7 @@ const modules = [
     number: 9,
     title: "Deliberation and Decision Support",
     label: "module:deliberation",
-    status: "Done",
+    status: "In Progress",
     groups: [
       "Consolidation of Evaluation Outputs",
       "Deliberation Record Handling",
@@ -330,7 +330,7 @@ const modules = [
     number: 10,
     title: "Decision and Approval Handling",
     label: "module:decision-approval",
-    status: "Done",
+    status: "In Progress",
     groups: [
       "Submission Packet Preparation",
       "Final Decision Recording",
@@ -358,7 +358,7 @@ const modules = [
     number: 11,
     title: "Notification Management",
     label: "module:notifications",
-    status: "Done",
+    status: "In Progress",
     groups: [
       "Submission and Status Notifications",
       "Selection and Non-Selection Notifications",
@@ -384,7 +384,7 @@ const modules = [
     number: 12,
     title: "Appointment and Contract Completion",
     label: "module:completion",
-    status: "Done",
+    status: "In Progress",
     groups: [
       "Plantilla Completion Tracking",
       "COS Completion Tracking",
