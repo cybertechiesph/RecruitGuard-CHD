@@ -62,7 +62,7 @@ jobs:
               },
               {
                 name: "Document Review and Qualification Screening",
-                color: "PURPLE",
+                color: "PINK",
                 patterns: ["document review and qualification screening", "module:screening", "screening", "qualification"]
               },
               {
@@ -97,7 +97,7 @@ jobs:
               },
               {
                 name: "Evidence Vault and Record Management",
-                color: "PURPLE",
+                color: "PINK",
                 patterns: ["evidence vault and record management", "module:evidence-vault", "evidence vault", "evidence"]
               },
               {
@@ -190,7 +190,8 @@ jobs:
                 projectId: project.id,
                 options: moduleOptions.map((option) => ({
                   name: option.name,
-                  color: option.color
+                  color: option.color,
+                  description: option.name
                 }))
               });
 
