@@ -25,159 +25,176 @@ jobs:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
+            const body = (lines) => lines.join("\n");
 
             const issues = [
               {
                 title: "[Task]: Configure GitHub Projects board and repository labels",
                 labels: ["type:task", "priority:p1"],
-                body: `## Desired outcome
-Create the repository project board and labels described in \`docs/project-tracking.md\` so issues can be filtered by type, priority, branch, module, and risk.
-
-## Checklist
-- [x] Create GitHub Project named \`RecruitGuard-CHD Development\`.
-- [x] Add repository automation for project tracking.
-- [ ] Review and finalize project views.
-- [ ] Review generated labels after starter issues are created.
-
-## References
-- \`docs/project-tracking.md\``
+                body: body([
+                  "## Desired outcome",
+                  "Create the repository project board and labels described in `docs/project-tracking.md` so issues can be filtered by type, priority, branch, module, and risk.",
+                  "",
+                  "## Checklist",
+                  "- [x] Create GitHub Project named `RecruitGuard-CHD Development`.",
+                  "- [x] Add repository automation for project tracking.",
+                  "- [ ] Review and finalize project views.",
+                  "- [ ] Review generated labels after starter issues are created.",
+                  "",
+                  "## References",
+                  "- `docs/project-tracking.md`"
+                ])
               },
               {
                 title: "[Task]: Run full test suite and record baseline",
                 labels: ["type:test", "priority:p1"],
-                body: `## Desired outcome
-Establish the current passing test baseline after the initial GitHub import.
-
-## Checklist
-- [ ] Install dependencies in a clean virtual environment.
-- [ ] Copy \`.env.example\` to \`.env\` and use synthetic local values.
-- [ ] Run Django migrations.
-- [ ] Run the full Django test suite.
-- [ ] Record test count, failures, and environment notes in this issue.`
+                body: body([
+                  "## Desired outcome",
+                  "Establish the current passing test baseline after the initial GitHub import.",
+                  "",
+                  "## Checklist",
+                  "- [ ] Install dependencies in a clean virtual environment.",
+                  "- [ ] Copy `.env.example` to `.env` and use synthetic local values.",
+                  "- [ ] Run Django migrations.",
+                  "- [ ] Run the full Django test suite.",
+                  "- [ ] Record test count, failures, and environment notes in this issue."
+                ])
               },
               {
                 title: "[Feature]: Verify branch and level routing rules",
                 labels: ["type:feature", "priority:p0", "module:routing", "routing", "security", "workflow"],
-                body: `## Summary
-Confirm that Level 1 cases route to Secretariat, Level 2 cases route to HRM Chief, and Secretariat cannot process Level 2 cases unless a controlled audit-logged override exists.
-
-## Recruitment branch
-Shared
-
-## Core module
-Branch-Aware and Level-Aware Routing
-
-## Acceptance criteria
-- [ ] Level 1 Plantilla and COS cases route to Secretariat where applicable.
-- [ ] Level 2 Plantilla and COS cases route to HRM Chief where applicable.
-- [ ] Secretariat receives a server-side denial for Level 2 processing without override.
-- [ ] Controlled override behavior is explicitly tested and audit-logged.
-- [ ] Tests cover both Plantilla and COS paths where the same internal control applies.
-
-## References
-- \`docs/routing-rules.md\`
-- \`docs/workflow-rules.md\`
-- \`docs/security-rules.md\``
+                body: body([
+                  "## Summary",
+                  "Confirm that Level 1 cases route to Secretariat, Level 2 cases route to HRM Chief, and Secretariat cannot process Level 2 cases unless a controlled audit-logged override exists.",
+                  "",
+                  "## Recruitment branch",
+                  "Shared",
+                  "",
+                  "## Core module",
+                  "Branch-Aware and Level-Aware Routing",
+                  "",
+                  "## Acceptance criteria",
+                  "- [ ] Level 1 Plantilla and COS cases route to Secretariat where applicable.",
+                  "- [ ] Level 2 Plantilla and COS cases route to HRM Chief where applicable.",
+                  "- [ ] Secretariat receives a server-side denial for Level 2 processing without override.",
+                  "- [ ] Controlled override behavior is explicitly tested and audit-logged.",
+                  "- [ ] Tests cover both Plantilla and COS paths where the same internal control applies.",
+                  "",
+                  "## References",
+                  "- `docs/routing-rules.md`",
+                  "- `docs/workflow-rules.md`",
+                  "- `docs/security-rules.md`"
+                ])
               },
               {
                 title: "[Feature]: Review Evidence Vault encryption and integrity flow",
                 labels: ["type:feature", "priority:p0", "module:evidence-vault", "module:export-integrity", "security", "evidence", "audit"],
-                body: `## Summary
-Validate that evidence storage, retrieval, versioning, export, SHA-256 integrity, and AES-256-GCM handling match the locked stack and security rules.
-
-## Recruitment branch
-Shared
-
-## Core module
-Evidence Vault and Record Management
-
-## Acceptance criteria
-- [ ] Evidence upload size and type validations are enforced.
-- [ ] Evidence bytes are encrypted using configured AES-256-GCM secret material.
-- [ ] SHA-256 digest is stored and shown in integrity outputs.
-- [ ] Evidence download and access actions are permission-checked and audit-logged.
-- [ ] Export bundles include integrity verification output.
-
-## References
-- \`docs/security-rules.md\`
-- \`docs/modules.md\`
-- \`docs/ERD-FULL.md\``
+                body: body([
+                  "## Summary",
+                  "Validate that evidence storage, retrieval, versioning, export, SHA-256 integrity, and AES-256-GCM handling match the locked stack and security rules.",
+                  "",
+                  "## Recruitment branch",
+                  "Shared",
+                  "",
+                  "## Core module",
+                  "Evidence Vault and Record Management",
+                  "",
+                  "## Acceptance criteria",
+                  "- [ ] Evidence upload size and type validations are enforced.",
+                  "- [ ] Evidence bytes are encrypted using configured AES-256-GCM secret material.",
+                  "- [ ] SHA-256 digest is stored and shown in integrity outputs.",
+                  "- [ ] Evidence download and access actions are permission-checked and audit-logged.",
+                  "- [ ] Export bundles include integrity verification output.",
+                  "",
+                  "## References",
+                  "- `docs/security-rules.md`",
+                  "- `docs/modules.md`",
+                  "- `docs/ERD-FULL.md`"
+                ])
               },
               {
                 title: "[Feature]: QA applicant intake and OTP verification",
                 labels: ["type:feature", "priority:p1", "module:intake-otp", "branch:shared", "security"],
-                body: `## Summary
-Verify the applicant-facing submission path, OTP lifecycle, receipt, and status lookup using synthetic applicant data.
-
-## Recruitment branch
-Shared
-
-## Core module
-Applicant Intake and OTP Verification
-
-## Acceptance criteria
-- [ ] Applicant can view active vacancies/openings.
-- [ ] Applicant can submit required documents.
-- [ ] OTP is generated, hashed, sent through the configured email service, and expires correctly.
-- [ ] Verified applications produce a receipt/reference.
-- [ ] Status lookup does not leak protected internal data.
-
-## References
-- \`docs/FRS.md\`
-- \`docs/use-cases.md\`
-- \`docs/security-rules.md\``
+                body: body([
+                  "## Summary",
+                  "Verify the applicant-facing submission path, OTP lifecycle, receipt, and status lookup using synthetic applicant data.",
+                  "",
+                  "## Recruitment branch",
+                  "Shared",
+                  "",
+                  "## Core module",
+                  "Applicant Intake and OTP Verification",
+                  "",
+                  "## Acceptance criteria",
+                  "- [ ] Applicant can view active vacancies/openings.",
+                  "- [ ] Applicant can submit required documents.",
+                  "- [ ] OTP is generated, hashed, sent through the configured email service, and expires correctly.",
+                  "- [ ] Verified applications produce a receipt/reference.",
+                  "- [ ] Status lookup does not leak protected internal data.",
+                  "",
+                  "## References",
+                  "- `docs/FRS.md`",
+                  "- `docs/use-cases.md`",
+                  "- `docs/security-rules.md`"
+                ])
               },
               {
                 title: "[Feature]: QA evaluation stage locks",
                 labels: ["type:feature", "priority:p1", "module:screening", "module:examination", "module:interview-rating", "workflow"],
-                body: `## Summary
-Confirm that screening, examination, and interview records can only be created, updated, finalized, or locked by the allowed actors at the allowed workflow stages.
-
-## Recruitment branch
-Shared
-
-## Core module
-Document Review and Qualification Screening
-
-## Acceptance criteria
-- [ ] Screening records respect actor and stage restrictions.
-- [ ] Examination records respect actor and stage restrictions.
-- [ ] Interview sessions and ratings respect actor and stage restrictions.
-- [ ] Finalized stages become read-only except through documented controlled reopen paths.
-- [ ] Audit logs are created for protected workflow actions.
-
-## References
-- \`docs/workflow-rules.md\`
-- \`docs/security-rules.md\``
+                body: body([
+                  "## Summary",
+                  "Confirm that screening, examination, and interview records can only be created, updated, finalized, or locked by the allowed actors at the allowed workflow stages.",
+                  "",
+                  "## Recruitment branch",
+                  "Shared",
+                  "",
+                  "## Core module",
+                  "Document Review and Qualification Screening",
+                  "",
+                  "## Acceptance criteria",
+                  "- [ ] Screening records respect actor and stage restrictions.",
+                  "- [ ] Examination records respect actor and stage restrictions.",
+                  "- [ ] Interview sessions and ratings respect actor and stage restrictions.",
+                  "- [ ] Finalized stages become read-only except through documented controlled reopen paths.",
+                  "- [ ] Audit logs are created for protected workflow actions.",
+                  "",
+                  "## References",
+                  "- `docs/workflow-rules.md`",
+                  "- `docs/security-rules.md`"
+                ])
               },
               {
                 title: "[Task]: Prepare demo data and script",
                 labels: ["type:task", "type:docs", "priority:p2"],
-                body: `## Desired outcome
-Prepare a synthetic demonstration flow for thesis review without using real applicant or employee data.
-
-## Checklist
-- [ ] Define synthetic users for each direct actor.
-- [ ] Define at least one Plantilla Level 1 flow.
-- [ ] Define at least one Plantilla Level 2 flow.
-- [ ] Define at least one COS flow.
-- [ ] Include evidence, audit, notification, and export checkpoints.
-- [ ] Confirm no real personal data appears in demo records or screenshots.`
+                body: body([
+                  "## Desired outcome",
+                  "Prepare a synthetic demonstration flow for thesis review without using real applicant or employee data.",
+                  "",
+                  "## Checklist",
+                  "- [ ] Define synthetic users for each direct actor.",
+                  "- [ ] Define at least one Plantilla Level 1 flow.",
+                  "- [ ] Define at least one Plantilla Level 2 flow.",
+                  "- [ ] Define at least one COS flow.",
+                  "- [ ] Include evidence, audit, notification, and export checkpoints.",
+                  "- [ ] Confirm no real personal data appears in demo records or screenshots."
+                ])
               },
               {
                 title: "[Task]: Deployment readiness review",
                 labels: ["type:task", "priority:p2", "security"],
-                body: `## Desired outcome
-Prepare the application for a secure hosted or review environment while preserving the locked technology stack.
-
-## Checklist
-- [ ] Confirm production \`.env\` requirements.
-- [ ] Confirm PostgreSQL settings.
-- [ ] Confirm Gmail SMTP settings.
-- [ ] Confirm secure cookie and HTTPS settings.
-- [ ] Confirm static and media handling.
-- [ ] Confirm backup/export handling for evidence records.
-- [ ] Confirm no hard-coded secrets exist in committed files.`
+                body: body([
+                  "## Desired outcome",
+                  "Prepare the application for a secure hosted or review environment while preserving the locked technology stack.",
+                  "",
+                  "## Checklist",
+                  "- [ ] Confirm production `.env` requirements.",
+                  "- [ ] Confirm PostgreSQL settings.",
+                  "- [ ] Confirm Gmail SMTP settings.",
+                  "- [ ] Confirm secure cookie and HTTPS settings.",
+                  "- [ ] Confirm static and media handling.",
+                  "- [ ] Confirm backup/export handling for evidence records.",
+                  "- [ ] Confirm no hard-coded secrets exist in committed files."
+                ])
               }
             ];
 
