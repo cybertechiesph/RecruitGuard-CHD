@@ -158,13 +158,16 @@ def workflow_stages(branch):
                 "short_label": "HRMPSB",
             }
         )
-    stages.extend(
-        [
+    if branch == PositionPosting.Branch.PLANTILLA:
+        stages.append(
             {
                 "value": RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW,
                 "label": RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW.label,
                 "short_label": "Authority",
-            },
+            }
+        )
+    stages.extend(
+        [
             {
                 "value": RecruitmentCase.Stage.COMPLETION,
                 "label": RecruitmentCase.Stage.COMPLETION.label,

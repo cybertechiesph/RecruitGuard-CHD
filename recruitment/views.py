@@ -246,6 +246,14 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
         )
         context["final_decision_history"] = get_final_decision_history(application)
         context["latest_final_decision"] = get_latest_final_decision(application)
+        if application.branch == PositionPosting.Branch.COS:
+            context["decision_record_label"] = "COS Selection"
+            context["decision_actor_label"] = "HRM Chief"
+            context["decision_completion_label"] = "contract"
+        else:
+            context["decision_record_label"] = "Final Decision"
+            context["decision_actor_label"] = "Appointing Authority"
+            context["decision_completion_label"] = "appointment"
         if user.role == RecruitmentUser.Role.SYSTEM_ADMIN:
             context["audit_log_url"] = reverse("application-audit-log", kwargs={"pk": application.pk})
             context["evidence_items"] = list(

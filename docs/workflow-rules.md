@@ -21,6 +21,7 @@
 - Not identical to Plantilla
 - Steps are applied where applicable
 - No additional COS-specific actor is introduced beyond current internal roles
+- After HRM Chief deliberation, COS selection may be recorded by the HRM Chief and routed directly to completion tracking; Appointing Authority signing is not part of the COS path.
 
 ## Routing Principles
 - Level 1 -> Secretariat

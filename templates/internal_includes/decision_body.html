@@ -428,9 +428,9 @@
 <div class="rg-icard">
     <div class="rg-icard__header">
         <div>
-            <h3 class="rg-icard__title">Final Decision</h3>
+            <h3 class="rg-icard__title">{{ decision_record_label|default:"Final Decision" }}</h3>
             <p class="rg-icard__subtitle">
-                Select an outcome and provide supporting notes.
+                Select an outcome and provide supporting notes as {{ decision_actor_label|default:"Appointing Authority" }}.
                 This action is <strong>permanent</strong> and cannot be undone.
             </p>
         </div>
@@ -458,7 +458,7 @@
                     <span class="rg-dec-choice-btn__body">
                         <span class="rg-dec-choice-btn__title">Selected</span>
                         <span class="rg-dec-choice-btn__sub">
-                            Applicant is recommended for appointment
+                            Applicant proceeds to {{ decision_completion_label|default:"appointment" }}
                         </span>
                     </span>
                 </button>
@@ -470,7 +470,7 @@
                     <span class="rg-dec-choice-btn__body">
                         <span class="rg-dec-choice-btn__title">Not Selected</span>
                         <span class="rg-dec-choice-btn__sub">
-                            Applicant will not proceed to appointment
+                            Applicant will not proceed to {{ decision_completion_label|default:"appointment" }}
                         </span>
                     </span>
                 </button>
@@ -493,7 +493,7 @@
                 id="{{ final_decision_form.decision_notes.id_for_label }}"
                 class="form-control{% if final_decision_form.decision_notes.errors %} is-invalid{% endif %}"
                 rows="6"
-                placeholder="Provide the rationale and basis for this decision. Include any relevant considerations from the deliberation, assessment scores, and applicable CSC regulations."
+                placeholder="Provide the rationale and basis for this decision. Include any relevant considerations from the deliberation, assessment scores, and applicable recruitment rules."
                 style="font-size:0.8125rem;">{{ final_decision_form.decision_notes.value|default:"" }}</textarea>
             {% if final_decision_form.decision_notes.errors %}
                 <div class="invalid-feedback" style="font-size:0.8rem;">
@@ -509,7 +509,7 @@
         <div class="d-flex justify-content-end">
             <button type="button" class="btn btn-rg-primary btn-sm"
                     id="dec-open-modal-btn" disabled>
-                <i class="bi bi-lock-fill me-1"></i>Record Final Decision&hellip;
+                <i class="bi bi-lock-fill me-1"></i>Record {{ decision_record_label|default:"Final Decision" }}&hellip;
             </button>
         </div>
 
@@ -529,7 +529,7 @@
         </span>
     </div>
     <button type="button" class="btn-rg-finalize" id="dec-finalize-btn" disabled>
-        <i class="bi bi-lock-fill me-1"></i>Record Final Decision
+        <i class="bi bi-lock-fill me-1"></i>Record {{ decision_record_label|default:"Final Decision" }}
     </button>
 </div>
 
@@ -557,14 +557,14 @@
                  style="background:var(--rg-primary);border-bottom:none;padding:1rem 1.25rem;">
                 <h5 class="modal-title" id="decConfirmModalLabel"
                     style="font-size:0.9375rem;font-weight:700;color:#fff;margin:0;">
-                    Confirm Final Decision
+                    Confirm {{ decision_record_label|default:"Final Decision" }}
                 </h5>
                 <button type="button" class="btn-close btn-close-white"
                         data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body"
                  style="padding:1.25rem;font-size:0.8125rem;color:#374151;line-height:1.65;">
-                <p class="mb-2">You are about to record a permanent final decision for:</p>
+                <p class="mb-2">You are about to record a permanent {{ decision_record_label|default:"final decision"|lower }} for:</p>
                 <ul class="mb-3" style="padding-left:1.2rem;">
                     <li><strong>Applicant:</strong> <span id="dec-modal-name">—</span></li>
                     <li><strong>Position:</strong> <span id="dec-modal-position">—</span></li>

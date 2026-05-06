@@ -789,7 +789,7 @@ def _workflow_detail_sequence(application):
         return ["screening", "exam", "actions"]
     if current_stage == RecruitmentCase.Stage.HRM_CHIEF_REVIEW:
         if application.branch == PositionPosting.Branch.COS:
-            return ["screening", "exam", "interview", "deliberation", "actions"]
+            return ["screening", "exam", "interview", "deliberation", "decision"]
         return ["screening", "exam", "actions"]
     if current_stage == RecruitmentCase.Stage.HRMPSB_REVIEW:
         return ["interview", "deliberation", "actions"]
@@ -1209,14 +1209,21 @@ def get_latest_final_decision(application):
     return get_final_decision_history(application).first()
 
 
+def _final_decision_stage_and_role(application):
+    if application.branch == PositionPosting.Branch.COS:
+        return RecruitmentCase.Stage.HRM_CHIEF_REVIEW, RecruitmentUser.Role.HRM_CHIEF
+    return RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW, RecruitmentUser.Role.APPOINTING_AUTHORITY
+
+
 def user_can_record_final_decision(user, application):
     current_stage = get_current_review_stage(application)
+    expected_stage, expected_role = _final_decision_stage_and_role(application)
     if (
-        current_stage != RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW
+        current_stage != expected_stage
         or get_current_workflow_section(application) != "decision"
     ):
         return False
-    if user.role != RecruitmentUser.Role.APPOINTING_AUTHORITY:
+    if user.role != expected_role:
         return False
     return user_can_process_application(user, application)
 
@@ -3353,13 +3360,16 @@ def record_final_decision(application, actor, cleaned_data):
         raise ValueError("A recruitment case must exist before a final decision can be recorded.")
     if application.case.is_stage_locked:
         raise ValueError("This recruitment case is stage-locked. Use controlled reopen before proceeding.")
+    expected_stage, expected_role = _final_decision_stage_and_role(application)
     if not user_can_record_final_decision(actor, application):
+        expected_role_label = RecruitmentUser.Role(expected_role).label
         raise ValueError(
-            "Only the Appointing Authority may record the final decision at the current workflow stage."
+            f"Only the {expected_role_label} may record the final decision at the current workflow stage."
         )
-    if application.case.current_stage != RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW:
+    if application.case.current_stage != expected_stage:
+        expected_stage_label = RecruitmentCase.Stage(expected_stage).label
         raise ValueError(
-            "Final decisions may only be recorded during the Appointing Authority review stage."
+            f"Final decisions may only be recorded during the {expected_stage_label} stage."
         )
 
     submission_packet = build_submission_packet(application)
@@ -3375,7 +3385,7 @@ def record_final_decision(application, actor, cleaned_data):
         application=application,
         recruitment_case=application.case,
         recruitment_entry=application.position,
-        review_stage=RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW,
+        review_stage=expected_stage,
         decided_by=actor,
         branch=application.branch,
         level=application.level,
@@ -3407,9 +3417,17 @@ def record_final_decision(application, actor, cleaned_data):
         actor=actor,
         action=AuditLog.Action.DECISION_RECORDED,
         description=(
-            "Final decision recorded as selected by the Appointing Authority."
+            (
+                "COS selection recorded as selected by the HRM Chief."
+                if application.branch == PositionPosting.Branch.COS
+                else "Final decision recorded as selected by the Appointing Authority."
+            )
             if decision.is_selected
-            else "Final decision recorded as not selected by the Appointing Authority."
+            else (
+                "COS selection recorded as not selected by the HRM Chief."
+                if application.branch == PositionPosting.Branch.COS
+                else "Final decision recorded as not selected by the Appointing Authority."
+            )
         ),
         metadata={
             "final_decision_id": decision.id,

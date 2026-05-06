@@ -197,7 +197,7 @@
             
             {% if current_detail_tab.key == "decision" %}
             <div class="rg-cws-stage-section" id="cws-decision">
-                {% include "internal_includes/stage_titlebar.html" with title="Final Decision" locked=latest_final_decision %}
+                {% include "internal_includes/stage_titlebar.html" with title=decision_record_label locked=latest_final_decision %}
 
                 {% if final_decision_form %}
                     
@@ -209,7 +209,7 @@
 
                 {% else %}
                     
-                    {% include "internal_includes/state_empty.html" with title="Final Decision not yet available" copy="This stage will become active once the case advances to Appointing Authority review." %}
+                    {% include "internal_includes/state_empty.html" with title="Decision not yet available" copy="This stage will become active once the case advances to the branch-appropriate decision step." %}
                 {% endif %}
             </div>
             {% endif %}

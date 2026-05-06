@@ -29,7 +29,7 @@ All 15 FRS modules are represented in the system implementation. Modules 1-6 and
 | 7 | Examination Management | In Progress | Exam records, score/result/status/validity/waiver handling, finalization lock, exam tests; pending manual review |
 | 8 | Interview and Rating Management | In Progress | Interview sessions, evaluator ratings, justifications, fallback sheet upload to Evidence Vault, interview tests; pending manual review |
 | 9 | Deliberation and Decision Support | In Progress | Consolidation, deliberation records, ranking/CAR support, ReportLab CAR generation, deliberation tests; pending manual review |
-| 10 | Decision and Approval Handling | In Progress | Submission packet, final decision records, selected/not-selected routing and locks, decision tests; pending manual review |
+| 10 | Decision and Approval Handling | In Progress | Submission packet, Plantilla Appointing Authority final decisions, COS HRM Chief selection routing, selected/not-selected routing and locks, decision tests; pending manual review |
 | 11 | Notification Management | In Progress | Submission, selected, non-selected, checklist, and reminder notifications with logs/audit, notification tests; pending manual review |
 | 12 | Appointment and Contract Completion | In Progress | Plantilla appointment and COS contract completion tracking, requirement checklist, case closure, completion tests; pending manual review |
 | 13 | Evidence Vault and Record Management | Done | Central evidence metadata, AES-256-GCM encrypted bytes, SHA-256 digest, versioning, archive/search/download, evidence tests |

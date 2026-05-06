@@ -373,7 +373,6 @@ class BaseRecruitmentTestCase(TestCase):
             self.finalize_exam_for_current_stage(application, self.hrm_chief)
             self.finalize_interview_for_current_stage(application, self.hrm_chief)
             self.finalize_deliberation_for_current_stage(application, self.hrm_chief)
-            process_workflow_action(application, self.hrm_chief, "endorse", "Forward to Appointing Authority.")
         application.refresh_from_db()
         return application
 
@@ -435,10 +434,15 @@ class BaseRecruitmentTestCase(TestCase):
     def make_selected_application(self, position):
         application = self.make_application(position)
         self.move_application_to_appointing_review(application)
+        decision_actor = (
+            self.hrm_chief
+            if application.branch == PositionPosting.Branch.COS
+            else self.appointing
+        )
         with self.captureOnCommitCallbacks(execute=True):
             self.record_final_decision_for_current_stage(
                 application,
-                self.appointing,
+                decision_actor,
                 decision_outcome=FinalDecision.Outcome.SELECTED,
                 decision_notes="Approved for completion tracking.",
             )
@@ -2126,7 +2130,7 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.HRMPSB_REVIEW)
         self.assertFalse(WorkflowOverride.objects.filter(application=application).exists())
 
-    def test_cos_skips_hrmpsb_stage(self):
+    def test_cos_skips_hrmpsb_and_appointing_authority_stage(self):
         application = self.make_application(self.cos_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
@@ -2140,10 +2144,27 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         self.finalize_exam_for_current_stage(application, self.hrm_chief)
         self.finalize_interview_for_current_stage(application, self.hrm_chief)
         self.finalize_deliberation_for_current_stage(application, self.hrm_chief)
-        process_workflow_action(application, self.hrm_chief, "endorse", "COS endorsed.")
         application.refresh_from_db()
-        self.assertEqual(application.current_handler_role, RecruitmentUser.Role.APPOINTING_AUTHORITY)
-        self.assertEqual(application.status, RecruitmentApplication.Status.APPOINTING_AUTHORITY_REVIEW)
+        self.assertEqual(application.current_handler_role, RecruitmentUser.Role.HRM_CHIEF)
+        self.assertEqual(application.status, RecruitmentApplication.Status.HRM_CHIEF_REVIEW)
+        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.HRM_CHIEF_REVIEW)
+
+        with self.assertRaisesMessage(ValueError, "Complete the current workflow task before proceeding."):
+            process_workflow_action(application, self.hrm_chief, "endorse", "COS endorsed.")
+
+        with self.captureOnCommitCallbacks(execute=True):
+            decision = self.record_final_decision_for_current_stage(
+                application,
+                self.hrm_chief,
+                decision_outcome=FinalDecision.Outcome.SELECTED,
+                decision_notes="COS selected after HRM Chief deliberation.",
+            )
+        application.refresh_from_db()
+        self.assertEqual(decision.decided_by, self.hrm_chief)
+        self.assertEqual(decision.review_stage, RecruitmentCase.Stage.HRM_CHIEF_REVIEW)
+        self.assertEqual(application.status, RecruitmentApplication.Status.APPROVED)
+        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.COMPLETION)
+        self.assertEqual(application.current_handler_role, RecruitmentUser.Role.SECRETARIAT)
 
 
 class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
@@ -3732,12 +3753,11 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         self.finalize_exam_for_current_stage(application, self.hrm_chief)
         self.finalize_interview_for_current_stage(application, self.hrm_chief)
         self.finalize_deliberation_for_current_stage(application, self.hrm_chief)
-        process_workflow_action(application, self.hrm_chief, "endorse", "COS endorsed.")
 
         with self.captureOnCommitCallbacks(execute=True):
             self.record_final_decision_for_current_stage(
                 application,
-                self.appointing,
+                self.hrm_chief,
                 decision_outcome=FinalDecision.Outcome.SELECTED,
                 decision_notes="Approved.",
             )
@@ -4621,7 +4641,7 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
 
         decision = self.record_final_decision_for_current_stage(
             application,
-            self.appointing,
+            self.hrm_chief,
             decision_outcome=FinalDecision.Outcome.NOT_SELECTED,
             decision_notes="Not selected after reviewing final records.",
         )
@@ -4629,6 +4649,8 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         application.case.refresh_from_db()
 
         self.assertEqual(decision.decision_outcome, FinalDecision.Outcome.NOT_SELECTED)
+        self.assertEqual(decision.decided_by, self.hrm_chief)
+        self.assertEqual(decision.review_stage, RecruitmentCase.Stage.HRM_CHIEF_REVIEW)
         self.assertEqual(application.status, RecruitmentApplication.Status.REJECTED)
         self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.CLOSED)
         self.assertTrue(application.case.is_stage_locked)
@@ -4638,6 +4660,26 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
                 notification_type=NotificationLog.NotificationType.NON_SELECTED_APPLICANT,
             ).exists()
         )
+
+    def test_appointing_authority_cannot_record_cos_selection(self):
+        application = self.make_application(self.cos_position)
+        self.move_application_to_appointing_review(application)
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "Only the HRM Chief may record the final decision at the current workflow stage.",
+        ):
+            self.record_final_decision_for_current_stage(
+                application,
+                self.appointing,
+                decision_outcome=FinalDecision.Outcome.SELECTED,
+                decision_notes="COS should not require Appointing Authority signing.",
+            )
+
+        self.assertFalse(FinalDecision.objects.filter(application=application).exists())
+        application.refresh_from_db()
+        self.assertEqual(application.status, RecruitmentApplication.Status.HRM_CHIEF_REVIEW)
+        self.assertEqual(application.current_handler_role, RecruitmentUser.Role.HRM_CHIEF)
 
     def test_application_detail_exposes_decision_packet_sections(self):
         application = self.make_application(self.level1_position)

@@ -1521,11 +1521,19 @@ class FinalDecision(TimestampedModel):
     class Meta:
         ordering = ["-decided_at", "-created_at"]
 
+    def _expected_review_stage_and_decider_role(self):
+        branch = self.application.branch if self.application_id else self.branch
+        if branch == PositionPosting.Branch.COS:
+            return RecruitmentCase.Stage.HRM_CHIEF_REVIEW, RecruitmentUser.Role.HRM_CHIEF
+        return RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW, RecruitmentUser.Role.APPOINTING_AUTHORITY
+
     def clean(self):
         errors = {}
-        if self.review_stage != RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW:
+        expected_stage, expected_role = self._expected_review_stage_and_decider_role()
+        if self.review_stage != expected_stage:
+            expected_stage_label = RecruitmentCase.Stage(expected_stage).label
             errors["review_stage"] = (
-                "Final decisions are only supported during the Appointing Authority review stage."
+                f"Final decisions are only supported during the {expected_stage_label} stage."
             )
         if not self.recruitment_case_id:
             errors["recruitment_case"] = "Final decisions must be linked to the recruitment case."
@@ -1541,8 +1549,9 @@ class FinalDecision(TimestampedModel):
             errors["recruitment_entry"] = (
                 "Final decisions must stay linked to the recruitment entry of the same application."
             )
-        if self.decided_by.role != RecruitmentUser.Role.APPOINTING_AUTHORITY:
-            errors["decided_by"] = "Only the Appointing Authority may record a final decision."
+        if self.decided_by.role != expected_role:
+            expected_role_label = RecruitmentUser.Role(expected_role).label
+            errors["decided_by"] = f"Only the {expected_role_label} may record this final decision."
         if not self.submission_packet_snapshot:
             errors["submission_packet_snapshot"] = (
                 "Final decisions must preserve the submission packet snapshot."
@@ -1553,9 +1562,9 @@ class FinalDecision(TimestampedModel):
     def save(self, *args, **kwargs):
         self.recruitment_case = getattr(self.application, "case", None)
         self.recruitment_entry = self.application.position
-        self.review_stage = RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW
         self.branch = self.application.branch
         self.level = self.application.level
+        self.review_stage, _ = self._expected_review_stage_and_decider_role()
         self.decided_by_role = self.decided_by.role
         super().save(*args, **kwargs)
 
