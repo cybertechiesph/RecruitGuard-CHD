@@ -1,0 +1,27 @@
+{% comment %}
+Loading / skeleton state partial.
+Usage:
+  {% include "internal_includes/state_loading.html" with
+      label="Loading applications..."
+      rows=5
+      spinner=True
+  %}
+All parameters optional. Default: spinner + 3 skeleton rows.
+{% endcomment %}
+{% with row_count=rows|default:3 %}
+<div class="rg-istate-loading" role="status" aria-live="polite">
+    {% if spinner is not False %}
+        <div class="rg-spinner" aria-hidden="true"></div>
+    {% endif %}
+    <p class="rg-istate-loading__label">{{ label|default:"Loading…" }}</p>
+</div>
+<div aria-hidden="true">
+    {% for i in row_count|make_list %}
+        <div class="rg-skeleton-row">
+            <div class="rg-skeleton rg-skeleton-line rg-skeleton-line--lg" style="width: 40%"></div>
+            <div class="rg-skeleton rg-skeleton-line" style="width: 70%"></div>
+            <div class="rg-skeleton rg-skeleton-line rg-skeleton-line--sm" style="width: 55%"></div>
+        </div>
+    {% endfor %}
+</div>
+{% endwith %}

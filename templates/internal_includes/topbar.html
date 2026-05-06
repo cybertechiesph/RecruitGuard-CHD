@@ -1,0 +1,15 @@
+{% load recruitment_ui %}
+<div class="rg-context-bar">
+    <div class="rg-context-bar__breadcrumb">
+        <a href="{% url 'dashboard' %}" class="rg-breadcrumb-home">Dashboard</a>
+        {% block breadcrumb %}{% endblock %}
+    </div>
+    <div class="rg-context-bar__right">
+        <span class="rg-context-bar__role">
+            <span class="rg-pill rg-pill--{{ user.role|role_theme }}" style="font-size:0.7rem;min-height:1.6rem;padding:0.2rem 0.6rem;">
+                {{ user.role|role_label }}
+            </span>
+        </span>
+        <span class="rg-user-pill">{{ user.get_full_name|default:user.username }}</span>
+    </div>
+</div>

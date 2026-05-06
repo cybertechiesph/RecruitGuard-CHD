@@ -1,0 +1,170 @@
+{% extends "internal_base.html" %}
+{% load recruitment_ui %}
+
+{% block internal_title %}Recruitment Entries{% endblock %}
+
+{% block breadcrumb %}
+<span class="rg-breadcrumb-sep">›</span>
+<span class="rg-breadcrumb-current">Entries &amp; Positions</span>
+{% endblock %}
+
+{% block content %}
+<div class="rg-page-header">
+    <div>
+        <p class="rg-eyebrow">Entries &amp; Positions</p>
+        <h1 class="rg-page-title">Recruitment Entries</h1>
+    </div>
+    <div class="rg-page-actions">
+        <a href="{% url 'position-catalog-list' %}" class="btn btn-outline-secondary btn-sm">Position References</a>
+        <a href="{% url 'recruitment-entry-create' %}" class="btn btn-rg-primary btn-sm">New Entry</a>
+    </div>
+</div>
+
+<div class="rg-istat-row">
+    <div class="rg-istat">
+        <span class="rg-istat__value">{{ entries|length }}</span>
+        <span class="rg-istat__label">Entries</span>
+    </div>
+    <div class="rg-istat-row__divider"></div>
+    <div class="rg-istat">
+        <span class="rg-istat__value">Dual</span>
+        <span class="rg-istat__label">Branch</span>
+    </div>
+    <div class="rg-istat-row__divider"></div>
+    <div class="rg-istat">
+        <span class="rg-istat__value">Level-Aware</span>
+        <span class="rg-istat__label">Routing</span>
+    </div>
+</div>
+
+{% url 'recruitment-entry-create' as create_entry_url %}
+{% if not entries %}
+    <div class="rg-icard">
+        {% include "internal_includes/state_empty.html" with title="No recruitment entries recorded yet" copy="Create a Plantilla or COS entry to begin managing applications for a position." action_url=create_entry_url action_label="Create First Entry" %}
+    </div>
+{% else %}
+    <div class="rg-itbl rg-itbl--sticky">
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th>Entry</th>
+                        <th>Position</th>
+                        <th>Branch / Intake</th>
+                        <th>Routing</th>
+                        <th>Status</th>
+                        <th>Schedule</th>
+                        <th class="col-actions"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in entries %}
+                        <tr>
+                            <td>
+                                <div style="font-family:'Courier New',monospace;font-size:0.78rem;font-weight:700;color:#5f6c78;">
+                                    {{ entry.job_code }}
+                                </div>
+                                <div style="font-size:0.8125rem;font-weight:600;color:#111827;margin-top:0.15rem;">
+                                    {{ entry.title }}
+                                </div>
+                            </td>
+                            <td>
+                                {% if entry.position_reference %}
+                                    <div style="font-size:0.8125rem;color:#111827;">
+                                        {{ entry.position_reference.position_title }}
+                                    </div>
+                                    <div class="rg-imeta mt-1">
+                                        {% if entry.position_reference.class_id %}{{ entry.position_reference.class_id }}{% else %}—{% endif %}
+                                        {% if entry.position_reference.salary_grade %}
+                                            <span class="rg-imeta__sep"></span>SG {{ entry.position_reference.salary_grade }}
+                                        {% endif %}
+                                    </div>
+                                    {% if entry.position_reference.reference_status != "VERIFIED_REFERENCE" %}
+                                        <div class="rg-imeta mt-1" style="color:#c87a00;">
+                                            {{ entry.position_reference.get_reference_status_display }}
+                                        </div>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="rg-imeta">No linked position reference</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="d-flex flex-wrap gap-1">
+                                    <span class="rg-pill rg-pill--{{ entry.branch|branch_theme }} rg-pill--sm">
+                                        {{ entry.get_branch_display }}
+                                    </span>
+                                    <span class="rg-pill rg-pill--info rg-pill--sm">
+                                        {{ entry.get_intake_mode_display }}
+                                    </span>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="rg-pill rg-pill--{{ entry.level|level_theme }} rg-pill--sm">
+                                    {{ entry.get_level_display }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="rg-pill rg-pill--{{ entry.status|status_theme }} rg-pill--sm">
+                                    {{ entry.get_status_display }}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="rg-imeta" style="flex-direction:column;gap:0.1rem;align-items:flex-start;">
+                                    <span>{{ entry.opening_date|date:"M d, Y" }}</span>
+                                    <span>
+                                        {% if entry.closing_date %}
+                                            to {{ entry.closing_date|date:"M d, Y" }}
+                                        {% else %}
+                                            No fixed close date
+                                        {% endif %}
+                                    </span>
+                                </div>
+                            </td>
+                            <td class="col-actions">
+                                <div class="rg-itbl-actions">
+                                    <a href="{% url 'recruitment-entry-update' entry.pk %}"
+                                       class="btn btn-outline-secondary btn-sm">Edit</a>
+
+                                    {% if entry.status != "active" %}
+                                        <form method="post" action="{% url 'recruitment-entry-status' entry.pk 'active' %}">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-rg-secondary btn-sm">Activate</button>
+                                        </form>
+                                    {% endif %}
+
+                                    {% if entry.status != "suspended" and entry.status != "closed" %}
+                                        <form method="post" action="{% url 'recruitment-entry-status' entry.pk 'suspended' %}">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-rg-warn btn-sm"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#suspendModal{{ entry.pk }}"
+                                                    data-entry="{{ entry.job_code }}">
+                                                Suspend
+                                            </button>
+                                        </form>
+                                    {% endif %}
+
+                                    {% if entry.status != "closed" %}
+                                        <form method="post"
+                                              action="{% url 'recruitment-entry-status' entry.pk 'closed' %}"
+                                              id="closeForm{{ entry.pk }}">
+                                            {% csrf_token %}
+                                        </form>
+                                        <button type="button"
+                                                class="btn btn-rg-destructive btn-sm"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#closeModal{{ entry.pk }}">
+                                            Close
+                                        </button>
+                                        {% include "internal_includes/modal_confirm.html" with modal_id="closeModal"|add:entry.pk|stringformat:"s" variant="destructive" title="Close this recruitment entry?" body="Closing will stop accepting new applications for this entry. Existing cases in the workflow will not be affected." confirm_label="Close Entry" form_id="closeForm"|add:entry.pk|stringformat:"s" %}
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}

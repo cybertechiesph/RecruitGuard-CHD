@@ -1,0 +1,152 @@
+{% extends "applicant_base.html" %}
+
+{% block title %}Track My Application | RecruitGuard-CHD{% endblock %}
+
+{% block main_class %}{% endblock %}
+
+{% block content %}
+<div class="rg-pub-wrap" style="max-width:580px; padding-top:2.5rem;">
+
+    <div style="text-align:center; margin-bottom:2rem;">
+        <h1 style="font-size:1.5rem; font-weight:700; color:#111827; margin:0 0 0.5rem;">
+            Track Your Application
+        </h1>
+        <p style="font-size:0.9375rem; color:#5f6c78; max-width:44ch; margin:0 auto;">
+            Enter the Application ID you received when you submitted your application, along with the email address you used.
+        </p>
+    </div>
+
+    {# Lookup form #}
+    <div class="card p-4 mb-4">
+        <form method="post" novalidate>
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+            <div class="alert alert-danger" role="alert" style="font-size:0.9rem;">
+                {% for error in form.non_field_errors %}
+                    <p style="margin:0 0 0.25rem;">{{ error }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <div class="rg-pub-field" style="margin-bottom:1rem;">
+                <label for="{{ form.application_id.id_for_label }}"
+                       style="display:block; font-size:0.875rem; font-weight:600; color:#374151; margin-bottom:0.4rem;">
+                    Application ID <span class="text-danger">*</span>
+                </label>
+                {{ form.application_id }}
+                {% if form.application_id.errors %}
+                <div class="invalid-feedback d-block" style="font-size:0.8125rem;">
+                    {{ form.application_id.errors.0 }}
+                </div>
+                {% endif %}
+                <div class="form-text">Your Application ID looks like <strong>RG-2024-00001</strong>.</div>
+            </div>
+
+            <div class="rg-pub-field" style="margin-bottom:1.25rem;">
+                <label for="{{ form.email.id_for_label }}"
+                       style="display:block; font-size:0.875rem; font-weight:600; color:#374151; margin-bottom:0.4rem;">
+                    Email Address <span class="text-danger">*</span>
+                </label>
+                {{ form.email }}
+                {% if form.email.errors %}
+                <div class="invalid-feedback d-block" style="font-size:0.8125rem;">
+                    {{ form.email.errors.0 }}
+                </div>
+                {% endif %}
+                <div class="form-text">Use the same email address you submitted with your application.</div>
+            </div>
+
+            <button type="submit" class="btn btn-rg-primary btn-lg" style="width:100%;">
+                Check Status &rarr;
+            </button>
+        </form>
+    </div>
+
+    {# Result card — only shown after a successful lookup #}
+    {% if application %}
+    <div class="card p-4 mb-4" style="border-left:4px solid
+        {% if status_variant == 'approved' %}#15803d
+        {% elif status_variant == 'not-selected' %}#6b7280
+        {% elif status_variant == 'returned' %}#b45309
+        {% else %}#0369a1{% endif %};">
+
+        <p style="font-size:0.75rem; font-weight:600; color:#9aa4af; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.5rem;">
+            Application Status
+        </p>
+
+        <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap; margin-bottom:1.25rem;">
+            <span class="rg-pub-status-badge rg-pub-status-badge--{{ status_variant }}">
+                {{ status_label }}
+            </span>
+        </div>
+
+        <p style="font-size:0.9375rem; color:#374151; margin-bottom:1.5rem; line-height:1.65;">
+            {{ status_description }}
+        </p>
+
+        <hr style="border-color:#e5e9ed; margin:0 0 1rem;">
+
+        <dl class="rg-pub-review-dl">
+            <div class="rg-pub-review-row">
+                <dt>Application ID</dt>
+                <dd>{{ application.reference_label }}</dd>
+            </div>
+            <div class="rg-pub-review-row">
+                <dt>Applicant</dt>
+                <dd>{{ application.applicant_display_name }}</dd>
+            </div>
+            <div class="rg-pub-review-row">
+                <dt>Position</dt>
+                <dd>{{ application.position.title }}</dd>
+            </div>
+            <div class="rg-pub-review-row">
+                <dt>Type</dt>
+                <dd>
+                    {% if application.branch == "plantilla" %}Permanent (Plantilla){% else %}Contract of Service{% endif %}
+                </dd>
+            </div>
+            <div class="rg-pub-review-row">
+                <dt>Submitted</dt>
+                <dd>{{ application.submitted_at|date:"F d, Y" }} at {{ application.submitted_at|date:"g:i A" }}</dd>
+            </div>
+        </dl>
+    </div>
+
+    {# Conditional guidance boxes #}
+    {% if status_variant == 'returned' %}
+    <div class="rg-pub-info-box rg-pub-info-box--warning" style="margin-bottom:1.5rem;">
+        <p>
+            <strong>Action needed.</strong>
+            Please check your email at <strong>{{ application.applicant_email }}</strong> for instructions from our recruitment team.
+        </p>
+    </div>
+    {% endif %}
+
+    {% if status_variant == 'approved' %}
+    <div class="rg-pub-info-box" style="background:#f0fdf4; border-left-color:#15803d; margin-bottom:1.5rem;">
+        <p>
+            <strong>Congratulations!</strong>
+            Our recruitment team will contact you at <strong>{{ application.applicant_email }}</strong> with next steps.
+        </p>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    {# Help nudge #}
+    <div style="text-align:center; font-size:0.875rem; color:#9aa4af; margin-top:0.5rem; margin-bottom:1.5rem;">
+        Can&rsquo;t find your application?
+        <a href="{% url 'applicant-help' %}" style="color:var(--rg-primary);">Visit the Help page</a>
+        or email
+        <a href="mailto:recruitment@chd4a.doh.gov.ph" style="color:var(--rg-primary);">recruitment@chd4a.doh.gov.ph</a>.
+    </div>
+
+    <div style="text-align:center;">
+        <a href="{% url 'applicant-portal' %}" class="rg-pub-back" style="justify-content:center;">
+            &larr; Back to Job Openings
+        </a>
+    </div>
+
+</div>
+{% endblock %}
+

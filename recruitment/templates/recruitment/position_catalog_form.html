@@ -1,0 +1,75 @@
+{% extends "internal_base.html" %}
+
+{% block content %}
+<div class="rg-page-header">
+    <div>
+        <p class="rg-eyebrow">Recruitment Entry Management</p>
+        <h1 class="rg-page-title">{% if object %}Update Position Reference{% else %}Create Position Reference{% endif %}</h1>
+        <p class="rg-page-copy">Maintain the controlled official Position Reference catalog used by recruitment entry handlers.</p>
+    </div>
+    <div class="rg-page-actions">
+        <a href="{% url 'position-catalog-list' %}" class="btn btn-outline-secondary">Back to Position Reference Catalog</a>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-xl-10">
+        <div class="card p-4">
+            <div class="alert alert-info">
+                This screen is reserved for controlled maintenance of official position references. Recruitment entry creation uses selection from this catalog and must not encode official positions from scratch.
+            </div>
+            <form method="post">
+                {% csrf_token %}
+                {% if form.non_field_errors %}
+                    <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+                {% endif %}
+
+                <div class="rg-form-section mb-4">
+                    <h2 class="rg-form-section__title">Official Reference Metadata</h2>
+                    <p class="rg-form-section__copy">Record the validated official metadata fields used as the starter source of truth for Plantilla and COS recruitment entry selection.</p>
+                    <div class="row g-3">
+                        <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.position_title %}</div>
+                        <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.position_slug %}</div>
+                        <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.salary_grade %}</div>
+                        <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.level_classification %}</div>
+                        <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.reference_status %}</div>
+                        <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.class_id %}</div>
+                        <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.os_code %}</div>
+                        <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.position_code %}</div>
+                        <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.occupational_service %}</div>
+                        <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.occupational_group %}</div>
+                    </div>
+                </div>
+
+                <div class="rg-form-section mb-4">
+                    <h2 class="rg-form-section__title">Control and Review</h2>
+                    <p class="rg-form-section__copy">Keep incomplete records safe by preserving only what is known, flagging manual review where needed, and avoiding fabricated metadata.</p>
+                    <div class="row g-3">
+                        <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.is_active %}</div>
+                        <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.agency_item_number %}</div>
+                        <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.office_division_default %}</div>
+                        <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.employment_track_applicability %}</div>
+                        <div class="col-12">{% include "recruitment/includes/form_field.html" with field=form.notes %}</div>
+                    </div>
+                </div>
+
+                <div class="rg-form-section">
+                    <h2 class="rg-form-section__title">Future-Facing Qualification Fields</h2>
+                    <p class="rg-form-section__copy">Use these only when validated qualification standard details are available. Leave them blank rather than inventing official data.</p>
+                    <div class="row g-3">
+                        <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.qs_education %}</div>
+                        <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.qs_training %}</div>
+                        <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.qs_experience %}</div>
+                        <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.qs_eligibility %}</div>
+                    </div>
+                </div>
+
+                <div class="rg-form-actions">
+                    <button type="submit" class="btn btn-rg-primary">Save Position Reference</button>
+                    <a href="{% url 'position-catalog-list' %}" class="btn btn-outline-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

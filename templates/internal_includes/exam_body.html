@@ -1,0 +1,597 @@
+
+{% load recruitment_ui %}
+
+
+<div class="rg-scr-elig-bar rg-scr-elig-bar--no-status" id="exam-status-bar">
+
+    <div class="rg-scr-elig-bar__icon" id="exam-status-bar-icon">
+        
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M5 8h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+    </div>
+
+    <div class="flex-1">
+        <div class="rg-scr-elig-bar__label">Exam Status</div>
+        <div class="rg-scr-elig-bar__verdict" id="exam-status-verdict">No status selected</div>
+    </div>
+
+    
+    <div style="flex-shrink:0;">
+        <span class="rg-pill rg-pill--neutral rg-pill--sm">Draft</span>
+    </div>
+</div>
+
+
+<form method="post" action="{% url 'exam-review' application.pk %}" id="exam-form">
+    {% csrf_token %}
+    <input type="hidden" name="operation" id="exam-op-field" value="save">
+
+    
+    <div class="rg-icard" style="margin-bottom:1rem;">
+        <div class="rg-icard__header" style="margin-bottom:0.875rem;">
+            <div>
+                <h3 class="rg-icard__title">Exam Type</h3>
+                <p class="rg-icard__subtitle">
+                    Specify the name or description of the examination administered,
+                    waived, or for which the applicant was absent.
+                </p>
+            </div>
+        </div>
+
+        <div class="rg-field" style="max-width:520px;">
+            <label class="form-label" for="{{ exam_form.exam_type.id_for_label }}">
+                {{ exam_form.exam_type.label }}
+            </label>
+            {{ exam_form.exam_type }}
+            {% if exam_form.exam_type.help_text %}
+                <div class="form-text">{{ exam_form.exam_type.help_text|safe }}</div>
+            {% endif %}
+            {% for error in exam_form.exam_type.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    
+    <div class="rg-icard" style="margin-bottom:1rem;">
+        <div class="rg-icard__header" style="margin-bottom:0.875rem;">
+            <div>
+                <h3 class="rg-icard__title">Exam Status</h3>
+                <p class="rg-icard__subtitle">
+                    Select the outcome of the examination for this applicant.
+                    Additional fields will appear based on your selection.
+                </p>
+            </div>
+        </div>
+
+        
+        <div class="rg-scr-choice-strip" role="group" aria-label="Exam status">
+            <button type="button"
+                    class="rg-scr-choice-btn js-exam-choice"
+                    data-target="id_exam_status"
+                    data-value="completed"
+                    data-theme="success"
+                    data-label="Completed"
+                    aria-pressed="false">
+                <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                    <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.5"/>
+                    <path d="M4.5 7l1.8 1.8 3.2-3.6" stroke="currentColor" stroke-width="1.5"
+                          stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Completed
+            </button>
+            <button type="button"
+                    class="rg-scr-choice-btn js-exam-choice"
+                    data-target="id_exam_status"
+                    data-value="waived"
+                    data-theme="warning"
+                    data-label="Waived"
+                    aria-pressed="false">
+                <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                    <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.5"/>
+                    <path d="M5 7h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                Waived
+            </button>
+            <button type="button"
+                    class="rg-scr-choice-btn js-exam-choice"
+                    data-target="id_exam_status"
+                    data-value="absent"
+                    data-theme="danger"
+                    data-label="Absent"
+                    aria-pressed="false">
+                <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                    <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.5"/>
+                    <path d="M4.5 4.5l5 5M9.5 4.5l-5 5" stroke="currentColor" stroke-width="1.5"
+                          stroke-linecap="round"/>
+                </svg>
+                Absent
+            </button>
+        </div>
+
+        
+        <div style="display:none;">
+            {{ exam_form.exam_status }}
+        </div>
+        {% for error in exam_form.exam_status.errors %}
+            <div class="invalid-feedback d-block" style="margin-top:0.25rem;">{{ error }}</div>
+        {% endfor %}
+
+        
+        <div class="rg-exam-cond-group" id="exam-cond-completed">
+            <div style="font-size:0.72rem;font-weight:700;color:#5f6c78;
+                        text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.75rem;">
+                Examination Result &amp; Details
+            </div>
+            <div class="rg-exam-score-grid">
+                <div class="rg-field">
+                    <label class="form-label" for="{{ exam_form.exam_score.id_for_label }}">
+                        {{ exam_form.exam_score.label }}
+                    </label>
+                    {{ exam_form.exam_score }}
+                    {% if exam_form.exam_score.help_text %}
+                        <div class="form-text">{{ exam_form.exam_score.help_text|safe }}</div>
+                    {% endif %}
+                    {% for error in exam_form.exam_score.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+                <div class="rg-field">
+                    <label class="form-label" for="{{ exam_form.exam_result.id_for_label }}">
+                        {{ exam_form.exam_result.label }}
+                    </label>
+                    {{ exam_form.exam_result }}
+                    {% if exam_form.exam_result.help_text %}
+                        <div class="form-text">{{ exam_form.exam_result.help_text|safe }}</div>
+                    {% endif %}
+                    {% for error in exam_form.exam_result.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+                <div class="rg-field">
+                    <label class="form-label" for="{{ exam_form.valid_from.id_for_label }}">
+                        {{ exam_form.valid_from.label }}
+                    </label>
+                    {{ exam_form.valid_from }}
+                    {% if exam_form.valid_from.help_text %}
+                        <div class="form-text">{{ exam_form.valid_from.help_text|safe }}</div>
+                    {% endif %}
+                    {% for error in exam_form.valid_from.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+                <div class="rg-field">
+                    <label class="form-label" for="{{ exam_form.valid_until.id_for_label }}">
+                        {{ exam_form.valid_until.label }}
+                    </label>
+                    {{ exam_form.valid_until }}
+                    {% if exam_form.valid_until.help_text %}
+                        <div class="form-text">{{ exam_form.valid_until.help_text|safe }}</div>
+                    {% endif %}
+                    {% for error in exam_form.valid_until.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        
+        <div class="rg-exam-cond-group" id="exam-cond-remarks">
+            <div style="font-size:0.72rem;font-weight:700;color:#5f6c78;
+                        text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.75rem;">
+                Justification / Remarks
+                <span style="font-weight:400;color:#dc2626;margin-left:0.25rem;">Required</span>
+            </div>
+            <div class="rg-field">
+                <label class="form-label" for="{{ exam_form.exam_notes.id_for_label }}">
+                    {{ exam_form.exam_notes.label }}
+                </label>
+                {{ exam_form.exam_notes }}
+                {% if exam_form.exam_notes.help_text %}
+                    <div class="form-text">{{ exam_form.exam_notes.help_text|safe }}</div>
+                {% endif %}
+                {% for error in exam_form.exam_notes.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </div>
+        </div>
+
+    </div>
+
+    
+    <div class="rg-cws-fin-bar" id="exam-fin-bar">
+        <div class="rg-cws-fin-bar__inner">
+
+            
+            <div class="rg-scr-ready-list" id="exam-ready-list">
+                <div class="rg-scr-ready-item" id="exam-ready-type">
+                    <span class="rg-scr-ready-item__icon" aria-hidden="true"></span>
+                    Exam type specified
+                </div>
+                <div class="rg-scr-ready-item" id="exam-ready-status">
+                    <span class="rg-scr-ready-item__icon" aria-hidden="true"></span>
+                    Exam status selected
+                </div>
+                <div class="rg-scr-ready-item" id="exam-ready-details" style="display:none;">
+                    <span class="rg-scr-ready-item__icon" aria-hidden="true"></span>
+                    <span id="exam-ready-details-label">Score or result recorded</span>
+                </div>
+            </div>
+
+            
+            <div class="rg-cws-fin-bar__actions">
+                <button type="submit" class="btn btn-sm btn-outline-secondary"
+                        id="exam-save-btn"
+                        onclick="document.getElementById('exam-op-field').value='save';">
+                    Save Draft
+                </button>
+                <button type="button"
+                        class="btn-rg-finalize is-blocked"
+                        id="exam-finalize-btn"
+                        disabled
+                        data-bs-toggle="modal"
+                        data-bs-target="#modal-exam-finalize">
+                    <svg width="12" height="13" viewBox="0 0 12 14" fill="none"
+                         aria-hidden="true" style="margin-right:5px;vertical-align:-1px;">
+                        <rect x="2" y="6" width="8" height="7" rx="1.5"
+                              stroke="currentColor" stroke-width="1.5"/>
+                        <path d="M4 6V4.5a2 2 0 0 1 4 0V6"
+                              stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                    Finalize &amp; Lock
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+</form>
+
+
+<div class="modal fade" id="modal-exam-finalize" tabindex="-1"
+     aria-labelledby="modal-exam-finalize-label" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:480px;">
+        <div class="modal-content" style="border-radius:0.6rem;overflow:hidden;">
+
+            <div class="modal-header"
+                 style="background:var(--rg-primary);border-bottom:none;padding:1rem 1.25rem;">
+                <h5 class="modal-title" id="modal-exam-finalize-label"
+                    style="font-size:0.9375rem;font-weight:700;color:#fff;margin:0;">
+                    Confirm: Finalize Examination Record
+                </h5>
+                <button type="button" class="btn-close btn-close-white"
+                        data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body" style="padding:1.25rem;">
+                <p style="font-size:0.8125rem;color:#374151;margin-bottom:0.75rem;">
+                    You are about to lock the examination record for this case.
+                    Once finalized, the record cannot be edited without a
+                    <strong>Controlled Reopen</strong> procedure.
+                </p>
+
+                <div class="rg-scr-modal-summary" id="exam-modal-summary">
+                    <div class="rg-scr-modal-summary__row">
+                        <span class="rg-scr-modal-summary__label">Applicant</span>
+                        <span class="rg-scr-modal-summary__value">
+                            {{ application.applicant.get_full_name }}
+                        </span>
+                    </div>
+                    <div class="rg-scr-modal-summary__row">
+                        <span class="rg-scr-modal-summary__label">Review Stage</span>
+                        <span class="rg-scr-modal-summary__value">
+                            {{ recruitment_case.get_current_stage_display }}
+                        </span>
+                    </div>
+                    <div class="rg-scr-modal-summary__row">
+                        <span class="rg-scr-modal-summary__label">Exam Type</span>
+                        <span class="rg-scr-modal-summary__value"
+                              id="modal-exam-type-val">&mdash;</span>
+                    </div>
+                    <div class="rg-scr-modal-summary__row">
+                        <span class="rg-scr-modal-summary__label">Exam Status</span>
+                        <span class="rg-scr-modal-summary__value"
+                              id="modal-exam-status-val">&mdash;</span>
+                    </div>
+                    <div class="rg-scr-modal-summary__row" id="modal-exam-result-row"
+                         style="display:none;">
+                        <span class="rg-scr-modal-summary__label">Result / Score</span>
+                        <span class="rg-scr-modal-summary__value"
+                              id="modal-exam-result-val">&mdash;</span>
+                    </div>
+                </div>
+
+                <div style="margin-top:0.875rem;padding:0.6rem 0.875rem;
+                            background:#fff7ed;border:1px solid #fed7aa;
+                            border-radius:0.4rem;display:flex;gap:0.6rem;
+                            align-items:flex-start;">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
+                         style="flex-shrink:0;margin-top:1px;color:#c2410c;" aria-hidden="true">
+                        <path d="M8 2L14.5 13H1.5L8 2z"
+                              stroke="currentColor" stroke-width="1.5"
+                              stroke-linejoin="round"/>
+                        <path d="M8 6.5v3" stroke="currentColor" stroke-width="1.5"
+                              stroke-linecap="round"/>
+                        <circle cx="8" cy="11" r="0.6" fill="currentColor"/>
+                    </svg>
+                    <p style="margin:0;font-size:0.775rem;color:#92400e;line-height:1.5;">
+                        This action is permanent within the current workflow stage.
+                        Ensure all examination details are correct before confirming.
+                    </p>
+                </div>
+            </div>
+
+            <div class="modal-footer"
+                 style="border-top:1px solid #e2e8f0;padding:0.875rem 1.25rem;
+                        display:flex;justify-content:flex-end;gap:0.625rem;">
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        data-bs-dismiss="modal">
+                    Cancel &mdash; Keep Editing
+                </button>
+                <button type="button" class="btn-rg-finalize" id="modal-exam-confirm-btn">
+                    Yes, Finalize &amp; Lock
+                </button>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+
+<script>
+(function () {
+    "use strict";
+
+    /* ── Element refs ──────────────────────────────────────────── */
+    var examForm       = document.getElementById("exam-form");
+    var opField        = document.getElementById("exam-op-field");
+    var examTypeInput  = document.getElementById("{{ exam_form.exam_type.id_for_label }}");
+    var examStatusSel  = document.getElementById("id_exam_status");
+    var statusBar      = document.getElementById("exam-status-bar");
+    var statusVerdict  = document.getElementById("exam-status-verdict");
+    var condCompleted  = document.getElementById("exam-cond-completed");
+    var condRemarks    = document.getElementById("exam-cond-remarks");
+    var readyType      = document.getElementById("exam-ready-type");
+    var readyStatus    = document.getElementById("exam-ready-status");
+    var readyDetails   = document.getElementById("exam-ready-details");
+    var readyDetailsLbl = document.getElementById("exam-ready-details-label");
+    var finalBtn       = document.getElementById("exam-finalize-btn");
+    var modalConfirmBtn = document.getElementById("modal-exam-confirm-btn");
+
+    var scoreInput     = document.getElementById("{{ exam_form.exam_score.id_for_label }}");
+    var resultInput    = document.getElementById("{{ exam_form.exam_result.id_for_label }}");
+    var notesInput     = document.getElementById("{{ exam_form.exam_notes.id_for_label }}");
+
+    /* ── Status bar config ─────────────────────────────────────── */
+    var STATUS_CONFIG = {
+        "completed": {
+            modifier: "rg-scr-elig-bar--completed",
+            label: "Completed",
+            icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/><path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+        },
+        "waived": {
+            modifier: "rg-scr-elig-bar--waived",
+            label: "Waived",
+            icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/><path d="M5 8h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>'
+        },
+        "absent": {
+            modifier: "rg-scr-elig-bar--absent",
+            label: "Absent",
+            icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>'
+        }
+    };
+
+    var ALL_BAR_MODIFIERS = [
+        "rg-scr-elig-bar--no-status",
+        "rg-scr-elig-bar--completed",
+        "rg-scr-elig-bar--waived",
+        "rg-scr-elig-bar--absent"
+    ];
+
+    /* ── Update status bar ─────────────────────────────────────── */
+    function updateStatusBar(status) {
+        if (!statusBar || !statusVerdict) return;
+        ALL_BAR_MODIFIERS.forEach(function (cls) { statusBar.classList.remove(cls); });
+        var iconEl = document.getElementById("exam-status-bar-icon");
+        if (status && STATUS_CONFIG[status]) {
+            var cfg = STATUS_CONFIG[status];
+            statusBar.classList.add(cfg.modifier);
+            statusVerdict.textContent = cfg.label;
+            if (iconEl) iconEl.innerHTML = cfg.icon;
+        } else {
+            statusBar.classList.add("rg-scr-elig-bar--no-status");
+            statusVerdict.textContent = "No status selected";
+            if (iconEl) iconEl.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/><path d="M5 8h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
+        }
+    }
+
+    /* ── Show/hide conditional field groups ────────────────────── */
+    function updateConditionalGroups(status) {
+        if (!condCompleted || !condRemarks) return;
+        if (status === "completed") {
+            condCompleted.classList.add("is-visible");
+            condRemarks.classList.remove("is-visible");
+        } else if (status === "waived" || status === "absent") {
+            condCompleted.classList.remove("is-visible");
+            condRemarks.classList.add("is-visible");
+        } else {
+            condCompleted.classList.remove("is-visible");
+            condRemarks.classList.remove("is-visible");
+        }
+    }
+
+    /* ── Readiness checks ──────────────────────────────────────── */
+    function setReadyItem(el, met) {
+        if (!el) return;
+        el.classList.toggle("rg-scr-ready-item--met", met);
+        el.classList.toggle("rg-scr-ready-item--blocking", !met);
+        var iconEl = el.querySelector(".rg-scr-ready-item__icon");
+        if (!iconEl) return;
+        if (met) {
+            iconEl.innerHTML = '<svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        } else {
+            iconEl.innerHTML = "";
+        }
+    }
+
+    function checkReadiness() {
+        var status       = examStatusSel ? examStatusSel.value : "";
+        var hasType      = examTypeInput ? examTypeInput.value.trim().length > 0 : false;
+        var hasStatus    = status.length > 0;
+        var hasScore     = scoreInput  ? scoreInput.value.trim().length > 0 : false;
+        var hasResult    = resultInput ? resultInput.value.trim().length > 0 : false;
+        var hasNotes     = notesInput  ? notesInput.value.trim().length > 0 : false;
+
+        setReadyItem(readyType, hasType);
+        setReadyItem(readyStatus, hasStatus);
+
+        var detailsMet = false;
+        if (status === "completed") {
+            if (readyDetails) readyDetails.style.display = "";
+            if (readyDetailsLbl) readyDetailsLbl.textContent = "Score or result recorded";
+            detailsMet = hasScore || hasResult;
+            setReadyItem(readyDetails, detailsMet);
+        } else if (status === "waived" || status === "absent") {
+            if (readyDetails) readyDetails.style.display = "";
+            if (readyDetailsLbl) readyDetailsLbl.textContent = "Justification / remarks provided";
+            detailsMet = hasNotes;
+            setReadyItem(readyDetails, detailsMet);
+        } else {
+            if (readyDetails) readyDetails.style.display = "none";
+            detailsMet = true; /* no detail check needed when no status #}*/
+        }
+
+        var ready = hasType && hasStatus && detailsMet;
+        if (ready) {
+            if (finalBtn) {
+                finalBtn.classList.remove("is-blocked");
+                finalBtn.removeAttribute("disabled");
+            }
+        } else {
+            if (finalBtn) {
+                finalBtn.classList.add("is-blocked");
+                finalBtn.setAttribute("disabled", "disabled");
+            }
+        }
+    }
+
+    /* ── Visual choice strip (exam status) ────────────────────── */
+    function activateChoiceBtn(btn) {
+        var targetId = btn.dataset.target;
+        var value    = btn.dataset.value;
+        var theme    = btn.dataset.theme;
+
+        /* Deactivate all buttons in this strip */
+        document.querySelectorAll(".js-exam-choice[data-target='" + targetId + "']")
+            .forEach(function (b) {
+                b.classList.remove("is-active-success", "is-active-warning", "is-active-danger");
+                b.setAttribute("aria-pressed", "false");
+            });
+
+        /* Activate clicked button */
+        btn.classList.add("is-active-" + theme);
+        btn.setAttribute("aria-pressed", "true");
+
+        /* Sync hidden select */
+        var select = document.getElementById(targetId);
+        if (select) {
+            select.value = value;
+            select.dispatchEvent(new Event("change"));
+        }
+    }
+
+    /* Restore choice strip state on page load from existing form values */
+    function restoreExamChoiceStrips() {
+        document.querySelectorAll(".js-exam-choice").forEach(function (btn) {
+            var select = document.getElementById(btn.dataset.target);
+            if (select && select.value === btn.dataset.value) {
+                btn.classList.add("is-active-" + btn.dataset.theme);
+                btn.setAttribute("aria-pressed", "true");
+            }
+        });
+    }
+
+    /* ── Modal population ──────────────────────────────────────── */
+    function populateModal() {
+        var status  = examStatusSel ? examStatusSel.value : "";
+        var typeVal = examTypeInput ? examTypeInput.value.trim() : "";
+        var cfg     = STATUS_CONFIG[status];
+
+        var modalTypeEl   = document.getElementById("modal-exam-type-val");
+        var modalStatusEl = document.getElementById("modal-exam-status-val");
+        var modalResultRow = document.getElementById("modal-exam-result-row");
+        var modalResultEl = document.getElementById("modal-exam-result-val");
+
+        if (modalTypeEl)   modalTypeEl.textContent   = typeVal || "\u2014";
+        if (modalStatusEl) modalStatusEl.textContent = cfg ? cfg.label : "\u2014";
+
+        if (status === "completed" && modalResultRow && modalResultEl) {
+            var scoreVal  = scoreInput  ? scoreInput.value.trim()  : "";
+            var resultVal = resultInput ? resultInput.value.trim() : "";
+            var display   = "";
+            if (scoreVal && resultVal) { display = scoreVal + " \u2014 " + resultVal; }
+            else if (scoreVal)   { display = scoreVal; }
+            else if (resultVal)  { display = resultVal; }
+            modalResultEl.textContent = display || "\u2014";
+            modalResultRow.style.display = "";
+        } else if (modalResultRow) {
+            modalResultRow.style.display = "none";
+        }
+    }
+
+    /* ── Event listeners ───────────────────────────────────────── */
+
+    /* Choice strip buttons */
+    document.querySelectorAll(".js-exam-choice").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+            activateChoiceBtn(btn);
+        });
+    });
+
+    /* Hidden select change → update bar + conditionals + readiness */
+    if (examStatusSel) {
+        examStatusSel.addEventListener("change", function () {
+            var status = examStatusSel.value;
+            updateStatusBar(status);
+            updateConditionalGroups(status);
+            checkReadiness();
+        });
+    }
+
+    /* Exam type input → readiness */
+    if (examTypeInput) {
+        examTypeInput.addEventListener("input", checkReadiness);
+    }
+
+    /* Score / result / notes inputs → readiness */
+    [scoreInput, resultInput, notesInput].forEach(function (inp) {
+        if (inp) inp.addEventListener("input", checkReadiness);
+    });
+
+    /* Finalize button opens modal → populate summary */
+    if (finalBtn) {
+        finalBtn.addEventListener("click", function () {
+            populateModal();
+        });
+    }
+
+    /* Modal confirm → set operation and submit */
+    if (modalConfirmBtn) {
+        modalConfirmBtn.addEventListener("click", function () {
+            if (opField) opField.value = "finalize";
+            if (examForm) examForm.submit();
+        });
+    }
+
+    /* ── Initialization ────────────────────────────────────────── */
+    restoreExamChoiceStrips();
+    var initialStatus = examStatusSel ? examStatusSel.value : "";
+    updateStatusBar(initialStatus);
+    updateConditionalGroups(initialStatus);
+    checkReadiness();
+
+})();
+</script>
+

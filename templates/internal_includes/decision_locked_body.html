@@ -1,0 +1,251 @@
+{% load recruitment_ui %}
+
+
+{% with dec=latest_final_decision %}
+{% with snap=dec.submission_packet_snapshot %}
+
+
+{% if dec.decision_outcome == "selected" %}
+    <div class="rg-dec-status-bar rg-dec-status-bar--selected">
+        <i class="bi bi-check-circle-fill"></i>
+        Decision Recorded &mdash; <strong>Selected</strong>
+    </div>
+{% else %}
+    <div class="rg-dec-status-bar rg-dec-status-bar--not-selected">
+        <i class="bi bi-x-circle-fill"></i>
+        Decision Recorded &mdash; <strong>Not Selected</strong>
+    </div>
+{% endif %}
+
+
+<div class="rg-dec-locked-frame">
+    <div class="rg-dec-locked-frame__header">
+        <i class="bi bi-lock-fill" style="color:var(--rg-primary);font-size:0.875rem;"></i>
+        <span class="rg-dec-locked-frame__header-title">Final Decision Record</span>
+        <i class="bi bi-shield-lock text-muted" style="font-size:0.8rem;"></i>
+    </div>
+    <div class="rg-dec-locked-frame__body">
+
+        
+        <div class="rg-pkt-rows">
+            <div class="rg-pkt-row">
+                <span class="rg-pkt-row__label">Outcome</span>
+                <span class="rg-pkt-row__value">
+                    {% if dec.decision_outcome == "selected" %}
+                        <span class="rg-dec-outcome-pill rg-dec-outcome-pill--selected">
+                            <i class="bi bi-check-circle-fill"></i>Selected
+                        </span>
+                    {% else %}
+                        <span class="rg-dec-outcome-pill rg-dec-outcome-pill--not-selected">
+                            <i class="bi bi-x-circle-fill"></i>Not Selected
+                        </span>
+                    {% endif %}
+                </span>
+            </div>
+            <div class="rg-pkt-row">
+                <span class="rg-pkt-row__label">Decided</span>
+                <span class="rg-pkt-row__value">
+                    {{ dec.decided_at|date:"N j, Y, g:i a" }}
+                </span>
+            </div>
+            <div class="rg-pkt-row">
+                <span class="rg-pkt-row__label">Decided By</span>
+                <span class="rg-pkt-row__value">
+                    {{ dec.decided_by }}
+                    {% if dec.decided_by_role %}
+                        <span class="text-muted" style="font-size:0.78rem;">
+                            ({{ dec.decided_by_role }})
+                        </span>
+                    {% endif %}
+                </span>
+            </div>
+            {% if snap and snap.context %}
+                <div class="rg-pkt-row">
+                    <span class="rg-pkt-row__label">Applicant</span>
+                    <span class="rg-pkt-row__value">
+                        <strong>{{ snap.context.applicant_name }}</strong>
+                    </span>
+                </div>
+                <div class="rg-pkt-row">
+                    <span class="rg-pkt-row__label">Position</span>
+                    <span class="rg-pkt-row__value">
+                        {{ snap.context.recruitment_entry_title }}
+                    </span>
+                </div>
+            {% endif %}
+        </div>
+
+        
+        {% if dec.decision_notes %}
+            <div class="mt-3 pt-3" style="border-top:1px solid #e5e7eb;">
+                <div class="text-muted mb-1"
+                     style="font-size:0.72rem;font-weight:600;text-transform:uppercase;
+                            letter-spacing:0.04em;">
+                    Decision Notes
+                </div>
+                <div style="font-size:0.8125rem;color:#374151;line-height:1.65;
+                            white-space:pre-line;">{{ dec.decision_notes }}</div>
+            </div>
+        {% endif %}
+
+    </div>
+</div>
+
+
+{% if snap %}
+    {% with sctx=snap.context ssum=snap.summary %}
+    <div class="rg-icard" style="margin-top:0;">
+        <div class="rg-icard__header">
+            <div>
+                <h3 class="rg-icard__title">Packet Snapshot</h3>
+                <p class="rg-icard__subtitle">
+                    Submission packet as captured at the time this decision was recorded.
+                </p>
+            </div>
+            <i class="bi bi-archive text-muted" style="font-size:1.1rem;"></i>
+        </div>
+
+        
+        {% if sctx %}
+            <div class="rg-pkt-overview">
+                <div class="rg-pkt-row">
+                    <span class="rg-pkt-row__label">Applicant</span>
+                    <span class="rg-pkt-row__value">
+                        <strong>{{ sctx.applicant_name }}</strong>
+                    </span>
+                </div>
+                <div class="rg-pkt-row">
+                    <span class="rg-pkt-row__label">Reference No.</span>
+                    <span class="rg-pkt-row__value">
+                        {{ sctx.application_reference|default:"—" }}
+                    </span>
+                </div>
+                <div class="rg-pkt-row">
+                    <span class="rg-pkt-row__label">Position</span>
+                    <span class="rg-pkt-row__value">{{ sctx.recruitment_entry_title }}</span>
+                </div>
+                <div class="rg-pkt-row">
+                    <span class="rg-pkt-row__label">Item Code</span>
+                    <span class="rg-pkt-row__value">{{ sctx.recruitment_entry_code }}</span>
+                </div>
+                <div class="rg-pkt-row">
+                    <span class="rg-pkt-row__label">Branch / Type</span>
+                    <span class="rg-pkt-row__value">{{ sctx.branch_label }}</span>
+                </div>
+                <div class="rg-pkt-row">
+                    <span class="rg-pkt-row__label">Salary Grade</span>
+                    <span class="rg-pkt-row__value">SG-{{ sctx.level }}</span>
+                </div>
+            </div>
+        {% endif %}
+
+        
+        {% if ssum %}
+            <div class="rg-pkt-rows mt-3 pt-3" style="border-top:1px solid #e5e7eb;">
+                <div class="rg-pkt-row">
+                    <span class="rg-pkt-row__label">Screening Records</span>
+                    <span class="rg-pkt-row__value">
+                        {{ ssum.finalized_screening_count|default:"0" }} finalized
+                    </span>
+                </div>
+                <div class="rg-pkt-row">
+                    <span class="rg-pkt-row__label">Exam Records</span>
+                    <span class="rg-pkt-row__value">
+                        {{ ssum.finalized_exam_count|default:"0" }} finalized
+                    </span>
+                </div>
+                <div class="rg-pkt-row">
+                    <span class="rg-pkt-row__label">Interview Sessions</span>
+                    <span class="rg-pkt-row__value">
+                        {{ ssum.finalized_interview_count|default:"0" }} finalized
+                    </span>
+                </div>
+                <div class="rg-pkt-row">
+                    <span class="rg-pkt-row__label">Deliberation Record</span>
+                    <span class="rg-pkt-row__value">
+                        {% if ssum.has_deliberation_record %}
+                            <span class="text-success fw-semibold">
+                                <i class="bi bi-check-circle-fill me-1"></i>Present
+                            </span>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </span>
+                </div>
+                {% if ssum.has_comparative_assessment_report %}
+                    <div class="rg-pkt-row">
+                        <span class="rg-pkt-row__label">
+                            Comparative Assessment Report
+                        </span>
+                        <span class="rg-pkt-row__value">
+                            <span class="text-success fw-semibold">
+                                <i class="bi bi-check-circle-fill me-1"></i>Present
+                            </span>
+                        </span>
+                    </div>
+                {% endif %}
+                <div class="rg-pkt-row">
+                    <span class="rg-pkt-row__label">Evidence Items</span>
+                    <span class="rg-pkt-row__value">
+                        {{ ssum.evidence_reference_count|default:"0" }}
+                    </span>
+                </div>
+                {% if ssum.missing_components %}
+                    <div class="rg-pkt-row" style="align-items:flex-start;">
+                        <span class="rg-pkt-row__label" style="padding-top:0.1rem;">
+                            Noted Gaps
+                        </span>
+                        <span class="rg-pkt-row__value" style="color:#854d0e;">
+                            {% for item in ssum.missing_components %}
+                                {{ item }}{% if not forloop.last %}, {% endif %}
+                            {% endfor %}
+                        </span>
+                    </div>
+                {% endif %}
+            </div>
+        {% endif %}
+
+    </div>
+    {% endwith %}
+{% endif %}
+
+
+<div class="rg-dec-handoff">
+    <span class="rg-dec-handoff__icon">
+        <i class="bi bi-arrow-right-circle-fill"></i>
+    </span>
+    <div>
+        {% if snap and snap.summary and snap.summary.has_comparative_assessment_report %}
+            
+            {% if dec.decision_outcome == "selected" %}
+                <strong>Decision recorded.</strong>
+                This application has been marked <em>Selected</em>.
+                The recruitment case will proceed to appointment processing.
+                Coordinate with HR for the preparation and issuance of the appointment document
+                in accordance with CSC rules.
+            {% else %}
+                <strong>Decision recorded.</strong>
+                This application has been marked <em>Not Selected</em>.
+                The recruitment case for this applicant is now closed.
+                The official record has been preserved and archived.
+            {% endif %}
+        {% else %}
+            
+            {% if dec.decision_outcome == "selected" %}
+                <strong>Decision recorded.</strong>
+                This application has been marked <em>Selected</em>.
+                The recruitment case will proceed to contract preparation.
+                Coordinate with HR for the preparation and issuance of the contract of service.
+            {% else %}
+                <strong>Decision recorded.</strong>
+                This application has been marked <em>Not Selected</em>.
+                The recruitment case for this applicant is now closed.
+                The official record has been preserved and archived.
+            {% endif %}
+        {% endif %}
+    </div>
+</div>
+
+{% endwith %}
+{% endwith %}
+

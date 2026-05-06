@@ -1,0 +1,89 @@
+{% comment %}
+Contextual banner partial.
+Usage:
+  {% include "internal_includes/banner.html" with
+      variant="observer"
+      title="Observer Access"
+      copy="You can view this record but cannot make changes in this role."
+  %}
+
+variant options:
+  info       — blue, informational
+  warning    — amber, caution
+  success    — green, confirmed
+  error      — red, problem
+  observer   — grey left-ruled, read-only notice
+  blocked    — amber left-ruled, action blocked
+  locked     — gold left-ruled, record locked/finalized
+{% endcomment %}
+<div class="rg-banner rg-banner--{{ variant|default:'info' }}" role="{% if variant == 'error' %}alert{% else %}note{% endif %}">
+    <div class="rg-banner__icon" aria-hidden="true">
+        {% if variant == "observer" %}
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+            </svg>
+        {% elif variant == "blocked" %}
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+            </svg>
+        {% elif variant == "locked" %}
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+        {% elif variant == "success" %}
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+        {% elif variant == "warning" %}
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+        {% elif variant == "error" %}
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="15" y1="9" x2="9" y2="15"/>
+                <line x1="9" y1="9" x2="15" y2="15"/>
+            </svg>
+        {% else %}
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+        {% endif %}
+    </div>
+    <div class="rg-banner__body">
+        {% if title %}
+            <span class="rg-banner__title">{{ title }}</span>
+        {% endif %}
+        {% if copy %}
+            <p class="rg-banner__copy">{{ copy }}</p>
+        {% endif %}
+        {% block banner_body %}{% endblock %}
+    </div>
+    {% if action_url and action_label %}
+        <div class="rg-banner__actions">
+            <a href="{{ action_url }}" class="btn btn-outline-secondary btn-sm">{{ action_label }}</a>
+        </div>
+    {% endif %}
+</div>

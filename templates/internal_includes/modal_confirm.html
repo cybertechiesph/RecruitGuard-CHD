@@ -1,0 +1,105 @@
+{% comment %}
+Confirmation modal partial.
+Renders a reusable Bootstrap modal with internal-portal styling.
+
+Usage — include once per page (or per form that needs it):
+  {% include "internal_includes/modal_confirm.html" with
+      modal_id="confirmClose"
+      variant="destructive"
+      title="Close this recruitment entry?"
+      body="This will prevent new applications from being accepted. Existing cases will not be affected."
+      confirm_label="Close Entry"
+      cancel_label="Cancel"
+      form_id="closeEntryForm"
+  %}
+
+Then wire the trigger:
+  <button class="btn btn-rg-destructive btn-sm"
+          data-bs-toggle="modal" data-bs-target="#confirmClose">
+      Close Entry
+  </button>
+
+And the form you want submitted on confirm:
+  <form id="closeEntryForm" method="post" action="...">{% csrf_token %}</form>
+
+Parameters:
+  modal_id      — HTML id for the modal (required)
+  variant       — "" (default) | "destructive" | "lock" | "warn"
+  title         — modal heading
+  body          — paragraph text in modal body
+  summary_items — optional list of strings for a summary checklist
+  confirm_label — confirm button label (default: "Confirm")
+  cancel_label  — cancel button label (default: "Cancel")
+  form_id       — if set, confirm button submits this form
+  confirm_url   — if set (and no form_id), confirm button links here
+  confirm_class — extra CSS class on confirm button
+{% endcomment %}
+<div class="modal fade rg-modal-confirm rg-modal-confirm--{{ variant }}"
+     id="{{ modal_id }}"
+     tabindex="-1"
+     aria-labelledby="{{ modal_id }}Label"
+     aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h2 class="modal-title h5" id="{{ modal_id }}Label">
+                    {{ title|default:"Are you sure?" }}
+                </h2>
+                <button type="button" class="btn-close btn-sm"
+                        data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body">
+                {% if body %}
+                    <p class="mb-0">{{ body }}</p>
+                {% endif %}
+                {% if summary_items %}
+                    <div class="rg-modal-confirm__summary mt-3">
+                        {% for item in summary_items %}
+                            <div class="rg-modal-confirm__summary-item">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14"
+                                     viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                     aria-hidden="true">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <line x1="12" y1="8" x2="12" y2="12"/>
+                                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                                </svg>
+                                {{ item }}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="modal-footer">
+                <button type="button"
+                        class="btn btn-outline-secondary btn-sm"
+                        data-bs-dismiss="modal">
+                    {{ cancel_label|default:"Cancel" }}
+                </button>
+
+                {% if form_id %}
+                    <button type="submit"
+                            form="{{ form_id }}"
+                            class="btn btn-sm {% if variant == 'destructive' %}btn-rg-destructive{% elif variant == 'warn' %}btn-rg-warn{% else %}btn-rg-primary{% endif %} {{ confirm_class }}">
+                        {{ confirm_label|default:"Confirm" }}
+                    </button>
+                {% elif confirm_url %}
+                    <a href="{{ confirm_url }}"
+                       class="btn btn-sm {% if variant == 'destructive' %}btn-rg-destructive{% elif variant == 'warn' %}btn-rg-warn{% else %}btn-rg-primary{% endif %} {{ confirm_class }}">
+                        {{ confirm_label|default:"Confirm" }}
+                    </a>
+                {% else %}
+                    <button type="button"
+                            class="btn btn-sm btn-rg-primary {{ confirm_class }}"
+                            data-bs-dismiss="modal">
+                        {{ confirm_label|default:"Confirm" }}
+                    </button>
+                {% endif %}
+            </div>
+
+        </div>
+    </div>
+</div>

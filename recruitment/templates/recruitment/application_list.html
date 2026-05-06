@@ -1,0 +1,125 @@
+{% extends "internal_base.html" %}
+{% load recruitment_ui %}
+
+{% block internal_title %}{% if is_queue %}Assigned Queue{% else %}Applications{% endif %}{% endblock %}
+
+{% block breadcrumb %}
+<span class="rg-breadcrumb-sep">›</span>
+<span class="rg-breadcrumb-current">{% if is_queue %}My Queue{% else %}Applications{% endif %}</span>
+{% endblock %}
+
+{% block content %}
+<div class="rg-page-header">
+    <div>
+        <p class="rg-eyebrow">{% if is_queue %}Workflow{% else %}Internal Portal{% endif %}</p>
+        <h1 class="rg-page-title">{% if is_queue %}Assigned Queue{% else %}Accessible Applications{% endif %}</h1>
+    </div>
+    <div class="rg-page-actions">
+        {% if not is_queue %}
+            <a href="{% url 'workflow-queue' %}" class="btn btn-rg-primary btn-sm">My Queue</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="rg-istat-row">
+    <div class="rg-istat">
+        <span class="rg-istat__value">{{ applications|length }}</span>
+        <span class="rg-istat__label">Records</span>
+    </div>
+    <div class="rg-istat-row__divider"></div>
+    <div class="rg-istat">
+        <span class="rg-istat__value">{% if is_queue %}Assigned{% else %}Accessible{% endif %}</span>
+        <span class="rg-istat__label">View Mode</span>
+    </div>
+    <div class="rg-istat-row__divider"></div>
+    <div class="rg-istat">
+        <span class="rg-istat__value">Level-Aware</span>
+        <span class="rg-istat__label">Routing</span>
+    </div>
+</div>
+
+{% if not applications %}
+    <div class="rg-icard">
+        {% include "internal_includes/state_empty.html" with title="No applications found" copy="No applications are currently routed to your role, or no records match the current filter." %}
+    </div>
+{% else %}
+    <div class="rg-itbl rg-itbl--sticky">
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th>Reference</th>
+                        <th>Position</th>
+                        <th>Branch / Level</th>
+                        <th>Current Task</th>
+                        <th>Handler</th>
+                        <th>Updated</th>
+                        <th class="col-actions"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for application in applications %}
+                        <tr>
+                            <td class="col-ref">
+                                <div class="fw-bold" style="font-family:'Courier New',monospace;font-size:0.78rem;color:#5f6c78;">
+                                    {{ application.reference_label }}
+                                </div>
+                                <div class="rg-imeta mt-1">
+                                    {{ application.applicant_display_name }}
+                                </div>
+                            </td>
+                            <td>
+                                <div style="font-size:0.8125rem;font-weight:600;color:#111827;">
+                                    {{ application.position.title }}
+                                </div>
+                                <div class="rg-imeta mt-1">
+                                    {{ application.position.job_code }}
+                                    <span class="rg-imeta__sep"></span>
+                                    {{ application.position.get_intake_mode_display }}
+                                </div>
+                            </td>
+                            <td>
+                                <div class="d-flex flex-wrap gap-1">
+                                    <span class="rg-pill rg-pill--{{ application.branch|branch_theme }} rg-pill--sm">
+                                        {{ application.get_branch_display }}
+                                    </span>
+                                    <span class="rg-pill rg-pill--{{ application.level|level_theme }} rg-pill--sm">
+                                        {{ application.get_level_display }}
+                                    </span>
+                                </div>
+                            </td>
+                            <td>
+                                {% queue_task_theme application as task_theme %}
+                                {% queue_task_label application as task_label %}
+                                <span class="rg-pill rg-pill--{{ task_theme }} rg-pill--sm">
+                                    {{ task_label }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if application.current_handler_role %}
+                                    <span class="rg-pill rg-pill--{{ application.current_handler_role|role_theme }} rg-pill--sm">
+                                        {{ application.current_handler_role|role_label }}
+                                    </span>
+                                {% else %}
+                                    <span class="rg-pill rg-pill--closed rg-pill--sm">Closed</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="rg-imeta">{{ application.updated_at|date:"M d, Y" }}</span>
+                            </td>
+                            <td class="col-actions">
+                                <div class="rg-itbl-actions">
+                                    <a href="{% url 'application-detail' application.pk %}"
+                                       class="btn btn-outline-secondary btn-sm">
+                                        View Case
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,134 @@
+{% extends "applicant_base.html" %}
+
+{% block title %}Application Submitted | RecruitGuard-CHD{% endblock %}
+
+{% block main_class %}{% endblock %}
+
+{% block content %}
+<div class="rg-pub-wrap" style="max-width:580px; padding-top:2.5rem;">
+
+    {# Success icon + headline #}
+    <div style="text-align:center; margin-bottom:2rem;">
+        <div class="rg-pub-success-icon" role="img" aria-label="Success">&#10003;</div>
+        <h1 style="font-size:1.6rem; font-weight:700; color:#111827; margin:0 0 0.5rem;">
+            Your Application Has Been Submitted
+        </h1>
+        <p style="font-size:0.9375rem; color:#5f6c78; max-width:42ch; margin:0 auto;">
+            Thank you for applying. Your application has been received by DOH&ndash;CHD CALABARZON.
+        </p>
+    </div>
+
+    {# Receipt card #}
+    <div class="rg-pub-receipt-card">
+        <p style="font-size:0.8125rem; font-weight:600; color:#5f6c78; margin-bottom:0.35rem; text-transform:uppercase; letter-spacing:0.08em;">
+            Your Application ID
+        </p>
+        <p class="rg-pub-receipt-id">{{ application.reference_label }}</p>
+
+        <button class="btn btn-outline-secondary btn-sm" id="copy-btn" style="margin-bottom:1.25rem;"
+                data-value="{{ application.reference_label }}">
+            Copy Application ID
+        </button>
+
+        <hr style="border-color:#e5e9ed; margin:0 0 1rem;">
+
+        <dl class="rg-pub-review-dl" style="text-align:left;">
+            <div class="rg-pub-review-row">
+                <dt>Position</dt>
+                <dd>{{ application.position.title }}</dd>
+            </div>
+            <div class="rg-pub-review-row">
+                <dt>Type</dt>
+                <dd>
+                    {% if application.branch == "plantilla" %}Permanent (Plantilla){% else %}Contract of Service{% endif %}
+                </dd>
+            </div>
+            <div class="rg-pub-review-row">
+                <dt>Submitted</dt>
+                <dd>{{ application.submitted_at|date:"F d, Y" }} at {{ application.submitted_at|date:"g:i A" }}</dd>
+            </div>
+            <div class="rg-pub-review-row">
+                <dt>Email</dt>
+                <dd>{{ application.applicant_email }}</dd>
+            </div>
+            <div class="rg-pub-review-row">
+                <dt>Documents</dt>
+                <dd>{{ application.evidence_items.count }} file{{ application.evidence_items.count|pluralize }} submitted</dd>
+            </div>
+        </dl>
+    </div>
+
+    {# What happens next #}
+    <div class="card p-4 mb-3">
+        <h2 style="font-size:1rem; font-weight:700; color:#111827; margin:0 0 1rem;">What Happens Next</h2>
+        <ol style="padding-left:1.25rem; margin:0; font-size:0.9375rem; color:#374151; line-height:1.7;">
+            <li>Your application will be reviewed by our recruitment team.</li>
+            <li>You may be contacted at your email or phone number for updates or additional requirements.</li>
+            <li>You can check your application status anytime using your Application ID.</li>
+        </ol>
+    </div>
+
+    {# Reminder box #}
+    <div class="rg-pub-info-box rg-pub-info-box--warning" style="margin-bottom:1.5rem;">
+        <p>
+            <strong>Save your Application ID.</strong>
+            You will need it to check your application status.
+        </p>
+        <p>
+            A confirmation has also been sent to <strong>{{ application.applicant_email }}</strong>.
+        </p>
+    </div>
+
+    {# Action buttons #}
+    <div style="display:flex; flex-wrap:wrap; gap:0.75rem; justify-content:center; margin-bottom:1.25rem;">
+        <a href="{% url 'applicant-status-lookup' %}?reference={{ application.reference_label|urlencode }}&email={{ application.applicant_email|urlencode }}"
+           class="btn btn-rg-primary btn-lg">
+            Track My Application
+        </a>
+        <a href="{% url 'applicant-portal' %}" class="btn btn-outline-secondary btn-lg">
+            Back to Job Openings
+        </a>
+    </div>
+
+    <p style="text-align:center; font-size:0.8125rem; color:#9aa4af;">
+        <a href="#" onclick="window.print(); return false;" style="color:#9aa4af;">Print this page</a>
+    </p>
+
+</div>
+
+<style>
+@media print {
+    header, footer, .rg-public-footer, #copy-btn, .btn { display: none !important; }
+    .rg-pub-receipt-card { border: 2px solid #000 !important; }
+}
+</style>
+
+<script>
+(function () {
+    var btn = document.getElementById('copy-btn');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+        var val = btn.dataset.value;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(val).then(function () {
+                btn.textContent = 'Copied!';
+                setTimeout(function () { btn.textContent = 'Copy Application ID'; }, 2000);
+            });
+        } else {
+            // Fallback
+            var ta = document.createElement('textarea');
+            ta.value = val;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            btn.textContent = 'Copied!';
+            setTimeout(function () { btn.textContent = 'Copy Application ID'; }, 2000);
+        }
+    });
+})();
+</script>
+{% endblock %}
+

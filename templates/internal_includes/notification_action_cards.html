@@ -1,0 +1,51 @@
+{% if checklist_notification_form %}
+    <div class="rg-icard">
+        <div class="rg-icard__header">
+            <div>
+                <h3 class="rg-icard__title">Requirement Checklist Notification</h3>
+                <p class="rg-icard__subtitle">
+                    Send the selected applicant the next-step requirement checklist and
+                    any deadline for completion handling.
+                </p>
+            </div>
+        </div>
+        <form method="post" action="{% url 'notification-checklist' application.pk %}">
+            {% csrf_token %}
+            <div class="rg-form-grid">
+                {% for field in checklist_notification_form %}
+                    {% include "recruitment/includes/form_field.html" with field=field %}
+                {% endfor %}
+            </div>
+            <div class="rg-form-actions">
+                <button type="submit" class="btn btn-rg-primary">
+                    Send Checklist Notification
+                </button>
+            </div>
+        </form>
+    </div>
+{% endif %}
+
+{% if reminder_notification_form %}
+    <div class="rg-icard">
+        <div class="rg-icard__header">
+            <div>
+                <h3 class="rg-icard__title">Reminder Notification</h3>
+                <p class="rg-icard__subtitle">
+                    Send a status or deadline reminder where the current application state
+                    still requires applicant action.
+                </p>
+            </div>
+        </div>
+        <form method="post" action="{% url 'notification-reminder' application.pk %}">
+            {% csrf_token %}
+            <div class="rg-form-grid">
+                {% for field in reminder_notification_form %}
+                    {% include "recruitment/includes/form_field.html" with field=field %}
+                {% endfor %}
+            </div>
+            <div class="rg-form-actions">
+                <button type="submit" class="btn btn-outline-secondary">Send Reminder</button>
+            </div>
+        </form>
+    </div>
+{% endif %}

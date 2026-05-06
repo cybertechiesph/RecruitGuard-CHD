@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Applicant Portal | RecruitGuard-CHD{% endblock %}
+{% block body_class %}applicant-portal-body{% endblock %}
+
+{% block theme_styles %}
+:root {
+    --rg-secondary: #eef2f4;
+    --rg-surface: #f4f6fa;
+}
+{% endblock %}
+
+{% block body_background %}
+background:
+    radial-gradient(circle at top right, rgba(253, 184, 19, 0.05), transparent 30%),
+    linear-gradient(180deg, #f4f6fa 0%, #f7f8fa 60%, #f4f6fa 100%);
+{% endblock %}
+
+{% block site_header %}
+<header class="rg-topbar rg-public-topbar">
+    <div class="rg-container rg-topbar__inner rg-public-topbar__inner">
+        <a class="rg-brand rg-public-brand" href="{% url 'applicant-portal' %}">
+            <span class="rg-brand-copy">
+                <span class="rg-brand-kicker">Republic of the Philippines</span>
+                <span class="rg-brand-agency">Department of Health &ndash; CHD CALABARZON</span>
+                <span class="rg-brand-title">RecruitGuard-CHD Recruitment Portal</span>
+            </span>
+        </a>
+        <nav class="rg-nav-actions rg-public-nav" aria-label="Applicant navigation">
+            <a href="{% url 'applicant-portal' %}"
+               class="rg-nav-link rg-nav-link--{% if request.resolver_match.url_name == 'applicant-portal' or request.resolver_match.url_name == 'applicant-vacancy-detail' %}primary{% else %}secondary{% endif %}">
+                Job Openings
+            </a>
+            <a href="{% url 'applicant-status-lookup' %}"
+               class="rg-nav-link rg-nav-link--{% if request.resolver_match.url_name == 'applicant-status-lookup' %}primary{% else %}secondary{% endif %}">
+                Track Application
+            </a>
+            <a href="{% url 'applicant-help' %}"
+               class="rg-nav-link rg-nav-link--{% if request.resolver_match.url_name == 'applicant-help' %}primary{% else %}secondary{% endif %}">
+                Help
+            </a>
+        </nav>
+    </div>
+</header>
+{% endblock %}
+
+{% block layout_wrapper %}
+{{ block.super }}
+{% block public_footer %}
+<footer class="rg-public-footer">
+    <div class="rg-public-footer__stripe" aria-hidden="true">
+        <span></span><span></span><span></span><span></span>
+    </div>
+    <div class="rg-public-footer__body">
+        <p class="rg-public-footer__agency">
+            Department of Health &ndash; Center for Health Development CALABARZON (Region IV-A)
+        </p>
+        <p class="rg-public-footer__meta">
+            RecruitGuard-CHD Recruitment Portal &middot;
+            <a href="mailto:recruitment@chd4a.doh.gov.ph">recruitment@chd4a.doh.gov.ph</a>
+        </p>
+    </div>
+</footer>
+{% endblock %}
+{% endblock %}

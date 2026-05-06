@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}{% block internal_title %}Internal Portal{% endblock %} | RecruitGuard-CHD{% endblock %}
+{% block body_class %}internal-portal-body {% block workspace_body_class %}{% endblock %}{% endblock %}
+
+{% block theme_styles %}
+:root {
+    --rg-surface: #f4f6fa;
+}
+{% endblock %}
+
+{% block body_background %}
+background:
+    radial-gradient(circle at top right, rgba(253, 184, 19, 0.05), transparent 30%),
+    linear-gradient(180deg, #f4f6fa 0%, #f7f8fa 60%, #f4f6fa 100%);
+{% endblock %}
+
+{% block site_header %}{% endblock %}
+
+{% block layout_wrapper %}
+<div class="rg-layout">
+    {% include "internal_includes/sidebar.html" %}
+
+    <div class="rg-main-area">
+        {% include "internal_includes/topbar.html" %}
+
+        {% if messages %}
+            <div class="rg-message-stack" style="padding:0 1.5rem;margin-top:.75rem;">
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <div class="rg-main-content">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+    "use strict";
+
+    /* ── Drawer open/close ───────────────────────────────────────
+       Triggers: elements with data-drawer="<drawerId>"
+       Close:    elements with data-drawer-close="<drawerId>"
+       Overlay:  #<drawerId>Overlay
+    ─────────────────────────────────────────────────────────── */
+    function openDrawer(id) {
+        var drawer = document.getElementById(id);
+        var overlay = document.getElementById(id + "Overlay");
+        if (!drawer) return;
+        drawer.classList.add("is-open");
+        if (overlay) overlay.classList.add("is-open");
+        document.body.style.overflow = "hidden";
+    }
+
+    function closeDrawer(id) {
+        var drawer = document.getElementById(id);
+        var overlay = document.getElementById(id + "Overlay");
+        if (!drawer) return;
+        drawer.classList.remove("is-open");
+        if (overlay) overlay.classList.remove("is-open");
+        document.body.style.overflow = "";
+    }
+
+    document.addEventListener("click", function (e) {
+        /* Open */
+        var trigger = e.target.closest("[data-drawer]");
+        if (trigger) {
+            var id = trigger.getAttribute("data-drawer");
+            var titleEl = document.getElementById(id + "Title");
+            var subtitleEl = document.getElementById(id + "Subtitle");
+            if (titleEl && trigger.dataset.drawerTitle) {
+                titleEl.textContent = trigger.dataset.drawerTitle;
+            }
+            if (subtitleEl && trigger.dataset.drawerSubtitle) {
+                subtitleEl.textContent = trigger.dataset.drawerSubtitle;
+            }
+            openDrawer(id);
+            return;
+        }
+
+        /* Close via close button */
+        var closeBtn = e.target.closest("[data-drawer-close]");
+        if (closeBtn) {
+            closeDrawer(closeBtn.getAttribute("data-drawer-close"));
+            return;
+        }
+
+        /* Close via overlay click */
+        if (e.target.classList.contains("rg-drawer-overlay") && e.target.classList.contains("is-open")) {
+            var overlayId = e.target.id.replace("Overlay", "");
+            closeDrawer(overlayId);
+        }
+    });
+
+    /* Close drawer on Escape key */
+    document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") {
+            document.querySelectorAll(".rg-drawer.is-open").forEach(function (d) {
+                closeDrawer(d.id);
+            });
+        }
+    });
+})();
+</script>
+{% endblock %}

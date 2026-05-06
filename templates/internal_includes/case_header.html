@@ -1,0 +1,35 @@
+{% load recruitment_ui %}
+<div class="rg-cws-header">
+    <div class="rg-cws-header__identity">
+        <div class="rg-cws-header__ref">{{ application.reference_label }}</div>
+        <div class="rg-cws-header__title">{{ application.applicant_display_name }}</div>
+        <div class="rg-cws-header__meta">
+            {{ application.position.title }}
+            <span class="rg-imeta__sep" style="display:inline-block;"></span>
+            {{ application.position.job_code }}
+        </div>
+    </div>
+    <div class="rg-cws-header__pills">
+        <span class="rg-pill rg-pill--{{ application.branch|branch_theme }} rg-pill--sm">
+            {{ application.get_branch_display }}
+        </span>
+        <span class="rg-pill rg-pill--{{ application.level|level_theme }} rg-pill--sm">
+            {{ application.get_level_display }}
+        </span>
+        {% if application.current_handler_role %}
+            <span class="rg-pill rg-pill--{{ application.current_handler_role|role_theme }} rg-pill--sm">
+                {{ application.current_handler_role|role_label }}
+            </span>
+        {% else %}
+            <span class="rg-pill rg-pill--neutral rg-pill--sm">Closed</span>
+        {% endif %}
+    </div>
+    <div class="rg-cws-header__actions">
+        {% if request.user.role != "system_admin" %}
+            <a href="{% url 'workflow-queue' %}" class="btn btn-outline-secondary btn-sm">← Queue</a>
+        {% endif %}
+        {% if can_export %}
+            <a href="{% url 'application-export' application.pk %}" class="btn btn-outline-secondary btn-sm">Export</a>
+        {% endif %}
+    </div>
+</div>

@@ -1,0 +1,134 @@
+{% load recruitment_ui static %}
+{% with url_name=request.resolver_match.url_name %}
+<nav class="rg-sidebar" id="internal-sidebar">
+    <a href="{% url 'dashboard' %}" class="rg-sidebar__brand rg-sidebar__brand--doh">
+        <span class="rg-sidebar__brand-seal"
+              role="img"
+              aria-label="DOH–CHD CALABARZON seal"></span>
+        <span class="rg-sidebar__brand-copy">
+            <small>DOH–CHD CALABARZON</small>
+            RecruitGuard-CHD
+        </span>
+    </a>
+
+    <div class="rg-sidebar__nav">
+
+        <a href="{% url 'dashboard' %}"
+           class="rg-sidebar__link {% if url_name == 'dashboard' %}is-active{% endif %}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="7" height="7"/>
+                <rect x="14" y="3" width="7" height="7"/>
+                <rect x="14" y="14" width="7" height="7"/>
+                <rect x="3" y="14" width="7" height="7"/>
+            </svg>
+            Dashboard
+        </a>
+
+        {% if user.role != "system_admin" %}
+            <a href="{% url 'workflow-queue' %}"
+               class="rg-sidebar__link {% if url_name == 'workflow-queue' or url_name == 'application-list' or url_name == 'application-detail' %}is-active{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 11l3 3L22 4"/>
+                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                </svg>
+                My Queue
+            </a>
+        {% endif %}
+
+        {% if user.role == "secretariat" or user.role == "hrm_chief" %}
+            <a href="{% url 'recruitment-entry-list' %}"
+               class="rg-sidebar__link {% if 'entry' in url_name or 'position' in url_name %}is-active{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                </svg>
+                Entries &amp; Positions
+            </a>
+        {% endif %}
+
+        {% if user.role == "system_admin" %}
+            <a href="{% url 'evidence-vault-list' %}"
+               class="rg-sidebar__link {% if url_name == 'evidence-vault-list' %}is-active{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
+                Evidence Vault
+            </a>
+        {% endif %}
+
+        {% if user.role == "system_admin" %}
+            <a href="{% url 'audit-log-list' %}"
+               class="rg-sidebar__link {% if url_name == 'audit-log-list' %}is-active{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                </svg>
+                Audit Log
+            </a>
+        {% endif %}
+
+        {% if user.role == "system_admin" %}
+            <a href="{% url 'recruitment-entry-list' %}"
+               class="rg-sidebar__link {% if 'entry' in url_name or 'position' in url_name %}is-active{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                </svg>
+                Entries &amp; Positions
+            </a>
+
+            <a href="{% url 'internal-user-list' %}"
+               class="rg-sidebar__link {% if 'user' in url_name %}is-active{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+                User Management
+            </a>
+        {% endif %}
+
+    </div>
+
+    <div class="rg-sidebar__footer">
+        <a href="{% url 'password-change' %}"
+           class="rg-sidebar__link {% if url_name == 'password-change' or url_name == 'password-change-done' %}is-active{% endif %}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+            Settings
+        </a>
+        <form method="post" action="{% url 'logout' %}" class="mt-1">
+            {% csrf_token %}
+            <button type="submit" class="rg-sidebar__link"
+                    style="background:none;border:none;width:100%;text-align:left;cursor:pointer;color:#dc2626;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                    <polyline points="16 17 21 12 16 7"/>
+                    <line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+                Sign Out
+            </button>
+        </form>
+    </div>
+</nav>
+{% endwith %}

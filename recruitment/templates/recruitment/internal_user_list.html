@@ -1,0 +1,90 @@
+{% extends "internal_base.html" %}
+{% load recruitment_ui %}
+
+{% block content %}
+<div class="rg-page-header">
+    <div>
+        <p class="rg-eyebrow">Identity and Access</p>
+        <h1 class="rg-page-title">Internal Users</h1>
+        <p class="rg-page-copy">Account administration for the locked internal actor set.</p>
+    </div>
+    <div class="rg-page-actions">
+        <a href="{% url 'internal-user-create' %}" class="btn btn-rg-primary">Create Internal User</a>
+    </div>
+</div>
+
+<div class="rg-kpi-grid mb-4">
+    <div class="rg-kpi">
+        <span class="rg-kpi__label">Internal Accounts</span>
+        <strong class="rg-kpi__value">{{ internal_users|length }}</strong>
+        <span class="rg-kpi__hint">Registered internal users</span>
+    </div>
+    <div class="rg-kpi">
+        <span class="rg-kpi__label">Active Accounts</span>
+        <strong class="rg-kpi__value">{{ active_internal_users }}</strong>
+        <span class="rg-kpi__hint">Currently enabled internal access</span>
+    </div>
+    <div class="rg-kpi">
+        <span class="rg-kpi__label">Actor Model</span>
+        <strong class="rg-kpi__value">Locked</strong>
+        <span class="rg-kpi__hint">No new internal actors are introduced here</span>
+    </div>
+    <div class="rg-kpi">
+        <span class="rg-kpi__label">Portal Scope</span>
+        <strong class="rg-kpi__value">Admin</strong>
+        <span class="rg-kpi__hint">Identity and access control only</span>
+    </div>
+</div>
+
+<div class="rg-table-shell">
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Role</th>
+                    <th>Office</th>
+                    <th>Status</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for internal_user in internal_users %}
+                    <tr>
+                        <td>
+                            <strong>{{ internal_user.username }}</strong>
+                            <div class="small text-muted">{{ internal_user.email }}</div>
+                        </td>
+                        <td><span class="rg-pill rg-pill--{{ internal_user.role|role_theme }}">{{ internal_user.get_role_display }}</span></td>
+                        <td>{{ internal_user.office_name|default:"-" }}</td>
+                        <td>
+                            {% if internal_user.is_active %}
+                                <span class="rg-pill rg-pill--success">Active</span>
+                            {% else %}
+                                <span class="rg-pill rg-pill--neutral">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <div class="d-flex justify-content-end gap-2 flex-wrap">
+                                <a href="{% url 'internal-user-update' internal_user.pk %}" class="btn btn-outline-secondary btn-sm">Edit</a>
+                                <form method="post" action="{% url 'internal-user-toggle-active' internal_user.pk %}">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-outline-dark btn-sm">
+                                        {% if internal_user.is_active %}Deactivate{% else %}Activate{% endif %}
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="5">
+                            <div class="rg-empty-state">No internal users found.</div>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

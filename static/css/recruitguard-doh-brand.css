@@ -1,0 +1,723 @@
+/* ==========================================================================
+   RecruitGuard-CHD — DOH–CHD CALABARZON brand overlay
+   Loaded after recruitguard.css. Shifts the institutional palette toward the
+   official DOH–CHD CALABARZON identity:
+     - deep institutional green (matches official site hero + letterhead)
+     - DOH gold accent (official GOVPH unified web palette)
+     - GOVPH success-green / health-blue for status semantics only
+     - institutional red for decline / reject
+   Does not change layout, spacing, or workflow behavior.
+   ========================================================================== */
+
+:root,
+.internal-portal-body,
+.applicant-portal-body {
+    /* === Official DOH–CHD CALABARZON institutional palette === */
+    --rg-brand-green: #1e5c2d;          /* primary institutional green */
+    --rg-brand-green-strong: #144219;    /* hover / pressed */
+    --rg-brand-green-soft: #e6f0dc;      /* light green wash (active nav, tint) */
+    --rg-brand-green-ink: #0e2f14;       /* darkest green for headings */
+
+    --rg-brand-gold: #fdb813;            /* GOVPH unified yellow / seal accent */
+    --rg-brand-gold-strong: #c98f0a;     /* hover / pressed gold */
+    --rg-brand-gold-soft: #fff4d6;       /* light gold wash */
+
+    --rg-brand-success: #7ebb42;         /* GOVPH success green (status only) */
+    --rg-brand-success-soft: #eef6dd;
+    --rg-brand-success-ink: #3b7a1f;
+
+    --rg-brand-health-blue: #32a0da;     /* GOVPH health blue (secondary status) */
+    --rg-brand-health-blue-soft: #e3f3fb;
+    --rg-brand-health-blue-ink: #1e6b93;
+
+    --rg-brand-danger: #c92f27;          /* institutional red (decline / reject) */
+
+    /* === Re-bind existing tokens to the institutional palette === */
+    --rg-primary: var(--rg-brand-green);
+    --rg-primary-strong: var(--rg-brand-green-strong);
+    --rg-primary-soft: var(--rg-brand-green-soft);
+    --rg-accent: var(--rg-brand-gold);
+    --rg-accent-strong: var(--rg-brand-gold-strong);
+}
+
+/* --- Body background: warm-neutral with subtle gold highlight --- */
+body.internal-portal-body,
+body.applicant-portal-body {
+    background:
+        radial-gradient(circle at top right, rgba(253, 184, 19, 0.06), transparent 34%),
+        linear-gradient(180deg, #f4f6fa 0%, #f7f8fa 60%, #f4f6fa 100%) !important;
+}
+
+/* --- Primary button: institutional green --- */
+.internal-portal-body .btn-rg-primary,
+.applicant-portal-body .btn-rg-primary,
+.rg-login-page .btn-rg-primary {
+    background: var(--rg-brand-green);
+    border-color: var(--rg-brand-green);
+    color: #fff;
+}
+.internal-portal-body .btn-rg-primary:hover,
+.internal-portal-body .btn-rg-primary:focus,
+.applicant-portal-body .btn-rg-primary:hover,
+.applicant-portal-body .btn-rg-primary:focus,
+.rg-login-page .btn-rg-primary:hover,
+.rg-login-page .btn-rg-primary:focus {
+    background: var(--rg-brand-green-strong);
+    border-color: var(--rg-brand-green-strong);
+    color: #fff;
+}
+
+/* --- Sidebar active state: green tint + green left border --- */
+.rg-sidebar__link.is-active {
+    background: var(--rg-brand-green-soft) !important;
+    color: var(--rg-brand-green) !important;
+    border-left: 3px solid var(--rg-brand-green);
+    padding-left: calc(0.75rem - 3px);
+}
+
+.rg-sidebar__brand {
+    border-bottom: 1px solid rgba(30, 92, 45, 0.1);
+}
+.rg-sidebar__brand small {
+    color: var(--rg-brand-green);
+    letter-spacing: 0.08em;
+    font-weight: 700;
+}
+
+/* --- Sidebar brand: circular CHD CALABARZON seal + wordmark --- */
+.rg-sidebar__brand--doh {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.75rem;
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+}
+.rg-sidebar__brand-seal {
+    display: block;
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    background-image: url("/static/img/brand/chd-calabarzon-seal.png?v=20260420-green");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+}
+.rg-sidebar__brand-copy {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+    min-width: 0;
+}
+.rg-sidebar__brand-copy small {
+    display: block;
+    font-size: 0.58rem;
+    margin-bottom: 0.1rem;
+}
+
+/* --- Pipeline: complete nodes use institutional green --- */
+.rg-pipeline__stage.is-complete .rg-pipeline__circle {
+    background: var(--rg-brand-green) !important;
+    color: #fff !important;
+}
+.rg-pipeline__stage.is-complete .rg-pipeline__label {
+    color: var(--rg-brand-green);
+    font-weight: 600;
+}
+.rg-pipeline__connector.is-complete {
+    background: var(--rg-brand-green) !important;
+}
+
+/* --- Pipeline: current stage carries a gold ring for emphasis --- */
+.rg-pipeline__stage.is-current .rg-pipeline__circle {
+    background: #fff !important;
+    color: var(--rg-brand-green-strong) !important;
+    border: 2px solid var(--rg-brand-gold) !important;
+    box-shadow: 0 0 0 3px rgba(253, 184, 19, 0.18);
+}
+.rg-pipeline__stage.is-current .rg-pipeline__label {
+    color: var(--rg-brand-green-strong);
+    font-weight: 700;
+}
+
+/* --- Case Workspace header: green ink on title --- */
+.rg-cws-header__title {
+    color: var(--rg-brand-green-ink);
+}
+
+/* --- Role pills: differentiated for scanability (primary role → green) --- */
+.rg-pill--hrm-chief {
+    background: var(--rg-brand-green-soft);
+    color: var(--rg-brand-green);
+    border-color: #cfe0c0;
+}
+.rg-pill--secretariat {
+    background: var(--rg-brand-health-blue-soft);
+    color: var(--rg-brand-health-blue-ink);
+    border-color: #c5e4f3;
+}
+.rg-pill--plantilla {
+    background: var(--rg-brand-gold-soft);
+    color: #8a6407;
+    border-color: #ffdf88;
+}
+
+/* --- Status pill refinements --- */
+.rg-pill--success {
+    background: var(--rg-brand-success-soft);
+    color: var(--rg-brand-success-ink);
+    border-color: #cfe4af;
+}
+.rg-pill--warning {
+    background: var(--rg-brand-gold-soft);
+    color: #8a6407;
+    border-color: #ffdf88;
+}
+
+/* --- Finalize & Lock: green + gold inset underline --- */
+.btn-rg-finalize {
+    background: var(--rg-brand-green);
+    color: #fff;
+    border: 1px solid var(--rg-brand-green-strong);
+    box-shadow: inset 0 -2px 0 var(--rg-brand-gold);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+.btn-rg-finalize:hover:not(:disabled),
+.btn-rg-finalize:focus:not(:disabled) {
+    background: var(--rg-brand-green-strong);
+    color: #fff;
+    box-shadow: inset 0 -2px 0 var(--rg-brand-gold-strong);
+}
+.btn-rg-finalize.is-blocked,
+.btn-rg-finalize:disabled {
+    background: #dee2e7;
+    color: #8a94a0;
+    border-color: #d0d5db;
+    box-shadow: none;
+    cursor: not-allowed;
+}
+
+/* --- Locked ribbon: green background, gold underline --- */
+.rg-cws-lock-ribbon {
+    background: var(--rg-brand-green) !important;
+    color: #fff !important;
+    border-bottom: 2px solid var(--rg-brand-gold) !important;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+/* ==========================================================================
+   LOGIN PAGE — full-width banner strip + centered card (green palette)
+   Layout:
+     [ full-width green banner strip ]
+     [ building photo bg + green overlay ]
+       [ centered white card
+         [ circular CHD seal ]
+         [ form fields ]
+       ]
+   ========================================================================== */
+
+.rg-login-page {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background-image:
+        linear-gradient(rgba(14, 47, 20, 0.82), rgba(20, 66, 25, 0.88)),
+        url("/static/img/brand/login-background.jpg?v=20260420-green");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+}
+
+.rg-login-banner {
+    width: 100%;
+    background: #fff;
+    padding: 0.5rem 1rem;
+    line-height: 0;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+    position: relative;
+    z-index: 2;
+    text-align: center;
+}
+.rg-login-banner img {
+    display: inline-block;
+    width: auto;
+    height: auto;
+    max-width: min(820px, 100%);
+    max-height: 140px;
+    object-fit: contain;
+}
+
+.rg-login-body {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 1.25rem;
+    position: relative;
+    z-index: 1;
+}
+
+.rg-login-card {
+    width: 100%;
+    max-width: 420px;
+    background: #fff;
+    border-radius: 12px;
+    padding: 2.5rem 2rem 2rem;
+    box-shadow:
+        0 20px 48px rgba(0, 0, 0, 0.28),
+        0 4px 12px rgba(0, 0, 0, 0.12);
+    border-top: 4px solid var(--rg-brand-gold);
+    position: relative;
+    text-align: center;
+}
+
+.rg-login-card__seal {
+    display: block;
+    width: 96px;
+    height: 96px;
+    margin: 0 auto 1.25rem;
+    border-radius: 50%;
+    background-image: url("/static/img/brand/chd-calabarzon-seal.png?v=20260420-green");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+    background-color: #fff;
+}
+
+.rg-login-card__eyebrow {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--rg-brand-green);
+    margin-bottom: 0.25rem;
+}
+.rg-login-card__title {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--rg-brand-green-ink);
+    margin-bottom: 0.35rem;
+    letter-spacing: -0.01em;
+}
+.rg-login-card__sub {
+    font-size: 0.85rem;
+    color: #5f6c78;
+    margin-bottom: 1.6rem;
+    line-height: 1.5;
+}
+.rg-login-card form {
+    text-align: left;
+}
+.rg-login-card .rg-form-actions {
+    text-align: center;
+}
+.rg-login-card__notice {
+    margin-top: 1.25rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid #edf0f3;
+    font-size: 0.72rem;
+    color: #8c99a4;
+    text-align: center;
+    line-height: 1.55;
+}
+
+/* Official letterhead banner — used on packet export headers */
+.rg-letterhead {
+    display: block;
+    width: 100%;
+    max-width: 520px;
+    height: auto;
+    margin: 0 0 1.25rem;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.25));
+}
+
+/* --- Form card: green outline focus --- */
+.rg-login-card input:focus,
+.internal-portal-body .form-control:focus,
+.applicant-portal-body .form-control:focus {
+    border-color: var(--rg-brand-green) !important;
+    box-shadow: 0 0 0 3px rgba(30, 92, 45, 0.15) !important;
+}
+
+/* --- Dashboard "Awaiting Your Action" card gets a gold top rule --- */
+.internal-portal-body [class*="rg-dashboard"] [class*="queue"],
+.internal-portal-body .rg-awaiting-card {
+    border-top: 3px solid var(--rg-brand-gold);
+}
+
+/* --- Context bar / topbar: green breadcrumb --- */
+.rg-context-bar__breadcrumb a,
+.rg-breadcrumb-home {
+    color: var(--rg-brand-green);
+}
+
+/* --- Decision / submission packet: institutional ribbon --- */
+.rg-packet-header,
+.rg-completion-letterhead {
+    border-top: 4px solid var(--rg-brand-green);
+    border-bottom: 2px solid var(--rg-brand-gold);
+    padding: 1rem 1.25rem;
+    background: #fff;
+}
+
+/* --- Small screens: tighten login padding --- */
+@media (max-width: 560px) {
+    .rg-login-banner img {
+        max-height: 72px;
+    }
+    .rg-login-body {
+        padding: 1.5rem 1rem;
+    }
+    .rg-login-card {
+        padding: 2rem 1.25rem 1.5rem;
+    }
+    .rg-login-card__seal {
+        width: 80px;
+        height: 80px;
+    }
+}
+
+/* ==========================================================================
+   APPLICANT PORTAL — public-facing institutional header, hero, footer
+   Layout:
+     [ rg-public-topbar  seal + kicker + system title | nav ]
+     [ rg-pub-hero--photo  building photo + green overlay + centered copy ]
+     [ rg-pub-trust-strip  official-portal chips ]
+     [ content ]
+     [ rg-public-footer + 4-color GOVPH stripe ]
+   ========================================================================== */
+
+/* --- Public topbar: white surface, green underline, seal + wordmark --- */
+.applicant-portal-body .rg-topbar.rg-public-topbar {
+    background: #fff;
+    border-bottom: 3px solid var(--rg-brand-green);
+    box-shadow: 0 1px 0 rgba(14, 47, 20, 0.04), 0 2px 6px rgba(14, 47, 20, 0.04);
+}
+.rg-public-topbar__inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    padding-top: 0.85rem;
+    padding-bottom: 0.85rem;
+}
+.rg-public-brand {
+    display: flex;
+    align-items: center;
+    gap: 1.1rem;
+    text-decoration: none;
+    color: inherit;
+}
+.applicant-portal-body .rg-public-brand {
+    gap: 1.1rem;
+}
+.rg-public-brand::before {
+    content: "";
+    display: block;
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+    background-image: url("/static/img/brand/chd-calabarzon-seal.png?v=20260420-green");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+}
+.rg-public-brand .rg-brand-copy {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
+}
+.rg-public-brand .rg-brand-kicker {
+    font-size: 0.64rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--rg-brand-green);
+}
+.rg-public-brand .rg-brand-agency {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #2a3642;
+    letter-spacing: 0.01em;
+}
+.rg-public-brand .rg-brand-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--rg-brand-green-ink);
+    letter-spacing: -0.005em;
+}
+
+.rg-public-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.rg-public-nav .rg-nav-link {
+    display: inline-block;
+    padding: 0.5rem 0.85rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #384451;
+    text-decoration: none;
+    border: 1px solid transparent;
+    transition: background 120ms ease, color 120ms ease;
+}
+.rg-public-nav .rg-nav-link:hover {
+    background: var(--rg-brand-green-soft);
+    color: var(--rg-brand-green);
+}
+.rg-public-nav .rg-nav-link--primary {
+    background: var(--rg-brand-green-soft);
+    color: var(--rg-brand-green);
+    border-color: #cfe0c0;
+}
+
+@media (max-width: 720px) {
+    .rg-public-topbar__inner {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.6rem;
+    }
+    .rg-public-brand::before { width: 40px; height: 40px; }
+    .rg-public-brand .rg-brand-title { font-size: 0.95rem; }
+}
+
+/* --- Photographic hero (landing page) --- */
+.rg-pub-hero--photo {
+    position: relative;
+    padding: 3.25rem 1rem 2.5rem;
+    text-align: center;
+    color: #fff;
+    background-image:
+        linear-gradient(rgba(14, 47, 20, 0.78), rgba(20, 66, 25, 0.88)),
+        url("/static/img/brand/login-background.jpg?v=20260420-green");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    border-bottom: 4px solid var(--rg-brand-gold);
+}
+.rg-pub-hero--photo .rg-pub-wrap {
+    position: relative;
+    z-index: 1;
+}
+.rg-pub-hero--photo .rg-pub-hero__eyebrow {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--rg-brand-gold);
+    margin-bottom: 0.65rem;
+}
+.rg-pub-hero--photo .rg-pub-hero__title {
+    color: #fff !important;
+    font-size: clamp(1.55rem, 3.2vw, 2.2rem);
+    line-height: 1.2;
+    font-weight: 700;
+    margin-bottom: 0.85rem;
+    text-shadow: 0 2px 14px rgba(0, 0, 0, 0.35);
+}
+.rg-pub-hero--photo .rg-pub-hero__copy {
+    color: rgba(255, 255, 255, 0.92) !important;
+    max-width: 640px;
+    margin: 0 auto 1.5rem;
+    font-size: 0.98rem;
+    line-height: 1.6;
+}
+
+/* --- Hero CTA pair: primary solid green + secondary outlined --- */
+.rg-pub-hero-ctas {
+    display: inline-flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 0.25rem;
+}
+.rg-pub-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.7rem 1.4rem;
+    border-radius: 6px;
+    font-size: 0.92rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    text-decoration: none;
+    border: 2px solid transparent;
+    transition: background 140ms ease, color 140ms ease, transform 80ms ease;
+}
+.rg-pub-btn:active { transform: translateY(1px); }
+.rg-pub-btn--primary {
+    background: var(--rg-brand-green);
+    color: #fff;
+    border-color: var(--rg-brand-green-strong);
+    box-shadow: inset 0 -2px 0 var(--rg-brand-gold);
+}
+.rg-pub-btn--primary:hover,
+.rg-pub-btn--primary:focus {
+    background: var(--rg-brand-green-strong);
+    color: #fff;
+}
+.rg-pub-btn--ghost {
+    background: transparent;
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.75);
+}
+.rg-pub-btn--ghost:hover,
+.rg-pub-btn--ghost:focus {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    border-color: #fff;
+}
+
+/* --- Trust strip: official-portal chips below hero --- */
+.rg-pub-trust-strip {
+    background: #f4f6fa;
+    border-bottom: 1px solid #e3e8ee;
+    padding: 0.85rem 1rem;
+}
+.rg-pub-trust-strip__inner {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 1.5rem 2rem;
+    font-size: 0.78rem;
+    color: #4a5663;
+}
+.rg-pub-trust-strip__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+}
+.rg-pub-trust-strip__item svg {
+    width: 14px;
+    height: 14px;
+    color: var(--rg-brand-green);
+    flex-shrink: 0;
+}
+
+/* --- Action-card icon: SVG sized, green ink --- */
+.rg-pub-action-card__icon {
+    width: 44px;
+    height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--rg-brand-green-soft);
+    color: var(--rg-brand-green);
+    border-radius: 50%;
+    margin-bottom: 0.85rem;
+    font-size: 0 !important;
+    line-height: 0 !important;
+}
+.rg-pub-action-card__icon svg {
+    width: 22px;
+    height: 22px;
+}
+.rg-pub-action-card {
+    border-top: 3px solid transparent;
+    transition: border-color 140ms ease, transform 120ms ease, box-shadow 140ms ease;
+}
+.rg-pub-action-card:hover {
+    border-top-color: var(--rg-brand-gold);
+}
+.rg-pub-action-card__cta {
+    color: var(--rg-brand-green) !important;
+}
+
+/* --- Intake-form letterhead: slim official header above form --- */
+.rg-pub-letterhead {
+    background: #fff;
+    border-top: 4px solid var(--rg-brand-green);
+    border-bottom: 2px solid var(--rg-brand-gold);
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.95rem;
+    box-shadow: 0 1px 3px rgba(14, 47, 20, 0.06);
+}
+.rg-pub-letterhead::before {
+    content: "";
+    display: block;
+    width: 52px;
+    height: 52px;
+    flex-shrink: 0;
+    background-image: url("/static/img/brand/chd-calabarzon-seal.png?v=20260420-green");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+}
+.rg-pub-letterhead__copy {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+    min-width: 0;
+}
+.rg-pub-letterhead__kicker {
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--rg-brand-green);
+}
+.rg-pub-letterhead__agency {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: var(--rg-brand-green-ink);
+}
+.rg-pub-letterhead__subtitle {
+    font-size: 0.78rem;
+    color: #4a5663;
+    margin-top: 0.15rem;
+}
+
+/* --- Public footer: 4-color GOVPH stripe + content --- */
+.rg-public-footer {
+    margin-top: 3rem;
+    background: #fff;
+    border-top: 1px solid #d7dde3;
+}
+.rg-public-footer__stripe {
+    display: flex;
+    height: 4px;
+    width: 100%;
+}
+.rg-public-footer__stripe span {
+    flex: 1;
+    display: block;
+}
+.rg-public-footer__stripe span:nth-child(1) { background: var(--rg-brand-gold); }
+.rg-public-footer__stripe span:nth-child(2) { background: var(--rg-brand-success); }
+.rg-public-footer__stripe span:nth-child(3) { background: var(--rg-brand-health-blue); }
+.rg-public-footer__stripe span:nth-child(4) { background: var(--rg-brand-danger); }
+
+.rg-public-footer__body {
+    padding: 1.5rem 1rem;
+    text-align: center;
+    color: #4a5663;
+}
+.rg-public-footer__agency {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--rg-brand-green-ink);
+    margin: 0 0 0.2rem;
+}
+.rg-public-footer__meta {
+    font-size: 0.78rem;
+    color: #6b7280;
+    margin: 0;
+}
+.rg-public-footer__meta a {
+    color: var(--rg-brand-green);
+    font-weight: 600;
+    text-decoration: none;
+}
+.rg-public-footer__meta a:hover { text-decoration: underline; }

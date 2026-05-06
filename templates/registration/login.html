@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Sign In | RecruitGuard-CHD{% endblock %}
+{% block body_class %}internal-portal-body rg-login-body-wrap{% endblock %}
+
+{% block body_background %}
+background: #0e2f14;
+{% endblock %}
+
+{% block layout_wrapper %}
+<div class="rg-login-page">
+    <div class="rg-login-body">
+        <div class="rg-login-card">
+            <div class="rg-login-card__seal"
+                 role="img"
+                 aria-label="DOH–CHD CALABARZON seal"></div>
+
+            <p class="rg-login-card__eyebrow">Internal Access</p>
+            <h2 class="rg-login-card__title">RecruitGuard-CHD</h2>
+            <p class="rg-login-card__sub">
+                Sign in with your assigned internal credentials.
+            </p>
+
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags|default:'info' }} mb-3">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+
+            <form method="post">
+                {% csrf_token %}
+                {% if form.non_field_errors %}
+                    <div class="alert alert-danger mb-3">{{ form.non_field_errors }}</div>
+                {% endif %}
+                <div class="rg-form-grid">
+                    {% include "recruitment/includes/form_field.html" with field=form.username %}
+                    {% include "recruitment/includes/form_field.html" with field=form.password %}
+                </div>
+                <div class="rg-form-actions mt-3">
+                    <button type="submit" class="btn btn-rg-primary w-100">Sign In</button>
+                </div>
+            </form>
+
+            <p class="rg-login-card__notice">
+                Authorised DOH–CHD CALABARZON staff only. Session activity is monitored and logged.
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

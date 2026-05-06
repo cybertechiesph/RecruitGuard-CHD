@@ -1,0 +1,517 @@
+{% load recruitment_ui %}
+
+
+
+{% if recruitment_case and recruitment_case.current_stage == "closed" %}
+    {% if latest_final_decision %}
+        {% if latest_final_decision.decision_outcome == "selected" %}
+            <div class="rg-cmp-closed-banner rg-cmp-closed-banner--selected">
+                <span class="rg-cmp-closed-banner__icon">
+                    <i class="bi bi-patch-check-fill"></i>
+                </span>
+                <div class="rg-cmp-closed-banner__body">
+                    <p class="rg-cmp-closed-banner__title">
+                        Case Closed &mdash; Applicant Selected
+                    </p>
+                    <p class="rg-cmp-closed-banner__meta">
+                        {% if recruitment_case.closed_at %}
+                            Closed {{ recruitment_case.closed_at|date:"N j, Y" }}.
+                        {% endif %}
+                        Final decision recorded
+                        {% if latest_final_decision.decided_at %}
+                            {{ latest_final_decision.decided_at|date:"N j, Y" }}
+                        {% endif %}
+                        {% if latest_final_decision.decided_by %}
+                            by {{ latest_final_decision.decided_by }}.
+                        {% endif %}
+                    </p>
+                    <span class="rg-cmp-closed-banner__audit-note">
+                        <i class="bi bi-shield-lock-fill"></i>
+                        Fully archived &amp; audit-logged
+                    </span>
+                </div>
+            </div>
+        {% else %}
+            <div class="rg-cmp-closed-banner rg-cmp-closed-banner--not-selected">
+                <span class="rg-cmp-closed-banner__icon">
+                    <i class="bi bi-x-circle-fill"></i>
+                </span>
+                <div class="rg-cmp-closed-banner__body">
+                    <p class="rg-cmp-closed-banner__title">
+                        Case Closed &mdash; Not Selected
+                    </p>
+                    <p class="rg-cmp-closed-banner__meta">
+                        {% if recruitment_case.closed_at %}
+                            Closed {{ recruitment_case.closed_at|date:"N j, Y" }}.
+                        {% endif %}
+                        Final decision recorded
+                        {% if latest_final_decision.decided_at %}
+                            {{ latest_final_decision.decided_at|date:"N j, Y" }}
+                        {% endif %}
+                        {% if latest_final_decision.decided_by %}
+                            by {{ latest_final_decision.decided_by }}.
+                        {% endif %}
+                    </p>
+                    <span class="rg-cmp-closed-banner__audit-note">
+                        <i class="bi bi-shield-lock-fill"></i>
+                        Fully archived &amp; audit-logged
+                    </span>
+                </div>
+            </div>
+        {% endif %}
+    {% else %}
+        <div class="rg-cmp-closed-banner rg-cmp-closed-banner--neutral">
+            <span class="rg-cmp-closed-banner__icon">
+                <i class="bi bi-archive-fill"></i>
+            </span>
+            <div class="rg-cmp-closed-banner__body">
+                <p class="rg-cmp-closed-banner__title">
+                    Recruitment Case Closed
+                </p>
+                <p class="rg-cmp-closed-banner__meta">
+                    {% if recruitment_case.closed_at %}
+                        Closed {{ recruitment_case.closed_at|date:"N j, Y" }}.
+                    {% endif %}
+                    All records are preserved as read-only archives.
+                </p>
+                <span class="rg-cmp-closed-banner__audit-note">
+                    <i class="bi bi-shield-lock-fill"></i>
+                    Fully archived &amp; audit-logged
+                </span>
+            </div>
+        </div>
+    {% endif %}
+{% elif completion_record %}
+    
+    <div class="rg-cmp-closed-banner rg-cmp-closed-banner--neutral">
+        <span class="rg-cmp-closed-banner__icon">
+            <i class="bi bi-hourglass-split"></i>
+        </span>
+        <div class="rg-cmp-closed-banner__body">
+            <p class="rg-cmp-closed-banner__title">
+                Completion Tracking In Progress
+            </p>
+            <p class="rg-cmp-closed-banner__meta">
+                Tracking has begun. The case remains open until all requirements are resolved
+                and the case is formally closed.
+            </p>
+        </div>
+    </div>
+{% endif %}
+
+
+{% if latest_final_decision %}
+    <div class="rg-icard">
+        <div class="rg-icard__header">
+            <div>
+                <h3 class="rg-icard__title">Final Decision Record</h3>
+                <p class="rg-icard__subtitle">
+                    Decision recorded at Appointing Authority review stage.
+                </p>
+            </div>
+            <i class="bi bi-lock-fill" style="color:var(--rg-primary);font-size:1rem;"></i>
+        </div>
+
+        <div class="rg-pkt-rows">
+            <div class="rg-pkt-row">
+                <span class="rg-pkt-row__label">Outcome</span>
+                <span class="rg-pkt-row__value">
+                    {% if latest_final_decision.decision_outcome == "selected" %}
+                        <span class="rg-dec-outcome-pill rg-dec-outcome-pill--selected">
+                            <i class="bi bi-check-circle-fill"></i>Selected
+                        </span>
+                    {% else %}
+                        <span class="rg-dec-outcome-pill rg-dec-outcome-pill--not-selected">
+                            <i class="bi bi-x-circle-fill"></i>Not Selected
+                        </span>
+                    {% endif %}
+                </span>
+            </div>
+            <div class="rg-pkt-row">
+                <span class="rg-pkt-row__label">Decided</span>
+                <span class="rg-pkt-row__value">
+                    {{ latest_final_decision.decided_at|date:"N j, Y, g:i a" }}
+                </span>
+            </div>
+            <div class="rg-pkt-row">
+                <span class="rg-pkt-row__label">Decided By</span>
+                <span class="rg-pkt-row__value">
+                    {{ latest_final_decision.decided_by }}
+                    {% if latest_final_decision.decided_by_role %}
+                        <span class="text-muted" style="font-size:0.78rem;">
+                            ({{ latest_final_decision.decided_by_role }})
+                        </span>
+                    {% endif %}
+                </span>
+            </div>
+            {% if latest_final_decision.decision_notes %}
+                <div class="rg-pkt-row" style="align-items:flex-start;">
+                    <span class="rg-pkt-row__label" style="padding-top:0.1rem;">
+                        Notes
+                    </span>
+                    <span class="rg-pkt-row__value"
+                          style="white-space:pre-line;color:#374151;">
+                        {{ latest_final_decision.decision_notes }}
+                    </span>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+{% endif %}
+
+
+{% if completion_record %}
+    <div class="rg-icard">
+        <div class="rg-icard__header">
+            <div>
+                <h3 class="rg-icard__title">
+                    {{ completion_record.completion_label }} Record
+                </h3>
+                <p class="rg-icard__subtitle">
+                    Completion tracking details as recorded at closure.
+                </p>
+            </div>
+            <i class="bi bi-lock-fill" style="color:var(--rg-primary);font-size:1rem;"></i>
+        </div>
+
+        <div class="rg-pkt-rows mb-3">
+            {% if completion_record.completion_reference %}
+                <div class="rg-pkt-row">
+                    <span class="rg-pkt-row__label">
+                        {{ completion_record.completion_label }} Ref.
+                    </span>
+                    <span class="rg-pkt-row__value">
+                        {{ completion_record.completion_reference }}
+                    </span>
+                </div>
+            {% endif %}
+            {% if completion_record.completion_date %}
+                <div class="rg-pkt-row">
+                    <span class="rg-pkt-row__label">
+                        {{ completion_record.completion_label }} Date
+                    </span>
+                    <span class="rg-pkt-row__value">
+                        {{ completion_record.completion_date|date:"N j, Y" }}
+                    </span>
+                </div>
+            {% endif %}
+            {% if completion_record.deadline %}
+                <div class="rg-pkt-row">
+                    <span class="rg-pkt-row__label">Deadline</span>
+                    <span class="rg-pkt-row__value">
+                        {{ completion_record.deadline|date:"N j, Y" }}
+                    </span>
+                </div>
+            {% endif %}
+            {% if completion_record.announcement_reference %}
+                <div class="rg-pkt-row">
+                    <span class="rg-pkt-row__label">Announcement Ref.</span>
+                    <span class="rg-pkt-row__value">
+                        {{ completion_record.announcement_reference }}
+                    </span>
+                </div>
+            {% endif %}
+            {% if completion_record.announcement_date %}
+                <div class="rg-pkt-row">
+                    <span class="rg-pkt-row__label">Announcement Date</span>
+                    <span class="rg-pkt-row__value">
+                        {{ completion_record.announcement_date|date:"N j, Y" }}
+                    </span>
+                </div>
+            {% endif %}
+            {% if completion_record.remarks %}
+                <div class="rg-pkt-row" style="align-items:flex-start;">
+                    <span class="rg-pkt-row__label" style="padding-top:0.1rem;">
+                        Remarks
+                    </span>
+                    <span class="rg-pkt-row__value"
+                          style="white-space:pre-line;color:#374151;">
+                        {{ completion_record.remarks }}
+                    </span>
+                </div>
+            {% endif %}
+        </div>
+
+        
+        {% if completion_requirements %}
+            <div class="pt-3" style="border-top:1px solid #e5e7eb;">
+                <div class="d-flex align-items-center mb-2" style="gap:0.5rem;">
+                    <span style="font-size:0.8rem;font-weight:700;color:#1e293b;flex:1;">
+                        Requirement Checklist
+                    </span>
+                    <span style="font-size:0.75rem;color:#64748b;">
+                        {{ completion_record.completed_requirement_count }}&nbsp;/&nbsp;{{ completion_record.total_requirement_count }}
+                        resolved
+                    </span>
+                </div>
+                <div class="rg-cmp-req-list">
+                    {% for req in completion_requirements %}
+                        <div class="rg-cmp-req-row">
+                            <div class="rg-cmp-req-row__main">
+                                <div class="rg-cmp-req-row__label">{{ req.item_label }}</div>
+                                {% if req.notes %}
+                                    <div class="rg-cmp-req-row__notes">{{ req.notes }}</div>
+                                {% endif %}
+                            </div>
+                            {% with s=req.status|lower %}
+                            {% if s == "completed" %}
+                                <span class="rg-cmp-req-status-badge rg-cmp-req-status-badge--completed">
+                                    <i class="bi bi-check-circle-fill"></i>
+                                    {{ req.get_status_display }}
+                                </span>
+                            {% elif s == "pending" %}
+                                <span class="rg-cmp-req-status-badge rg-cmp-req-status-badge--pending">
+                                    <i class="bi bi-hourglass-split"></i>
+                                    {{ req.get_status_display }}
+                                </span>
+                            {% else %}
+                                <span class="rg-cmp-req-status-badge rg-cmp-req-status-badge--na">
+                                    <i class="bi bi-dash-circle"></i>
+                                    {{ req.get_status_display }}
+                                </span>
+                            {% endif %}
+                            {% endwith %}
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+
+    </div>
+{% endif %}
+
+
+{% if recruitment_case %}
+    <div class="rg-cmp-archive-meta">
+        {% if recruitment_case.closed_at %}
+            <div class="rg-cmp-archive-meta__item">
+                <span class="rg-cmp-archive-meta__label">Closed</span>
+                <span class="rg-cmp-archive-meta__value">
+                    {{ recruitment_case.closed_at|date:"N j, Y" }}
+                </span>
+            </div>
+        {% endif %}
+        <div class="rg-cmp-archive-meta__item">
+            <span class="rg-cmp-archive-meta__label">Case Stage</span>
+            <span class="rg-cmp-archive-meta__value">
+                {{ recruitment_case.get_current_stage_display }}
+            </span>
+        </div>
+        <div class="rg-cmp-archive-meta__item">
+            <span class="rg-cmp-archive-meta__label">Case Status</span>
+            <span class="rg-cmp-archive-meta__value">
+                {{ recruitment_case.get_case_status_display }}
+            </span>
+        </div>
+        {% if recruitment_case.locked_stage %}
+            <div class="rg-cmp-archive-meta__item">
+                <span class="rg-cmp-archive-meta__label">Locked At</span>
+                <span class="rg-cmp-archive-meta__value">
+                    {{ recruitment_case.locked_stage|title }}
+                </span>
+            </div>
+        {% endif %}
+        {% if completion_record and completion_record.completion_reference %}
+            <div class="rg-cmp-archive-meta__item">
+                <span class="rg-cmp-archive-meta__label">
+                    {{ completion_record.completion_label }} Reference
+                </span>
+                <span class="rg-cmp-archive-meta__value">
+                    {{ completion_record.completion_reference }}
+                </span>
+            </div>
+        {% endif %}
+    </div>
+{% endif %}
+
+
+{% if case_timeline %}
+    <div class="rg-icard">
+        <div class="rg-icard__header">
+            <div>
+                <h3 class="rg-icard__title">Case Timeline</h3>
+                <p class="rg-icard__subtitle">
+                    Key workflow events recorded throughout this recruitment case.
+                </p>
+            </div>
+            {% if audit_log_url %}
+                <a href="{{ audit_log_url }}"
+                   class="btn btn-sm btn-outline-secondary"
+                   style="font-size:0.75rem;white-space:nowrap;">
+                    <i class="bi bi-shield-lock me-1"></i>Full Audit Log
+                </a>
+            {% endif %}
+        </div>
+
+        <div class="rg-cmp-timeline">
+            {% for entry in case_timeline %}
+                
+                {% with a=entry.action|lower %}
+                <div class="rg-cmp-timeline-item
+                    {% if a == 'case_closed' %}rg-cmp-timeline-item--closed
+                    {% elif a == 'decision_recorded' %}rg-cmp-timeline-item--decision
+                    {% elif a == 'completion_recorded' %}rg-cmp-timeline-item--completion
+                    {% elif a == 'case_reopened' %}rg-cmp-timeline-item--reopen
+                    {% elif entry.is_sensitive_access %}rg-cmp-timeline-item--sensitive
+                    {% endif %}">
+                    <div class="rg-cmp-timeline-item__dot"></div>
+                    <div class="rg-cmp-timeline-item__body">
+                        <div class="rg-cmp-timeline-item__action">
+                            {{ entry.get_action_display }}
+                        </div>
+                        <div class="rg-cmp-timeline-item__meta">
+                            {{ entry.created_at|date:"N j, Y, g:i a" }}
+                            {% if entry.actor %}
+                                &mdash; {{ entry.actor }}
+                                {% if entry.actor_role %}
+                                    ({{ entry.actor_role }})
+                                {% endif %}
+                            {% endif %}
+                            {% if entry.workflow_stage %}
+                                &mdash; {{ entry.workflow_stage|title }}
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endwith %}
+            {% endfor %}
+        </div>
+
+    </div>
+{% elif audit_log_url %}
+    
+    <div class="rg-dec-handoff">
+        <span class="rg-dec-handoff__icon">
+            <i class="bi bi-shield-lock-fill"></i>
+        </span>
+        <div>
+            <strong>Audit Log.</strong>
+            The complete audit trail for this case is preserved and accessible.
+            <a href="{{ audit_log_url }}" class="ms-1">
+                View full audit log <i class="bi bi-arrow-right ms-1"></i>
+            </a>
+        </div>
+    </div>
+{% endif %}
+
+
+{% if reopen_form %}
+    <div class="rg-cmp-reopen-zone">
+        <div class="rg-cmp-reopen-zone__header">
+            <i class="bi bi-exclamation-triangle-fill rg-cmp-reopen-zone__icon"></i>
+            <span class="rg-cmp-reopen-zone__title">
+                Controlled Reopen Request
+            </span>
+            <span style="font-size:0.69rem;font-weight:600;color:#dc2626;
+                         text-transform:uppercase;letter-spacing:0.05em;">
+                HRM Chief Only
+            </span>
+        </div>
+        <div class="rg-cmp-reopen-zone__body">
+            Reopening a closed recruitment case is an exceptional, controlled action.
+            The case will be restored to its locked stage
+            {% if recruitment_case and recruitment_case.locked_stage %}
+                (<strong>{{ recruitment_case.locked_stage|title }}</strong>)
+            {% endif %}
+            for review and reprocessing.
+            This action is <strong>permanently audit-logged</strong> and should only be
+            used when a documented administrative need or legal obligation requires it.
+        </div>
+        <button type="button"
+                class="btn btn-sm btn-outline-danger"
+                data-bs-toggle="modal"
+                data-bs-target="#reopenConfirmModal">
+            <i class="bi bi-arrow-counterclockwise me-1"></i>Request Reopen&hellip;
+        </button>
+    </div>
+
+    
+    <div class="modal fade" id="reopenConfirmModal" tabindex="-1"
+         aria-labelledby="reopenConfirmModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="border-radius:0.6rem;overflow:hidden;">
+                <div class="modal-header"
+                     style="background:#991b1b;border-bottom:none;padding:1rem 1.25rem;">
+                    <h5 class="modal-title" id="reopenConfirmModalLabel"
+                        style="font-size:0.9375rem;font-weight:700;color:#fff;margin:0;">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        Reopen Closed Recruitment Case
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white"
+                            data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form method="post"
+                      action="{% url 'workflow-reopen' application.pk %}"
+                      id="reopen-form">
+                    {% csrf_token %}
+                    <div class="modal-body"
+                         style="padding:1.25rem;font-size:0.8125rem;color:#374151;line-height:1.65;">
+                        <div class="mb-3"
+                             style="background:#fef2f2;border:1px solid #fca5a5;
+                                    border-radius:0.35rem;padding:0.65rem 0.75rem;
+                                    font-size:0.8rem;color:#991b1b;">
+                            <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                            <strong>This is a controlled, audit-logged action.</strong>
+                            The reopen event will be permanently recorded against this case.
+                            Only proceed if you have a documented administrative or legal basis.
+                        </div>
+                        <div class="mb-3">
+                            <label for="{{ reopen_form.reason.id_for_label }}"
+                                   class="form-label fw-semibold"
+                                   style="font-size:0.8125rem;">
+                                {{ reopen_form.reason.label }}
+                                <span class="text-danger">*</span>
+                            </label>
+                            <textarea
+                                name="{{ reopen_form.reason.html_name }}"
+                                id="{{ reopen_form.reason.id_for_label }}"
+                                class="form-control{% if reopen_form.reason.errors %} is-invalid{% endif %}"
+                                rows="4"
+                                placeholder="Document the specific administrative or legal basis for reopening this closed recruitment case."
+                                style="font-size:0.8125rem;"
+                            ></textarea>
+                            {% if reopen_form.reason.errors %}
+                                <div class="invalid-feedback" style="font-size:0.8rem;">
+                                    {{ reopen_form.reason.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="modal-footer"
+                         style="border-top:1px solid #e5e7eb;padding:0.75rem 1.25rem;
+                                display:flex;justify-content:flex-end;gap:0.5rem;">
+                        <button type="button" class="btn btn-sm btn-outline-secondary"
+                                data-bs-dismiss="modal">
+                            Cancel
+                        </button>
+                        <button type="submit"
+                                class="btn btn-sm btn-danger"
+                                id="reopen-confirm-btn">
+                            <i class="bi bi-arrow-counterclockwise me-1"></i>
+                            Confirm Reopen
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+{% else %}
+    
+    {% if audit_log_url and not case_timeline %}
+        
+    {% elif audit_log_url and recruitment_case and recruitment_case.current_stage == "closed" %}
+        <div class="rg-dec-handoff">
+            <span class="rg-dec-handoff__icon">
+                <i class="bi bi-shield-lock-fill"></i>
+            </span>
+            <div>
+                <strong>Read-only archive.</strong>
+                All records for this case are preserved and immutable.
+                The complete audit trail is available through the
+                <a href="{{ audit_log_url }}">full audit log</a>.
+            </div>
+        </div>
+    {% endif %}
+{% endif %}
+

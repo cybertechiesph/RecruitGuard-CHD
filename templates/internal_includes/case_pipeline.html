@@ -1,0 +1,29 @@
+{% load recruitment_ui %}
+{% pipeline_stages as pipe_stages %}
+<div class="rg-cws-pipeline">
+    <div class="rg-pipeline">
+        {% for stage in pipe_stages %}
+            {% if recruitment_case %}
+                {% pipeline_stage_state application recruitment_case.case_status stage.key as pstate %}
+            {% else %}
+                {% with pstate="future" %}{% endwith %}
+            {% endif %}
+            <div class="rg-pipeline__stage is-{% if recruitment_case %}{{ pstate }}{% else %}future{% endif %}">
+                <div class="rg-pipeline__circle">
+                    {% if recruitment_case and pstate == "complete" %}
+                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                            <path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="currentColor" stroke-width="1.75"
+                                  stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    {% else %}
+                        {{ forloop.counter }}
+                    {% endif %}
+                </div>
+                <span class="rg-pipeline__label">{{ stage.label }}</span>
+            </div>
+            {% if not forloop.last %}
+                <div class="rg-pipeline__connector {% if recruitment_case and pstate == 'complete' %}is-complete{% endif %}"></div>
+            {% endif %}
+        {% endfor %}
+    </div>
+</div>

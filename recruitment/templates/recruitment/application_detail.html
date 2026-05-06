@@ -1,0 +1,496 @@
+{% extends "internal_base.html" %}
+{% load recruitment_ui %}
+
+{% block internal_title %}{{ application.reference_label }}{% endblock %}
+{% block workspace_body_class %}rg-cws-page{% endblock %}
+
+{% block breadcrumb %}
+<span class="rg-breadcrumb-sep">›</span>
+{% if request.user.role == "system_admin" %}
+    <a href="{% url 'recruitment-entry-list' %}">Entries</a>
+{% else %}
+    <a href="{% url 'workflow-queue' %}">My Queue</a>
+{% endif %}
+<span class="rg-breadcrumb-sep">›</span>
+<span class="rg-breadcrumb-current">{{ application.reference_label }}</span>
+{% endblock %}
+
+{% block content %}
+{% workflow_stages application.branch as workflow_steps %}
+{% pipeline_stages as pipe_stages %}
+
+
+{% include "internal_includes/case_header.html" %}
+
+
+{% include "internal_includes/case_pipeline.html" %}
+
+
+{% if request.user.role == "system_admin" %}
+<div class="rg-cws-observer-notice">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2" aria-hidden="true">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M12 8v4m0 4h.01"/>
+    </svg>
+    System Administrator — observer mode. Stage forms are not rendered for this role.
+    Case content is visible for audit and identity-management purposes only.
+</div>
+{% endif %}
+
+<div class="rg-cws-body">
+    <div class="rg-cws-layout{% if request.user.role != 'system_admin' %} rg-cws-layout--full{% endif %}">
+
+        
+        <div class="rg-cws-main">
+
+            
+            <div class="rg-cws-stage-tabs">
+                <span class="rg-cws-stage-tab is-active">{{ current_detail_tab.label }}</span>
+            </div>
+
+            
+            {% if current_detail_tab.key == "overview" %}
+            <div class="rg-cws-stage-section" id="cws-overview">
+                {% include "internal_includes/stage_titlebar.html" with title="Case Overview" %}
+
+                <div class="rg-icard">
+                    <div class="rg-icard__header">
+                        <div>
+                            <h3 class="rg-icard__title">Applicant Snapshot</h3>
+                            <p class="rg-icard__subtitle">
+                                Applicant details and submission information for this case.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="rg-info-list">
+                        <div class="rg-info-row">
+                            <div class="rg-info-row__label">Applicant</div>
+                            <div class="rg-info-row__value">{{ application.applicant_display_name }}</div>
+                        </div>
+                        <div class="rg-info-row">
+                            <div class="rg-info-row__label">Email</div>
+                            <div class="rg-info-row__value">{{ application.applicant_email }}</div>
+                        </div>
+                        {% if application.applicant_phone %}
+                        <div class="rg-info-row">
+                            <div class="rg-info-row__label">Phone</div>
+                            <div class="rg-info-row__value">{{ application.applicant_phone }}</div>
+                        </div>
+                        {% endif %}
+                        <div class="rg-info-row">
+                            <div class="rg-info-row__label">Position</div>
+                            <div class="rg-info-row__value">
+                                {{ application.position.title }} ({{ application.position.job_code }})
+                            </div>
+                        </div>
+                        <div class="rg-info-row">
+                            <div class="rg-info-row__label">Submitted</div>
+                            <div class="rg-info-row__value">
+                                {{ application.submitted_at|date:"M d, Y H:i" }}
+                            </div>
+                        </div>
+                        {% if application.qualification_summary %}
+                        <div class="rg-info-row">
+                            <div class="rg-info-row__label">Qualification Summary</div>
+                            <div class="rg-info-row__value">{{ application.qualification_summary }}</div>
+                        </div>
+                        {% endif %}
+                        {% if application.cover_letter %}
+                        <div class="rg-info-row">
+                            <div class="rg-info-row__label">Cover Letter</div>
+                            <div class="rg-info-row__value">{{ application.cover_letter }}</div>
+                        </div>
+                        {% endif %}
+                        <div class="rg-info-row">
+                            <div class="rg-info-row__label">Performance Rating Availability</div>
+                            <div class="rg-info-row__value">{{ application.get_performance_rating_applicability_display }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            
+            {% if current_detail_tab.key == "screening" %}
+            <div class="rg-cws-stage-section" id="cws-screening">
+                {% include "internal_includes/stage_titlebar.html" with title="Qualification Screening" locked=screening_locked %}
+
+                {% if screening_form %}
+                    
+                    {% include "internal_includes/screening_body.html" %}
+
+                {% elif screening_locked and current_screening_record %}
+                    
+                    {% include "internal_includes/screening_locked_body.html" %}
+                    {% if action_form and screening_disposition_required %}
+                        {% include "internal_includes/workflow_action_card.html" %}
+                    {% endif %}
+
+                {% else %}
+                    
+                    {% include "internal_includes/state_empty.html" with title="Screening not yet available" copy="This stage will become active once the case enters Secretariat or HRM Chief review." %}
+                {% endif %}
+            </div>
+            {% endif %}
+
+            
+            {% if current_detail_tab.key == "exam" %}
+            <div class="rg-cws-stage-section" id="cws-exam">
+                {% include "internal_includes/stage_titlebar.html" with title="Examination" locked=exam_locked %}
+
+                {% if exam_form %}
+                    
+                    {% include "internal_includes/exam_body.html" %}
+
+                {% elif exam_locked and current_exam_record %}
+                    
+                    {% include "internal_includes/exam_locked_body.html" %}
+
+                {% else %}
+                    
+                    {% include "internal_includes/state_empty.html" with title="Examination not yet available" copy="This stage will become active once the case advances to the examination step in the workflow." %}
+                {% endif %}
+            </div>
+            {% endif %}
+
+            
+            {% if current_detail_tab.key == "interview" %}
+            <div class="rg-cws-stage-section" id="cws-interview">
+                {% include "internal_includes/stage_titlebar.html" with title="Interview / Rating" locked=interview_session_locked %}
+
+                {% if interview_session_locked and current_interview_session %}
+                    
+                    {% include "internal_includes/interview_locked_body.html" %}
+
+                {% elif interview_session_form or interview_rating_form or interview_rating_requires_session or interview_fallback_form or interview_fallback_requires_session %}
+                    
+                    {% include "internal_includes/interview_body.html" %}
+
+                {% else %}
+                    
+                    {% include "internal_includes/state_empty.html" with title="Interview / Rating not yet available" copy="This stage will become active once the case advances to HRMPSB or HRM Chief review." %}
+                {% endif %}
+            </div>
+            {% endif %}
+
+            
+            {% if current_detail_tab.key == "deliberation" %}
+            <div class="rg-cws-stage-section" id="cws-deliberation">
+                {% include "internal_includes/stage_titlebar.html" with title="Deliberation / CAR" locked=deliberation_locked %}
+
+                {% if deliberation_form or car_form or car_requires_deliberation or car_requires_finalized_deliberation %}
+                    
+                    {% include "internal_includes/deliberation_body.html" %}
+
+                {% elif deliberation_locked or car_locked %}
+                    
+                    {% include "internal_includes/deliberation_locked_body.html" %}
+
+                {% else %}
+                    
+                    {% include "internal_includes/state_empty.html" with title="Deliberation not yet available" copy="This stage will become active once the case advances to the applicable deliberation review stage." %}
+                {% endif %}
+            </div>
+            {% endif %}
+
+            
+            {% if current_detail_tab.key == "decision" %}
+            <div class="rg-cws-stage-section" id="cws-decision">
+                {% include "internal_includes/stage_titlebar.html" with title="Final Decision" locked=latest_final_decision %}
+
+                {% if final_decision_form %}
+                    
+                    {% include "internal_includes/decision_body.html" %}
+
+                {% elif latest_final_decision %}
+                    
+                    {% include "internal_includes/decision_locked_body.html" %}
+
+                {% else %}
+                    
+                    {% include "internal_includes/state_empty.html" with title="Final Decision not yet available" copy="This stage will become active once the case advances to Appointing Authority review." %}
+                {% endif %}
+            </div>
+            {% endif %}
+
+            
+            {% if current_detail_tab.key == "completion" %}
+            <div class="rg-cws-stage-section" id="cws-completion">
+                {% include "internal_includes/stage_titlebar.html" with title="Completion &amp; Archive" locked=completion_record %}
+
+                {% if completion_form or closure_form %}
+                    
+                    {% include "internal_includes/completion_body.html" %}
+                    {% include "internal_includes/notification_action_cards.html" %}
+
+                {% elif recruitment_case and recruitment_case.current_stage == "closed" %}
+                    
+                    {% include "internal_includes/completion_locked_body.html" %}
+                    {% include "internal_includes/notification_action_cards.html" %}
+
+                {% elif completion_record %}
+                    
+                    {% include "internal_includes/completion_locked_body.html" %}
+                    {% include "internal_includes/notification_action_cards.html" %}
+
+                {% else %}
+                    
+                    {% include "internal_includes/state_empty.html" with title="Completion &amp; Archive not yet available" copy="This stage will become active once a final decision has been recorded and the case advances to completion tracking." %}
+                {% endif %}
+            </div>
+            {% endif %}
+
+            
+            {% if current_detail_tab.key == "actions" %}
+            <div class="rg-cws-stage-section" id="cws-actions">
+                {% include "internal_includes/stage_titlebar.html" with title="Workflow Actions" %}
+
+                {% if action_form %}
+                    {% include "internal_includes/workflow_action_card.html" %}
+                {% endif %}
+
+                {% include "internal_includes/notification_action_cards.html" %}
+
+                {% if override_form %}
+                    <div class="rg-icard" style="border-color:#fca5a5;">
+                        <div class="rg-icard__header">
+                            <div>
+                                <h3 class="rg-icard__title">Level 2 Override</h3>
+                                <p class="rg-icard__subtitle">
+                                    Use only when Secretariat must explicitly process a Level 2 case
+                                    with audit logging.
+                                </p>
+                            </div>
+                        </div>
+                        <form method="post" action="{% url 'workflow-override' application.pk %}">
+                            {% csrf_token %}
+                            <div class="rg-form-grid">
+                                {% for field in override_form %}
+                                    {% include "recruitment/includes/form_field.html" with field=field %}
+                                {% endfor %}
+                            </div>
+                            <div class="rg-form-actions">
+                                <button type="submit" class="btn btn-outline-danger">
+                                    Grant Controlled Override
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                {% endif %}
+
+                {% if reopen_form %}
+                    <div class="rg-icard" style="border-color:#fca5a5;">
+                        <div class="rg-icard__header">
+                            <div>
+                                <h3 class="rg-icard__title">Controlled Reopen</h3>
+                                <p class="rg-icard__subtitle">
+                                    Use only for stage-locked cases that need to be reopened with
+                                    traceable justification.
+                                </p>
+                            </div>
+                        </div>
+                        <form method="post" action="{% url 'workflow-reopen' application.pk %}">
+                            {% csrf_token %}
+                            <div class="rg-form-grid">
+                                {% for field in reopen_form %}
+                                    {% include "recruitment/includes/form_field.html" with field=field %}
+                                {% endfor %}
+                            </div>
+                            <div class="rg-form-actions">
+                                <button type="submit" class="btn btn-outline-danger">Reopen Case</button>
+                            </div>
+                        </form>
+                    </div>
+                {% endif %}
+
+                {% if not action_form and not checklist_notification_form and not reminder_notification_form and not override_form and not reopen_form %}
+                    {% include "internal_includes/state_empty.html" with title="No actions available" copy="No workflow actions are currently available for your role at this stage." %}
+                {% endif %}
+            </div>
+            {% endif %}
+
+            
+            {% if request.user.role == "system_admin" %}
+            <div class="rg-cws-stage-section" id="cws-evidence" style="display:none;">
+                {% include "internal_includes/stage_titlebar.html" with title="Evidence Vault" %}
+
+                <div class="rg-icard">
+                    <div class="rg-icard__header">
+                        <div>
+                            <h3 class="rg-icard__title">Stored Evidence</h3>
+                            <p class="rg-icard__subtitle">
+                                Encrypted controlled documents stored for this case.
+                            </p>
+                        </div>
+                    </div>
+                    {% if evidence_items %}
+                        <div class="rg-list-stack">
+                            {% for item in evidence_items %}
+                                <article class="rg-record">
+                                    <div class="rg-record__header">
+                                        <div>
+                                            <strong>{{ item.label }}</strong>
+                                            <div class="rg-record__meta">
+                                                {{ item.original_filename }} — {{ item.version_label }}
+                                            </div>
+                                        </div>
+                                        <span class="rg-note">{{ item.created_at|date:"M d, Y H:i" }}</span>
+                                    </div>
+                                    <div class="d-flex flex-wrap gap-2 mb-2">
+                                        <span class="rg-pill rg-pill--neutral rg-pill--sm">
+                                            SHA-256: {{ item.sha256_digest|truncatechars:18 }}
+                                        </span>
+                                        {% if item.stage %}
+                                            <span class="rg-pill rg-pill--info rg-pill--sm">
+                                                {{ item.stage|stage_label }}
+                                            </span>
+                                        {% endif %}
+                                        <span class="rg-pill rg-pill--neutral rg-pill--sm">
+                                            {{ item.get_artifact_scope_display }}
+                                        </span>
+                                        {% if item.is_archived %}
+                                            <span class="rg-pill rg-pill--warning rg-pill--sm">
+                                                Archived{% if item.archive_tag %}: {{ item.archive_tag }}{% endif %}
+                                            </span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="d-flex gap-2">
+                                        <a href="{% url 'evidence-download' application.pk item.pk %}?disposition=inline"
+                                           class="btn btn-outline-secondary btn-sm"
+                                           target="_blank"
+                                           rel="noopener">View</a>
+                                        <a href="{% url 'evidence-download' application.pk item.pk %}"
+                                           class="btn btn-outline-secondary btn-sm">Download</a>
+                                    </div>
+                                </article>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        {% include "internal_includes/state_empty.html" with title="No evidence uploaded yet" copy="Controlled documents will appear here once uploaded to the vault." %}
+                    {% endif %}
+                </div>
+
+                {% if evidence_form %}
+                    <div class="rg-icard">
+                        <div class="rg-icard__header">
+                            <div>
+                                <h3 class="rg-icard__title">Upload Evidence</h3>
+                                <p class="rg-icard__subtitle">
+                                    Store additional controlled documents in the encrypted Evidence Vault.
+                                </p>
+                            </div>
+                        </div>
+                        <form method="post" action="{% url 'evidence-upload' application.pk %}"
+                              enctype="multipart/form-data">
+                            {% csrf_token %}
+                            <div class="rg-form-grid">
+                                {% for field in evidence_form %}
+                                    {% include "recruitment/includes/form_field.html" with field=field %}
+                                {% endfor %}
+                            </div>
+                            <div class="rg-form-actions">
+                                <button type="submit" class="btn btn-rg-primary">Store Securely</button>
+                            </div>
+                        </form>
+                    </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            
+            <div class="rg-cws-stage-section" id="cws-timeline" style="display:none;">
+                {% include "internal_includes/stage_titlebar.html" with title="Case Timeline" %}
+
+                <div class="rg-icard">
+                    <div class="rg-icard__header">
+                        <div>
+                            <h3 class="rg-icard__title">Workflow Milestones</h3>
+                            <p class="rg-icard__subtitle">
+                                Workflow-facing events and stage transitions for this recruitment case.
+                            </p>
+                        </div>
+                        {% if audit_log_url %}
+                        <div class="rg-icard__actions">
+                            <a href="{{ audit_log_url }}" class="btn btn-outline-secondary btn-sm">
+                                Full Audit Trail
+                            </a>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% if case_timeline %}
+                        <div class="rg-timeline">
+                            {% for entry in case_timeline %}
+                                <article class="rg-timeline__item">
+                                    <div class="rg-record">
+                                        <div class="rg-record__header">
+                                            <strong>{{ entry.get_action_display }}</strong>
+                                            <span class="rg-note">
+                                                {{ entry.created_at|date:"M d, Y H:i" }}
+                                            </span>
+                                        </div>
+                                        <p class="mb-1">{{ entry.description }}</p>
+                                        {% if entry.metadata.from_stage or entry.metadata.to_stage %}
+                                            <p class="mb-1 rg-note">
+                                                {% if entry.metadata.from_stage %}
+                                                    {{ entry.metadata.from_stage|stage_label }}
+                                                {% else %}
+                                                    Start
+                                                {% endif %}
+                                                →
+                                                {% if entry.metadata.to_stage %}
+                                                    {{ entry.metadata.to_stage|stage_label }}
+                                                {% elif entry.metadata.case_stage %}
+                                                    {{ entry.metadata.case_stage|stage_label }}
+                                                {% else %}
+                                                    No stage
+                                                {% endif %}
+                                            </p>
+                                        {% endif %}
+                                        <p class="mb-0 rg-note">
+                                            {{ entry.actor_role|role_label|default:"System" }}
+                                        </p>
+                                    </div>
+                                </article>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        {% include "internal_includes/state_empty.html" with title="No events recorded yet" copy="Workflow transitions and milestone events will appear here." %}
+                    {% endif %}
+                </div>
+            </div>
+
+        </div>
+        
+
+        {% if request.user.role == "system_admin" %}
+        <div class="rg-cws-sidebar">
+            {% include "internal_includes/case_meta_sidebar.html" %}
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+
+<script>
+(function () {
+    "use strict";
+    var tabs = document.querySelectorAll(".js-cws-tab");
+    var sections = document.querySelectorAll(".rg-cws-stage-section");
+
+    tabs.forEach(function (tab) {
+        tab.addEventListener("click", function (e) {
+            e.preventDefault();
+            /* Deactivate all tabs */
+            tabs.forEach(function (t) { t.classList.remove("is-active"); });
+            tab.classList.add("is-active");
+            /* Hide all sections */
+            sections.forEach(function (s) { s.style.display = "none"; });
+            /* Show target section */
+            var target = document.getElementById(tab.dataset.section);
+            if (target) { target.style.display = ""; }
+        });
+    });
+})();
+</script>
+{% endblock %}

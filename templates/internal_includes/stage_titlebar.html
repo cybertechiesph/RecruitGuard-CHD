@@ -1,0 +1,18 @@
+{# Parameters: title, locked (bool, optional), observer (bool, optional) #}
+<div class="rg-cws-stage-titlebar">
+    <div class="rg-cws-stage-titlebar__left">
+        <span class="rg-cws-stage-titlebar__title">{{ title }}</span>
+        {% if locked %}
+            <span class="rg-pill rg-pill--neutral rg-pill--sm" style="display:inline-flex;align-items:center;gap:3px;">
+                <svg width="9" height="10" viewBox="0 0 12 14" fill="none" aria-hidden="true">
+                    <rect x="2" y="6" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+                    <path d="M4 6V4.5a2 2 0 0 1 4 0V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                Locked
+            </span>
+        {% elif observer %}
+            <span class="rg-pill rg-pill--info rg-pill--sm">Read Only</span>
+        {% endif %}
+    </div>
+    <div class="rg-cws-stage-titlebar__right"></div>
+</div>

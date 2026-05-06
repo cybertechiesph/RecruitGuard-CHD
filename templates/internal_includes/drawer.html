@@ -1,0 +1,73 @@
+{% comment %}
+Right-side drawer / detail panel partial.
+A reusable slide-in panel for row details, audit events,
+and evidence previews.
+
+Usage — include once in a page template:
+  {% include "internal_includes/drawer.html" with drawer_id="detailDrawer" %}
+
+Then add a data-drawer trigger on any element:
+  <button type="button"
+          data-drawer="detailDrawer"
+          data-drawer-title="Application Detail"
+          data-drawer-subtitle="REF-2026-001">
+      View Detail
+  </button>
+
+The drawer JS (included via internal_base.html extra_scripts block)
+handles open/close and copies data-drawer-* attributes into the panel.
+
+To populate drawer body content dynamically, use AJAX or a
+{% block drawer_content %} override in the page template.
+Static content can be placed directly inside the #drawerBody div.
+
+Parameters:
+  drawer_id      — HTML id for the drawer (required)
+  title          — default title before JS populates it
+  subtitle       — default subtitle
+{% endcomment %}
+<div class="rg-drawer-overlay" id="{{ drawer_id }}Overlay" aria-hidden="true"></div>
+
+<div class="rg-drawer"
+     id="{{ drawer_id }}"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="{{ drawer_id }}Title">
+
+    <div class="rg-drawer__header">
+        <div>
+            <h2 class="rg-drawer__title" id="{{ drawer_id }}Title">
+                {{ title|default:"Detail" }}
+            </h2>
+            {% if subtitle %}
+                <p class="rg-drawer__meta">{{ subtitle }}</p>
+            {% else %}
+                <p class="rg-drawer__meta" id="{{ drawer_id }}Subtitle"></p>
+            {% endif %}
+        </div>
+        <button type="button"
+                class="rg-drawer__close"
+                data-drawer-close="{{ drawer_id }}"
+                aria-label="Close panel">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+        </button>
+    </div>
+
+    <div class="rg-drawer__body" id="{{ drawer_id }}Body">
+        {% block drawer_content %}
+            {# Pages override this block, or JS populates #drawerId Body via fetch #}
+            <div class="rg-istate-loading" role="status">
+                <div class="rg-spinner"></div>
+                <p class="rg-istate-loading__label">Loading…</p>
+            </div>
+        {% endblock %}
+    </div>
+
+    {% block drawer_footer %}{% endblock %}
+
+</div>

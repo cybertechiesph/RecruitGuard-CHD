@@ -1,0 +1,87 @@
+{% extends "internal_base.html" %}
+
+{% block content %}
+<div class="rg-page-header">
+    <div>
+        <p class="rg-eyebrow">Recruitment Entry Management</p>
+        <h1 class="rg-page-title">Position Reference Catalog</h1>
+        <p class="rg-page-copy">Controlled official position references used by Plantilla vacancies and COS openings during recruitment entry creation.</p>
+    </div>
+    <div class="rg-page-actions">
+        <a href="{% url 'recruitment-entry-list' %}" class="btn btn-outline-secondary">View Entries</a>
+        {% if user.role == "system_admin" %}
+            <a href="{% url 'position-catalog-create' %}" class="btn btn-rg-primary">New Position Reference</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="alert alert-info">
+    Official positions come from this controlled reference catalog. Recruitment entry handlers may select from the active list, but routine entry creation does not create new official positions.
+</div>
+
+<div class="rg-table-shell">
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Position</th>
+                    <th>Classification</th>
+                    <th>Occupational Service</th>
+                    <th>Reference Status</th>
+                    <th>Catalog State</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for position in positions %}
+                    <tr>
+                        <td>
+                            <strong>{{ position.position_title }}</strong>
+                            <div class="small text-muted">
+                                Slug: {{ position.position_slug }}
+                                {% if position.salary_grade %} | SG {{ position.salary_grade }}{% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            <div>{{ position.get_level_classification_display|default:"No level classification" }}</div>
+                            <div class="small text-muted">
+                                {% if position.class_id %}Class ID: {{ position.class_id }}{% else %}Class ID pending{% endif %}
+                                {% if position.os_code %} | OS Code: {{ position.os_code }}{% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            <div>{{ position.occupational_service|default:"Pending manual review" }}</div>
+                            <div class="small text-muted">{{ position.occupational_group|default:"Group not recorded" }}</div>
+                        </td>
+                        <td>
+                            <span class="rg-pill {% if position.reference_status == 'VERIFIED_REFERENCE' %}rg-pill--success{% elif position.reference_status == 'NEEDS_REVIEW' %}rg-pill--warning{% else %}rg-pill--danger{% endif %}">
+                                {{ position.get_reference_status_display }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if position.is_active %}
+                                <span class="rg-pill rg-pill--success">Active</span>
+                            {% else %}
+                                <span class="rg-pill rg-pill--neutral">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            {% if user.role == "system_admin" %}
+                                <a href="{% url 'position-catalog-update' position.pk %}" class="btn btn-outline-secondary btn-sm">Edit</a>
+                            {% else %}
+                                <span class="text-muted small">Read only</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="6">
+                            <div class="rg-empty-state">No position references recorded yet.</div>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,134 @@
+{% extends "internal_base.html" %}
+{% load recruitment_ui %}
+
+{% block content %}
+<div class="rg-page-header">
+    <div>
+        <p class="rg-eyebrow">Module 14</p>
+        {% if review_scope == "application" %}
+            <h1 class="rg-page-title">Application Audit Trail</h1>
+            <p class="rg-page-copy">Read-only traceability review for {{ application.reference_label }} across workflow, routing, evidence, export, and sensitive-access events.</p>
+        {% else %}
+            <h1 class="rg-page-title">System Audit Logs</h1>
+            <p class="rg-page-copy">Read-only review of system-level identity, access, and security-relevant events that do not expose recruitment case content.</p>
+        {% endif %}
+    </div>
+    <div class="rg-page-actions">
+        <span class="rg-pill rg-pill--neutral">{{ result_count }} log{{ result_count|pluralize }}</span>
+        {% if review_scope == "application" %}
+            <a href="{% url 'application-detail' application.pk %}" class="btn btn-outline-secondary">Back to Case</a>
+        {% endif %}
+    </div>
+</div>
+
+{% if review_scope == "application" %}
+    <div class="rg-kpi-grid mb-4">
+        <div class="rg-kpi">
+            <span class="rg-kpi__label">Case Reference</span>
+            <strong class="rg-kpi__value">{{ application.reference_label }}</strong>
+            <span class="rg-kpi__hint">Linked recruitment application</span>
+        </div>
+        <div class="rg-kpi">
+            <span class="rg-kpi__label">Branch / Level</span>
+            <strong class="rg-kpi__value">{{ application.get_branch_display }} / {{ application.get_level_display }}</strong>
+            <span class="rg-kpi__hint">Routing-aware case classification</span>
+        </div>
+        <div class="rg-kpi">
+            <span class="rg-kpi__label">Current Status</span>
+            <strong class="rg-kpi__value">{{ application.get_status_display }}</strong>
+            <span class="rg-kpi__hint">Current workflow state</span>
+        </div>
+        <div class="rg-kpi">
+            <span class="rg-kpi__label">Handler</span>
+            <strong class="rg-kpi__value">{{ application.current_handler_role|role_label }}</strong>
+            <span class="rg-kpi__hint">Current authorized processor</span>
+        </div>
+    </div>
+{% endif %}
+
+<div class="card p-4 mb-4">
+    <h2 class="h4 mb-3">Search and Filters</h2>
+    <form method="get">
+        <div class="rg-form-grid">
+            {% for field in search_form %}
+                {% include "recruitment/includes/form_field.html" with field=field %}
+            {% endfor %}
+        </div>
+        <div class="rg-form-actions">
+            <button type="submit" class="btn btn-rg-primary">Apply Filters</button>
+            {% if review_scope == "application" %}
+                <a href="{% url 'application-audit-log' application.pk %}" class="btn btn-outline-secondary">Reset</a>
+            {% else %}
+                <a href="{% url 'audit-log-list' %}" class="btn btn-outline-secondary">Reset</a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+<div class="card p-4">
+    <div class="rg-section__header">
+        <div>
+            <h2 class="h4 mb-1">Logged Events</h2>
+            <p class="rg-section-copy">Each event preserves actor identity, role, timestamp, action, case reference, workflow stage, and trace details.</p>
+        </div>
+    </div>
+    {% if audit_logs %}
+        <div class="rg-list-stack">
+            {% for log in audit_logs %}
+                <article class="rg-record">
+                    <div class="rg-record__header">
+                        <div>
+                            <strong>{{ log.get_action_display }}</strong>
+                            <div class="rg-record__meta">
+                                {% if log.case_reference %}
+                                    {{ log.case_reference }}
+                                {% else %}
+                                    System-wide event
+                                {% endif %}
+                            </div>
+                        </div>
+                        <span class="rg-note">{{ log.created_at|date:"M d, Y H:i" }}</span>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2 mb-2">
+                        {% if log.actor_role %}
+                            <span class="rg-pill rg-pill--{{ log.actor_role|role_theme }}">{{ log.actor_role|role_label }}</span>
+                        {% else %}
+                            <span class="rg-pill rg-pill--neutral">System</span>
+                        {% endif %}
+                        {% if log.workflow_stage %}
+                            <span class="rg-pill rg-pill--info">{{ log.workflow_stage|stage_label }}</span>
+                        {% endif %}
+                        {% if log.is_sensitive_access %}
+                            <span class="rg-pill rg-pill--warning">Sensitive Access</span>
+                        {% endif %}
+                        {% if log.application %}
+                            <span class="rg-pill rg-pill--{{ log.application.branch|branch_theme }}">{{ log.application.get_branch_display }}</span>
+                            <span class="rg-pill rg-pill--{{ log.application.level|level_theme }}">{{ log.application.get_level_display }}</span>
+                        {% endif %}
+                    </div>
+                    <p class="mb-1">{{ log.description }}</p>
+                    <p class="mb-1">
+                        <strong>Actor:</strong>
+                        {% if log.actor %}
+                            {{ log.actor }}{% if log.actor.username %} ({{ log.actor.username }}){% endif %}
+                        {% else %}
+                            System
+                        {% endif %}
+                    </p>
+                    {% if log.application %}
+                        <p class="mb-1"><strong>Case:</strong> {{ log.application.reference_label }} | {{ log.application.position.title }}</p>
+                    {% endif %}
+                    {% if log.metadata %}
+                        <details class="mt-2">
+                            <summary class="rg-note">Event details</summary>
+                            <pre class="bg-light border rounded p-3 mt-2 mb-0"><code>{{ log.metadata|pretty_json }}</code></pre>
+                        </details>
+                    {% endif %}
+                </article>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="rg-empty-state">No audit events matched the current filters.</div>
+    {% endif %}
+</div>
+{% endblock %}

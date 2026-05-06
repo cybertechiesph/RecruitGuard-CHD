@@ -1,0 +1,72 @@
+{% extends "internal_base.html" %}
+{% load recruitment_ui %}
+
+{% block content %}
+<div class="rg-page-header">
+    <div>
+        <p class="rg-eyebrow">Internal Reference</p>
+        <h1 class="rg-page-title">Open Recruitment Entries</h1>
+        <p class="rg-page-copy">Reference view of the active recruitment entries currently visible in the internal portal.</p>
+    </div>
+    <div class="rg-page-actions">
+        <a href="{% url 'applicant-portal' %}" class="btn btn-outline-secondary">Open Public Applicant Portal</a>
+    </div>
+</div>
+
+<div class="row g-4">
+    {% for position in positions %}
+        <div class="col-lg-6">
+            <div class="card p-4 h-100">
+                <div class="rg-list-item__header">
+                    <div>
+                        <h2 class="h4 mb-1">{{ position.title }}</h2>
+                        <p class="mb-0 rg-note">
+                            {{ position.job_code }} |
+                            {{ position.official_office_label|default:"CHD CALABARZON" }}
+                        </p>
+                    </div>
+                    <span class="rg-pill rg-pill--{{ position.branch|branch_theme }}">{{ position.get_branch_display }}</span>
+                </div>
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    <span class="rg-pill rg-pill--{{ position.level|level_theme }}">{{ position.get_level_display }}</span>
+                    <span class="rg-pill rg-pill--info">{{ position.get_intake_mode_display }}</span>
+                </div>
+                {% if position.position_reference or position.qualification_reference or not position.position_reference and position.description or not position.position_reference and position.requirements %}
+                    <div class="rg-form-section">
+                        <h3 class="rg-form-section__title">Reference Snapshot</h3>
+                        {% if position.position_reference %}
+                            <p class="rg-form-section__copy mb-2">
+                                {% if position.position_reference.class_id %}Class ID {{ position.position_reference.class_id }}{% else %}Class ID pending{% endif %}
+                                {% if position.position_reference.salary_grade %} | SG {{ position.position_reference.salary_grade }}{% endif %}
+                                {% if position.position_reference.occupational_group %} | {{ position.position_reference.occupational_group }}{% endif %}
+                            </p>
+                            {% if position.position_reference.qualification_summary %}
+                                <div class="rg-note mb-2">{{ position.position_reference.qualification_summary|linebreaksbr }}</div>
+                            {% endif %}
+                        {% endif %}
+                        {% if position.qualification_reference %}
+                            <p class="rg-form-section__copy mb-0">{{ position.qualification_reference }}</p>
+                        {% elif not position.position_reference and position.requirements %}
+                            <p class="rg-form-section__copy mb-0">{{ position.requirements }}</p>
+                        {% endif %}
+                        {% if not position.position_reference and position.description %}
+                            <p class="rg-note mt-2 mb-0">{{ position.description }}</p>
+                        {% endif %}
+                    </div>
+                {% endif %}
+                <p class="mt-3 mb-0 rg-note">
+                    {% if position.closing_date %}
+                        Open until {{ position.closing_date|date:"M d, Y" }}
+                    {% else %}
+                        Intake remains open while the entry is active.
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    {% empty %}
+        <div class="col-12">
+            <div class="rg-empty-state">No active recruitment entries found.</div>
+        </div>
+    {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,125 @@
+import hashlib
+from dataclasses import dataclass
+from pathlib import Path
+
+from django.conf import settings
+
+
+MAX_APPLICANT_DOCUMENT_UPLOAD_BYTES = 5 * 1024 * 1024
+GENERIC_CONTENT_TYPES = {"", "application/octet-stream", "binary/octet-stream"}
+VALIDATED_UPLOAD_CACHE_ATTR = "_recruitguard_validated_applicant_document"
+
+
+@dataclass(frozen=True)
+class ValidatedApplicantDocumentUpload:
+    canonical_content_type: str
+    detected_format: str
+    extension: str
+    raw_bytes: bytes
+    sha256_digest: str
+    size_bytes: int
+
+
+FILE_SIGNATURES = {
+    "pdf": {
+        "canonical_content_type": "application/pdf",
+        "content_types": {"application/pdf", "application/x-pdf"},
+        "extensions": {".pdf"},
+        "signature": b"%PDF-",
+    },
+    "jpeg": {
+        "canonical_content_type": "image/jpeg",
+        "content_types": {"image/jpeg", "image/jpg", "image/pjpeg"},
+        "extensions": {".jpg", ".jpeg"},
+        "signature": b"\xff\xd8\xff",
+    },
+    "png": {
+        "canonical_content_type": "image/png",
+        "content_types": {"image/png", "image/x-png"},
+        "extensions": {".png"},
+        "signature": b"\x89PNG\r\n\x1a\n",
+    },
+}
+
+
+def _normalized_content_type(uploaded_file):
+    content_type = getattr(uploaded_file, "content_type", "") or ""
+    return content_type.split(";", 1)[0].strip().lower()
+
+
+def _detect_file_format(raw_bytes):
+    if raw_bytes.startswith(FILE_SIGNATURES["pdf"]["signature"]):
+        return "pdf"
+    if raw_bytes.startswith(FILE_SIGNATURES["jpeg"]["signature"]):
+        return "jpeg"
+    if raw_bytes.startswith(FILE_SIGNATURES["png"]["signature"]):
+        return "png"
+    return None
+
+
+def validate_applicant_document_upload(uploaded_file):
+    cached_validation = getattr(uploaded_file, VALIDATED_UPLOAD_CACHE_ATTR, None)
+    if cached_validation is not None:
+        return cached_validation
+
+    file_size = getattr(uploaded_file, "size", None)
+    max_bytes = min(
+        getattr(settings, "MAX_EVIDENCE_UPLOAD_BYTES", MAX_APPLICANT_DOCUMENT_UPLOAD_BYTES),
+        MAX_APPLICANT_DOCUMENT_UPLOAD_BYTES,
+    )
+    if file_size is not None and file_size > max_bytes:
+        raise ValueError("Each applicant document must be 5 MB or smaller.")
+    if file_size == 0:
+        raise ValueError("Empty files are not allowed.")
+
+    filename = getattr(uploaded_file, "name", "") or ""
+    extension = Path(filename).suffix.lower()
+    allowed_extensions = {
+        allowed_extension
+        for signature in FILE_SIGNATURES.values()
+        for allowed_extension in signature["extensions"]
+    }
+    if extension not in allowed_extensions:
+        raise ValueError("Upload a PDF, JPG, JPEG, or PNG file only.")
+
+    raw_bytes = uploaded_file.read()
+    if hasattr(uploaded_file, "seek"):
+        uploaded_file.seek(0)
+    if not raw_bytes:
+        raise ValueError("Empty files are not allowed.")
+    if len(raw_bytes) > max_bytes:
+        raise ValueError("Each applicant document must be 5 MB or smaller.")
+
+    detected_format = _detect_file_format(raw_bytes)
+    if not detected_format:
+        raise ValueError(
+            "The uploaded file could not be verified as a valid PDF, JPG, JPEG, or PNG document."
+        )
+
+    detected_signature = FILE_SIGNATURES[detected_format]
+    if extension not in detected_signature["extensions"]:
+        raise ValueError(
+            "The uploaded file contents do not match the selected file extension. "
+            "Please upload the correct PDF, JPG, JPEG, or PNG file."
+        )
+
+    content_type = _normalized_content_type(uploaded_file)
+    if (
+        content_type not in GENERIC_CONTENT_TYPES
+        and content_type not in detected_signature["content_types"]
+    ):
+        raise ValueError(
+            "The uploaded file type does not match the selected document format. "
+            "Please upload a valid PDF, JPG, JPEG, or PNG file."
+        )
+
+    validated_upload = ValidatedApplicantDocumentUpload(
+        canonical_content_type=detected_signature["canonical_content_type"],
+        detected_format=detected_format,
+        extension=extension,
+        raw_bytes=raw_bytes,
+        sha256_digest=hashlib.sha256(raw_bytes).hexdigest(),
+        size_bytes=len(raw_bytes),
+    )
+    setattr(uploaded_file, VALIDATED_UPLOAD_CACHE_ATTR, validated_upload)
+    return validated_upload

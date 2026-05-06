@@ -1,0 +1,247 @@
+{% extends "applicant_base.html" %}
+{% load recruitment_ui %}
+
+{% block title %}Verify Your Email | RecruitGuard-CHD{% endblock %}
+
+{% block site_header %}
+{# Simplified navbar during application flow #}
+<header class="rg-topbar rg-public-topbar">
+    <div class="rg-container rg-topbar__inner rg-public-topbar__inner">
+        <a class="rg-brand rg-public-brand" href="{% url 'applicant-portal' %}">
+            <span class="rg-brand-copy">
+                <span class="rg-brand-kicker">Republic of the Philippines</span>
+                <span class="rg-brand-agency">Department of Health &ndash; CHD CALABARZON</span>
+                <span class="rg-brand-title">RecruitGuard-CHD Recruitment Portal</span>
+            </span>
+        </a>
+        <div style="font-size:0.85rem; color:#5f6c78; text-align:right;">
+            Applying for<br><strong style="color:#0e2f14;">{{ application.position.title }}</strong>
+        </div>
+    </div>
+</header>
+{% endblock %}
+
+{% block main_class %}{% endblock %}
+
+{% block content %}
+
+{# Stepper #}
+<div class="rg-pub-stepper" role="navigation" aria-label="Application steps">
+    <div class="rg-pub-stepper__step rg-pub-stepper__step--done">
+        <div class="rg-pub-stepper__circle">&#10003;</div>
+        <span class="rg-pub-stepper__label">Your Information</span>
+    </div>
+    <div class="rg-pub-stepper__connector rg-pub-stepper__connector--done"></div>
+    <div class="rg-pub-stepper__step {% if not application.otp_is_currently_valid %}rg-pub-stepper__step--active{% else %}rg-pub-stepper__step--done{% endif %}">
+        <div class="rg-pub-stepper__circle">
+            {% if application.otp_is_currently_valid %}&#10003;{% else %}3{% endif %}
+        </div>
+        <span class="rg-pub-stepper__label">Verify Email</span>
+    </div>
+    <div class="rg-pub-stepper__connector {% if application.otp_is_currently_valid %}rg-pub-stepper__connector--done{% endif %}"></div>
+    <div class="rg-pub-stepper__step {% if application.otp_is_currently_valid %}rg-pub-stepper__step--active{% endif %}">
+        <div class="rg-pub-stepper__circle">4</div>
+        <span class="rg-pub-stepper__label">Review &amp; Submit</span>
+    </div>
+</div>
+<p class="rg-pub-stepper-label">
+    {% if not application.otp_is_currently_valid %}
+        Step 3 of 4 &mdash; Verify your email address to continue.
+    {% else %}
+        Step 4 of 4 &mdash; Review your application and submit.
+    {% endif %}
+</p>
+
+<div class="rg-pub-wrap" style="max-width:520px; padding-top:2rem;">
+
+    {% if messages %}
+    <div style="margin-bottom:1rem;">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {# ── State: OTP not yet verified ──────────────────────────── #}
+    {% if not application.otp_is_currently_valid %}
+
+    <div class="rg-pub-otp-card">
+        <h1 style="font-size:1.3rem; font-weight:700; color:#111827; margin:0 0 0.5rem; text-align:center;">
+            Verify Your Email
+        </h1>
+        <p style="font-size:0.9rem; color:#5f6c78; text-align:center; margin-bottom:1.25rem;">
+            We sent a 6-digit verification code to:
+        </p>
+
+        <div class="rg-pub-otp-email">
+            <span>&#9993;</span>
+            <strong>{{ application.applicant_email }}</strong>
+        </div>
+
+        <form method="post" autocomplete="off" novalidate>
+            {% csrf_token %}
+            <input type="hidden" name="action" value="verify">
+
+            <div class="rg-pub-field" style="margin-bottom:1.25rem;">
+                <label for="{{ otp_form.otp.id_for_label }}" style="display:block; font-size:0.875rem; font-weight:600; color:#374151; margin-bottom:0.4rem; text-align:center;">
+                    Enter Verification Code
+                </label>
+                <input type="text"
+                       id="{{ otp_form.otp.id_for_label }}"
+                       name="{{ otp_form.otp.html_name }}"
+                       class="form-control rg-pub-otp-input {% if otp_form.otp.errors %}is-invalid{% endif %}"
+                       inputmode="numeric"
+                       autocomplete="one-time-code"
+                       maxlength="6"
+                       pattern="[0-9]{6}"
+                       placeholder="_ _ _ _ _ _"
+                       autofocus>
+                {% if otp_form.otp.errors %}
+                <div class="invalid-feedback" style="text-align:center; display:block;">
+                    {{ otp_form.otp.errors.0 }}
+                </div>
+                {% endif %}
+            </div>
+
+            <p style="font-size:0.8125rem; color:#9aa4af; text-align:center; margin-bottom:1.25rem;">
+                The code is valid for {{ otp_validity_minutes }} minute{{ otp_validity_minutes|pluralize }}.
+            </p>
+
+            <button type="submit" class="btn btn-rg-primary btn-lg" style="width:100%;">
+                Verify &amp; Continue &rarr;
+            </button>
+        </form>
+
+        <div class="rg-pub-otp-help">
+            <p><strong>Didn&rsquo;t receive the code?</strong></p>
+            <ul>
+                <li>Check your <strong>Spam</strong> or <strong>Junk Mail</strong> folder.</li>
+                <li>Make sure you entered the correct email address.</li>
+            </ul>
+
+            <form method="post" style="display:inline;">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="resend">
+                <button type="submit" class="rg-pub-resend-link" id="resend-btn">
+                    Resend Code
+                </button>
+            </form>
+            <span id="resend-timer" style="font-size:0.875rem; color:#9aa4af;"></span>
+
+            <p style="margin-top:0.85rem; font-size:0.8125rem;">
+                Wrong email address?
+                <a href="{% url 'applicant-intake' application.position.pk %}" style="color:var(--rg-primary); font-weight:600;">
+                    &larr; Go back to edit your information
+                </a>
+            </p>
+        </div>
+    </div>
+
+    {# ── State: OTP verified, ready to submit ──────────────────── #}
+    {% else %}
+
+    <div class="rg-pub-otp-card" style="text-align:center;">
+        <div style="font-size:2.5rem; margin-bottom:0.75rem;">&#9989;</div>
+        <h1 style="font-size:1.3rem; font-weight:700; color:#111827; margin:0 0 0.5rem;">
+            Email Verified
+        </h1>
+        <p style="font-size:0.9rem; color:#5f6c78; margin-bottom:1.5rem;">
+            Your email address has been verified. Please review your application details below before finalizing.
+        </p>
+
+        {# Application summary #}
+        <div style="text-align:left; margin-bottom:1.5rem;">
+            <div class="rg-pub-review-card">
+                <div class="rg-pub-review-card__header">
+                    <span class="rg-pub-review-card__title">Application Summary</span>
+                </div>
+                <div class="rg-pub-review-card__body">
+                    <dl class="rg-pub-review-dl">
+                        <div class="rg-pub-review-row">
+                            <dt>Applicant</dt>
+                            <dd>{{ application.applicant_display_name }}</dd>
+                        </div>
+                        <div class="rg-pub-review-row">
+                            <dt>Email</dt>
+                            <dd>{{ application.applicant_email }} <span style="color:#15803d; font-size:0.8125rem; font-weight:600;">&#10003; Verified</span></dd>
+                        </div>
+                        <div class="rg-pub-review-row">
+                            <dt>Position</dt>
+                            <dd>{{ application.position.title }}</dd>
+                        </div>
+                        <div class="rg-pub-review-row">
+                            <dt>Documents</dt>
+                            <dd>{{ application.evidence_items.count }} file{{ application.evidence_items.count|pluralize }} uploaded</dd>
+                        </div>
+                    </dl>
+                </div>
+            </div>
+        </div>
+
+        <div class="rg-pub-info-box rg-pub-info-box--warning" style="text-align:left; margin-bottom:1.5rem;">
+            <p>Once you submit, your application cannot be edited. Please make sure everything is correct before proceeding.</p>
+        </div>
+
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="finalize">
+            <button type="submit" class="btn btn-rg-primary btn-lg" style="width:100%;"
+                    onclick="return confirm('Submit your application? This cannot be undone.');">
+                Submit My Application &rarr;
+            </button>
+        </form>
+    </div>
+
+    {% endif %}
+
+    <div style="text-align:center; margin-top:1.25rem;">
+        <a href="{% url 'applicant-portal' %}" class="rg-pub-back" style="justify-content:center;">
+            &larr; Return to Job Openings
+        </a>
+    </div>
+
+</div>
+
+<script>
+(function () {
+    // Simple resend cooldown — resets on page load after server sends a new code.
+    var COOLDOWN = 60;
+    var timerEl = document.getElementById('resend-timer');
+    var resendBtn = document.getElementById('resend-btn');
+    if (!timerEl || !resendBtn) return;
+
+    var stored = sessionStorage.getItem('rg_otp_sent_at');
+    if (stored) {
+        var elapsed = Math.floor((Date.now() - parseInt(stored, 10)) / 1000);
+        var remaining = COOLDOWN - elapsed;
+        if (remaining > 0) {
+            startCountdown(remaining);
+        }
+    }
+
+    // Record send time when the resend form is submitted.
+    var resendForm = resendBtn.closest('form');
+    if (resendForm) {
+        resendForm.addEventListener('submit', function () {
+            sessionStorage.setItem('rg_otp_sent_at', Date.now().toString());
+        });
+    }
+
+    function startCountdown(seconds) {
+        resendBtn.disabled = true;
+        tick(seconds);
+    }
+
+    function tick(s) {
+        if (s <= 0) {
+            timerEl.textContent = '';
+            resendBtn.disabled = false;
+            return;
+        }
+        timerEl.textContent = ' (available in ' + s + 's)';
+        setTimeout(function () { tick(s - 1); }, 1000);
+    }
+})();
+</script>
+{% endblock %}
+

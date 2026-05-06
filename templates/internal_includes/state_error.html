@@ -1,0 +1,27 @@
+{# Error state partial.
+   Usage:
+     {% include "internal_includes/state_error.html" with
+         title="Could not load records"
+         copy="An error occurred while fetching this data. Try refreshing the page."
+         retry_url=request.path
+     %}
+   All parameters optional.
+#}
+<div class="rg-istate-error">
+    <div class="rg-istate-error__icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="1.5"
+             stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+    </div>
+    <h3 class="rg-istate-error__title">{{ title|default:"Something went wrong" }}</h3>
+    <p class="rg-istate-error__copy">
+        {{ copy|default:"An unexpected error occurred. Refresh the page or contact your system administrator if the problem persists." }}
+    </p>
+    {% if retry_url %}
+        <a href="{{ retry_url }}" class="btn btn-outline-secondary btn-sm">Try Again</a>
+    {% endif %}
+</div>

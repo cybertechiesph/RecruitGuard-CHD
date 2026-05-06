@@ -1,0 +1,169 @@
+{% extends "applicant_base.html" %}
+
+{% block title %}{{ entry.title }} | RecruitGuard-CHD{% endblock %}
+
+{% block main_class %}{% endblock %}
+
+{% block content %}
+<div class="rg-pub-wrap">
+
+    {# Breadcrumb #}
+    <nav class="rg-pub-breadcrumb" aria-label="Breadcrumb">
+        <a href="{% url 'applicant-portal' %}">Home</a>
+        <span class="rg-pub-breadcrumb__sep" aria-hidden="true">/</span>
+        <a href="{% url 'applicant-portal' %}#job-openings">Job Openings</a>
+        <span class="rg-pub-breadcrumb__sep" aria-hidden="true">/</span>
+        <span>{{ entry.title }}</span>
+    </nav>
+
+    {# Position header card #}
+    <div class="rg-pub-position-header">
+        <h1 class="rg-pub-position-title">{{ entry.title }}</h1>
+
+        <div class="rg-pub-position-badges">
+            {% if entry.branch == "plantilla" %}
+                <span class="rg-pub-badge rg-pub-badge--type">Permanent (Plantilla)</span>
+            {% else %}
+                <span class="rg-pub-badge rg-pub-badge--type">Contract of Service</span>
+            {% endif %}
+            {% if entry.official_office_label %}
+                <span class="rg-pub-badge">{{ entry.official_office_label }}</span>
+            {% endif %}
+            {% if entry.job_code %}
+                <span class="rg-pub-badge" title="Item/Entry Code">Code: {{ entry.job_code }}</span>
+            {% endif %}
+        </div>
+
+        {# Deadline #}
+        {% if entry.closing_date %}
+        <div class="rg-pub-deadline-box {% if is_closing_soon %}rg-pub-deadline-box--urgent{% endif %}">
+            <span>&#9200;</span>
+            <span>
+                {% if is_closing_soon %}
+                    <strong>Closing Soon &mdash;</strong>
+                {% endif %}
+                Application Deadline: <strong>{{ entry.closing_date|date:"F d, Y" }}</strong>
+            </span>
+        </div>
+        {% else %}
+        <div class="rg-pub-deadline-box">
+            <span>&#9200;</span>
+            <span>Applications are accepted while this position is active.</span>
+        </div>
+        {% endif %}
+
+        {# CTA #}
+        {% if can_apply %}
+        <a href="{% url 'applicant-intake' entry.pk %}" class="btn btn-rg-primary btn-lg" style="width:100%;">
+            Apply for This Position &rarr;
+        </a>
+        {% else %}
+        <button class="btn btn-outline-secondary btn-lg" disabled style="width:100%;">
+            Applications are not currently open for this position
+        </button>
+        {% endif %}
+    </div>
+
+    {# About #}
+    {% if not entry.position_reference and entry.description %}
+    <div class="rg-pub-section">
+        <h2 class="rg-pub-section__title">About This Position</h2>
+        <p class="rg-pub-section__copy">{{ entry.description }}</p>
+    </div>
+    {% endif %}
+
+    {% if entry.position_reference %}
+    <div class="rg-pub-section">
+        <h2 class="rg-pub-section__title">Official Position Reference</h2>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <p class="rg-pub-section__copy mb-1"><strong>Salary Grade</strong></p>
+                <p class="rg-pub-section__copy mb-0">{% if entry.position_reference.salary_grade %}SG {{ entry.position_reference.salary_grade }}{% else %}Not recorded{% endif %}</p>
+            </div>
+            <div class="col-md-4">
+                <p class="rg-pub-section__copy mb-1"><strong>Level Classification</strong></p>
+                <p class="rg-pub-section__copy mb-0">{{ entry.position_reference.get_level_classification_display|default:"Not recorded" }}</p>
+            </div>
+            <div class="col-md-4">
+                <p class="rg-pub-section__copy mb-1"><strong>Class ID</strong></p>
+                <p class="rg-pub-section__copy mb-0">{{ entry.position_reference.class_id|default:"Not recorded" }}</p>
+            </div>
+            <div class="col-md-6">
+                <p class="rg-pub-section__copy mb-1"><strong>Occupational Service</strong></p>
+                <p class="rg-pub-section__copy mb-0">{{ entry.position_reference.occupational_service|default:"Not recorded" }}</p>
+            </div>
+            <div class="col-md-6">
+                <p class="rg-pub-section__copy mb-1"><strong>Occupational Group</strong></p>
+                <p class="rg-pub-section__copy mb-0">{{ entry.position_reference.occupational_group|default:"Not recorded" }}</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {# Qualifications #}
+    {% if entry.qualification_reference or entry.position_reference and entry.position_reference.qualification_summary or not entry.position_reference and entry.requirements %}
+    <div class="rg-pub-section">
+        <h2 class="rg-pub-section__title">Qualifications</h2>
+        {% if entry.qualification_reference %}
+        <p class="rg-pub-section__copy" style="margin-bottom:0.75rem;">{{ entry.qualification_reference }}</p>
+        {% endif %}
+        {% if entry.position_reference and entry.position_reference.qualification_summary %}
+        <div class="rg-pub-section__copy">{{ entry.position_reference.qualification_summary|linebreaksbr }}</div>
+        {% elif not entry.position_reference and entry.requirements %}
+        <p class="rg-pub-section__copy">{{ entry.requirements }}</p>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {# Documents needed #}
+    <div class="rg-pub-section">
+        <h2 class="rg-pub-section__title">Documents Needed</h2>
+        <p class="rg-pub-section__copy" style="margin-bottom:1rem;">
+            Please prepare the following documents as files (PDF, JPG, or PNG) before you start your application.
+        </p>
+        <ul class="rg-pub-doc-list">
+            {% for req in document_requirements %}
+            <li {% if not req.is_required or req.conditional_on_performance_rating %}class="is-optional"{% endif %}>
+                {{ req.title }}
+                <span class="rg-pub-optional-tag">{{ req.applicant_label }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    {# How to apply #}
+    <div class="rg-pub-section">
+        <h2 class="rg-pub-section__title">How to Apply</h2>
+        <p class="rg-pub-section__copy">
+            Click <strong>"Apply for This Position"</strong> below. You will fill in your personal information,
+            upload your documents, verify your email address, and review your application before submitting.
+            The whole process takes about 15&ndash;20 minutes.
+        </p>
+    </div>
+
+    {# Data privacy notice #}
+    <div class="rg-pub-info-box rg-pub-info-box--info" style="margin-top:1.75rem; font-size:0.8125rem;">
+        <p>
+            <strong>Data Privacy Notice:</strong> Your personal data will be used solely for recruitment purposes
+            in accordance with the Data Privacy Act of 2012 (Republic Act No. 10173).
+        </p>
+    </div>
+
+    {# Bottom CTA #}
+    {% if can_apply %}
+    <div style="margin-top:2rem; text-align:center;">
+        <a href="{% url 'applicant-intake' entry.pk %}" class="btn btn-rg-primary btn-lg" style="min-width:320px;">
+            Apply for This Position &rarr;
+        </a>
+        <p style="margin-top:0.75rem; font-size:0.8125rem; color:#5f6c78;">
+            Applications are submitted without creating an account. An email verification code is required to finalize your submission.
+        </p>
+    </div>
+    {% endif %}
+
+    <div style="margin-top:1.5rem;">
+        <a href="{% url 'applicant-portal' %}#job-openings" class="rg-pub-back">&larr; Back to Job Openings</a>
+    </div>
+
+</div>
+{% endblock %}

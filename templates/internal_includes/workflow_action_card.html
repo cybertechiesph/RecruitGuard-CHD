@@ -1,0 +1,28 @@
+<div class="rg-icard">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">Workflow Action</h3>
+            <p class="rg-icard__subtitle">
+                {% if screening_disposition_required %}
+                    Record the screening disposition for this case. Failed screening outcomes must be returned to the applicant or rejected from this stage.
+                {% elif recruitment_case and recruitment_case.current_stage == "appointing_authority_review" %}
+                    Use this control only for allowed non-final workflow actions such as
+                    returning the packet to HRM Chief.
+                {% else %}
+                    Record the next authorized workflow decision for the current stage.
+                {% endif %}
+            </p>
+        </div>
+    </div>
+    <form method="post" action="{% url 'workflow-action' application.pk %}">
+        {% csrf_token %}
+        <div class="rg-form-grid">
+            {% for field in action_form %}
+                {% include "recruitment/includes/form_field.html" with field=field %}
+            {% endfor %}
+        </div>
+        <div class="rg-form-actions">
+            <button type="submit" class="btn btn-rg-primary">Record Decision</button>
+        </div>
+    </form>
+</div>

@@ -1,0 +1,13 @@
+{# Parameters: stage_name (string), info_text (optional string) #}
+{# Wire form buttons to this bar by placing them here or using HTML5 form= attribute on parent forms. #}
+<div class="rg-cws-fin-bar">
+    <div class="rg-cws-fin-bar__info">
+        <span style="font-weight:600;color:#111827;">{{ stage_name }}</span>
+        {% if info_text %}
+            <span style="color:#5f6c78;"> — {{ info_text }}</span>
+        {% endif %}
+    </div>
+    <div class="rg-cws-fin-bar__actions">
+        {# Stage-specific action buttons are placed inside their respective forms above. #}
+    </div>
+</div>

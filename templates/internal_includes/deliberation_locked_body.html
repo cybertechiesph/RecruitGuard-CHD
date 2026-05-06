@@ -1,0 +1,355 @@
+
+{% load recruitment_ui %}
+
+
+<div class="rg-scr-elig-bar rg-scr-elig-bar--qualified">
+    <div class="rg-scr-elig-bar__icon">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.5"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+    </div>
+    <div class="flex-1">
+        <div class="rg-scr-elig-bar__label">Deliberation Stage — Finalized</div>
+        <div class="rg-scr-elig-bar__verdict">
+            {% if current_comparative_assessment_report and current_comparative_assessment_report.is_finalized %}
+                Deliberation &amp; CAR Locked
+            {% else %}
+                Deliberation Locked
+            {% endif %}
+        </div>
+        {% if current_deliberation_record.finalized_at %}
+        <div class="rg-scr-elig-bar__meta">
+            Finalized
+            {{ current_deliberation_record.finalized_at|date:"M d, Y" }}
+            at {{ current_deliberation_record.finalized_at|date:"H:i" }}
+            {% if current_deliberation_record.finalized_by_role %}
+                &mdash;
+                {{ current_deliberation_record.finalized_by_role|role_label }}
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+    <div style="flex-shrink:0;">
+        <span class="rg-pill rg-pill--neutral rg-pill--sm"
+              style="display:inline-flex;align-items:center;gap:4px;">
+            <svg width="10" height="11" viewBox="0 0 12 14" fill="none" aria-hidden="true">
+                <rect x="2" y="6" width="8" height="7" rx="1.5"
+                      stroke="currentColor" stroke-width="1.5"/>
+                <path d="M4 6V4.5a2 2 0 0 1 4 0V6"
+                      stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            Locked
+        </span>
+    </div>
+</div>
+
+
+<div class="rg-cws-locked-frame">
+    <div class="rg-cws-lock-ribbon" aria-hidden="true">Locked</div>
+    <div class="rg-cws-locked-frame__content">
+
+        
+        <div style="margin-bottom:1.25rem;">
+            <div style="font-size:0.72rem;font-weight:700;color:#5f6c78;
+                        text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem;">
+                Deliberation Record
+            </div>
+
+            <div class="rg-exam-locked-field">
+                <div class="rg-exam-locked-field__label">Deliberated At</div>
+                <div class="rg-exam-locked-field__value">
+                    {% if current_deliberation_record.deliberated_at %}
+                        {{ current_deliberation_record.deliberated_at|date:"l, F j, Y" }}
+                        at {{ current_deliberation_record.deliberated_at|date:"H:i" }}
+                    {% else %}
+                        <span style="color:#9aa4af;font-style:italic;">Not recorded</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if application.branch == "plantilla" and current_deliberation_record.ranking_position %}
+            <div class="rg-exam-locked-field">
+                <div class="rg-exam-locked-field__label">Ranking Position</div>
+                <div class="rg-exam-locked-field__value">
+                    <strong style="font-size:1.15rem;">
+                        #{{ current_deliberation_record.ranking_position }}
+                    </strong>
+                    {% if current_deliberation_record.ranking_notes %}
+                        <span style="font-size:0.8125rem;color:#5f6c78;margin-left:0.5rem;">
+                            &mdash; {{ current_deliberation_record.ranking_notes }}
+                        </span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="rg-exam-locked-field">
+                <div class="rg-exam-locked-field__label">Deliberation Minutes</div>
+                <div class="rg-exam-locked-field__value">
+                    {% if current_deliberation_record.deliberation_minutes %}
+                        {{ current_deliberation_record.deliberation_minutes }}
+                    {% else %}
+                        <span style="color:#9aa4af;font-style:italic;">Not recorded</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="rg-exam-locked-field">
+                <div class="rg-exam-locked-field__label">Decision Support Summary</div>
+                <div class="rg-exam-locked-field__value">
+                    {% if current_deliberation_record.decision_support_summary %}
+                        {{ current_deliberation_record.decision_support_summary }}
+                    {% else %}
+                        <span style="color:#9aa4af;font-style:italic;">Not recorded</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        
+        {% if current_deliberation_record.consolidated_snapshot.summary %}
+        {% with snap=current_deliberation_record.consolidated_snapshot.summary %}
+        <div style="margin-bottom:1.25rem;">
+            <div style="font-size:0.72rem;font-weight:700;color:#5f6c78;
+                        text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem;">
+                Stage Snapshot at Finalization
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:0.5rem 1.5rem;font-size:0.79rem;">
+                {% if snap.latest_qualification_outcome %}
+                <div>
+                    <span style="color:#9aa4af;font-weight:600;text-transform:uppercase;
+                                 font-size:0.68rem;letter-spacing:0.04em;">Screening</span>
+                    <span style="margin-left:0.35rem;font-weight:600;color:#374151;">
+                        {{ snap.latest_qualification_outcome }}
+                    </span>
+                </div>
+                {% endif %}
+                {% if snap.latest_exam_score %}
+                <div>
+                    <span style="color:#9aa4af;font-weight:600;text-transform:uppercase;
+                                 font-size:0.68rem;letter-spacing:0.04em;">Exam Score</span>
+                    <span style="margin-left:0.35rem;font-weight:600;color:#374151;">
+                        {{ snap.latest_exam_score }}
+                    </span>
+                </div>
+                {% elif snap.latest_exam_status %}
+                <div>
+                    <span style="color:#9aa4af;font-weight:600;text-transform:uppercase;
+                                 font-size:0.68rem;letter-spacing:0.04em;">Exam</span>
+                    <span style="margin-left:0.35rem;font-weight:600;color:#374151;">
+                        {{ snap.latest_exam_status }}
+                    </span>
+                </div>
+                {% endif %}
+                {% if snap.latest_interview_average %}
+                <div>
+                    <span style="color:#9aa4af;font-weight:600;text-transform:uppercase;
+                                 font-size:0.68rem;letter-spacing:0.04em;">Interview Avg</span>
+                    <span style="margin-left:0.35rem;font-weight:600;color:#374151;">
+                        {{ snap.latest_interview_average }} / 100
+                    </span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endwith %}
+        {% endif %}
+
+        
+        {% if current_interview_ratings %}
+        <div style="margin-bottom:1.25rem;">
+            <div style="font-size:0.72rem;font-weight:700;color:#5f6c78;
+                        text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem;">
+                Panel Interview Ratings
+            </div>
+            <div class="rg-del-rating-list">
+                {% for rating in current_interview_ratings %}
+                <div class="rg-del-rating-row">
+                    <div class="rg-del-score-badge
+                        {% if rating.rating_score >= 75 %}rg-del-score-badge--passing
+                        {% elif rating.rating_score > 0 %}rg-del-score-badge--marginal
+                        {% endif %}">
+                        <div class="rg-del-score-badge__num">{{ rating.rating_score }}</div>
+                        <div class="rg-del-score-badge__sub">/100</div>
+                    </div>
+                    <div class="rg-del-rating-row__body">
+                        <div class="rg-del-rating-row__evaluator">
+                            {{ rating.rated_by.get_full_name }}
+                        </div>
+                        <div class="rg-del-rating-row__role">
+                            {{ rating.rated_by_role|role_label }}
+                        </div>
+                        {% if rating.rating_notes %}
+                        <div class="rg-del-rating-row__notes">
+                            {{ rating.rating_notes }}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        
+        <div class="rg-imeta"
+             style="border-top:1px solid #e2e8f0;padding-top:0.75rem;margin-top:0.25rem;">
+            <svg width="12" height="12" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <rect x="2.5" y="6.5" width="9" height="6.5" rx="1.5"
+                      stroke="#9aa4af" stroke-width="1.4"/>
+                <path d="M4.5 6.5V5a2.5 2.5 0 0 1 5 0v1.5"
+                      stroke="#9aa4af" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+            Deliberation finalized
+            {% if current_deliberation_record.finalized_at %}
+                {{ current_deliberation_record.finalized_at|date:"M d, Y" }}
+                at {{ current_deliberation_record.finalized_at|date:"H:i" }}
+            {% endif %}
+            {% if current_deliberation_record.finalized_by_role %}
+                <span class="rg-imeta__sep"></span>
+                {{ current_deliberation_record.finalized_by_role|role_label }}
+            {% endif %}
+        </div>
+
+    </div>
+</div>
+
+
+{% if current_comparative_assessment_report and current_comparative_assessment_report.is_finalized %}
+<div class="rg-icard" style="margin-bottom:1rem;">
+    <div class="rg-icard__header" style="margin-bottom:0.875rem;">
+        <div>
+            <h3 class="rg-icard__title">Comparative Assessment Report</h3>
+            <p class="rg-icard__subtitle">
+                Finalized CAR for this position posting — version
+                {{ current_comparative_assessment_report.version_number }}.
+            </p>
+        </div>
+        <span class="rg-pill rg-pill--neutral rg-pill--sm"
+              style="display:inline-flex;align-items:center;gap:4px;flex-shrink:0;align-self:flex-start;">
+            <svg width="9" height="10" viewBox="0 0 12 14" fill="none" aria-hidden="true">
+                <rect x="2" y="6" width="8" height="7" rx="1.5"
+                      stroke="currentColor" stroke-width="1.5"/>
+                <path d="M4 6V4.5a2 2 0 0 1 4 0V6"
+                      stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            CAR Locked
+        </span>
+    </div>
+
+    {% if current_comparative_assessment_report_items %}
+    <div class="rg-del-car-list" style="margin-bottom:0.875rem;">
+        {% for item in current_comparative_assessment_report_items %}
+        <div class="rg-del-car-item">
+            <div class="rg-del-rank-badge">#{{ item.rank_order }}</div>
+            <div class="rg-del-car-item__body">
+                <div class="rg-del-car-item__name">
+                    {{ item.recruitment_case.application.applicant.get_full_name }}
+                </div>
+                <div class="rg-del-car-item__scores">
+                    {% if item.qualification_outcome %}
+                    <div class="rg-del-car-item__score-cell">
+                        <span class="rg-del-car-item__score-label">Screening</span>
+                        <span class="rg-del-car-item__score-val">
+                            <span class="rg-pill rg-pill--{{ item.qualification_outcome|status_theme }} rg-pill--sm">
+                                {{ item.qualification_outcome }}
+                            </span>
+                        </span>
+                    </div>
+                    {% endif %}
+                    {% if item.exam_score %}
+                    <div class="rg-del-car-item__score-cell">
+                        <span class="rg-del-car-item__score-label">Exam Score</span>
+                        <span class="rg-del-car-item__score-val">{{ item.exam_score }}</span>
+                    </div>
+                    {% elif item.exam_status %}
+                    <div class="rg-del-car-item__score-cell">
+                        <span class="rg-del-car-item__score-label">Exam</span>
+                        <span class="rg-del-car-item__score-val">
+                            <span class="rg-pill rg-pill--{{ item.exam_status|status_theme }} rg-pill--sm">
+                                {{ item.exam_status }}
+                            </span>
+                        </span>
+                    </div>
+                    {% endif %}
+                    {% if item.interview_average_score %}
+                    <div class="rg-del-car-item__score-cell">
+                        <span class="rg-del-car-item__score-label">Interview Avg</span>
+                        <span class="rg-del-car-item__score-val">{{ item.interview_average_score }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+                {% if item.decision_support_summary %}
+                <div class="rg-del-car-item__decision">
+                    {{ item.decision_support_summary }}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if current_comparative_assessment_report.summary_notes %}
+    <div style="padding:0.6rem 0.875rem;background:#f8fafc;border:1px solid #e2e8f0;
+                border-radius:0.4rem;font-size:0.8125rem;color:#374151;margin-bottom:0.75rem;">
+        <div style="font-size:0.68rem;font-weight:700;color:#9aa4af;text-transform:uppercase;
+                    letter-spacing:0.05em;margin-bottom:0.25rem;">
+            CAR Summary Notes
+        </div>
+        {{ current_comparative_assessment_report.summary_notes }}
+    </div>
+    {% endif %}
+
+    <div class="rg-imeta">
+        <svg width="12" height="12" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <rect x="2.5" y="6.5" width="9" height="6.5" rx="1.5"
+                  stroke="#9aa4af" stroke-width="1.4"/>
+            <path d="M4.5 6.5V5a2.5 2.5 0 0 1 5 0v1.5"
+                  stroke="#9aa4af" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+        CAR finalized
+        {% if current_comparative_assessment_report.finalized_at %}
+            {{ current_comparative_assessment_report.finalized_at|date:"M d, Y" }}
+            at {{ current_comparative_assessment_report.finalized_at|date:"H:i" }}
+        {% endif %}
+        {% if current_comparative_assessment_report.finalized_by_role %}
+            <span class="rg-imeta__sep"></span>
+            {{ current_comparative_assessment_report.finalized_by_role|role_label }}
+        {% endif %}
+        <span class="rg-imeta__sep"></span>
+        Version {{ current_comparative_assessment_report.version_number }}
+    </div>
+</div>
+{% endif %}
+
+
+<div class="rg-icard" style="background:#f8fafc;">
+    <div style="display:flex;align-items:flex-start;gap:0.75rem;">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none"
+             style="flex-shrink:0;margin-top:0.1rem;color:var(--rg-primary);" aria-hidden="true">
+            <circle cx="10" cy="10" r="8.5" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M7 10l2 2 4-4" stroke="currentColor" stroke-width="1.5"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div>
+            <div style="font-size:0.875rem;font-weight:700;color:#111827;margin-bottom:0.2rem;">
+                Deliberation complete — case advancing
+            </div>
+            <p style="font-size:0.8125rem;color:#5f6c78;margin:0;">
+                {% if application.branch == "plantilla" %}
+                    The deliberation record and Comparative Assessment Report are finalized.
+                    The case is advancing to the
+                    <strong>Decision / Submission Packet</strong> stage for Appointing Authority review.
+                {% else %}
+                    The deliberation record is finalized. This COS case is advancing toward
+                    the <strong>Decision / Submission Packet</strong> stage.
+                {% endif %}
+                To modify any locked record, use the Controlled Reopen procedure in the Actions tab.
+            </p>
+        </div>
+    </div>
+</div>
+

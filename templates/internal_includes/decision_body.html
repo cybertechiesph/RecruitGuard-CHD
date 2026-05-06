@@ -1,0 +1,733 @@
+{% load recruitment_ui %}
+
+
+{% if submission_packet %}
+
+
+<div class="rg-icard">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">Submission Packet</h3>
+            <p class="rg-icard__subtitle">
+                Complete record of all evaluation stages for this application.
+            </p>
+        </div>
+        {% if submission_packet.summary.ready_for_final_decision %}
+            <span class="rg-pkt-section__badge rg-pkt-section__badge--ok">
+                <i class="bi bi-check-circle-fill me-1"></i>Packet Complete
+            </span>
+        {% else %}
+            <span class="rg-pkt-section__badge rg-pkt-section__badge--warn">
+                <i class="bi bi-exclamation-triangle-fill me-1"></i>Incomplete
+            </span>
+        {% endif %}
+    </div>
+
+    {% with ctx=submission_packet.context %}
+    <div class="rg-pkt-overview">
+        <div class="rg-pkt-row">
+            <span class="rg-pkt-row__label">Applicant</span>
+            <span class="rg-pkt-row__value"><strong>{{ ctx.applicant_name }}</strong></span>
+        </div>
+        <div class="rg-pkt-row">
+            <span class="rg-pkt-row__label">Reference No.</span>
+            <span class="rg-pkt-row__value">{{ ctx.application_reference|default:"—" }}</span>
+        </div>
+        <div class="rg-pkt-row">
+            <span class="rg-pkt-row__label">Position</span>
+            <span class="rg-pkt-row__value">{{ ctx.recruitment_entry_title }}</span>
+        </div>
+        <div class="rg-pkt-row">
+            <span class="rg-pkt-row__label">Item Code</span>
+            <span class="rg-pkt-row__value">{{ ctx.recruitment_entry_code }}</span>
+        </div>
+        <div class="rg-pkt-row">
+            <span class="rg-pkt-row__label">Branch / Type</span>
+            <span class="rg-pkt-row__value">{{ ctx.branch_label }}</span>
+        </div>
+        <div class="rg-pkt-row">
+            <span class="rg-pkt-row__label">Salary Grade</span>
+            <span class="rg-pkt-row__value">SG-{{ ctx.level }}</span>
+        </div>
+    </div>
+    {% endwith %}
+</div>
+
+
+<div class="rg-pkt">
+
+    
+    <div class="rg-pkt-section">
+        <div class="rg-pkt-section__head">
+            <i class="bi bi-clipboard2-check rg-pkt-section__icon"></i>
+            <span class="rg-pkt-section__title">Screening Records</span>
+            {% if submission_packet.summary.finalized_screening_count %}
+                <span class="rg-pkt-section__badge rg-pkt-section__badge--ok">
+                    {{ submission_packet.summary.finalized_screening_count }} finalized
+                </span>
+            {% else %}
+                <span class="rg-pkt-section__badge rg-pkt-section__badge--none">None</span>
+            {% endif %}
+        </div>
+        <div class="rg-pkt-section__body">
+            {% if submission_packet.screening_records %}
+                <div class="rg-pkt-rows">
+                    {% for rec in submission_packet.screening_records %}
+                        <div class="rg-pkt-row">
+                            <span class="rg-pkt-row__label">{{ rec.review_stage_label }}</span>
+                            <span class="rg-pkt-row__value">
+                                {% if rec.qualification_outcome == "qualified" %}
+                                    <span class="rg-pkt-outcome-pill rg-pkt-outcome-pill--passed">
+                                        <i class="bi bi-check-circle-fill"></i>
+                                        {{ rec.qualification_outcome_label }}
+                                    </span>
+                                {% elif rec.qualification_outcome == "not_qualified" %}
+                                    <span class="rg-pkt-outcome-pill rg-pkt-outcome-pill--failed">
+                                        <i class="bi bi-x-circle-fill"></i>
+                                        {{ rec.qualification_outcome_label }}
+                                    </span>
+                                {% else %}
+                                    <span class="rg-pkt-outcome-pill rg-pkt-outcome-pill--pending">
+                                        {{ rec.qualification_outcome_label|default:"—" }}
+                                    </span>
+                                {% endif %}
+                                {% if rec.completeness_status_label %}
+                                    <span class="text-muted ms-2" style="font-size:0.78rem;">
+                                        — {{ rec.completeness_status_label }}
+                                    </span>
+                                {% endif %}
+                                {% if rec.finalized_at %}
+                                    <span class="text-muted ms-2" style="font-size:0.73rem;">
+                                        ({{ rec.finalized_at|slice:":10" }})
+                                    </span>
+                                {% endif %}
+                            </span>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="text-muted mb-0" style="font-size:0.8rem;">
+                    No finalized screening records in packet.
+                </p>
+            {% endif %}
+        </div>
+    </div>
+
+    
+    <div class="rg-pkt-section">
+        <div class="rg-pkt-section__head">
+            <i class="bi bi-journal-text rg-pkt-section__icon"></i>
+            <span class="rg-pkt-section__title">Written Examination</span>
+            {% if submission_packet.summary.finalized_exam_count %}
+                <span class="rg-pkt-section__badge rg-pkt-section__badge--ok">
+                    {{ submission_packet.summary.finalized_exam_count }} finalized
+                </span>
+            {% else %}
+                <span class="rg-pkt-section__badge rg-pkt-section__badge--none">None</span>
+            {% endif %}
+        </div>
+        <div class="rg-pkt-section__body">
+            {% if submission_packet.exam_records %}
+                <div class="rg-pkt-rows">
+                    {% for rec in submission_packet.exam_records %}
+                        <div class="rg-pkt-row">
+                            <span class="rg-pkt-row__label">{{ rec.review_stage_label }}</span>
+                            <span class="rg-pkt-row__value">
+                                {% if rec.exam_score %}
+                                    <strong>{{ rec.exam_score }}</strong> / 100
+                                    &ensp;
+                                {% endif %}
+                                {% if rec.exam_result == "passed" %}
+                                    <span class="rg-pkt-outcome-pill rg-pkt-outcome-pill--passed">
+                                        <i class="bi bi-check-circle-fill"></i>
+                                        {{ rec.exam_status_label }}
+                                    </span>
+                                {% elif rec.exam_result == "failed" %}
+                                    <span class="rg-pkt-outcome-pill rg-pkt-outcome-pill--failed">
+                                        <i class="bi bi-x-circle-fill"></i>
+                                        {{ rec.exam_status_label }}
+                                    </span>
+                                {% elif rec.exam_status_label %}
+                                    <span class="rg-pkt-outcome-pill rg-pkt-outcome-pill--pending">
+                                        {{ rec.exam_status_label }}
+                                    </span>
+                                {% endif %}
+                                {% if rec.finalized_at %}
+                                    <span class="text-muted ms-2" style="font-size:0.73rem;">
+                                        ({{ rec.finalized_at|slice:":10" }})
+                                    </span>
+                                {% endif %}
+                            </span>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="text-muted mb-0" style="font-size:0.8rem;">
+                    No finalized exam records in packet.
+                </p>
+            {% endif %}
+        </div>
+    </div>
+
+    
+    <div class="rg-pkt-section">
+        <div class="rg-pkt-section__head">
+            <i class="bi bi-people rg-pkt-section__icon"></i>
+            <span class="rg-pkt-section__title">Interview / Panel Rating</span>
+            {% if submission_packet.summary.finalized_interview_count %}
+                <span class="rg-pkt-section__badge rg-pkt-section__badge--ok">
+                    {{ submission_packet.summary.finalized_interview_count }}
+                    session{{ submission_packet.summary.finalized_interview_count|pluralize }}
+                </span>
+            {% else %}
+                <span class="rg-pkt-section__badge rg-pkt-section__badge--none">None</span>
+            {% endif %}
+        </div>
+        <div class="rg-pkt-section__body">
+            {% if submission_packet.interview_sessions %}
+                <div class="rg-pkt-session-list">
+                    {% for sess in submission_packet.interview_sessions %}
+                        <div class="rg-pkt-session-item">
+                            <div class="rg-pkt-session-item__label">
+                                <strong>{{ sess.review_stage_label }}</strong>
+                                {% if sess.location %}
+                                    &mdash; {{ sess.location }}
+                                {% endif %}
+                                {% if sess.scheduled_for %}
+                                    <span class="text-muted ms-1" style="font-size:0.73rem;">
+                                        ({{ sess.scheduled_for|slice:":10" }})
+                                    </span>
+                                {% endif %}
+                                <br>
+                                <span class="text-muted" style="font-size:0.73rem;">
+                                    {{ sess.rating_count }} panel
+                                    rating{{ sess.rating_count|pluralize }}{% if sess.fallback_count %},
+                                    {{ sess.fallback_count }}
+                                    fallback attachment{{ sess.fallback_count|pluralize }}{% endif %}
+                                </span>
+                            </div>
+                            <div class="rg-pkt-session-item__avg">
+                                {% if sess.average_score %}
+                                    Avg: {{ sess.average_score }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="text-muted mb-0" style="font-size:0.8rem;">
+                    No finalized interview sessions in packet.
+                </p>
+            {% endif %}
+        </div>
+    </div>
+
+    
+    <div class="rg-pkt-section">
+        <div class="rg-pkt-section__head">
+            <i class="bi bi-chat-square-text rg-pkt-section__icon"></i>
+            <span class="rg-pkt-section__title">Deliberation Record</span>
+            {% if submission_packet.summary.has_deliberation_record %}
+                <span class="rg-pkt-section__badge rg-pkt-section__badge--ok">Finalized</span>
+            {% else %}
+                <span class="rg-pkt-section__badge rg-pkt-section__badge--warn">Missing</span>
+            {% endif %}
+        </div>
+        <div class="rg-pkt-section__body">
+            {% with del=submission_packet.deliberation_record %}
+            {% if del and del.deliberated_at %}
+                <div class="rg-pkt-rows">
+                    <div class="rg-pkt-row">
+                        <span class="rg-pkt-row__label">Stage</span>
+                        <span class="rg-pkt-row__value">{{ del.review_stage_label }}</span>
+                    </div>
+                    <div class="rg-pkt-row">
+                        <span class="rg-pkt-row__label">Deliberated</span>
+                        <span class="rg-pkt-row__value">{{ del.deliberated_at|slice:":10" }}</span>
+                    </div>
+                    {% if del.ranking_position %}
+                        <div class="rg-pkt-row">
+                            <span class="rg-pkt-row__label">Ranking Position</span>
+                            <span class="rg-pkt-row__value">
+                                <strong>#{{ del.ranking_position }}</strong>
+                            </span>
+                        </div>
+                    {% endif %}
+                    {% if del.latest_interview_average %}
+                        <div class="rg-pkt-row">
+                            <span class="rg-pkt-row__label">Interview Avg.</span>
+                            <span class="rg-pkt-row__value">
+                                <strong>{{ del.latest_interview_average }}</strong>
+                            </span>
+                        </div>
+                    {% endif %}
+                    {% if del.decision_support_summary %}
+                        <div class="rg-pkt-row" style="align-items:flex-start;">
+                            <span class="rg-pkt-row__label" style="padding-top:0.1rem;">
+                                Decision Summary
+                            </span>
+                            <span class="rg-pkt-row__value" style="white-space:pre-line;">
+                                {{ del.decision_support_summary }}
+                            </span>
+                        </div>
+                    {% endif %}
+                </div>
+            {% else %}
+                <p class="text-muted mb-0" style="font-size:0.8rem;">
+                    No finalized deliberation record in packet.
+                </p>
+            {% endif %}
+            {% endwith %}
+        </div>
+    </div>
+
+    
+    {% if submission_packet.summary.has_comparative_assessment_report %}
+    <div class="rg-pkt-section">
+        <div class="rg-pkt-section__head">
+            <i class="bi bi-bar-chart-line rg-pkt-section__icon"></i>
+            <span class="rg-pkt-section__title">Comparative Assessment Report</span>
+            <span class="rg-pkt-section__badge rg-pkt-section__badge--ok">Finalized</span>
+        </div>
+        <div class="rg-pkt-section__body">
+            {% with car=submission_packet.comparative_assessment_report %}
+            {% if car and car.finalized_at %}
+                <div class="rg-pkt-rows mb-3">
+                    <div class="rg-pkt-row">
+                        <span class="rg-pkt-row__label">Stage</span>
+                        <span class="rg-pkt-row__value">{{ car.review_stage_label }}</span>
+                    </div>
+                    <div class="rg-pkt-row">
+                        <span class="rg-pkt-row__label">Version</span>
+                        <span class="rg-pkt-row__value">v{{ car.version_number }}</span>
+                    </div>
+                    <div class="rg-pkt-row">
+                        <span class="rg-pkt-row__label">Candidates Ranked</span>
+                        <span class="rg-pkt-row__value">{{ car.candidate_count }}</span>
+                    </div>
+                    <div class="rg-pkt-row">
+                        <span class="rg-pkt-row__label">Finalized</span>
+                        <span class="rg-pkt-row__value">{{ car.finalized_at|slice:":10" }}</span>
+                    </div>
+                </div>
+                {% if car.items %}
+                    <div class="rg-del-car-list">
+                        {% for item in car.items %}
+                            <div class="rg-del-car-item">
+                                <div class="rg-del-rank-badge">{{ item.rank_order }}</div>
+                                <div class="rg-del-car-item__body">
+                                    <div class="rg-del-car-item__name">
+                                        {{ item.applicant_name }}
+                                    </div>
+                                    <div class="rg-del-car-item__scores">
+                                        {% if item.exam_score %}
+                                            <span class="rg-del-car-item__score-cell">
+                                                <span class="rg-del-car-item__score-label">Exam</span>
+                                                <span class="rg-del-car-item__score-val">
+                                                    {{ item.exam_score }}
+                                                </span>
+                                            </span>
+                                        {% endif %}
+                                        {% if item.interview_average_score %}
+                                            <span class="rg-del-car-item__score-cell">
+                                                <span class="rg-del-car-item__score-label">
+                                                    Interview Avg.
+                                                </span>
+                                                <span class="rg-del-car-item__score-val">
+                                                    {{ item.interview_average_score }}
+                                                </span>
+                                            </span>
+                                        {% endif %}
+                                    </div>
+                                    {% if item.decision_support_summary %}
+                                        <div class="rg-del-car-item__decision">
+                                            {{ item.decision_support_summary }}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                {% if car.summary_notes %}
+                    <p class="text-muted mt-2 mb-0"
+                       style="font-size:0.79rem;white-space:pre-line;">{{ car.summary_notes }}</p>
+                {% endif %}
+            {% endif %}
+            {% endwith %}
+        </div>
+    </div>
+    {% endif %}
+
+    
+    {% if submission_packet.evidence_references %}
+    <div class="rg-pkt-section">
+        <div class="rg-pkt-section__head">
+            <i class="bi bi-paperclip rg-pkt-section__icon"></i>
+            <span class="rg-pkt-section__title">Evidence References</span>
+            <span class="rg-pkt-section__badge rg-pkt-section__badge--ok">
+                {{ submission_packet.summary.evidence_reference_count }}
+                item{{ submission_packet.summary.evidence_reference_count|pluralize }}
+            </span>
+        </div>
+        <div class="rg-pkt-section__body">
+            <div class="rg-pkt-evidence-list">
+                {% for ref in submission_packet.evidence_references %}
+                    <div class="rg-pkt-evidence-item">
+                        <i class="bi bi-file-earmark-text rg-pkt-evidence-item__icon"></i>
+                        <span>
+                            <strong>{{ ref.label }}</strong>
+                            {% if ref.stage_label %}
+                                <span class="text-muted"> — {{ ref.stage_label }}</span>
+                            {% endif %}
+                            {% if ref.artifact_scope_label %}
+                                <span class="text-muted"> ({{ ref.artifact_scope_label }})</span>
+                            {% endif %}
+                            {% if ref.original_filename %}
+                                <span class="text-muted ms-1" style="font-size:0.72rem;">
+                                    {{ ref.original_filename }}
+                                </span>
+                            {% endif %}
+                            {% if ref.version_number %}
+                                <span class="text-muted" style="font-size:0.72rem;">
+                                    v{{ ref.version_number }}
+                                </span>
+                            {% endif %}
+                        </span>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+
+
+{% if submission_packet.summary.missing_components %}
+    <div class="rg-pkt-missing-strip">
+        <div class="rg-pkt-missing-strip__icon">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+        </div>
+        <div>
+            <strong>Packet incomplete.</strong>
+            The following components are absent from this submission packet.
+            You may still record a decision, but the packet will reflect these gaps.
+            <ul>
+                {% for item in submission_packet.summary.missing_components %}
+                    <li>{{ item }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+{% endif %}
+
+
+<div class="rg-icard">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">Final Decision</h3>
+            <p class="rg-icard__subtitle">
+                Select an outcome and provide supporting notes.
+                This action is <strong>permanent</strong> and cannot be undone.
+            </p>
+        </div>
+    </div>
+
+    <form id="dec-form" method="post" action="{% url 'final-decision-record' application.pk %}">
+        {% csrf_token %}
+
+        
+        <div style="display:none;">
+            {{ final_decision_form.decision_outcome }}
+        </div>
+
+        
+        <div class="mb-4">
+            <label class="form-label fw-semibold" style="font-size:0.8125rem;">
+                Decision Outcome <span class="text-danger">*</span>
+            </label>
+            <div class="rg-dec-choice-strip">
+                <button type="button" class="rg-dec-choice-btn"
+                        id="dec-btn-selected" data-val="selected">
+                    <span class="rg-dec-choice-btn__icon">
+                        <i class="bi bi-check-circle-fill"></i>
+                    </span>
+                    <span class="rg-dec-choice-btn__body">
+                        <span class="rg-dec-choice-btn__title">Selected</span>
+                        <span class="rg-dec-choice-btn__sub">
+                            Applicant is recommended for appointment
+                        </span>
+                    </span>
+                </button>
+                <button type="button" class="rg-dec-choice-btn"
+                        id="dec-btn-not-selected" data-val="not_selected">
+                    <span class="rg-dec-choice-btn__icon">
+                        <i class="bi bi-x-circle-fill"></i>
+                    </span>
+                    <span class="rg-dec-choice-btn__body">
+                        <span class="rg-dec-choice-btn__title">Not Selected</span>
+                        <span class="rg-dec-choice-btn__sub">
+                            Applicant will not proceed to appointment
+                        </span>
+                    </span>
+                </button>
+            </div>
+            {% if final_decision_form.decision_outcome.errors %}
+                <div class="invalid-feedback d-block mt-1" style="font-size:0.8rem;">
+                    {{ final_decision_form.decision_outcome.errors.0 }}
+                </div>
+            {% endif %}
+        </div>
+
+        
+        <div class="mb-3" id="dec-notes-group">
+            <label for="{{ final_decision_form.decision_notes.id_for_label }}"
+                   class="form-label fw-semibold" style="font-size:0.8125rem;">
+                Decision Notes <span class="text-danger">*</span>
+            </label>
+            <textarea
+                name="{{ final_decision_form.decision_notes.html_name }}"
+                id="{{ final_decision_form.decision_notes.id_for_label }}"
+                class="form-control{% if final_decision_form.decision_notes.errors %} is-invalid{% endif %}"
+                rows="6"
+                placeholder="Provide the rationale and basis for this decision. Include any relevant considerations from the deliberation, assessment scores, and applicable CSC regulations."
+                style="font-size:0.8125rem;">{{ final_decision_form.decision_notes.value|default:"" }}</textarea>
+            {% if final_decision_form.decision_notes.errors %}
+                <div class="invalid-feedback" style="font-size:0.8rem;">
+                    {{ final_decision_form.decision_notes.errors.0 }}
+                </div>
+            {% endif %}
+            <div class="form-text" style="font-size:0.75rem;">
+                Notes are preserved as part of the permanent decision record.
+            </div>
+        </div>
+
+        
+        <div class="d-flex justify-content-end">
+            <button type="button" class="btn btn-rg-primary btn-sm"
+                    id="dec-open-modal-btn" disabled>
+                <i class="bi bi-lock-fill me-1"></i>Record Final Decision&hellip;
+            </button>
+        </div>
+
+    </form>
+</div>
+
+
+<div class="rg-cws-fin-bar" id="dec-fin-bar">
+    <div class="rg-cws-fin-bar__checks">
+        <span class="rg-cws-fin-bar__check" id="dec-ready-outcome">
+            <i class="bi bi-circle rg-cws-fin-bar__check-icon"></i>
+            Decision outcome selected
+        </span>
+        <span class="rg-cws-fin-bar__check" id="dec-ready-notes">
+            <i class="bi bi-circle rg-cws-fin-bar__check-icon"></i>
+            Decision notes provided
+        </span>
+    </div>
+    <button type="button" class="btn-rg-finalize" id="dec-finalize-btn" disabled>
+        <i class="bi bi-lock-fill me-1"></i>Record Final Decision
+    </button>
+</div>
+
+{% else %}
+
+<div class="rg-icard">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">Submission Packet Unavailable</h3>
+            <p class="rg-icard__subtitle">
+                The submission packet could not be built for this application at this time.
+                Ensure all prior stages have been finalized before proceeding.
+            </p>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+
+<div class="modal fade" id="decConfirmModal" tabindex="-1"
+     aria-labelledby="decConfirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius:0.6rem;overflow:hidden;">
+            <div class="modal-header"
+                 style="background:var(--rg-primary);border-bottom:none;padding:1rem 1.25rem;">
+                <h5 class="modal-title" id="decConfirmModalLabel"
+                    style="font-size:0.9375rem;font-weight:700;color:#fff;margin:0;">
+                    Confirm Final Decision
+                </h5>
+                <button type="button" class="btn-close btn-close-white"
+                        data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body"
+                 style="padding:1.25rem;font-size:0.8125rem;color:#374151;line-height:1.65;">
+                <p class="mb-2">You are about to record a permanent final decision for:</p>
+                <ul class="mb-3" style="padding-left:1.2rem;">
+                    <li><strong>Applicant:</strong> <span id="dec-modal-name">—</span></li>
+                    <li><strong>Position:</strong> <span id="dec-modal-position">—</span></li>
+                    <li>
+                        <strong>Outcome:</strong>
+                        <span id="dec-modal-outcome" class="fw-bold">—</span>
+                    </li>
+                </ul>
+                <div style="background:#fef9c3;border:1px solid #fde047;border-radius:0.35rem;
+                            padding:0.6rem 0.75rem;font-size:0.79rem;color:#854d0e;">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                    This action is <strong>permanent and cannot be undone.</strong>
+                    Once recorded, the decision is locked and preserved as part of the
+                    official recruitment record. No further editing will be possible.
+                </div>
+            </div>
+            <div class="modal-footer"
+                 style="border-top:1px solid #e5e7eb;padding:0.75rem 1.25rem;
+                        display:flex;justify-content:flex-end;gap:0.5rem;">
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        data-bs-dismiss="modal">
+                    Cancel &mdash; Keep Reviewing
+                </button>
+                <button type="button" class="btn-rg-finalize" id="dec-confirm-btn">
+                    <i class="bi bi-lock-fill me-1"></i>Yes, Record Decision
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<script>
+(function () {
+    "use strict";
+
+    /* ── Element refs ─────────────────────────────────── */
+    var decForm        = document.getElementById("dec-form");
+    var outcomeSelect  = document.getElementById("{{ final_decision_form.decision_outcome.id_for_label }}");
+    var btnSelected    = document.getElementById("dec-btn-selected");
+    var btnNotSelected = document.getElementById("dec-btn-not-selected");
+    var notesTextarea  = document.getElementById("{{ final_decision_form.decision_notes.id_for_label }}");
+    var openModalBtn   = document.getElementById("dec-open-modal-btn");
+    var finalizeBtn    = document.getElementById("dec-finalize-btn");
+    var confirmBtn     = document.getElementById("dec-confirm-btn");
+    var readyOutcome   = document.getElementById("dec-ready-outcome");
+    var readyNotes     = document.getElementById("dec-ready-notes");
+    var modalName      = document.getElementById("dec-modal-name");
+    var modalPosition  = document.getElementById("dec-modal-position");
+    var modalOutcome   = document.getElementById("dec-modal-outcome");
+
+    /* Bootstrap modal instance */
+    var decModalEl = document.getElementById("decConfirmModal");
+    var decModal   = decModalEl ? new bootstrap.Modal(decModalEl) : null;
+
+    /* Packet context baked in at render time */
+    var applicantName  = "{{ submission_packet.context.applicant_name|default:'—'|escapejs }}";
+    var positionTitle  = "{{ submission_packet.context.recruitment_entry_title|default:'—'|escapejs }}";
+
+    /* ── Choice strip: select outcome ─────────────────── */
+    function setOutcome(val) {
+        if (!outcomeSelect) return;
+        outcomeSelect.value = val;
+
+        if (btnSelected) {
+            btnSelected.classList.remove("is-active--selected", "is-active--not-selected");
+        }
+        if (btnNotSelected) {
+            btnNotSelected.classList.remove("is-active--selected", "is-active--not-selected");
+        }
+
+        if (val === "selected" && btnSelected) {
+            btnSelected.classList.add("is-active--selected");
+        } else if (val === "not_selected" && btnNotSelected) {
+            btnNotSelected.classList.add("is-active--not-selected");
+        }
+
+        checkReadiness();
+    }
+
+    if (btnSelected) {
+        btnSelected.addEventListener("click", function () { setOutcome("selected"); });
+    }
+    if (btnNotSelected) {
+        btnNotSelected.addEventListener("click", function () { setOutcome("not_selected"); });
+    }
+
+    /* Restore on page load (handles form re-render after validation error) */
+    if (outcomeSelect && outcomeSelect.value) {
+        setOutcome(outcomeSelect.value);
+    }
+
+    /* ── Readiness check ─────────────────────────────── */
+    function setCheck(el, met) {
+        if (!el) return;
+        var icon = el.querySelector(".rg-cws-fin-bar__check-icon");
+        if (met) {
+            el.classList.add("is-met");
+            if (icon) {
+                icon.classList.remove("bi-circle");
+                icon.classList.add("bi-check-circle-fill");
+            }
+        } else {
+            el.classList.remove("is-met");
+            if (icon) {
+                icon.classList.remove("bi-check-circle-fill");
+                icon.classList.add("bi-circle");
+            }
+        }
+    }
+
+    function checkReadiness() {
+        var hasOutcome = outcomeSelect && outcomeSelect.value.trim().length > 0;
+        var hasNotes   = notesTextarea  && notesTextarea.value.trim().length  > 0;
+
+        setCheck(readyOutcome, hasOutcome);
+        setCheck(readyNotes,   hasNotes);
+
+        var allReady = hasOutcome && hasNotes;
+
+        if (openModalBtn) { openModalBtn.disabled = !allReady; }
+        if (finalizeBtn)  { finalizeBtn.disabled  = !allReady; }
+    }
+
+    if (notesTextarea) {
+        notesTextarea.addEventListener("input", checkReadiness);
+    }
+
+    /* Run once on page load */
+    checkReadiness();
+
+    /* ── Modal population ────────────────────────────── */
+    function openConfirmModal() {
+        var val          = outcomeSelect ? outcomeSelect.value : "";
+        var outcomeLabel = val === "selected"     ? "Selected" :
+                           val === "not_selected" ? "Not Selected" : "—";
+        var outcomeColor = val === "selected"     ? "#15803d" :
+                           val === "not_selected" ? "#991b1b" : "#374151";
+
+        if (modalName)     { modalName.textContent     = applicantName; }
+        if (modalPosition) { modalPosition.textContent = positionTitle; }
+        if (modalOutcome)  {
+            modalOutcome.textContent  = outcomeLabel;
+            modalOutcome.style.color  = outcomeColor;
+        }
+
+        if (decModal) { decModal.show(); }
+    }
+
+    if (openModalBtn) {
+        openModalBtn.addEventListener("click", openConfirmModal);
+    }
+    if (finalizeBtn) {
+        finalizeBtn.addEventListener("click", openConfirmModal);
+    }
+
+    /* ── Confirm → submit form ───────────────────────── */
+    if (confirmBtn && decForm) {
+        confirmBtn.addEventListener("click", function () {
+            decForm.submit();
+        });
+    }
+
+})();
+</script>
+
