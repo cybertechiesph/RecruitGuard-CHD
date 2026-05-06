@@ -153,9 +153,20 @@ Recommended classic token setup:
 
 After the secret is added, new issues and pull requests should be added to `https://github.com/users/cybertechiesph/projects/1` automatically.
 
-The `.github/workflows/project-module-sync.yml` workflow uses the same secret to:
+The `.github/workflows/frs-module-tracker-sync.yml` workflow uses the same secret to:
+
+- create or update one open GitHub issue for each of the 15 FRS modules
+- set each FRS module issue's project `Module` field
+- set each FRS module issue's project `Status` field from the implementation review
+- close and archive non-FRS starter/setup/demo tracking items
+
+The `.github/workflows/project-module-sync.yml` workflow keeps FRS module issues synced after later edits. It is intentionally limited to issue titles that start with `[FRS Module ` so unrelated setup, demo, or deployment items do not re-enter the professor-facing tracker.
+
+The `.github/workflows/project-tracking.yml` workflow only handles issue labeling. It no longer auto-adds every issue or pull request to the Project because the active tracker is module-based.
+
+The module sync uses the same secret to:
 
 - create the `Module` project field if it does not exist
-- add open issues and pull requests to the project if missing
+- add open FRS module issues to the project if missing
 - assign each item to the matching FRS module
-- keep future issue and pull request module values synced
+- keep future FRS module issue values synced

@@ -1,0 +1,41 @@
+# FRS Module Status
+
+Source: `C:/Users/j3r1c/Downloads/FRS/CLIENT_FRS.pdf`
+
+Verification date: 2026-05-07
+
+Verification command:
+
+```powershell
+.\.venv\Scripts\python.exe manage.py test
+```
+
+Result: 155 tests passed.
+
+## Status Summary
+
+All 15 FRS modules are represented in the system and should be tracked as `Done` for the current FRS implementation baseline. Environment-specific items such as production Gmail credentials, deployment settings, and real HR data validation remain manual review concerns, not separate FRS tracker modules.
+
+## Modules
+
+| No. | FRS Module | Status | Evidence |
+| --- | --- | --- | --- |
+| 1 | Identity and Access Control | Done | Custom user roles, internal login/password/account views, RBAC mixins, audit-logged account updates, identity tests |
+| 2 | Recruitment Entry and Vacancy Management | Done | Position reference catalog, Plantilla/COS entries, branch-specific validation, entry status audit, entry tests |
+| 3 | Applicant Intake and OTP Verification | Done | Public applicant portal, accountless intake, requirement-coded uploads, hashed/expiring OTP, receipt/status lookup, portal tests |
+| 4 | Recruitment Case Management and Workflow Engine | Done | Case creation, stage progression, stage locks, controlled reopen, timeline/history, workflow tests |
+| 5 | Branch-Aware and Level-Aware Routing | Done | Plantilla/COS branch logic, Level 1 to Secretariat, Level 2 to HRM Chief, Secretariat Level 2 block, override audit, routing tests |
+| 6 | Document Review and Qualification Screening | Done | Screening records, completeness/qualification review, finalization and locks, screening tests |
+| 7 | Examination Management | Done | Exam records, score/result/status/validity/waiver handling, finalization lock, exam tests |
+| 8 | Interview and Rating Management | Done | Interview sessions, evaluator ratings, justifications, fallback sheet upload to Evidence Vault, interview tests |
+| 9 | Deliberation and Decision Support | Done | Consolidation, deliberation records, ranking/CAR support, ReportLab CAR generation, deliberation tests |
+| 10 | Decision and Approval Handling | Done | Submission packet, final decision records, selected/not-selected routing and locks, decision tests |
+| 11 | Notification Management | Done | Submission, selected, non-selected, checklist, and reminder notifications with logs/audit, notification tests |
+| 12 | Appointment and Contract Completion | Done | Plantilla appointment and COS contract completion tracking, requirement checklist, case closure, completion tests |
+| 13 | Evidence Vault and Record Management | Done | Central evidence metadata, AES-256-GCM encrypted bytes, SHA-256 digest, versioning, archive/search/download, evidence tests |
+| 14 | Audit Logging and Traceability | Done | Structured audit logs, routing/override/export/protected access logging, traceability views, audit tests |
+| 15 | Evidence Export and Integrity Verification | Done | Controlled zip export, evidence inventory, manifest, SHA-256 verification reports/checksums, export tests |
+
+## Tracker Rule
+
+The GitHub Project should show one active issue per FRS module. Non-FRS setup, demo, deployment, or automation-test issues should be closed or archived so the professor-facing project view stays aligned with the Functional Requirements Specification.

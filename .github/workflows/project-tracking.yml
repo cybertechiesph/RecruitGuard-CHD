@@ -3,13 +3,10 @@ name: Project Tracking
 on:
   issues:
     types: [opened, edited, reopened]
-  pull_request:
-    types: [opened, edited, reopened, ready_for_review]
 
 permissions:
   contents: read
   issues: write
-  pull-requests: read
 
 jobs:
   triage:
@@ -149,17 +146,3 @@ jobs:
                 labels: [...wanted]
               });
             }
-
-  add-to-project:
-    name: Add item to GitHub Project
-    runs-on: ubuntu-latest
-    env:
-      ADD_TO_PROJECT_PAT: ${{ secrets.ADD_TO_PROJECT_PAT }}
-    steps:
-      - name: Add issue or pull request to project
-        if: env.ADD_TO_PROJECT_PAT != ''
-        uses: actions/add-to-project@v1.0.2
-        with:
-          project-url: https://github.com/users/cybertechiesph/projects/1
-          github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
-

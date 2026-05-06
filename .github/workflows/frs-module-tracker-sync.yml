@@ -1,0 +1,38 @@
+name: FRS Module Tracker Sync
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/frs-module-tracker-sync.yml"
+      - ".github/scripts/frs-module-tracker.js"
+      - "docs/frs-module-status.md"
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    name: Sync FRS module tracker
+    runs-on: ubuntu-latest
+    env:
+      ADD_TO_PROJECT_PAT: ${{ secrets.ADD_TO_PROJECT_PAT }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Create and update FRS module issues
+        if: env.ADD_TO_PROJECT_PAT != ''
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
+          script: |
+            const sync = require("./.github/scripts/frs-module-tracker.js");
+            await sync({ github, context, core });
+
+      - name: Missing token notice
+        if: env.ADD_TO_PROJECT_PAT == ''
+        run: |
+          echo "ADD_TO_PROJECT_PAT is not configured. FRS module tracker sync was skipped."
+

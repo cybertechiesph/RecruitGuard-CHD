@@ -8,8 +8,6 @@ on:
       - ".github/workflows/project-module-sync.yml"
   issues:
     types: [opened, edited, labeled, unlabeled, reopened]
-  pull_request:
-    types: [opened, edited, labeled, unlabeled, reopened, ready_for_review]
 
 permissions:
   contents: read
@@ -320,29 +318,25 @@ jobs:
               });
             }
 
-            async function listOpenRepoContent() {
+            async function listOpenFrsModuleIssues() {
               const issues = await github.paginate(github.rest.issues.listForRepo, {
                 owner: repoOwner,
                 repo,
                 state: "open",
                 per_page: 100
               });
-              const openIssues = issues.filter((issue) => !issue.pull_request);
-
-              const pulls = await github.paginate(github.rest.pulls.list, {
-                owner: repoOwner,
-                repo,
-                state: "open",
-                per_page: 100
-              });
-
-              return [...openIssues, ...pulls];
+              return issues.filter((issue) => (
+                !issue.pull_request && issue.title.startsWith("[FRS Module ")
+              ));
             }
 
             async function eventContent() {
-              if (context.payload.issue) return [context.payload.issue];
-              if (context.payload.pull_request) return [context.payload.pull_request];
-              return listOpenRepoContent();
+              if (context.payload.issue) {
+                return context.payload.issue.title.startsWith("[FRS Module ")
+                  ? [context.payload.issue]
+                  : [];
+              }
+              return listOpenFrsModuleIssues();
             }
 
             const project = await loadProject();

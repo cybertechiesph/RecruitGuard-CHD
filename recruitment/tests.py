@@ -451,7 +451,8 @@ class FoundationSmokeTests(TestCase):
     def test_login_page_loads(self):
         response = self.client.get(reverse("login"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Internal Recruitment Portal")
+        self.assertContains(response, "Internal Access")
+        self.assertContains(response, "RecruitGuard-CHD")
         self.assertTrue(reverse("login").startswith("/internal/"))
 
     def test_dashboard_redirects_anonymous_users_to_login(self):
