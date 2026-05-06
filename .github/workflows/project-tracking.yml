@@ -1,0 +1,165 @@
+name: Project Tracking
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+  pull_request:
+    types: [opened, edited, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  triage:
+    name: Label issues
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Apply tracking labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const title = issue.title || "";
+            const body = issue.body || "";
+            const haystack = `${title}\n${body}`.toLowerCase();
+
+            const wanted = new Set();
+
+            const labelDefinitions = {
+              "type:feature": "Tracks a feature, workflow change, or module deliverable.",
+              "type:bug": "Tracks a defect, regression, or rule violation.",
+              "type:task": "Tracks maintenance, setup, documentation, testing, or research work.",
+              "type:docs": "Documentation-only or documentation-heavy work.",
+              "type:test": "Testing or QA-focused work.",
+              "priority:p0": "Security, data integrity, or release blocker.",
+              "priority:p1": "Major workflow or demo-readiness priority.",
+              "priority:p2": "Important but non-blocking work.",
+              "priority:p3": "Minor polish or cleanup.",
+              "branch:shared": "Applies to both Plantilla and COS.",
+              "branch:plantilla": "Plantilla-specific work.",
+              "branch:cos": "COS-specific work.",
+              "module:identity": "Identity and Access Control.",
+              "module:entry-management": "Recruitment Entry and Vacancy Management.",
+              "module:intake-otp": "Applicant Intake and OTP Verification.",
+              "module:workflow-engine": "Recruitment Case Management and Workflow Engine.",
+              "module:routing": "Branch-Aware and Level-Aware Routing.",
+              "module:screening": "Document Review and Qualification Screening.",
+              "module:examination": "Examination Management.",
+              "module:interview-rating": "Interview and Rating Management.",
+              "module:deliberation": "Deliberation and Decision Support.",
+              "module:decision-approval": "Decision and Approval Handling.",
+              "module:notifications": "Notification Management.",
+              "module:completion": "Appointment and Contract Completion.",
+              "module:evidence-vault": "Evidence Vault and Record Management.",
+              "module:audit-logging": "Audit Logging and Traceability.",
+              "module:export-integrity": "Evidence Export and Integrity Verification.",
+              "security": "Security-sensitive work.",
+              "audit": "Audit logging or traceability work.",
+              "routing": "Routing rule work.",
+              "evidence": "Evidence handling or export work.",
+              "workflow": "Workflow state or stage behavior.",
+              "blocked": "Blocked by an external decision or dependency."
+            };
+
+            if (/^\[feature\]/i.test(title)) wanted.add("type:feature");
+            if (/^\[bug\]/i.test(title)) wanted.add("type:bug");
+            if (/^\[task\]/i.test(title)) wanted.add("type:task");
+
+            if (haystack.includes("p0") || haystack.includes("security/data integrity blocker")) wanted.add("priority:p0");
+            else if (haystack.includes("p1") || haystack.includes("major workflow blocker")) wanted.add("priority:p1");
+            else if (haystack.includes("p2") || haystack.includes("important defect")) wanted.add("priority:p2");
+            else if (haystack.includes("p3") || haystack.includes("minor polish")) wanted.add("priority:p3");
+
+            if (haystack.includes("plantilla")) wanted.add("branch:plantilla");
+            if (haystack.includes("cos")) wanted.add("branch:cos");
+            if (haystack.includes("shared")) wanted.add("branch:shared");
+
+            const moduleRules = [
+              ["identity and access control", "module:identity"],
+              ["recruitment entry and vacancy management", "module:entry-management"],
+              ["applicant intake and otp verification", "module:intake-otp"],
+              ["recruitment case management and workflow engine", "module:workflow-engine"],
+              ["branch-aware and level-aware routing", "module:routing"],
+              ["document review and qualification screening", "module:screening"],
+              ["examination management", "module:examination"],
+              ["interview and rating management", "module:interview-rating"],
+              ["deliberation and decision support", "module:deliberation"],
+              ["decision and approval handling", "module:decision-approval"],
+              ["notification management", "module:notifications"],
+              ["appointment and contract completion", "module:completion"],
+              ["evidence vault and record management", "module:evidence-vault"],
+              ["audit logging and traceability", "module:audit-logging"],
+              ["evidence export and integrity verification", "module:export-integrity"]
+            ];
+
+            for (const [needle, label] of moduleRules) {
+              if (haystack.includes(needle)) wanted.add(label);
+            }
+
+            const riskRules = [
+              ["security", "security"],
+              ["audit", "audit"],
+              ["traceability", "audit"],
+              ["routing", "routing"],
+              ["evidence", "evidence"],
+              ["export", "evidence"],
+              ["workflow", "workflow"],
+              ["stage", "workflow"],
+              ["blocked", "blocked"]
+            ];
+
+            for (const [needle, label] of riskRules) {
+              if (haystack.includes(needle)) wanted.add(label);
+            }
+
+            for (const label of wanted) {
+              try {
+                await github.rest.issues.getLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label
+                });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label,
+                  description: labelDefinitions[label] || "RecruitGuard-CHD tracking label.",
+                  color: label.startsWith("priority:p0") ? "b60205" :
+                    label.startsWith("priority:p1") ? "d93f0b" :
+                    label.startsWith("priority:p2") ? "fbca04" :
+                    label.startsWith("priority:p3") ? "0e8a16" :
+                    label.startsWith("type:") ? "1d76db" :
+                    label.startsWith("module:") ? "5319e7" :
+                    label.startsWith("branch:") ? "0e8a16" :
+                    "c5def5"
+                });
+              }
+            }
+
+            if (wanted.size > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: [...wanted]
+              });
+            }
+
+  add-to-project:
+    name: Add item to GitHub Project
+    runs-on: ubuntu-latest
+    env:
+      ADD_TO_PROJECT_PAT: ${{ secrets.ADD_TO_PROJECT_PAT }}
+    steps:
+      - name: Add issue or pull request to project
+        if: env.ADD_TO_PROJECT_PAT != ''
+        uses: actions/add-to-project@v1.0.2
+        with:
+          project-url: https://github.com/users/cybertechiesph/projects/1
+          github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
+

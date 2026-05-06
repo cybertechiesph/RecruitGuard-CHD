@@ -10,6 +10,10 @@ Create one GitHub Project for the repository named `RecruitGuard-CHD Development
 - Table sorted by priority, module, and updated date
 - Roadmap grouped by milestone or phase
 
+Project URL:
+
+- `https://github.com/users/cybertechiesph/projects/1`
+
 Recommended status values:
 
 - Backlog
@@ -109,3 +113,26 @@ Recommended milestones:
 - Changes to routing, workflow, security, evidence, or audit behavior must reference the relevant docs.
 - Do not track onboarding, offboarding, payroll, termination, or full employee lifecycle items because they are out of scope.
 - Keep dummy or synthetic data only in issues, tests, screenshots, and demos.
+
+## Automation
+
+The repository includes `.github/workflows/project-tracking.yml`.
+
+It automatically labels new or edited issues based on:
+
+- issue template type
+- priority text such as P0, P1, P2, or P3
+- branch text such as Shared, Plantilla, or COS
+- selected core module
+- risk keywords such as security, audit, routing, evidence, and workflow
+
+It can also automatically add new issues and pull requests to the GitHub Project. GitHub Projects are outside the repository permission boundary, so the built-in `GITHUB_TOKEN` is not enough for user-owned Projects. Add a repository secret named `ADD_TO_PROJECT_PAT` with a fine-grained token that can write to the project.
+
+Recommended token setup:
+
+- owner: `cybertechiesph`
+- repository access: `cybertechiesph/RecruitGuard-CHD`
+- repository permissions: Issues read/write, Pull requests read, Metadata read
+- account/project permission: Projects read/write
+
+After the secret is added, new issues and pull requests should be added to `https://github.com/users/cybertechiesph/projects/1` automatically.
