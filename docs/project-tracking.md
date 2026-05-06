@@ -126,13 +126,14 @@ It automatically labels new or edited issues based on:
 - selected core module
 - risk keywords such as security, audit, routing, evidence, and workflow
 
-It can also automatically add new issues and pull requests to the GitHub Project. GitHub Projects are outside the repository permission boundary, so the built-in `GITHUB_TOKEN` is not enough for user-owned Projects. Add a repository secret named `ADD_TO_PROJECT_PAT` with a fine-grained token that can write to the project.
+It can also automatically add new issues and pull requests to the GitHub Project. GitHub Projects are outside the repository permission boundary, so the built-in `GITHUB_TOKEN` is not enough for user-owned Projects. Add a repository secret named `ADD_TO_PROJECT_PAT` with a classic personal access token that can write to the project.
 
-Recommended token setup:
+Recommended classic token setup:
 
-- owner: `cybertechiesph`
-- repository access: `cybertechiesph/RecruitGuard-CHD`
-- repository permissions: Issues read/write, Pull requests read, Metadata read
-- account/project permission: Projects read/write
+- token type: classic personal access token
+- expiration: 90 days or 180 days
+- scopes for this public repository: `project`
+- optional fallback scope if GitHub reports repository access errors: `public_repo`
+- avoid broad scopes such as `repo`, `admin:repo_hook`, `workflow`, `delete_repo`, `admin:org`, or `user`
 
 After the secret is added, new issues and pull requests should be added to `https://github.com/users/cybertechiesph/projects/1` automatically.
