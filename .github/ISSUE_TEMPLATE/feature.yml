@@ -1,0 +1,69 @@
+name: Feature or Module Work
+description: Track a RecruitGuard-CHD feature, workflow change, or module task.
+title: "[Feature]: "
+labels: ["type:feature"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What should be implemented?
+      placeholder: Describe the user-facing or system behavior.
+    validations:
+      required: true
+  - type: dropdown
+    id: branch
+    attributes:
+      label: Recruitment branch
+      options:
+        - Shared
+        - Plantilla
+        - COS
+    validations:
+      required: true
+  - type: dropdown
+    id: module
+    attributes:
+      label: Core module
+      options:
+        - Identity and Access Control
+        - Recruitment Entry and Vacancy Management
+        - Applicant Intake and OTP Verification
+        - Recruitment Case Management and Workflow Engine
+        - Branch-Aware and Level-Aware Routing
+        - Document Review and Qualification Screening
+        - Examination Management
+        - Interview and Rating Management
+        - Deliberation and Decision Support
+        - Decision and Approval Handling
+        - Notification Management
+        - Appointment and Contract Completion
+        - Evidence Vault and Record Management
+        - Audit Logging and Traceability
+        - Evidence Export and Integrity Verification
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Keep these testable.
+      value: |
+        - [ ] Server-side access restrictions are enforced.
+        - [ ] Validations cover invalid branch, level, role, or state transitions.
+        - [ ] Audit logging is added where the action changes protected workflow state.
+        - [ ] Relevant tests are added or updated.
+    validations:
+      required: true
+  - type: textarea
+    id: references
+    attributes:
+      label: Design references
+      description: Link or name the relevant docs.
+      value: |
+        - docs/FRS.md
+        - docs/modules.md
+        - docs/workflow-rules.md
+        - docs/routing-rules.md
+        - docs/security-rules.md
+

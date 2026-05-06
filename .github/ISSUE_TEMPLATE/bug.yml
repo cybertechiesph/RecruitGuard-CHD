@@ -1,0 +1,44 @@
+name: Bug Report
+description: Report a defect, regression, or rule violation.
+title: "[Bug]: "
+labels: ["type:bug"]
+body:
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+      description: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened according to the docs or workflow rules?
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - P0 - Security/data integrity blocker
+        - P1 - Major workflow blocker
+        - P2 - Important defect
+        - P3 - Minor polish or cleanup
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      value: |
+        1.
+        2.
+        3.
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope notes
+      description: Include affected actor, branch, level, stage, and module if known.
+

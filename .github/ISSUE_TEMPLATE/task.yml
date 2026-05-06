@@ -1,0 +1,35 @@
+name: Engineering Task
+description: Track maintenance, documentation, testing, or setup work.
+title: "[Task]: "
+labels: ["type:task"]
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: What should be true when this is done?
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Task kind
+      options:
+        - Documentation
+        - Testing
+        - Refactor
+        - Setup
+        - Security hardening
+        - Deployment preparation
+        - Research
+    validations:
+      required: true
+  - type: textarea
+    id: checklist
+    attributes:
+      label: Checklist
+      value: |
+        - [ ] Implementation is scoped to the requested work.
+        - [ ] Relevant docs are updated if behavior changes.
+        - [ ] Relevant tests or checks are run.
+
