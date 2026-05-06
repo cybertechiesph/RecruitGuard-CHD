@@ -35,7 +35,7 @@ Recommended setup:
 - layout: board or table
 - group by: `Module`
 - visible fields: `Status`, `Assignees`, `Labels`, `Linked pull requests`
-- filter: open issues only, if you want to hide completed review history
+- filter: do not filter to open issues only; FRS modules marked `Done` may be closed by GitHub's built-in Project workflow while remaining visible in the Project
 
 The repository includes `.github/workflows/project-module-sync.yml`, which creates and maintains the project `Module` field. It maps issues and pull requests to the closest FRS module using the issue title, body, and labels.
 
@@ -155,7 +155,7 @@ After the secret is added, new issues and pull requests should be added to `http
 
 The `.github/workflows/frs-module-tracker-sync.yml` workflow uses the same secret to:
 
-- create or update one open GitHub issue for each of the 15 FRS modules
+- create or update one GitHub issue for each of the 15 FRS modules
 - set each FRS module issue's project `Module` field
 - set each FRS module issue's project `Status` field from the implementation review
 - close and archive non-FRS starter/setup/demo tracking items
@@ -167,6 +167,6 @@ The `.github/workflows/project-tracking.yml` workflow only handles issue labelin
 The module sync uses the same secret to:
 
 - create the `Module` project field if it does not exist
-- add open FRS module issues to the project if missing
+- add FRS module issues to the project if missing
 - assign each item to the matching FRS module
 - keep future FRS module issue values synced
