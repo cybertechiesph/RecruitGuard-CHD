@@ -339,6 +339,8 @@ Manages examination data where applicable.
 i. System shall support creation of examination records where applicable.  
 ii. Examination type and result shall be recordable per case.  
 iii. Examination stage shall be applied according to branch-specific workflow rules where applicable.  
+iv. System shall support structured recording of technical and practical examination components where applicable.  
+v. System shall record examination date and administered-by information for completed examinations.  
 
 ### b. Examination Status and Validity
 i. System shall support recording of examination validity period where applicable.  
@@ -349,6 +351,7 @@ iii. Examination-related remarks shall be storable per case.
 i. Examination results shall be preserved as part of the recruitment case history.  
 ii. Finalized examination outputs shall be protected against unauthorized modification.  
 iii. Examination-related actions shall be traceable in the audit log.  
+iv. Optional examination supporting evidence shall be stored through the Evidence Vault with integrity metadata when uploaded.  
 
 ---
 

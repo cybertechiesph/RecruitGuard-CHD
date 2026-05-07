@@ -24,7 +24,7 @@
 </div>
 
 
-<form method="post" action="{% url 'exam-review' application.pk %}" id="exam-form">
+<form method="post" action="{% url 'exam-review' application.pk %}" id="exam-form" enctype="multipart/form-data">
     {% csrf_token %}
     <input type="hidden" name="operation" id="exam-op-field" value="save">
 
@@ -51,6 +51,40 @@
             {% for error in exam_form.exam_type.errors %}
                 <div class="invalid-feedback d-block">{{ error }}</div>
             {% endfor %}
+        </div>
+    </div>
+
+    
+    <div class="rg-icard" style="margin-bottom:1rem;">
+        <div class="rg-icard__header" style="margin-bottom:0.875rem;">
+            <div>
+                <h3 class="rg-icard__title">Exam Administration</h3>
+                <p class="rg-icard__subtitle">
+                    Record when the examination was administered and the office or person
+                    responsible for administering it.
+                </p>
+            </div>
+        </div>
+
+        <div class="rg-exam-score-grid">
+            <div class="rg-field">
+                <label class="form-label" for="{{ exam_form.exam_date.id_for_label }}">
+                    {{ exam_form.exam_date.label }}
+                </label>
+                {{ exam_form.exam_date }}
+                {% for error in exam_form.exam_date.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </div>
+            <div class="rg-field">
+                <label class="form-label" for="{{ exam_form.administered_by.id_for_label }}">
+                    {{ exam_form.administered_by.label }}
+                </label>
+                {{ exam_form.administered_by }}
+                {% for error in exam_form.administered_by.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </div>
         </div>
     </div>
 
@@ -123,9 +157,45 @@
         <div class="rg-exam-cond-group" id="exam-cond-completed">
             <div style="font-size:0.72rem;font-weight:700;color:#5f6c78;
                         text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.75rem;">
-                Examination Result &amp; Details
+                Technical and Practical Components
             </div>
             <div class="rg-exam-score-grid">
+                <div class="rg-field">
+                    <label class="form-label" for="{{ exam_form.technical_score.id_for_label }}">
+                        {{ exam_form.technical_score.label }}
+                    </label>
+                    {{ exam_form.technical_score }}
+                    {% for error in exam_form.technical_score.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+                <div class="rg-field">
+                    <label class="form-label" for="{{ exam_form.technical_result.id_for_label }}">
+                        {{ exam_form.technical_result.label }}
+                    </label>
+                    {{ exam_form.technical_result }}
+                    {% for error in exam_form.technical_result.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+                <div class="rg-field">
+                    <label class="form-label" for="{{ exam_form.practical_score.id_for_label }}">
+                        {{ exam_form.practical_score.label }}
+                    </label>
+                    {{ exam_form.practical_score }}
+                    {% for error in exam_form.practical_score.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+                <div class="rg-field">
+                    <label class="form-label" for="{{ exam_form.practical_result.id_for_label }}">
+                        {{ exam_form.practical_result.label }}
+                    </label>
+                    {{ exam_form.practical_result }}
+                    {% for error in exam_form.practical_result.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
                 <div class="rg-field">
                     <label class="form-label" for="{{ exam_form.exam_score.id_for_label }}">
                         {{ exam_form.exam_score.label }}
@@ -201,6 +271,43 @@
     </div>
 
     
+    <div class="rg-icard" style="margin-bottom:1rem;">
+        <div class="rg-icard__header" style="margin-bottom:0.875rem;">
+            <div>
+                <h3 class="rg-icard__title">Supporting Evidence</h3>
+                <p class="rg-icard__subtitle">
+                    Upload the exam sheet, rubric, or end-user assessment file when available.
+                    This upload is optional and is preserved in the Evidence Vault.
+                </p>
+            </div>
+        </div>
+
+        {% if current_exam_record and current_exam_record.evidence_item %}
+        <div class="rg-imeta" style="margin-bottom:0.75rem;">
+            Existing evidence:
+            <strong>{{ current_exam_record.evidence_item.label }}</strong>
+            <span class="rg-imeta__sep"></span>
+            {{ current_exam_record.evidence_item.version_label }}
+            <span class="rg-imeta__sep"></span>
+            SHA-256 {{ current_exam_record.evidence_item.sha256_digest|slice:":12" }}...
+        </div>
+        {% endif %}
+
+        <div class="rg-field">
+            <label class="form-label" for="{{ exam_form.evidence_file.id_for_label }}">
+                {{ exam_form.evidence_file.label }}
+            </label>
+            {{ exam_form.evidence_file }}
+            {% if exam_form.evidence_file.help_text %}
+                <div class="form-text">{{ exam_form.evidence_file.help_text|safe }}</div>
+            {% endif %}
+            {% for error in exam_form.evidence_file.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    
     <div class="rg-cws-fin-bar" id="exam-fin-bar">
         <div class="rg-cws-fin-bar__inner">
 
@@ -214,9 +321,13 @@
                     <span class="rg-scr-ready-item__icon" aria-hidden="true"></span>
                     Exam status selected
                 </div>
+                <div class="rg-scr-ready-item" id="exam-ready-admin">
+                    <span class="rg-scr-ready-item__icon" aria-hidden="true"></span>
+                    Date and administered-by recorded
+                </div>
                 <div class="rg-scr-ready-item" id="exam-ready-details" style="display:none;">
                     <span class="rg-scr-ready-item__icon" aria-hidden="true"></span>
-                    <span id="exam-ready-details-label">Score or result recorded</span>
+                    <span id="exam-ready-details-label">Technical, practical, or overall result recorded</span>
                 </div>
             </div>
 
@@ -295,6 +406,16 @@
                         <span class="rg-scr-modal-summary__value"
                               id="modal-exam-status-val">&mdash;</span>
                     </div>
+                    <div class="rg-scr-modal-summary__row">
+                        <span class="rg-scr-modal-summary__label">Exam Date</span>
+                        <span class="rg-scr-modal-summary__value"
+                              id="modal-exam-date-val">&mdash;</span>
+                    </div>
+                    <div class="rg-scr-modal-summary__row">
+                        <span class="rg-scr-modal-summary__label">Administered By</span>
+                        <span class="rg-scr-modal-summary__value"
+                              id="modal-exam-admin-val">&mdash;</span>
+                    </div>
                     <div class="rg-scr-modal-summary__row" id="modal-exam-result-row"
                          style="display:none;">
                         <span class="rg-scr-modal-summary__label">Result / Score</span>
@@ -349,12 +470,15 @@
     var opField        = document.getElementById("exam-op-field");
     var examTypeInput  = document.getElementById("{{ exam_form.exam_type.id_for_label }}");
     var examStatusSel  = document.getElementById("id_exam_status");
+    var examDateInput  = document.getElementById("{{ exam_form.exam_date.id_for_label }}");
+    var adminInput     = document.getElementById("{{ exam_form.administered_by.id_for_label }}");
     var statusBar      = document.getElementById("exam-status-bar");
     var statusVerdict  = document.getElementById("exam-status-verdict");
     var condCompleted  = document.getElementById("exam-cond-completed");
     var condRemarks    = document.getElementById("exam-cond-remarks");
     var readyType      = document.getElementById("exam-ready-type");
     var readyStatus    = document.getElementById("exam-ready-status");
+    var readyAdmin     = document.getElementById("exam-ready-admin");
     var readyDetails   = document.getElementById("exam-ready-details");
     var readyDetailsLbl = document.getElementById("exam-ready-details-label");
     var finalBtn       = document.getElementById("exam-finalize-btn");
@@ -362,6 +486,10 @@
 
     var scoreInput     = document.getElementById("{{ exam_form.exam_score.id_for_label }}");
     var resultInput    = document.getElementById("{{ exam_form.exam_result.id_for_label }}");
+    var technicalScoreInput = document.getElementById("{{ exam_form.technical_score.id_for_label }}");
+    var technicalResultInput = document.getElementById("{{ exam_form.technical_result.id_for_label }}");
+    var practicalScoreInput = document.getElementById("{{ exam_form.practical_score.id_for_label }}");
+    var practicalResultInput = document.getElementById("{{ exam_form.practical_result.id_for_label }}");
     var notesInput     = document.getElementById("{{ exam_form.exam_notes.id_for_label }}");
 
     /* ── Status bar config ─────────────────────────────────────── */
@@ -440,18 +568,36 @@
         var status       = examStatusSel ? examStatusSel.value : "";
         var hasType      = examTypeInput ? examTypeInput.value.trim().length > 0 : false;
         var hasStatus    = status.length > 0;
+        var hasExamDate  = examDateInput ? examDateInput.value.trim().length > 0 : false;
+        var hasAdmin     = adminInput ? adminInput.value.trim().length > 0 : false;
         var hasScore     = scoreInput  ? scoreInput.value.trim().length > 0 : false;
         var hasResult    = resultInput ? resultInput.value.trim().length > 0 : false;
+        var hasTechnicalScore = technicalScoreInput ? technicalScoreInput.value.trim().length > 0 : false;
+        var hasTechnicalResult = technicalResultInput ? technicalResultInput.value.trim().length > 0 : false;
+        var hasPracticalScore = practicalScoreInput ? practicalScoreInput.value.trim().length > 0 : false;
+        var hasPracticalResult = practicalResultInput ? practicalResultInput.value.trim().length > 0 : false;
         var hasNotes     = notesInput  ? notesInput.value.trim().length > 0 : false;
+        var adminMet     = status === "completed" ? (hasExamDate && hasAdmin) : true;
 
         setReadyItem(readyType, hasType);
         setReadyItem(readyStatus, hasStatus);
+        if (readyAdmin) {
+            readyAdmin.style.display = status === "completed" ? "" : "none";
+            setReadyItem(readyAdmin, adminMet);
+        }
 
         var detailsMet = false;
         if (status === "completed") {
             if (readyDetails) readyDetails.style.display = "";
-            if (readyDetailsLbl) readyDetailsLbl.textContent = "Score or result recorded";
-            detailsMet = hasScore || hasResult;
+            if (readyDetailsLbl) readyDetailsLbl.textContent = "Technical, practical, or overall result recorded";
+            detailsMet = (
+                hasScore ||
+                hasResult ||
+                hasTechnicalScore ||
+                hasTechnicalResult ||
+                hasPracticalScore ||
+                hasPracticalResult
+            );
             setReadyItem(readyDetails, detailsMet);
         } else if (status === "waived" || status === "absent") {
             if (readyDetails) readyDetails.style.display = "";
@@ -463,7 +609,7 @@
             detailsMet = true; /* no detail check needed when no status #}*/
         }
 
-        var ready = hasType && hasStatus && detailsMet;
+        var ready = hasType && hasStatus && adminMet && detailsMet;
         if (ready) {
             if (finalBtn) {
                 finalBtn.classList.remove("is-blocked");
@@ -521,19 +667,34 @@
 
         var modalTypeEl   = document.getElementById("modal-exam-type-val");
         var modalStatusEl = document.getElementById("modal-exam-status-val");
+        var modalDateEl   = document.getElementById("modal-exam-date-val");
+        var modalAdminEl  = document.getElementById("modal-exam-admin-val");
         var modalResultRow = document.getElementById("modal-exam-result-row");
         var modalResultEl = document.getElementById("modal-exam-result-val");
 
         if (modalTypeEl)   modalTypeEl.textContent   = typeVal || "\u2014";
         if (modalStatusEl) modalStatusEl.textContent = cfg ? cfg.label : "\u2014";
+        if (modalDateEl)   modalDateEl.textContent   = examDateInput ? (examDateInput.value.trim() || "\u2014") : "\u2014";
+        if (modalAdminEl)  modalAdminEl.textContent  = adminInput ? (adminInput.value.trim() || "\u2014") : "\u2014";
 
         if (status === "completed" && modalResultRow && modalResultEl) {
             var scoreVal  = scoreInput  ? scoreInput.value.trim()  : "";
             var resultVal = resultInput ? resultInput.value.trim() : "";
-            var display   = "";
-            if (scoreVal && resultVal) { display = scoreVal + " \u2014 " + resultVal; }
-            else if (scoreVal)   { display = scoreVal; }
-            else if (resultVal)  { display = resultVal; }
+            var technicalScoreVal = technicalScoreInput ? technicalScoreInput.value.trim() : "";
+            var technicalResultVal = technicalResultInput ? technicalResultInput.value.trim() : "";
+            var practicalScoreVal = practicalScoreInput ? practicalScoreInput.value.trim() : "";
+            var practicalResultVal = practicalResultInput ? practicalResultInput.value.trim() : "";
+            var displayParts = [];
+            if (technicalScoreVal || technicalResultVal) {
+                displayParts.push("Technical: " + (technicalScoreVal || "\u2014") + (technicalResultVal ? " (" + technicalResultVal + ")" : ""));
+            }
+            if (practicalScoreVal || practicalResultVal) {
+                displayParts.push("Practical: " + (practicalScoreVal || "\u2014") + (practicalResultVal ? " (" + practicalResultVal + ")" : ""));
+            }
+            if (scoreVal || resultVal) {
+                displayParts.push("Overall: " + (scoreVal || "\u2014") + (resultVal ? " (" + resultVal + ")" : ""));
+            }
+            var display = displayParts.join("; ");
             modalResultEl.textContent = display || "\u2014";
             modalResultRow.style.display = "";
         } else if (modalResultRow) {
@@ -566,7 +727,17 @@
     }
 
     /* Score / result / notes inputs → readiness */
-    [scoreInput, resultInput, notesInput].forEach(function (inp) {
+    [
+        examDateInput,
+        adminInput,
+        scoreInput,
+        resultInput,
+        technicalScoreInput,
+        technicalResultInput,
+        practicalScoreInput,
+        practicalResultInput,
+        notesInput
+    ].forEach(function (inp) {
         if (inp) inp.addEventListener("input", checkReadiness);
     });
 

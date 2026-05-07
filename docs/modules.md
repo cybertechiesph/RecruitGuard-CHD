@@ -19,7 +19,7 @@ Routes cases according to Plantilla/COS branch and Level 1/Level 2 rules.
 Handles completeness review, qualification checking, and screening outcomes.
 
 ## 7. Examination Management
-Handles exam-related records where applicable.
+Handles exam-related records where applicable, including technical and practical examination components, administration details, and optional Evidence Vault attachments.
 
 ## 8. Interview and Rating Management
 Handles interview scheduling, rating entry, and finalized interview outputs.

@@ -702,7 +702,7 @@ class ExaminationRecordView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, 
             raise PermissionDenied
 
         operation = request.POST.get("operation", "save")
-        form = ExamRecordForm(request.POST)
+        form = ExamRecordForm(request.POST, request.FILES)
         if form.is_valid():
             try:
                 exam_record = save_exam_record(
@@ -710,6 +710,7 @@ class ExaminationRecordView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, 
                     actor=request.user,
                     cleaned_data=form.cleaned_data,
                     finalize=operation == "finalize",
+                    evidence_file=form.cleaned_data.get("evidence_file"),
                 )
             except (ValueError, ValidationError) as exc:
                 messages.error(request, str(exc))

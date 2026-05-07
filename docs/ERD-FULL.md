@@ -284,20 +284,29 @@ Stores exam-related records where applicable.
 - case_id (FK -> RecruitmentCase.case_id)
 - exam_type
 - score
+- technical_score
+- technical_result
+- practical_score
+- practical_result
+- exam_date
+- administered_by
 - validity_end_date
 - waiver_flag
 - absence_flag
 - remarks
+- evidence_item_id (FK -> EvidenceVaultItem.artifact_id, nullable)
 - encoded_by_user_id (FK -> InternalUser.user_id)
 - encoded_at
 
 ### Relationships
 - One ExamRecord belongs to one RecruitmentCase
 - One ExamRecord may be encoded by one InternalUser
+- One ExamRecord may reference one optional EvidenceVaultItem
 
 ### Cardinality
 - RecruitmentCase 1 : M ExamRecord
 - InternalUser 1 : M ExamRecord
+- EvidenceVaultItem 0..1 : M ExamRecord references
 
 ---
 

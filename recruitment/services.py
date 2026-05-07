@@ -96,6 +96,7 @@ INTERVIEW_RATING_ROLES_BY_STAGE = {
 INTERVIEW_FALLBACK_LABEL = "Interview Rating Sheet (Fallback)"
 ARTIFACT_TYPE_APPLICANT_DOCUMENT = "applicant_document"
 ARTIFACT_TYPE_WORKFLOW_EVIDENCE = "workflow_evidence"
+ARTIFACT_TYPE_EXAM_EVIDENCE = "exam_supporting_evidence"
 ARTIFACT_TYPE_INTERVIEW_FALLBACK = "interview_fallback_rating_sheet"
 ARTIFACT_TYPE_COMPARATIVE_ASSESSMENT_REPORT = "comparative_assessment_report"
 DELIBERATION_STAGES_BY_BRANCH = {
@@ -881,6 +882,7 @@ def get_exam_record(application, stage=None):
     return application.exam_records.select_related(
         "recorded_by",
         "finalized_by",
+        "evidence_item",
     ).filter(review_stage=review_stage).first()
 
 
@@ -888,6 +890,7 @@ def get_exam_records(application):
     return application.exam_records.select_related(
         "recorded_by",
         "finalized_by",
+        "evidence_item",
     ).order_by("created_at")
 
 
@@ -1034,8 +1037,16 @@ def _deliberation_snapshot_for_exam(exam_record):
         "review_stage": exam_record.review_stage,
         "exam_type": exam_record.exam_type,
         "exam_status": exam_record.exam_status,
-        "exam_score": _decimal_string(exam_record.exam_score),
+        "exam_score": _decimal_string(exam_record.effective_score),
         "exam_result": exam_record.exam_result,
+        "technical_score": _decimal_string(exam_record.technical_score),
+        "technical_result": exam_record.technical_result,
+        "practical_score": _decimal_string(exam_record.practical_score),
+        "practical_result": exam_record.practical_result,
+        "component_summary": exam_record.component_summary,
+        "exam_date": exam_record.exam_date.isoformat() if exam_record.exam_date else "",
+        "administered_by": exam_record.administered_by,
+        "evidence_id": exam_record.evidence_item_id or "",
         "valid_from": exam_record.valid_from.isoformat() if exam_record.valid_from else "",
         "valid_until": exam_record.valid_until.isoformat() if exam_record.valid_until else "",
         "finalized_at": exam_record.finalized_at.isoformat() if exam_record.finalized_at else "",
@@ -1067,6 +1078,7 @@ def build_deliberation_consolidation(application):
         application.exam_records.filter(is_finalized=True).select_related(
             "recorded_by",
             "finalized_by",
+            "evidence_item",
         ).order_by("created_at")
     )
     interview_sessions = list(
@@ -1098,7 +1110,8 @@ def build_deliberation_consolidation(application):
                 latest_screening.qualification_outcome if latest_screening else ""
             ),
             "latest_exam_status": latest_exam.exam_status if latest_exam else "",
-            "latest_exam_score": _decimal_string(latest_exam.exam_score if latest_exam else None),
+            "latest_exam_score": _decimal_string(latest_exam.effective_score if latest_exam else None),
+            "latest_exam_components": latest_exam.component_summary if latest_exam else "",
             "latest_interview_average": _decimal_string(latest_interview_average),
         },
     }
@@ -1289,8 +1302,17 @@ def _decision_packet_exam_record(record):
         "exam_type": record.exam_type,
         "exam_status": record.exam_status,
         "exam_status_label": record.get_exam_status_display(),
-        "exam_score": _decimal_string(record.exam_score),
+        "exam_score": _decimal_string(record.effective_score),
         "exam_result": record.exam_result,
+        "technical_score": _decimal_string(record.technical_score),
+        "technical_result": record.technical_result,
+        "practical_score": _decimal_string(record.practical_score),
+        "practical_result": record.practical_result,
+        "component_summary": record.component_summary,
+        "exam_date": record.exam_date.isoformat() if record.exam_date else "",
+        "administered_by": record.administered_by,
+        "evidence_id": record.evidence_item_id or "",
+        "evidence_label": record.evidence_item.label if record.evidence_item_id else "",
         "finalized_at": record.finalized_at.isoformat() if record.finalized_at else "",
         "is_read_only": record.is_finalized,
     }
@@ -1479,6 +1501,7 @@ def build_submission_packet(application):
         application.exam_records.filter(is_finalized=True).select_related(
             "recorded_by",
             "finalized_by",
+            "evidence_item",
         ).order_by("created_at")
     )
     interview_sessions = list(
@@ -1623,7 +1646,8 @@ def save_screening_review(application, actor, cleaned_data, finalize=False):
     return screening_record
 
 
-def save_exam_record(application, actor, cleaned_data, finalize=False):
+@transaction.atomic
+def save_exam_record(application, actor, cleaned_data, finalize=False, evidence_file=None):
     if not hasattr(application, "case"):
         raise ValueError("A recruitment case must exist before examination data can be recorded.")
     review_stage = application.case.current_stage
@@ -1652,11 +1676,17 @@ def save_exam_record(application, actor, cleaned_data, finalize=False):
     exam_record.recorded_by = actor
     exam_record.exam_type = cleaned_data["exam_type"]
     exam_record.exam_status = cleaned_data["exam_status"]
-    exam_record.exam_score = cleaned_data["exam_score"]
-    exam_record.exam_result = cleaned_data["exam_result"]
-    exam_record.valid_from = cleaned_data["valid_from"]
-    exam_record.valid_until = cleaned_data["valid_until"]
-    exam_record.exam_notes = cleaned_data["exam_notes"]
+    exam_record.exam_score = cleaned_data.get("exam_score")
+    exam_record.exam_result = cleaned_data.get("exam_result", "")
+    exam_record.technical_score = cleaned_data.get("technical_score")
+    exam_record.technical_result = cleaned_data.get("technical_result", "")
+    exam_record.practical_score = cleaned_data.get("practical_score")
+    exam_record.practical_result = cleaned_data.get("practical_result", "")
+    exam_record.exam_date = cleaned_data.get("exam_date")
+    exam_record.administered_by = cleaned_data.get("administered_by", "")
+    exam_record.valid_from = cleaned_data.get("valid_from")
+    exam_record.valid_until = cleaned_data.get("valid_until")
+    exam_record.exam_notes = cleaned_data.get("exam_notes", "")
     exam_record.is_finalized = finalize
     if finalize:
         exam_record.finalized_by = actor
@@ -1666,6 +1696,21 @@ def save_exam_record(application, actor, cleaned_data, finalize=False):
         exam_record.finalized_at = None
     exam_record.full_clean()
     exam_record.save()
+
+    evidence = None
+    if evidence_file:
+        evidence = upload_evidence_item(
+            application=application,
+            actor=actor,
+            label=f"Exam Evidence - {exam_record.exam_type}",
+            uploaded_file=evidence_file,
+            document_key=f"exam-record-{review_stage}",
+            artifact_scope=EvidenceVaultItem.OwnerScope.CASE,
+            artifact_type=ARTIFACT_TYPE_EXAM_EVIDENCE,
+        )
+        exam_record.evidence_item = evidence
+        exam_record.full_clean()
+        exam_record.save(update_fields=["evidence_item", "updated_at"])
 
     record_audit_event(
         application=application,
@@ -1686,10 +1731,18 @@ def save_exam_record(application, actor, cleaned_data, finalize=False):
             "review_stage": review_stage,
             "exam_type": exam_record.exam_type,
             "exam_status": exam_record.exam_status,
-            "exam_score": str(exam_record.exam_score) if exam_record.exam_score is not None else "",
+            "exam_score": _decimal_string(exam_record.effective_score),
             "exam_result": exam_record.exam_result,
+            "technical_score": _decimal_string(exam_record.technical_score),
+            "technical_result": exam_record.technical_result,
+            "practical_score": _decimal_string(exam_record.practical_score),
+            "practical_result": exam_record.practical_result,
+            "exam_date": exam_record.exam_date.isoformat() if exam_record.exam_date else "",
+            "administered_by": exam_record.administered_by,
             "valid_from": exam_record.valid_from.isoformat() if exam_record.valid_from else "",
             "valid_until": exam_record.valid_until.isoformat() if exam_record.valid_until else "",
+            "evidence_id": evidence.id if evidence else exam_record.evidence_item_id,
+            "evidence_uploaded": bool(evidence),
             "is_finalized": exam_record.is_finalized,
         },
     )
@@ -2021,6 +2074,7 @@ def _car_candidate_rows(recruitment_entry, review_stage):
                 "qualification_outcome": summary.get("latest_qualification_outcome", ""),
                 "exam_status": summary.get("latest_exam_status", ""),
                 "exam_score": summary.get("latest_exam_score", ""),
+                "exam_components": summary.get("latest_exam_components", ""),
                 "interview_average_score": summary.get("latest_interview_average", ""),
                 "decision_support_summary": record.decision_support_summary,
             }
@@ -2065,6 +2119,7 @@ def generate_comparative_assessment_report(application, actor, cleaned_data, fin
                 "qualification_outcome": row["qualification_outcome"],
                 "exam_status": row["exam_status"],
                 "exam_score": row["exam_score"],
+                "exam_components": row["exam_components"],
                 "interview_average_score": row["interview_average_score"],
             }
             for row in candidate_rows
@@ -3876,6 +3931,7 @@ def _build_comparative_assessment_report_pdf(
                     f"Exam: {row['exam_status'] or 'N/A'} ({row['exam_score'] or 'N/A'}) | "
                     f"Interview Avg: {row['interview_average_score'] or 'N/A'}"
                 ),
+                f"Exam Components: {row.get('exam_components') or 'N/A'}",
                 row["decision_support_summary"] or "No decision-support summary recorded.",
                 "",
             ]

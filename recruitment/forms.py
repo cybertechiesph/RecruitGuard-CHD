@@ -787,6 +787,12 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
 
 
 class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.ModelForm):
+    evidence_file = forms.FileField(
+        label="Optional Evidence Upload",
+        required=False,
+        help_text="Attach supporting exam documentation when available. This is stored in the Evidence Vault.",
+    )
+
     class Meta:
         model = ExamRecord
         fields = [
@@ -794,12 +800,22 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
             "exam_status",
             "exam_score",
             "exam_result",
+            "technical_score",
+            "technical_result",
+            "practical_score",
+            "practical_result",
+            "exam_date",
+            "administered_by",
             "valid_from",
             "valid_until",
             "exam_notes",
+            "evidence_file",
         ]
         widgets = {
             "exam_score": forms.NumberInput(attrs={"step": "0.01", "min": "0"}),
+            "technical_score": forms.NumberInput(attrs={"step": "0.01", "min": "0"}),
+            "practical_score": forms.NumberInput(attrs={"step": "0.01", "min": "0"}),
+            "exam_date": forms.DateInput(attrs={"type": "date"}),
             "valid_from": forms.DateInput(attrs={"type": "date"}),
             "valid_until": forms.DateInput(attrs={"type": "date"}),
             "exam_notes": forms.Textarea(attrs={"rows": 4}),
@@ -809,17 +825,37 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
         super().__init__(*args, **kwargs)
         self.fields["exam_type"].label = "Exam Type"
         self.fields["exam_status"].label = "Exam Status"
-        self.fields["exam_score"].label = "Exam Score"
-        self.fields["exam_result"].label = "Exam Result"
+        self.fields["exam_score"].label = "Overall Score"
+        self.fields["exam_result"].label = "Overall Result"
+        self.fields["technical_score"].label = "Technical Score"
+        self.fields["technical_result"].label = "Technical Result"
+        self.fields["practical_score"].label = "Practical Score"
+        self.fields["practical_result"].label = "Practical Result"
+        self.fields["exam_date"].label = "Exam Date"
+        self.fields["administered_by"].label = "Administered By"
         self.fields["valid_from"].label = "Validity Start"
         self.fields["valid_until"].label = "Validity End"
         self.fields["exam_notes"].label = "Exam Notes / Remarks"
         self.fields["exam_notes"].required = False
         self.fields["exam_result"].required = False
+        self.fields["technical_score"].required = False
+        self.fields["technical_result"].required = False
+        self.fields["practical_score"].required = False
+        self.fields["practical_result"].required = False
+        self.fields["exam_date"].required = False
+        self.fields["administered_by"].required = False
         self.fields["valid_from"].required = False
         self.fields["valid_until"].required = False
         self.fields["exam_score"].required = False
         self._apply_bootstrap()
+
+    def clean_evidence_file(self):
+        uploaded_file = self.cleaned_data.get("evidence_file")
+        if uploaded_file and uploaded_file.size > settings.MAX_EVIDENCE_UPLOAD_BYTES:
+            raise forms.ValidationError(
+                "Uploaded file exceeds the configured Evidence Vault size limit."
+            )
+        return uploaded_file
 
 
 class InterviewSessionForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.ModelForm):

@@ -925,9 +925,32 @@ class ExamRecord(TimestampedModel):
         null=True,
     )
     exam_result = models.CharField(max_length=255, blank=True)
+    technical_score = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        blank=True,
+        null=True,
+    )
+    technical_result = models.CharField(max_length=255, blank=True)
+    practical_score = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        blank=True,
+        null=True,
+    )
+    practical_result = models.CharField(max_length=255, blank=True)
+    exam_date = models.DateField(blank=True, null=True)
+    administered_by = models.CharField(max_length=150, blank=True)
     valid_from = models.DateField(blank=True, null=True)
     valid_until = models.DateField(blank=True, null=True)
     exam_notes = models.TextField(blank=True)
+    evidence_item = models.ForeignKey(
+        "EvidenceVaultItem",
+        on_delete=models.SET_NULL,
+        related_name="exam_records",
+        blank=True,
+        null=True,
+    )
     is_finalized = models.BooleanField(default=False)
     finalized_at = models.DateTimeField(blank=True, null=True)
     finalized_by = models.ForeignKey(
@@ -964,12 +987,53 @@ class ExamRecord(TimestampedModel):
             errors["recorded_by"] = "Only Secretariat or HRM Chief may record examination outputs."
         if self.valid_from and self.valid_until and self.valid_until < self.valid_from:
             errors["valid_until"] = "Validity end date cannot be earlier than the validity start date."
+        if self.evidence_item_id:
+            evidence_matches_context = (
+                (
+                    self.evidence_item.artifact_scope == EvidenceVaultItem.OwnerScope.APPLICATION
+                    and self.evidence_item.application_id == self.application_id
+                )
+                or (
+                    self.evidence_item.artifact_scope == EvidenceVaultItem.OwnerScope.CASE
+                    and self.evidence_item.recruitment_case_id == self.recruitment_case_id
+                )
+                or (
+                    self.evidence_item.artifact_scope == EvidenceVaultItem.OwnerScope.ENTRY
+                    and self.evidence_item.recruitment_entry_id == self.application.position_id
+                )
+            )
+            if not evidence_matches_context:
+                errors["evidence_item"] = (
+                    "Exam evidence must belong to the same application, case, or recruitment entry context."
+                )
+            if self.evidence_item.stage != self.review_stage:
+                errors["evidence_item"] = "Exam evidence must match the examination review stage."
+        score_fields = {
+            "exam_score": self.exam_score,
+            "technical_score": self.technical_score,
+            "practical_score": self.practical_score,
+        }
         if self.exam_status == self.ExamStatus.COMPLETED:
-            if self.exam_score is None and not self.exam_result:
-                errors["exam_result"] = "Provide an exam result or score for completed examinations."
+            has_score = any(value is not None for value in score_fields.values())
+            has_component_result = bool(self.technical_result or self.practical_result)
+            if not self.exam_date:
+                errors["exam_date"] = "Provide the date the examination was administered."
+            if not self.administered_by:
+                errors["administered_by"] = "Record who administered the examination."
+            if not has_score and not self.exam_result and not has_component_result:
+                errors["exam_result"] = (
+                    "Provide an overall result, technical/practical result, or score for completed examinations."
+                )
         else:
-            if self.exam_score is not None:
-                errors["exam_score"] = "Waived or absent exams must not store a numeric score."
+            scored_fields = [
+                field_name
+                for field_name, value in score_fields.items()
+                if value is not None
+            ]
+            for field_name in scored_fields:
+                errors[field_name] = "Waived or absent exams must not store numeric scores."
+            if self.technical_result or self.practical_result:
+                errors["exam_result"] = "Waived or absent exams must not store component results."
             if self.valid_from or self.valid_until:
                 errors["valid_from"] = "Only completed exams may record a validity period."
             if not self.exam_notes:
@@ -994,6 +1058,41 @@ class ExamRecord(TimestampedModel):
     @property
     def is_locked(self):
         return self.is_finalized
+
+    @property
+    def effective_score(self):
+        if self.exam_score is not None:
+            return self.exam_score
+        component_scores = [
+            score
+            for score in [self.technical_score, self.practical_score]
+            if score is not None
+        ]
+        if not component_scores:
+            return None
+        return (
+            sum(component_scores, Decimal("0"))
+            / Decimal(len(component_scores))
+        ).quantize(Decimal("0.01"))
+
+    @property
+    def component_summary(self):
+        parts = []
+        if self.technical_score is not None or self.technical_result:
+            label = "Technical"
+            if self.technical_score is not None:
+                label = f"{label}: {self.technical_score}"
+            if self.technical_result:
+                label = f"{label} ({self.technical_result})"
+            parts.append(label)
+        if self.practical_score is not None or self.practical_result:
+            label = "Practical"
+            if self.practical_score is not None:
+                label = f"{label}: {self.practical_score}"
+            if self.practical_result:
+                label = f"{label} ({self.practical_result})"
+            parts.append(label)
+        return "; ".join(parts)
 
     def __str__(self):
         return f"{self.application.reference_label} {self.review_stage} examination"

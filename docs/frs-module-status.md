@@ -10,7 +10,7 @@ Verification command:
 .\.venv\Scripts\python.exe manage.py test
 ```
 
-Result: 155 tests passed.
+Result: 158 tests passed.
 
 ## Status Summary
 
@@ -26,7 +26,7 @@ All 15 FRS modules are represented in the system implementation. Modules 1-6 and
 | 4 | Recruitment Case Management and Workflow Engine | Done | Case creation, stage progression, stage locks, controlled reopen, timeline/history, workflow tests |
 | 5 | Branch-Aware and Level-Aware Routing | Done | Plantilla/COS branch logic, Level 1 to Secretariat, Level 2 to HRM Chief, Secretariat Level 2 block, override audit, routing tests |
 | 6 | Document Review and Qualification Screening | Done | Screening records, completeness/qualification review, finalization and locks, screening tests |
-| 7 | Examination Management | In Progress | Exam records, score/result/status/validity/waiver handling, finalization lock, exam tests; pending manual review |
+| 7 | Examination Management | In Progress | Exam records, structured technical/practical components, exam date/administered-by fields, optional Evidence Vault support, validity/waiver handling, finalization lock, exam tests; pending manual review |
 | 8 | Interview and Rating Management | In Progress | Interview sessions, evaluator ratings, justifications, fallback sheet upload to Evidence Vault, interview tests; pending manual review |
 | 9 | Deliberation and Decision Support | In Progress | Consolidation, deliberation records, ranking/CAR support, ReportLab CAR generation, deliberation tests; pending manual review |
 | 10 | Decision and Approval Handling | In Progress | Submission packet, Plantilla Appointing Authority final decisions, COS HRM Chief selection routing, selected/not-selected routing and locks, decision tests; pending manual review |

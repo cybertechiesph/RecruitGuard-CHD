@@ -102,6 +102,28 @@
                     </span>
                 </div>
             </div>
+
+            <div class="rg-exam-locked-field">
+                <div class="rg-exam-locked-field__label">Exam Date</div>
+                <div class="rg-exam-locked-field__value">
+                    {% if current_exam_record.exam_date %}
+                        {{ current_exam_record.exam_date|date:"M d, Y" }}
+                    {% else %}
+                        <span style="color:#9aa4af;font-style:italic;">Not recorded</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="rg-exam-locked-field">
+                <div class="rg-exam-locked-field__label">Administered By</div>
+                <div class="rg-exam-locked-field__value">
+                    {% if current_exam_record.administered_by %}
+                        {{ current_exam_record.administered_by }}
+                    {% else %}
+                        <span style="color:#9aa4af;font-style:italic;">Not recorded</span>
+                    {% endif %}
+                </div>
+            </div>
         </div>
 
         
@@ -113,7 +135,43 @@
             </div>
 
             <div class="rg-exam-locked-field">
-                <div class="rg-exam-locked-field__label">Score</div>
+                <div class="rg-exam-locked-field__label">Technical Component</div>
+                <div class="rg-exam-locked-field__value">
+                    {% if current_exam_record.technical_score is not None or current_exam_record.technical_result %}
+                        {% if current_exam_record.technical_score is not None %}
+                            {{ current_exam_record.technical_score }}
+                        {% else %}
+                            <span style="color:#9aa4af;">No score</span>
+                        {% endif %}
+                        {% if current_exam_record.technical_result %}
+                            &mdash; {{ current_exam_record.technical_result }}
+                        {% endif %}
+                    {% else %}
+                        <span style="color:#9aa4af;font-style:italic;">Not recorded</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="rg-exam-locked-field">
+                <div class="rg-exam-locked-field__label">Practical Component</div>
+                <div class="rg-exam-locked-field__value">
+                    {% if current_exam_record.practical_score is not None or current_exam_record.practical_result %}
+                        {% if current_exam_record.practical_score is not None %}
+                            {{ current_exam_record.practical_score }}
+                        {% else %}
+                            <span style="color:#9aa4af;">No score</span>
+                        {% endif %}
+                        {% if current_exam_record.practical_result %}
+                            &mdash; {{ current_exam_record.practical_result }}
+                        {% endif %}
+                    {% else %}
+                        <span style="color:#9aa4af;font-style:italic;">Not recorded</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="rg-exam-locked-field">
+                <div class="rg-exam-locked-field__label">Overall Score</div>
                 <div class="rg-exam-locked-field__value">
                     {% if current_exam_record.exam_score is not None %}
                         {{ current_exam_record.exam_score }}
@@ -124,7 +182,7 @@
             </div>
 
             <div class="rg-exam-locked-field">
-                <div class="rg-exam-locked-field__label">Result</div>
+                <div class="rg-exam-locked-field__label">Overall Result</div>
                 <div class="rg-exam-locked-field__value">
                     {% if current_exam_record.exam_result %}
                         {{ current_exam_record.exam_result }}
@@ -175,6 +233,26 @@
             </div>
         </div>
         {% endif %}
+
+        
+        <div style="margin-bottom:1.25rem;">
+            <div style="font-size:0.72rem;font-weight:700;color:#5f6c78;
+                        text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem;">
+                Supporting Evidence
+            </div>
+
+            <div class="rg-exam-locked-field">
+                <div class="rg-exam-locked-field__label">Evidence File</div>
+                <div class="rg-exam-locked-field__value">
+                    {% if current_exam_record.evidence_item %}
+                        {{ current_exam_record.evidence_item.label }}
+                        <span style="color:#9aa4af;">({{ current_exam_record.evidence_item.version_label }})</span>
+                    {% else %}
+                        <span style="color:#9aa4af;font-style:italic;">No exam evidence uploaded</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
 
         
         <div class="rg-imeta"

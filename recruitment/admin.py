@@ -180,9 +180,16 @@ class ExamRecordInline(admin.TabularInline):
         "exam_status",
         "exam_score",
         "exam_result",
+        "technical_score",
+        "technical_result",
+        "practical_score",
+        "practical_result",
+        "exam_date",
+        "administered_by",
         "valid_from",
         "valid_until",
         "exam_notes",
+        "evidence_item",
         "is_finalized",
         "finalized_by",
         "finalized_at",
@@ -530,12 +537,23 @@ class ExamRecordAdmin(admin.ModelAdmin):
         "recorded_by",
         "exam_type",
         "exam_status",
+        "exam_date",
+        "administered_by",
         "exam_score",
         "is_finalized",
         "finalized_at",
     )
     list_filter = ("review_stage", "branch", "level", "exam_status", "is_finalized")
-    search_fields = ("application__reference_number", "exam_type", "exam_result", "exam_notes", "recorded_by__username")
+    search_fields = (
+        "application__reference_number",
+        "exam_type",
+        "exam_result",
+        "technical_result",
+        "practical_result",
+        "administered_by",
+        "exam_notes",
+        "recorded_by__username",
+    )
     readonly_fields = ("created_at", "updated_at", "recorded_by_role", "finalized_by_role")
 
 

@@ -20,7 +20,7 @@ Implemented now:
 - Branch-aware workflow handling for Plantilla and COS
 - Level-aware routing with `Level 1 -> Secretariat` and `Level 2 -> HRM Chief`
 - Secretariat restriction for Level 2 cases, with controlled and audit-logged override support
-- Screening, examination, interview scheduling, direct ratings, fallback interview uploads, deliberation, and decision-support handling
+- Screening, structured technical/practical examination records with optional evidence uploads, interview scheduling, direct ratings, fallback interview uploads, deliberation, and decision-support handling
 - Comparative Assessment Report generation for Plantilla, including entry-scoped versioning
 - Final decision recording, completion tracking, controlled reopen, and case closure
 - Notification logging and email dispatch for submission acknowledgment, selected, non-selected, checklist, and reminder notices
@@ -34,7 +34,7 @@ Current repository boundaries:
 - PostgreSQL is supported through environment variables, but SQLite is currently used automatically for local bootstrap if PostgreSQL settings are left blank
 - OTP and notification email flows require valid SMTP credentials in `.env`
 
-The automated test suite currently includes 94 Django tests covering identity, intake, routing, workflow, evaluation, evidence, notification, completion, decision, audit, and export paths.
+The automated test suite currently includes 158 Django tests covering identity, intake, routing, workflow, evaluation, evidence, notification, completion, decision, audit, and export paths.
 
 ## Locked stack
 

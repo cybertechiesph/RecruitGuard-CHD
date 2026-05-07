@@ -48,7 +48,7 @@ It uses level-aware internal routing:
 - One Application creates one RecruitmentCase
 - One RecruitmentCase can have many CaseAssignments over time
 - One RecruitmentCase can have many ScreeningReview records
-- One RecruitmentCase can have many ExamRecord entries where applicable
+- One RecruitmentCase can have many ExamRecord entries where applicable, including structured technical/practical components and optional Evidence Vault support
 - One RecruitmentEntry can have many InterviewSession records
 - One InterviewSession can have many InterviewRating records
 - One RecruitmentEntry can have many DeliberationRecord entries
