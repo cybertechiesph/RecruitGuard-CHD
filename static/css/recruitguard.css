@@ -5064,6 +5064,7 @@ textarea.form-control {
    Variants: --destructive  --lock  --warn
    ────────────────────────────────────────────────────────────── */
 .rg-modal-confirm {
+    text-align: left;
     white-space: normal;
 }
 
