@@ -136,6 +136,11 @@ def pretty_json(value):
         return str(value)
 
 
+@register.filter
+def dom_id(value, prefix=""):
+    return f"{prefix}{value}"
+
+
 @register.simple_tag
 def workflow_stages(branch):
     stages = [

@@ -3426,6 +3426,10 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Close this recruitment entry?")
+        self.assertContains(response, f'data-bs-target="#closeModal{self.level1_position.pk}"')
+        self.assertContains(response, f'id="closeModal{self.level1_position.pk}"')
+        self.assertContains(response, f'id="closeForm{self.level1_position.pk}"')
+        self.assertContains(response, f'form="closeForm{self.level1_position.pk}"')
         self.assertNotContains(
             response,
             '{% include "internal_includes/modal_confirm.html" with modal_id="closeModal"|add:entry.pk|stringformat:"s" variant="destructive" title="Close this recruitment entry?" body="Closing will stop accepting new applications for this entry. Existing cases in the workflow will not be affected." confirm_label="Close Entry" form_id="closeForm"|add:entry.pk|stringformat:"s" %}',
