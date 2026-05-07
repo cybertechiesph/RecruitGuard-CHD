@@ -812,9 +812,12 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
             "evidence_file",
         ]
         widgets = {
-            "exam_score": forms.NumberInput(attrs={"step": "0.01", "min": "0"}),
-            "technical_score": forms.NumberInput(attrs={"step": "0.01", "min": "0"}),
-            "practical_score": forms.NumberInput(attrs={"step": "0.01", "min": "0"}),
+            "exam_score": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
+            "technical_score": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
+            "practical_score": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
+            "exam_result": forms.HiddenInput(),
+            "technical_result": forms.HiddenInput(),
+            "practical_result": forms.HiddenInput(),
             "exam_date": forms.DateInput(attrs={"type": "date"}),
             "valid_from": forms.DateInput(attrs={"type": "date"}),
             "valid_until": forms.DateInput(attrs={"type": "date"}),
@@ -822,10 +825,13 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
         }
 
     def __init__(self, *args, **kwargs):
+        self.application = kwargs.pop("application", None)
         super().__init__(*args, **kwargs)
+        self.component_section_label = "Policy Exam Components"
+        self.component_weight_display = "Component 40% / Practical 60%"
         self.fields["exam_type"].label = "Exam Type"
         self.fields["exam_status"].label = "Exam Status"
-        self.fields["exam_score"].label = "Overall Score"
+        self.fields["exam_score"].label = "Overall / Single Exam Score"
         self.fields["exam_result"].label = "Overall Result"
         self.fields["technical_score"].label = "Technical Score"
         self.fields["technical_result"].label = "Technical Result"
@@ -847,7 +853,97 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
         self.fields["valid_from"].required = False
         self.fields["valid_until"].required = False
         self.fields["exam_score"].required = False
+        self.fields["exam_type"].choices = self._exam_type_choices()
+        self.fields["administered_by"].choices = self._administered_by_choices()
+        self.fields["exam_type"].help_text = "Select the policy exam category for this application."
+        self.fields["administered_by"].help_text = "Select the office or party responsible under the CHD selection plan."
+        self.fields["exam_score"].help_text = (
+            "For component exams, the system calculates the overall score using 40% component "
+            "and 60% practical weighting. Use this field directly only for single-score exams."
+        )
+        if self.application:
+            if self.application.level == PositionPosting.Level.LEVEL_1:
+                self.fields["technical_score"].label = "General Score"
+                self.component_section_label = "General and Practical Components"
+                self.component_weight_display = "General 40% / Practical 60%"
+            elif self.application.level == PositionPosting.Level.LEVEL_2:
+                self.fields["technical_score"].label = "Technical Score"
+                self.fields["practical_score"].label = "Practical / General Ability Score"
+                self.component_section_label = "Technical and Practical / General Ability Components"
+                self.component_weight_display = "Technical 40% / Practical or General Ability 60%"
+            if self.application.branch == PositionPosting.Branch.COS:
+                self.component_section_label = "COS Examination Components"
         self._apply_bootstrap()
+
+    def _exam_type_choices(self):
+        choices = [("", "Select exam type")]
+        if not self.application:
+            return choices + list(ExamRecord.ExamType.choices)
+        if self.application.branch == PositionPosting.Branch.COS:
+            return choices + [
+                (
+                    ExamRecord.ExamType.END_USER_ASSESSMENT,
+                    ExamRecord.ExamType.END_USER_ASSESSMENT.label,
+                )
+            ]
+        if self.application.level == PositionPosting.Level.LEVEL_1:
+            return choices + [
+                (
+                    ExamRecord.ExamType.GENERAL_PRACTICAL,
+                    ExamRecord.ExamType.GENERAL_PRACTICAL.label,
+                )
+            ]
+        return choices + [
+            (
+                ExamRecord.ExamType.TECHNICAL_PRACTICAL,
+                ExamRecord.ExamType.TECHNICAL_PRACTICAL.label,
+            ),
+            (
+                ExamRecord.ExamType.PSYCHOMETRIC,
+                ExamRecord.ExamType.PSYCHOMETRIC.label,
+            ),
+        ]
+
+    def _administered_by_choices(self):
+        choices = [("", "Select administering office")]
+        if not self.application:
+            return choices + list(ExamRecord.AdministeredBy.choices)
+        if self.application.branch == PositionPosting.Branch.COS:
+            return choices + [
+                (
+                    ExamRecord.AdministeredBy.END_USER,
+                    ExamRecord.AdministeredBy.END_USER.label,
+                ),
+                (
+                    ExamRecord.AdministeredBy.HRMS_END_USER,
+                    ExamRecord.AdministeredBy.HRMS_END_USER.label,
+                ),
+            ]
+        if self.application.level == PositionPosting.Level.LEVEL_2:
+            return choices + [
+                (
+                    ExamRecord.AdministeredBy.HRMS_END_USER,
+                    ExamRecord.AdministeredBy.HRMS_END_USER.label,
+                ),
+                (
+                    ExamRecord.AdministeredBy.HRMS,
+                    ExamRecord.AdministeredBy.HRMS.label,
+                ),
+                (
+                    ExamRecord.AdministeredBy.ACCREDITED_INSTITUTION,
+                    ExamRecord.AdministeredBy.ACCREDITED_INSTITUTION.label,
+                ),
+            ]
+        return choices + [
+            (
+                ExamRecord.AdministeredBy.HRMS,
+                ExamRecord.AdministeredBy.HRMS.label,
+            ),
+            (
+                ExamRecord.AdministeredBy.HRMS_END_USER,
+                ExamRecord.AdministeredBy.HRMS_END_USER.label,
+            ),
+        ]
 
     def clean_evidence_file(self):
         uploaded_file = self.cleaned_data.get("evidence_file")

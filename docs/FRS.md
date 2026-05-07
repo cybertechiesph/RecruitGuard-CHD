@@ -337,10 +337,12 @@ Manages examination data where applicable.
 
 ### a. Examination Record Handling
 i. System shall support creation of examination records where applicable.  
-ii. Examination type and result shall be recordable per case.  
+ii. Examination type, administering office, and result shall use controlled values aligned with the CHD selection plan where applicable.  
 iii. Examination stage shall be applied according to branch-specific workflow rules where applicable.  
 iv. System shall support structured recording of technical and practical examination components where applicable.  
 v. System shall record examination date and administered-by information for completed examinations.  
+vi. System shall compute component-based examination scores using the CHD selection-plan component weights: 40% general/technical component and 60% practical/general ability component.  
+vii. System shall preserve examination outputs as evaluation inputs and shall not hard-code a universal passing cutoff unless a formally approved threshold is provided.  
 
 ### b. Examination Status and Validity
 i. System shall support recording of examination validity period where applicable.  

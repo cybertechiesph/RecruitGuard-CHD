@@ -887,8 +887,39 @@ class ScreeningRecord(TimestampedModel):
 
 
 class ExamRecord(TimestampedModel):
+    COMPONENT_WEIGHT = Decimal("0.40")
+    PRACTICAL_WEIGHT = Decimal("0.60")
+
+    class ExamType(models.TextChoices):
+        GENERAL_PRACTICAL = "general_practical", "General and Practical Examination"
+        TECHNICAL_PRACTICAL = (
+            "technical_practical",
+            "Technical and Practical / General Ability Test",
+        )
+        PSYCHOMETRIC = "psychometric", "Psychometric Examination"
+        END_USER_ASSESSMENT = "end_user_assessment", "End-user Examination"
+
     class ExamStatus(models.TextChoices):
         COMPLETED = "completed", "Completed"
+        WAIVED = "waived", "Waived"
+        ABSENT = "absent", "Absent"
+
+    class AdministeredBy(models.TextChoices):
+        HRMS = "hrms", "Human Resource Management Section"
+        HRMS_END_USER = "hrms_end_user", "HRMS with End-user technical input"
+        END_USER = "end_user", "End-user"
+        ACCREDITED_INSTITUTION = (
+            "accredited_institution",
+            "UP or accredited institution/academe",
+        )
+
+    class ComponentResult(models.TextChoices):
+        RECORDED = "recorded", "Recorded for evaluation"
+        NOT_APPLICABLE = "not_applicable", "Not applicable"
+
+    class OverallResult(models.TextChoices):
+        FOR_EVALUATION = "for_evaluation", "For HRMPSB evaluation"
+        INCOMPLETE = "incomplete", "Incomplete"
         WAIVED = "waived", "Waived"
         ABSENT = "absent", "Absent"
 
@@ -913,7 +944,7 @@ class ExamRecord(TimestampedModel):
     recorded_by_role = models.CharField(max_length=40, blank=True)
     branch = models.CharField(max_length=20, choices=PositionPosting.Branch.choices)
     level = models.PositiveSmallIntegerField(choices=PositionPosting.Level.choices)
-    exam_type = models.CharField(max_length=100)
+    exam_type = models.CharField(max_length=40, choices=ExamType.choices)
     exam_status = models.CharField(
         max_length=20,
         choices=ExamStatus.choices,
@@ -924,23 +955,39 @@ class ExamRecord(TimestampedModel):
         blank=True,
         null=True,
     )
-    exam_result = models.CharField(max_length=255, blank=True)
+    exam_result = models.CharField(
+        max_length=40,
+        choices=OverallResult.choices,
+        blank=True,
+    )
     technical_score = models.DecimalField(
         max_digits=6,
         decimal_places=2,
         blank=True,
         null=True,
     )
-    technical_result = models.CharField(max_length=255, blank=True)
+    technical_result = models.CharField(
+        max_length=40,
+        choices=ComponentResult.choices,
+        blank=True,
+    )
     practical_score = models.DecimalField(
         max_digits=6,
         decimal_places=2,
         blank=True,
         null=True,
     )
-    practical_result = models.CharField(max_length=255, blank=True)
+    practical_result = models.CharField(
+        max_length=40,
+        choices=ComponentResult.choices,
+        blank=True,
+    )
     exam_date = models.DateField(blank=True, null=True)
-    administered_by = models.CharField(max_length=150, blank=True)
+    administered_by = models.CharField(
+        max_length=40,
+        choices=AdministeredBy.choices,
+        blank=True,
+    )
     valid_from = models.DateField(blank=True, null=True)
     valid_until = models.DateField(blank=True, null=True)
     exam_notes = models.TextField(blank=True)
@@ -1013,17 +1060,19 @@ class ExamRecord(TimestampedModel):
             "technical_score": self.technical_score,
             "practical_score": self.practical_score,
         }
+        for field_name, value in score_fields.items():
+            if value is not None and (value < 0 or value > 100):
+                errors[field_name] = "Exam scores must be between 0 and 100."
         if self.exam_status == self.ExamStatus.COMPLETED:
-            has_score = any(value is not None for value in score_fields.values())
-            has_component_result = bool(self.technical_result or self.practical_result)
             if not self.exam_date:
                 errors["exam_date"] = "Provide the date the examination was administered."
             if not self.administered_by:
                 errors["administered_by"] = "Record who administered the examination."
-            if not has_score and not self.exam_result and not has_component_result:
-                errors["exam_result"] = (
-                    "Provide an overall result, technical/practical result, or score for completed examinations."
-                )
+            for field_name in self.required_score_fields:
+                if score_fields[field_name] is None:
+                    errors[field_name] = "Record this policy-required examination score."
+            if not self.required_score_fields and not any(value is not None for value in score_fields.values()):
+                errors["exam_score"] = "Record at least one examination score for completed examinations."
         else:
             scored_fields = [
                 field_name
@@ -1032,8 +1081,6 @@ class ExamRecord(TimestampedModel):
             ]
             for field_name in scored_fields:
                 errors[field_name] = "Waived or absent exams must not store numeric scores."
-            if self.technical_result or self.practical_result:
-                errors["exam_result"] = "Waived or absent exams must not store component results."
             if self.valid_from or self.valid_until:
                 errors["valid_from"] = "Only completed exams may record a validity period."
             if not self.exam_notes:
@@ -1049,6 +1096,7 @@ class ExamRecord(TimestampedModel):
         self.branch = self.application.branch
         self.level = self.application.level
         self.recorded_by_role = self.recorded_by.role
+        self.apply_policy_outputs()
         if self.finalized_by_id:
             self.finalized_by_role = self.finalized_by.role
         elif not self.is_finalized:
@@ -1060,37 +1108,115 @@ class ExamRecord(TimestampedModel):
         return self.is_finalized
 
     @property
+    def required_score_fields(self):
+        if self.exam_type in {
+            self.ExamType.GENERAL_PRACTICAL,
+            self.ExamType.TECHNICAL_PRACTICAL,
+        }:
+            return ("technical_score", "practical_score")
+        if self.exam_type == self.ExamType.END_USER_ASSESSMENT:
+            return ("practical_score",)
+        if self.exam_type == self.ExamType.PSYCHOMETRIC:
+            return ("exam_score",)
+        return ()
+
+    @property
+    def technical_component_label(self):
+        if self.level == PositionPosting.Level.LEVEL_1:
+            return "General"
+        return "Technical"
+
+    @property
+    def practical_component_label(self):
+        if self.level == PositionPosting.Level.LEVEL_2:
+            return "Practical / General Ability"
+        return "Practical"
+
+    @property
+    def component_weight_display(self):
+        return f"{self.technical_component_label} 40% / {self.practical_component_label} 60%"
+
+    def calculate_weighted_score(self):
+        if self.exam_type in {
+            self.ExamType.GENERAL_PRACTICAL,
+            self.ExamType.TECHNICAL_PRACTICAL,
+        }:
+            if self.technical_score is None or self.practical_score is None:
+                return None
+            return (
+                (self.technical_score * self.COMPONENT_WEIGHT)
+                + (self.practical_score * self.PRACTICAL_WEIGHT)
+            ).quantize(Decimal("0.01"))
+        if self.exam_type == self.ExamType.END_USER_ASSESSMENT:
+            return self.practical_score
+        return self.exam_score
+
+    def apply_policy_outputs(self):
+        if self.exam_status == self.ExamStatus.WAIVED:
+            self.exam_score = None
+            self.technical_score = None
+            self.practical_score = None
+            self.technical_result = ""
+            self.practical_result = ""
+            self.exam_result = self.OverallResult.WAIVED
+            return
+        if self.exam_status == self.ExamStatus.ABSENT:
+            self.exam_score = None
+            self.technical_score = None
+            self.practical_score = None
+            self.technical_result = ""
+            self.practical_result = ""
+            self.exam_result = self.OverallResult.ABSENT
+            return
+        if self.exam_status != self.ExamStatus.COMPLETED:
+            return
+
+        if self.exam_type in {
+            self.ExamType.GENERAL_PRACTICAL,
+            self.ExamType.TECHNICAL_PRACTICAL,
+        }:
+            self.exam_score = self.calculate_weighted_score()
+        elif self.exam_type == self.ExamType.END_USER_ASSESSMENT:
+            self.exam_score = self.practical_score
+
+        self.technical_result = (
+            self.ComponentResult.RECORDED
+            if self.technical_score is not None
+            else self.ComponentResult.NOT_APPLICABLE
+        )
+        self.practical_result = (
+            self.ComponentResult.RECORDED
+            if self.practical_score is not None
+            else self.ComponentResult.NOT_APPLICABLE
+        )
+        self.exam_result = (
+            self.OverallResult.FOR_EVALUATION
+            if self.exam_score is not None
+            else self.OverallResult.INCOMPLETE
+        )
+
+    @property
     def effective_score(self):
         if self.exam_score is not None:
             return self.exam_score
-        component_scores = [
-            score
-            for score in [self.technical_score, self.practical_score]
-            if score is not None
-        ]
-        if not component_scores:
-            return None
-        return (
-            sum(component_scores, Decimal("0"))
-            / Decimal(len(component_scores))
-        ).quantize(Decimal("0.01"))
+        return self.calculate_weighted_score()
 
     @property
     def component_summary(self):
         parts = []
         if self.technical_score is not None or self.technical_result:
-            label = "Technical"
+            label = self.technical_component_label
             if self.technical_score is not None:
                 label = f"{label}: {self.technical_score}"
             if self.technical_result:
-                label = f"{label} ({self.technical_result})"
+                label = f"{label} ({self.get_technical_result_display()})"
             parts.append(label)
         if self.practical_score is not None or self.practical_result:
-            label = "Practical"
+            label = self.practical_component_label
             if self.practical_score is not None:
                 label = f"{label}: {self.practical_score}"
             if self.practical_result:
-                label = f"{label} ({self.practical_result})"
+                label = f"{label} ({self.get_practical_result_display()})"
             parts.append(label)
         return "; ".join(parts)
 

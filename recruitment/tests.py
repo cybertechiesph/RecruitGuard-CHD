@@ -275,16 +275,16 @@ class BaseRecruitmentTestCase(TestCase):
         self,
         application,
         actor,
-        exam_type="Technical Examination",
+        exam_type=ExamRecord.ExamType.GENERAL_PRACTICAL,
         exam_status=ExamRecord.ExamStatus.COMPLETED,
         exam_score="88.50",
-        exam_result="Passed",
+        exam_result="",
         technical_score="87.00",
-        technical_result="Technical passed",
+        technical_result="",
         practical_score="90.00",
-        practical_result="Practical passed",
+        practical_result="",
         exam_date=None,
-        administered_by="HRMS Exam Administrator",
+        administered_by=ExamRecord.AdministeredBy.HRMS,
         valid_from=None,
         valid_until=None,
         exam_notes="Formal examination output recorded.",
@@ -2488,10 +2488,10 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
         exam_response = client.post(
             reverse("exam-review", kwargs={"pk": application.pk}),
             {
-                "exam_type": "Blocked Technical Examination",
+                "exam_type": ExamRecord.ExamType.TECHNICAL_PRACTICAL,
                 "exam_status": ExamRecord.ExamStatus.COMPLETED,
                 "exam_score": "85.00",
-                "exam_result": "Passed",
+                "exam_result": "",
                 "valid_from": timezone.localdate().isoformat(),
                 "valid_until": (timezone.localdate() + timedelta(days=365)).isoformat(),
                 "exam_notes": "Should be blocked before screening is finalized.",
@@ -2666,16 +2666,16 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
 class ExamRecordTests(BaseRecruitmentTestCase):
     def exam_payload(self, **overrides):
         payload = {
-            "exam_type": "Technical Examination",
+            "exam_type": ExamRecord.ExamType.GENERAL_PRACTICAL,
             "exam_status": ExamRecord.ExamStatus.COMPLETED,
             "exam_score": "86.75",
-            "exam_result": "Passed",
+            "exam_result": "",
             "technical_score": "84.50",
-            "technical_result": "Passed technical component",
+            "technical_result": "",
             "practical_score": "89.00",
-            "practical_result": "Passed practical component",
+            "practical_result": "",
             "exam_date": timezone.localdate().isoformat(),
-            "administered_by": "HRMS Exam Administrator",
+            "administered_by": ExamRecord.AdministeredBy.HRMS,
             "valid_from": timezone.localdate().isoformat(),
             "valid_until": (timezone.localdate() + timedelta(days=365)).isoformat(),
             "exam_notes": "Validated through the current review stage.",
@@ -2693,16 +2693,16 @@ class ExamRecordTests(BaseRecruitmentTestCase):
             application=application,
             actor=self.secretariat,
             cleaned_data={
-                "exam_type": "Technical Examination",
+                "exam_type": ExamRecord.ExamType.GENERAL_PRACTICAL,
                 "exam_status": ExamRecord.ExamStatus.COMPLETED,
                 "exam_score": "82.50",
-                "exam_result": "Initial pass",
+                "exam_result": "",
                 "technical_score": "80.00",
-                "technical_result": "Initial technical pass",
+                "technical_result": "",
                 "practical_score": "85.00",
-                "practical_result": "Initial practical pass",
+                "practical_result": "",
                 "exam_date": timezone.localdate(),
-                "administered_by": "HRMS Exam Administrator",
+                "administered_by": ExamRecord.AdministeredBy.HRMS,
                 "valid_from": timezone.localdate(),
                 "valid_until": timezone.localdate() + timedelta(days=180),
                 "exam_notes": "Initial exam draft.",
@@ -2723,16 +2723,16 @@ class ExamRecordTests(BaseRecruitmentTestCase):
             application=application,
             actor=self.secretariat,
             cleaned_data={
-                "exam_type": "Technical Examination",
+                "exam_type": ExamRecord.ExamType.GENERAL_PRACTICAL,
                 "exam_status": ExamRecord.ExamStatus.COMPLETED,
                 "exam_score": "90.00",
-                "exam_result": "Passed with updated score",
+                "exam_result": "",
                 "technical_score": "88.00",
-                "technical_result": "Technical passed",
+                "technical_result": "",
                 "practical_score": "92.00",
-                "practical_result": "Practical passed",
+                "practical_result": "",
                 "exam_date": timezone.localdate(),
-                "administered_by": "HRMS Exam Administrator",
+                "administered_by": ExamRecord.AdministeredBy.HRMS,
                 "valid_from": timezone.localdate(),
                 "valid_until": timezone.localdate() + timedelta(days=365),
                 "exam_notes": "Updated before finalization.",
@@ -2741,12 +2741,15 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         )
         exam_record.refresh_from_db()
         self.assertTrue(exam_record.is_finalized)
-        self.assertEqual(str(exam_record.exam_score), "90.00")
+        self.assertEqual(str(exam_record.exam_score), "90.40")
         self.assertEqual(str(exam_record.technical_score), "88.00")
         self.assertEqual(str(exam_record.practical_score), "92.00")
         self.assertEqual(exam_record.exam_date, timezone.localdate())
-        self.assertEqual(exam_record.administered_by, "HRMS Exam Administrator")
-        self.assertEqual(exam_record.component_summary, "Technical: 88.00 (Technical passed); Practical: 92.00 (Practical passed)")
+        self.assertEqual(exam_record.administered_by, ExamRecord.AdministeredBy.HRMS)
+        self.assertEqual(
+            exam_record.component_summary,
+            "General: 88.00 (Recorded for evaluation); Practical: 92.00 (Recorded for evaluation)",
+        )
         self.assertEqual(exam_record.finalized_by, self.secretariat)
         self.assertTrue(
             AuditLog.objects.filter(
@@ -2765,16 +2768,16 @@ class ExamRecordTests(BaseRecruitmentTestCase):
             application=application,
             actor=self.secretariat,
             cleaned_data={
-                "exam_type": "Technical and Practical Examination",
+                "exam_type": ExamRecord.ExamType.GENERAL_PRACTICAL,
                 "exam_status": ExamRecord.ExamStatus.COMPLETED,
                 "exam_score": None,
                 "exam_result": "",
                 "technical_score": "82.00",
-                "technical_result": "Technical passed",
+                "technical_result": "",
                 "practical_score": "88.00",
-                "practical_result": "Practical passed",
+                "practical_result": "",
                 "exam_date": timezone.localdate(),
-                "administered_by": "End-user and HRMS",
+                "administered_by": ExamRecord.AdministeredBy.HRMS_END_USER,
                 "valid_from": None,
                 "valid_until": None,
                 "exam_notes": "Structured components recorded without an overall score.",
@@ -2783,8 +2786,8 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         )
 
         self.assertTrue(exam_record.is_finalized)
-        self.assertIsNone(exam_record.exam_score)
-        self.assertEqual(str(exam_record.effective_score), "85.00")
+        self.assertEqual(str(exam_record.exam_score), "85.60")
+        self.assertEqual(str(exam_record.effective_score), "85.60")
 
     def test_exam_record_can_attach_optional_evidence(self):
         application = self.make_application(self.level1_position)
@@ -2796,16 +2799,16 @@ class ExamRecordTests(BaseRecruitmentTestCase):
             application=application,
             actor=self.secretariat,
             cleaned_data={
-                "exam_type": "Technical and Practical Examination",
+                "exam_type": ExamRecord.ExamType.GENERAL_PRACTICAL,
                 "exam_status": ExamRecord.ExamStatus.COMPLETED,
                 "exam_score": "91.00",
-                "exam_result": "Passed",
+                "exam_result": "",
                 "technical_score": "90.00",
-                "technical_result": "Technical passed",
+                "technical_result": "",
                 "practical_score": "92.00",
-                "practical_result": "Practical passed",
+                "practical_result": "",
                 "exam_date": timezone.localdate(),
-                "administered_by": "End-user and HRMS",
+                "administered_by": ExamRecord.AdministeredBy.HRMS_END_USER,
                 "valid_from": timezone.localdate(),
                 "valid_until": timezone.localdate() + timedelta(days=365),
                 "exam_notes": "Evidence file attached.",
@@ -2851,10 +2854,10 @@ class ExamRecordTests(BaseRecruitmentTestCase):
                 application=application,
                 actor=self.secretariat,
                 cleaned_data={
-                    "exam_type": "Technical Examination",
+                    "exam_type": ExamRecord.ExamType.GENERAL_PRACTICAL,
                     "exam_status": ExamRecord.ExamStatus.COMPLETED,
                     "exam_score": "70.00",
-                    "exam_result": "Changed after finalization",
+                    "exam_result": "",
                     "valid_from": timezone.localdate(),
                     "valid_until": timezone.localdate() + timedelta(days=30),
                     "exam_notes": "Should not save.",
@@ -2863,8 +2866,8 @@ class ExamRecordTests(BaseRecruitmentTestCase):
             )
 
         exam_record.refresh_from_db()
-        self.assertEqual(str(exam_record.exam_score), "88.50")
-        self.assertEqual(exam_record.exam_result, "Passed")
+        self.assertEqual(str(exam_record.exam_score), "88.80")
+        self.assertEqual(exam_record.exam_result, ExamRecord.OverallResult.FOR_EVALUATION)
 
     def test_cos_exam_waiver_can_be_finalized_without_score_or_validity(self):
         application = self.make_application(self.cos_position)
@@ -2876,7 +2879,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
             application=application,
             actor=self.secretariat,
             cleaned_data={
-                "exam_type": "Internal COS Assessment",
+                "exam_type": ExamRecord.ExamType.END_USER_ASSESSMENT,
                 "exam_status": ExamRecord.ExamStatus.WAIVED,
                 "exam_score": None,
                 "exam_result": "",
@@ -2910,7 +2913,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
                 application=application,
                 actor=self.secretariat,
                 cleaned_data={
-                    "exam_type": "Technical Examination",
+                    "exam_type": ExamRecord.ExamType.GENERAL_PRACTICAL,
                     "exam_status": ExamRecord.ExamStatus.COMPLETED,
                     "exam_score": None,
                     "exam_result": "",
@@ -2919,7 +2922,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
                     "practical_score": None,
                     "practical_result": "",
                     "exam_date": timezone.localdate(),
-                    "administered_by": "HRMS Exam Administrator",
+                    "administered_by": ExamRecord.AdministeredBy.HRMS,
                     "valid_from": None,
                     "valid_until": None,
                     "exam_notes": "Missing score and result.",

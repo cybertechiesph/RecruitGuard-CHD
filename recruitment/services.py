@@ -1014,6 +1014,12 @@ def _decimal_string(value):
     return str(value)
 
 
+def _optional_decimal(value):
+    if value in (None, ""):
+        return None
+    return Decimal(str(value))
+
+
 def _average_interview_rating(interview_session):
     ratings = list(interview_session.ratings.all())
     if not ratings:
@@ -1677,11 +1683,11 @@ def save_exam_record(application, actor, cleaned_data, finalize=False, evidence_
     exam_record.recorded_by = actor
     exam_record.exam_type = cleaned_data["exam_type"]
     exam_record.exam_status = cleaned_data["exam_status"]
-    exam_record.exam_score = cleaned_data.get("exam_score")
+    exam_record.exam_score = _optional_decimal(cleaned_data.get("exam_score"))
     exam_record.exam_result = cleaned_data.get("exam_result", "")
-    exam_record.technical_score = cleaned_data.get("technical_score")
+    exam_record.technical_score = _optional_decimal(cleaned_data.get("technical_score"))
     exam_record.technical_result = cleaned_data.get("technical_result", "")
-    exam_record.practical_score = cleaned_data.get("practical_score")
+    exam_record.practical_score = _optional_decimal(cleaned_data.get("practical_score"))
     exam_record.practical_result = cleaned_data.get("practical_result", "")
     exam_record.exam_date = cleaned_data.get("exam_date")
     exam_record.administered_by = cleaned_data.get("administered_by", "")
@@ -1695,6 +1701,7 @@ def save_exam_record(application, actor, cleaned_data, finalize=False, evidence_
     else:
         exam_record.finalized_by = None
         exam_record.finalized_at = None
+    exam_record.apply_policy_outputs()
     exam_record.full_clean()
     exam_record.save()
 
@@ -1703,7 +1710,7 @@ def save_exam_record(application, actor, cleaned_data, finalize=False, evidence_
         evidence = upload_evidence_item(
             application=application,
             actor=actor,
-            label=f"Exam Evidence - {exam_record.exam_type}",
+            label=f"Exam Evidence - {exam_record.get_exam_type_display()}",
             uploaded_file=evidence_file,
             document_key=f"exam-record-{review_stage}",
             artifact_scope=EvidenceVaultItem.OwnerScope.CASE,

@@ -283,7 +283,10 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
             if exam_record and exam_record.is_finalized:
                 context["exam_locked"] = True
             else:
-                context["exam_form"] = ExamRecordForm(instance=exam_record)
+                context["exam_form"] = ExamRecordForm(
+                    instance=exam_record,
+                    application=application,
+                )
         if user_can_manage_interview_session(user, application):
             interview_session = context["current_interview_session"]
             if interview_session and interview_session.is_finalized:
@@ -702,7 +705,7 @@ class ExaminationRecordView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, 
             raise PermissionDenied
 
         operation = request.POST.get("operation", "save")
-        form = ExamRecordForm(request.POST, request.FILES)
+        form = ExamRecordForm(request.POST, request.FILES, application=application)
         if form.is_valid():
             try:
                 exam_record = save_exam_record(
