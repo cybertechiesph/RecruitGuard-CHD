@@ -1996,6 +1996,11 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
 
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn(otp_code, mail.outbox[0].body)
+        self.assertEqual(len(mail.outbox[0].alternatives), 1)
+        html_body, mime_type = mail.outbox[0].alternatives[0]
+        self.assertEqual(mime_type, "text/html")
+        self.assertIn("Applicant Verification Code", html_body)
+        self.assertIn(otp_code, html_body)
 
 
 class WorkflowRoutingTests(BaseRecruitmentTestCase):

@@ -14,9 +14,10 @@ from io import BytesIO, StringIO
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
 from django.db.models import Q
+from django.template.loader import render_to_string
 from django.utils import timezone
 from django.utils.text import slugify
 from reportlab.lib.pagesizes import A4
@@ -2683,22 +2684,37 @@ def _generate_otp_code():
 
 
 def _deliver_application_otp(application, otp_code, *, actor=None, otp_expires_at=None):
-    send_mail(
-        subject="RecruitGuard-CHD applicant verification code",
-        message=(
-            "Your RecruitGuard-CHD one-time password is "
-            f"{otp_code}. It expires in {settings.APPLICATION_OTP_VALIDITY_MINUTES} minutes."
-        ),
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[application.applicant_email],
-        fail_silently=False,
+    otp_expires_at = otp_expires_at or application.otp_expires_at
+    subject = "RecruitGuard-CHD applicant verification code"
+    text_body = (
+        "RecruitGuard-CHD applicant verification code\n\n"
+        f"Your one-time password is {otp_code}.\n"
+        f"It expires in {settings.APPLICATION_OTP_VALIDITY_MINUTES} minutes.\n\n"
+        "Do not share this code. RecruitGuard-CHD staff will never ask for your OTP."
     )
+    html_body = render_to_string(
+        "email/applicant_otp.html",
+        {
+            "application": application,
+            "otp_code": otp_code,
+            "otp_expires_at": otp_expires_at,
+            "otp_validity_minutes": settings.APPLICATION_OTP_VALIDITY_MINUTES,
+        },
+    )
+    email = EmailMultiAlternatives(
+        subject=subject,
+        body=text_body,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[application.applicant_email],
+    )
+    email.attach_alternative(html_body, "text/html")
+    email.send(fail_silently=False)
     record_audit_event(
         application=application,
         actor=actor or application.applicant,
         action=AuditLog.Action.APPLICATION_OTP_SENT,
         description="Sent applicant OTP for final submission verification.",
-        metadata={"otp_expires_at": (otp_expires_at or application.otp_expires_at).isoformat()},
+        metadata={"otp_expires_at": otp_expires_at.isoformat()},
     )
 
 
