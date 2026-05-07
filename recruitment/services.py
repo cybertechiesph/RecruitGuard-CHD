@@ -321,7 +321,7 @@ def get_manageable_recruitment_entries(user):
         "position_reference",
         "created_by",
         "updated_by",
-    ).order_by("-updated_at")
+    ).exclude(status=PositionPosting.EntryStatus.CLOSED).order_by("-updated_at")
 
 
 def user_can_view_application(user, application):

@@ -1226,6 +1226,24 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
             ).exists()
         )
 
+    def test_closed_entry_is_removed_from_management_list(self):
+        client = Client()
+        client.force_login(self.hrm_chief)
+        response = client.post(
+            reverse(
+                "recruitment-entry-status",
+                kwargs={"pk": self.level1_position.pk, "status": PositionPosting.EntryStatus.CLOSED},
+            ),
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.level1_position.refresh_from_db()
+        self.assertEqual(self.level1_position.status, PositionPosting.EntryStatus.CLOSED)
+        self.assertFalse(self.level1_position.is_active)
+        self.assertNotContains(response, self.level1_position.job_code)
+        self.assertContains(response, self.level2_position.job_code)
+
     def test_status_service_blocks_transition_when_entry_fails_full_validation(self):
         PositionPosting.objects.filter(pk=self.level1_position.pk).update(
             closing_date=self.level1_position.opening_date - timedelta(days=1),
