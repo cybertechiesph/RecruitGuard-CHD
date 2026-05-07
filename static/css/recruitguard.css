@@ -5063,6 +5063,10 @@ textarea.form-control {
    Bootstrap modal with internal design system overrides.
    Variants: --destructive  --lock  --warn
    ────────────────────────────────────────────────────────────── */
+.rg-modal-confirm {
+    white-space: normal;
+}
+
 .rg-modal-confirm .modal-content {
     border: 1px solid #d7dde3;
     border-radius: 0.65rem;
@@ -5087,6 +5091,12 @@ textarea.form-control {
     font-size: 0.875rem;
     color: #374151;
     line-height: 1.65;
+}
+
+.rg-modal-confirm__body-copy {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    white-space: normal;
 }
 
 .rg-modal-confirm .modal-footer {

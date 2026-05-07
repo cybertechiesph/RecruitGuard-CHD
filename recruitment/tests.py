@@ -3430,6 +3430,7 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         self.assertContains(response, f'id="closeModal{self.level1_position.pk}"')
         self.assertContains(response, f'id="closeForm{self.level1_position.pk}"')
         self.assertContains(response, f'form="closeForm{self.level1_position.pk}"')
+        self.assertContains(response, 'class="mb-0 rg-modal-confirm__body-copy"')
         self.assertNotContains(
             response,
             '{% include "internal_includes/modal_confirm.html" with modal_id="closeModal"|add:entry.pk|stringformat:"s" variant="destructive" title="Close this recruitment entry?" body="Closing will stop accepting new applications for this entry. Existing cases in the workflow will not be affected." confirm_label="Close Entry" form_id="closeForm"|add:entry.pk|stringformat:"s" %}',
