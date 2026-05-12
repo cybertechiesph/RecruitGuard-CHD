@@ -827,8 +827,12 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
     def __init__(self, *args, **kwargs):
         self.application = kwargs.pop("application", None)
         super().__init__(*args, **kwargs)
-        self.component_section_label = "Policy Exam Components"
-        self.component_weight_display = "Component 40% / Practical 60%"
+        self.component_section_label = "Technical and Practical Components"
+        self.component_weight_display = "Technical and practical scores are recorded separately."
+        self.exam_type_is_fixed = False
+        self.exam_type_fixed_label = ""
+        self.administered_by_is_fixed = False
+        self.administered_by_fixed_label = ""
         self.fields["exam_type"].label = "Exam Type"
         self.fields["exam_status"].label = "Exam Status"
         self.fields["exam_score"].label = "Overall / Single Exam Score"
@@ -858,22 +862,55 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
         self.fields["exam_type"].help_text = "Select the policy exam category for this application."
         self.fields["administered_by"].help_text = "Select the office or party responsible under the CHD selection plan."
         self.fields["exam_score"].help_text = (
-            "For component exams, the system calculates the overall score using 40% component "
-            "and 60% practical weighting. Use this field directly only for single-score exams."
+            "Use this only when an official overall exam score is available. The system does "
+            "not calculate a weighting rule that is not stated in the FRS or hiring process."
         )
         if self.application:
-            if self.application.level == PositionPosting.Level.LEVEL_1:
-                self.fields["technical_score"].label = "General Score"
-                self.component_section_label = "General and Practical Components"
-                self.component_weight_display = "General 40% / Practical 60%"
-            elif self.application.level == PositionPosting.Level.LEVEL_2:
-                self.fields["technical_score"].label = "Technical Score"
-                self.fields["practical_score"].label = "Practical / General Ability Score"
-                self.component_section_label = "Technical and Practical / General Ability Components"
-                self.component_weight_display = "Technical 40% / Practical or General Ability 60%"
+            self.fields["technical_score"].label = "Technical Score"
+            self.fields["practical_score"].label = "Practical Score"
             if self.application.branch == PositionPosting.Branch.COS:
                 self.component_section_label = "COS Examination Components"
+        self._apply_fixed_choice_display(
+            "exam_type",
+            "exam_type_is_fixed",
+            "exam_type_fixed_label",
+        )
+        self._apply_fixed_choice_display(
+            "administered_by",
+            "administered_by_is_fixed",
+            "administered_by_fixed_label",
+        )
+        if self.exam_type_is_fixed:
+            self.fields["exam_type"].help_text = (
+                "Automatically determined from the recruitment branch and hiring-process source of truth."
+            )
+        if self.administered_by_is_fixed:
+            self.fields["administered_by"].help_text = (
+                "Automatically determined from the branch-specific hiring-process procedure."
+            )
         self._apply_bootstrap()
+
+    def _apply_fixed_choice_display(self, field_name, fixed_attr, label_attr):
+        options = [
+            (str(value), str(label))
+            for value, label in self.fields[field_name].choices
+            if value not in ("", None)
+        ]
+        is_fixed = len(options) == 1
+        setattr(self, fixed_attr, is_fixed)
+        if not is_fixed:
+            return
+
+        value, label = options[0]
+        setattr(self, label_attr, label)
+        self.fields[field_name].widget = forms.HiddenInput(
+            attrs={"data-fixed-label": label}
+        )
+        if not self.is_bound:
+            current_value = self.initial.get(field_name) or getattr(self.instance, field_name, "")
+            if not current_value:
+                self.initial[field_name] = value
+                self.fields[field_name].initial = value
 
     def _exam_type_choices(self):
         choices = [("", "Select exam type")]
@@ -886,22 +923,11 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
                     ExamRecord.ExamType.END_USER_ASSESSMENT.label,
                 )
             ]
-        if self.application.level == PositionPosting.Level.LEVEL_1:
-            return choices + [
-                (
-                    ExamRecord.ExamType.GENERAL_PRACTICAL,
-                    ExamRecord.ExamType.GENERAL_PRACTICAL.label,
-                )
-            ]
         return choices + [
             (
                 ExamRecord.ExamType.TECHNICAL_PRACTICAL,
                 ExamRecord.ExamType.TECHNICAL_PRACTICAL.label,
-            ),
-            (
-                ExamRecord.ExamType.PSYCHOMETRIC,
-                ExamRecord.ExamType.PSYCHOMETRIC.label,
-            ),
+            )
         ]
 
     def _administered_by_choices(self):
@@ -914,34 +940,11 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
                     ExamRecord.AdministeredBy.END_USER,
                     ExamRecord.AdministeredBy.END_USER.label,
                 ),
-                (
-                    ExamRecord.AdministeredBy.HRMS_END_USER,
-                    ExamRecord.AdministeredBy.HRMS_END_USER.label,
-                ),
-            ]
-        if self.application.level == PositionPosting.Level.LEVEL_2:
-            return choices + [
-                (
-                    ExamRecord.AdministeredBy.HRMS_END_USER,
-                    ExamRecord.AdministeredBy.HRMS_END_USER.label,
-                ),
-                (
-                    ExamRecord.AdministeredBy.HRMS,
-                    ExamRecord.AdministeredBy.HRMS.label,
-                ),
-                (
-                    ExamRecord.AdministeredBy.ACCREDITED_INSTITUTION,
-                    ExamRecord.AdministeredBy.ACCREDITED_INSTITUTION.label,
-                ),
             ]
         return choices + [
             (
                 ExamRecord.AdministeredBy.HRMS,
                 ExamRecord.AdministeredBy.HRMS.label,
-            ),
-            (
-                ExamRecord.AdministeredBy.HRMS_END_USER,
-                ExamRecord.AdministeredBy.HRMS_END_USER.label,
             ),
         ]
 

@@ -15,7 +15,7 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from .forms import ApplicantPortalIntakeForm
+from .forms import ApplicantPortalIntakeForm, ExamRecordForm
 from .models import (
     AuditLog,
     ComparativeAssessmentReport,
@@ -275,7 +275,7 @@ class BaseRecruitmentTestCase(TestCase):
         self,
         application,
         actor,
-        exam_type=ExamRecord.ExamType.GENERAL_PRACTICAL,
+        exam_type=ExamRecord.ExamType.TECHNICAL_PRACTICAL,
         exam_status=ExamRecord.ExamStatus.COMPLETED,
         exam_score="88.50",
         exam_result="",
@@ -2666,7 +2666,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
 class ExamRecordTests(BaseRecruitmentTestCase):
     def exam_payload(self, **overrides):
         payload = {
-            "exam_type": ExamRecord.ExamType.GENERAL_PRACTICAL,
+            "exam_type": ExamRecord.ExamType.TECHNICAL_PRACTICAL,
             "exam_status": ExamRecord.ExamStatus.COMPLETED,
             "exam_score": "86.75",
             "exam_result": "",
@@ -2683,6 +2683,39 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         payload.update(overrides)
         return payload
 
+    def test_exam_form_displays_single_policy_exam_type_as_fixed_value(self):
+        level1_application = self.make_application(self.level1_position)
+        level1_form = ExamRecordForm(application=level1_application)
+
+        self.assertTrue(level1_form.exam_type_is_fixed)
+        self.assertEqual(
+            level1_form.exam_type_fixed_label,
+            ExamRecord.ExamType.TECHNICAL_PRACTICAL.label,
+        )
+        self.assertEqual(
+            level1_form["exam_type"].value(),
+            ExamRecord.ExamType.TECHNICAL_PRACTICAL,
+        )
+        self.assertEqual(level1_form.fields["exam_type"].widget.input_type, "hidden")
+        self.assertTrue(level1_form.administered_by_is_fixed)
+        self.assertEqual(
+            level1_form.administered_by_fixed_label,
+            ExamRecord.AdministeredBy.HRMS.label,
+        )
+
+        cos_application = self.make_application(self.cos_position)
+        cos_form = ExamRecordForm(application=cos_application)
+        self.assertTrue(cos_form.exam_type_is_fixed)
+        self.assertEqual(
+            cos_form.exam_type_fixed_label,
+            ExamRecord.ExamType.END_USER_ASSESSMENT.label,
+        )
+        self.assertTrue(cos_form.administered_by_is_fixed)
+        self.assertEqual(
+            cos_form.administered_by_fixed_label,
+            ExamRecord.AdministeredBy.END_USER.label,
+        )
+
     def test_current_handler_can_create_update_and_finalize_exam_record(self):
         application = self.make_application(self.level1_position)
         self.verify_application_for_submission(application)
@@ -2693,7 +2726,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
             application=application,
             actor=self.secretariat,
             cleaned_data={
-                "exam_type": ExamRecord.ExamType.GENERAL_PRACTICAL,
+                "exam_type": ExamRecord.ExamType.TECHNICAL_PRACTICAL,
                 "exam_status": ExamRecord.ExamStatus.COMPLETED,
                 "exam_score": "82.50",
                 "exam_result": "",
@@ -2723,7 +2756,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
             application=application,
             actor=self.secretariat,
             cleaned_data={
-                "exam_type": ExamRecord.ExamType.GENERAL_PRACTICAL,
+                "exam_type": ExamRecord.ExamType.TECHNICAL_PRACTICAL,
                 "exam_status": ExamRecord.ExamStatus.COMPLETED,
                 "exam_score": "90.00",
                 "exam_result": "",
@@ -2741,14 +2774,14 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         )
         exam_record.refresh_from_db()
         self.assertTrue(exam_record.is_finalized)
-        self.assertEqual(str(exam_record.exam_score), "90.40")
+        self.assertEqual(str(exam_record.exam_score), "90.00")
         self.assertEqual(str(exam_record.technical_score), "88.00")
         self.assertEqual(str(exam_record.practical_score), "92.00")
         self.assertEqual(exam_record.exam_date, timezone.localdate())
         self.assertEqual(exam_record.administered_by, ExamRecord.AdministeredBy.HRMS)
         self.assertEqual(
             exam_record.component_summary,
-            "General: 88.00 (Recorded for evaluation); Practical: 92.00 (Recorded for evaluation)",
+            "Technical: 88.00 (Recorded for evaluation); Practical: 92.00 (Recorded for evaluation)",
         )
         self.assertEqual(exam_record.finalized_by, self.secretariat)
         self.assertTrue(
@@ -2768,7 +2801,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
             application=application,
             actor=self.secretariat,
             cleaned_data={
-                "exam_type": ExamRecord.ExamType.GENERAL_PRACTICAL,
+                "exam_type": ExamRecord.ExamType.TECHNICAL_PRACTICAL,
                 "exam_status": ExamRecord.ExamStatus.COMPLETED,
                 "exam_score": None,
                 "exam_result": "",
@@ -2777,7 +2810,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
                 "practical_score": "88.00",
                 "practical_result": "",
                 "exam_date": timezone.localdate(),
-                "administered_by": ExamRecord.AdministeredBy.HRMS_END_USER,
+                "administered_by": ExamRecord.AdministeredBy.HRMS,
                 "valid_from": None,
                 "valid_until": None,
                 "exam_notes": "Structured components recorded without an overall score.",
@@ -2786,8 +2819,8 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         )
 
         self.assertTrue(exam_record.is_finalized)
-        self.assertEqual(str(exam_record.exam_score), "85.60")
-        self.assertEqual(str(exam_record.effective_score), "85.60")
+        self.assertIsNone(exam_record.exam_score)
+        self.assertIsNone(exam_record.effective_score)
 
     def test_exam_record_can_attach_optional_evidence(self):
         application = self.make_application(self.level1_position)
@@ -2799,7 +2832,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
             application=application,
             actor=self.secretariat,
             cleaned_data={
-                "exam_type": ExamRecord.ExamType.GENERAL_PRACTICAL,
+                "exam_type": ExamRecord.ExamType.TECHNICAL_PRACTICAL,
                 "exam_status": ExamRecord.ExamStatus.COMPLETED,
                 "exam_score": "91.00",
                 "exam_result": "",
@@ -2808,7 +2841,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
                 "practical_score": "92.00",
                 "practical_result": "",
                 "exam_date": timezone.localdate(),
-                "administered_by": ExamRecord.AdministeredBy.HRMS_END_USER,
+                "administered_by": ExamRecord.AdministeredBy.HRMS,
                 "valid_from": timezone.localdate(),
                 "valid_until": timezone.localdate() + timedelta(days=365),
                 "exam_notes": "Evidence file attached.",
@@ -2854,7 +2887,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
                 application=application,
                 actor=self.secretariat,
                 cleaned_data={
-                    "exam_type": ExamRecord.ExamType.GENERAL_PRACTICAL,
+                    "exam_type": ExamRecord.ExamType.TECHNICAL_PRACTICAL,
                     "exam_status": ExamRecord.ExamStatus.COMPLETED,
                     "exam_score": "70.00",
                     "exam_result": "",
@@ -2866,7 +2899,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
             )
 
         exam_record.refresh_from_db()
-        self.assertEqual(str(exam_record.exam_score), "88.80")
+        self.assertEqual(str(exam_record.exam_score), "88.50")
         self.assertEqual(exam_record.exam_result, ExamRecord.OverallResult.FOR_EVALUATION)
 
     def test_cos_exam_waiver_can_be_finalized_without_score_or_validity(self):
@@ -2913,7 +2946,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
                 application=application,
                 actor=self.secretariat,
                 cleaned_data={
-                    "exam_type": ExamRecord.ExamType.GENERAL_PRACTICAL,
+                    "exam_type": ExamRecord.ExamType.TECHNICAL_PRACTICAL,
                     "exam_status": ExamRecord.ExamStatus.COMPLETED,
                     "exam_score": None,
                     "exam_result": "",

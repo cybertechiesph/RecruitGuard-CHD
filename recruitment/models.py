@@ -887,16 +887,8 @@ class ScreeningRecord(TimestampedModel):
 
 
 class ExamRecord(TimestampedModel):
-    COMPONENT_WEIGHT = Decimal("0.40")
-    PRACTICAL_WEIGHT = Decimal("0.60")
-
     class ExamType(models.TextChoices):
-        GENERAL_PRACTICAL = "general_practical", "General and Practical Examination"
-        TECHNICAL_PRACTICAL = (
-            "technical_practical",
-            "Technical and Practical / General Ability Test",
-        )
-        PSYCHOMETRIC = "psychometric", "Psychometric Examination"
+        TECHNICAL_PRACTICAL = "technical_practical", "Technical and Practical Examination"
         END_USER_ASSESSMENT = "end_user_assessment", "End-user Examination"
 
     class ExamStatus(models.TextChoices):
@@ -906,19 +898,14 @@ class ExamRecord(TimestampedModel):
 
     class AdministeredBy(models.TextChoices):
         HRMS = "hrms", "Human Resource Management Section"
-        HRMS_END_USER = "hrms_end_user", "HRMS with End-user technical input"
         END_USER = "end_user", "End-user"
-        ACCREDITED_INSTITUTION = (
-            "accredited_institution",
-            "UP or accredited institution/academe",
-        )
 
     class ComponentResult(models.TextChoices):
         RECORDED = "recorded", "Recorded for evaluation"
         NOT_APPLICABLE = "not_applicable", "Not applicable"
 
     class OverallResult(models.TextChoices):
-        FOR_EVALUATION = "for_evaluation", "For HRMPSB evaluation"
+        FOR_EVALUATION = "for_evaluation", "For evaluation"
         INCOMPLETE = "incomplete", "Incomplete"
         WAIVED = "waived", "Waived"
         ABSENT = "absent", "Absent"
@@ -1109,44 +1096,25 @@ class ExamRecord(TimestampedModel):
 
     @property
     def required_score_fields(self):
-        if self.exam_type in {
-            self.ExamType.GENERAL_PRACTICAL,
-            self.ExamType.TECHNICAL_PRACTICAL,
-        }:
+        if self.exam_type == self.ExamType.TECHNICAL_PRACTICAL:
             return ("technical_score", "practical_score")
         if self.exam_type == self.ExamType.END_USER_ASSESSMENT:
             return ("practical_score",)
-        if self.exam_type == self.ExamType.PSYCHOMETRIC:
-            return ("exam_score",)
         return ()
 
     @property
     def technical_component_label(self):
-        if self.level == PositionPosting.Level.LEVEL_1:
-            return "General"
         return "Technical"
 
     @property
     def practical_component_label(self):
-        if self.level == PositionPosting.Level.LEVEL_2:
-            return "Practical / General Ability"
         return "Practical"
 
     @property
     def component_weight_display(self):
-        return f"{self.technical_component_label} 40% / {self.practical_component_label} 60%"
+        return "Technical and practical scores are recorded as separate components."
 
-    def calculate_weighted_score(self):
-        if self.exam_type in {
-            self.ExamType.GENERAL_PRACTICAL,
-            self.ExamType.TECHNICAL_PRACTICAL,
-        }:
-            if self.technical_score is None or self.practical_score is None:
-                return None
-            return (
-                (self.technical_score * self.COMPONENT_WEIGHT)
-                + (self.practical_score * self.PRACTICAL_WEIGHT)
-            ).quantize(Decimal("0.01"))
+    def calculate_policy_score(self):
         if self.exam_type == self.ExamType.END_USER_ASSESSMENT:
             return self.practical_score
         return self.exam_score
@@ -1171,12 +1139,7 @@ class ExamRecord(TimestampedModel):
         if self.exam_status != self.ExamStatus.COMPLETED:
             return
 
-        if self.exam_type in {
-            self.ExamType.GENERAL_PRACTICAL,
-            self.ExamType.TECHNICAL_PRACTICAL,
-        }:
-            self.exam_score = self.calculate_weighted_score()
-        elif self.exam_type == self.ExamType.END_USER_ASSESSMENT:
+        if self.exam_type == self.ExamType.END_USER_ASSESSMENT:
             self.exam_score = self.practical_score
 
         self.technical_result = (
@@ -1189,9 +1152,13 @@ class ExamRecord(TimestampedModel):
             if self.practical_score is not None
             else self.ComponentResult.NOT_APPLICABLE
         )
+        has_required_scores = all(
+            getattr(self, field_name) is not None
+            for field_name in self.required_score_fields
+        )
         self.exam_result = (
             self.OverallResult.FOR_EVALUATION
-            if self.exam_score is not None
+            if has_required_scores or self.exam_score is not None
             else self.OverallResult.INCOMPLETE
         )
 
@@ -1199,7 +1166,7 @@ class ExamRecord(TimestampedModel):
     def effective_score(self):
         if self.exam_score is not None:
             return self.exam_score
-        return self.calculate_weighted_score()
+        return self.calculate_policy_score()
 
     @property
     def component_summary(self):
