@@ -240,7 +240,6 @@ PIPELINE_SECTION_MAP = {
     "exam": "exam",
     "interview": "interview",
     "deliberation": "deliberation",
-    "actions": "submission",
     "decision": "submission",
     "completion": "appointment",
 }
@@ -273,6 +272,17 @@ def pipeline_stages():
     return PIPELINE_STAGES
 
 
+def _pipeline_step_for_actions(application, current_stage):
+    if current_stage in {
+        RecruitmentCase.Stage.SECRETARIAT_REVIEW,
+        RecruitmentCase.Stage.HRM_CHIEF_REVIEW,
+    }:
+        return "interview"
+    if current_stage == RecruitmentCase.Stage.HRMPSB_REVIEW:
+        return "submission"
+    return PIPELINE_STAGE_MAP.get(current_stage, "screening")
+
+
 @register.simple_tag
 def pipeline_stage_state(application, case_status, step_key):
     recruitment_case = getattr(application, "case", None)
@@ -283,10 +293,13 @@ def pipeline_stage_state(application, case_status, step_key):
         return "future"
 
     current_section = get_current_workflow_section(application)
-    mapped = PIPELINE_SECTION_MAP.get(current_section) or PIPELINE_STAGE_MAP.get(
-        current_stage,
-        "screening",
-    )
+    if current_section == "actions":
+        mapped = _pipeline_step_for_actions(application, current_stage)
+    else:
+        mapped = PIPELINE_SECTION_MAP.get(current_section) or PIPELINE_STAGE_MAP.get(
+            current_stage,
+            "screening",
+        )
     order = [s["key"] for s in PIPELINE_STAGES]
 
     try:

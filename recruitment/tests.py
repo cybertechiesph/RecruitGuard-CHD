@@ -7,6 +7,7 @@ from datetime import date, timedelta
 
 from django.apps import apps as django_apps
 from django.contrib.auth import get_user_model
+from django.contrib.messages import get_messages
 from django.core import mail
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -358,7 +359,10 @@ class BaseRecruitmentTestCase(TestCase):
         with self.captureOnCommitCallbacks(execute=True):
             submit_application(application, self.applicant)
         application.refresh_from_db()
-        if application.case.current_stage == RecruitmentCase.Stage.SECRETARIAT_REVIEW:
+        if (
+            application.branch == PositionPosting.Branch.COS
+            and application.case.current_stage == RecruitmentCase.Stage.SECRETARIAT_REVIEW
+        ):
             self.finalize_screening_for_current_stage(application, self.secretariat)
             self.finalize_exam_for_current_stage(application, self.secretariat)
             process_workflow_action(application, self.secretariat, "endorse", "Forward to HRM Chief.")
@@ -366,10 +370,18 @@ class BaseRecruitmentTestCase(TestCase):
         return application
 
     def move_application_to_hrmpsb_review(self, application):
-        self.move_application_to_hrm_chief_review(application)
-        self.finalize_screening_for_current_stage(application, self.hrm_chief)
-        self.finalize_exam_for_current_stage(application, self.hrm_chief)
-        process_workflow_action(application, self.hrm_chief, "endorse", "Forward to HRMPSB.")
+        self.verify_application_for_submission(application)
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(application, self.applicant)
+        application.refresh_from_db()
+        if application.case.current_stage == RecruitmentCase.Stage.SECRETARIAT_REVIEW:
+            self.finalize_screening_for_current_stage(application, self.secretariat)
+            self.finalize_exam_for_current_stage(application, self.secretariat)
+            process_workflow_action(application, self.secretariat, "endorse", "Forward to HRMPSB.")
+        elif application.case.current_stage == RecruitmentCase.Stage.HRM_CHIEF_REVIEW:
+            self.finalize_screening_for_current_stage(application, self.hrm_chief)
+            self.finalize_exam_for_current_stage(application, self.hrm_chief)
+            process_workflow_action(application, self.hrm_chief, "endorse", "Forward to HRMPSB.")
         application.refresh_from_db()
         return application
 
@@ -2093,15 +2105,22 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         submit_application(application, self.applicant)
 
         client = Client()
-        client.force_login(self.sysadmin)
+        client.force_login(self.hrm_chief)
         response = client.post(
-            reverse("workflow-override", kwargs={"pk": application.pk}),
-            {"reason": "Controlled screening support."},
+            reverse("case-handoff", kwargs={"pk": application.pk}),
+            {
+                "target_role": RecruitmentUser.Role.SECRETARIAT,
+                "remarks": "Controlled screening support.",
+            },
         )
         self.assertEqual(response.status_code, 302)
 
         application.refresh_from_db()
+        application.case.refresh_from_db()
         self.assertEqual(application.current_handler_role, RecruitmentUser.Role.SECRETARIAT)
+        self.assertEqual(application.status, RecruitmentApplication.Status.HRM_CHIEF_REVIEW)
+        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.HRM_CHIEF_REVIEW)
+        self.assertEqual(application.case.current_handler_role, RecruitmentUser.Role.SECRETARIAT)
         self.assertTrue(WorkflowOverride.objects.filter(application=application, is_active=True).exists())
 
         self.finalize_screening_for_current_stage(
@@ -2110,9 +2129,19 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
             screening_notes="Override-backed screening completed.",
         )
         self.finalize_exam_for_current_stage(application, self.secretariat)
-        process_workflow_action(application, self.secretariat, "endorse", "Pre-screen completed.")
+        client.force_login(self.secretariat)
+        response = client.post(
+            reverse("case-handoff", kwargs={"pk": application.pk}),
+            {
+                "target_role": RecruitmentUser.Role.HRM_CHIEF,
+                "remarks": "Pre-screen completed.",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
         application.refresh_from_db()
         self.assertEqual(application.current_handler_role, RecruitmentUser.Role.HRM_CHIEF)
+        self.assertEqual(application.status, RecruitmentApplication.Status.HRM_CHIEF_REVIEW)
+        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.HRM_CHIEF_REVIEW)
         self.assertFalse(WorkflowOverride.objects.filter(application=application, is_active=True).exists())
         routing_events = list(application.routing_history.values_list("route_type", "to_handler_role"))
         self.assertEqual(
@@ -2153,11 +2182,11 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
 
         with self.assertRaisesMessage(
             ValueError,
-            "Secretariat overrides are only available while a Level 2 application is actively assigned to the HRM Chief review stage.",
+            "Level 2 Secretariat handoff is only available while the case remains in HRM Chief review.",
         ):
             grant_secretariat_override(
                 application=application,
-                actor=self.sysadmin,
+                actor=self.hrm_chief,
                 reason="Improper reroute attempt.",
             )
 
@@ -2227,13 +2256,7 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
 
         self.finalize_screening_for_current_stage(application, self.secretariat)
         self.finalize_exam_for_current_stage(application, self.secretariat)
-        process_workflow_action(application, self.secretariat, "endorse", "Forward to HRM Chief.")
-        application.refresh_from_db()
-        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.HRM_CHIEF_REVIEW)
-
-        self.finalize_screening_for_current_stage(application, self.hrm_chief)
-        self.finalize_exam_for_current_stage(application, self.hrm_chief)
-        process_workflow_action(application, self.hrm_chief, "endorse", "Forward to HRMPSB.")
+        process_workflow_action(application, self.secretariat, "endorse", "Forward to HRMPSB.")
         application.refresh_from_db()
         self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.HRMPSB_REVIEW)
 
@@ -2716,6 +2739,22 @@ class ExamRecordTests(BaseRecruitmentTestCase):
             ExamRecord.AdministeredBy.END_USER.label,
         )
 
+    def test_exam_form_rejects_scores_outside_allowed_range(self):
+        application = self.make_application(self.level1_position)
+        form = ExamRecordForm(
+            data=self.exam_payload(
+                exam_score="101",
+                technical_score="-1",
+                practical_score="125",
+            ),
+            application=application,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn(ExamRecordForm.SCORE_RANGE_MESSAGE, form.errors["exam_score"])
+        self.assertIn(ExamRecordForm.SCORE_RANGE_MESSAGE, form.errors["technical_score"])
+        self.assertIn(ExamRecordForm.SCORE_RANGE_MESSAGE, form.errors["practical_score"])
+
     def test_current_handler_can_create_update_and_finalize_exam_record(self):
         application = self.make_application(self.level1_position)
         self.verify_application_for_submission(application)
@@ -3000,6 +3039,36 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         )
 
         self.assertEqual(response.status_code, 200)
+        self.assertFalse(ExamRecord.objects.filter(application=application).exists())
+
+    def test_exam_view_invalid_scores_show_readable_message_and_do_not_finalize(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        self.finalize_screening_for_current_stage(application, self.secretariat)
+
+        client = Client()
+        client.force_login(self.secretariat)
+        response = client.post(
+            reverse("exam-review", kwargs={"pk": application.pk}),
+            {
+                **self.exam_payload(
+                    exam_score="101",
+                    technical_score="120",
+                    practical_score="-1",
+                ),
+                "operation": "finalize",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        message_text = " ".join(message.message for message in get_messages(response.wsgi_request))
+        self.assertIn("Overall / Single Exam Score", message_text)
+        self.assertIn("Technical Score", message_text)
+        self.assertIn("Practical Score", message_text)
+        self.assertIn(ExamRecordForm.SCORE_RANGE_MESSAGE, message_text)
+        self.assertNotIn("{'exam_score'", message_text)
         self.assertFalse(ExamRecord.objects.filter(application=application).exists())
 
     def test_secretariat_cannot_record_level2_exam_without_override(self):
@@ -4670,15 +4739,6 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             secondary_application,
             self.secretariat,
             "endorse",
-            "Forward second candidate to HRM Chief.",
-        )
-        secondary_application.refresh_from_db()
-        self.finalize_screening_for_current_stage(secondary_application, self.hrm_chief)
-        self.finalize_exam_for_current_stage(secondary_application, self.hrm_chief)
-        process_workflow_action(
-            secondary_application,
-            self.hrm_chief,
-            "endorse",
             "Forward second candidate to HRMPSB.",
         )
         secondary_application.refresh_from_db()
@@ -4753,15 +4813,6 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         process_workflow_action(
             secondary_application,
             self.secretariat,
-            "endorse",
-            "Forward second candidate to HRM Chief.",
-        )
-        secondary_application.refresh_from_db()
-        self.finalize_screening_for_current_stage(secondary_application, self.hrm_chief)
-        self.finalize_exam_for_current_stage(secondary_application, self.hrm_chief)
-        process_workflow_action(
-            secondary_application,
-            self.hrm_chief,
             "endorse",
             "Forward second candidate to HRMPSB.",
         )

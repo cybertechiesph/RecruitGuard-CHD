@@ -23,3 +23,5 @@ Routing is based on:
   - authorized
   - controlled
   - audit-logged
+- Secretariat may process a Level 2 case only after the HRM Chief hands off that specific case
+- A Secretariat / HRM Chief handoff changes the current handler only; it must not advance or roll back the official workflow stage

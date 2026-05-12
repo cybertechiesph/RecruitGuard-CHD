@@ -23,7 +23,11 @@ from .models import (
     ScreeningRecord,
 )
 from .requirements import get_applicant_document_requirements
-from .services import get_available_actions, get_current_applicant_document_map
+from .services import (
+    get_available_actions,
+    get_case_handoff_options,
+    get_current_applicant_document_map,
+)
 from .upload_validation import validate_applicant_document_upload
 
 
@@ -589,6 +593,26 @@ class WorkflowActionForm(BootstrapFormMixin, forms.Form):
         return action
 
 
+class CaseHandoffForm(BootstrapFormMixin, forms.Form):
+    target_role = forms.ChoiceField(label="Send To")
+    remarks = forms.CharField(
+        label="Reason / Remarks",
+        widget=forms.Textarea(attrs={"rows": 3}),
+    )
+
+    def __init__(self, *args, application, user, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["target_role"].choices = get_case_handoff_options(application, user)
+        self._apply_bootstrap()
+
+    def clean_target_role(self):
+        target_role = self.cleaned_data["target_role"]
+        valid_roles = {value for value, _label in self.fields["target_role"].choices}
+        if target_role not in valid_roles:
+            raise forms.ValidationError("Selected handoff target is not valid for this case.")
+        return target_role
+
+
 class WorkflowOverrideForm(BootstrapFormMixin, forms.Form):
     reason = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}))
 
@@ -787,6 +811,9 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
 
 
 class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.ModelForm):
+    SCORE_RANGE_MESSAGE = "Enter a score from 0 to 100."
+    SCORE_FIELD_NAMES = ("exam_score", "technical_score", "practical_score")
+
     evidence_file = forms.FileField(
         label="Optional Evidence Upload",
         required=False,
@@ -859,6 +886,15 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
         self.fields["exam_score"].required = False
         self.fields["exam_type"].choices = self._exam_type_choices()
         self.fields["administered_by"].choices = self._administered_by_choices()
+        for field_name in self.SCORE_FIELD_NAMES:
+            self.fields[field_name].widget.attrs.update(
+                {
+                    "min": "0",
+                    "max": "100",
+                    "data-score-limit": "true",
+                    "data-score-label": self.fields[field_name].label,
+                }
+            )
         self.fields["exam_type"].help_text = "Select the policy exam category for this application."
         self.fields["administered_by"].help_text = "Select the office or party responsible under the CHD selection plan."
         self.fields["exam_score"].help_text = (
@@ -947,6 +983,43 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
                 ExamRecord.AdministeredBy.HRMS.label,
             ),
         ]
+
+    def _required_score_fields_for_type(self, exam_type):
+        if exam_type == ExamRecord.ExamType.TECHNICAL_PRACTICAL:
+            return ("technical_score", "practical_score")
+        if exam_type == ExamRecord.ExamType.END_USER_ASSESSMENT:
+            return ("practical_score",)
+        return ()
+
+    def clean(self):
+        cleaned_data = super().clean()
+        for field_name in self.SCORE_FIELD_NAMES:
+            value = cleaned_data.get(field_name)
+            if value is not None and (value < 0 or value > 100):
+                self.add_error(field_name, self.SCORE_RANGE_MESSAGE)
+
+        exam_status = cleaned_data.get("exam_status")
+        score_values = {
+            field_name: cleaned_data.get(field_name)
+            for field_name in self.SCORE_FIELD_NAMES
+        }
+        if exam_status == ExamRecord.ExamStatus.COMPLETED:
+            if not cleaned_data.get("exam_date"):
+                self.add_error("exam_date", "Provide the date the examination was administered.")
+            if not cleaned_data.get("administered_by"):
+                self.add_error("administered_by", "Record who administered the examination.")
+            for field_name in self._required_score_fields_for_type(cleaned_data.get("exam_type")):
+                if score_values[field_name] is None and not self.has_error(field_name):
+                    self.add_error(field_name, "Record this policy-required examination score.")
+        elif exam_status in {ExamRecord.ExamStatus.WAIVED, ExamRecord.ExamStatus.ABSENT}:
+            for field_name, value in score_values.items():
+                if value is not None:
+                    self.add_error(field_name, "Remove numeric scores for waived or absent exams.")
+            if cleaned_data.get("valid_from") or cleaned_data.get("valid_until"):
+                self.add_error("valid_from", "Only completed exams may record a validity period.")
+            if not cleaned_data.get("exam_notes"):
+                self.add_error("exam_notes", "Provide remarks explaining the waiver or absence.")
+        return cleaned_data
 
     def clean_evidence_file(self):
         uploaded_file = self.cleaned_data.get("evidence_file")

@@ -27,7 +27,9 @@
 - Level 1 -> Secretariat
 - Level 2 -> HRM Chief
 - Secretariat must not process Level 2 cases
-- Controlled override only if explicitly implemented and audit-logged
+- Secretariat may process Level 2 cases only through a specific HRM Chief handoff
+- Controlled handoff/override must be explicitly implemented and audit-logged
+- Handoff between Secretariat and HRM Chief is handler reassignment; the case's official workflow stage remains universal
 
 ## Scope Boundaries
 - Recruitment only

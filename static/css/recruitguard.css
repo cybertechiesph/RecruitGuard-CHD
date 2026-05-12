@@ -6246,6 +6246,21 @@ textarea.form-control {
     gap: 0.75rem 1.25rem;
 }
 
+.rg-exam-validation-alert {
+    margin-bottom: 0.875rem;
+    padding: 0.65rem 0.8rem;
+    border: 1px solid #fca5a5;
+    border-radius: 0.35rem;
+    background: #fef2f2;
+    color: #991b1b;
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+
+.rg-exam-validation-alert[hidden] {
+    display: none;
+}
+
 @media (max-width: 600px) {
     .rg-exam-score-grid { grid-template-columns: 1fr; }
 }

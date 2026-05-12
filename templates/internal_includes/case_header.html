@@ -28,8 +28,61 @@
         {% if request.user.role != "system_admin" %}
             <a href="{% url 'workflow-queue' %}" class="btn btn-outline-secondary btn-sm">← Queue</a>
         {% endif %}
+        {% if case_handoff_form %}
+            <button type="button"
+                    class="btn btn-outline-secondary btn-sm"
+                    data-bs-toggle="modal"
+                    data-bs-target="#caseHandoffModal">
+                Route Case
+            </button>
+        {% endif %}
         {% if can_export %}
             <a href="{% url 'application-export' application.pk %}" class="btn btn-outline-secondary btn-sm">Export</a>
         {% endif %}
     </div>
 </div>
+
+{% if case_handoff_form %}
+<div class="modal fade rg-modal-confirm rg-modal-confirm--warn"
+     id="caseHandoffModal"
+     tabindex="-1"
+     aria-labelledby="caseHandoffModalLabel"
+     aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title h5" id="caseHandoffModalLabel">
+                    Route this case?
+                </h2>
+                <button type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+            </div>
+            <form method="post" action="{% url 'case-handoff' application.pk %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <p class="mb-3 rg-modal-confirm__body-copy">
+                        Send this case to the other authorized handler without advancing the official workflow stage.
+                    </p>
+                    <div class="rg-form-grid">
+                        {% for field in case_handoff_form %}
+                            {% include "recruitment/includes/form_field.html" with field=field %}
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button"
+                            class="btn btn-outline-secondary"
+                            data-bs-dismiss="modal">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn btn-rg-primary">
+                        Route Case
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}

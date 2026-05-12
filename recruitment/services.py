@@ -385,6 +385,188 @@ def user_can_export_application(user, application):
     return user.role in EXPORT_ROLES and user_can_view_application(user, application)
 
 
+def _handoff_target_status(application):
+    return application.status
+
+
+def _is_secretariat_hrm_handoff_role(role):
+    return role in {
+        RecruitmentUser.Role.SECRETARIAT,
+        RecruitmentUser.Role.HRM_CHIEF,
+    }
+
+
+def get_case_handoff_options(application, user):
+    if not hasattr(application, "case"):
+        return []
+    case = application.case
+    if case.is_stage_locked or case.current_stage == RecruitmentCase.Stage.CLOSED:
+        return []
+    if not _is_secretariat_hrm_handoff_role(user.role):
+        return []
+    if application.current_handler_role != user.role or case.current_handler_role != user.role:
+        return []
+    if not user_can_process_application(user, application):
+        return []
+
+    if user.role == RecruitmentUser.Role.SECRETARIAT:
+        return [(RecruitmentUser.Role.HRM_CHIEF, "Hand off to HRM Chief")]
+    if user.role == RecruitmentUser.Role.HRM_CHIEF:
+        return [(RecruitmentUser.Role.SECRETARIAT, "Hand off to Secretariat")]
+    return []
+
+
+def _case_handoff_description(actor_role, target_role, application):
+    if (
+        actor_role == RecruitmentUser.Role.HRM_CHIEF
+        and target_role == RecruitmentUser.Role.SECRETARIAT
+        and application.level == PositionPosting.Level.LEVEL_2
+    ):
+        return "Level 2 case handed off to Secretariat by HRM Chief."
+    if target_role == RecruitmentUser.Role.SECRETARIAT:
+        return "Case handed off to Secretariat."
+    return "Case handed off to HRM Chief."
+
+
+@transaction.atomic
+def route_case_between_secretariat_and_hrm_chief(application, actor, target_role, remarks):
+    if target_role not in {
+        RecruitmentUser.Role.SECRETARIAT,
+        RecruitmentUser.Role.HRM_CHIEF,
+    }:
+        raise ValueError("Cases can only be handed off between Secretariat and HRM Chief.")
+    if actor.role == target_role:
+        raise ValueError("Select the other office as the handoff target.")
+    if not _is_secretariat_hrm_handoff_role(actor.role):
+        raise ValueError("Only Secretariat and HRM Chief can hand off cases to each other.")
+    if not hasattr(application, "case"):
+        raise ValueError("A recruitment case must exist before it can be handed off.")
+    case = application.case
+    if case.is_stage_locked or case.current_stage == RecruitmentCase.Stage.CLOSED:
+        raise ValueError("Stage-locked or closed cases cannot be handed off.")
+    if application.current_handler_role != actor.role or case.current_handler_role != actor.role:
+        raise ValueError("Only the current handler can hand off this case.")
+    if not user_can_process_application(actor, application):
+        if (
+            actor.role == RecruitmentUser.Role.SECRETARIAT
+            and application.level == PositionPosting.Level.LEVEL_2
+        ):
+            raise ValueError(
+                "Secretariat cannot process Level 2 applications without an active HRM Chief handoff."
+            )
+        raise ValueError("You cannot hand off this case at its current workflow stage.")
+
+    active_override = application.active_secretariat_override
+    override = None
+    is_level2_secretariat_handoff = (
+        application.level == PositionPosting.Level.LEVEL_2
+        and actor.role == RecruitmentUser.Role.HRM_CHIEF
+        and target_role == RecruitmentUser.Role.SECRETARIAT
+    )
+    is_level2_return_to_hrm_chief = (
+        application.level == PositionPosting.Level.LEVEL_2
+        and actor.role == RecruitmentUser.Role.SECRETARIAT
+        and target_role == RecruitmentUser.Role.HRM_CHIEF
+    )
+
+    if application.level == PositionPosting.Level.LEVEL_2 and target_role == RecruitmentUser.Role.SECRETARIAT:
+        if actor.role != RecruitmentUser.Role.HRM_CHIEF:
+            raise ValueError("Only the HRM Chief can hand off a Level 2 case to Secretariat.")
+        if case.current_stage != RecruitmentCase.Stage.HRM_CHIEF_REVIEW:
+            raise ValueError(
+                "Level 2 Secretariat handoff is only available while the case remains in HRM Chief review."
+            )
+        application.overrides.filter(is_active=True).update(
+            is_active=False,
+            revoked_at=timezone.now(),
+        )
+        override = WorkflowOverride.objects.create(
+            application=application,
+            granted_by=actor,
+            target_role=RecruitmentUser.Role.SECRETARIAT,
+            reason=remarks,
+        )
+    elif is_level2_return_to_hrm_chief:
+        if not active_override:
+            raise ValueError("A Level 2 case can only return from Secretariat after an active HRM Chief handoff.")
+
+    previous_role = application.current_handler_role
+    previous_status = application.status
+    previous_stage = case.current_stage
+    previous_case_status = case.case_status
+
+    case.current_handler_role = target_role
+    case.case_status = RecruitmentCase.CaseStatus.ACTIVE
+    case.save(update_fields=["current_handler_role", "case_status", "updated_at"])
+
+    application.current_handler_role = target_role
+    application.status = _handoff_target_status(application)
+    application.save(update_fields=["current_handler_role", "status", "updated_at"])
+
+    description = _case_handoff_description(actor.role, target_role, application)
+    if override:
+        record_audit_event(
+            application=application,
+            actor=actor,
+            action=AuditLog.Action.OVERRIDE_GRANTED,
+            description="HRM Chief handed off a Level 2 case to Secretariat.",
+            metadata={
+                "override_id": override.id,
+                "reason": remarks,
+                **_case_timeline_metadata(case),
+            },
+        )
+
+    if is_level2_return_to_hrm_chief and active_override:
+        active_override.mark_used()
+        record_audit_event(
+            application=application,
+            actor=actor,
+            action=AuditLog.Action.OVERRIDE_USED,
+            description="Level 2 Secretariat handoff returned to HRM Chief.",
+            metadata={"override_id": active_override.id},
+        )
+
+    record_audit_event(
+        application=application,
+        actor=actor,
+        action=AuditLog.Action.ROUTED,
+        description=description,
+        metadata={
+            "remarks": remarks,
+            "from_status": previous_status,
+            "to_status": application.status,
+            "from_role": previous_role,
+            "to_role": target_role,
+            "from_stage": previous_stage,
+            "to_stage": case.current_stage,
+            "from_case_status": previous_case_status,
+            "to_case_status": case.case_status,
+            "case_locked": case.is_stage_locked,
+        },
+    )
+    record_routing_history_event(
+        application=application,
+        actor=actor,
+        route_type=(
+            RoutingHistory.RouteType.OVERRIDE
+            if is_level2_secretariat_handoff
+            else RoutingHistory.RouteType.FORWARD
+        ),
+        description=description,
+        recruitment_case=case,
+        from_handler_role=previous_role,
+        to_handler_role=target_role,
+        from_status=previous_status,
+        to_status=application.status,
+        from_stage=previous_stage,
+        to_stage=case.current_stage,
+        notes=remarks,
+        is_override=is_level2_secretariat_handoff,
+    )
+    return application
+
+
 def generate_submission_hash(application):
     payload = "|".join(
         [
@@ -3213,8 +3395,13 @@ def get_available_actions(application, user):
         return []
 
     if effective_role == RecruitmentUser.Role.SECRETARIAT and current_stage == RecruitmentCase.Stage.SECRETARIAT_REVIEW:
+        endorse_label = (
+            "Endorse to HRMPSB"
+            if application.branch == PositionPosting.Branch.PLANTILLA
+            else "Endorse to HRM Chief"
+        )
         return [
-            ("endorse", "Endorse to HRM Chief"),
+            ("endorse", endorse_label),
             ("return_to_applicant", "Return to Applicant"),
             ("reject", "Reject Application"),
         ]
@@ -3246,15 +3433,30 @@ def get_available_actions(application, user):
 
 
 def _transition_target(application, effective_role, action):
+    current_stage = get_current_review_stage(application)
     if effective_role == RecruitmentUser.Role.SECRETARIAT:
         if action == "endorse":
-            return RecruitmentUser.Role.HRM_CHIEF, RecruitmentApplication.Status.HRM_CHIEF_REVIEW, "Endorsed by Secretariat."
+            if current_stage != RecruitmentCase.Stage.SECRETARIAT_REVIEW:
+                raise ValueError("Unsupported workflow action for the current stage.")
+            if application.branch == PositionPosting.Branch.PLANTILLA:
+                return (
+                    RecruitmentUser.Role.HRMPSB_MEMBER,
+                    RecruitmentApplication.Status.HRMPSB_REVIEW,
+                    "Plantilla application endorsed to HRMPSB by Secretariat.",
+                )
+            return (
+                RecruitmentUser.Role.HRM_CHIEF,
+                RecruitmentApplication.Status.HRM_CHIEF_REVIEW,
+                "COS application endorsed to HRM Chief by Secretariat.",
+            )
         if action == "return_to_applicant":
             return RecruitmentUser.Role.APPLICANT, RecruitmentApplication.Status.RETURNED_TO_APPLICANT, "Returned by Secretariat."
         if action == "reject":
             return "", RecruitmentApplication.Status.REJECTED, "Rejected by Secretariat."
     if effective_role == RecruitmentUser.Role.HRM_CHIEF:
         if action == "endorse":
+            if current_stage != RecruitmentCase.Stage.HRM_CHIEF_REVIEW:
+                raise ValueError("Unsupported workflow action for the current stage.")
             if application.branch == PositionPosting.Branch.COS:
                 return (
                     RecruitmentUser.Role.APPOINTING_AUTHORITY,
@@ -3644,20 +3846,13 @@ def close_recruitment_case(application, actor, closure_notes):
 
 @transaction.atomic
 def grant_secretariat_override(application, actor, reason):
-    if actor.role != RecruitmentUser.Role.SYSTEM_ADMIN:
-        raise ValueError("Only the System Administrator can grant a Secretariat override.")
+    if actor.role != RecruitmentUser.Role.HRM_CHIEF:
+        raise ValueError("Only the HRM Chief can hand off a Level 2 case to Secretariat.")
     if application.level != PositionPosting.Level.LEVEL_2:
-        raise ValueError("Overrides are only available for Level 2 applications.")
+        raise ValueError("HRM Chief handoff is only required for Level 2 applications.")
     if not hasattr(application, "case"):
-        raise ValueError("A recruitment case must exist before an override can be granted.")
-    if application.status in {
-        RecruitmentApplication.Status.APPROVED,
-        RecruitmentApplication.Status.REJECTED,
-    }:
-        raise ValueError("Closed applications cannot be overridden.")
+        raise ValueError("A recruitment case must exist before a Level 2 handoff can be granted.")
     case = application.case
-    if case.is_stage_locked:
-        raise ValueError("Stage-locked recruitment cases cannot be rerouted by override.")
     if (
         application.status != RecruitmentApplication.Status.HRM_CHIEF_REVIEW
         or application.current_handler_role != RecruitmentUser.Role.HRM_CHIEF
@@ -3665,80 +3860,16 @@ def grant_secretariat_override(application, actor, reason):
         or case.current_handler_role != RecruitmentUser.Role.HRM_CHIEF
     ):
         raise ValueError(
-            "Secretariat overrides are only available while a Level 2 application is actively assigned to the HRM Chief review stage."
+            "Level 2 Secretariat handoff is only available while the case remains in HRM Chief review."
         )
-    previous_role = application.current_handler_role
-    previous_status = application.status
-    application.overrides.filter(is_active=True).update(
-        is_active=False,
-        revoked_at=timezone.now(),
-    )
-    override = WorkflowOverride.objects.create(
+    route_case_between_secretariat_and_hrm_chief(
         application=application,
-        granted_by=actor,
+        actor=actor,
         target_role=RecruitmentUser.Role.SECRETARIAT,
-        reason=reason,
+        remarks=reason,
     )
-    previous_stage = case.current_stage
-    case.current_stage = RecruitmentCase.Stage.SECRETARIAT_REVIEW
-    case.current_handler_role = RecruitmentUser.Role.SECRETARIAT
-    case.case_status = RecruitmentCase.CaseStatus.ACTIVE
-    case.is_stage_locked = False
-    case.locked_stage = ""
-    case.closed_at = None
-    case.save(
-        update_fields=[
-            "branch",
-            "current_stage",
-            "current_handler_role",
-            "case_status",
-            "is_stage_locked",
-            "locked_stage",
-            "closed_at",
-            "updated_at",
-        ]
-    )
-    application.current_handler_role = RecruitmentUser.Role.SECRETARIAT
-    application.status = RecruitmentApplication.Status.SECRETARIAT_REVIEW
-    application.save(update_fields=["current_handler_role", "status", "updated_at"])
-    record_audit_event(
-        application=application,
-        actor=actor,
-        action=AuditLog.Action.OVERRIDE_GRANTED,
-        description="Secretariat override granted for a Level 2 application.",
-        metadata={
-            "override_id": override.id,
-            "reason": reason,
-            **(_case_timeline_metadata(case) if case else {}),
-        },
-    )
-    record_audit_event(
-        application=application,
-        actor=actor,
-        action=AuditLog.Action.ROUTED,
-        description="Application rerouted to Secretariat under controlled override.",
-        metadata={
-            "status": application.status,
-            "current_handler_role": application.current_handler_role,
-            **(_case_timeline_metadata(case) if case else {}),
-        },
-    )
-    record_routing_history_event(
-        application=application,
-        actor=actor,
-        route_type=RoutingHistory.RouteType.OVERRIDE,
-        description="Application rerouted to Secretariat under controlled override.",
-        recruitment_case=case,
-        from_handler_role=previous_role,
-        to_handler_role=application.current_handler_role,
-        from_status=previous_status,
-        to_status=application.status,
-        from_stage=previous_stage,
-        to_stage=case.current_stage if case else _review_stage_from_application_status(application.status),
-        notes=reason,
-        is_override=True,
-    )
-    return override
+    application.refresh_from_db()
+    return application.active_secretariat_override
 
 
 @transaction.atomic

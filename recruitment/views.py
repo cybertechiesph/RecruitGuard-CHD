@@ -10,6 +10,7 @@ from django.views.generic import DetailView, ListView, TemplateView
 
 from .forms import (
     AuditLogSearchForm,
+    CaseHandoffForm,
     CaseClosureForm,
     ComparativeAssessmentReportForm,
     CompletionRequirementFormSet,
@@ -78,6 +79,7 @@ from .services import (
     get_latest_final_decision,
     get_latest_finalized_comparative_assessment_report,
     get_available_actions,
+    get_case_handoff_options,
     get_case_timeline,
     get_screening_record,
     get_screening_records,
@@ -91,6 +93,7 @@ from .services import (
     record_evidence_vault_access,
     record_protected_record_access,
     reopen_recruitment_case,
+    route_case_between_secretariat_and_hrm_chief,
     save_completion_tracking,
     save_deliberation_record,
     save_exam_record,
@@ -118,6 +121,62 @@ from .services import (
     user_can_upload_evidence,
     user_can_view_application,
 )
+
+
+EXAM_FIELD_LABELS = {
+    "exam_type": "Exam Type",
+    "exam_status": "Exam Status",
+    "exam_score": "Overall / Single Exam Score",
+    "technical_score": "Technical Score",
+    "practical_score": "Practical Score",
+    "exam_date": "Exam Date",
+    "administered_by": "Administered By",
+    "valid_from": "Validity Start",
+    "valid_until": "Validity End",
+    "exam_notes": "Exam Notes / Remarks",
+}
+
+
+def _join_labels(labels):
+    labels = [label for label in labels if label]
+    if len(labels) <= 1:
+        return labels[0] if labels else "Field"
+    if len(labels) == 2:
+        return f"{labels[0]} and {labels[1]}"
+    return f"{', '.join(labels[:-1])}, and {labels[-1]}"
+
+
+def _format_grouped_validation_messages(error_map, field_labels=None):
+    grouped = {}
+    field_labels = field_labels or {}
+    for field_name, errors in error_map.items():
+        label = field_labels.get(field_name, field_name.replace("_", " ").title())
+        for error in errors:
+            error_messages = getattr(error, "messages", None) or [str(error)]
+            for message in error_messages:
+                grouped.setdefault(message, []).append(label)
+    return "; ".join(
+        f"{_join_labels(labels)}: {message}"
+        for message, labels in grouped.items()
+    )
+
+
+def _format_form_errors(form, fallback):
+    message = _format_grouped_validation_messages(
+        form.errors.as_data(),
+        {field_name: field.label for field_name, field in form.fields.items()},
+    )
+    return message or fallback
+
+
+def _format_validation_error(exc, fallback, field_labels=None):
+    message_dict = getattr(exc, "message_dict", None)
+    if message_dict:
+        return _format_grouped_validation_messages(message_dict, field_labels) or fallback
+    error_messages = getattr(exc, "messages", None)
+    if error_messages:
+        return " ".join(str(message) for message in error_messages)
+    return str(exc) or fallback
 
 
 def _safe_next_url(request, fallback_url):
@@ -352,11 +411,8 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
             available_actions = get_available_actions(application, user)
             if available_actions:
                 context["action_form"] = WorkflowActionForm(application=application, user=user)
-        if (
-            user.role == RecruitmentUser.Role.SYSTEM_ADMIN
-            and application.level == PositionPosting.Level.LEVEL_2
-        ):
-            context["override_form"] = WorkflowOverrideForm()
+        if get_case_handoff_options(application, user):
+            context["case_handoff_form"] = CaseHandoffForm(application=application, user=user)
         if context["recruitment_case"] and user_can_reopen_case(user, context["recruitment_case"]):
             context["reopen_form"] = WorkflowReopenForm()
         if user_can_send_requirement_checklist_notification(user, application):
@@ -659,6 +715,34 @@ class WorkflowActionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, Vie
         return redirect("workflow-queue")
 
 
+class CaseHandoffView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
+    def post(self, request, pk):
+        application = get_object_or_404(RecruitmentApplication, pk=pk)
+        if not user_can_view_application(request.user, application):
+            raise PermissionDenied
+
+        form = CaseHandoffForm(request.POST, application=application, user=request.user)
+        if form.is_valid():
+            try:
+                route_case_between_secretariat_and_hrm_chief(
+                    application=application,
+                    actor=request.user,
+                    target_role=form.cleaned_data["target_role"],
+                    remarks=form.cleaned_data["remarks"],
+                )
+            except ValueError as exc:
+                messages.error(request, str(exc))
+            else:
+                messages.success(request, "Case handoff recorded and audit-logged.")
+        else:
+            messages.error(request, "Select a valid handoff target and add remarks.")
+
+        application.refresh_from_db()
+        if user_can_view_application(request.user, application):
+            return redirect("application-detail", pk=pk)
+        return redirect("workflow-queue")
+
+
 class ScreeningReviewView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
     def post(self, request, pk):
         application = get_object_or_404(RecruitmentApplication, pk=pk)
@@ -716,14 +800,27 @@ class ExaminationRecordView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, 
                     evidence_file=form.cleaned_data.get("evidence_file"),
                 )
             except (ValueError, ValidationError) as exc:
-                messages.error(request, str(exc))
+                messages.error(
+                    request,
+                    _format_validation_error(
+                        exc,
+                        "Review the examination fields before saving or finalizing.",
+                        EXAM_FIELD_LABELS,
+                    ),
+                )
             else:
                 if exam_record.is_finalized:
                     messages.success(request, "Examination output finalized and locked.")
                 else:
                     messages.success(request, "Examination record saved.")
         else:
-            messages.error(request, "Complete the required examination fields before saving.")
+            messages.error(
+                request,
+                _format_form_errors(
+                    form,
+                    "Review the examination fields before saving or finalizing.",
+                ),
+            )
         return redirect("application-detail", pk=pk)
 
 
@@ -960,7 +1057,7 @@ class CaseClosureView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
         return redirect("application-detail", pk=pk)
 
 
-class WorkflowOverrideView(LoginRequiredMixin, SystemAdministratorRequiredMixin, View):
+class WorkflowOverrideView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
     def post(self, request, pk):
         application = get_object_or_404(RecruitmentApplication, pk=pk)
         form = WorkflowOverrideForm(request.POST)
@@ -974,12 +1071,12 @@ class WorkflowOverrideView(LoginRequiredMixin, SystemAdministratorRequiredMixin,
             except ValueError as exc:
                 messages.error(request, str(exc))
             else:
-                messages.success(request, "Secretariat override granted and audit-logged.")
+                messages.success(request, "Level 2 handoff recorded and audit-logged.")
         else:
             messages.error(request, "Override reason is required.")
         if user_can_view_application(request.user, application):
             return redirect("application-detail", pk=pk)
-        return redirect("dashboard")
+        return redirect("workflow-queue")
 
 
 class RequirementChecklistNotificationView(LoginRequiredMixin, InternalUserRequiredMixin, View):

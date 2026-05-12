@@ -23,6 +23,7 @@ from .views import (
     AuditLogListView,
     ApplicationDetailView,
     ApplicationAuditLogView,
+    CaseHandoffView,
     ApplicationListView,
     CaseClosureView,
     ComparativeAssessmentReportView,
@@ -141,6 +142,7 @@ urlpatterns = [
     path("audit/", AuditLogListView.as_view(), name="audit-log-list"),
     path("workflow/queue/", WorkflowQueueView.as_view(), name="workflow-queue"),
     path("workflow/<int:pk>/action/", WorkflowActionView.as_view(), name="workflow-action"),
+    path("workflow/<int:pk>/handoff/", CaseHandoffView.as_view(), name="case-handoff"),
     path("workflow/<int:pk>/override/", WorkflowOverrideView.as_view(), name="workflow-override"),
     path("workflow/<int:pk>/reopen/", WorkflowReopenView.as_view(), name="workflow-reopen"),
 ]
