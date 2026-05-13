@@ -567,6 +567,153 @@ def route_case_between_secretariat_and_hrm_chief(application, actor, target_role
     return application
 
 
+def _consume_active_secretariat_handoff(application, actor, description):
+    if application.level != PositionPosting.Level.LEVEL_2:
+        return
+    override = application.active_secretariat_override
+    if not override:
+        return
+    override.mark_used()
+    record_audit_event(
+        application=application,
+        actor=actor,
+        action=AuditLog.Action.OVERRIDE_USED,
+        description=description,
+        metadata={"override_id": override.id},
+    )
+
+
+def _auto_route_application(application, actor, *, next_role, next_status, description, remarks):
+    if not hasattr(application, "case"):
+        return False
+    if (
+        application.current_handler_role == next_role
+        and application.status == next_status
+        and application.case.current_handler_role == next_role
+    ):
+        return False
+
+    previous_role = application.current_handler_role
+    previous_status = application.status
+    case_transition = _sync_case_after_workflow_action(
+        application=application,
+        actor=actor,
+        next_role=next_role,
+        next_status=next_status,
+        remarks=remarks,
+    )
+    application.current_handler_role = next_role
+    application.status = next_status
+    application.closed_at = None
+    application.save(update_fields=["current_handler_role", "status", "closed_at", "updated_at"])
+
+    record_audit_event(
+        application=application,
+        actor=actor,
+        action=AuditLog.Action.ROUTED,
+        description=description,
+        metadata={
+            "auto_routed": True,
+            "remarks": remarks,
+            "from_status": previous_status,
+            "to_status": next_status,
+            "from_role": previous_role,
+            "to_role": next_role,
+            "from_stage": case_transition["previous_stage"],
+            "to_stage": application.case.current_stage,
+            "from_case_status": case_transition["previous_case_status"],
+            "to_case_status": application.case.case_status,
+            "case_locked": application.case.is_stage_locked,
+        },
+    )
+    record_routing_history_event(
+        application=application,
+        actor=actor,
+        route_type=RoutingHistory.RouteType.FORWARD,
+        description=description,
+        recruitment_case=application.case,
+        from_handler_role=previous_role,
+        to_handler_role=next_role,
+        from_status=previous_status,
+        to_status=next_status,
+        from_stage=case_transition["previous_stage"],
+        to_stage=application.case.current_stage,
+        notes=remarks,
+    )
+    if previous_role == RecruitmentUser.Role.SECRETARIAT:
+        _consume_active_secretariat_handoff(
+            application,
+            actor,
+            "Level 2 Secretariat handoff consumed by automatic workflow advancement.",
+        )
+    return True
+
+
+def _auto_advance_after_exam_finalized(application, actor, review_stage):
+    if application.branch == PositionPosting.Branch.PLANTILLA and review_stage in SCREENING_STAGES:
+        return _auto_route_application(
+            application,
+            actor,
+            next_role=RecruitmentUser.Role.HRMPSB_MEMBER,
+            next_status=RecruitmentApplication.Status.HRMPSB_REVIEW,
+            description="Automatically routed to HRMPSB after examination finalization.",
+            remarks="Examination finalized; next designated handler is HRMPSB.",
+        )
+    if application.branch == PositionPosting.Branch.COS:
+        if review_stage == RecruitmentCase.Stage.SECRETARIAT_REVIEW:
+            return _auto_route_application(
+                application,
+                actor,
+                next_role=RecruitmentUser.Role.HRM_CHIEF,
+                next_status=RecruitmentApplication.Status.HRM_CHIEF_REVIEW,
+                description="Automatically routed to HRM Chief after COS examination finalization.",
+                remarks="COS examination finalized; next designated handler is HRM Chief.",
+            )
+        if (
+            review_stage == RecruitmentCase.Stage.HRM_CHIEF_REVIEW
+            and application.current_handler_role == RecruitmentUser.Role.SECRETARIAT
+        ):
+            return _auto_route_application(
+                application,
+                actor,
+                next_role=RecruitmentUser.Role.HRM_CHIEF,
+                next_status=RecruitmentApplication.Status.HRM_CHIEF_REVIEW,
+                description="Automatically returned to HRM Chief after COS examination handoff completion.",
+                remarks="COS examination finalized by Secretariat handoff; next designated handler is HRM Chief.",
+            )
+    return False
+
+
+def _auto_advance_after_car_finalized(report, actor):
+    if not report.is_finalized:
+        return []
+    routed_applications = []
+    report_items = report.items.select_related(
+        "recruitment_case",
+        "recruitment_case__application",
+    )
+    for item in report_items:
+        application = item.recruitment_case.application
+        if (
+            application.branch != PositionPosting.Branch.PLANTILLA
+            or application.status != RecruitmentApplication.Status.HRMPSB_REVIEW
+            or application.case.current_stage != RecruitmentCase.Stage.HRMPSB_REVIEW
+            or application.current_handler_role != RecruitmentUser.Role.HRMPSB_MEMBER
+        ):
+            continue
+        routed = _auto_route_application(
+            application,
+            actor,
+            next_role=RecruitmentUser.Role.APPOINTING_AUTHORITY,
+            next_status=RecruitmentApplication.Status.APPOINTING_AUTHORITY_REVIEW,
+            description="Automatically routed to Appointing Authority after CAR finalization.",
+            remarks=f"{CAR_LABEL} finalized; next designated handler is Appointing Authority.",
+        )
+        if routed:
+            routed_applications.append(application)
+    return routed_applications
+
+
 def generate_submission_hash(application):
     payload = "|".join(
         [
@@ -1936,6 +2083,8 @@ def save_exam_record(application, actor, cleaned_data, finalize=False, evidence_
             "is_finalized": exam_record.is_finalized,
         },
     )
+    if finalize:
+        _auto_advance_after_exam_finalized(application, actor, review_stage)
     return exam_record
 
 
@@ -2389,6 +2538,8 @@ def generate_comparative_assessment_report(application, actor, cleaned_data, fin
             "is_finalized": report.is_finalized,
         },
     )
+    if finalize:
+        _auto_advance_after_car_finalized(report, actor)
     return report
 
 
@@ -3617,16 +3768,11 @@ def process_workflow_action(application, actor, action, remarks):
         effective_role == RecruitmentUser.Role.SECRETARIAT
         and application.level == PositionPosting.Level.LEVEL_2
     ):
-        override = application.active_secretariat_override
-        if override:
-            override.mark_used()
-            record_audit_event(
-                application=application,
-                actor=actor,
-                action=AuditLog.Action.OVERRIDE_USED,
-                description="Secretariat override consumed during Level 2 processing.",
-                metadata={"override_id": override.id},
-            )
+        _consume_active_secretariat_handoff(
+            application,
+            actor,
+            "Secretariat override consumed during Level 2 processing.",
+        )
     if next_status == RecruitmentApplication.Status.APPROVED:
         queue_selected_applicant_notification(application, actor=actor)
     elif next_status == RecruitmentApplication.Status.REJECTED:

@@ -30,6 +30,7 @@
 - Secretariat may process Level 2 cases only through a specific HRM Chief handoff
 - Controlled handoff/override must be explicitly implemented and audit-logged
 - Handoff between Secretariat and HRM Chief is handler reassignment; the case's official workflow stage remains universal
+- When a finalized output completes a handler-changing boundary, the workflow engine shall automatically route the case to the next designated handler
 
 ## Scope Boundaries
 - Recruitment only

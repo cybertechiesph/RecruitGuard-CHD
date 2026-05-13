@@ -821,6 +821,9 @@ class ExaminationRecordView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, 
                     "Review the examination fields before saving or finalizing.",
                 ),
             )
+        application.refresh_from_db()
+        if not user_can_view_application(request.user, application):
+            return redirect("workflow-queue")
         return redirect("application-detail", pk=pk)
 
 
@@ -952,6 +955,9 @@ class ComparativeAssessmentReportView(LoginRequiredMixin, WorkflowProcessorRequi
                     messages.success(request, "Comparative Assessment Report generated.")
         else:
             messages.error(request, "Provide the CAR notes before generating the report.")
+        application.refresh_from_db()
+        if not user_can_view_application(request.user, application):
+            return redirect("workflow-queue")
         return redirect("application-detail", pk=pk)
 
 
