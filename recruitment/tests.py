@@ -44,11 +44,13 @@ from .services import (
     build_export_bundle,
     build_submission_packet,
     generate_comparative_assessment_report,
+    get_available_actions,
     get_queue_for_user,
     grant_secretariat_override,
     issue_application_otp,
     persist_position,
     process_workflow_action,
+    repair_auto_advance_workflow_boundaries,
     record_final_decision,
     record_system_audit_event,
     save_deliberation_record,
@@ -2179,6 +2181,77 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.HRM_CHIEF_REVIEW)
         self.assertEqual(application.case.current_handler_role, RecruitmentUser.Role.HRM_CHIEF)
         self.assertFalse(WorkflowOverride.objects.filter(application=application, is_active=True).exists())
+
+    def test_repair_auto_advance_moves_stale_exam_boundary_case(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        self.finalize_screening_for_current_stage(application, self.secretariat)
+        self.finalize_exam_for_current_stage(application, self.secretariat)
+
+        application.refresh_from_db()
+        case = application.case
+        application.current_handler_role = RecruitmentUser.Role.SECRETARIAT
+        application.status = RecruitmentApplication.Status.SECRETARIAT_REVIEW
+        application.save(update_fields=["current_handler_role", "status", "updated_at"])
+        case.current_stage = RecruitmentCase.Stage.SECRETARIAT_REVIEW
+        case.current_handler_role = RecruitmentUser.Role.SECRETARIAT
+        case.case_status = RecruitmentCase.CaseStatus.ACTIVE
+        case.is_stage_locked = False
+        case.locked_stage = ""
+        case.save(
+            update_fields=[
+                "current_stage",
+                "current_handler_role",
+                "case_status",
+                "is_stage_locked",
+                "locked_stage",
+                "updated_at",
+            ]
+        )
+
+        self.assertEqual(get_available_actions(application, self.secretariat), [])
+        repaired = repair_auto_advance_workflow_boundaries(actor=None)
+
+        application.refresh_from_db()
+        self.assertEqual(len(repaired), 1)
+        self.assertEqual(application.current_handler_role, RecruitmentUser.Role.HRMPSB_MEMBER)
+        self.assertEqual(application.status, RecruitmentApplication.Status.HRMPSB_REVIEW)
+        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.HRMPSB_REVIEW)
+
+    def test_repair_auto_advance_moves_stale_car_boundary_case(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_appointing_review(application)
+
+        application.refresh_from_db()
+        case = application.case
+        application.current_handler_role = RecruitmentUser.Role.HRMPSB_MEMBER
+        application.status = RecruitmentApplication.Status.HRMPSB_REVIEW
+        application.save(update_fields=["current_handler_role", "status", "updated_at"])
+        case.current_stage = RecruitmentCase.Stage.HRMPSB_REVIEW
+        case.current_handler_role = RecruitmentUser.Role.HRMPSB_MEMBER
+        case.case_status = RecruitmentCase.CaseStatus.ACTIVE
+        case.is_stage_locked = False
+        case.locked_stage = ""
+        case.save(
+            update_fields=[
+                "current_stage",
+                "current_handler_role",
+                "case_status",
+                "is_stage_locked",
+                "locked_stage",
+                "updated_at",
+            ]
+        )
+
+        self.assertEqual(get_available_actions(application, self.hrmpsb), [])
+        repaired = repair_auto_advance_workflow_boundaries(actor=None)
+
+        application.refresh_from_db()
+        self.assertEqual(len(repaired), 1)
+        self.assertEqual(application.current_handler_role, RecruitmentUser.Role.APPOINTING_AUTHORITY)
+        self.assertEqual(application.status, RecruitmentApplication.Status.APPOINTING_AUTHORITY_REVIEW)
+        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW)
 
     def test_secretariat_cannot_view_finalized_level2_case_without_authorized_basis(self):
         application = self.make_application(self.level2_position)

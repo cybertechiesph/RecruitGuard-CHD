@@ -714,6 +714,91 @@ def _auto_advance_after_car_finalized(report, actor):
     return routed_applications
 
 
+def _auto_advance_boundary_is_ready(application, current_stage=None, current_section=None):
+    current_stage = current_stage or get_current_review_stage(application)
+    current_section = current_section or get_current_workflow_section(application)
+    if current_section != "actions":
+        return False
+    if current_stage in SCREENING_STAGES:
+        if not exam_is_finalized_for_current_stage(application):
+            return False
+        if application.branch == PositionPosting.Branch.PLANTILLA:
+            return True
+        if application.branch == PositionPosting.Branch.COS:
+            return current_stage == RecruitmentCase.Stage.SECRETARIAT_REVIEW
+    if (
+        application.branch == PositionPosting.Branch.PLANTILLA
+        and current_stage == RecruitmentCase.Stage.HRMPSB_REVIEW
+    ):
+        report = get_comparative_assessment_report(application, stage=current_stage)
+        return bool(report and report.is_finalized)
+    return False
+
+
+@transaction.atomic
+def repair_auto_advance_workflow_boundaries(actor=None):
+    repaired = []
+    applications = RecruitmentApplication.objects.select_related(
+        "applicant",
+        "position",
+        "case",
+    ).filter(
+        case__case_status=RecruitmentCase.CaseStatus.ACTIVE,
+        case__is_stage_locked=False,
+    ).order_by("id")
+
+    processed_reports = set()
+    for application in applications:
+        if not hasattr(application, "case"):
+            continue
+        current_stage = application.case.current_stage
+        current_section = get_current_workflow_section(application)
+        if not _auto_advance_boundary_is_ready(application, current_stage, current_section):
+            continue
+
+        before_role = application.current_handler_role
+        before_status = application.status
+        before_stage = application.case.current_stage
+        if current_stage in SCREENING_STAGES:
+            routed = _auto_advance_after_exam_finalized(application, actor, current_stage)
+            if routed:
+                repaired.append(
+                    {
+                        "application_id": application.id,
+                        "reference": application.reference_label,
+                        "from_role": before_role,
+                        "to_role": application.current_handler_role,
+                        "from_status": before_status,
+                        "to_status": application.status,
+                        "from_stage": before_stage,
+                        "to_stage": application.case.current_stage,
+                        "reason": "exam_finalized_boundary",
+                    }
+                )
+            continue
+
+        report = get_comparative_assessment_report(application, stage=current_stage)
+        if not report or not report.is_finalized or report.id in processed_reports:
+            continue
+        processed_reports.add(report.id)
+        routed_applications = _auto_advance_after_car_finalized(report, actor)
+        for routed_application in routed_applications:
+            repaired.append(
+                {
+                    "application_id": routed_application.id,
+                    "reference": routed_application.reference_label,
+                    "from_role": RecruitmentUser.Role.HRMPSB_MEMBER,
+                    "to_role": routed_application.current_handler_role,
+                    "from_status": RecruitmentApplication.Status.HRMPSB_REVIEW,
+                    "to_status": routed_application.status,
+                    "from_stage": RecruitmentCase.Stage.HRMPSB_REVIEW,
+                    "to_stage": routed_application.case.current_stage,
+                    "reason": "car_finalized_boundary",
+                }
+            )
+    return repaired
+
+
 def generate_submission_hash(application):
     payload = "|".join(
         [
@@ -3543,6 +3628,9 @@ def get_available_actions(application, user):
         ]
 
     if current_section != "actions":
+        return []
+
+    if _auto_advance_boundary_is_ready(application, current_stage, current_section):
         return []
 
     if effective_role == RecruitmentUser.Role.SECRETARIAT and current_stage == RecruitmentCase.Stage.SECRETARIAT_REVIEW:
