@@ -1,6 +1,6 @@
 {# Parameters: stage_title, locked_message (optional) #}
 <div class="rg-cws-locked-frame">
-    <div class="rg-cws-lock-ribbon" aria-hidden="true">Locked</div>
+    <div class="rg-cws-lock-ribbon" aria-hidden="true">Final</div>
     <div class="rg-cws-locked-frame__content">
         <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -10,7 +10,7 @@
             <span style="font-size:0.875rem;font-weight:600;color:#111827;">{{ stage_title }}</span>
         </div>
         <p style="font-size:0.8125rem;color:#5f6c78;margin:0;">
-            {{ locked_message|default:"This stage output is finalized and locked. No further edits are permitted." }}
+            {{ locked_message|default:"This record is final and cannot be edited." }}
         </p>
     </div>
 </div>

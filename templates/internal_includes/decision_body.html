@@ -9,7 +9,7 @@
         <div>
             <h3 class="rg-icard__title">Submission Packet</h3>
             <p class="rg-icard__subtitle">
-                Complete record of all evaluation stages for this application.
+                Complete record of all evaluation steps for this application.
             </p>
         </div>
         {% if submission_packet.summary.ready_for_final_decision %}
@@ -240,7 +240,7 @@
             {% if del and del.deliberated_at %}
                 <div class="rg-pkt-rows">
                     <div class="rg-pkt-row">
-                        <span class="rg-pkt-row__label">Stage</span>
+                        <span class="rg-pkt-row__label">Step</span>
                         <span class="rg-pkt-row__value">{{ del.review_stage_label }}</span>
                     </div>
                     <div class="rg-pkt-row">
@@ -296,7 +296,7 @@
             {% if car and car.finalized_at %}
                 <div class="rg-pkt-rows mb-3">
                     <div class="rg-pkt-row">
-                        <span class="rg-pkt-row__label">Stage</span>
+                        <span class="rg-pkt-row__label">Step</span>
                         <span class="rg-pkt-row__value">{{ car.review_stage_label }}</span>
                     </div>
                     <div class="rg-pkt-row">
@@ -380,7 +380,7 @@
                         <span>
                             <strong>{{ ref.label }}</strong>
                             {% if ref.stage_label %}
-                                <span class="text-muted"> — {{ ref.stage_label }}</span>
+                                <span class="text-muted"> &mdash; {{ ref.stage_label }}</span>
                             {% endif %}
                             {% if ref.artifact_scope_label %}
                                 <span class="text-muted"> ({{ ref.artifact_scope_label }})</span>
@@ -541,7 +541,7 @@
             <h3 class="rg-icard__title">Submission Packet Unavailable</h3>
             <p class="rg-icard__subtitle">
                 The submission packet could not be built for this application at this time.
-                Ensure all prior stages have been finalized before proceeding.
+                Ensure all prior steps have been finalized before proceeding.
             </p>
         </div>
     </div>
@@ -566,18 +566,18 @@
                  style="padding:1.25rem;font-size:0.8125rem;color:#374151;line-height:1.65;">
                 <p class="mb-2">You are about to record a permanent {{ decision_record_label|default:"final decision"|lower }} for:</p>
                 <ul class="mb-3" style="padding-left:1.2rem;">
-                    <li><strong>Applicant:</strong> <span id="dec-modal-name">—</span></li>
-                    <li><strong>Position:</strong> <span id="dec-modal-position">—</span></li>
+                    <li><strong>Applicant:</strong> <span id="dec-modal-name">&mdash;</span></li>
+                    <li><strong>Position:</strong> <span id="dec-modal-position">&mdash;</span></li>
                     <li>
                         <strong>Outcome:</strong>
-                        <span id="dec-modal-outcome" class="fw-bold">—</span>
+                        <span id="dec-modal-outcome" class="fw-bold">&mdash;</span>
                     </li>
                 </ul>
                 <div style="background:#fef9c3;border:1px solid #fde047;border-radius:0.35rem;
                             padding:0.6rem 0.75rem;font-size:0.79rem;color:#854d0e;">
                     <i class="bi bi-exclamation-triangle-fill me-1"></i>
                     This action is <strong>permanent and cannot be undone.</strong>
-                    Once recorded, the decision is locked and preserved as part of the
+                    Once recorded, the decision is final and preserved as part of the
                     official recruitment record. No further editing will be possible.
                 </div>
             </div>
@@ -589,7 +589,7 @@
                     Cancel &mdash; Keep Reviewing
                 </button>
                 <button type="button" class="btn-rg-finalize" id="dec-confirm-btn">
-                    <i class="bi bi-lock-fill me-1"></i>Yes, Record Decision
+                    <i class="bi bi-lock-fill me-1"></i>Yes, Save Decision
                 </button>
             </div>
         </div>

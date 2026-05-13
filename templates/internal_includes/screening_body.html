@@ -298,13 +298,13 @@
 
             <div class="modal-body" style="padding:1.25rem;font-size:0.8125rem;color:#374151;line-height:1.65;">
                 <p class="mb-2">
-                    You are about to finalize the screening output for
+                    You are about to finalize the screening record for
                     <strong>{{ application.reference_label }}</strong>
                     — <span class="text-muted">{{ application.applicant_display_name }}</span>.
                 </p>
                 <p class="mb-3">
                     This action will permanently lock the screening record and cannot be
-                    reversed without a controlled reopen procedure. The following will be
+                    changed without an authorized reopen. The following will be
                     recorded:
                 </p>
                 <ul class="mb-3" style="font-size:0.875rem;padding-left:1.25rem;">
@@ -325,7 +325,7 @@
                         <span class="rg-scr-modal-summary__value" id="modal-scr-outcome">—</span>
                     </div>
                     <div class="rg-scr-modal-summary__row">
-                        <span class="rg-scr-modal-summary__label">Review Stage</span>
+                        <span class="rg-scr-modal-summary__label">Review Step</span>
                         <span class="rg-scr-modal-summary__value">
                             {% if recruitment_case %}
                                 {{ recruitment_case.get_current_stage_display }}
@@ -338,7 +338,7 @@
 
                 <p class="rg-note mt-3 mb-0">
                     Proceed only if you are satisfied that the information above is accurate
-                    and complete. Once locked, this record is part of the permanent case file.
+                    and complete. Once finalized, this record is part of the permanent case file.
                 </p>
             </div>
 

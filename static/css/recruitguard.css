@@ -414,6 +414,16 @@ textarea.form-control {
     gap: 1rem;
 }
 
+.rg-fixed-value {
+    display: flex;
+    min-height: 3rem;
+    align-items: center;
+    background: #f8fafc;
+    color: var(--rg-text);
+    font-weight: 600;
+    white-space: normal;
+}
+
 .rg-form-section {
     padding: 1.25rem;
     border: 1px solid var(--rg-border);
@@ -5311,6 +5321,20 @@ textarea.form-control {
     flex-shrink: 0;
 }
 
+.rg-list-summary {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    margin: 0 0 0.85rem;
+    color: #5f6c78;
+    font-size: 0.875rem;
+}
+
+.rg-list-summary strong {
+    color: #111827;
+    font-size: 1rem;
+}
+
 /* ──────────────────────────────────────────────────────────────
    Page-level filter bar  (rg-ifilter-bar)
    Compact search/filter row above tables
@@ -5429,8 +5453,8 @@ textarea.form-control {
    Geometry tokens
    ────────────────────────────────────────────────────────────── */
 .rg-cws-page {
-    --rg-cws-header-h:   76px;
-    --rg-cws-pipe-h:     60px;
+    --rg-cws-header-h:   72px;
+    --rg-cws-pipe-h:     52px;
     --rg-cws-sticky-top: calc(var(--rg-cws-header-h) + var(--rg-cws-pipe-h));
 }
 
@@ -5496,6 +5520,34 @@ textarea.form-control {
     flex-shrink: 0;
 }
 
+.rg-cws-header__facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem 0.7rem;
+    align-items: center;
+    color: #5f6c78;
+    font-size: 0.78rem;
+    flex-shrink: 1;
+    min-width: 0;
+}
+
+.rg-cws-header__facts span {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    white-space: nowrap;
+}
+
+.rg-cws-header__facts span:not(:last-child)::after {
+    content: "";
+    display: inline-block;
+    width: 3px;
+    height: 3px;
+    margin-left: 0.7rem;
+    border-radius: 50%;
+    background: #c0c8d0;
+}
+
 .rg-cws-header__actions {
     display: flex;
     gap: 0.5rem;
@@ -5508,14 +5560,14 @@ textarea.form-control {
    ────────────────────────────────────────────────────────────── */
 .rg-cws-pipeline {
     position: sticky;
-    top: var(--rg-cws-header-h, 76px);
+    top: var(--rg-cws-header-h, 72px);
     z-index: 29;
-    background: #fafbfc;
-    border-bottom: 1px solid #d7dde3;
+    background: #fff;
+    border-bottom: 1px solid #edf0f3;
     padding: 0 1.5rem;
     overflow-x: auto;
     scrollbar-width: none;
-    min-height: var(--rg-cws-pipe-h, 60px);
+    min-height: var(--rg-cws-pipe-h, 52px);
     display: flex;
     align-items: center;
 }
@@ -5525,20 +5577,19 @@ textarea.form-control {
 .rg-cws-pipeline .rg-pipeline {
     gap: 0;
     justify-content: flex-start;
-    padding: 0.5rem 0;
+    padding: 0.35rem 0;
     flex-wrap: nowrap;
 }
 
-/* Pipeline stage colours: navy for complete, gold for current */
 .rg-cws-pipeline .rg-pipeline__stage.is-complete .rg-pipeline__circle {
-    background: var(--rg-primary);
-    border-color: var(--rg-primary);
-    color: #fff;
+    background: #eef7f1;
+    border-color: #b8d8c4;
+    color: var(--rg-primary);
 }
 
 .rg-cws-pipeline .rg-pipeline__stage.is-complete .rg-pipeline__label {
-    color: var(--rg-primary);
-    font-weight: 600;
+    color: #4f6c5b;
+    font-weight: 500;
 }
 
 .rg-cws-pipeline .rg-pipeline__stage.is-current .rg-pipeline__circle {
@@ -5553,7 +5604,19 @@ textarea.form-control {
     font-weight: 700;
 }
 
-.rg-cws-pipeline .rg-pipeline__connector.is-complete { background: var(--rg-primary); }
+.rg-cws-pipeline .rg-pipeline__stage.is-future {
+    opacity: 0.56;
+}
+
+.rg-cws-pipeline .rg-pipeline__label {
+    font-size: 0.66rem;
+}
+
+.rg-cws-pipeline .rg-pipeline__connector {
+    background: #e7ecef;
+}
+
+.rg-cws-pipeline .rg-pipeline__connector.is-complete { background: #bdd0c4; }
 
 /* ──────────────────────────────────────────────────────────────
    Observer-mode notice bar
@@ -5638,9 +5701,9 @@ textarea.form-control {
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
-    padding: 0.4rem 0 0.85rem;
+    padding: 0.1rem 0 0.75rem;
     margin-bottom: 0.875rem;
-    border-bottom: 2px solid #edf0f3;
+    border-bottom: 1px solid #edf0f3;
 }
 
 .rg-cws-stage-titlebar__left {

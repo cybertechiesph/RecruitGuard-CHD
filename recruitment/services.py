@@ -410,9 +410,9 @@ def get_case_handoff_options(application, user):
         return []
 
     if user.role == RecruitmentUser.Role.SECRETARIAT:
-        return [(RecruitmentUser.Role.HRM_CHIEF, "Hand off to HRM Chief")]
+        return [(RecruitmentUser.Role.HRM_CHIEF, "Send to HRM Chief")]
     if user.role == RecruitmentUser.Role.HRM_CHIEF:
-        return [(RecruitmentUser.Role.SECRETARIAT, "Hand off to Secretariat")]
+        return [(RecruitmentUser.Role.SECRETARIAT, "Send to Secretariat")]
     return []
 
 
@@ -422,10 +422,10 @@ def _case_handoff_description(actor_role, target_role, application):
         and target_role == RecruitmentUser.Role.SECRETARIAT
         and application.level == PositionPosting.Level.LEVEL_2
     ):
-        return "Level 2 case handed off to Secretariat by HRM Chief."
+        return "Level 2 case sent to Secretariat by HRM Chief."
     if target_role == RecruitmentUser.Role.SECRETARIAT:
-        return "Case handed off to Secretariat."
-    return "Case handed off to HRM Chief."
+        return "Case sent to Secretariat."
+    return "Case sent to HRM Chief."
 
 
 @transaction.atomic
@@ -434,27 +434,27 @@ def route_case_between_secretariat_and_hrm_chief(application, actor, target_role
         RecruitmentUser.Role.SECRETARIAT,
         RecruitmentUser.Role.HRM_CHIEF,
     }:
-        raise ValueError("Cases can only be handed off between Secretariat and HRM Chief.")
+        raise ValueError("Cases can only be sent between Secretariat and HRM Chief.")
     if actor.role == target_role:
-        raise ValueError("Select the other office as the handoff target.")
+        raise ValueError("Select the other office.")
     if not _is_secretariat_hrm_handoff_role(actor.role):
-        raise ValueError("Only Secretariat and HRM Chief can hand off cases to each other.")
+        raise ValueError("Only Secretariat and HRM Chief can send cases to each other.")
     if not hasattr(application, "case"):
-        raise ValueError("A recruitment case must exist before it can be handed off.")
+        raise ValueError("A case must exist before it can be sent.")
     case = application.case
     if case.is_stage_locked or case.current_stage == RecruitmentCase.Stage.CLOSED:
-        raise ValueError("Stage-locked or closed cases cannot be handed off.")
+        raise ValueError("Final or closed cases cannot be sent.")
     if application.current_handler_role != actor.role or case.current_handler_role != actor.role:
-        raise ValueError("Only the current handler can hand off this case.")
+        raise ValueError("Only the assigned office can send this case.")
     if not user_can_process_application(actor, application):
         if (
             actor.role == RecruitmentUser.Role.SECRETARIAT
             and application.level == PositionPosting.Level.LEVEL_2
         ):
             raise ValueError(
-                "Secretariat cannot process Level 2 applications without an active HRM Chief handoff."
+                "Secretariat can handle a Level 2 case only after HRM Chief sends it to Secretariat."
             )
-        raise ValueError("You cannot hand off this case at its current workflow stage.")
+        raise ValueError("This case cannot be sent at the current step.")
 
     active_override = application.active_secretariat_override
     override = None
@@ -471,10 +471,10 @@ def route_case_between_secretariat_and_hrm_chief(application, actor, target_role
 
     if application.level == PositionPosting.Level.LEVEL_2 and target_role == RecruitmentUser.Role.SECRETARIAT:
         if actor.role != RecruitmentUser.Role.HRM_CHIEF:
-            raise ValueError("Only the HRM Chief can hand off a Level 2 case to Secretariat.")
+            raise ValueError("Only HRM Chief can send a Level 2 case to Secretariat.")
         if case.current_stage != RecruitmentCase.Stage.HRM_CHIEF_REVIEW:
             raise ValueError(
-                "Level 2 Secretariat handoff is only available while the case remains in HRM Chief review."
+                "A Level 2 case can be sent to Secretariat only while it is assigned to HRM Chief review."
             )
         application.overrides.filter(is_active=True).update(
             is_active=False,
@@ -488,7 +488,7 @@ def route_case_between_secretariat_and_hrm_chief(application, actor, target_role
         )
     elif is_level2_return_to_hrm_chief:
         if not active_override:
-            raise ValueError("A Level 2 case can only return from Secretariat after an active HRM Chief handoff.")
+            raise ValueError("This Level 2 case can return to HRM Chief only after HRM Chief first sent it to Secretariat.")
 
     previous_role = application.current_handler_role
     previous_status = application.status
@@ -523,7 +523,7 @@ def route_case_between_secretariat_and_hrm_chief(application, actor, target_role
             application=application,
             actor=actor,
             action=AuditLog.Action.OVERRIDE_USED,
-            description="Level 2 Secretariat handoff returned to HRM Chief.",
+            description="Level 2 case returned from Secretariat to HRM Chief.",
             metadata={"override_id": active_override.id},
         )
 
@@ -644,7 +644,7 @@ def _auto_route_application(application, actor, *, next_role, next_status, descr
         _consume_active_secretariat_handoff(
             application,
             actor,
-            "Level 2 Secretariat handoff consumed by automatic workflow advancement.",
+            "Level 2 Secretariat authorization ended after automatic case advancement.",
         )
     return True
 
@@ -678,8 +678,8 @@ def _auto_advance_after_exam_finalized(application, actor, review_stage):
                 actor,
                 next_role=RecruitmentUser.Role.HRM_CHIEF,
                 next_status=RecruitmentApplication.Status.HRM_CHIEF_REVIEW,
-                description="Automatically returned to HRM Chief after COS examination handoff completion.",
-                remarks="COS examination finalized by Secretariat handoff; next designated handler is HRM Chief.",
+                description="Automatically returned to HRM Chief after COS examination was finalized by Secretariat.",
+                remarks="COS examination finalized by Secretariat; next assigned office is HRM Chief.",
             )
     return False
 
@@ -2005,15 +2005,15 @@ def build_submission_packet(application):
 
 def save_screening_review(application, actor, cleaned_data, finalize=False):
     if not hasattr(application, "case"):
-        raise ValueError("A recruitment case must exist before screening can be recorded.")
+        raise ValueError("A case must exist before screening can be recorded.")
     review_stage = application.case.current_stage
     screening_record = get_screening_record(application, stage=review_stage)
     if screening_record and screening_record.is_finalized:
-        raise ValueError("Finalized screening outputs are locked and cannot be modified.")
+        raise ValueError("Finalized screening records cannot be edited.")
     if not user_can_manage_screening(actor, application):
-        raise ValueError("You cannot record screening for this application at its current workflow stage.")
+        raise ValueError("This case is not currently assigned to you for screening.")
     if review_stage not in SCREENING_STAGES:
-        raise ValueError("Screening is only available during Secretariat or HRM Chief review stages.")
+        raise ValueError("Screening can only be edited while the case is assigned to Secretariat or HRM Chief review.")
 
     created = screening_record is None
     if screening_record is None:
@@ -2070,17 +2070,17 @@ def save_screening_review(application, actor, cleaned_data, finalize=False):
 @transaction.atomic
 def save_exam_record(application, actor, cleaned_data, finalize=False, evidence_file=None):
     if not hasattr(application, "case"):
-        raise ValueError("A recruitment case must exist before examination data can be recorded.")
+        raise ValueError("A case must exist before exam details can be recorded.")
     review_stage = application.case.current_stage
     exam_record = get_exam_record(application, stage=review_stage)
     if exam_record and exam_record.is_finalized:
-        raise ValueError("Finalized examination outputs are locked and cannot be modified.")
+        raise ValueError("Finalized exam records cannot be edited.")
     if not user_can_manage_exam(actor, application):
         raise ValueError(
-            "You cannot record examination data for this application at its current workflow stage."
+            "This case is not currently assigned to you for exam details."
         )
     if review_stage not in EXAM_STAGES:
-        raise ValueError("Examination records are only available during Secretariat or HRM Chief review stages.")
+        raise ValueError("Exam details can only be edited while the case is assigned to Secretariat or HRM Chief review.")
 
     created = exam_record is None
     if exam_record is None:
@@ -2176,18 +2176,18 @@ def save_exam_record(application, actor, cleaned_data, finalize=False, evidence_
 @transaction.atomic
 def save_interview_session(application, actor, cleaned_data, finalize=False):
     if not hasattr(application, "case"):
-        raise ValueError("A recruitment case must exist before interview scheduling can be recorded.")
+        raise ValueError("A case must exist before interview scheduling can be recorded.")
     review_stage = application.case.current_stage
     interview_session = get_interview_session(application, stage=review_stage)
     if interview_session and interview_session.is_finalized:
-        raise ValueError("Finalized interview sessions are locked and cannot be modified.")
+        raise ValueError("Finalized interview records cannot be edited.")
     if not user_can_manage_interview_session(actor, application):
         raise ValueError(
-            "You cannot manage interview scheduling for this application at its current workflow stage."
+            "This case is not currently assigned to you for interview scheduling."
         )
     if review_stage not in INTERVIEW_SESSION_STAGES:
         raise ValueError(
-            "Interview sessions are only available during Secretariat, HRM Chief, or HRMPSB review stages."
+            "Interview scheduling is available only while the case is assigned to Secretariat, HRM Chief, or HRMPSB review."
         )
 
     created = interview_session is None
@@ -2256,15 +2256,15 @@ def save_interview_session(application, actor, cleaned_data, finalize=False):
 @transaction.atomic
 def save_interview_rating(application, actor, cleaned_data):
     if not hasattr(application, "case"):
-        raise ValueError("A recruitment case must exist before interview ratings can be recorded.")
+        raise ValueError("A case must exist before interview ratings can be recorded.")
 
     review_stage = application.case.current_stage
     interview_session = get_interview_session(application, stage=review_stage)
     if interview_session and interview_session.is_finalized:
-        raise ValueError("Finalized interview sessions are locked and cannot accept rating changes.")
+        raise ValueError("Finalized interview records cannot accept rating changes.")
     if not user_can_manage_interview_rating(actor, application):
         raise ValueError(
-            "You cannot record interview ratings for this application at its current workflow stage."
+            "This case is not currently assigned to you for interview rating."
         )
     if not interview_session:
         raise ValueError("Schedule the interview session before recording interview ratings.")
@@ -2308,15 +2308,15 @@ def save_interview_rating(application, actor, cleaned_data):
 @transaction.atomic
 def upload_interview_fallback_rating(application, actor, uploaded_file, remarks):
     if not hasattr(application, "case"):
-        raise ValueError("A recruitment case must exist before fallback interview ratings can be uploaded.")
+        raise ValueError("A case must exist before fallback interview ratings can be uploaded.")
 
     review_stage = application.case.current_stage
     interview_session = get_interview_session(application, stage=review_stage)
     if interview_session and interview_session.is_finalized:
-        raise ValueError("Finalized interview sessions are locked and cannot accept fallback rating uploads.")
+        raise ValueError("Finalized interview records cannot accept fallback rating uploads.")
     if not user_can_upload_interview_fallback(actor, application):
         raise ValueError(
-            "You cannot upload a fallback interview rating sheet for this application at its current workflow stage."
+            "This case is not currently assigned to you for fallback rating upload."
         )
     if not interview_session:
         raise ValueError("Schedule the interview session before uploading a fallback rating sheet.")
@@ -2362,22 +2362,22 @@ def _finalized_deliberation_queryset_for_entry(recruitment_entry, review_stage):
 @transaction.atomic
 def save_deliberation_record(application, actor, cleaned_data, finalize=False):
     if not hasattr(application, "case"):
-        raise ValueError("A recruitment case must exist before deliberation data can be recorded.")
+        raise ValueError("A case must exist before deliberation details can be recorded.")
     if not user_can_manage_deliberation(actor, application):
         raise ValueError(
-            "You cannot manage deliberation records for this application at its current workflow stage."
+            "This case is not currently assigned to you for deliberation."
         )
 
     review_stage = application.case.current_stage
     expected_stage = DELIBERATION_STAGES_BY_BRANCH.get(application.branch, "")
     if review_stage != expected_stage:
         raise ValueError(
-            "Deliberation is only available during the branch-appropriate decision-support stage."
+            "Deliberation is available only during the proper decision-support step for this branch."
         )
 
     deliberation_record = get_deliberation_record(application, stage=review_stage)
     if deliberation_record and deliberation_record.is_finalized:
-        raise ValueError("Finalized deliberation records are locked and cannot be modified.")
+        raise ValueError("Finalized deliberation records cannot be edited.")
 
     created = deliberation_record is None
     if deliberation_record is None:
@@ -2509,16 +2509,16 @@ def _car_candidate_rows(recruitment_entry, review_stage):
 @transaction.atomic
 def generate_comparative_assessment_report(application, actor, cleaned_data, finalize=False):
     if not hasattr(application, "case"):
-        raise ValueError("A recruitment case must exist before a Comparative Assessment Report can be generated.")
+        raise ValueError("A case must exist before a Comparative Assessment Report can be generated.")
     if not user_can_manage_comparative_assessment_report(actor, application):
         raise ValueError(
-            "You cannot generate the Comparative Assessment Report for this application at its current workflow stage."
+            "This case is not currently assigned to you for the Comparative Assessment Report."
         )
 
     review_stage = application.case.current_stage
     if review_stage != CAR_REVIEW_STAGE or application.branch != PositionPosting.Branch.PLANTILLA:
         raise ValueError(
-            "Comparative Assessment Report generation is only available for Plantilla cases at the HRMPSB stage."
+            "The Comparative Assessment Report is available only for Plantilla cases at the HRMPSB step."
         )
 
     deliberation_record = get_deliberation_record(application, stage=review_stage)
@@ -2631,10 +2631,10 @@ def generate_comparative_assessment_report(application, actor, cleaned_data, fin
 @transaction.atomic
 def save_completion_tracking(application, actor, cleaned_data, requirement_formset):
     if not hasattr(application, "case"):
-        raise ValueError("A recruitment case must exist before completion tracking can be recorded.")
+        raise ValueError("A case must exist before completion details can be recorded.")
     if not user_can_manage_completion(actor, application):
         raise ValueError(
-            "You cannot manage completion tracking for this application at its current workflow stage."
+            "This case is not currently assigned to you for completion details."
         )
 
     completion_record = get_completion_record(application)
@@ -3113,9 +3113,9 @@ def _deliver_application_otp(application, otp_code, *, actor=None, otp_expires_a
     subject = "RecruitGuard-CHD applicant verification code"
     text_body = (
         "RecruitGuard-CHD applicant verification code\n\n"
-        f"Your one-time password is {otp_code}.\n"
+        f"Your verification code is {otp_code}.\n"
         f"It expires in {settings.APPLICATION_OTP_VALIDITY_MINUTES} minutes.\n\n"
-        "Do not share this code. RecruitGuard-CHD staff will never ask for your OTP."
+        "Do not share this code. RecruitGuard-CHD staff will never ask for it."
     )
     html_body = render_to_string(
         "email/applicant_otp.html",
@@ -3138,14 +3138,14 @@ def _deliver_application_otp(application, otp_code, *, actor=None, otp_expires_a
         application=application,
         actor=actor or application.applicant,
         action=AuditLog.Action.APPLICATION_OTP_SENT,
-        description="Sent applicant OTP for final submission verification.",
+        description="Sent applicant verification code for final submission.",
         metadata={"otp_expires_at": otp_expires_at.isoformat()},
     )
 
 
 def issue_application_otp(application, actor=None):
     if application.status != RecruitmentApplication.Status.DRAFT:
-        raise ValueError("OTP can only be issued while the application is still in draft.")
+        raise ValueError("A verification code can only be issued while the application is still in draft.")
 
     otp_code = _generate_otp_code()
     now = timezone.now()
@@ -3182,15 +3182,15 @@ def issue_application_otp(application, actor=None):
 
 def verify_application_otp(application, otp_code, actor=None):
     if application.status != RecruitmentApplication.Status.DRAFT:
-        raise ValueError("OTP verification is only available before final submission.")
+        raise ValueError("Email verification is only available before final submission.")
     if not application.otp_hash or not application.otp_expires_at:
-        raise ValueError("Request an OTP first before attempting verification.")
+        raise ValueError("Request a verification code first.")
     if application.otp_expires_at < timezone.now():
-        raise ValueError("The OTP has expired. Request a new code before final submission.")
+        raise ValueError("The verification code has expired. Request a new code before final submission.")
 
     expected_hash = _hash_application_otp(application, otp_code)
     if not hmac.compare_digest(application.otp_hash, expected_hash):
-        raise ValueError("The OTP is invalid.")
+        raise ValueError("The verification code is invalid.")
 
     application.otp_verified_at = timezone.now()
     application.save(update_fields=["otp_verified_at", "updated_at"])
@@ -3198,7 +3198,7 @@ def verify_application_otp(application, otp_code, actor=None):
         application=application,
         actor=actor or application.applicant,
         action=AuditLog.Action.APPLICATION_OTP_VERIFIED,
-        description="Applicant OTP verified successfully.",
+        description="Applicant verification code verified successfully.",
         metadata={"verified_at": application.otp_verified_at.isoformat()},
     )
     return application
@@ -3369,15 +3369,15 @@ def upload_evidence_item(
     artifact_type="",
 ):
     if not user_can_upload_evidence(actor, application):
-        raise ValueError("You cannot upload evidence for this application.")
+        raise ValueError("You cannot upload files for this application.")
     if artifact_scope == EvidenceVaultItem.OwnerScope.CASE and not hasattr(application, "case"):
-        raise ValueError("A recruitment case must exist before case-owned evidence can be uploaded.")
+        raise ValueError("A case must exist before case files can be uploaded.")
     validated_upload = None
     file_size = getattr(uploaded_file, "size", None)
     if artifact_type == ARTIFACT_TYPE_APPLICANT_DOCUMENT:
         validated_upload = validate_applicant_document_upload(uploaded_file)
     elif file_size is not None and file_size > settings.MAX_EVIDENCE_UPLOAD_BYTES:
-        raise ValueError("Uploaded file exceeds the configured Evidence Vault size limit.")
+        raise ValueError("The uploaded file is larger than the allowed file size.")
     if validated_upload is not None:
         raw_bytes = validated_upload.raw_bytes
         content_type = validated_upload.canonical_content_type
@@ -3543,8 +3543,8 @@ def submit_application(application, actor):
         raise ValueError("This recruitment entry is not currently open for intake.")
     if not application.otp_is_currently_valid:
         if application.otp_expires_at and application.otp_expires_at < timezone.now():
-            raise ValueError("Your OTP verification has expired. Request a new code before final submission.")
-        raise ValueError("Valid OTP verification is required before final submission.")
+            raise ValueError("Your email verification has expired. Request a new code before final submission.")
+        raise ValueError("Email verification is required before final submission.")
 
     previous_status = application.status
     previous_role = application.current_handler_role
@@ -3730,25 +3730,25 @@ def _transition_target(application, effective_role, action):
             return RecruitmentUser.Role.HRM_CHIEF, RecruitmentApplication.Status.HRM_CHIEF_REVIEW, "Returned by Appointing Authority to HRM Chief."
         if action == "reject":
             return "", RecruitmentApplication.Status.REJECTED, "Rejected by Appointing Authority."
-    raise ValueError("Unsupported workflow action for the current stage.")
+    raise ValueError("This action is not allowed at the current step.")
 
 
 @transaction.atomic
 def process_workflow_action(application, actor, action, remarks):
     effective_role = get_effective_role_for_action(actor, application)
     if not hasattr(application, "case"):
-        raise ValueError("A recruitment case must exist before workflow actions can be processed.")
+        raise ValueError("A case must exist before saving the next step.")
     if application.case.is_stage_locked:
-        raise ValueError("This recruitment case is stage-locked. Use controlled reopen before proceeding.")
+        raise ValueError("This case is final and cannot be edited unless it is reopened with authorization.")
     if not user_can_process_application(actor, application):
         if (
             effective_role == RecruitmentUser.Role.SECRETARIAT
             and application.level == PositionPosting.Level.LEVEL_2
         ):
             raise ValueError(
-                "Secretariat cannot process Level 2 applications without an active override."
+                "Secretariat can handle a Level 2 case only after HRM Chief sends it to Secretariat."
             )
-        raise ValueError("You cannot process this application at its current workflow stage.")
+        raise ValueError("This case is not currently assigned to you.")
     current_section = get_current_workflow_section(application)
     if action in {"endorse", "recommend"} and current_section != "actions":
         raise ValueError(_workflow_progress_block_message(application, current_section))
@@ -3758,7 +3758,7 @@ def process_workflow_action(application, actor, action, remarks):
         and action == "endorse"
         and not screening_is_finalized_for_current_stage(application)
     ):
-        raise ValueError("Finalize the screening record before endorsing this application.")
+        raise ValueError("Finalize the screening record before moving this case forward.")
     if (
         effective_role == RecruitmentUser.Role.HRM_CHIEF
         and application.branch == PositionPosting.Branch.COS
@@ -3767,7 +3767,7 @@ def process_workflow_action(application, actor, action, remarks):
     ):
         deliberation_record = get_deliberation_record(application, stage=application.case.current_stage)
         if not deliberation_record or not deliberation_record.is_finalized:
-            raise ValueError("Finalize the deliberation record before endorsing this COS application.")
+            raise ValueError("Finalize the deliberation record before moving this COS case forward.")
     if (
         effective_role == RecruitmentUser.Role.HRMPSB_MEMBER
         and application.branch == PositionPosting.Branch.PLANTILLA
@@ -3776,14 +3776,14 @@ def process_workflow_action(application, actor, action, remarks):
     ):
         deliberation_record = get_deliberation_record(application, stage=application.case.current_stage)
         if not deliberation_record or not deliberation_record.is_finalized:
-            raise ValueError("Finalize the deliberation record before recommending this Plantilla application.")
+            raise ValueError("Finalize the deliberation record before recommending this Plantilla case.")
         comparative_assessment_report = get_comparative_assessment_report(
             application,
             stage=application.case.current_stage,
         )
         if not comparative_assessment_report or not comparative_assessment_report.is_finalized:
             raise ValueError(
-                "Finalize the Comparative Assessment Report before recommending this Plantilla application."
+                "Finalize the Comparative Assessment Report before recommending this Plantilla case."
             )
 
     next_role, next_status, description = _transition_target(application, effective_role, action)
@@ -3827,11 +3827,12 @@ def process_workflow_action(application, actor, action, remarks):
         },
     )
     if next_role:
+        next_role_label = RecruitmentUser.Role(next_role).label
         record_audit_event(
             application=application,
             actor=actor,
             action=AuditLog.Action.ROUTED,
-            description=f"Application routed to {next_role}.",
+            description=f"Case assigned to {next_role_label}.",
             metadata={
                 "status": next_status,
                 "current_handler_role": next_role,
@@ -3842,7 +3843,7 @@ def process_workflow_action(application, actor, action, remarks):
             application=application,
             actor=actor,
             route_type=RoutingHistory.RouteType.FORWARD,
-            description=f"Application routed to {next_role}.",
+            description=f"Case assigned to {next_role_label}.",
             recruitment_case=application.case,
             from_handler_role=previous_role,
             to_handler_role=next_role,
@@ -3859,7 +3860,7 @@ def process_workflow_action(application, actor, action, remarks):
         _consume_active_secretariat_handoff(
             application,
             actor,
-            "Secretariat override consumed during Level 2 processing.",
+            "Secretariat special authorization ended after Level 2 processing.",
         )
     if next_status == RecruitmentApplication.Status.APPROVED:
         queue_selected_applicant_notification(application, actor=actor)
@@ -3871,26 +3872,26 @@ def process_workflow_action(application, actor, action, remarks):
 @transaction.atomic
 def record_final_decision(application, actor, cleaned_data):
     if not hasattr(application, "case"):
-        raise ValueError("A recruitment case must exist before a final decision can be recorded.")
+        raise ValueError("A case must exist before a final decision can be recorded.")
     if application.case.is_stage_locked:
-        raise ValueError("This recruitment case is stage-locked. Use controlled reopen before proceeding.")
+        raise ValueError("This case is final and cannot be edited unless it is reopened with authorization.")
     expected_stage, expected_role = _final_decision_stage_and_role(application)
     if not user_can_record_final_decision(actor, application):
         expected_role_label = RecruitmentUser.Role(expected_role).label
         raise ValueError(
-            f"Only the {expected_role_label} may record the final decision at the current workflow stage."
+            f"Only the {expected_role_label} may record the final decision at the current step."
         )
     if application.case.current_stage != expected_stage:
         expected_stage_label = RecruitmentCase.Stage(expected_stage).label
         raise ValueError(
-            f"Final decisions may only be recorded during the {expected_stage_label} stage."
+            f"Final decisions may only be recorded during the {expected_stage_label} step."
         )
 
     submission_packet = build_submission_packet(application)
     missing_components = submission_packet["summary"]["missing_components"]
     if missing_components:
         raise ValueError(
-            "Submission packet is incomplete for final decision recording. Missing: "
+            "The submission packet is incomplete for final decision recording. Missing: "
             + "; ".join(missing_components)
             + "."
         )
@@ -3994,13 +3995,13 @@ def record_final_decision(application, actor, cleaned_data):
 @transaction.atomic
 def close_recruitment_case(application, actor, closure_notes):
     if not hasattr(application, "case"):
-        raise ValueError("A recruitment case must exist before it can be closed.")
+        raise ValueError("A case must exist before it can be closed.")
     if not user_can_manage_completion(actor, application):
-        raise ValueError("You cannot close this recruitment case at its current workflow stage.")
+        raise ValueError("This case is not currently assigned to you for closure.")
 
     case = application.case
     if case.current_stage != RecruitmentCase.Stage.COMPLETION:
-        raise ValueError("Case closure is only available from the completion tracking stage.")
+        raise ValueError("Case closure is available only from the completion step.")
 
     completion_record = get_completion_record(application)
     if not completion_record:
@@ -4081,11 +4082,11 @@ def close_recruitment_case(application, actor, closure_notes):
 @transaction.atomic
 def grant_secretariat_override(application, actor, reason):
     if actor.role != RecruitmentUser.Role.HRM_CHIEF:
-        raise ValueError("Only the HRM Chief can hand off a Level 2 case to Secretariat.")
+        raise ValueError("Only the HRM Chief can send a Level 2 case to Secretariat.")
     if application.level != PositionPosting.Level.LEVEL_2:
-        raise ValueError("HRM Chief handoff is only required for Level 2 applications.")
+        raise ValueError("Special authorization is only required for Level 2 applications.")
     if not hasattr(application, "case"):
-        raise ValueError("A recruitment case must exist before a Level 2 handoff can be granted.")
+        raise ValueError("A recruitment case must exist before Level 2 special authorization can be recorded.")
     case = application.case
     if (
         application.status != RecruitmentApplication.Status.HRM_CHIEF_REVIEW
@@ -4094,7 +4095,7 @@ def grant_secretariat_override(application, actor, reason):
         or case.current_handler_role != RecruitmentUser.Role.HRM_CHIEF
     ):
         raise ValueError(
-            "Level 2 Secretariat handoff is only available while the case remains in HRM Chief review."
+            "Level 2 Secretariat authorization is only available while the case is assigned to HRM Chief review."
         )
     route_case_between_secretariat_and_hrm_chief(
         application=application,
@@ -4109,12 +4110,12 @@ def grant_secretariat_override(application, actor, reason):
 @transaction.atomic
 def reopen_recruitment_case(application, actor, reason):
     if not hasattr(application, "case"):
-        raise ValueError("A recruitment case does not exist for this application.")
+        raise ValueError("A case does not exist for this application.")
     case = application.case
     if actor.role not in CASE_REOPEN_ROLES:
-        raise ValueError("Only the HRM Chief can perform a controlled reopen in this prototype.")
+        raise ValueError("Only the HRM Chief can reopen a finalized case.")
     if not case.is_stage_locked or not case.locked_stage:
-        raise ValueError("Only stage-locked recruitment cases can be reopened.")
+        raise ValueError("Only finalized cases can be reopened.")
 
     previous_stage = case.current_stage
     previous_role = application.current_handler_role
@@ -4122,7 +4123,7 @@ def reopen_recruitment_case(application, actor, reason):
     reopened_stage = case.locked_stage
     reopened_status = _application_status_from_stage(reopened_stage)
     if not reopened_status:
-        raise ValueError("The locked recruitment case does not point to a reopenable workflow stage.")
+        raise ValueError("This finalized case does not point to a step that can be reopened.")
 
     case.current_stage = reopened_stage
     case.current_handler_role = _handler_role_from_stage(reopened_stage, application=application)
@@ -4153,7 +4154,7 @@ def reopen_recruitment_case(application, actor, reason):
         application=application,
         actor=actor,
         action=AuditLog.Action.CASE_REOPENED,
-        description="Controlled reopen applied to a stage-locked recruitment case.",
+        description="Authorized reopen applied to a finalized recruitment case.",
         metadata={
             "reason": reason,
             "reopened_stage": reopened_stage,
@@ -4164,7 +4165,7 @@ def reopen_recruitment_case(application, actor, reason):
         application=application,
         actor=actor,
         action=AuditLog.Action.ROUTED,
-        description=f"Recruitment case reopened to {case.current_handler_role}.",
+        description=f"Case reopened and assigned to {RecruitmentUser.Role(case.current_handler_role).label}.",
         metadata={
             "status": application.status,
             "current_handler_role": application.current_handler_role,
@@ -4175,7 +4176,7 @@ def reopen_recruitment_case(application, actor, reason):
         application=application,
         actor=actor,
         route_type=RoutingHistory.RouteType.REOPEN,
-        description=f"Recruitment case reopened to {case.current_handler_role}.",
+        description=f"Case reopened and assigned to {RecruitmentUser.Role(case.current_handler_role).label}.",
         recruitment_case=case,
         from_handler_role=previous_role,
         to_handler_role=application.current_handler_role,
@@ -4233,6 +4234,11 @@ def _build_application_pdf(application, *, actor=None, generated_at=None):
     generated_at = generated_at or timezone.now()
     actor_label = str(actor) if actor else "System"
     actor_role = actor.get_role_display() if actor else "System"
+    assigned_role = (
+        RecruitmentUser.Role(application.current_handler_role).label
+        if application.current_handler_role
+        else "Closed"
+    )
     lines = [
         f"Reference: {application.reference_number}",
         f"Application ID: {application.id}",
@@ -4244,10 +4250,10 @@ def _build_application_pdf(application, *, actor=None, generated_at=None):
         f"Branch: {application.position.get_branch_display()}",
         f"Level: {application.position.get_level_display()}",
         f"Application Status: {application.get_status_display()}",
-        f"Current Handler: {application.current_handler_role or 'Closed'}",
-        f"Case Stage: {case.get_current_stage_display() if case else 'Not created'}",
+        f"Assigned To: {assigned_role}",
+        f"Current Step: {case.get_current_stage_display() if case else 'Not created'}",
         f"Case Status: {case.get_case_status_display() if case else 'N/A'}",
-        f"Stage Locked: {'Yes' if getattr(case, 'is_stage_locked', False) else 'No'}",
+        f"Finalized: {'Yes' if getattr(case, 'is_stage_locked', False) else 'No'}",
         f"Submission Hash: {application.submission_hash or 'N/A'}",
         "",
         "Qualification Summary:",
@@ -4256,9 +4262,9 @@ def _build_application_pdf(application, *, actor=None, generated_at=None):
         "Cover Letter:",
         application.cover_letter or "N/A",
         "",
-        f"Evidence Count: {len(evidence_items)}",
+        f"File Count: {len(evidence_items)}",
         f"Audit Entry Count: {application.audit_logs.count()}",
-        f"Routing Event Count: {application.routing_history.count()}",
+        f"Assignment Event Count: {application.routing_history.count()}",
     ]
     if completion_record:
         lines.extend(
@@ -4429,9 +4435,9 @@ def _export_bundle_root(application):
 
 
 def _evidence_export_path(evidence, bundle_root):
-    scope_component = _safe_export_path_component(evidence.artifact_scope, "artifact")
+    scope_component = _safe_export_path_component(evidence.artifact_scope, "file")
     stage_component = _safe_export_path_component(evidence.stage, "unstaged")
-    document_component = evidence.document_key or _safe_export_path_component(evidence.label, "artifact")
+    document_component = evidence.document_key or _safe_export_path_component(evidence.label, "file")
     fallback_name = f"{document_component}.bin"
     filename = _safe_export_filename(evidence.original_filename, fallback_name)
     return (
@@ -4500,9 +4506,9 @@ def _evidence_inventory_csv(application, actor, generated_at, evidence_exports):
             "exported_by",
             "exported_by_role",
             "evidence_id",
-            "artifact_scope",
-            "artifact_scope_label",
-            "artifact_type",
+            "file_scope",
+            "file_scope_label",
+            "file_type",
             "label",
             "stage",
             "stage_label",
@@ -4571,13 +4577,13 @@ def _build_evidence_inventory_pdf(application, actor, generated_at, evidence_exp
         f"Recruitment Case ID: {case.id if case else 'Not created'}",
         f"Generated At: {generated_at:%Y-%m-%d %H:%M}",
         f"Exported By: {actor} ({actor.get_role_display()})",
-        f"Evidence Count: {len(evidence_exports)}",
+        f"File Count: {len(evidence_exports)}",
     ]
     if not evidence_exports:
         lines.extend(
             [
                 "",
-                "No evidence files were present in the Evidence Vault for this export.",
+                "No saved files were present for this export.",
             ]
         )
     else:

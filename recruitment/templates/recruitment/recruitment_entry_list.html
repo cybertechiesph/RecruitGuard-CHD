@@ -4,7 +4,7 @@
 {% block internal_title %}Recruitment Entries{% endblock %}
 
 {% block breadcrumb %}
-<span class="rg-breadcrumb-sep">›</span>
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
 <span class="rg-breadcrumb-current">Entries &amp; Positions</span>
 {% endblock %}
 
@@ -32,8 +32,8 @@
     </div>
     <div class="rg-istat-row__divider"></div>
     <div class="rg-istat">
-        <span class="rg-istat__value">Level-Aware</span>
-        <span class="rg-istat__label">Routing</span>
+        <span class="rg-istat__value">Level-Based</span>
+        <span class="rg-istat__label">Assignment</span>
     </div>
 </div>
 
@@ -51,7 +51,7 @@
                         <th>Entry</th>
                         <th>Position</th>
                         <th>Branch / Intake</th>
-                        <th>Routing</th>
+                        <th>Level</th>
                         <th>Status</th>
                         <th>Schedule</th>
                         <th class="col-actions"></th>
@@ -74,7 +74,7 @@
                                         {{ entry.position_reference.position_title }}
                                     </div>
                                     <div class="rg-imeta mt-1">
-                                        {% if entry.position_reference.class_id %}{{ entry.position_reference.class_id }}{% else %}—{% endif %}
+                                        {% if entry.position_reference.class_id %}{{ entry.position_reference.class_id }}{% else %}&mdash;{% endif %}
                                         {% if entry.position_reference.salary_grade %}
                                             <span class="rg-imeta__sep"></span>SG {{ entry.position_reference.salary_grade }}
                                         {% endif %}

@@ -5,7 +5,7 @@
     <div>
         <p class="rg-eyebrow">Recruitment Entry Management</p>
         <h1 class="rg-page-title">{% if object %}Update Recruitment Entry{% else %}Create Recruitment Entry{% endif %}</h1>
-        <p class="rg-page-copy">Create the recruitment entry by selecting an official Position Reference first, reviewing the linked metadata, then configuring the branch-specific intake details.</p>
+        <p class="rg-page-copy">Create the recruitment entry by choosing an official position, reviewing its details, and setting the intake schedule.</p>
     </div>
     <div class="rg-page-actions">
         <a href="{% url 'recruitment-entry-list' %}" class="btn btn-outline-secondary">Back to Entries</a>
@@ -22,22 +22,22 @@
                 {% endif %}
 
                 <div class="rg-form-section mb-4">
-                    <h2 class="rg-form-section__title">1. Position Reference Selection</h2>
-                    <p class="rg-form-section__copy">Select the official position from the controlled master catalog. Recruitment entry handlers do not create official Plantilla or COS positions from scratch on this screen.</p>
+                    <h2 class="rg-form-section__title">1. Select Official Position</h2>
+                    <p class="rg-form-section__copy">Choose the official position from the Position Reference list. Official Plantilla or COS positions are not typed in manually here.</p>
                     <div class="row g-3">
                         <div class="col-lg-8">{% include "recruitment/includes/form_field.html" with field=form.position_reference %}</div>
                     </div>
                 </div>
 
                 <div class="rg-form-section mb-4">
-                    <h2 class="rg-form-section__title">2. Reference Metadata Review</h2>
-                    <p class="rg-form-section__copy">These official metadata values stay linked to the selected Position Reference. Routing basis is derived from the reference level classification, not manually encoded on the entry form.</p>
+                    <h2 class="rg-form-section__title">2. Review Position Details</h2>
+                    <p class="rg-form-section__copy">These official details stay linked to the selected position. The case level comes from the position classification.</p>
                     <div class="card bg-light border-0 p-3" id="position-reference-review">
                         <div id="position-reference-warning" class="alert alert-warning mb-3{% if not selected_position_reference or selected_position_reference.reference_status == 'VERIFIED_REFERENCE' %} d-none{% endif %}">
                             {% if selected_position_reference %}{{ selected_position_reference.get_selection_warning }}{% endif %}
                         </div>
                         <div id="position-reference-empty"{% if selected_position_reference %} class="d-none"{% endif %}>
-                            <p class="text-muted mb-0">Select a Position Reference to review the linked title, salary grade, level classification, class ID, OS code, occupational service, and occupational group.</p>
+                            <p class="text-muted mb-0">Select a position to review its title, salary grade, level, class ID, OS code, occupational service, and occupational group.</p>
                         </div>
                         <div id="position-reference-metadata"{% if not selected_position_reference %} class="d-none"{% endif %}>
                             <div class="row g-3">
@@ -79,8 +79,8 @@
                 </div>
 
                 <div class="rg-form-section mb-4">
-                    <h2 class="rg-form-section__title">3. Recruitment Entry Configuration</h2>
-                    <p class="rg-form-section__copy">After the official reference is selected, review the generated tracking code, then configure the branch, entry status, intake window, and any entry-specific notes used downstream during screening.</p>
+                    <h2 class="rg-form-section__title">3. Set Recruitment Entry Details</h2>
+                    <p class="rg-form-section__copy">Review the generated entry code, then set the recruitment type, entry status, intake dates, and notes for screening.</p>
                     <div class="row g-3">
                         <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.job_code %}</div>
                         <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.branch %}</div>
@@ -94,7 +94,7 @@
 
                 <div class="rg-form-section">
                     <h2 class="rg-form-section__title">4. Entry Notes</h2>
-                    <p class="rg-form-section__copy">Use this area only for recruitment-entry-specific notes. Official position metadata remains controlled by the selected Position Reference.</p>
+                    <p class="rg-form-section__copy">Use this area only for notes specific to this recruitment entry. Official position details remain linked to the selected position.</p>
                     {% include "recruitment/includes/form_field.html" with field=form.qualification_reference %}
                 </div>
 

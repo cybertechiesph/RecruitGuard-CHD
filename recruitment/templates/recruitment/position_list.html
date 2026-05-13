@@ -4,9 +4,9 @@
 {% block content %}
 <div class="rg-page-header">
     <div>
-        <p class="rg-eyebrow">Internal Reference</p>
+        <p class="rg-eyebrow">Internal View</p>
         <h1 class="rg-page-title">Open Recruitment Entries</h1>
-        <p class="rg-page-copy">Reference view of the active recruitment entries currently visible in the internal portal.</p>
+        <p class="rg-page-copy">Active recruitment entries currently visible in the internal portal.</p>
     </div>
     <div class="rg-page-actions">
         <a href="{% url 'applicant-portal' %}" class="btn btn-outline-secondary">Open Public Applicant Portal</a>
@@ -33,7 +33,7 @@
                 </div>
                 {% if position.position_reference or position.qualification_reference or not position.position_reference and position.description or not position.position_reference and position.requirements %}
                     <div class="rg-form-section">
-                        <h3 class="rg-form-section__title">Reference Snapshot</h3>
+                        <h3 class="rg-form-section__title">Position Details</h3>
                         {% if position.position_reference %}
                             <p class="rg-form-section__copy mb-2">
                                 {% if position.position_reference.class_id %}Class ID {{ position.position_reference.class_id }}{% else %}Class ID pending{% endif %}

@@ -167,9 +167,9 @@ class PositionReference(TimestampedModel):
                 for field_name in self.missing_core_fields
             ]
             if missing_labels:
-                return "Reference metadata is incomplete. Missing: " + ", ".join(missing_labels) + "."
-            return "Reference metadata is incomplete and requires manual follow-up."
-        return "Reference metadata needs manual review before it is treated as a fully verified official position."
+                return "Position reference details are incomplete. Missing: " + ", ".join(missing_labels) + "."
+            return "Position reference details are incomplete and require manual follow-up."
+        return "Position reference details need manual review before this is treated as a fully verified official position."
 
     @property
     def qualification_summary(self):
@@ -187,7 +187,7 @@ class PositionReference(TimestampedModel):
     def clean(self):
         errors = {}
         if self.reference_status == self.ReferenceStatus.VERIFIED_REFERENCE and self.missing_core_fields:
-            errors["reference_status"] = "Verified references must include the complete official starter metadata."
+            errors["reference_status"] = "Verified references must include complete official position details."
         if errors:
             raise ValidationError(errors)
 
@@ -407,7 +407,7 @@ class PositionPosting(TimestampedModel):
                 errors["position_reference"] = "Inactive position references cannot be used for recruitment entries."
             elif self.position_reference.routing_level is None:
                 errors["position_reference"] = (
-                    "The selected position reference does not contain a usable level classification."
+                    "The selected position reference is missing the level classification needed for assignment."
                 )
         if self.closing_date and self.closing_date < self.opening_date:
             errors["closing_date"] = "Closing date cannot be earlier than opening date."
@@ -701,9 +701,9 @@ class WorkflowOverride(TimestampedModel):
 
     def clean(self):
         if self.target_role != RecruitmentUser.Role.SECRETARIAT:
-            raise ValidationError("Only Secretariat overrides are supported in this prototype.")
+            raise ValidationError("Only Secretariat special authorization is supported.")
         if self.application.level != PositionPosting.Level.LEVEL_2:
-            raise ValidationError("Overrides are only required for Level 2 applications.")
+            raise ValidationError("Special authorization is only required for Level 2 applications.")
 
     def mark_used(self):
         self.is_active = False
@@ -716,7 +716,7 @@ class WorkflowOverride(TimestampedModel):
         self.save(update_fields=["is_active", "revoked_at", "updated_at"])
 
     def __str__(self):
-        return f"Override for {self.application.reference_number}"
+        return f"Special authorization for {self.application.reference_number}"
 
 
 class RoutingHistory(TimestampedModel):
@@ -862,11 +862,11 @@ class ScreeningRecord(TimestampedModel):
             RecruitmentUser.Role.SECRETARIAT,
             RecruitmentUser.Role.HRM_CHIEF,
         }:
-            raise ValidationError("Only Secretariat or HRM Chief may record screening outputs.")
+            raise ValidationError("Only Secretariat or HRM Chief may record screening details.")
         if self.is_finalized and not self.finalized_by_id:
-            raise ValidationError("Finalized screening outputs must record the finalizing user.")
+            raise ValidationError("Finalized screening records must record the finalizing user.")
         if not self.is_finalized and (self.finalized_by_id or self.finalized_at):
-            raise ValidationError("Draft screening outputs cannot include finalization metadata.")
+            raise ValidationError("Draft screening records cannot include finalization details.")
 
     def save(self, *args, **kwargs):
         self.branch = self.application.branch
@@ -1018,7 +1018,7 @@ class ExamRecord(TimestampedModel):
             RecruitmentUser.Role.SECRETARIAT,
             RecruitmentUser.Role.HRM_CHIEF,
         }:
-            errors["recorded_by"] = "Only Secretariat or HRM Chief may record examination outputs."
+            errors["recorded_by"] = "Only Secretariat or HRM Chief may record examination details."
         if self.valid_from and self.valid_until and self.valid_until < self.valid_from:
             errors["valid_until"] = "Validity end date cannot be earlier than the validity start date."
         if self.evidence_item_id:
@@ -1073,9 +1073,9 @@ class ExamRecord(TimestampedModel):
             if not self.exam_notes:
                 errors["exam_notes"] = "Provide remarks explaining the waiver or absence."
         if self.is_finalized and not self.finalized_by_id:
-            errors["finalized_by"] = "Finalized examination outputs must record the finalizing user."
+            errors["finalized_by"] = "Finalized examination records must record the finalizing user."
         if not self.is_finalized and (self.finalized_by_id or self.finalized_at):
-            errors["finalized_at"] = "Draft examination outputs cannot include finalization metadata."
+            errors["finalized_at"] = "Draft examination records cannot include finalization details."
         if errors:
             raise ValidationError(errors)
 
@@ -1275,7 +1275,7 @@ class InterviewSession(TimestampedModel):
         if self.is_finalized and not self.finalized_by_id:
             errors["finalized_by"] = "Finalized interview sessions must record the finalizing user."
         if not self.is_finalized and (self.finalized_by_id or self.finalized_at):
-            errors["finalized_at"] = "Draft interview sessions cannot include finalization metadata."
+            errors["finalized_at"] = "Draft interview sessions cannot include finalization details."
         if errors:
             raise ValidationError(errors)
 
@@ -1351,7 +1351,7 @@ class InterviewRating(TimestampedModel):
         if self.recruitment_case_id and self.interview_session_id and self.interview_session.recruitment_case_id != self.recruitment_case_id:
             errors["recruitment_case"] = "Interview ratings must stay linked to the same recruitment case as the interview session."
         if self.interview_session_id and self.review_stage != self.interview_session.review_stage:
-            errors["review_stage"] = "Interview ratings must use the same workflow stage as the interview session."
+            errors["review_stage"] = "Interview ratings must use the same review step as the interview session."
         if self.review_stage not in allowed_roles:
             errors["review_stage"] = "Direct interview ratings are only supported during HRM Chief or HRMPSB review stages."
         elif self.rated_by.role != allowed_roles[self.review_stage]:
@@ -1474,7 +1474,7 @@ class DeliberationRecord(TimestampedModel):
         if self.is_finalized and not self.finalized_by_id:
             errors["finalized_by"] = "Finalized deliberation records must record the finalizing user."
         if not self.is_finalized and (self.finalized_by_id or self.finalized_at):
-            errors["finalized_at"] = "Draft deliberation records cannot include finalization metadata."
+            errors["finalized_at"] = "Draft deliberation records cannot include finalization details."
         if errors:
             raise ValidationError(errors)
 
@@ -1559,16 +1559,16 @@ class ComparativeAssessmentReport(TimestampedModel):
             errors["version_number"] = "CAR version number must be a positive whole number."
         if self.is_finalized and not self.evidence_item_id:
             errors["evidence_item"] = (
-                "Finalized Comparative Assessment Reports must link to the generated PDF artifact."
+                "Finalized Comparative Assessment Reports must link to the generated PDF file."
             )
         if self.evidence_item_id:
             if self.evidence_item.artifact_scope != EvidenceVaultItem.OwnerScope.ENTRY:
                 errors["evidence_item"] = (
-                    "Comparative Assessment Reports must link to an entry-owned Evidence Vault artifact."
+                    "Comparative Assessment Reports must link to an entry-owned secured file."
                 )
             elif self.evidence_item.recruitment_entry_id != self.recruitment_entry_id:
                 errors["evidence_item"] = (
-                    "The generated CAR artifact must stay linked to the same recruitment entry as the report."
+                    "The generated CAR file must stay linked to the same recruitment entry as the report."
                 )
         if self.is_finalized and not self.finalized_by_id:
             errors["finalized_by"] = (
@@ -1576,7 +1576,7 @@ class ComparativeAssessmentReport(TimestampedModel):
             )
         if not self.is_finalized and (self.finalized_by_id or self.finalized_at):
             errors["finalized_at"] = (
-                "Draft Comparative Assessment Reports cannot include finalization metadata."
+                "Draft Comparative Assessment Reports cannot include finalization details."
             )
         if errors:
             raise ValidationError(errors)
@@ -2148,23 +2148,23 @@ class EvidenceVaultItem(TimestampedModel):
         )
         if owner_count != 1:
             errors["artifact_scope"] = (
-                "Evidence must belong to exactly one owner scope: application, recruitment case, or recruitment entry."
+                "Saved files must belong to exactly one owner: application, recruitment case, or recruitment entry."
             )
         if self.artifact_scope == self.OwnerScope.APPLICATION and not self.application_id:
-            errors["application"] = "Application-owned evidence must point to an application."
+            errors["application"] = "Application files must point to an application."
         if self.artifact_scope == self.OwnerScope.CASE and not self.recruitment_case_id:
-            errors["recruitment_case"] = "Case-owned evidence must point to a recruitment case."
+            errors["recruitment_case"] = "Case files must point to a recruitment case."
         if self.artifact_scope == self.OwnerScope.ENTRY and not self.recruitment_entry_id:
-            errors["recruitment_entry"] = "Entry-owned evidence must point to a recruitment entry."
+            errors["recruitment_entry"] = "Entry files must point to a recruitment entry."
         if self.is_archived and not self.archive_tag.strip():
-            errors["archive_tag"] = "Provide an archive tag when marking evidence as archived."
+            errors["archive_tag"] = "Provide an archive label when marking a file as archived."
         if self.previous_version_id:
             if self.previous_version.owner_signature() != self.owner_signature():
-                errors["previous_version"] = "Version history must stay within the same artifact owner scope."
+                errors["previous_version"] = "Version history must stay within the same file owner scope."
             if self.previous_version.document_key != self.document_key:
                 errors["document_key"] = "Version history must stay within the same document key."
             if self.previous_version.artifact_scope != self.artifact_scope:
-                errors["artifact_scope"] = "Version history must stay within the same artifact scope."
+                errors["artifact_scope"] = "Version history must stay within the same file scope."
             if self.previous_version.version_family != self.version_family:
                 errors["version_family"] = "Version history must stay within the same version family."
             if self.previous_version.version_number >= self.version_number:

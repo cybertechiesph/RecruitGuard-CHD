@@ -5,7 +5,7 @@
     <div>
         <p class="rg-eyebrow">Recruitment Entry Management</p>
         <h1 class="rg-page-title">{% if object %}Update Position Reference{% else %}Create Position Reference{% endif %}</h1>
-        <p class="rg-page-copy">Maintain the controlled official Position Reference catalog used by recruitment entry handlers.</p>
+        <p class="rg-page-copy">Maintain the official Position Reference list used when creating recruitment entries.</p>
     </div>
     <div class="rg-page-actions">
         <a href="{% url 'position-catalog-list' %}" class="btn btn-outline-secondary">Back to Position Reference Catalog</a>
@@ -16,7 +16,7 @@
     <div class="col-xl-10">
         <div class="card p-4">
             <div class="alert alert-info">
-                This screen is reserved for controlled maintenance of official position references. Recruitment entry creation uses selection from this catalog and must not encode official positions from scratch.
+                This screen is for maintaining official position references. Recruitment entries should select positions from this list.
             </div>
             <form method="post">
                 {% csrf_token %}
@@ -25,8 +25,8 @@
                 {% endif %}
 
                 <div class="rg-form-section mb-4">
-                    <h2 class="rg-form-section__title">Official Reference Metadata</h2>
-                    <p class="rg-form-section__copy">Record the validated official metadata fields used as the starter source of truth for Plantilla and COS recruitment entry selection.</p>
+                    <h2 class="rg-form-section__title">Official Position Details</h2>
+                    <p class="rg-form-section__copy">Record the verified official details used for Plantilla and COS recruitment entries.</p>
                     <div class="row g-3">
                         <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.position_title %}</div>
                         <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.position_slug %}</div>
@@ -43,7 +43,7 @@
 
                 <div class="rg-form-section mb-4">
                     <h2 class="rg-form-section__title">Control and Review</h2>
-                    <p class="rg-form-section__copy">Keep incomplete records safe by preserving only what is known, flagging manual review where needed, and avoiding fabricated metadata.</p>
+                    <p class="rg-form-section__copy">If a record is incomplete, save only what is known and mark it for manual review.</p>
                     <div class="row g-3">
                         <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.is_active %}</div>
                         <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.agency_item_number %}</div>
@@ -54,8 +54,8 @@
                 </div>
 
                 <div class="rg-form-section">
-                    <h2 class="rg-form-section__title">Future-Facing Qualification Fields</h2>
-                    <p class="rg-form-section__copy">Use these only when validated qualification standard details are available. Leave them blank rather than inventing official data.</p>
+                    <h2 class="rg-form-section__title">Qualification Details</h2>
+                    <p class="rg-form-section__copy">Use these only when verified qualification standard details are available. Leave them blank if the official data is not yet confirmed.</p>
                     <div class="row g-3">
                         <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.qs_education %}</div>
                         <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.qs_training %}</div>

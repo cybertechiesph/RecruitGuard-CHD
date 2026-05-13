@@ -5,7 +5,7 @@
     <div>
         <p class="rg-eyebrow">Recruitment Entry Management</p>
         <h1 class="rg-page-title">Position Reference Catalog</h1>
-        <p class="rg-page-copy">Controlled official position references used by Plantilla vacancies and COS openings during recruitment entry creation.</p>
+        <p class="rg-page-copy">Official position references used for Plantilla vacancies and COS openings.</p>
     </div>
     <div class="rg-page-actions">
         <a href="{% url 'recruitment-entry-list' %}" class="btn btn-outline-secondary">View Entries</a>
@@ -16,7 +16,7 @@
 </div>
 
 <div class="alert alert-info">
-    Official positions come from this controlled reference catalog. Recruitment entry handlers may select from the active list, but routine entry creation does not create new official positions.
+    Official positions come from this reference list. Recruitment entry staff may select from active positions, but routine entry creation does not create new official positions.
 </div>
 
 <div class="rg-table-shell">
@@ -69,7 +69,7 @@
                             {% if user.role == "system_admin" %}
                                 <a href="{% url 'position-catalog-update' position.pk %}" class="btn btn-outline-secondary btn-sm">Edit</a>
                             {% else %}
-                                <span class="text-muted small">Read only</span>
+                                <span class="text-muted small">View only</span>
                             {% endif %}
                         </td>
                     </tr>

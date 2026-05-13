@@ -59,7 +59,7 @@
                 {% if recent_identity_logs %}
                     {% for entry in recent_identity_logs %}
                         <div class="rg-dash-sysad-event">
-                            <span class="rg-dash-sysad-event__action">{{ entry.get_action_display }}</span>
+                            <span class="rg-dash-sysad-event__action">{{ entry.action|audit_action_label }}</span>
                             <span class="rg-dash-sysad-event__desc">{{ entry.description }}</span>
                             <span class="rg-dash-sysad-event__time">{{ entry.created_at|date:"M d, Y H:i" }}</span>
                         </div>
@@ -71,13 +71,6 @@
         </div>
 
         <div class="col-lg-5 d-flex flex-column gap-3">
-            <div class="rg-icard">
-                <div class="rg-icard__header rg-icard__header--flush" style="border-bottom:0;padding-bottom:0;margin-bottom:.75rem;">
-                    <h2 class="rg-icard__title">Announcements</h2>
-                </div>
-                {% include "internal_includes/banner.html" with variant="info" copy="No active announcements. Notices will appear here when posted." %}
-            </div>
-
             <div class="rg-icard">
                 <div class="rg-icard__header">
                     <h2 class="rg-icard__title">Open Recruitment Entries</h2>
@@ -111,20 +104,22 @@
 {% else %}
 
     <div class="row g-3">
-        <div class="col-lg-7">
+        <div class="col-lg-8">
             <div class="rg-icard rg-icard--hero h-100">
                 <div class="rg-icard__header">
                     <div>
-                        <h2 class="rg-icard__title">Awaiting Your Action</h2>
-                        <p class="rg-icard__subtitle">Applications currently routed to your role.</p>
+                        <h2 class="rg-icard__title">Cases Needing Your Action</h2>
+                        <p class="rg-icard__subtitle">Cases currently assigned to you.</p>
                     </div>
                     <div class="rg-icard__actions">
-                        <a href="{% url 'workflow-queue' %}" class="btn btn-rg-primary btn-sm">Open Queue</a>
+                        <a href="{% url 'workflow-queue' %}" class="btn btn-rg-primary btn-sm">Open My Queue</a>
                     </div>
                 </div>
 
                 {% if queue %}
                     {% for application in queue|slice:":6" %}
+                        {% queue_task_theme application as task_theme %}
+                        {% queue_task_label application as task_label %}
                         <a href="{% url 'application-detail' application.pk %}" class="rg-dash-queue-row">
                             <div class="rg-dash-queue-row__main">
                                 <div class="rg-dash-queue-row__ref">{{ application.reference_label }}</div>
@@ -138,8 +133,8 @@
                                 </div>
                             </div>
                             <div class="rg-dash-queue-row__badge">
-                                <span class="rg-pill rg-pill--{{ application.status|status_theme }} rg-pill--sm">
-                                    {{ application.get_status_display }}
+                                <span class="rg-pill rg-pill--{{ task_theme }} rg-pill--sm">
+                                    {{ task_label }}
                                 </span>
                             </div>
                         </a>
@@ -147,23 +142,16 @@
                     {% if queue|length > 6 %}
                         <div style="padding:.75rem 0 0;font-size:.8125rem;color:#5f6c78;border-top:1px solid #edf0f3;">
                             +{{ queue|length|add:"-6" }} more &mdash;
-                            <a href="{% url 'workflow-queue' %}">view all in queue</a>
+                            <a href="{% url 'workflow-queue' %}">view all cases</a>
                         </div>
                     {% endif %}
                 {% else %}
-                    {% include "internal_includes/state_empty.html" with title="Queue is clear" copy="No applications are currently routed to your role." %}
+                    {% include "internal_includes/state_empty.html" with title="No cases right now" copy="No cases need your action right now." %}
                 {% endif %}
             </div>
         </div>
 
-        <div class="col-lg-5 d-flex flex-column gap-3">
-            <div class="rg-icard">
-                <div class="rg-icard__header rg-icard__header--flush" style="border-bottom:0;padding-bottom:0;margin-bottom:.75rem;">
-                    <h2 class="rg-icard__title">Announcements</h2>
-                </div>
-                {% include "internal_includes/banner.html" with variant="info" copy="No active announcements. Notices from the HRM Chief or administrators will appear here." %}
-            </div>
-
+        <div class="col-lg-4 d-flex flex-column gap-3">
             <div class="rg-icard">
                 <div class="rg-icard__header">
                     <h2 class="rg-icard__title">Open Entries</h2>

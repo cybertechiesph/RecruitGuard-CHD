@@ -24,7 +24,7 @@
             {% if latest_final_decision.decided_by %}
                 by <strong>{{ latest_final_decision.decided_by }}</strong>
             {% endif %}.
-            This stage tracks
+            This step tracks
             {% if completion_record %}
                 {{ completion_record.completion_label|lower }}
             {% else %}
@@ -420,7 +420,7 @@
                     <i class="bi bi-exclamation-triangle-fill me-1"></i>
                     <strong>This action is permanent and cannot be undone.</strong>
                     The case will be marked as closed and all records will be
-                    preserved as read-only archives. The closure is fully audit-logged.
+                    preserved as final archives. The closure is audit-logged.
                 </div>
             </div>
             <div class="modal-footer"

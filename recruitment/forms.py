@@ -31,16 +31,71 @@ from .services import (
 from .upload_validation import validate_applicant_document_upload
 
 
+AUDIT_ACTION_CHOICE_LABELS = {
+    AuditLog.Action.APPLICATION_OTP_SENT: "Verification Code Sent",
+    AuditLog.Action.APPLICATION_OTP_VERIFIED: "Email Verified",
+    AuditLog.Action.ROUTED: "Case Assigned",
+    AuditLog.Action.INTERVIEW_FALLBACK_UPLOADED: "Interview Rating File Uploaded",
+    AuditLog.Action.CAR_GENERATED: "Comparative Assessment Report Created",
+    AuditLog.Action.OVERRIDE_GRANTED: "Special Authorization Recorded",
+    AuditLog.Action.OVERRIDE_USED: "Special Authorization Used",
+    AuditLog.Action.EVIDENCE_UPLOADED: "File Uploaded",
+    AuditLog.Action.EVIDENCE_DOWNLOADED: "File Downloaded",
+    AuditLog.Action.EVIDENCE_ARCHIVED: "File Archived",
+    AuditLog.Action.EVIDENCE_RESTORED: "File Restored",
+    AuditLog.Action.EVIDENCE_VAULT_VIEWED: "Secured Files Viewed",
+    AuditLog.Action.EXPORT_GENERATED: "Export Created",
+}
+
+
+def audit_action_choices():
+    return [
+        ("", "All actions"),
+        *[
+            (value, AUDIT_ACTION_CHOICE_LABELS.get(value, label))
+            for value, label in AuditLog.Action.choices
+        ],
+    ]
+
+
 class BootstrapFormMixin:
     def _apply_bootstrap(self):
         for field in self.fields.values():
             css_class = field.widget.attrs.get("class", "")
+            if isinstance(field.widget, forms.HiddenInput):
+                continue
             if isinstance(field.widget, forms.CheckboxInput):
                 field.widget.attrs["class"] = f"{css_class} form-check-input".strip()
             elif isinstance(field.widget, (forms.Select, forms.SelectMultiple)):
                 field.widget.attrs["class"] = f"{css_class} form-select".strip()
             else:
                 field.widget.attrs["class"] = f"{css_class} form-control".strip()
+
+    def _apply_fixed_choice_display(self, field_name, fixed_attr, label_attr):
+        options = [
+            (str(value), str(label))
+            for value, label in self.fields[field_name].choices
+            if value not in ("", None)
+        ]
+        is_fixed = len(options) == 1
+        setattr(self, fixed_attr, is_fixed)
+        setattr(self, label_attr, "")
+        if not is_fixed:
+            return
+
+        value, label = options[0]
+        setattr(self, label_attr, label)
+        self.fields[field_name].widget = forms.HiddenInput(
+            attrs={"data-fixed-label": label}
+        )
+
+        instance = getattr(self, "instance", None)
+        current_value = self.initial.get(field_name) or (
+            getattr(instance, field_name, "") if instance is not None else ""
+        )
+        self.fields[field_name].initial = current_value or value
+        if not self.is_bound and not current_value:
+            self.initial[field_name] = value
 
 
 class DeferredModelValidationMixin:
@@ -439,7 +494,7 @@ class ApplicantPortalIntakeForm(BootstrapFormMixin, forms.Form):
 
 
 class ApplicantOTPForm(BootstrapFormMixin, forms.Form):
-    otp = forms.CharField(max_length=6, min_length=6, label="One-time password")
+    otp = forms.CharField(max_length=6, min_length=6, label="Verification Code")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -448,7 +503,7 @@ class ApplicantOTPForm(BootstrapFormMixin, forms.Form):
     def clean_otp(self):
         otp = self.cleaned_data["otp"].strip()
         if not otp.isdigit():
-            raise forms.ValidationError("Enter the 6-digit OTP sent to your email address.")
+            raise forms.ValidationError("Enter the 6-digit verification code sent to your email address.")
         return otp
 
 
@@ -474,7 +529,7 @@ class EvidenceUploadForm(BootstrapFormMixin, forms.Form):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["label"].help_text = (
-            "Uploading another file with the same label during the same workflow stage creates a new preserved version."
+            "If a file with the same label already exists for this step, the system keeps both versions."
         )
         self._apply_bootstrap()
 
@@ -482,45 +537,45 @@ class EvidenceUploadForm(BootstrapFormMixin, forms.Form):
         uploaded_file = self.cleaned_data["file"]
         if uploaded_file.size > settings.MAX_EVIDENCE_UPLOAD_BYTES:
             raise forms.ValidationError(
-                "Uploaded file exceeds the configured Evidence Vault size limit."
+                "The uploaded file is larger than the allowed file size."
             )
         return uploaded_file
 
 
 class EvidenceVaultSearchForm(BootstrapFormMixin, forms.Form):
     ARCHIVAL_STATUS_CHOICES = (
-        ("active", "Active Only"),
-        ("archived", "Archived Only"),
-        ("all", "All Evidence"),
+        ("active", "Active only"),
+        ("archived", "Archived only"),
+        ("all", "All files"),
     )
 
     q = forms.CharField(required=False, label="Search")
     stage = forms.ChoiceField(
         required=False,
-        choices=[("", "All stages"), *EvidenceVaultItem.Stage.choices],
-        label="Stage",
+        choices=[("", "All steps"), *EvidenceVaultItem.Stage.choices],
+        label="Step",
     )
     artifact_scope = forms.ChoiceField(
         required=False,
-        choices=[("", "All ownership scopes"), *EvidenceVaultItem.OwnerScope.choices],
-        label="Ownership Scope",
+            choices=[("", "All file scopes"), *EvidenceVaultItem.OwnerScope.choices],
+            label="File Scope",
     )
     archival_status = forms.ChoiceField(
         required=False,
         choices=ARCHIVAL_STATUS_CHOICES,
         initial="active",
-        label="Archive State",
+        label="Archive Status",
     )
     current_version_only = forms.BooleanField(
         required=False,
         initial=True,
-        label="Show current versions only",
+        label="Show latest versions only",
     )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["q"].help_text = (
-            "Search by application ID, recruitment entry, document label, filename, SHA-256 hash, archive tag, or uploader."
+            "Search by Application ID, recruitment entry, file label, filename, SHA-256 hash, archive label, or uploader."
         )
         self._apply_bootstrap()
 
@@ -529,23 +584,23 @@ class AuditLogSearchForm(BootstrapFormMixin, forms.Form):
     q = forms.CharField(required=False, label="Search")
     action = forms.ChoiceField(
         required=False,
-        choices=[("", "All actions"), *AuditLog.Action.choices],
+        choices=audit_action_choices(),
         label="Action",
     )
     actor_role = forms.ChoiceField(
         required=False,
         choices=[("", "All roles"), *RecruitmentUser.Role.choices],
-        label="Actor Role",
+        label="User Role",
     )
     sensitive_only = forms.BooleanField(
         required=False,
-        label="Sensitive access only",
+        label="Sensitive records only",
     )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["q"].help_text = (
-            "Search by case reference, stage, description, or actor username."
+            "Search by case reference, step, description, or username."
         )
         self._apply_bootstrap()
 
@@ -560,7 +615,7 @@ class EvidenceArchiveForm(BootstrapFormMixin, forms.Form):
     archive_tag = forms.CharField(
         required=False,
         max_length=255,
-        label="Archive Tag",
+        label="Archive Label",
     )
 
     def __init__(self, *args, **kwargs):
@@ -570,7 +625,7 @@ class EvidenceArchiveForm(BootstrapFormMixin, forms.Form):
     def clean(self):
         cleaned_data = super().clean()
         if cleaned_data.get("action") == "archive" and not (cleaned_data.get("archive_tag") or "").strip():
-            self.add_error("archive_tag", "Archive tag is required when archiving an evidence item.")
+            self.add_error("archive_tag", "Enter an archive label before archiving this file.")
         return cleaned_data
 
 
@@ -580,7 +635,14 @@ class WorkflowActionForm(BootstrapFormMixin, forms.Form):
 
     def __init__(self, *args, application, user, **kwargs):
         super().__init__(*args, **kwargs)
+        self.action_is_fixed = False
+        self.action_fixed_label = ""
         self.fields["action"].choices = get_available_actions(application, user)
+        self._apply_fixed_choice_display(
+            "action",
+            "action_is_fixed",
+            "action_fixed_label",
+        )
         self._apply_bootstrap()
 
     def clean_action(self):
@@ -588,7 +650,7 @@ class WorkflowActionForm(BootstrapFormMixin, forms.Form):
         valid_actions = {value for value, _label in self.fields["action"].choices}
         if action not in valid_actions:
             raise forms.ValidationError(
-                "Selected action is not valid for this workflow stage."
+                "This action is not allowed at the current step."
             )
         return action
 
@@ -596,25 +658,35 @@ class WorkflowActionForm(BootstrapFormMixin, forms.Form):
 class CaseHandoffForm(BootstrapFormMixin, forms.Form):
     target_role = forms.ChoiceField(label="Send To")
     remarks = forms.CharField(
-        label="Reason / Remarks",
+        label="Reason or Remarks",
         widget=forms.Textarea(attrs={"rows": 3}),
     )
 
     def __init__(self, *args, application, user, **kwargs):
         super().__init__(*args, **kwargs)
+        self.target_role_is_fixed = False
+        self.target_role_fixed_label = ""
         self.fields["target_role"].choices = get_case_handoff_options(application, user)
+        self._apply_fixed_choice_display(
+            "target_role",
+            "target_role_is_fixed",
+            "target_role_fixed_label",
+        )
         self._apply_bootstrap()
 
     def clean_target_role(self):
         target_role = self.cleaned_data["target_role"]
         valid_roles = {value for value, _label in self.fields["target_role"].choices}
         if target_role not in valid_roles:
-            raise forms.ValidationError("Selected handoff target is not valid for this case.")
+            raise forms.ValidationError("This receiving office is not allowed for this case.")
         return target_role
 
 
 class WorkflowOverrideForm(BootstrapFormMixin, forms.Form):
-    reason = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}))
+    reason = forms.CharField(
+        label="Reason for Special Authorization",
+        widget=forms.Textarea(attrs={"rows": 3}),
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -622,7 +694,10 @@ class WorkflowOverrideForm(BootstrapFormMixin, forms.Form):
 
 
 class WorkflowReopenForm(BootstrapFormMixin, forms.Form):
-    reason = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}))
+    reason = forms.CharField(
+        label="Reason for Reopening",
+        widget=forms.Textarea(attrs={"rows": 3}),
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -632,7 +707,7 @@ class WorkflowReopenForm(BootstrapFormMixin, forms.Form):
 class RequirementChecklistNotificationForm(BootstrapFormMixin, forms.Form):
     checklist_items = forms.CharField(
         widget=forms.Textarea(attrs={"rows": 5}),
-        help_text="List the required appointment or contract completion items to send to the applicant.",
+        help_text="List the appointment or contract requirements to email to the applicant.",
     )
     deadline = forms.DateField(
         required=False,
@@ -815,9 +890,9 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
     SCORE_FIELD_NAMES = ("exam_score", "technical_score", "practical_score")
 
     evidence_file = forms.FileField(
-        label="Optional Evidence Upload",
+        label="Optional Supporting File",
         required=False,
-        help_text="Attach supporting exam documentation when available. This is stored in the Evidence Vault.",
+        help_text="Attach a supporting exam file when available. This is saved with the secured case files.",
     )
 
     class Meta:
@@ -895,11 +970,10 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
                     "data-score-label": self.fields[field_name].label,
                 }
             )
-        self.fields["exam_type"].help_text = "Select the policy exam category for this application."
-        self.fields["administered_by"].help_text = "Select the office or party responsible under the CHD selection plan."
+        self.fields["exam_type"].help_text = "Set by the recruitment branch and hiring-process rules."
+        self.fields["administered_by"].help_text = "Office responsible under the CHD hiring process."
         self.fields["exam_score"].help_text = (
-            "Use this only when an official overall exam score is available. The system does "
-            "not calculate a weighting rule that is not stated in the FRS or hiring process."
+            "Use only when an official overall score is available. The system does not decide pass/fail or apply unstated weighting."
         )
         if self.application:
             self.fields["technical_score"].label = "Technical Score"
@@ -918,35 +992,13 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
         )
         if self.exam_type_is_fixed:
             self.fields["exam_type"].help_text = (
-                "Automatically determined from the recruitment branch and hiring-process source of truth."
+                "Automatically set from the recruitment branch and hiring-process rules."
             )
         if self.administered_by_is_fixed:
             self.fields["administered_by"].help_text = (
-                "Automatically determined from the branch-specific hiring-process procedure."
+                "Automatically set from the branch-specific hiring-process procedure."
             )
         self._apply_bootstrap()
-
-    def _apply_fixed_choice_display(self, field_name, fixed_attr, label_attr):
-        options = [
-            (str(value), str(label))
-            for value, label in self.fields[field_name].choices
-            if value not in ("", None)
-        ]
-        is_fixed = len(options) == 1
-        setattr(self, fixed_attr, is_fixed)
-        if not is_fixed:
-            return
-
-        value, label = options[0]
-        setattr(self, label_attr, label)
-        self.fields[field_name].widget = forms.HiddenInput(
-            attrs={"data-fixed-label": label}
-        )
-        if not self.is_bound:
-            current_value = self.initial.get(field_name) or getattr(self.instance, field_name, "")
-            if not current_value:
-                self.initial[field_name] = value
-                self.fields[field_name].initial = value
 
     def _exam_type_choices(self):
         choices = [("", "Select exam type")]
@@ -1007,10 +1059,10 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
             if not cleaned_data.get("exam_date"):
                 self.add_error("exam_date", "Provide the date the examination was administered.")
             if not cleaned_data.get("administered_by"):
-                self.add_error("administered_by", "Record who administered the examination.")
+                self.add_error("administered_by", "Select who administered the examination.")
             for field_name in self._required_score_fields_for_type(cleaned_data.get("exam_type")):
                 if score_values[field_name] is None and not self.has_error(field_name):
-                    self.add_error(field_name, "Record this policy-required examination score.")
+                    self.add_error(field_name, "Enter this required exam score.")
         elif exam_status in {ExamRecord.ExamStatus.WAIVED, ExamRecord.ExamStatus.ABSENT}:
             for field_name, value in score_values.items():
                 if value is not None:
@@ -1025,7 +1077,7 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
         uploaded_file = self.cleaned_data.get("evidence_file")
         if uploaded_file and uploaded_file.size > settings.MAX_EVIDENCE_UPLOAD_BYTES:
             raise forms.ValidationError(
-                "Uploaded file exceeds the configured Evidence Vault size limit."
+                "The uploaded file is larger than the allowed file size."
             )
         return uploaded_file
 
@@ -1233,16 +1285,16 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
                 self.fields["position_reference"].queryset
                 | PositionReference.objects.filter(pk=self.instance.position_reference_id)
             )
-        self.fields["position_reference"].empty_label = "Select an official position reference"
+        self.fields["position_reference"].empty_label = "Select an official position"
         self.fields["position_reference"].label = "Position Reference"
         self.fields["position_reference"].help_text = (
-            "Choose from the controlled master Position Reference catalog. Official positions cannot be encoded here."
+            "Choose from the official Position Reference list. Official positions are not typed in manually here."
         )
         self.fields["job_code"].label = "Entry Code"
         self.fields["job_code"].required = False
         self.fields["job_code"].disabled = True
         self.fields["job_code"].help_text = (
-            "This code is generated automatically for tracking and cannot be edited manually."
+            "Generated automatically for tracking. This cannot be edited."
         )
         self.fields["job_code"].widget.attrs.update(
             {
@@ -1280,7 +1332,7 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
         if submitted_job_code and submitted_job_code != existing_job_code:
             self.add_error(
                 "job_code",
-                "Entry Code is generated automatically and cannot be edited manually.",
+                "Entry Code is generated automatically for tracking and cannot be edited.",
             )
 
         if position_reference is None:
@@ -1294,7 +1346,7 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
             elif position_reference.routing_level is None:
                 self.add_error(
                     "position_reference",
-                    "This position reference does not contain the level classification required for routing.",
+                    "This position reference is missing the level classification needed for assignment.",
                 )
             else:
                 self.instance.level = position_reference.routing_level

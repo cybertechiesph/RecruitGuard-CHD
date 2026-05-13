@@ -1,4 +1,9 @@
-{% if field.field.widget.input_type == "checkbox" %}
+{% if field.field.widget.input_type == "hidden" %}
+    {{ field }}
+    {% for error in field.errors %}
+        <div class="invalid-feedback d-block">{{ error }}</div>
+    {% endfor %}
+{% elif field.field.widget.input_type == "checkbox" %}
     <div class="rg-field rg-field--checkbox">
         <div class="form-check">
             {{ field }}

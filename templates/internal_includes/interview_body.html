@@ -5,7 +5,7 @@
 <div class="rg-icard" style="margin-bottom:1rem;">
     <div class="rg-icard__header" style="margin-bottom:0.875rem;">
         <div>
-            <h3 class="rg-icard__title">Applicant &amp; Prior Stage Summary</h3>
+            <h3 class="rg-icard__title">Applicant &amp; Previous Step Summary</h3>
             <p class="rg-icard__subtitle">
                 Quick reference for rating preparation.
             </p>
@@ -22,7 +22,7 @@
         <div class="rg-int-context-item">
             <div class="rg-int-context-item__label">Position</div>
             <div class="rg-int-context-item__value">
-                {{ application.entry.position_title|default:"—" }}
+                {{ application.entry.position_title|default:"Not recorded" }}
                 {% if application.entry.job_order_code %}
                     <span style="font-weight:400;color:#5f6c78;font-size:0.8rem;">
                         &mdash; {{ application.entry.job_order_code }}
@@ -68,7 +68,7 @@
             </div>
         </div>
         <div class="rg-int-context-item">
-            <div class="rg-int-context-item__label">Review Stage</div>
+            <div class="rg-int-context-item__label">Review Step</div>
             <div class="rg-int-context-item__value">
                 {{ recruitment_case.get_current_stage_display|default:"—" }}
             </div>
@@ -101,7 +101,7 @@
                     Schedule the interview and save the session before rating can be submitted.
                     Finalize the session only after all ratings or a fallback sheet are on record.
                 {% else %}
-                    Interview session details for this review stage.
+                    Interview session details for this review step.
                 {% endif %}
             </p>
         </div>
@@ -290,7 +290,7 @@
                 {% endif %}
                 <div class="rg-int-submitted-state__notice">
                     The interview session has been finalized. Ratings can no longer be revised.
-                    Use the Controlled Reopen procedure if a correction is required.
+                    Use Authorized Reopen if a correction is required.
                 </div>
             </div>
         </div>
@@ -315,9 +315,9 @@
                       stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
             <p style="font-size:0.8125rem;color:#5f6c78;margin:0;">
-                This stage&#39;s rating record is complete. Ratings will be reviewed comparatively
-                during the <strong>Deliberation / CAR</strong> stage. Individual scores are not
-                disclosed to other panel members before that stage.
+                This rating record is complete. Ratings will be reviewed together
+                during <strong>Deliberation / CAR</strong>. Individual scores are not
+                shown to other panel members before that step.
             </p>
         </div>
     </div>
@@ -351,7 +351,7 @@
         <strong>Two-level lock process:</strong>
         Your individual rating submission (now) is separate from the session-level finalization
         (later). Other panel members cannot view individual scores until the
-        <strong>Deliberation / CAR</strong> stage opens.
+        <strong>Deliberation / CAR</strong> step opens.
     </div>
 
     {% if current_user_interview_rating %}
@@ -564,7 +564,7 @@
         </div>
         <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid #edf0f3;
                     font-size:0.79rem;color:#5f6c78;">
-            Scores will be visible to authorised roles when the Deliberation stage opens.
+            Scores will be visible to authorized roles when Deliberation opens.
         </div>
     {% else %}
         <div style="padding:1.25rem 0;text-align:center;">
@@ -661,7 +661,7 @@
             <path d="M4 6V4.5a2 2 0 0 1 4 0V6"
                   stroke="#9aa4af" stroke-width="1.5" stroke-linecap="round"/>
         </svg>
-        Fallback upload locked &mdash; session is finalized.
+                Fallback upload is final because the session is finalized.
         {% if current_interview_fallback_evidence %}
             {{ current_interview_fallback_evidence|length }}
             fallback sheet{{ current_interview_fallback_evidence|length|pluralize }} on record.
@@ -770,11 +770,11 @@
                     <div class="rg-scr-modal-summary__row">
                         <span class="rg-scr-modal-summary__label">Position</span>
                         <span class="rg-scr-modal-summary__value">
-                            {{ application.entry.position_title|default:"—" }}
+                            {{ application.entry.position_title|default:"Not recorded" }}
                         </span>
                     </div>
                     <div class="rg-scr-modal-summary__row">
-                        <span class="rg-scr-modal-summary__label">Review Stage</span>
+                        <span class="rg-scr-modal-summary__label">Review Step</span>
                         <span class="rg-scr-modal-summary__value">
                             {{ recruitment_case.get_current_stage_display }}
                         </span>
@@ -790,7 +790,7 @@
                             background:#f0f9ff;border:1px solid #bae6fd;
                             border-radius:0.4rem;font-size:0.775rem;color:#0c4a6e;line-height:1.5;">
                     <strong>Note:</strong> Your score is kept confidential until the
-                    Deliberation / CAR stage. Other panel members cannot view your rating
+                    Deliberation / CAR step. Other panel members cannot view your rating
                     before deliberation opens.
                 </div>
             </div>
@@ -837,12 +837,12 @@
             <div class="modal-body" style="padding:1.25rem;">
                 <p style="font-size:0.8125rem;color:#374151;margin-bottom:0.75rem;">
                     You are about to finalize and lock the interview session for this case.
-                    This is the <strong>stage-level lock</strong> — it is separate from each
+                    This finalizes the whole interview step. It is separate from each
                     individual panel member&rsquo;s rating submission.
                 </p>
                 <p style="font-size:0.8125rem;color:#374151;margin-bottom:0.875rem;">
                     Once finalized: no new ratings or fallback uploads can be recorded, and
-                    the session cannot be reopened without a Controlled Reopen procedure.
+                    the session cannot be reopened without Authorized Reopen.
                 </p>
 
                 <div class="rg-scr-modal-summary">
@@ -853,7 +853,7 @@
                         </span>
                     </div>
                     <div class="rg-scr-modal-summary__row">
-                        <span class="rg-scr-modal-summary__label">Review Stage</span>
+                        <span class="rg-scr-modal-summary__label">Review Step</span>
                         <span class="rg-scr-modal-summary__value">
                             {{ recruitment_case.get_current_stage_display }}
                         </span>
@@ -888,7 +888,7 @@
                         <circle cx="8" cy="11" r="0.6" fill="currentColor"/>
                     </svg>
                     <p style="margin:0;font-size:0.775rem;color:#92400e;line-height:1.5;">
-                        This locks the entire interview stage for all panel members.
+                        This finalizes the entire interview step for all panel members.
                         Ensure all expected ratings are on record before confirming.
                     </p>
                 </div>

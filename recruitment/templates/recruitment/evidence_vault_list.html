@@ -1,23 +1,23 @@
 {% extends "internal_base.html" %}
 {% load recruitment_ui %}
 
-{% block internal_title %}Evidence & Audit{% endblock %}
+{% block internal_title %}Files & Audit{% endblock %}
 
 {% block content %}
 <div class="rg-page-header">
     <div>
-        <p class="rg-eyebrow">Modules 13–15</p>
-        <h1 class="rg-page-title" style="font-size:1.5rem;">Evidence Vault & Audit Log</h1>
-        <p class="rg-page-copy">Combined evidence and audit traceability view. Audit logs are read-only; exports are logged.</p>
+        <p class="rg-eyebrow">Files and Audit</p>
+        <h1 class="rg-page-title" style="font-size:1.5rem;">Secured Files & Audit Log</h1>
+        <p class="rg-page-copy">Review saved case files and audit records. Audit logs cannot be edited; exports are logged.</p>
     </div>
     <div class="rg-page-actions">
-        <span class="rg-pill rg-pill--neutral">{{ result_count }} evidence item{{ result_count|pluralize }}</span>
-        <a href="{% url 'audit-log-list' %}" class="btn btn-outline-secondary">Full System Audit</a>
+        <span class="rg-pill rg-pill--neutral">{{ result_count }} file{{ result_count|pluralize }}</span>
+        <a href="{% url 'audit-log-list' %}" class="btn btn-outline-secondary">Full Audit Log</a>
     </div>
 </div>
 
 <div class="card p-4 mb-4">
-    <h2 class="h5 mb-3">Evidence Vault Filters</h2>
+    <h2 class="h5 mb-3">File Filters</h2>
     <form method="get">
         <div class="rg-form-grid">
             {% for field in search_form %}
@@ -32,12 +32,12 @@
 </div>
 
 <div class="rg-split-pane">
-    <!-- Evidence Vault Pane -->
+    <!-- Secured Files Pane -->
     <div class="card p-4">
         <div class="rg-section__header mb-3">
             <div>
-                <h2 class="h5 mb-1">Evidence Vault</h2>
-                <p class="rg-section-copy" style="font-size:.75rem;">Encrypted evidence items stored per case.</p>
+                <h2 class="h5 mb-1">Secured Files</h2>
+                <p class="rg-section-copy" style="font-size:.75rem;">Saved files connected to recruitment cases.</p>
             </div>
         </div>
         {% if evidence_items %}
@@ -45,11 +45,11 @@
                 <table class="table rg-doc-inventory">
                     <thead>
                         <tr>
-                            <th>File Name</th>
-                            <th>Stage</th>
+                            <th>File</th>
+                            <th>Step</th>
                             <th>Uploaded By</th>
-                            <th>Timestamp</th>
-                            <th>Ver</th>
+                            <th>Date</th>
+                            <th>Version</th>
                             <th>SHA-256</th>
                             <th>Actions</th>
                         </tr>
@@ -71,7 +71,7 @@
                                     {% if item.stage %}
                                         <span class="rg-pill rg-pill--info" style="font-size:.65rem;">{{ item.stage|stage_label }}</span>
                                     {% else %}
-                                        <span class="rg-note" style="font-size:.7rem;">—</span>
+                                        <span class="rg-note" style="font-size:.7rem;">&mdash;</span>
                                     {% endif %}
                                 </td>
                                 <td style="font-size:.75rem;">
@@ -100,7 +100,7 @@
                 </table>
             </div>
         {% else %}
-            <div class="rg-empty-state">No evidence items match the current filters.</div>
+            <div class="rg-empty-state">No files match the current filters.</div>
         {% endif %}
     </div>
 
@@ -109,7 +109,7 @@
         <div class="rg-section__header mb-3">
             <div>
                 <h2 class="h5 mb-1">Audit Log</h2>
-                <p class="rg-section-copy" style="font-size:.75rem;">Recent audit events across the system.</p>
+                <p class="rg-section-copy" style="font-size:.75rem;">Recent audit records across the system.</p>
             </div>
         </div>
         {% if recent_audit_logs %}
@@ -117,7 +117,7 @@
                 {% for log in recent_audit_logs %}
                     <article class="rg-record" style="padding:.75rem .85rem;">
                         <div class="rg-record__header" style="margin-bottom:.35rem;">
-                            <strong style="font-size:.8125rem;">{{ log.get_action_display }}</strong>
+                            <strong style="font-size:.8125rem;">{{ log.action|audit_action_label }}</strong>
                             <span class="rg-note" style="font-size:.7rem;">{{ log.created_at|date:"M d H:i" }}</span>
                         </div>
                         <div class="d-flex flex-wrap gap-1 mb-1">
@@ -136,9 +136,9 @@
                 {% endfor %}
             </div>
         {% else %}
-            <div class="rg-empty-state">No audit events recorded.</div>
+            <div class="rg-empty-state">No audit records yet.</div>
         {% endif %}
-        <p class="rg-note mt-3" style="font-size:.7rem;">ℹ Audit logs are read-only; exports are logged.</p>
+        <p class="rg-note mt-3" style="font-size:.7rem;">Audit logs cannot be edited; exports are logged.</p>
     </div>
 </div>
 {% endblock %}

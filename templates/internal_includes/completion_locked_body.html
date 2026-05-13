@@ -72,7 +72,7 @@
                     {% if recruitment_case.closed_at %}
                         Closed {{ recruitment_case.closed_at|date:"N j, Y" }}.
                     {% endif %}
-                    All records are preserved as read-only archives.
+                    All records are preserved as final archives.
                 </p>
                 <span class="rg-cmp-closed-banner__audit-note">
                     <i class="bi bi-shield-lock-fill"></i>
@@ -106,7 +106,7 @@
             <div>
                 <h3 class="rg-icard__title">Final Decision Record</h3>
                 <p class="rg-icard__subtitle">
-                    Decision recorded at Appointing Authority review stage.
+                    Decision recorded at Appointing Authority review step.
                 </p>
             </div>
             <i class="bi bi-lock-fill" style="color:var(--rg-primary);font-size:1rem;"></i>
@@ -292,7 +292,7 @@
             </div>
         {% endif %}
         <div class="rg-cmp-archive-meta__item">
-            <span class="rg-cmp-archive-meta__label">Case Stage</span>
+            <span class="rg-cmp-archive-meta__label">Case Step</span>
             <span class="rg-cmp-archive-meta__value">
                 {{ recruitment_case.get_current_stage_display }}
             </span>
@@ -331,7 +331,7 @@
             <div>
                 <h3 class="rg-icard__title">Case Timeline</h3>
                 <p class="rg-icard__subtitle">
-                    Key workflow events recorded throughout this recruitment case.
+                    Key case events recorded throughout this recruitment case.
                 </p>
             </div>
             {% if audit_log_url %}
@@ -357,7 +357,7 @@
                     <div class="rg-cmp-timeline-item__dot"></div>
                     <div class="rg-cmp-timeline-item__body">
                         <div class="rg-cmp-timeline-item__action">
-                            {{ entry.get_action_display }}
+                            {{ entry.action|audit_action_label }}
                         </div>
                         <div class="rg-cmp-timeline-item__meta">
                             {{ entry.created_at|date:"N j, Y, g:i a" }}
@@ -400,7 +400,7 @@
         <div class="rg-cmp-reopen-zone__header">
             <i class="bi bi-exclamation-triangle-fill rg-cmp-reopen-zone__icon"></i>
             <span class="rg-cmp-reopen-zone__title">
-                Controlled Reopen Request
+                Authorized Reopen Request
             </span>
             <span style="font-size:0.69rem;font-weight:600;color:#dc2626;
                          text-transform:uppercase;letter-spacing:0.05em;">
@@ -409,7 +409,7 @@
         </div>
         <div class="rg-cmp-reopen-zone__body">
             Reopening a closed recruitment case is an exceptional, controlled action.
-            The case will be restored to its locked stage
+            The case will be restored to its finalized step
             {% if recruitment_case and recruitment_case.locked_stage %}
                 (<strong>{{ recruitment_case.locked_stage|title }}</strong>)
             {% endif %}

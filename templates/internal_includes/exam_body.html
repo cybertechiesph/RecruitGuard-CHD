@@ -42,7 +42,7 @@
         <div class="rg-field" style="max-width:520px;">
             {% if exam_form.exam_type_is_fixed %}
                 <label class="form-label">{{ exam_form.exam_type.label }}</label>
-                <div class="form-control" aria-readonly="true" style="background:#f8fafc;">
+                <div class="form-control rg-fixed-value" aria-readonly="true">
                     {{ exam_form.exam_type_fixed_label }}
                 </div>
                 {{ exam_form.exam_type }}
@@ -85,7 +85,7 @@
             <div class="rg-field">
                 {% if exam_form.administered_by_is_fixed %}
                     <label class="form-label">{{ exam_form.administered_by.label }}</label>
-                    <div class="form-control" aria-readonly="true" style="background:#f8fafc;">
+                    <div class="form-control rg-fixed-value" aria-readonly="true">
                         {{ exam_form.administered_by_fixed_label }}
                     </div>
                     {{ exam_form.administered_by }}
@@ -216,7 +216,7 @@
                 </div>
                 <div class="rg-field">
                     <label class="form-label">System Result</label>
-                    <div class="form-control" aria-readonly="true" style="background:#f8fafc;">
+                    <div class="form-control rg-fixed-value" aria-readonly="true">
                         For evaluation
                     </div>
                     <div class="form-text">
@@ -289,7 +289,7 @@
                 <h3 class="rg-icard__title">Supporting Evidence</h3>
                 <p class="rg-icard__subtitle">
                     Upload the exam sheet, rubric, or end-user assessment file when available.
-                    This upload is optional and is preserved in the Evidence Vault.
+                    This upload is optional and will be saved with the secured case files.
                 </p>
             </div>
         </div>
@@ -390,9 +390,9 @@
 
             <div class="modal-body" style="padding:1.25rem;">
                 <p style="font-size:0.8125rem;color:#374151;margin-bottom:0.75rem;">
-                    You are about to lock the examination record for this case.
+                    You are about to finalize the examination record for this case.
                     Once finalized, the record cannot be edited without a
-                    <strong>Controlled Reopen</strong> procedure.
+                    <strong>Authorized Reopen</strong>.
                 </p>
 
                 <div class="rg-scr-modal-summary" id="exam-modal-summary">
@@ -403,7 +403,7 @@
                         </span>
                     </div>
                     <div class="rg-scr-modal-summary__row">
-                        <span class="rg-scr-modal-summary__label">Review Stage</span>
+                        <span class="rg-scr-modal-summary__label">Review Step</span>
                         <span class="rg-scr-modal-summary__value">
                             {{ recruitment_case.get_current_stage_display }}
                         </span>
@@ -450,7 +450,7 @@
                         <circle cx="8" cy="11" r="0.6" fill="currentColor"/>
                     </svg>
                     <p style="margin:0;font-size:0.775rem;color:#92400e;line-height:1.5;">
-                        This action is permanent within the current workflow stage.
+                        This record will become final for the current step.
                         Ensure all examination details are correct before confirming.
                     </p>
                 </div>

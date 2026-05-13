@@ -1,18 +1,18 @@
 {% extends "internal_base.html" %}
 {% load recruitment_ui %}
 
-{% block internal_title %}{% if is_queue %}Assigned Queue{% else %}Applications{% endif %}{% endblock %}
+{% block internal_title %}{% if is_queue %}My Assigned Cases{% else %}Cases I Can View{% endif %}{% endblock %}
 
 {% block breadcrumb %}
-<span class="rg-breadcrumb-sep">›</span>
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
 <span class="rg-breadcrumb-current">{% if is_queue %}My Queue{% else %}Applications{% endif %}</span>
 {% endblock %}
 
 {% block content %}
 <div class="rg-page-header">
     <div>
-        <p class="rg-eyebrow">{% if is_queue %}Workflow{% else %}Internal Portal{% endif %}</p>
-        <h1 class="rg-page-title">{% if is_queue %}Assigned Queue{% else %}Accessible Applications{% endif %}</h1>
+        <p class="rg-eyebrow">{% if is_queue %}Cases{% else %}Internal Portal{% endif %}</p>
+        <h1 class="rg-page-title">{% if is_queue %}My Assigned Cases{% else %}Cases I Can View{% endif %}</h1>
     </div>
     <div class="rg-page-actions">
         {% if not is_queue %}
@@ -21,26 +21,39 @@
     </div>
 </div>
 
-<div class="rg-istat-row">
-    <div class="rg-istat">
-        <span class="rg-istat__value">{{ applications|length }}</span>
-        <span class="rg-istat__label">Records</span>
+{% if is_queue %}
+    {% if applications %}
+        <div class="rg-list-summary">
+            <strong>{{ applications|length }}</strong>
+            <span>case{% if applications|length != 1 %}s{% endif %} need{% if applications|length == 1 %}s{% endif %} your action.</span>
+        </div>
+    {% endif %}
+{% else %}
+    <div class="rg-istat-row">
+        <div class="rg-istat">
+            <span class="rg-istat__value">{{ applications|length }}</span>
+            <span class="rg-istat__label">Cases</span>
+        </div>
+        <div class="rg-istat-row__divider"></div>
+        <div class="rg-istat">
+            <span class="rg-istat__value">Can View</span>
+            <span class="rg-istat__label">List</span>
+        </div>
+        <div class="rg-istat-row__divider"></div>
+        <div class="rg-istat">
+            <span class="rg-istat__value">Level-Based</span>
+            <span class="rg-istat__label">Assignment</span>
+        </div>
     </div>
-    <div class="rg-istat-row__divider"></div>
-    <div class="rg-istat">
-        <span class="rg-istat__value">{% if is_queue %}Assigned{% else %}Accessible{% endif %}</span>
-        <span class="rg-istat__label">View Mode</span>
-    </div>
-    <div class="rg-istat-row__divider"></div>
-    <div class="rg-istat">
-        <span class="rg-istat__value">Level-Aware</span>
-        <span class="rg-istat__label">Routing</span>
-    </div>
-</div>
+{% endif %}
 
 {% if not applications %}
     <div class="rg-icard">
-        {% include "internal_includes/state_empty.html" with title="No applications found" copy="No applications are currently routed to your role, or no records match the current filter." %}
+        {% if is_queue %}
+            {% include "internal_includes/state_empty.html" with title="No cases right now" copy="No cases need your action right now." %}
+        {% else %}
+            {% include "internal_includes/state_empty.html" with title="No cases found" copy="No cases match the current filter." %}
+        {% endif %}
     </div>
 {% else %}
     <div class="rg-itbl rg-itbl--sticky">
@@ -48,12 +61,16 @@
             <table class="table align-middle">
                 <thead>
                     <tr>
-                        <th>Reference</th>
+                        <th>Case</th>
                         <th>Position</th>
-                        <th>Branch / Level</th>
-                        <th>Current Task</th>
-                        <th>Handler</th>
-                        <th>Updated</th>
+                        {% if not is_queue %}
+                            <th>Branch / Level</th>
+                        {% endif %}
+                        <th>{% if is_queue %}Needed Step{% else %}Current Step{% endif %}</th>
+                        {% if not is_queue %}
+                            <th>Assigned To</th>
+                        {% endif %}
+                        <th>Last Updated</th>
                         <th class="col-actions"></th>
                     </tr>
                 </thead>
@@ -76,18 +93,26 @@
                                     {{ application.position.job_code }}
                                     <span class="rg-imeta__sep"></span>
                                     {{ application.position.get_intake_mode_display }}
-                                </div>
-                            </td>
-                            <td>
-                                <div class="d-flex flex-wrap gap-1">
-                                    <span class="rg-pill rg-pill--{{ application.branch|branch_theme }} rg-pill--sm">
+                                    {% if is_queue %}
+                                        <span class="rg-imeta__sep"></span>
                                         {{ application.get_branch_display }}
-                                    </span>
-                                    <span class="rg-pill rg-pill--{{ application.level|level_theme }} rg-pill--sm">
+                                        <span class="rg-imeta__sep"></span>
                                         {{ application.get_level_display }}
-                                    </span>
+                                    {% endif %}
                                 </div>
                             </td>
+                            {% if not is_queue %}
+                                <td>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        <span class="rg-pill rg-pill--{{ application.branch|branch_theme }} rg-pill--sm">
+                                            {{ application.get_branch_display }}
+                                        </span>
+                                        <span class="rg-pill rg-pill--{{ application.level|level_theme }} rg-pill--sm">
+                                            {{ application.get_level_display }}
+                                        </span>
+                                    </div>
+                                </td>
+                            {% endif %}
                             <td>
                                 {% queue_task_theme application as task_theme %}
                                 {% queue_task_label application as task_label %}
@@ -95,15 +120,17 @@
                                     {{ task_label }}
                                 </span>
                             </td>
-                            <td>
-                                {% if application.current_handler_role %}
-                                    <span class="rg-pill rg-pill--{{ application.current_handler_role|role_theme }} rg-pill--sm">
-                                        {{ application.current_handler_role|role_label }}
-                                    </span>
-                                {% else %}
-                                    <span class="rg-pill rg-pill--closed rg-pill--sm">Closed</span>
-                                {% endif %}
-                            </td>
+                            {% if not is_queue %}
+                                <td>
+                                    {% if application.current_handler_role %}
+                                        <span class="rg-pill rg-pill--{{ application.current_handler_role|role_theme }} rg-pill--sm">
+                                            {{ application.current_handler_role|role_label }}
+                                        </span>
+                                    {% else %}
+                                        <span class="rg-pill rg-pill--closed rg-pill--sm">Closed</span>
+                                    {% endif %}
+                                </td>
+                            {% endif %}
                             <td>
                                 <span class="rg-imeta">{{ application.updated_at|date:"M d, Y" }}</span>
                             </td>
@@ -111,7 +138,7 @@
                                 <div class="rg-itbl-actions">
                                     <a href="{% url 'application-detail' application.pk %}"
                                        class="btn btn-outline-secondary btn-sm">
-                                        View Case
+                                        Open Case
                                     </a>
                                 </div>
                             </td>

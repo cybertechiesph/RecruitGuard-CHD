@@ -81,18 +81,18 @@ def _record_notification_audit(application, actor, action, description, metadata
 
 def _build_submission_acknowledgment(application):
     return (
-        f"RecruitGuard-CHD submission acknowledged: {application.reference_number}",
+        f"RecruitGuard-CHD application received: {application.reference_number}",
         "\n".join(
             [
                 f"Dear {application.applicant_display_name},",
                 "",
-                "Your application has been submitted successfully to RecruitGuard-CHD.",
+                "Your application has been received by RecruitGuard-CHD.",
                 f"Application ID: {application.reference_number}",
                 f"Position: {application.position.title}",
-                f"Recruitment branch: {application.position.get_branch_display()}",
+                f"Recruitment type: {application.position.get_branch_display()}",
                 f"Current status: {application.get_status_display()}",
                 "",
-                "Keep your Application ID for future status checks in the applicant portal.",
+                "Keep your Application ID so you can check your application status.",
             ]
         ),
     )
@@ -100,14 +100,14 @@ def _build_submission_acknowledgment(application):
 
 def _build_selected_notification(application):
     return (
-        f"RecruitGuard-CHD selection result: {application.position.title}",
+        f"RecruitGuard-CHD application result: {application.position.title}",
         "\n".join(
             [
                 f"Dear {application.applicant_display_name},",
                 "",
                 (
-                    f"You have been selected for the {application.position.get_branch_display()} "
-                    f"recruitment process for {application.position.title}."
+                    f"You have been selected for {application.position.title} "
+                    f"under {application.position.get_branch_display()} recruitment."
                 ),
                 (
                     f"The next step is { _completion_label(application).lower() } "
@@ -123,14 +123,14 @@ def _build_selected_notification(application):
 
 def _build_non_selected_notification(application):
     return (
-        f"RecruitGuard-CHD non-selection notice: {application.position.title}",
+        f"RecruitGuard-CHD application result: {application.position.title}",
         "\n".join(
             [
                 f"Dear {application.applicant_display_name},",
                 "",
                 (
-                    f"Your application for the {application.position.get_branch_display()} "
-                    f"recruitment process for {application.position.title} was not selected."
+                    f"Your application for {application.position.title} "
+                    f"under {application.position.get_branch_display()} recruitment was not selected."
                 ),
                 f"Application ID: {application.reference_number}",
                 "",
@@ -163,7 +163,7 @@ def _build_requirement_checklist_notification(
         [
             "",
             f"Application ID: {application.reference_number}",
-            "This requirement checklist was sent through RecruitGuard-CHD.",
+            "This requirements checklist was sent through RecruitGuard-CHD.",
         ]
     )
     return (
@@ -354,17 +354,17 @@ def send_requirement_checklist_notification(
 ):
     case = getattr(application, "case", None)
     if actor.role not in NOTIFICATION_MANAGER_ROLES:
-        raise ValueError("Only Secretariat or HRM Chief may send requirement checklist notifications.")
+        raise ValueError("Only Secretariat or HRM Chief may send the requirement checklist.")
     if application.status != RecruitmentApplication.Status.APPROVED:
-        raise ValueError("Requirement checklist notifications are only available for approved applications.")
+        raise ValueError("Requirement checklists can only be sent for approved applications.")
     if (
         not case
         or case.current_stage != RecruitmentCase.Stage.COMPLETION
         or case.is_stage_locked
     ):
-        raise ValueError("Requirement checklist notifications are only available during active completion tracking.")
+        raise ValueError("Requirement checklists can only be sent during active completion.")
     if case.current_handler_role != actor.role:
-        raise ValueError("Only the assigned completion handler may send the requirement checklist.")
+        raise ValueError("Only the office assigned to completion may send the requirement checklist.")
 
     subject, body = _build_requirement_checklist_notification(
         application=application,
@@ -394,16 +394,16 @@ def send_reminder_notification(
 ):
     case = getattr(application, "case", None)
     if actor.role not in NOTIFICATION_MANAGER_ROLES:
-        raise ValueError("Only Secretariat or HRM Chief may send reminder notifications.")
+        raise ValueError("Only Secretariat or HRM Chief may send reminders.")
     if not application.submitted_at:
-        raise ValueError("Reminders are only available after an application has been submitted.")
+        raise ValueError("Reminders can only be sent after an application has been submitted.")
     if application.status in {
         RecruitmentApplication.Status.REJECTED,
         RecruitmentApplication.Status.WITHDRAWN,
     }:
-        raise ValueError("Reminders are not available for closed non-selected applications.")
+        raise ValueError("Reminders are not available for closed or non-selected applications.")
     if case and (case.is_stage_locked or case.current_handler_role != actor.role):
-        raise ValueError("Only the assigned active handler may send reminders for this application.")
+        raise ValueError("Only the assigned office may send reminders for this application.")
 
     subject, body = _build_reminder_notification(
         application=application,

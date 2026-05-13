@@ -4,6 +4,7 @@ import json
 import re
 import zipfile
 from datetime import date, timedelta
+from unittest.mock import patch
 
 from django.apps import apps as django_apps
 from django.contrib.auth import get_user_model
@@ -13,10 +14,16 @@ from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import transaction
 from django.test import Client, TestCase, override_settings
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 
-from .forms import ApplicantPortalIntakeForm, ExamRecordForm
+from .forms import (
+    ApplicantPortalIntakeForm,
+    CaseHandoffForm,
+    ExamRecordForm,
+    WorkflowActionForm,
+)
 from .models import (
     AuditLog,
     ComparativeAssessmentReport,
@@ -892,7 +899,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         self.assertContains(create_response, 'placeholder="Will be generated automatically after first save"')
         self.assertContains(
             create_response,
-            "This code is generated automatically for tracking and cannot be edited manually.",
+            "Generated automatically for tracking. This cannot be edited.",
         )
 
         entry = PositionPosting.objects.create(
@@ -1138,7 +1145,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Entry Code is generated automatically and cannot be edited manually.")
+        self.assertContains(response, "Entry Code is generated automatically for tracking and cannot be edited.")
         self.assertEqual(PositionPosting.objects.count(), initial_count)
 
     def test_inactive_position_reference_cannot_be_used_for_entry_creation(self):
@@ -1202,10 +1209,10 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Reference metadata is incomplete")
+        self.assertContains(response, "Position reference details are incomplete")
         self.assertContains(
             response,
-            "This position reference does not contain the level classification required for routing.",
+            "This position reference is missing the level classification needed for assignment.",
         )
         self.assertEqual(PositionPosting.objects.count(), initial_count)
 
@@ -1421,7 +1428,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
             {"action": "finalize"},
             follow=True,
         )
-        self.assertContains(response, "Valid OTP verification is required before final submission.")
+        self.assertContains(response, "Email verification is required before final submission.")
         application.refresh_from_db()
         self.assertIsNone(application.submitted_at)
 
@@ -1508,7 +1515,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         )
 
         application.refresh_from_db()
-        self.assertContains(response, "The OTP is invalid.")
+        self.assertContains(response, "The verification code is invalid.")
         self.assertIsNone(application.otp_verified_at)
 
     def test_portal_intake_requires_requirement_coded_documents(self):
@@ -1973,7 +1980,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
             {"action": "verify", "otp": otp_code},
             follow=True,
         )
-        self.assertContains(response, "The OTP has expired.")
+        self.assertContains(response, "The verification code has expired.")
 
         application.refresh_from_db()
         application.otp_verified_at = timezone.now() - timedelta(minutes=2)
@@ -1983,7 +1990,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
             {"action": "finalize"},
             follow=True,
         )
-        self.assertContains(response, "Your OTP verification has expired.")
+        self.assertContains(response, "Your email verification has expired.")
         application.refresh_from_db()
         self.assertIsNone(application.submitted_at)
 
@@ -2056,7 +2063,7 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
 
         with self.assertRaisesMessage(
             ValueError,
-            "Secretariat cannot process Level 2 applications without an active override.",
+            "Secretariat can handle a Level 2 case only after HRM Chief sends it to Secretariat.",
         ):
             process_workflow_action(
                 application,
@@ -2080,6 +2087,54 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
                 "endorse",
                 "Attempted before screening finalization.",
             )
+
+    def test_case_handoff_modal_shows_fixed_destination_for_single_target(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+
+        client = Client()
+        client.force_login(self.secretariat)
+        response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
+
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn("Send to HRM Chief", content)
+        self.assertIn('type="hidden" name="target_role" value="hrm_chief"', content)
+        self.assertNotIn('<select name="target_role"', content)
+
+    def test_case_handoff_form_collapses_single_authorized_target(self):
+        application = self.make_application(self.level2_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+
+        form = CaseHandoffForm(application=application, user=self.hrm_chief)
+
+        self.assertTrue(form.target_role_is_fixed)
+        self.assertEqual(form.target_role_fixed_label, "Send to Secretariat")
+        self.assertEqual(form.fields["target_role"].widget.input_type, "hidden")
+        self.assertEqual(form["target_role"].value(), RecruitmentUser.Role.SECRETARIAT)
+
+    def test_workflow_action_form_collapses_single_authorized_action(self):
+        application = self.make_application(self.level1_position)
+        with patch(
+            "recruitment.forms.get_available_actions",
+            return_value=[("return_to_hrm_chief", "Return to HRM Chief")],
+        ):
+            form = WorkflowActionForm(application=application, user=self.appointing)
+
+        self.assertTrue(form.action_is_fixed)
+        self.assertEqual(form.action_fixed_label, "Return to HRM Chief")
+        self.assertEqual(form.fields["action"].widget.input_type, "hidden")
+        self.assertEqual(form["action"].value(), "return_to_hrm_chief")
+
+        html = render_to_string(
+            "internal_includes/workflow_action_card.html",
+            {"action_form": form, "application": application},
+        )
+        self.assertIn("Return to HRM Chief", html)
+        self.assertIn('type="hidden" name="action" value="return_to_hrm_chief"', html)
+        self.assertNotIn('<select name="action"', html)
 
     def test_secretariat_cannot_view_or_queue_level2_without_override_even_if_misassigned(self):
         application = self.make_application(self.level2_position)
@@ -2282,7 +2337,7 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
 
         with self.assertRaisesMessage(
             ValueError,
-            "Level 2 Secretariat handoff is only available while the case remains in HRM Chief review.",
+            "Level 2 Secretariat authorization is only available while the case is assigned to HRM Chief review.",
         ):
             grant_secretariat_override(
                 application=application,
@@ -2471,7 +2526,7 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
         response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'rg-cws-stage-tab is-active">Screening</span>')
+        self.assertContains(response, 'rg-cws-stage-titlebar__title">Qualification Screening</span>')
         self.assertNotContains(response, 'data-section="cws-exam"')
         self.assertNotContains(response, 'data-section="cws-interview"')
         self.assertNotContains(response, 'data-section="cws-actions"')
@@ -2503,15 +2558,16 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
         self.assertEqual(response.status_code, 200)
         content = response.content.decode()
         match = re.search(
-            r'(?s)<div class="rg-cws-header__pills">(.*?)</div>\s*<div class="rg-cws-header__actions">',
+            r'(?s)<div class="rg-cws-header__facts"[^>]*>(.*?)</div>\s*<div class="rg-cws-header__actions">',
             content,
         )
         self.assertIsNotNone(match)
-        header_pills = match.group(1)
-        self.assertIn("Plantilla", header_pills)
-        self.assertIn("Level 2", header_pills)
-        self.assertIn("HRM Chief", header_pills)
-        self.assertNotIn("HRM Chief Review", header_pills)
+        header_facts = match.group(1)
+        self.assertIn("Plantilla", header_facts)
+        self.assertIn("Level 2", header_facts)
+        self.assertIn("Assigned to HRM Chief", header_facts)
+        self.assertNotIn("HRM Chief Review", header_facts)
+        self.assertNotIn("rg-pill", header_facts)
 
     def test_pipeline_advances_to_exam_after_screening_is_finalized(self):
         application = self.make_application(self.level2_position)
@@ -2529,7 +2585,7 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
         response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'rg-cws-stage-tab is-active">Exam</span>')
+        self.assertContains(response, 'rg-cws-stage-titlebar__title">Examination</span>')
         content = response.content.decode()
         self.assertRegex(
             content,
@@ -2558,7 +2614,7 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
         response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'rg-cws-stage-tab is-active">Screening</span>')
+        self.assertContains(response, 'rg-cws-stage-titlebar__title">Qualification Screening</span>')
         self.assertContains(response, "Return to Applicant")
         self.assertContains(response, "Reject Application")
         self.assertNotContains(response, "Endorse to HRMPSB")
@@ -2696,7 +2752,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Screening output finalized and locked.")
+        self.assertContains(response, "Screening finalized and locked.")
         screening_record = ScreeningRecord.objects.get(application=application)
         self.assertTrue(screening_record.is_finalized)
         self.assertEqual(screening_record.finalized_by, self.secretariat)
@@ -2721,7 +2777,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Screening output finalized and locked.")
+        self.assertContains(response, "Screening finalized and locked.")
         screening_record = ScreeningRecord.objects.get(application=application)
         self.assertTrue(screening_record.is_finalized)
         self.assertEqual(screening_record.completeness_notes, "")
@@ -2735,7 +2791,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
 
         with self.assertRaisesMessage(
             ValueError,
-            "Finalized screening outputs are locked and cannot be modified.",
+            "Finalized screening records cannot be edited.",
         ):
             save_screening_review(
                 application=application,
@@ -3019,7 +3075,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.HRMPSB_REVIEW)
         with self.assertRaisesMessage(
             ValueError,
-            "You cannot record examination data for this application at its current workflow stage.",
+            "This case is not currently assigned to you for exam details.",
         ):
             save_exam_record(
                 application=application,
@@ -3403,7 +3459,7 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
 
         with self.assertRaisesMessage(
             ValueError,
-            "You cannot upload evidence for this application.",
+            "You cannot upload files for this application.",
         ):
             upload_evidence_item(
                 application=application,
@@ -3603,15 +3659,15 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         response = client.get(reverse("dashboard"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Queue is clear")
+        self.assertContains(response, "No cases right now")
         self.assertNotContains(
             response,
-            '{% include "internal_includes/state_empty.html" with title="Queue is clear" copy="No applications are currently routed to your role." %}',
+            '{% include "internal_includes/state_empty.html" with title="No cases right now" copy="No cases need your action right now." %}',
         )
         self.assertNotContains(response, "{# Empty state partial.")
         self.assertNotContains(
             response,
-            '{% include "internal_includes/banner.html" with variant="info" copy="No active announcements. Notices from the HRM Chief or administrators will appear here." %}',
+            '{% include "internal_includes/banner.html" with variant="info" copy="No notices right now. Notices from the HRM Chief or administrators will appear here." %}',
         )
         self.assertNotContains(response, "{# Contextual banner partial.")
 
@@ -3622,10 +3678,10 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         response = client.get(reverse("workflow-queue"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "No applications found")
+        self.assertContains(response, "No cases right now")
         self.assertNotContains(
             response,
-            '{% include "internal_includes/state_empty.html" with title="No applications found" copy="No applications are currently routed to your role, or no records match the current filter." %}',
+            '{% include "internal_includes/state_empty.html" with title="No cases right now" copy="No cases need your action right now." %}',
         )
         self.assertNotContains(response, "{# Empty state partial.")
 
@@ -3724,7 +3780,7 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         response = client.get(reverse("workflow-queue"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Current Task")
+        self.assertContains(response, "Needed Step")
         self.assertContains(response, "Screening")
         self.assertNotContains(response, "HRM Chief Review")
 
@@ -3738,7 +3794,7 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         response = client.get(reverse("workflow-queue"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Current Task")
+        self.assertContains(response, "Needed Step")
         self.assertContains(response, "Exam")
         self.assertNotContains(response, "HRM Chief Review")
 
@@ -3955,7 +4011,7 @@ class AuditLoggingTraceabilityTests(BaseRecruitmentTestCase):
         response = client.get(reverse("application-audit-log", kwargs={"pk": application.pk}))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Application Audit Trail")
+        self.assertContains(response, "Case Audit Log")
         log = AuditLog.objects.filter(
             application=application,
             actor=self.sysadmin,
@@ -3992,7 +4048,7 @@ class AuditLoggingTraceabilityTests(BaseRecruitmentTestCase):
         response = client.get(reverse("audit-log-list"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "System Audit Logs")
+        self.assertContains(response, "System Audit Log")
         self.assertContains(response, "Password Changed")
         self.assertFalse(response.context["audit_logs"][0].application_id if response.context["audit_logs"] else False)
         log = AuditLog.objects.filter(
@@ -4127,7 +4183,7 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         self.assertEqual(application.current_handler_role, RecruitmentUser.Role.SECRETARIAT)
         self.assertEqual(notification.delivery_status, NotificationLog.DeliveryStatus.SENT)
         self.assertEqual(len(mail.outbox), 1)
-        self.assertIn("selection result", mail.outbox[0].subject.lower())
+        self.assertIn("application result", mail.outbox[0].subject.lower())
         self.assertIn("COS", mail.outbox[0].body)
 
     def test_rejection_sends_non_selected_applicant_notification(self):
@@ -4145,7 +4201,7 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         self.assertEqual(application.status, RecruitmentApplication.Status.REJECTED)
         self.assertEqual(notification.delivery_status, NotificationLog.DeliveryStatus.SENT)
         self.assertEqual(len(mail.outbox), 1)
-        self.assertIn("non-selection notice", mail.outbox[0].subject.lower())
+        self.assertIn("application result", mail.outbox[0].subject.lower())
 
     def test_secretariat_can_send_requirement_checklist_notification_for_level1_completion(self):
         application = self.make_approved_cos_application()
@@ -4173,7 +4229,7 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         self.assertEqual(notification.triggered_by, self.secretariat)
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].subject, notification.subject)
-        self.assertContains(response, "Requirement Checklist Notification")
+        self.assertContains(response, "Send Requirement Checklist")
 
     def test_secretariat_cannot_send_requirement_checklist_before_selection(self):
         application = self.make_submitted_application()
@@ -4216,7 +4272,7 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         self.assertEqual(notification.delivery_status, NotificationLog.DeliveryStatus.SENT)
         self.assertEqual(notification.triggered_by, self.hrm_chief)
         self.assertEqual(len(mail.outbox), 1)
-        self.assertContains(response, "Reminder Notification")
+        self.assertContains(response, "Send Reminder")
 
 
 class CompletionTrackingTests(BaseRecruitmentTestCase):
@@ -4602,7 +4658,7 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
 
         with self.assertRaisesMessage(
             ValueError,
-            "You cannot manage interview scheduling for this application at its current workflow stage.",
+            "This case is not currently assigned to you for interview scheduling.",
         ):
             save_interview_session(
                 application=application,
@@ -4674,7 +4730,7 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
 
         with self.assertRaisesMessage(
             ValueError,
-            "Finalized interview sessions are locked and cannot accept rating changes.",
+            "Finalized interview records cannot accept rating changes.",
         ):
             save_interview_rating(
                 application=application,
@@ -4683,7 +4739,7 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
             )
         with self.assertRaisesMessage(
             ValueError,
-            "Finalized interview sessions are locked and cannot accept fallback rating uploads.",
+            "Finalized interview records cannot accept fallback rating uploads.",
         ):
             upload_interview_fallback_rating(
                 application=application,
@@ -4986,7 +5042,7 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
 
         with self.assertRaisesMessage(
             ValueError,
-            "Only the HRM Chief may record the final decision at the current workflow stage.",
+            "Only the HRM Chief may record the final decision at the current step.",
         ):
             self.record_final_decision_for_current_stage(
                 application,
@@ -5009,7 +5065,7 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'rg-cws-stage-tab is-active">Decision</span>')
+        self.assertContains(response, 'rg-cws-stage-titlebar__title">Final Decision</span>')
         self.assertNotContains(response, 'data-section="cws-interview"')
         self.assertNotContains(response, 'data-section="cws-deliberation"')
         self.assertContains(response, 'rg-cws-layout rg-cws-layout--full')

@@ -160,7 +160,7 @@ class ApplicantPortalIntakeView(FormView):
 
         messages.success(
             self.request,
-            "Your draft has been prepared. Check your email for the OTP needed to finalize submission.",
+            "Your application draft is ready. Check your email for the verification code.",
         )
         for warning in form.duplicate_document_warnings:
             messages.warning(self.request, warning)
@@ -234,12 +234,12 @@ class ApplicantOTPView(TemplateView):
                 if isinstance(exc, OperationalError):
                     messages.error(
                         request,
-                        "We could not prepare a new OTP right now. Please try again in a few moments.",
+                        "We could not prepare a new verification code right now. Please try again in a few moments.",
                     )
                 else:
                     messages.error(request, str(exc))
             else:
-                messages.success(request, "A new OTP has been sent to your registered email address.")
+                messages.success(request, "A new verification code has been sent to your email address.")
             return redirect("applicant-otp", token=application.public_token)
 
         if action == "verify":
@@ -250,7 +250,7 @@ class ApplicantOTPView(TemplateView):
                 except ValueError as exc:
                     otp_form.add_error("otp", str(exc))
                 else:
-                    messages.success(request, "OTP verified. You may now finalize your submission.")
+                    messages.success(request, "Email verified. You may now submit your application.")
                     return redirect("applicant-otp", token=application.public_token)
             return self.render_to_response(
                 self.get_context_data(application=application, otp_form=otp_form)
@@ -265,7 +265,7 @@ class ApplicantOTPView(TemplateView):
             messages.success(request, "Application submitted successfully.")
             return redirect("applicant-receipt", token=application.public_token)
 
-        messages.error(request, "Unsupported applicant portal action.")
+        messages.error(request, "This applicant action is not available.")
         return redirect("applicant-otp", token=application.public_token)
 
 

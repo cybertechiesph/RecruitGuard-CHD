@@ -9,31 +9,25 @@
             {{ application.position.job_code }}
         </div>
     </div>
-    <div class="rg-cws-header__pills">
-        <span class="rg-pill rg-pill--{{ application.branch|branch_theme }} rg-pill--sm">
-            {{ application.get_branch_display }}
-        </span>
-        <span class="rg-pill rg-pill--{{ application.level|level_theme }} rg-pill--sm">
-            {{ application.get_level_display }}
-        </span>
+    <div class="rg-cws-header__facts" aria-label="Case details">
+        <span>{{ application.get_branch_display }}</span>
+        <span>{{ application.get_level_display }}</span>
         {% if application.current_handler_role %}
-            <span class="rg-pill rg-pill--{{ application.current_handler_role|role_theme }} rg-pill--sm">
-                {{ application.current_handler_role|role_label }}
-            </span>
+            <span>Assigned to {{ application.current_handler_role|role_label }}</span>
         {% else %}
-            <span class="rg-pill rg-pill--neutral rg-pill--sm">Closed</span>
+            <span>Closed</span>
         {% endif %}
     </div>
     <div class="rg-cws-header__actions">
         {% if request.user.role != "system_admin" %}
-            <a href="{% url 'workflow-queue' %}" class="btn btn-outline-secondary btn-sm">← Queue</a>
+            <a href="{% url 'workflow-queue' %}" class="btn btn-outline-secondary btn-sm">&larr; Back to Queue</a>
         {% endif %}
         {% if case_handoff_form %}
             <button type="button"
                     class="btn btn-outline-secondary btn-sm"
                     data-bs-toggle="modal"
                     data-bs-target="#caseHandoffModal">
-                Route Case
+                Send Case
             </button>
         {% endif %}
         {% if can_export %}
@@ -52,7 +46,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h2 class="modal-title h5" id="caseHandoffModalLabel">
-                    Route this case?
+                    Send this case?
                 </h2>
                 <button type="button"
                         class="btn-close"
@@ -63,12 +57,26 @@
                 {% csrf_token %}
                 <div class="modal-body">
                     <p class="mb-3 rg-modal-confirm__body-copy">
-                        Send this case to the other authorized handler without advancing the official workflow stage.
+                        Send this case to the other authorized office. The official step will stay the same.
                     </p>
                     <div class="rg-form-grid">
-                        {% for field in case_handoff_form %}
-                            {% include "recruitment/includes/form_field.html" with field=field %}
-                        {% endfor %}
+                        {% if case_handoff_form.target_role_is_fixed %}
+                            <div class="rg-field">
+                                <label class="form-label">{{ case_handoff_form.target_role.label }}</label>
+                                <div class="form-control rg-fixed-value" aria-readonly="true">
+                                    {{ case_handoff_form.target_role_fixed_label }}
+                                </div>
+                                {{ case_handoff_form.target_role }}
+                                {% for error in case_handoff_form.target_role.errors %}
+                                    <div class="invalid-feedback d-block">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            {% include "recruitment/includes/form_field.html" with field=case_handoff_form.remarks %}
+                        {% else %}
+                            {% for field in case_handoff_form %}
+                                {% include "recruitment/includes/form_field.html" with field=field %}
+                            {% endfor %}
+                        {% endif %}
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -78,7 +86,7 @@
                         Cancel
                     </button>
                     <button type="submit" class="btn btn-rg-primary">
-                        Route Case
+                        Send Case
                     </button>
                 </div>
             </form>

@@ -538,7 +538,7 @@ class EvidenceUploadView(LoginRequiredMixin, SystemAdministratorRequiredMixin, V
             )
             messages.success(
                 request,
-                f"Evidence stored in the vault as {evidence.version_label}.",
+                f"File saved as {evidence.version_label}.",
             )
         else:
             messages.error(
@@ -609,9 +609,9 @@ class EvidenceArchiveToggleView(LoginRequiredMixin, SystemAdministratorRequiredM
                 messages.error(request, str(exc))
             else:
                 if form.cleaned_data["action"] == "archive":
-                    messages.success(request, "Evidence archived with its retention tag.")
+                    messages.success(request, "File archived with its archive label.")
                 else:
-                    messages.success(request, "Evidence restored from archive.")
+                    messages.success(request, "File restored from archive.")
         else:
             messages.error(
                 request,
@@ -707,9 +707,9 @@ class WorkflowActionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, Vie
             except ValueError as exc:
                 messages.error(request, str(exc))
             else:
-                messages.success(request, "Workflow decision recorded.")
+                messages.success(request, "Next step saved.")
         else:
-            messages.error(request, "Invalid workflow action.")
+            messages.error(request, "Choose an allowed next step.")
         if user_can_view_application(request.user, application):
             return redirect("application-detail", pk=pk)
         return redirect("workflow-queue")
@@ -733,9 +733,9 @@ class CaseHandoffView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
             except ValueError as exc:
                 messages.error(request, str(exc))
             else:
-                messages.success(request, "Case handoff recorded and audit-logged.")
+                messages.success(request, "Case sent and recorded.")
         else:
-            messages.error(request, "Select a valid handoff target and add remarks.")
+            messages.error(request, "Add remarks before sending the case.")
 
         application.refresh_from_db()
         if user_can_view_application(request.user, application):
@@ -763,9 +763,9 @@ class ScreeningReviewView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, Vi
                 messages.error(request, str(exc))
             else:
                 if screening_record.is_finalized:
-                    messages.success(request, "Screening output finalized and locked.")
+                    messages.success(request, "Screening finalized and locked.")
                 else:
-                    messages.success(request, "Screening review saved.")
+                    messages.success(request, "Screening draft saved.")
         else:
             error_messages = []
             for field_name, errors in form.errors.items():
@@ -810,9 +810,9 @@ class ExaminationRecordView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, 
                 )
             else:
                 if exam_record.is_finalized:
-                    messages.success(request, "Examination output finalized and locked.")
+                    messages.success(request, "Exam finalized and locked.")
                 else:
-                    messages.success(request, "Examination record saved.")
+                    messages.success(request, "Exam draft saved.")
         else:
             messages.error(
                 request,
@@ -849,7 +849,7 @@ class InterviewSessionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
                 if interview_session.is_finalized:
                     messages.success(request, "Interview session finalized and locked.")
                 else:
-                    messages.success(request, "Interview session schedule saved.")
+                    messages.success(request, "Interview schedule saved.")
         else:
             messages.error(request, "Complete the required interview scheduling fields before saving.")
         return redirect("application-detail", pk=pk)
@@ -896,7 +896,7 @@ class InterviewFallbackUploadView(LoginRequiredMixin, WorkflowProcessorRequiredM
             except ValueError as exc:
                 messages.error(request, str(exc))
             else:
-                messages.success(request, "Fallback interview rating sheet uploaded to the Evidence Vault.")
+                messages.success(request, "Fallback rating sheet saved with secured files.")
         else:
             messages.error(request, "Provide the scanned fallback rating sheet and upload remarks.")
         return redirect("application-detail", pk=pk)
@@ -952,7 +952,7 @@ class ComparativeAssessmentReportView(LoginRequiredMixin, WorkflowProcessorRequi
                 if report.is_finalized:
                     messages.success(request, "Comparative Assessment Report finalized and locked.")
                 else:
-                    messages.success(request, "Comparative Assessment Report generated.")
+                    messages.success(request, "Comparative Assessment Report saved.")
         else:
             messages.error(request, "Provide the CAR notes before generating the report.")
         application.refresh_from_db()
@@ -1022,7 +1022,7 @@ class CompletionTrackingView(LoginRequiredMixin, WorkflowProcessorRequiredMixin,
             except (ValueError, ValidationError) as exc:
                 messages.error(request, str(exc))
             else:
-                messages.success(request, "Completion tracking saved.")
+                messages.success(request, "Completion details saved.")
         else:
             errors = []
             errors.extend(error for error_list in form.errors.values() for error in error_list)
@@ -1057,7 +1057,7 @@ class CaseClosureView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
             except ValueError as exc:
                 messages.error(request, str(exc))
             else:
-                messages.success(request, "Recruitment case closed after completion tracking.")
+                messages.success(request, "Case closed after completion.")
         else:
             messages.error(request, "Closure notes are required.")
         return redirect("application-detail", pk=pk)
@@ -1077,9 +1077,9 @@ class WorkflowOverrideView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
             except ValueError as exc:
                 messages.error(request, str(exc))
             else:
-                messages.success(request, "Level 2 handoff recorded and audit-logged.")
+                messages.success(request, "Level 2 authorization recorded.")
         else:
-            messages.error(request, "Override reason is required.")
+            messages.error(request, "Add a reason for this authorization.")
         if user_can_view_application(request.user, application):
             return redirect("application-detail", pk=pk)
         return redirect("workflow-queue")
@@ -1109,7 +1109,7 @@ class RequirementChecklistNotificationView(LoginRequiredMixin, InternalUserRequi
             else:
                 messages.success(
                     request,
-                    "Requirement checklist notification queued for email delivery.",
+                    "Requirement checklist email queued for delivery.",
                 )
         else:
             messages.error(
@@ -1141,7 +1141,7 @@ class ReminderNotificationView(LoginRequiredMixin, InternalUserRequiredMixin, Vi
             except ValueError as exc:
                 messages.error(request, str(exc))
             else:
-                messages.success(request, "Reminder notification queued for email delivery.")
+                messages.success(request, "Reminder email queued for delivery.")
         else:
             messages.error(
                 request,
@@ -1166,9 +1166,9 @@ class WorkflowReopenView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, Vie
             except ValueError as exc:
                 messages.error(request, str(exc))
             else:
-                messages.success(request, "Recruitment case reopened under controlled action.")
+                messages.success(request, "Case reopened with authorization.")
         else:
-            messages.error(request, "A reopen reason is required.")
+            messages.error(request, "Add a reason before reopening this case.")
         if user_can_view_application(request.user, application):
             return redirect("application-detail", pk=pk)
         return redirect("workflow-queue")

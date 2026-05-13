@@ -4,7 +4,7 @@
 <div class="rg-icard">
     <div class="rg-icard__header">
         <div>
-            <h3 class="rg-icard__title">Workflow Snapshot</h3>
+            <h3 class="rg-icard__title">Case Summary</h3>
         </div>
         {% if audit_log_url %}
         <div class="rg-icard__actions">
@@ -22,7 +22,7 @@
         </span>
     </div>
     <div class="rg-cws-meta-row">
-        <span class="rg-cws-meta-row__label">Routing</span>
+        <span class="rg-cws-meta-row__label">Level</span>
         <span class="rg-cws-meta-row__value">
             <span class="rg-pill rg-pill--{{ application.level|level_theme }} rg-pill--sm">
                 {{ application.get_level_display }}
@@ -30,7 +30,7 @@
         </span>
     </div>
     <div class="rg-cws-meta-row">
-        <span class="rg-cws-meta-row__label">Handler</span>
+        <span class="rg-cws-meta-row__label">Assigned To</span>
         <span class="rg-cws-meta-row__value">
             {% if application.current_handler_role %}
                 <span class="rg-pill rg-pill--{{ application.current_handler_role|role_theme }} rg-pill--sm">
@@ -43,7 +43,7 @@
     </div>
     {% if recruitment_case %}
     <div class="rg-cws-meta-row">
-        <span class="rg-cws-meta-row__label">Stage</span>
+        <span class="rg-cws-meta-row__label">Current Step</span>
         <span class="rg-cws-meta-row__value" style="font-size:0.8125rem;font-weight:600;color:#111827;">
             {{ recruitment_case.get_current_stage_display }}
         </span>
@@ -64,7 +64,7 @@
 
     {% if application.active_secretariat_override %}
         <div style="margin-top:0.75rem;">
-            {% include "internal_includes/banner.html" with variant="warning" copy="A controlled Secretariat override is active for this Level 2 application." %}
+            {% include "internal_includes/banner.html" with variant="warning" copy="HRM Chief allowed Secretariat to handle this Level 2 case." %}
         </div>
     {% endif %}
 
@@ -79,11 +79,11 @@
 <div class="rg-icard">
     <div class="rg-icard__header rg-icard__header--flush"
          style="border-bottom:0;padding-bottom:0;margin-bottom:0.75rem;">
-        <h3 class="rg-icard__title">Stage Integrity</h3>
+        <h3 class="rg-icard__title">Step Controls</h3>
     </div>
     {% if recruitment_case %}
         <div class="rg-cws-meta-row">
-            <span class="rg-cws-meta-row__label">Active Stage</span>
+            <span class="rg-cws-meta-row__label">Current Step</span>
             <span class="rg-cws-meta-row__value"
                   style="font-size:0.8125rem;font-weight:600;color:#111827;">
                 {{ recruitment_case.get_current_stage_display }}
@@ -96,7 +96,7 @@
                     <path d="M5 8l2 2 4-4" stroke="#16a34a" stroke-width="1.5"
                           stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
-                Routing enforced server-side
+                Assignment rules are enforced by the system
             </div>
             <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.78rem;color:#5f6c78;">
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -104,12 +104,12 @@
                     <path d="M5 8l2 2 4-4" stroke="#16a34a" stroke-width="1.5"
                           stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
-                Finalized outputs are read-only
+                Final records cannot be edited normally
             </div>
         </div>
         <p style="margin-top:0.65rem;font-size:0.72rem;color:#9aa4af;
                   border-top:1px solid #edf0f3;padding-top:0.5rem;margin-bottom:0;">
-            Stage skipping is not permitted.
+            Steps cannot be skipped.
         </p>
     {% else %}
         {% include "internal_includes/state_empty.html" with title="No case created" copy="No active recruitment case found for this application." %}
@@ -121,9 +121,9 @@
 <div class="rg-icard">
     <div class="rg-icard__header">
         <div>
-            <h3 class="rg-icard__title">Evidence Vault</h3>
+            <h3 class="rg-icard__title">Secured Files</h3>
             <p class="rg-icard__subtitle">
-                {{ evidence_items|length }} item{{ evidence_items|length|pluralize }} stored
+                {{ evidence_items|length }} file{{ evidence_items|length|pluralize }} saved
             </p>
         </div>
         {% if evidence_vault_url %}
@@ -146,7 +146,7 @@
     {% endfor %}
     {% if evidence_items|length > 4 %}
     <p style="font-size:0.72rem;color:#9aa4af;margin:0.4rem 0 0;">
-        +{{ evidence_items|length|add:"-4" }} more in vault
+        +{{ evidence_items|length|add:"-4" }} more saved file{{ evidence_items|length|add:"-4"|pluralize }}
     </p>
     {% endif %}
 </div>
@@ -162,7 +162,7 @@
     {% for entry in routing_history|slice:":5" %}
     <div style="padding:0.45rem 0;border-bottom:1px solid #edf0f3;{% if forloop.last %}border-bottom:0;{% endif %}">
         <div style="font-size:0.8125rem;font-weight:600;color:#111827;line-height:1.3;">
-            {{ entry.get_action_display }}
+            {{ entry.action|audit_action_label }}
         </div>
         <div class="rg-imeta" style="margin-top:0.2rem;">
             {{ entry.created_at|date:"M d, Y" }}
@@ -181,24 +181,22 @@
     <div style="font-size:0.78rem;color:#5f6c78;display:flex;flex-direction:column;gap:0.75rem;">
         <div>
             <strong style="color:#111827;display:block;margin-bottom:0.2rem;">
-                Current task only
+                Current task
             </strong>
-            This screen only exposes the workflow task currently assigned to this case.
-            Finalize and lock it first before the next task becomes available.
+            Only the current task for this case is shown. Use Finalize &amp; Lock before the next task becomes available.
         </div>
         <div>
             <strong style="color:#111827;display:block;margin-bottom:0.2rem;">
-                Stage progression
+                Step order
             </strong>
-            Future workflow steps remain hidden until the active task is completed.
-            Stage skipping is blocked server-side.
+            Future steps stay hidden until the active task is completed. The system will not allow skipped steps.
         </div>
         {% if audit_log_url %}
         <div>
             <strong style="color:#111827;display:block;margin-bottom:0.2rem;">
-                Audit visibility
+                Audit review
             </strong>
-            Workflow Snapshot and the Audit button remain available for traceable review.
+            The case summary and Audit button stay available for review.
         </div>
         {% endif %}
     </div>

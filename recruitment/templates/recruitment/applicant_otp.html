@@ -62,7 +62,7 @@
     </div>
     {% endif %}
 
-    {# ── State: OTP not yet verified ──────────────────────────── #}
+    {# State: code not yet verified #}
     {% if not application.otp_is_currently_valid %}
 
     <div class="rg-pub-otp-card">
@@ -137,7 +137,7 @@
         </div>
     </div>
 
-    {# ── State: OTP verified, ready to submit ──────────────────── #}
+    {# State: code verified, ready to submit #}
     {% else %}
 
     <div class="rg-pub-otp-card" style="text-align:center;">
@@ -146,7 +146,7 @@
             Email Verified
         </h1>
         <p style="font-size:0.9rem; color:#5f6c78; margin-bottom:1.5rem;">
-            Your email address has been verified. Please review your application details below before finalizing.
+            Your email address has been verified. Please review your application details below before submitting.
         </p>
 
         {# Application summary #}
@@ -204,7 +204,7 @@
 
 <script>
 (function () {
-    // Simple resend cooldown — resets on page load after server sends a new code.
+    // Simple resend cooldown; resets on page load after server sends a new code.
     var COOLDOWN = 60;
     var timerEl = document.getElementById('resend-timer');
     var resendBtn = document.getElementById('resend-btn');
@@ -244,4 +244,3 @@
 })();
 </script>
 {% endblock %}
-

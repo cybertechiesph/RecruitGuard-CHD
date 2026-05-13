@@ -6,11 +6,11 @@
     <div>
         <p class="rg-eyebrow">Module 14</p>
         {% if review_scope == "application" %}
-            <h1 class="rg-page-title">Application Audit Trail</h1>
-            <p class="rg-page-copy">Read-only traceability review for {{ application.reference_label }} across workflow, routing, evidence, export, and sensitive-access events.</p>
+            <h1 class="rg-page-title">Case Audit Log</h1>
+            <p class="rg-page-copy">Protected review for {{ application.reference_label }} across case steps, assignment, files, export, and sensitive access.</p>
         {% else %}
-            <h1 class="rg-page-title">System Audit Logs</h1>
-            <p class="rg-page-copy">Read-only review of system-level identity, access, and security-relevant events that do not expose recruitment case content.</p>
+            <h1 class="rg-page-title">System Audit Log</h1>
+            <p class="rg-page-copy">Protected review of user accounts, access, and security records that do not show case content.</p>
         {% endif %}
     </div>
     <div class="rg-page-actions">
@@ -26,22 +26,22 @@
         <div class="rg-kpi">
             <span class="rg-kpi__label">Case Reference</span>
             <strong class="rg-kpi__value">{{ application.reference_label }}</strong>
-            <span class="rg-kpi__hint">Linked recruitment application</span>
+            <span class="rg-kpi__hint">Linked recruitment case</span>
         </div>
         <div class="rg-kpi">
             <span class="rg-kpi__label">Branch / Level</span>
             <strong class="rg-kpi__value">{{ application.get_branch_display }} / {{ application.get_level_display }}</strong>
-            <span class="rg-kpi__hint">Routing-aware case classification</span>
+            <span class="rg-kpi__hint">Branch and level of this case</span>
         </div>
         <div class="rg-kpi">
             <span class="rg-kpi__label">Current Status</span>
             <strong class="rg-kpi__value">{{ application.get_status_display }}</strong>
-            <span class="rg-kpi__hint">Current workflow state</span>
+            <span class="rg-kpi__hint">Current case status</span>
         </div>
         <div class="rg-kpi">
-            <span class="rg-kpi__label">Handler</span>
+            <span class="rg-kpi__label">Assigned To</span>
             <strong class="rg-kpi__value">{{ application.current_handler_role|role_label }}</strong>
-            <span class="rg-kpi__hint">Current authorized processor</span>
+            <span class="rg-kpi__hint">Office currently assigned</span>
         </div>
     </div>
 {% endif %}
@@ -69,7 +69,7 @@
     <div class="rg-section__header">
         <div>
             <h2 class="h4 mb-1">Logged Events</h2>
-            <p class="rg-section-copy">Each event preserves actor identity, role, timestamp, action, case reference, workflow stage, and trace details.</p>
+            <p class="rg-section-copy">Each record shows who acted, when it happened, the case involved, and the related step.</p>
         </div>
     </div>
     {% if audit_logs %}
@@ -78,12 +78,12 @@
                 <article class="rg-record">
                     <div class="rg-record__header">
                         <div>
-                            <strong>{{ log.get_action_display }}</strong>
+                            <strong>{{ log.action|audit_action_label }}</strong>
                             <div class="rg-record__meta">
                                 {% if log.case_reference %}
                                     {{ log.case_reference }}
                                 {% else %}
-                                    System-wide event
+                                    System-wide record
                                 {% endif %}
                             </div>
                         </div>
@@ -99,7 +99,7 @@
                             <span class="rg-pill rg-pill--info">{{ log.workflow_stage|stage_label }}</span>
                         {% endif %}
                         {% if log.is_sensitive_access %}
-                            <span class="rg-pill rg-pill--warning">Sensitive Access</span>
+                            <span class="rg-pill rg-pill--warning">Sensitive Record</span>
                         {% endif %}
                         {% if log.application %}
                             <span class="rg-pill rg-pill--{{ log.application.branch|branch_theme }}">{{ log.application.get_branch_display }}</span>
@@ -120,7 +120,7 @@
                     {% endif %}
                     {% if log.metadata %}
                         <details class="mt-2">
-                            <summary class="rg-note">Event details</summary>
+                            <summary class="rg-note">Audit details</summary>
                             <pre class="bg-light border rounded p-3 mt-2 mb-0"><code>{{ log.metadata|pretty_json }}</code></pre>
                         </details>
                     {% endif %}
@@ -128,7 +128,7 @@
             {% endfor %}
         </div>
     {% else %}
-        <div class="rg-empty-state">No audit events matched the current filters.</div>
+        <div class="rg-empty-state">No audit records match the current filters.</div>
     {% endif %}
 </div>
 {% endblock %}

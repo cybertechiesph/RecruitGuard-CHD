@@ -11,7 +11,7 @@
         </svg>
     </div>
     <div class="flex-1">
-        <div class="rg-scr-elig-bar__label">Deliberation Stage — Finalized</div>
+        <div class="rg-scr-elig-bar__label">Deliberation Step &mdash; Finalized</div>
         <div class="rg-scr-elig-bar__verdict">
             {% if current_comparative_assessment_report and current_comparative_assessment_report.is_finalized %}
                 Deliberation &amp; CAR Locked
@@ -114,7 +114,7 @@
         <div style="margin-bottom:1.25rem;">
             <div style="font-size:0.72rem;font-weight:700;color:#5f6c78;
                         text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem;">
-                Stage Snapshot at Finalization
+                Step Summary at Finalization
             </div>
             <div style="display:flex;flex-wrap:wrap;gap:0.5rem 1.5rem;font-size:0.79rem;">
                 {% if snap.latest_qualification_outcome %}
@@ -342,12 +342,12 @@
                 {% if application.branch == "plantilla" %}
                     The deliberation record and Comparative Assessment Report are finalized.
                     The case is advancing to the
-                    <strong>Decision / Submission Packet</strong> stage for Appointing Authority review.
+                    <strong>Decision / Submission Packet</strong> step for Appointing Authority review.
                 {% else %}
                     The deliberation record is finalized. This COS case is advancing toward
-                    the <strong>Decision / Submission Packet</strong> stage.
+                    the <strong>Decision / Submission Packet</strong> step.
                 {% endif %}
-                To modify any locked record, use the Controlled Reopen procedure in the Actions tab.
+                To modify any finalized record, use Authorized Reopen in the Actions tab.
             </p>
         </div>
     </div>
