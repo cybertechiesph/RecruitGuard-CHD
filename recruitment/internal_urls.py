@@ -12,6 +12,7 @@ from .entry_views import (
 )
 from .identity_views import (
     InternalLoginView,
+    InternalMFAVerifyView,
     InternalPasswordChangeDoneView,
     InternalPasswordChangeView,
     InternalUserCreateView,
@@ -38,6 +39,7 @@ from .views import (
     ExaminationRecordView,
     ExportApplicationBundleView,
     FinalDecisionView,
+    FinalSelectionView,
     InterviewFallbackUploadView,
     InterviewRatingView,
     InterviewSessionView,
@@ -56,6 +58,7 @@ urlpatterns = [
     path("", DashboardView.as_view(), name="dashboard"),
     path("forbidden/", ForbiddenView.as_view(), name="forbidden"),
     path("login/", InternalLoginView.as_view(), name="login"),
+    path("login/mfa/", InternalMFAVerifyView.as_view(), name="internal-mfa-verify"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path(
         "password/change/",
@@ -114,6 +117,7 @@ urlpatterns = [
         name="comparative-assessment-report",
     ),
     path("applications/<int:pk>/final-decision/", FinalDecisionView.as_view(), name="final-decision-record"),
+    path("applications/<int:pk>/final-selection/", FinalSelectionView.as_view(), name="final-selection-record"),
     path("applications/<int:pk>/completion/", CompletionTrackingView.as_view(), name="completion-tracking"),
     path("applications/<int:pk>/close/", CaseClosureView.as_view(), name="case-close"),
     path("evidence/", EvidenceVaultListView.as_view(), name="evidence-vault-list"),

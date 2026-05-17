@@ -8,6 +8,7 @@ from django.utils import timezone
 from .models import (
     AuditLog,
     ComparativeAssessmentReport,
+    ComparativeAssessmentReportItem,
     CompletionRecord,
     CompletionRequirement,
     DeliberationRecord,
@@ -32,6 +33,12 @@ from .upload_validation import validate_applicant_document_upload
 
 
 AUDIT_ACTION_CHOICE_LABELS = {
+    AuditLog.Action.INTERNAL_MFA_SENT: "Internal Verification Code Sent",
+    AuditLog.Action.INTERNAL_MFA_RESENT: "Internal Verification Code Resent",
+    AuditLog.Action.INTERNAL_MFA_VERIFIED: "Internal MFA Verified",
+    AuditLog.Action.INTERNAL_MFA_FAILED: "Internal MFA Failed",
+    AuditLog.Action.INTERNAL_MFA_EXPIRED: "Internal MFA Expired",
+    AuditLog.Action.INTERNAL_MFA_LOCKED: "Internal MFA Locked",
     AuditLog.Action.APPLICATION_OTP_SENT: "Verification Code Sent",
     AuditLog.Action.APPLICATION_OTP_VERIFIED: "Email Verified",
     AuditLog.Action.ROUTED: "Case Assigned",
@@ -182,6 +189,20 @@ class InternalPasswordChangeForm(BootstrapFormMixin, PasswordChangeForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._apply_bootstrap()
+
+
+class InternalMFAOTPForm(BootstrapFormMixin, forms.Form):
+    otp = forms.CharField(max_length=6, min_length=6, label="Verification Code")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
+
+    def clean_otp(self):
+        otp = self.cleaned_data["otp"].strip()
+        if not otp.isdigit():
+            raise forms.ValidationError("Enter the 6-digit verification code sent to your email address.")
+        return otp
 
 
 class InternalUserCreateForm(BootstrapFormMixin, UserCreationForm):
@@ -1211,6 +1232,39 @@ class FinalDecisionForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.
         self.fields["decision_outcome"].label = "Final Outcome"
         self.fields["decision_notes"].label = "Decision Notes / Remarks"
         self._apply_bootstrap()
+
+
+class CARItemChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, item):
+        application = item.application
+        reference = application.reference_number or application.reference_label
+        return f"#{item.rank_order} - {application.applicant_display_name} ({reference})"
+
+
+class FinalSelectionForm(BootstrapFormMixin, forms.Form):
+    selected_item = CARItemChoiceField(
+        queryset=ComparativeAssessmentReportItem.objects.none(),
+        widget=forms.RadioSelect,
+    )
+    decision_notes = forms.CharField(widget=forms.Textarea(attrs={"rows": 4}))
+
+    def __init__(self, *args, report=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.report = report
+        if report is not None:
+            self.fields["selected_item"].queryset = report.items.select_related(
+                "recruitment_case",
+                "recruitment_case__application",
+            ).order_by("rank_order", "created_at")
+        self.fields["selected_item"].label = "Selected Appointee"
+        self.fields["decision_notes"].label = "Decision Notes / Remarks"
+        self._apply_bootstrap()
+
+    def clean_selected_item(self):
+        selected_item = self.cleaned_data["selected_item"]
+        if self.report is not None and selected_item.report_id != self.report.id:
+            raise forms.ValidationError("Select an applicant from the finalized CAR.")
+        return selected_item
 
 
 class PositionReferenceForm(BootstrapFormMixin, forms.ModelForm):

@@ -7,6 +7,7 @@ from datetime import date, timedelta
 from unittest.mock import patch
 
 from django.apps import apps as django_apps
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.messages import get_messages
 from django.core import mail
@@ -33,6 +34,8 @@ from .models import (
     ExamRecord,
     EvidenceVaultItem,
     FinalDecision,
+    FinalSelection,
+    InternalMFAChallenge,
     NotificationLog,
     PositionReference,
     PositionPosting,
@@ -43,6 +46,10 @@ from .models import (
     ScreeningRecord,
     WorkflowOverride,
 )
+from .permissions import (
+    INTERNAL_MFA_USER_SESSION_KEY,
+    INTERNAL_MFA_VERIFIED_SESSION_KEY,
+)
 from .requirements import (
     get_applicant_document_requirements,
     get_required_applicant_document_requirements,
@@ -51,6 +58,7 @@ from .services import (
     build_export_bundle,
     build_submission_packet,
     generate_comparative_assessment_report,
+    get_latest_finalized_comparative_assessment_report,
     get_available_actions,
     get_queue_for_user,
     grant_secretariat_override,
@@ -59,6 +67,7 @@ from .services import (
     process_workflow_action,
     repair_auto_advance_workflow_boundaries,
     record_final_decision,
+    record_final_selection,
     record_system_audit_event,
     save_deliberation_record,
     save_exam_record,
@@ -83,31 +92,37 @@ class BaseRecruitmentTestCase(TestCase):
         self.applicant = User.objects.create_user(
             username="applicant",
             password="testpass123",
+            email="applicant@example.com",
             role=RecruitmentUser.Role.APPLICANT,
         )
         self.secretariat = User.objects.create_user(
             username="secretariat",
             password="testpass123",
+            email="secretariat@example.com",
             role=RecruitmentUser.Role.SECRETARIAT,
         )
         self.hrm_chief = User.objects.create_user(
             username="hrmchief",
             password="testpass123",
+            email="hrmchief@example.com",
             role=RecruitmentUser.Role.HRM_CHIEF,
         )
         self.hrmpsb = User.objects.create_user(
             username="hrmpsb",
             password="testpass123",
+            email="hrmpsb@example.com",
             role=RecruitmentUser.Role.HRMPSB_MEMBER,
         )
         self.appointing = User.objects.create_user(
             username="appointing",
             password="testpass123",
+            email="appointing@example.com",
             role=RecruitmentUser.Role.APPOINTING_AUTHORITY,
         )
         self.sysadmin = User.objects.create_user(
             username="sysadmin",
             password="testpass123",
+            email="sysadmin@example.com",
             role=RecruitmentUser.Role.SYSTEM_ADMIN,
         )
         self.admin_aide_position = PositionReference.objects.get(position_title="Administrative Aide VI")
@@ -148,6 +163,14 @@ class BaseRecruitmentTestCase(TestCase):
             status=PositionPosting.EntryStatus.ACTIVE,
         )
 
+    def force_login_with_mfa(self, client, user):
+        client.force_login(user)
+        if getattr(user, "is_internal_user", False):
+            session = client.session
+            session[INTERNAL_MFA_VERIFIED_SESSION_KEY] = True
+            session[INTERNAL_MFA_USER_SESSION_KEY] = user.id
+            session.save()
+
     def level1_closing_date(self):
         return timezone.localdate() + timedelta(days=15)
 
@@ -156,6 +179,14 @@ class BaseRecruitmentTestCase(TestCase):
 
     def entry_opening_date_string(self):
         return self.entry_opening_date().isoformat()
+
+    def finalize_applicant_pool_for_test(self, entry):
+        if entry.applicant_pool_is_finalized:
+            return entry
+        entry.status = PositionPosting.EntryStatus.CLOSED
+        entry.save(update_fields=["status", "is_active", "updated_at"])
+        entry.refresh_from_db()
+        return entry
 
     def build_valid_applicant_document_upload(
         self,
@@ -416,6 +447,11 @@ class BaseRecruitmentTestCase(TestCase):
         decision_support_summary="Decision-support summary preserved for routing.",
         ranking_notes="Ranking basis recorded for decision support.",
     ):
+        if (
+            application.branch == PositionPosting.Branch.PLANTILLA
+            and application.case.current_stage == RecruitmentCase.Stage.HRMPSB_REVIEW
+        ):
+            self.finalize_applicant_pool_for_test(application.position)
         return save_deliberation_record(
             application=application,
             actor=actor,
@@ -449,6 +485,32 @@ class BaseRecruitmentTestCase(TestCase):
         decision_outcome=FinalDecision.Outcome.SELECTED,
         decision_notes="Final decision recorded after packet review.",
     ):
+        if application.branch == PositionPosting.Branch.PLANTILLA:
+            report = get_latest_finalized_comparative_assessment_report(application)
+            if not report:
+                raise ValueError("Finalize the CAR before recording the final selection.")
+            candidate_items = report.items.select_related(
+                "recruitment_case",
+                "recruitment_case__application",
+            ).order_by("rank_order", "created_at")
+            if decision_outcome == FinalDecision.Outcome.NOT_SELECTED:
+                selected_item = candidate_items.exclude(
+                    recruitment_case__application=application,
+                ).first()
+            else:
+                selected_item = candidate_items.filter(
+                    recruitment_case__application=application,
+                ).first()
+            if not selected_item:
+                raise ValueError("Plantilla final selection requires a selected CAR applicant.")
+            return record_final_selection(
+                application=application,
+                actor=actor,
+                cleaned_data={
+                    "selected_item": selected_item,
+                    "decision_notes": decision_notes,
+                },
+            )
         return record_final_decision(
             application=application,
             actor=actor,
@@ -482,6 +544,9 @@ class BaseRecruitmentTestCase(TestCase):
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class FoundationSmokeTests(TestCase):
+    def extract_internal_mfa_code(self):
+        return re.search(r"\b(\d{6})\b", mail.outbox[-1].body).group(1)
+
     def test_login_page_loads(self):
         response = self.client.get(reverse("login"))
         self.assertEqual(response.status_code, 200)
@@ -510,9 +575,10 @@ class FoundationSmokeTests(TestCase):
         self.assertIn(reverse("login"), response["Location"])
 
     def test_internal_user_can_log_in(self):
-        User.objects.create_user(
+        user = User.objects.create_user(
             username="secretariat",
             password="testpass123",
+            email="secretariat@example.com",
             role=RecruitmentUser.Role.SECRETARIAT,
         )
         response = self.client.post(
@@ -522,9 +588,158 @@ class FoundationSmokeTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.request["PATH_INFO"], reverse("internal-mfa-verify"))
+        self.assertContains(response, "Check Your Email")
+        self.assertFalse(
+            AuditLog.objects.filter(action=AuditLog.Action.INTERNAL_LOGIN).exists()
+        )
+        challenge = InternalMFAChallenge.objects.get(user=user)
+        otp_code = self.extract_internal_mfa_code()
+        self.assertNotEqual(challenge.otp_hash, otp_code)
+
+        response = self.client.post(
+            reverse("internal-mfa-verify"),
+            {"action": "verify", "otp": otp_code},
+            follow=True,
+        )
+
         self.assertEqual(response.request["PATH_INFO"], reverse("dashboard"))
         self.assertTrue(
             AuditLog.objects.filter(action=AuditLog.Action.INTERNAL_LOGIN).exists()
+        )
+        self.assertTrue(
+            AuditLog.objects.filter(action=AuditLog.Action.INTERNAL_MFA_VERIFIED).exists()
+        )
+
+    def test_internal_login_requires_registered_email_for_mfa(self):
+        User.objects.create_user(
+            username="secretariat",
+            password="testpass123",
+            role=RecruitmentUser.Role.SECRETARIAT,
+        )
+        response = self.client.post(
+            reverse("login"),
+            {"username": "secretariat", "password": "testpass123"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "does not have an email address")
+        self.assertFalse(InternalMFAChallenge.objects.exists())
+        self.assertTrue(
+            AuditLog.objects.filter(action=AuditLog.Action.INTERNAL_MFA_FAILED).exists()
+        )
+
+    def test_internal_page_requires_completed_mfa(self):
+        user = User.objects.create_user(
+            username="secretariat",
+            password="testpass123",
+            email="secretariat@example.com",
+            role=RecruitmentUser.Role.SECRETARIAT,
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("login"), response["Location"])
+
+    def test_internal_mfa_resend_respects_cooldown(self):
+        user = User.objects.create_user(
+            username="secretariat",
+            password="testpass123",
+            email="secretariat@example.com",
+            role=RecruitmentUser.Role.SECRETARIAT,
+        )
+        self.client.post(
+            reverse("login"),
+            {"username": "secretariat", "password": "testpass123"},
+        )
+        challenge = InternalMFAChallenge.objects.get(user=user)
+
+        response = self.client.post(
+            reverse("internal-mfa-verify"),
+            {"action": "resend"},
+            follow=True,
+        )
+
+        self.assertContains(response, "Please wait")
+        self.assertEqual(InternalMFAChallenge.objects.filter(user=user).count(), 1)
+
+        challenge.requested_at = timezone.now() - timedelta(
+            seconds=settings.INTERNAL_MFA_RESEND_COOLDOWN_SECONDS + 1
+        )
+        challenge.save(update_fields=["requested_at", "updated_at"])
+        response = self.client.post(
+            reverse("internal-mfa-verify"),
+            {"action": "resend"},
+            follow=True,
+        )
+
+        self.assertContains(response, "A new verification code has been sent.")
+        self.assertEqual(InternalMFAChallenge.objects.filter(user=user).count(), 2)
+        challenge.refresh_from_db()
+        self.assertTrue(challenge.is_used)
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertTrue(
+            AuditLog.objects.filter(action=AuditLog.Action.INTERNAL_MFA_RESENT).exists()
+        )
+
+    def test_expired_internal_mfa_code_is_rejected(self):
+        user = User.objects.create_user(
+            username="secretariat",
+            password="testpass123",
+            email="secretariat@example.com",
+            role=RecruitmentUser.Role.SECRETARIAT,
+        )
+        self.client.post(
+            reverse("login"),
+            {"username": "secretariat", "password": "testpass123"},
+        )
+        otp_code = self.extract_internal_mfa_code()
+        challenge = InternalMFAChallenge.objects.get(user=user)
+        challenge.expires_at = timezone.now() - timedelta(minutes=1)
+        challenge.save(update_fields=["expires_at", "updated_at"])
+
+        response = self.client.post(
+            reverse("internal-mfa-verify"),
+            {"action": "verify", "otp": otp_code},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "invalid or expired")
+        challenge.refresh_from_db()
+        self.assertTrue(challenge.is_used)
+        self.assertTrue(
+            AuditLog.objects.filter(action=AuditLog.Action.INTERNAL_MFA_EXPIRED).exists()
+        )
+
+    @override_settings(INTERNAL_MFA_MAX_ATTEMPTS=2)
+    def test_internal_mfa_locks_after_too_many_failed_attempts(self):
+        user = User.objects.create_user(
+            username="secretariat",
+            password="testpass123",
+            email="secretariat@example.com",
+            role=RecruitmentUser.Role.SECRETARIAT,
+        )
+        self.client.post(
+            reverse("login"),
+            {"username": "secretariat", "password": "testpass123"},
+        )
+        challenge = InternalMFAChallenge.objects.get(user=user)
+
+        for _attempt in range(2):
+            response = self.client.post(
+                reverse("internal-mfa-verify"),
+                {"action": "verify", "otp": "000000"},
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, "invalid or expired")
+
+        challenge.refresh_from_db()
+        self.assertTrue(challenge.is_used)
+        self.assertEqual(challenge.attempt_count, 2)
+        self.assertTrue(
+            AuditLog.objects.filter(action=AuditLog.Action.INTERNAL_MFA_LOCKED).exists()
         )
 
     def test_applicant_cannot_use_internal_login(self):
@@ -560,7 +775,7 @@ class FoundationSmokeTests(TestCase):
 class IdentityAdministrationTests(BaseRecruitmentTestCase):
     def test_system_admin_can_create_internal_account(self):
         client = Client()
-        client.force_login(self.sysadmin)
+        self.force_login_with_mfa(client, self.sysadmin)
         response = client.post(
             reverse("internal-user-create"),
             {
@@ -589,7 +804,7 @@ class IdentityAdministrationTests(BaseRecruitmentTestCase):
 
     def test_non_admin_cannot_access_internal_user_directory(self):
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
         response = client.get(reverse("internal-user-list"))
         self.assertEqual(response.status_code, 403)
 
@@ -601,7 +816,7 @@ class IdentityAdministrationTests(BaseRecruitmentTestCase):
             email="member.one@example.com",
         )
         client = Client()
-        client.force_login(self.sysadmin)
+        self.force_login_with_mfa(client, self.sysadmin)
         response = client.post(
             reverse("internal-user-update", kwargs={"pk": managed_user.pk}),
             {
@@ -639,7 +854,7 @@ class IdentityAdministrationTests(BaseRecruitmentTestCase):
         submit_application(application, self.applicant)
 
         client = Client()
-        client.force_login(self.sysadmin)
+        self.force_login_with_mfa(client, self.sysadmin)
         response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
         self.assertEqual(response.status_code, 404)
 
@@ -648,7 +863,7 @@ class IdentityAdministrationTests(BaseRecruitmentTestCase):
         self.assertFalse(self.sysadmin.is_staff)
 
         client = Client()
-        client.force_login(self.sysadmin)
+        self.force_login_with_mfa(client, self.sysadmin)
         response = client.get("/admin/")
 
         self.assertEqual(response.status_code, 302)
@@ -719,7 +934,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
 
     def test_system_admin_can_create_position_reference_catalog_record(self):
         client = Client()
-        client.force_login(self.sysadmin)
+        self.force_login_with_mfa(client, self.sysadmin)
         response = client.post(
             reverse("position-catalog-create"),
             {
@@ -756,7 +971,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
 
     def test_entry_manager_cannot_create_position_reference_catalog_record(self):
         client = Client()
-        client.force_login(self.hrm_chief)
+        self.force_login_with_mfa(client, self.hrm_chief)
 
         response = client.get(reverse("position-catalog-create"))
 
@@ -891,7 +1106,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
 
     def test_entry_code_field_is_read_only_in_create_and_edit_forms(self):
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
 
         create_response = client.get(reverse("recruitment-entry-create"))
         self.assertEqual(create_response.status_code, 200)
@@ -916,7 +1131,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
 
     def test_entry_manager_can_create_recruitment_entry(self):
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
         response = client.post(
             reverse("recruitment-entry-create"),
             {
@@ -961,7 +1176,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         original_job_code = entry.job_code
 
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
         response = client.post(
             reverse("recruitment-entry-update", kwargs={"pk": entry.pk}),
             {
@@ -991,7 +1206,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         )
 
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
         response = client.post(
             reverse("recruitment-entry-update", kwargs={"pk": entry.pk}),
             {
@@ -1019,7 +1234,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         self.assertFalse(RecruitmentCase.objects.filter(application=application).exists())
 
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
         response = client.post(
             reverse("recruitment-entry-update", kwargs={"pk": self.level1_position.pk}),
             {
@@ -1072,7 +1287,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         self.mark_application_as_submitted_without_case(application)
 
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
         response = client.post(
             reverse("recruitment-entry-update", kwargs={"pk": self.cos_position.pk}),
             {
@@ -1105,7 +1320,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
 
     def test_recruitment_entry_creation_requires_position_reference(self):
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
         initial_count = PositionPosting.objects.count()
         response = client.post(
             reverse("recruitment-entry-create"),
@@ -1127,7 +1342,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
 
     def test_recruitment_entry_create_rejects_manual_entry_code_tampering(self):
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
         initial_count = PositionPosting.objects.count()
         response = client.post(
             reverse("recruitment-entry-create"),
@@ -1161,7 +1376,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
             is_active=False,
         )
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
         initial_count = PositionPosting.objects.count()
 
         response = client.post(
@@ -1191,7 +1406,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
             notes="Synthetic incomplete record for test coverage.",
         )
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
         initial_count = PositionPosting.objects.count()
 
         response = client.post(
@@ -1218,13 +1433,13 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
 
     def test_non_entry_manager_cannot_access_entry_management(self):
         client = Client()
-        client.force_login(self.hrmpsb)
+        self.force_login_with_mfa(client, self.hrmpsb)
         response = client.get(reverse("recruitment-entry-list"))
         self.assertEqual(response.status_code, 403)
 
     def test_entry_status_change_is_audited(self):
         client = Client()
-        client.force_login(self.hrm_chief)
+        self.force_login_with_mfa(client, self.hrm_chief)
         response = client.post(
             reverse(
                 "recruitment-entry-status",
@@ -1245,7 +1460,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
 
     def test_closed_entry_is_removed_from_management_list(self):
         client = Client()
-        client.force_login(self.hrm_chief)
+        self.force_login_with_mfa(client, self.hrm_chief)
         response = client.post(
             reverse(
                 "recruitment-entry-status",
@@ -1294,7 +1509,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         self.admin_aide_position.save(update_fields=["is_active", "updated_at"])
 
         client = Client()
-        client.force_login(self.hrm_chief)
+        self.force_login_with_mfa(client, self.hrm_chief)
         response = client.post(
             reverse(
                 "recruitment-entry-status",
@@ -1369,6 +1584,29 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertNotContains(response, "Manage Entries")
         self.assertNotContains(response, "Internal Users")
 
+    def test_deadline_passed_vacancy_is_not_open_for_applicant_intake(self):
+        self.level1_position.closing_date = timezone.localdate() - timedelta(days=1)
+        self.level1_position.save(update_fields=["closing_date", "updated_at"])
+
+        self.level1_position.refresh_from_db()
+        self.assertFalse(self.level1_position.is_open_for_intake)
+        self.assertTrue(self.level1_position.applicant_pool_is_finalized)
+
+        portal_response = self.client.get(reverse("applicant-portal"))
+        self.assertNotContains(portal_response, self.level1_position.title)
+
+        detail_response = self.client.get(
+            reverse("applicant-vacancy-detail", kwargs={"pk": self.level1_position.pk})
+        )
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertFalse(detail_response.context["can_apply"])
+        self.assertContains(detail_response, "Applications are not currently open for this position")
+
+        intake_response = self.client.get(
+            reverse("applicant-intake", kwargs={"pk": self.level1_position.pk})
+        )
+        self.assertEqual(intake_response.status_code, 404)
+
     def test_public_vacancy_detail_uses_reference_metadata_over_legacy_entry_text(self):
         self.level1_position.description = "Legacy description should stay hidden."
         self.level1_position.requirements = "Legacy requirements should stay hidden."
@@ -1396,7 +1634,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.admin_aide_position.save(update_fields=["qs_training", "updated_at"])
 
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
         response = client.get(reverse("position-list"))
 
         self.assertEqual(response.status_code, 200)
@@ -2094,7 +2332,7 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         submit_application(application, self.applicant)
 
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
         response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
 
         self.assertEqual(response.status_code, 200)
@@ -2148,7 +2386,7 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         self.assertFalse(get_queue_for_user(self.secretariat).filter(pk=application.pk).exists())
 
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
         response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
         self.assertEqual(response.status_code, 404)
 
@@ -2158,7 +2396,7 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         submit_application(application, self.applicant)
 
         client = Client()
-        client.force_login(self.hrm_chief)
+        self.force_login_with_mfa(client, self.hrm_chief)
         response = client.post(
             reverse("case-handoff", kwargs={"pk": application.pk}),
             {
@@ -2209,7 +2447,7 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         submit_application(application, self.applicant)
 
         client = Client()
-        client.force_login(self.hrm_chief)
+        self.force_login_with_mfa(client, self.hrm_chief)
         response = client.post(
             reverse("case-handoff", kwargs={"pk": application.pk}),
             {
@@ -2219,7 +2457,7 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         )
         self.assertEqual(response.status_code, 302)
 
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
         response = client.post(
             reverse("case-handoff", kwargs={"pk": application.pk}),
             {
@@ -2308,7 +2546,7 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         self.assertEqual(application.status, RecruitmentApplication.Status.APPOINTING_AUTHORITY_REVIEW)
         self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW)
 
-    def test_secretariat_cannot_view_finalized_level2_case_without_authorized_basis(self):
+    def test_secretariat_cannot_view_selected_level2_case_without_authorized_basis(self):
         application = self.make_application(self.level2_position)
         self.move_application_to_appointing_review(application)
 
@@ -2316,18 +2554,19 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
             self.record_final_decision_for_current_stage(
                 application,
                 self.appointing,
-                decision_outcome=FinalDecision.Outcome.NOT_SELECTED,
-                decision_notes="Finalize Level 2 case without Secretariat visibility.",
+                decision_outcome=FinalDecision.Outcome.SELECTED,
+                decision_notes="Select Level 2 applicant for HRM Chief completion tracking.",
             )
 
         application.refresh_from_db()
         application.case.refresh_from_db()
 
-        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.CLOSED)
+        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.COMPLETION)
+        self.assertEqual(application.current_handler_role, RecruitmentUser.Role.HRM_CHIEF)
         self.assertFalse(user_can_view_application(self.secretariat, application))
 
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
         response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
         self.assertEqual(response.status_code, 404)
 
@@ -2434,7 +2673,7 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
         application = self.make_selected_application(self.cos_position)
 
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
         response = client.post(
             reverse("completion-tracking", kwargs={"pk": application.pk}),
             {
@@ -2474,7 +2713,7 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
         self.assertTrue(application.case.is_stage_locked)
         self.assertEqual(application.case.locked_stage, RecruitmentCase.Stage.COMPLETION)
 
-        client.force_login(self.hrm_chief)
+        self.force_login_with_mfa(client, self.hrm_chief)
         response = client.post(
             reverse("workflow-reopen", kwargs={"pk": application.pk}),
             {"reason": "Correcting the completion tracking record."},
@@ -2501,7 +2740,7 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
         submit_application(application, self.applicant)
 
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
         response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
 
         self.assertContains(response, "RG-")
@@ -2522,7 +2761,7 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
         submit_application(application, self.applicant)
 
         client = Client()
-        client.force_login(self.hrm_chief)
+        self.force_login_with_mfa(client, self.hrm_chief)
         response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
 
         self.assertEqual(response.status_code, 200)
@@ -2537,7 +2776,7 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
         submit_application(application, self.applicant)
 
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
         response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
 
         self.assertEqual(response.status_code, 200)
@@ -2552,7 +2791,7 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
         submit_application(application, self.applicant)
 
         client = Client()
-        client.force_login(self.hrm_chief)
+        self.force_login_with_mfa(client, self.hrm_chief)
         response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
 
         self.assertEqual(response.status_code, 200)
@@ -2581,7 +2820,7 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
         )
 
         client = Client()
-        client.force_login(self.hrm_chief)
+        self.force_login_with_mfa(client, self.hrm_chief)
         response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
 
         self.assertEqual(response.status_code, 200)
@@ -2610,7 +2849,7 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
         )
 
         client = Client()
-        client.force_login(self.hrm_chief)
+        self.force_login_with_mfa(client, self.hrm_chief)
         response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
 
         self.assertEqual(response.status_code, 200)
@@ -2639,7 +2878,7 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
         )
 
         client = Client()
-        client.force_login(self.hrm_chief)
+        self.force_login_with_mfa(client, self.hrm_chief)
         response = client.post(
             reverse("workflow-action", kwargs={"pk": application.pk}),
             {"action": "reject", "remarks": "Rejected directly from screening."},
@@ -2659,7 +2898,7 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
         submit_application(application, self.applicant)
 
         client = Client()
-        client.force_login(self.hrm_chief)
+        self.force_login_with_mfa(client, self.hrm_chief)
 
         exam_response = client.post(
             reverse("exam-review", kwargs={"pk": application.pk}),
@@ -2744,7 +2983,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         submit_application(application, self.applicant)
 
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
         response = client.post(
             reverse("screening-review", kwargs={"pk": application.pk}),
             {**self.screening_payload(), "operation": "finalize"},
@@ -2763,7 +3002,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         submit_application(application, self.applicant)
 
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
         response = client.post(
             reverse("screening-review", kwargs={"pk": application.pk}),
             {
@@ -2815,7 +3054,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         submit_application(application, self.applicant)
 
         client = Client()
-        client.force_login(self.hrmpsb)
+        self.force_login_with_mfa(client, self.hrmpsb)
         response = client.post(
             reverse("screening-review", kwargs={"pk": application.pk}),
             {**self.screening_payload(), "operation": "save"},
@@ -2831,7 +3070,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         application.save(update_fields=["current_handler_role", "status", "updated_at"])
 
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
         response = client.post(
             reverse("screening-review", kwargs={"pk": application.pk}),
             {**self.screening_payload(), "operation": "save"},
@@ -3163,7 +3402,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         submit_application(application, self.applicant)
 
         client = Client()
-        client.force_login(self.hrmpsb)
+        self.force_login_with_mfa(client, self.hrmpsb)
         response = client.post(
             reverse("exam-review", kwargs={"pk": application.pk}),
             {**self.exam_payload(), "operation": "save"},
@@ -3177,7 +3416,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         self.finalize_screening_for_current_stage(application, self.secretariat)
 
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
         response = client.post(
             reverse("exam-review", kwargs={"pk": application.pk}),
             {
@@ -3203,7 +3442,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         self.finalize_screening_for_current_stage(application, self.secretariat)
 
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
         response = client.post(
             reverse("exam-review", kwargs={"pk": application.pk}),
             {
@@ -3235,7 +3474,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         application.save(update_fields=["current_handler_role", "status", "updated_at"])
 
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
         response = client.post(
             reverse("exam-review", kwargs={"pk": application.pk}),
             {**self.exam_payload(), "operation": "save"},
@@ -3375,7 +3614,7 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
         )
 
         client = Client()
-        client.force_login(self.sysadmin)
+        self.force_login_with_mfa(client, self.sysadmin)
         response = client.get(
             reverse(
                 "evidence-download",
@@ -3408,7 +3647,7 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
         )
 
         client = Client()
-        client.force_login(self.sysadmin)
+        self.force_login_with_mfa(client, self.sysadmin)
         response = client.get(
             reverse(
                 "evidence-download",
@@ -3435,7 +3674,7 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
         )
 
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
         response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
 
         evidence_url = reverse(
@@ -3508,7 +3747,7 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
         )
 
         client = Client()
-        client.force_login(self.sysadmin)
+        self.force_login_with_mfa(client, self.sysadmin)
 
         initial_response = client.get(
             reverse("evidence-vault-list"),
@@ -3567,7 +3806,7 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
         )
 
         client = Client()
-        client.force_login(self.hrm_chief)
+        self.force_login_with_mfa(client, self.hrm_chief)
         response = client.get(
             reverse(
                 "evidence-download",
@@ -3599,7 +3838,7 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
         }
         for label, user in roles.items():
             client = Client()
-            client.force_login(user)
+            self.force_login_with_mfa(client, user)
             with self.subTest(role=label):
                 response = client.get(
                     reverse(
@@ -3627,7 +3866,7 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
         }
         for label, user in roles.items():
             client = Client()
-            client.force_login(user)
+            self.force_login_with_mfa(client, user)
             with self.subTest(role=label, endpoint="evidence_vault_list"):
                 response = client.get(reverse("evidence-vault-list"))
                 self.assertEqual(response.status_code, 403)
@@ -3654,7 +3893,7 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
 class ViewAndExportTests(BaseRecruitmentTestCase):
     def test_dashboard_empty_state_renders_without_raw_include_tags(self):
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
 
         response = client.get(reverse("dashboard"))
 
@@ -3673,7 +3912,7 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
 
     def test_workflow_queue_empty_state_renders_without_raw_include_tags(self):
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
 
         response = client.get(reverse("workflow-queue"))
 
@@ -3688,7 +3927,7 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
     def test_recruitment_entry_empty_state_renders_without_raw_include_tags(self):
         PositionPosting.objects.all().delete()
         client = Client()
-        client.force_login(self.hrm_chief)
+        self.force_login_with_mfa(client, self.hrm_chief)
 
         response = client.get(reverse("recruitment-entry-list"))
 
@@ -3703,7 +3942,7 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
 
     def test_recruitment_entry_list_renders_modal_partial_without_raw_include_tags(self):
         client = Client()
-        client.force_login(self.hrm_chief)
+        self.force_login_with_mfa(client, self.hrm_chief)
 
         response = client.get(reverse("recruitment-entry-list"))
 
@@ -3722,7 +3961,7 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
 
     def test_system_admin_dashboard_shows_role_label_and_admin_only_nav(self):
         client = Client()
-        client.force_login(self.sysadmin)
+        self.force_login_with_mfa(client, self.sysadmin)
 
         response = client.get(reverse("dashboard"))
 
@@ -3742,7 +3981,7 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         }
         for label, user in roles.items():
             client = Client()
-            client.force_login(user)
+            self.force_login_with_mfa(client, user)
             response = client.get(reverse("dashboard"))
 
             with self.subTest(role=label):
@@ -3752,7 +3991,7 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
 
     def test_non_admin_sidebar_keeps_only_my_queue_link_for_case_navigation(self):
         client = Client()
-        client.force_login(self.hrm_chief)
+        self.force_login_with_mfa(client, self.hrm_chief)
 
         response = client.get(reverse("dashboard"))
 
@@ -3764,7 +4003,7 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
 
     def test_application_list_redirects_to_workflow_queue_for_internal_users(self):
         client = Client()
-        client.force_login(self.hrm_chief)
+        self.force_login_with_mfa(client, self.hrm_chief)
 
         response = client.get(reverse("application-list"))
 
@@ -3776,7 +4015,7 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         self.move_application_to_hrm_chief_review(application)
 
         client = Client()
-        client.force_login(self.hrm_chief)
+        self.force_login_with_mfa(client, self.hrm_chief)
         response = client.get(reverse("workflow-queue"))
 
         self.assertEqual(response.status_code, 200)
@@ -3790,7 +4029,7 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         self.finalize_screening_for_current_stage(application, self.hrm_chief)
 
         client = Client()
-        client.force_login(self.hrm_chief)
+        self.force_login_with_mfa(client, self.hrm_chief)
         response = client.get(reverse("workflow-queue"))
 
         self.assertEqual(response.status_code, 200)
@@ -3800,7 +4039,7 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
 
     def test_applicant_user_cannot_access_internal_dashboard(self):
         client = Client()
-        client.force_login(self.applicant)
+        self.force_login_with_mfa(client, self.applicant)
         response = client.get(reverse("dashboard"))
         self.assertEqual(response.status_code, 403)
 
@@ -3817,7 +4056,7 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         )
 
         client = Client()
-        client.force_login(self.applicant)
+        self.force_login_with_mfa(client, self.applicant)
         response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
         self.assertEqual(response.status_code, 403)
 
@@ -3828,7 +4067,7 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         application.refresh_from_db()
 
         client = Client()
-        client.force_login(self.hrm_chief)
+        self.force_login_with_mfa(client, self.hrm_chief)
         response = client.get(reverse("application-export", kwargs={"pk": application.pk}))
         self.assertEqual(response.status_code, 200)
         archive = zipfile.ZipFile(io.BytesIO(response.content))
@@ -3935,7 +4174,7 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         submit_application(application, self.applicant)
 
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
         response = client.get(reverse("application-export", kwargs={"pk": application.pk}))
 
         self.assertEqual(response.status_code, 200)
@@ -3947,7 +4186,7 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         submit_application(application, self.applicant)
 
         client = Client()
-        client.force_login(self.hrmpsb)
+        self.force_login_with_mfa(client, self.hrmpsb)
         response = client.get(reverse("application-export", kwargs={"pk": application.pk}))
 
         self.assertEqual(response.status_code, 403)
@@ -3990,7 +4229,7 @@ class AuditLoggingTraceabilityTests(BaseRecruitmentTestCase):
         application = self.make_submitted_application()
 
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
         response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
 
         self.assertEqual(response.status_code, 200)
@@ -4007,7 +4246,7 @@ class AuditLoggingTraceabilityTests(BaseRecruitmentTestCase):
         application = self.make_submitted_application()
 
         client = Client()
-        client.force_login(self.sysadmin)
+        self.force_login_with_mfa(client, self.sysadmin)
         response = client.get(reverse("application-audit-log", kwargs={"pk": application.pk}))
 
         self.assertEqual(response.status_code, 200)
@@ -4024,7 +4263,7 @@ class AuditLoggingTraceabilityTests(BaseRecruitmentTestCase):
         self.make_submitted_application()
 
         client = Client()
-        client.force_login(self.sysadmin)
+        self.force_login_with_mfa(client, self.sysadmin)
         response = client.get(reverse("evidence-vault-list"))
 
         self.assertEqual(response.status_code, 200)
@@ -4044,7 +4283,7 @@ class AuditLoggingTraceabilityTests(BaseRecruitmentTestCase):
         )
 
         client = Client()
-        client.force_login(self.sysadmin)
+        self.force_login_with_mfa(client, self.sysadmin)
         response = client.get(reverse("audit-log-list"))
 
         self.assertEqual(response.status_code, 200)
@@ -4076,7 +4315,7 @@ class AuditLoggingTraceabilityTests(BaseRecruitmentTestCase):
         }
         for label, user in roles.items():
             client = Client()
-            client.force_login(user)
+            self.force_login_with_mfa(client, user)
             with self.subTest(role=label, endpoint="audit_log_list"):
                 response = client.get(reverse("audit-log-list"))
                 self.assertEqual(response.status_code, 403)
@@ -4207,7 +4446,7 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         application = self.make_approved_cos_application()
         mail.outbox.clear()
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
 
         with self.captureOnCommitCallbacks(execute=True):
             response = client.post(
@@ -4234,7 +4473,7 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
     def test_secretariat_cannot_send_requirement_checklist_before_selection(self):
         application = self.make_submitted_application()
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
 
         response = client.post(
             reverse("notification-checklist", kwargs={"pk": application.pk}),
@@ -4251,7 +4490,7 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         application = self.make_approved_level2_plantilla_application()
         mail.outbox.clear()
         client = Client()
-        client.force_login(self.hrm_chief)
+        self.force_login_with_mfa(client, self.hrm_chief)
 
         with self.captureOnCommitCallbacks(execute=True):
             response = client.post(
@@ -4305,7 +4544,7 @@ class CompletionTrackingTests(BaseRecruitmentTestCase):
     def test_plantilla_completion_tracking_stores_announcement_and_requirement_statuses(self):
         application = self.make_selected_application(self.level1_position)
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
 
         response = client.post(
             reverse("completion-tracking", kwargs={"pk": application.pk}),
@@ -4353,7 +4592,7 @@ class CompletionTrackingTests(BaseRecruitmentTestCase):
     def test_cos_completion_tracking_ignores_announcement_fields_and_preserves_requirements(self):
         application = self.make_selected_application(self.cos_position)
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
 
         response = client.post(
             reverse("completion-tracking", kwargs={"pk": application.pk}),
@@ -4391,7 +4630,7 @@ class CompletionTrackingTests(BaseRecruitmentTestCase):
     def test_case_close_requires_completion_reference(self):
         application = self.make_selected_application(self.cos_position)
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
 
         client.post(
             reverse("completion-tracking", kwargs={"pk": application.pk}),
@@ -4437,7 +4676,7 @@ class CompletionTrackingTests(BaseRecruitmentTestCase):
     def test_case_close_requires_completion_date(self):
         application = self.make_selected_application(self.level1_position)
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
 
         client.post(
             reverse("completion-tracking", kwargs={"pk": application.pk}),
@@ -4486,7 +4725,7 @@ class CompletionTrackingTests(BaseRecruitmentTestCase):
     def test_resolved_checklist_alone_does_not_make_case_ready_for_closure(self):
         application = self.make_selected_application(self.cos_position)
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
 
         client.post(
             reverse("completion-tracking", kwargs={"pk": application.pk}),
@@ -4529,7 +4768,7 @@ class CompletionTrackingTests(BaseRecruitmentTestCase):
     def test_case_close_requires_resolved_completion_requirements(self):
         application = self.make_selected_application(self.cos_position)
         client = Client()
-        client.force_login(self.secretariat)
+        self.force_login_with_mfa(client, self.secretariat)
 
         client.post(
             reverse("completion-tracking", kwargs={"pk": application.pk}),
@@ -4575,7 +4814,7 @@ class CompletionTrackingTests(BaseRecruitmentTestCase):
     def test_case_close_locks_case_and_closed_case_remains_retrievable(self):
         application = self.make_selected_application(self.level2_position)
         client = Client()
-        client.force_login(self.hrm_chief)
+        self.force_login_with_mfa(client, self.hrm_chief)
 
         client.post(
             reverse("completion-tracking", kwargs={"pk": application.pk}),
@@ -4762,6 +5001,17 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         payload.update(overrides)
         return payload
 
+    def deliberation_payload(self, **overrides):
+        payload = {
+            "deliberated_at": timezone.now(),
+            "deliberation_minutes": "Panel reviewed the finalized applicant pool.",
+            "decision_support_summary": "Decision-support summary for ranking.",
+            "ranking_position": 1,
+            "ranking_notes": "Ranking basis recorded.",
+        }
+        payload.update(overrides)
+        return payload
+
     def rating_payload(self, **overrides):
         payload = {
             "rating_score": "92.00",
@@ -4811,10 +5061,69 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             "92.00",
         )
 
+    def test_plantilla_deliberation_requires_finalized_applicant_pool(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb)
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "Plantilla deliberation and CAR generation are available only after the vacancy is closed",
+        ):
+            save_deliberation_record(
+                application=application,
+                actor=self.hrmpsb,
+                cleaned_data=self.deliberation_payload(),
+                finalize=True,
+            )
+
+        update_recruitment_entry_status(
+            self.level1_position,
+            self.secretariat,
+            PositionPosting.EntryStatus.CLOSED,
+        )
+        application.position.refresh_from_db()
+
+        deliberation_record = save_deliberation_record(
+            application=application,
+            actor=self.hrmpsb,
+            cleaned_data=self.deliberation_payload(),
+            finalize=True,
+        )
+
+        self.assertTrue(deliberation_record.is_finalized)
+        self.level1_position.refresh_from_db()
+        self.assertTrue(self.level1_position.applicant_pool_is_finalized)
+
+    def test_car_generation_requires_finalized_applicant_pool(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb)
+        self.finalize_applicant_pool_for_test(self.level1_position)
+        self.finalize_deliberation_for_current_stage(application, self.hrmpsb, ranking_position=1)
+
+        self.level1_position.status = PositionPosting.EntryStatus.ACTIVE
+        self.level1_position.closing_date = timezone.localdate() + timedelta(days=3)
+        self.level1_position.save(update_fields=["status", "closing_date", "is_active", "updated_at"])
+        application.position.refresh_from_db()
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "Plantilla deliberation and CAR generation are available only after the vacancy is closed",
+        ):
+            generate_comparative_assessment_report(
+                application=application,
+                actor=self.hrmpsb,
+                cleaned_data={"summary_notes": "Attempted before pool finalization."},
+                finalize=True,
+            )
+
     def test_plantilla_recommendation_requires_deliberation_and_car(self):
         application = self.make_application(self.level1_position)
         self.move_application_to_hrmpsb_review(application)
         self.finalize_interview_for_current_stage(application, self.hrmpsb)
+        self.finalize_applicant_pool_for_test(self.level1_position)
+        application.position.refresh_from_db()
 
         with self.assertRaisesMessage(
             ValueError,
@@ -4985,30 +5294,129 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
 
 
 class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
-    def test_selected_final_decision_routes_case_to_completion_and_preserves_packet(self):
+    def test_final_selection_routes_selected_plantilla_case_to_completion_and_preserves_car(self):
         application = self.make_application(self.level1_position)
         self.move_application_to_appointing_review(application)
 
-        decision = self.record_final_decision_for_current_stage(
+        selection = self.record_final_decision_for_current_stage(
             application,
             self.appointing,
             decision_outcome=FinalDecision.Outcome.SELECTED,
-            decision_notes="Selected after reviewing the final submission packet.",
+            decision_notes="Selected after reviewing the finalized CAR.",
         )
         application.refresh_from_db()
         application.case.refresh_from_db()
 
         self.assertEqual(application.status, RecruitmentApplication.Status.APPROVED)
         self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.COMPLETION)
-        self.assertEqual(decision.decision_outcome, FinalDecision.Outcome.SELECTED)
-        self.assertTrue(decision.submission_packet_snapshot["summary"]["has_deliberation_record"])
-        self.assertTrue(decision.submission_packet_snapshot["summary"]["has_comparative_assessment_report"])
+        self.assertEqual(application.current_handler_role, RecruitmentUser.Role.SECRETARIAT)
+        self.assertEqual(selection.selected_application_id, application.id)
+        self.assertEqual(selection.decided_by, self.appointing)
+        self.assertTrue(selection.car_snapshot["comparative_assessment_report"]["items"])
+        self.assertFalse(FinalDecision.objects.filter(application=application).exists())
         self.assertTrue(
             NotificationLog.objects.filter(
                 application=application,
                 notification_type=NotificationLog.NotificationType.SELECTED_APPLICANT,
             ).exists()
         )
+
+    def test_final_selection_marks_other_car_applicants_not_selected(self):
+        primary_application = self.make_application(self.level1_position)
+        secondary_applicant = User.objects.create_user(
+            username="final-selection-secondary",
+            password="testpass123",
+            role=RecruitmentUser.Role.APPLICANT,
+        )
+        secondary_application = RecruitmentApplication.objects.create(
+            applicant=secondary_applicant,
+            position=self.level1_position,
+            applicant_first_name="Second",
+            applicant_last_name="Candidate",
+            applicant_email="final.selection.secondary@example.com",
+            applicant_phone="09179990123",
+            checklist_privacy_consent=True,
+            checklist_documents_complete=True,
+            checklist_information_certified=True,
+            qualification_summary="Second applicant for CAR final selection.",
+            cover_letter="Applying for the same vacancy.",
+        )
+        self.upload_required_applicant_documents(
+            secondary_application,
+            secondary_applicant,
+            content_prefix="final-selection-secondary",
+        )
+
+        self.move_application_to_hrmpsb_review(primary_application)
+        otp_code = issue_application_otp(secondary_application, actor=secondary_applicant)
+        verify_application_otp(secondary_application, otp_code, actor=secondary_applicant)
+        submit_application(secondary_application, secondary_applicant)
+        self.finalize_screening_for_current_stage(secondary_application, self.secretariat)
+        self.finalize_exam_for_current_stage(secondary_application, self.secretariat)
+        secondary_application.refresh_from_db()
+
+        self.finalize_interview_for_current_stage(primary_application, self.hrmpsb)
+        self.finalize_interview_for_current_stage(secondary_application, self.hrmpsb)
+        self.finalize_deliberation_for_current_stage(primary_application, self.hrmpsb, ranking_position=1)
+        self.finalize_deliberation_for_current_stage(secondary_application, self.hrmpsb, ranking_position=2)
+        report = self.finalize_car_for_current_stage(primary_application, self.hrmpsb)
+        primary_application.refresh_from_db()
+        secondary_application.refresh_from_db()
+        selected_item = report.items.get(recruitment_case=secondary_application.case)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            selection = record_final_selection(
+                application=primary_application,
+                actor=self.appointing,
+                cleaned_data={
+                    "selected_item": selected_item,
+                    "decision_notes": "Selected the second-ranked applicant from the CAR.",
+                },
+            )
+
+        primary_application.refresh_from_db()
+        primary_application.case.refresh_from_db()
+        secondary_application.refresh_from_db()
+        secondary_application.case.refresh_from_db()
+
+        self.assertEqual(FinalSelection.objects.filter(recruitment_entry=self.level1_position).count(), 1)
+        self.assertEqual(selection.selected_application_id, secondary_application.id)
+        self.assertEqual(secondary_application.status, RecruitmentApplication.Status.APPROVED)
+        self.assertEqual(secondary_application.case.current_stage, RecruitmentCase.Stage.COMPLETION)
+        self.assertEqual(secondary_application.current_handler_role, RecruitmentUser.Role.SECRETARIAT)
+        self.assertEqual(primary_application.status, RecruitmentApplication.Status.REJECTED)
+        self.assertEqual(primary_application.case.current_stage, RecruitmentCase.Stage.CLOSED)
+        self.assertTrue(primary_application.case.is_stage_locked)
+        self.assertFalse(FinalDecision.objects.filter(application__position=self.level1_position).exists())
+        self.assertTrue(
+            NotificationLog.objects.filter(
+                application=secondary_application,
+                notification_type=NotificationLog.NotificationType.SELECTED_APPLICANT,
+            ).exists()
+        )
+        self.assertTrue(
+            NotificationLog.objects.filter(
+                application=primary_application,
+                notification_type=NotificationLog.NotificationType.NON_SELECTED_APPLICANT,
+            ).exists()
+        )
+
+    def test_level2_final_selection_routes_selected_applicant_to_hrm_chief_completion(self):
+        application = self.make_application(self.level2_position)
+        self.move_application_to_appointing_review(application)
+
+        self.record_final_decision_for_current_stage(
+            application,
+            self.appointing,
+            decision_outcome=FinalDecision.Outcome.SELECTED,
+            decision_notes="Selected Level 2 applicant from the finalized CAR.",
+        )
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+
+        self.assertEqual(application.status, RecruitmentApplication.Status.APPROVED)
+        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.COMPLETION)
+        self.assertEqual(application.current_handler_role, RecruitmentUser.Role.HRM_CHIEF)
 
     def test_not_selected_final_decision_closes_case_and_locks_it(self):
         application = self.make_application(self.cos_position)
@@ -5061,16 +5469,16 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         self.move_application_to_appointing_review(application)
 
         client = Client()
-        client.force_login(self.appointing)
+        self.force_login_with_mfa(client, self.appointing)
         response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'rg-cws-stage-titlebar__title">Final Decision</span>')
+        self.assertContains(response, 'rg-cws-stage-titlebar__title">Final Selection</span>')
         self.assertNotContains(response, 'data-section="cws-interview"')
         self.assertNotContains(response, 'data-section="cws-deliberation"')
         self.assertContains(response, 'rg-cws-layout rg-cws-layout--full')
         self.assertNotContains(response, "Workflow Snapshot")
-        self.assertContains(response, "Final Decision")
+        self.assertContains(response, "Final CAR Selection")
 
         packet = build_submission_packet(application)
         self.assertTrue(packet["summary"]["has_deliberation_record"])

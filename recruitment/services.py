@@ -33,6 +33,8 @@ from .models import (
     ExamRecord,
     EvidenceVaultItem,
     FinalDecision,
+    FinalSelection,
+    InternalMFAChallenge,
     InterviewRating,
     InterviewSession,
     PositionReference,
@@ -111,6 +113,10 @@ DELIBERATION_ROLES_BY_BRANCH = {
 CAR_REVIEW_STAGE = RecruitmentCase.Stage.HRMPSB_REVIEW
 CAR_MANAGER_ROLES = {RecruitmentUser.Role.HRMPSB_MEMBER}
 CAR_LABEL = "Comparative Assessment Report"
+PLANTILLA_POOL_NOT_FINAL_MESSAGE = (
+    "Plantilla deliberation and CAR generation are available only after the vacancy "
+    "is closed or its closing date has passed."
+)
 FINAL_DECISION_OUTCOME_TO_STATUS = {
     FinalDecision.Outcome.SELECTED: RecruitmentApplication.Status.APPROVED,
     FinalDecision.Outcome.NOT_SELECTED: RecruitmentApplication.Status.REJECTED,
@@ -165,6 +171,268 @@ def record_system_audit_event(actor, action, description, metadata=None):
         description=description,
         metadata=metadata,
     )
+
+
+def _request_ip_address(request):
+    if request is None:
+        return None
+    forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR", "")
+    if forwarded_for:
+        return forwarded_for.split(",", 1)[0].strip()
+    return request.META.get("REMOTE_ADDR") or None
+
+
+def _request_user_agent(request):
+    if request is None:
+        return ""
+    return request.META.get("HTTP_USER_AGENT", "")[:1000]
+
+
+def _generate_internal_mfa_code():
+    return f"{secrets.randbelow(900000) + 100000:06d}"
+
+
+def _hash_internal_mfa_otp(challenge, otp_code):
+    payload = "|".join(
+        [
+            str(challenge.user_id),
+            str(challenge.challenge_token),
+            otp_code,
+        ]
+    )
+    return hmac.new(
+        settings.INTERNAL_MFA_OTP_HASH_SECRET.encode("utf-8"),
+        payload.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _send_internal_mfa_email(challenge, otp_code):
+    subject = "RecruitGuard-CHD internal verification code"
+    text_body = (
+        "RecruitGuard-CHD internal verification code\n\n"
+        f"Your verification code is {otp_code}.\n"
+        f"It expires in {settings.INTERNAL_MFA_OTP_VALIDITY_MINUTES} minutes.\n\n"
+        "Do not share this code. RecruitGuard-CHD staff will never ask for it."
+    )
+    email = EmailMultiAlternatives(
+        subject=subject,
+        body=text_body,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[challenge.sent_to_email],
+    )
+    email.send(fail_silently=False)
+
+
+def _latest_internal_mfa_challenge(user):
+    return user.mfa_challenges.order_by("-requested_at", "-created_at").first()
+
+
+def issue_internal_mfa_challenge(user, request=None, *, is_resend=False, enforce_cooldown=False):
+    if not getattr(user, "is_active", False) or not getattr(user, "is_internal_user", False):
+        raise ValueError("Internal MFA is only available for active internal users.")
+
+    sent_to_email = (user.email or "").strip().lower()
+    if not sent_to_email:
+        record_system_audit_event(
+            actor=user,
+            action=AuditLog.Action.INTERNAL_MFA_FAILED,
+            description="Internal MFA challenge could not be issued because the account has no email address.",
+            metadata={
+                "reason": "missing_email",
+                "user_id": user.id,
+                "user_role": user.role,
+            },
+        )
+        raise ValueError("Your internal account does not have an email address. Contact the System Administrator.")
+
+    if enforce_cooldown:
+        latest_challenge = _latest_internal_mfa_challenge(user)
+        if latest_challenge is not None:
+            elapsed = timezone.now() - latest_challenge.requested_at
+            cooldown_seconds = settings.INTERNAL_MFA_RESEND_COOLDOWN_SECONDS
+            if elapsed.total_seconds() < cooldown_seconds:
+                remaining = max(1, int(cooldown_seconds - elapsed.total_seconds()))
+                raise ValueError(f"Please wait {remaining} seconds before requesting another code.")
+
+    with transaction.atomic():
+        otp_code = _generate_internal_mfa_code()
+        now = timezone.now()
+        InternalMFAChallenge.objects.filter(
+            user=user,
+            is_used=False,
+            verified_at__isnull=True,
+        ).update(is_used=True, updated_at=now)
+        challenge = InternalMFAChallenge(
+            user=user,
+            sent_to_email=sent_to_email,
+            requested_at=now,
+            expires_at=now + timedelta(minutes=settings.INTERNAL_MFA_OTP_VALIDITY_MINUTES),
+            ip_address=_request_ip_address(request),
+            user_agent=_request_user_agent(request),
+        )
+        challenge.otp_hash = _hash_internal_mfa_otp(challenge, otp_code)
+        challenge.full_clean()
+        challenge.save()
+        _send_internal_mfa_email(challenge, otp_code)
+
+        record_system_audit_event(
+            actor=user,
+            action=(
+                AuditLog.Action.INTERNAL_MFA_RESENT
+                if is_resend
+                else AuditLog.Action.INTERNAL_MFA_SENT
+            ),
+            description=(
+                "Resent internal MFA verification code."
+                if is_resend
+                else "Sent internal MFA verification code."
+            ),
+            metadata={
+                "challenge_id": challenge.id,
+                "sent_to_email": sent_to_email,
+                "expires_at": challenge.expires_at.isoformat(),
+                "ip_address": challenge.ip_address,
+                "user_agent": challenge.user_agent,
+            },
+        )
+    return challenge
+
+
+def verify_internal_mfa_challenge(user, challenge_token, otp_code, request=None):
+    generic_error = "The verification code is invalid or expired."
+    challenge = None
+    error_to_raise = None
+
+    with transaction.atomic():
+        try:
+            challenge = InternalMFAChallenge.objects.select_for_update().get(
+                user=user,
+                challenge_token=challenge_token,
+            )
+        except InternalMFAChallenge.DoesNotExist:
+            record_system_audit_event(
+                actor=user,
+                action=AuditLog.Action.INTERNAL_MFA_FAILED,
+                description="Internal MFA verification failed.",
+                metadata={
+                    "reason": "challenge_not_found",
+                    "ip_address": _request_ip_address(request),
+                    "user_agent": _request_user_agent(request),
+                },
+            )
+            error_to_raise = generic_error
+
+        if challenge is not None and (
+            not getattr(user, "is_active", False) or not getattr(user, "is_internal_user", False)
+        ):
+            error_to_raise = generic_error
+
+        if challenge is not None and error_to_raise is None and (
+            challenge.is_used or challenge.verified_at
+        ):
+            record_system_audit_event(
+                actor=user,
+                action=AuditLog.Action.INTERNAL_MFA_FAILED,
+                description="Internal MFA verification failed.",
+                metadata={
+                    "challenge_id": challenge.id,
+                    "reason": "challenge_used",
+                    "ip_address": _request_ip_address(request),
+                    "user_agent": _request_user_agent(request),
+                },
+            )
+            error_to_raise = generic_error
+
+        if challenge is not None and error_to_raise is None and challenge.is_expired:
+            challenge.is_used = True
+            challenge.save(update_fields=["is_used", "updated_at"])
+            record_system_audit_event(
+                actor=user,
+                action=AuditLog.Action.INTERNAL_MFA_EXPIRED,
+                description="Internal MFA verification code expired before successful verification.",
+                metadata={
+                    "challenge_id": challenge.id,
+                    "expires_at": challenge.expires_at.isoformat(),
+                    "ip_address": _request_ip_address(request),
+                    "user_agent": _request_user_agent(request),
+                },
+            )
+            error_to_raise = generic_error
+
+        if challenge is not None and error_to_raise is None and (
+            challenge.attempt_count >= settings.INTERNAL_MFA_MAX_ATTEMPTS
+        ):
+            challenge.is_used = True
+            challenge.save(update_fields=["is_used", "updated_at"])
+            record_system_audit_event(
+                actor=user,
+                action=AuditLog.Action.INTERNAL_MFA_LOCKED,
+                description="Internal MFA challenge locked after too many failed attempts.",
+                metadata={
+                    "challenge_id": challenge.id,
+                    "attempt_count": challenge.attempt_count,
+                    "ip_address": _request_ip_address(request),
+                    "user_agent": _request_user_agent(request),
+                },
+            )
+            error_to_raise = generic_error
+
+        if challenge is not None and error_to_raise is None:
+            expected_hash = _hash_internal_mfa_otp(challenge, otp_code)
+            if not hmac.compare_digest(challenge.otp_hash, expected_hash):
+                challenge.attempt_count += 1
+                update_fields = ["attempt_count", "updated_at"]
+                locked = challenge.attempt_count >= settings.INTERNAL_MFA_MAX_ATTEMPTS
+                if locked:
+                    challenge.is_used = True
+                    update_fields.append("is_used")
+                challenge.save(update_fields=update_fields)
+                record_system_audit_event(
+                    actor=user,
+                    action=AuditLog.Action.INTERNAL_MFA_FAILED,
+                    description="Internal MFA verification failed.",
+                    metadata={
+                        "challenge_id": challenge.id,
+                        "reason": "invalid_code",
+                        "attempt_count": challenge.attempt_count,
+                        "ip_address": _request_ip_address(request),
+                        "user_agent": _request_user_agent(request),
+                    },
+                )
+                if locked:
+                    record_system_audit_event(
+                        actor=user,
+                        action=AuditLog.Action.INTERNAL_MFA_LOCKED,
+                        description="Internal MFA challenge locked after too many failed attempts.",
+                        metadata={
+                            "challenge_id": challenge.id,
+                            "attempt_count": challenge.attempt_count,
+                            "ip_address": _request_ip_address(request),
+                            "user_agent": _request_user_agent(request),
+                        },
+                    )
+                error_to_raise = generic_error
+            else:
+                challenge.verified_at = timezone.now()
+                challenge.is_used = True
+                challenge.save(update_fields=["verified_at", "is_used", "updated_at"])
+                record_system_audit_event(
+                    actor=user,
+                    action=AuditLog.Action.INTERNAL_MFA_VERIFIED,
+                    description="Internal MFA verification completed successfully.",
+                    metadata={
+                        "challenge_id": challenge.id,
+                        "attempt_count": challenge.attempt_count,
+                        "verified_at": challenge.verified_at.isoformat(),
+                        "ip_address": _request_ip_address(request),
+                        "user_agent": _request_user_agent(request),
+                    },
+                )
+
+    if error_to_raise is not None:
+        raise ValueError(error_to_raise)
+    return challenge
 
 
 def record_protected_record_access(application, actor, source):
@@ -1243,6 +1511,26 @@ def _workflow_section_is_complete(application, section_key):
     return True
 
 
+def application_requires_finalized_applicant_pool(application):
+    return (
+        application.branch == PositionPosting.Branch.PLANTILLA
+        and get_current_review_stage(application) == RecruitmentCase.Stage.HRMPSB_REVIEW
+    )
+
+
+def application_has_finalized_applicant_pool(application):
+    if not application_requires_finalized_applicant_pool(application):
+        return True
+    return application.position.applicant_pool_is_finalized
+
+
+def get_applicant_pool_finalization_block_message(application):
+    closing_date = getattr(application.position, "closing_date", None)
+    if closing_date:
+        return f"{PLANTILLA_POOL_NOT_FINAL_MESSAGE} Current closing date: {closing_date:%Y-%m-%d}."
+    return f"{PLANTILLA_POOL_NOT_FINAL_MESSAGE} Close the recruitment entry before starting HRMPSB deliberation."
+
+
 def get_current_workflow_section(application):
     sequence = _workflow_detail_sequence(application)
     for section_key in sequence:
@@ -1275,6 +1563,11 @@ def _workflow_progress_block_message(application, section_key=None):
     if section_key == "interview":
         return "Finalize the interview task before proceeding to the next workflow task."
     if section_key == "deliberation":
+        if (
+            application_requires_finalized_applicant_pool(application)
+            and not application_has_finalized_applicant_pool(application)
+        ):
+            return get_applicant_pool_finalization_block_message(application)
         if (
             application.branch == PositionPosting.Branch.COS
             and get_current_review_stage(application) == RecruitmentCase.Stage.HRM_CHIEF_REVIEW
@@ -1608,6 +1901,28 @@ def get_latest_finalized_comparative_assessment_report(application):
     ).order_by("-version_number", "-finalized_at", "-created_at").first()
 
 
+def get_final_selection_for_entry(recruitment_entry):
+    return (
+        FinalSelection.objects.select_related(
+            "comparative_assessment_report",
+            "selected_item",
+            "selected_item__recruitment_case",
+            "selected_item__recruitment_case__application",
+            "selected_application",
+            "selected_case",
+            "decided_by",
+            "recruitment_entry",
+        )
+        .filter(recruitment_entry=recruitment_entry)
+        .order_by("-decided_at", "-created_at")
+        .first()
+    )
+
+
+def get_final_selection_for_application(application):
+    return get_final_selection_for_entry(application.position)
+
+
 def get_comparative_assessment_report_items_for_report(report):
     if not report:
         return ComparativeAssessmentReportItem.objects.none()
@@ -1650,6 +1965,8 @@ def _final_decision_stage_and_role(application):
 
 
 def user_can_record_final_decision(user, application):
+    if application.branch == PositionPosting.Branch.PLANTILLA:
+        return False
     current_stage = get_current_review_stage(application)
     expected_stage, expected_role = _final_decision_stage_and_role(application)
     if (
@@ -1658,6 +1975,25 @@ def user_can_record_final_decision(user, application):
     ):
         return False
     if user.role != expected_role:
+        return False
+    return user_can_process_application(user, application)
+
+
+def user_can_record_final_selection(user, application):
+    if application.branch != PositionPosting.Branch.PLANTILLA:
+        return False
+    current_stage = get_current_review_stage(application)
+    if (
+        current_stage != RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW
+        or get_current_workflow_section(application) != "decision"
+    ):
+        return False
+    if user.role != RecruitmentUser.Role.APPOINTING_AUTHORITY:
+        return False
+    if get_final_selection_for_application(application):
+        return False
+    report = get_latest_finalized_comparative_assessment_report(application)
+    if not report:
         return False
     return user_can_process_application(user, application)
 
@@ -1878,6 +2214,24 @@ def _decision_packet_car_report(report):
         ),
         "items": [_decision_packet_car_item(item) for item in items],
         "is_read_only": report.is_finalized,
+    }
+
+
+def build_car_selection_packet(report):
+    return {
+        "context": {
+            "built_at": timezone.now().isoformat(),
+            "recruitment_entry_id": report.recruitment_entry_id,
+            "recruitment_entry_code": report.recruitment_entry.job_code,
+            "recruitment_entry_title": report.recruitment_entry.title,
+            "branch": report.recruitment_entry.branch,
+            "branch_label": report.recruitment_entry.get_branch_display(),
+            "level": report.recruitment_entry.level,
+            "level_label": report.recruitment_entry.get_level_display(),
+            "review_stage": report.review_stage,
+            "review_stage_label": report.get_review_stage_display(),
+        },
+        "comparative_assessment_report": _decision_packet_car_report(report),
     }
 
 
@@ -2363,6 +2717,11 @@ def _finalized_deliberation_queryset_for_entry(recruitment_entry, review_stage):
 def save_deliberation_record(application, actor, cleaned_data, finalize=False):
     if not hasattr(application, "case"):
         raise ValueError("A case must exist before deliberation details can be recorded.")
+    if (
+        application_requires_finalized_applicant_pool(application)
+        and not application_has_finalized_applicant_pool(application)
+    ):
+        raise ValueError(get_applicant_pool_finalization_block_message(application))
     if not user_can_manage_deliberation(actor, application):
         raise ValueError(
             "This case is not currently assigned to you for deliberation."
@@ -2477,6 +2836,27 @@ def _car_candidate_rows(recruitment_entry, review_stage):
         raise ValueError(
             "Finalize at least one Plantilla deliberation record before generating the Comparative Assessment Report."
         )
+    deliberated_case_ids = {record.recruitment_case_id for record in deliberation_records}
+    pending_cases = (
+        RecruitmentCase.objects.select_related("application")
+        .filter(
+            application__position=recruitment_entry,
+            application__branch=PositionPosting.Branch.PLANTILLA,
+            application__status=RecruitmentApplication.Status.HRMPSB_REVIEW,
+            current_stage=review_stage,
+            case_status=RecruitmentCase.CaseStatus.ACTIVE,
+            is_stage_locked=False,
+        )
+        .exclude(id__in=deliberated_case_ids)
+    )
+    if pending_cases.exists():
+        pending_references = "; ".join(
+            case.application.reference_label for case in pending_cases.order_by("application__reference_number", "id")
+        )
+        raise ValueError(
+            "Finalize deliberation records for all active applicants in this vacancy before generating the CAR. "
+            f"Pending: {pending_references}."
+        )
     if any(record.ranking_position is None for record in deliberation_records):
         raise ValueError(
             "All finalized Plantilla deliberation records for this recruitment entry must include a ranking position before CAR generation."
@@ -2510,6 +2890,11 @@ def _car_candidate_rows(recruitment_entry, review_stage):
 def generate_comparative_assessment_report(application, actor, cleaned_data, finalize=False):
     if not hasattr(application, "case"):
         raise ValueError("A case must exist before a Comparative Assessment Report can be generated.")
+    if (
+        application_requires_finalized_applicant_pool(application)
+        and not application_has_finalized_applicant_pool(application)
+    ):
+        raise ValueError(get_applicant_pool_finalization_block_message(application))
     if not user_can_manage_comparative_assessment_report(actor, application):
         raise ValueError(
             "This case is not currently assigned to you for the Comparative Assessment Report."
@@ -2520,6 +2905,12 @@ def generate_comparative_assessment_report(application, actor, cleaned_data, fin
         raise ValueError(
             "The Comparative Assessment Report is available only for Plantilla cases at the HRMPSB step."
         )
+    if ComparativeAssessmentReport.objects.filter(
+        recruitment_entry=application.position,
+        review_stage=review_stage,
+        is_finalized=True,
+    ).exists():
+        raise ValueError("A finalized CAR already exists for this vacancy.")
 
     deliberation_record = get_deliberation_record(application, stage=review_stage)
     if not deliberation_record or not deliberation_record.is_finalized:
@@ -3869,8 +4260,181 @@ def process_workflow_action(application, actor, action, remarks):
     return application
 
 
+def _final_selection_items_are_ready(report):
+    items = list(get_comparative_assessment_report_items_for_report(report))
+    if not items:
+        raise ValueError("The finalized CAR has no ranked applicants.")
+    for item in items:
+        application = item.application
+        case = getattr(application, "case", None)
+        if (
+            not case
+            or application.status != RecruitmentApplication.Status.APPOINTING_AUTHORITY_REVIEW
+            or application.current_handler_role != RecruitmentUser.Role.APPOINTING_AUTHORITY
+            or case.current_stage != RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW
+            or case.current_handler_role != RecruitmentUser.Role.APPOINTING_AUTHORITY
+            or case.is_stage_locked
+        ):
+            raise ValueError(
+                "All CAR applicants must be ready for Appointing Authority final selection."
+            )
+    return items
+
+
+@transaction.atomic
+def record_final_selection(application, actor, cleaned_data):
+    if application.branch != PositionPosting.Branch.PLANTILLA:
+        raise ValueError("CAR-based final selection is only available for Plantilla vacancies.")
+    if not user_can_record_final_selection(actor, application):
+        raise ValueError(
+            "Only the Appointing Authority may record final selection from the finalized CAR."
+        )
+
+    report = get_latest_finalized_comparative_assessment_report(application)
+    if not report:
+        raise ValueError("Finalize the CAR before recording the final selection.")
+    if get_final_selection_for_entry(report.recruitment_entry):
+        raise ValueError("Final selection has already been recorded for this vacancy.")
+
+    selected_item = cleaned_data["selected_item"]
+    selected_item = (
+        ComparativeAssessmentReportItem.objects.select_related(
+            "report",
+            "recruitment_case",
+            "recruitment_case__application",
+        )
+        .filter(pk=selected_item.pk, report=report)
+        .first()
+    )
+    if not selected_item:
+        raise ValueError("Select an applicant from the finalized CAR.")
+
+    report_items = _final_selection_items_are_ready(report)
+    car_snapshot = build_car_selection_packet(report)
+    selection = FinalSelection(
+        comparative_assessment_report=report,
+        recruitment_entry=report.recruitment_entry,
+        selected_item=selected_item,
+        selected_application=selected_item.application,
+        selected_case=selected_item.recruitment_case,
+        decided_by=actor,
+        decision_notes=cleaned_data["decision_notes"],
+        car_snapshot=car_snapshot,
+    )
+    selection.full_clean()
+    selection.save()
+
+    for item in report_items:
+        target_application = item.application
+        selected = item.pk == selected_item.pk
+        next_role = _completion_handler_role(target_application) if selected else ""
+        next_status = (
+            RecruitmentApplication.Status.APPROVED
+            if selected
+            else RecruitmentApplication.Status.REJECTED
+        )
+        previous_role = target_application.current_handler_role
+        previous_status = target_application.status
+        case_transition = _sync_case_after_workflow_action(
+            application=target_application,
+            actor=actor,
+            next_role=next_role,
+            next_status=next_status,
+            remarks=selection.decision_notes,
+        )
+        target_application.current_handler_role = next_role
+        target_application.status = next_status
+        target_application.closed_at = (
+            timezone.now()
+            if target_application.case.current_stage == RecruitmentCase.Stage.CLOSED
+            else None
+        )
+        target_application.save(update_fields=["current_handler_role", "status", "closed_at", "updated_at"])
+
+        record_audit_event(
+            application=target_application,
+            actor=actor,
+            action=AuditLog.Action.DECISION_RECORDED,
+            description=(
+                "Appointing Authority selected this applicant from the finalized CAR."
+                if selected
+                else "Appointing Authority selected another applicant from the finalized CAR."
+            ),
+            metadata={
+                "final_selection_id": selection.id,
+                "car_report_id": report.id,
+                "selected_car_item_id": selected_item.id,
+                "car_item_id": item.id,
+                "decision_outcome": (
+                    FinalDecision.Outcome.SELECTED
+                    if selected
+                    else FinalDecision.Outcome.NOT_SELECTED
+                ),
+                "decision_notes": selection.decision_notes,
+                "from_status": previous_status,
+                "to_status": next_status,
+                "from_role": previous_role,
+                "to_role": next_role,
+                "from_stage": case_transition["previous_stage"],
+                "to_stage": target_application.case.current_stage,
+                "from_case_status": case_transition["previous_case_status"],
+                "to_case_status": target_application.case.case_status,
+                "case_locked": target_application.case.is_stage_locked,
+            },
+        )
+
+        if selected:
+            next_role_label = RecruitmentUser.Role(next_role).label
+            record_audit_event(
+                application=target_application,
+                actor=actor,
+                action=AuditLog.Action.ROUTED,
+                description=f"Application routed to {next_role} for completion handling.",
+                metadata={
+                    "status": next_status,
+                    "current_handler_role": next_role,
+                    **_case_timeline_metadata(target_application.case),
+                },
+            )
+            record_routing_history_event(
+                application=target_application,
+                actor=actor,
+                route_type=RoutingHistory.RouteType.FORWARD,
+                description=f"Selected from CAR and routed to {next_role_label} for completion handling.",
+                recruitment_case=target_application.case,
+                from_handler_role=previous_role,
+                to_handler_role=next_role,
+                from_status=previous_status,
+                to_status=next_status,
+                from_stage=case_transition["previous_stage"],
+                to_stage=target_application.case.current_stage,
+                notes=selection.decision_notes,
+            )
+            queue_selected_applicant_notification(target_application, actor=actor)
+        else:
+            record_routing_history_event(
+                application=target_application,
+                actor=actor,
+                route_type=RoutingHistory.RouteType.CLOSE,
+                description="Closed as not selected after Appointing Authority selected from CAR.",
+                recruitment_case=target_application.case,
+                from_handler_role=previous_role,
+                to_handler_role="",
+                from_status=previous_status,
+                to_status=next_status,
+                from_stage=case_transition["previous_stage"],
+                to_stage=target_application.case.current_stage,
+                notes=selection.decision_notes,
+            )
+            queue_non_selected_applicant_notification(target_application, actor=actor)
+
+    return selection
+
+
 @transaction.atomic
 def record_final_decision(application, actor, cleaned_data):
+    if application.branch == PositionPosting.Branch.PLANTILLA:
+        raise ValueError("Plantilla final selection must be recorded from the finalized CAR.")
     if not hasattr(application, "case"):
         raise ValueError("A case must exist before a final decision can be recorded.")
     if application.case.is_stage_locked:
@@ -4633,6 +5197,14 @@ def _manifest_json(
     case = getattr(application, "case", None)
     completion_record = get_completion_record(application)
     submission_packet = build_submission_packet(application)
+    final_selection = get_final_selection_for_application(application)
+    final_selection_outcome = ""
+    if final_selection:
+        final_selection_outcome = (
+            FinalDecision.Outcome.SELECTED
+            if application.id == final_selection.selected_application_id
+            else FinalDecision.Outcome.NOT_SELECTED
+        )
     payload = {
         "export": {
             "bundle_root": bundle_root,
@@ -4771,6 +5343,24 @@ def _manifest_json(
             }
             for decision in get_final_decision_history(application)
         ],
+        "final_selection": (
+            {
+                "id": final_selection.id,
+                "comparative_assessment_report_id": final_selection.comparative_assessment_report_id,
+                "selected_item_id": final_selection.selected_item_id,
+                "selected_rank_order": final_selection.selected_item.rank_order,
+                "selected_application_id": final_selection.selected_application_id,
+                "selected_case_id": final_selection.selected_case_id,
+                "selected_applicant_name": final_selection.selected_application.applicant_display_name,
+                "decision_outcome_for_this_application": final_selection_outcome,
+                "decision_notes": final_selection.decision_notes,
+                "decided_by_role": final_selection.decided_by_role,
+                "decided_at": final_selection.decided_at.isoformat() if final_selection.decided_at else "",
+                "car_snapshot": final_selection.car_snapshot,
+            }
+            if final_selection
+            else {}
+        ),
     }
     return json.dumps(payload, indent=2).encode("utf-8")
 

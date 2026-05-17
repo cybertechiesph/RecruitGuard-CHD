@@ -21,6 +21,7 @@ from .forms import (
     ExamRecordForm,
     EvidenceUploadForm,
     FinalDecisionForm,
+    FinalSelectionForm,
     InterviewFallbackUploadForm,
     InterviewRatingForm,
     InterviewSessionForm,
@@ -51,6 +52,8 @@ from .permissions import (
     WorkflowProcessorRequiredMixin,
 )
 from .services import (
+    application_has_finalized_applicant_pool,
+    application_requires_finalized_applicant_pool,
     build_submission_packet,
     build_export_bundle,
     close_recruitment_case,
@@ -71,6 +74,8 @@ from .services import (
     get_exam_record,
     get_exam_records,
     get_final_decision_history,
+    get_final_selection_for_application,
+    get_applicant_pool_finalization_block_message,
     get_interview_fallback_evidence,
     get_interview_rating_for_user,
     get_interview_ratings,
@@ -90,6 +95,7 @@ from .services import (
     process_workflow_action,
     record_audit_log_review,
     record_final_decision,
+    record_final_selection,
     record_evidence_vault_access,
     record_protected_record_access,
     reopen_recruitment_case,
@@ -116,6 +122,7 @@ from .services import (
     user_can_manage_screening,
     user_can_process_application,
     user_can_record_final_decision,
+    user_can_record_final_selection,
     user_can_reopen_case,
     user_can_upload_interview_fallback,
     user_can_upload_evidence,
@@ -305,12 +312,16 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
         )
         context["final_decision_history"] = get_final_decision_history(application)
         context["latest_final_decision"] = get_latest_final_decision(application)
+        context["latest_final_selection"] = get_final_selection_for_application(application)
+        context["decision_locked_record"] = (
+            context["latest_final_decision"] or context["latest_final_selection"]
+        )
         if application.branch == PositionPosting.Branch.COS:
             context["decision_record_label"] = "COS Selection"
             context["decision_actor_label"] = "HRM Chief"
             context["decision_completion_label"] = "contract"
         else:
-            context["decision_record_label"] = "Final Decision"
+            context["decision_record_label"] = "Final Selection"
             context["decision_actor_label"] = "Appointing Authority"
             context["decision_completion_label"] = "appointment"
         if user.role == RecruitmentUser.Role.SYSTEM_ADMIN:
@@ -370,13 +381,22 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
                 context["interview_fallback_locked"] = True
             else:
                 context["interview_fallback_form"] = InterviewFallbackUploadForm()
-        if user_can_manage_deliberation(user, application):
+        applicant_pool_is_blocked = (
+            application_requires_finalized_applicant_pool(application)
+            and not application_has_finalized_applicant_pool(application)
+        )
+        if applicant_pool_is_blocked:
+            context["deliberation_requires_vacancy_closure"] = True
+            context["deliberation_vacancy_closure_message"] = (
+                get_applicant_pool_finalization_block_message(application)
+            )
+        elif user_can_manage_deliberation(user, application):
             deliberation_record = context["current_deliberation_record"]
             if deliberation_record and deliberation_record.is_finalized:
                 context["deliberation_locked"] = True
             else:
                 context["deliberation_form"] = DeliberationRecordForm(instance=deliberation_record)
-        if user_can_manage_comparative_assessment_report(user, application):
+        if not applicant_pool_is_blocked and user_can_manage_comparative_assessment_report(user, application):
             deliberation_record = context["current_deliberation_record"]
             report = context["current_comparative_assessment_report"]
             if not deliberation_record:
@@ -389,6 +409,11 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
                 context["car_form"] = ComparativeAssessmentReportForm(instance=report)
         if user_can_record_final_decision(user, application):
             context["final_decision_form"] = FinalDecisionForm()
+        if user_can_record_final_selection(user, application):
+            report = context["current_comparative_assessment_report"]
+            context["final_selection_report"] = report
+            context["final_selection_items"] = context["current_comparative_assessment_report_items"]
+            context["final_selection_form"] = FinalSelectionForm(report=report)
         if user_can_manage_completion(user, application):
             completion_record = context["completion_record"]
             requirement_instance = completion_record or CompletionRecord(
@@ -905,6 +930,12 @@ class InterviewFallbackUploadView(LoginRequiredMixin, WorkflowProcessorRequiredM
 class DeliberationRecordView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
     def post(self, request, pk):
         application = get_object_or_404(RecruitmentApplication, pk=pk)
+        if (
+            application_requires_finalized_applicant_pool(application)
+            and not application_has_finalized_applicant_pool(application)
+        ):
+            messages.error(request, get_applicant_pool_finalization_block_message(application))
+            return redirect("application-detail", pk=pk)
         if not user_can_manage_deliberation(request.user, application):
             raise PermissionDenied
 
@@ -933,6 +964,12 @@ class DeliberationRecordView(LoginRequiredMixin, WorkflowProcessorRequiredMixin,
 class ComparativeAssessmentReportView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
     def post(self, request, pk):
         application = get_object_or_404(RecruitmentApplication, pk=pk)
+        if (
+            application_requires_finalized_applicant_pool(application)
+            and not application_has_finalized_applicant_pool(application)
+        ):
+            messages.error(request, get_applicant_pool_finalization_block_message(application))
+            return redirect("application-detail", pk=pk)
         if not user_can_manage_comparative_assessment_report(request.user, application):
             raise PermissionDenied
 
@@ -958,6 +995,34 @@ class ComparativeAssessmentReportView(LoginRequiredMixin, WorkflowProcessorRequi
         application.refresh_from_db()
         if not user_can_view_application(request.user, application):
             return redirect("workflow-queue")
+        return redirect("application-detail", pk=pk)
+
+
+class FinalSelectionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
+    def post(self, request, pk):
+        application = get_object_or_404(RecruitmentApplication, pk=pk)
+        if not user_can_record_final_selection(request.user, application):
+            raise PermissionDenied
+
+        report = get_latest_finalized_comparative_assessment_report(application)
+        form = FinalSelectionForm(request.POST, report=report)
+        if form.is_valid():
+            try:
+                selection = record_final_selection(
+                    application=application,
+                    actor=request.user,
+                    cleaned_data=form.cleaned_data,
+                )
+            except (ValueError, ValidationError) as exc:
+                messages.error(request, str(exc))
+            else:
+                messages.success(
+                    request,
+                    "Final selection recorded from the CAR. Applicant cases were updated.",
+                )
+                return redirect("application-detail", pk=selection.selected_application_id)
+        else:
+            messages.error(request, "Choose the selected appointee and provide decision remarks.")
         return redirect("application-detail", pk=pk)
 
 

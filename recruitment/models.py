@@ -81,6 +81,55 @@ class RecruitmentUser(AbstractUser):
         return self.get_full_name() or self.username
 
 
+class InternalMFAChallenge(TimestampedModel):
+    user = models.ForeignKey(
+        RecruitmentUser,
+        on_delete=models.CASCADE,
+        related_name="mfa_challenges",
+    )
+    challenge_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    otp_hash = models.CharField(max_length=64)
+    sent_to_email = models.EmailField()
+    requested_at = models.DateTimeField(default=timezone.now)
+    expires_at = models.DateTimeField()
+    verified_at = models.DateTimeField(blank=True, null=True)
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+    is_used = models.BooleanField(default=False)
+    ip_address = models.GenericIPAddressField(blank=True, null=True)
+    user_agent = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-requested_at", "-created_at"]
+        indexes = [
+            models.Index(fields=["user", "challenge_token"]),
+            models.Index(fields=["user", "is_used", "expires_at"]),
+        ]
+
+    def clean(self):
+        errors = {}
+        if not self.user_id:
+            errors["user"] = "MFA challenge must belong to an internal user."
+        elif not self.user.is_internal_user:
+            errors["user"] = "MFA challenges are only supported for internal users."
+        if not self.sent_to_email:
+            errors["sent_to_email"] = "MFA challenge must record the destination email."
+        if self.expires_at and self.expires_at <= self.requested_at:
+            errors["expires_at"] = "MFA challenge expiry must be after the request time."
+        if errors:
+            raise ValidationError(errors)
+
+    @property
+    def is_expired(self):
+        return self.expires_at <= timezone.now()
+
+    @property
+    def is_verified(self):
+        return bool(self.verified_at and self.is_used)
+
+    def __str__(self):
+        return f"MFA challenge for {self.user} at {self.requested_at:%Y-%m-%d %H:%M}"
+
+
 class PositionReference(TimestampedModel):
     class LevelClassification(models.TextChoices):
         FIRST_LEVEL = "FIRST_LEVEL", "First Level"
@@ -497,6 +546,20 @@ class PositionPosting(TimestampedModel):
         if self.intake_mode == self.IntakeMode.OPENING_BASED and self.closing_date:
             return self.closing_date >= timezone.localdate()
         return True
+
+    @property
+    def intake_deadline_has_passed(self):
+        return bool(self.closing_date and self.closing_date < timezone.localdate())
+
+    @property
+    def applicant_pool_is_finalized(self):
+        if self.status == self.EntryStatus.CLOSED:
+            return True
+        if self.branch == self.Branch.PLANTILLA:
+            return self.intake_deadline_has_passed
+        if self.intake_mode == self.IntakeMode.OPENING_BASED and self.closing_date:
+            return self.intake_deadline_has_passed
+        return False
 
     @property
     def engagement_type(self):
@@ -1538,7 +1601,12 @@ class ComparativeAssessmentReport(TimestampedModel):
             models.UniqueConstraint(
                 fields=["recruitment_entry", "review_stage", "version_number"],
                 name="unique_car_version_per_entry_stage",
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["recruitment_entry", "review_stage"],
+                condition=models.Q(is_finalized=True),
+                name="unique_finalized_car_per_entry_stage",
+            ),
         ]
 
     def clean(self):
@@ -1561,6 +1629,16 @@ class ComparativeAssessmentReport(TimestampedModel):
             errors["evidence_item"] = (
                 "Finalized Comparative Assessment Reports must link to the generated PDF file."
             )
+        if self.is_finalized and self.recruitment_entry_id:
+            finalized_queryset = type(self).objects.filter(
+                recruitment_entry_id=self.recruitment_entry_id,
+                review_stage=self.review_stage,
+                is_finalized=True,
+            )
+            if self.pk:
+                finalized_queryset = finalized_queryset.exclude(pk=self.pk)
+            if finalized_queryset.exists():
+                errors["is_finalized"] = "Only one finalized CAR is allowed per vacancy."
         if self.evidence_item_id:
             if self.evidence_item.artifact_scope != EvidenceVaultItem.OwnerScope.ENTRY:
                 errors["evidence_item"] = (
@@ -1668,6 +1746,98 @@ class ComparativeAssessmentReportItem(TimestampedModel):
 
     def __str__(self):
         return f"{self.report} #{self.rank_order}"
+
+
+class FinalSelection(TimestampedModel):
+    comparative_assessment_report = models.OneToOneField(
+        ComparativeAssessmentReport,
+        on_delete=models.PROTECT,
+        related_name="final_selection",
+    )
+    recruitment_entry = models.ForeignKey(
+        PositionPosting,
+        on_delete=models.PROTECT,
+        related_name="final_selections",
+    )
+    selected_item = models.OneToOneField(
+        ComparativeAssessmentReportItem,
+        on_delete=models.PROTECT,
+        related_name="final_selection",
+    )
+    selected_application = models.ForeignKey(
+        RecruitmentApplication,
+        on_delete=models.PROTECT,
+        related_name="final_selections_as_selected",
+    )
+    selected_case = models.ForeignKey(
+        RecruitmentCase,
+        on_delete=models.PROTECT,
+        related_name="final_selections_as_selected",
+    )
+    decided_by = models.ForeignKey(
+        RecruitmentUser,
+        on_delete=models.PROTECT,
+        related_name="recorded_final_selections",
+    )
+    decided_by_role = models.CharField(max_length=40, blank=True)
+    decision_notes = models.TextField()
+    car_snapshot = models.JSONField(default=dict, blank=True)
+    decided_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["-decided_at", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["recruitment_entry"],
+                name="unique_final_selection_per_entry",
+            )
+        ]
+
+    def clean(self):
+        errors = {}
+        if self.recruitment_entry_id and self.recruitment_entry.branch != PositionPosting.Branch.PLANTILLA:
+            errors["recruitment_entry"] = "Final selection from CAR is only supported for Plantilla vacancies."
+        if self.comparative_assessment_report_id:
+            if self.comparative_assessment_report.recruitment_entry_id != self.recruitment_entry_id:
+                errors["comparative_assessment_report"] = (
+                    "Final selection must use the finalized CAR for the same vacancy."
+                )
+            if not self.comparative_assessment_report.is_finalized:
+                errors["comparative_assessment_report"] = "Final selection requires a finalized CAR."
+        if self.selected_item_id:
+            if (
+                self.comparative_assessment_report_id
+                and self.selected_item.report_id != self.comparative_assessment_report_id
+            ):
+                errors["selected_item"] = "Selected applicant must come from the finalized CAR."
+            if (
+                self.selected_application_id
+                and self.selected_item.recruitment_case.application_id != self.selected_application_id
+            ):
+                errors["selected_application"] = "Selected application must match the selected CAR item."
+            if self.selected_case_id and self.selected_item.recruitment_case_id != self.selected_case_id:
+                errors["selected_case"] = "Selected case must match the selected CAR item."
+        if self.decided_by_id and self.decided_by.role != RecruitmentUser.Role.APPOINTING_AUTHORITY:
+            errors["decided_by"] = "Only the Appointing Authority may record the final CAR selection."
+        if not (self.decision_notes or "").strip():
+            errors["decision_notes"] = "Decision notes are required."
+        if not self.car_snapshot:
+            errors["car_snapshot"] = "Final selection must preserve the CAR snapshot."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        if self.selected_item_id:
+            self.selected_application = self.selected_item.application
+            self.selected_case = self.selected_item.recruitment_case
+        if self.comparative_assessment_report_id:
+            self.recruitment_entry = self.comparative_assessment_report.recruitment_entry
+        if self.decided_by_id:
+            self.decided_by_role = self.decided_by.role
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.recruitment_entry.job_code} selected {self.selected_application.reference_label}"
 
 
 class FinalDecision(TimestampedModel):
@@ -2225,6 +2395,12 @@ class AuditLog(TimestampedModel):
     class Action(models.TextChoices):
         INTERNAL_LOGIN = "internal_login", "Internal Login"
         INTERNAL_LOGOUT = "internal_logout", "Internal Logout"
+        INTERNAL_MFA_SENT = "internal_mfa_sent", "Internal MFA Sent"
+        INTERNAL_MFA_RESENT = "internal_mfa_resent", "Internal MFA Resent"
+        INTERNAL_MFA_VERIFIED = "internal_mfa_verified", "Internal MFA Verified"
+        INTERNAL_MFA_FAILED = "internal_mfa_failed", "Internal MFA Failed"
+        INTERNAL_MFA_EXPIRED = "internal_mfa_expired", "Internal MFA Expired"
+        INTERNAL_MFA_LOCKED = "internal_mfa_locked", "Internal MFA Locked"
         PASSWORD_CHANGED = "password_changed", "Password Changed"
         INTERNAL_ACCOUNT_CREATED = "internal_account_created", "Internal Account Created"
         INTERNAL_ACCOUNT_UPDATED = "internal_account_updated", "Internal Account Updated"
@@ -2276,6 +2452,8 @@ class AuditLog(TimestampedModel):
         Action.CASE_REOPENED,
         Action.EXPORT_GENERATED,
         Action.EVIDENCE_DOWNLOADED,
+        Action.INTERNAL_MFA_FAILED,
+        Action.INTERNAL_MFA_LOCKED,
         Action.OVERRIDE_GRANTED,
         Action.OVERRIDE_USED,
         Action.PROTECTED_RECORD_VIEWED,

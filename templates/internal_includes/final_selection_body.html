@@ -1,0 +1,127 @@
+{% load recruitment_ui %}
+
+<div class="rg-icard">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">Final CAR Selection</h3>
+            <p class="rg-icard__subtitle">
+                Review the finalized Comparative Assessment Report and choose one appointee from the ranked list.
+            </p>
+        </div>
+        {% if final_selection_report %}
+            <span class="rg-pill rg-pill--success rg-pill--sm">CAR v{{ final_selection_report.version_number }}</span>
+        {% endif %}
+    </div>
+
+    {% if final_selection_report %}
+        <div class="rg-pkt-overview">
+            <div class="rg-pkt-row">
+                <span class="rg-pkt-row__label">Vacancy</span>
+                <span class="rg-pkt-row__value"><strong>{{ final_selection_report.recruitment_entry.title }}</strong></span>
+            </div>
+            <div class="rg-pkt-row">
+                <span class="rg-pkt-row__label">Entry Code</span>
+                <span class="rg-pkt-row__value">{{ final_selection_report.recruitment_entry.job_code }}</span>
+            </div>
+            <div class="rg-pkt-row">
+                <span class="rg-pkt-row__label">Candidates Ranked</span>
+                <span class="rg-pkt-row__value">{{ final_selection_items|length }}</span>
+            </div>
+            <div class="rg-pkt-row">
+                <span class="rg-pkt-row__label">Finalized</span>
+                <span class="rg-pkt-row__value">{{ final_selection_report.finalized_at|date:"N j, Y, g:i a" }}</span>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<form method="post" action="{% url 'final-selection-record' application.pk %}">
+    {% csrf_token %}
+    <div class="rg-icard">
+        <div class="rg-icard__header">
+            <div>
+                <h3 class="rg-icard__title">Ranked Applicants</h3>
+                <p class="rg-icard__subtitle">
+                    Select the appointee exactly once. The selected applicant will proceed to completion; all other CAR applicants will be closed as not selected.
+                </p>
+            </div>
+        </div>
+
+        {% if final_selection_form.selected_item.errors %}
+            <div class="invalid-feedback d-block mb-2">
+                {{ final_selection_form.selected_item.errors.0 }}
+            </div>
+        {% endif %}
+
+        <div class="rg-del-car-list">
+            {% for item in final_selection_items %}
+                {% with candidate=item.recruitment_case.application %}
+                <label class="rg-del-car-item" style="cursor:pointer;">
+                    <div class="rg-del-rank-badge">#{{ item.rank_order }}</div>
+                    <div class="rg-del-car-item__body">
+                        <div class="d-flex align-items-start justify-content-between gap-3">
+                            <div>
+                                <div class="rg-del-car-item__name">{{ candidate.applicant_display_name }}</div>
+                                <div class="text-muted" style="font-size:0.75rem;">
+                                    {{ candidate.reference_number|default:candidate.reference_label }}
+                                </div>
+                            </div>
+                            <input type="radio"
+                                   name="{{ final_selection_form.selected_item.html_name }}"
+                                   value="{{ item.pk }}"
+                                   required>
+                        </div>
+                        <div class="rg-del-car-item__scores">
+                            {% if item.qualification_outcome %}
+                                <span class="rg-del-car-item__score-cell">
+                                    <span class="rg-del-car-item__score-label">Screening</span>
+                                    <span class="rg-del-car-item__score-val">{{ item.qualification_outcome }}</span>
+                                </span>
+                            {% endif %}
+                            {% if item.exam_score %}
+                                <span class="rg-del-car-item__score-cell">
+                                    <span class="rg-del-car-item__score-label">Exam</span>
+                                    <span class="rg-del-car-item__score-val">{{ item.exam_score }}</span>
+                                </span>
+                            {% endif %}
+                            {% if item.interview_average_score %}
+                                <span class="rg-del-car-item__score-cell">
+                                    <span class="rg-del-car-item__score-label">Interview Avg.</span>
+                                    <span class="rg-del-car-item__score-val">{{ item.interview_average_score }}</span>
+                                </span>
+                            {% endif %}
+                        </div>
+                        {% if item.decision_support_summary %}
+                            <div class="rg-del-car-item__decision">{{ item.decision_support_summary }}</div>
+                        {% endif %}
+                    </div>
+                </label>
+                {% endwith %}
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="rg-icard">
+        <div class="rg-field">
+            <label for="{{ final_selection_form.decision_notes.id_for_label }}" class="form-label">
+                {{ final_selection_form.decision_notes.label }} <span class="text-danger">*</span>
+            </label>
+            <textarea name="{{ final_selection_form.decision_notes.html_name }}"
+                      id="{{ final_selection_form.decision_notes.id_for_label }}"
+                      class="form-control{% if final_selection_form.decision_notes.errors %} is-invalid{% endif %}"
+                      rows="5"
+                      required>{{ final_selection_form.decision_notes.value|default:"" }}</textarea>
+            {% if final_selection_form.decision_notes.errors %}
+                <div class="invalid-feedback">{{ final_selection_form.decision_notes.errors.0 }}</div>
+            {% endif %}
+            <div class="form-text">
+                Notes are preserved with the CAR-level final selection record.
+            </div>
+        </div>
+        <div class="rg-form-actions">
+            <button type="submit" class="btn btn-rg-primary">
+                Record Final Selection
+            </button>
+        </div>
+    </div>
+</form>

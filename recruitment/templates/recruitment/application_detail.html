@@ -173,7 +173,11 @@
             <div class="rg-cws-stage-section" id="cws-deliberation">
                 {% include "internal_includes/stage_titlebar.html" with title="Deliberation / CAR" locked=deliberation_locked %}
 
-                {% if deliberation_form or car_form or car_requires_deliberation or car_requires_finalized_deliberation %}
+                {% if deliberation_requires_vacancy_closure %}
+
+                    {% include "internal_includes/state_empty.html" with title="Applicant pool not final" copy=deliberation_vacancy_closure_message %}
+
+                {% elif deliberation_form or car_form or car_requires_deliberation or car_requires_finalized_deliberation %}
                     
                     {% include "internal_includes/deliberation_body.html" %}
 
@@ -191,11 +195,19 @@
             
             {% if current_detail_tab.key == "decision" %}
             <div class="rg-cws-stage-section" id="cws-decision">
-                {% include "internal_includes/stage_titlebar.html" with title=decision_record_label locked=latest_final_decision %}
+                {% include "internal_includes/stage_titlebar.html" with title=decision_record_label locked=decision_locked_record %}
 
-                {% if final_decision_form %}
+                {% if final_selection_form %}
+                    
+                    {% include "internal_includes/final_selection_body.html" %}
+
+                {% elif final_decision_form %}
                     
                     {% include "internal_includes/decision_body.html" %}
+
+                {% elif latest_final_selection %}
+                    
+                    {% include "internal_includes/final_selection_locked_body.html" %}
 
                 {% elif latest_final_decision %}
                     

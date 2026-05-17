@@ -10,6 +10,8 @@ from .models import (
     ExamRecord,
     EvidenceVaultItem,
     FinalDecision,
+    FinalSelection,
+    InternalMFAChallenge,
     InterviewRating,
     InterviewSession,
     NotificationLog,
@@ -41,6 +43,42 @@ class RecruitmentUserAdmin(UserAdmin):
     )
     list_display = ("username", "email", "role", "office_name", "is_active")
     list_filter = ("role", "is_active", "is_staff")
+
+
+@admin.register(InternalMFAChallenge)
+class InternalMFAChallengeAdmin(admin.ModelAdmin):
+    list_display = (
+        "user",
+        "sent_to_email",
+        "requested_at",
+        "expires_at",
+        "verified_at",
+        "attempt_count",
+        "is_used",
+    )
+    list_filter = ("is_used", "verified_at", "expires_at")
+    search_fields = ("user__username", "user__email", "sent_to_email", "challenge_token")
+    readonly_fields = (
+        "user",
+        "challenge_token",
+        "otp_hash",
+        "sent_to_email",
+        "requested_at",
+        "expires_at",
+        "verified_at",
+        "attempt_count",
+        "is_used",
+        "ip_address",
+        "user_agent",
+        "created_at",
+        "updated_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(PositionReference)
@@ -287,7 +325,24 @@ class FinalDecisionInline(admin.TabularInline):
     can_delete = False
 
 
-PositionPostingAdmin.inlines = [ComparativeAssessmentReportInline]
+class FinalSelectionInline(admin.TabularInline):
+    model = FinalSelection
+    extra = 0
+    readonly_fields = (
+        "comparative_assessment_report",
+        "selected_item",
+        "selected_application",
+        "selected_case",
+        "decided_by",
+        "decided_by_role",
+        "decision_notes",
+        "decided_at",
+        "created_at",
+    )
+    can_delete = False
+
+
+PositionPostingAdmin.inlines = [ComparativeAssessmentReportInline, FinalSelectionInline]
 
 
 class NotificationLogInline(admin.TabularInline):

@@ -2,7 +2,33 @@
 
 
 
-{% if latest_final_decision %}
+{% if latest_final_selection %}
+    <div class="rg-cmp-decision-ref">
+        <span class="rg-cmp-decision-ref__icon">
+            <i class="bi bi-check2-circle"></i>
+        </span>
+        <div>
+            <strong>
+                Applicant Selected from CAR
+                &mdash;
+            </strong>
+            Final selection recorded
+            {% if latest_final_selection.decided_at %}
+                on {{ latest_final_selection.decided_at|date:"N j, Y" }}
+            {% endif %}
+            {% if latest_final_selection.decided_by %}
+                by <strong>{{ latest_final_selection.decided_by }}</strong>
+            {% endif %}.
+            This step tracks
+            {% if completion_record %}
+                {{ completion_record.completion_label|lower }}
+            {% else %}
+                appointment
+            {% endif %}
+            completion and formally closes the selected case.
+        </div>
+    </div>
+{% elif latest_final_decision %}
     <div class="rg-cmp-decision-ref">
         <span class="rg-cmp-decision-ref__icon">
             <i class="bi bi-check2-circle"></i>
@@ -399,7 +425,9 @@
                 <ul class="mb-3" style="padding-left:1.2rem;">
                     <li>
                         <strong>Applicant:</strong>
-                        {% if latest_final_decision %}
+                        {% if latest_final_selection %}
+                            {{ latest_final_selection.selected_application.applicant_display_name }}
+                        {% elif latest_final_decision %}
                             {{ latest_final_decision.submission_packet_snapshot.context.applicant_name|default:application.applicant_display_name }}
                         {% else %}
                             {{ application.applicant_display_name }}

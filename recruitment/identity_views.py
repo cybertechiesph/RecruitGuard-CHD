@@ -1,27 +1,150 @@
 from django.contrib import messages
+from django.contrib.auth import login as auth_login, logout as auth_logout
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, PasswordChangeDoneView, PasswordChangeView
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.views import View
-from django.views.generic import CreateView, ListView, UpdateView
+from django.views.generic import CreateView, FormView, ListView, UpdateView
 
 from .forms import (
     InternalAuthenticationForm,
+    InternalMFAOTPForm,
     InternalPasswordChangeForm,
     InternalUserCreateForm,
     InternalUserUpdateForm,
 )
 from .models import AuditLog, RecruitmentUser
-from .permissions import InternalUserRequiredMixin, SystemAdministratorRequiredMixin
-from .services import record_system_audit_event
+from .permissions import (
+    INTERNAL_MFA_USER_SESSION_KEY,
+    INTERNAL_MFA_VERIFIED_SESSION_KEY,
+    InternalUserRequiredMixin,
+    SystemAdministratorRequiredMixin,
+    internal_mfa_is_verified,
+)
+from .services import (
+    issue_internal_mfa_challenge,
+    record_system_audit_event,
+    verify_internal_mfa_challenge,
+)
+
+
+PENDING_INTERNAL_MFA_USER_SESSION_KEY = "pending_internal_mfa_user_id"
+PENDING_INTERNAL_MFA_CHALLENGE_SESSION_KEY = "pending_internal_mfa_challenge_token"
+PENDING_INTERNAL_MFA_NEXT_SESSION_KEY = "pending_internal_mfa_next"
+
+
+def _clear_pending_internal_mfa(session):
+    session.pop(PENDING_INTERNAL_MFA_USER_SESSION_KEY, None)
+    session.pop(PENDING_INTERNAL_MFA_CHALLENGE_SESSION_KEY, None)
+    session.pop(PENDING_INTERNAL_MFA_NEXT_SESSION_KEY, None)
 
 
 class InternalLoginView(LoginView):
     template_name = "registration/login.html"
     authentication_form = InternalAuthenticationForm
     redirect_authenticated_user = True
+
+    def dispatch(self, request, *args, **kwargs):
+        if (
+            request.user.is_authenticated
+            and getattr(request.user, "is_internal_user", False)
+            and not internal_mfa_is_verified(request)
+        ):
+            auth_logout(request)
+            messages.info(request, "Please sign in again to complete internal verification.")
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        user = form.get_user()
+        try:
+            challenge = issue_internal_mfa_challenge(user, self.request)
+        except ValueError as exc:
+            form.add_error(None, str(exc))
+            return self.form_invalid(form)
+
+        self.request.session.cycle_key()
+        self.request.session[PENDING_INTERNAL_MFA_USER_SESSION_KEY] = user.id
+        self.request.session[PENDING_INTERNAL_MFA_CHALLENGE_SESSION_KEY] = str(
+            challenge.challenge_token
+        )
+        self.request.session[PENDING_INTERNAL_MFA_NEXT_SESSION_KEY] = self.get_success_url()
+        messages.success(
+            self.request,
+            "A verification code has been sent to your registered email address.",
+        )
+        return redirect("internal-mfa-verify")
+
+
+class InternalMFAVerifyView(FormView):
+    template_name = "registration/internal_mfa_verify.html"
+    form_class = InternalMFAOTPForm
+
+    def get_pending_user(self):
+        user_id = self.request.session.get(PENDING_INTERNAL_MFA_USER_SESSION_KEY)
+        challenge_token = self.request.session.get(PENDING_INTERNAL_MFA_CHALLENGE_SESSION_KEY)
+        if not user_id or not challenge_token:
+            return None
+        return RecruitmentUser.objects.filter(
+            pk=user_id,
+            is_active=True,
+            role__in=RecruitmentUser.internal_roles(),
+        ).first()
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated and internal_mfa_is_verified(request):
+            return redirect("dashboard")
+        self.pending_user = self.get_pending_user()
+        if self.pending_user is None:
+            messages.error(request, "Sign in with your internal credentials before entering a verification code.")
+            return redirect("login")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["pending_user"] = self.pending_user
+        return context
+
+    def post(self, request, *args, **kwargs):
+        if request.POST.get("action") == "resend":
+            try:
+                challenge = issue_internal_mfa_challenge(
+                    self.pending_user,
+                    request,
+                    is_resend=True,
+                    enforce_cooldown=True,
+                )
+            except ValueError as exc:
+                messages.error(request, str(exc))
+            else:
+                request.session[PENDING_INTERNAL_MFA_CHALLENGE_SESSION_KEY] = str(
+                    challenge.challenge_token
+                )
+                messages.success(request, "A new verification code has been sent.")
+            return redirect("internal-mfa-verify")
+        return super().post(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        challenge_token = self.request.session.get(PENDING_INTERNAL_MFA_CHALLENGE_SESSION_KEY)
+        try:
+            verify_internal_mfa_challenge(
+                self.pending_user,
+                challenge_token,
+                form.cleaned_data["otp"],
+                request=self.request,
+            )
+        except ValueError as exc:
+            form.add_error("otp", str(exc))
+            return self.form_invalid(form)
+
+        next_url = self.request.session.get(PENDING_INTERNAL_MFA_NEXT_SESSION_KEY) or reverse("dashboard")
+        auth_login(self.request, self.pending_user)
+        _clear_pending_internal_mfa(self.request.session)
+        self.request.session[INTERNAL_MFA_VERIFIED_SESSION_KEY] = True
+        self.request.session[INTERNAL_MFA_USER_SESSION_KEY] = self.pending_user.id
+        messages.success(self.request, "Internal verification completed.")
+        return redirect(next_url)
 
 
 class InternalPasswordChangeView(LoginRequiredMixin, InternalUserRequiredMixin, PasswordChangeView):

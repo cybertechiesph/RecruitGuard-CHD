@@ -68,7 +68,15 @@
         </div>
     {% endif %}
 
-    {% if latest_final_decision %}
+    {% if latest_final_selection %}
+        <div style="margin-top:0.75rem;">
+            {% if application.pk == latest_final_selection.selected_application_id %}
+                {% include "internal_includes/banner.html" with variant="info" title="Final Selection Recorded" copy="Selected from the finalized CAR" %}
+            {% else %}
+                {% include "internal_includes/banner.html" with variant="info" title="Final Selection Recorded" copy="Not selected from the finalized CAR" %}
+            {% endif %}
+        </div>
+    {% elif latest_final_decision %}
         <div style="margin-top:0.75rem;">
             {% include "internal_includes/banner.html" with variant="info" title="Final Decision Recorded" copy=latest_final_decision.get_decision_outcome_display %}
         </div>
