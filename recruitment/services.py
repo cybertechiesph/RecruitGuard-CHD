@@ -43,6 +43,7 @@ from .models import (
     RecruitmentCase,
     RecruitmentUser,
     RoutingHistory,
+    ScreeningDocumentReview,
     ScreeningRecord,
     WorkflowOverride,
 )
@@ -87,6 +88,10 @@ INTERVIEW_SESSION_MANAGER_ROLES = {
     RecruitmentUser.Role.HRM_CHIEF,
     RecruitmentUser.Role.HRMPSB_MEMBER,
 }
+PLANTILLA_INTERVIEW_SUPPORT_ROLES_BY_LEVEL = {
+    PositionPosting.Level.LEVEL_1: {RecruitmentUser.Role.SECRETARIAT},
+    PositionPosting.Level.LEVEL_2: {RecruitmentUser.Role.HRM_CHIEF},
+}
 INTERVIEW_SESSION_STAGES = {
     RecruitmentCase.Stage.SECRETARIAT_REVIEW,
     RecruitmentCase.Stage.HRM_CHIEF_REVIEW,
@@ -111,8 +116,24 @@ DELIBERATION_ROLES_BY_BRANCH = {
     PositionPosting.Branch.PLANTILLA: {RecruitmentUser.Role.HRMPSB_MEMBER},
 }
 CAR_REVIEW_STAGE = RecruitmentCase.Stage.HRMPSB_REVIEW
-CAR_MANAGER_ROLES = {RecruitmentUser.Role.HRMPSB_MEMBER}
+TOP_FIVE_SELECTION_LIMIT = 5
+PLANTILLA_CAR_PREPARATION_ROLES_BY_LEVEL = {
+    PositionPosting.Level.LEVEL_1: {RecruitmentUser.Role.SECRETARIAT},
+    PositionPosting.Level.LEVEL_2: {RecruitmentUser.Role.HRM_CHIEF},
+}
 CAR_LABEL = "Comparative Assessment Report"
+PLANTILLA_ASSESSMENT_WEIGHTS_BY_LEVEL = {
+    PositionPosting.Level.LEVEL_1: {
+        "document_review": Decimal("0.20"),
+        "exam": Decimal("0.40"),
+        "interview": Decimal("0.40"),
+    },
+    PositionPosting.Level.LEVEL_2: {
+        "document_review": Decimal("0.40"),
+        "exam": Decimal("0.20"),
+        "interview": Decimal("0.40"),
+    },
+}
 PLANTILLA_POOL_NOT_FINAL_MESSAGE = (
     "Plantilla deliberation and CAR generation are available only after the vacancy "
     "is closed or its closing date has passed."
@@ -553,7 +574,45 @@ def get_queue_for_user(user):
     if user.role == RecruitmentUser.Role.SYSTEM_ADMIN:
         return RecruitmentApplication.objects.none()
     queryset = RecruitmentApplication.objects.select_related("applicant", "position", "case")
-    queryset = queryset.filter(current_handler_role=user.role)
+    assigned_queryset = queryset.filter(current_handler_role=user.role)
+    support_queryset = RecruitmentApplication.objects.none()
+    interview_support_levels = [
+        level
+        for level, roles in PLANTILLA_INTERVIEW_SUPPORT_ROLES_BY_LEVEL.items()
+        if user.role in roles
+    ]
+    car_support_levels = [
+        level
+        for level, roles in PLANTILLA_CAR_PREPARATION_ROLES_BY_LEVEL.items()
+        if user.role in roles
+    ]
+    if interview_support_levels:
+        support_queryset = support_queryset | queryset.filter(
+            branch=PositionPosting.Branch.PLANTILLA,
+            level__in=interview_support_levels,
+            status=RecruitmentApplication.Status.HRMPSB_REVIEW,
+            case__current_stage=RecruitmentCase.Stage.HRMPSB_REVIEW,
+            case__case_status=RecruitmentCase.CaseStatus.ACTIVE,
+            case__is_stage_locked=False,
+        ).exclude(
+            interview_sessions__review_stage=RecruitmentCase.Stage.HRMPSB_REVIEW,
+            interview_sessions__is_finalized=True,
+        )
+    if car_support_levels:
+        support_queryset = support_queryset | queryset.filter(
+            branch=PositionPosting.Branch.PLANTILLA,
+            level__in=car_support_levels,
+            status=RecruitmentApplication.Status.HRMPSB_REVIEW,
+            case__current_stage=RecruitmentCase.Stage.HRMPSB_REVIEW,
+            case__case_status=RecruitmentCase.CaseStatus.ACTIVE,
+            case__is_stage_locked=False,
+            interview_sessions__review_stage=RecruitmentCase.Stage.HRMPSB_REVIEW,
+            interview_sessions__is_finalized=True,
+        ).exclude(
+            position__comparative_assessment_reports__review_stage=RecruitmentCase.Stage.HRMPSB_REVIEW,
+            position__comparative_assessment_reports__is_finalized=True,
+        )
+    queryset = (assigned_queryset | support_queryset).distinct()
     if user.role == RecruitmentUser.Role.SECRETARIAT:
         queryset = queryset.filter(
             Q(level=PositionPosting.Level.LEVEL_1)
@@ -596,6 +655,10 @@ def get_manageable_recruitment_entries(user):
 def user_can_view_application(user, application):
     if user.role == RecruitmentUser.Role.APPLICANT:
         return application.applicant_id == user.id
+    if user_can_support_plantilla_interview(user, application):
+        return True
+    if user_can_prepare_plantilla_car(user, application):
+        return True
     if application.current_handler_role == user.role:
         if (
             user.role == RecruitmentUser.Role.SECRETARIAT
@@ -633,6 +696,40 @@ def user_can_process_application(user, application):
     ):
         return application.active_secretariat_override is not None
     return effective_role in WORKFLOW_PROCESSOR_ROLES
+
+
+def user_can_support_plantilla_interview(user, application):
+    case = getattr(application, "case", None)
+    if not case or case.is_stage_locked:
+        return False
+    if (
+        application.branch != PositionPosting.Branch.PLANTILLA
+        or application.status != RecruitmentApplication.Status.HRMPSB_REVIEW
+        or case.current_stage != RecruitmentCase.Stage.HRMPSB_REVIEW
+        or case.case_status != RecruitmentCase.CaseStatus.ACTIVE
+        or get_current_workflow_section(application) != "interview"
+    ):
+        return False
+    return user.role in PLANTILLA_INTERVIEW_SUPPORT_ROLES_BY_LEVEL.get(application.level, set())
+
+
+def user_is_interview_rating_support_encoder(user, application):
+    return user_can_support_plantilla_interview(user, application)
+
+
+def user_can_prepare_plantilla_car(user, application):
+    case = getattr(application, "case", None)
+    if not case or case.is_stage_locked:
+        return False
+    if (
+        application.branch != PositionPosting.Branch.PLANTILLA
+        or application.status != RecruitmentApplication.Status.HRMPSB_REVIEW
+        or case.current_stage != CAR_REVIEW_STAGE
+        or case.case_status != RecruitmentCase.CaseStatus.ACTIVE
+        or get_current_workflow_section(application) != "deliberation"
+    ):
+        return False
+    return user.role in PLANTILLA_CAR_PREPARATION_ROLES_BY_LEVEL.get(application.level, set())
 
 
 def user_can_upload_evidence(user, application):
@@ -1157,6 +1254,7 @@ def get_case_timeline(application):
             AuditLog.Action.DELIBERATION_FINALIZED,
             AuditLog.Action.CAR_GENERATED,
             AuditLog.Action.CAR_FINALIZED,
+            AuditLog.Action.CAR_RETURNED,
             AuditLog.Action.DECISION_RECORDED,
             AuditLog.Action.COMPLETION_RECORDED,
             AuditLog.Action.CASE_CLOSED,
@@ -1410,6 +1508,8 @@ def get_screening_record(application, stage=None):
     return application.screening_records.select_related(
         "reviewed_by",
         "finalized_by",
+    ).prefetch_related(
+        "document_reviews__evidence_item",
     ).filter(review_stage=review_stage).first()
 
 
@@ -1417,6 +1517,8 @@ def get_screening_records(application):
     return application.screening_records.select_related(
         "reviewed_by",
         "finalized_by",
+    ).prefetch_related(
+        "document_reviews__evidence_item",
     ).order_by("created_at")
 
 
@@ -1630,7 +1732,10 @@ def get_interview_sessions(application):
             "finalized_by",
             "recruitment_case",
             "recruitment_entry",
-        ).prefetch_related("ratings__rated_by").order_by("created_at")
+        ).prefetch_related(
+            "ratings__rated_by",
+            "ratings__encoded_by",
+        ).order_by("created_at")
     )
     fallback_items = list(get_interview_fallback_evidence(application))
     fallback_by_stage = {}
@@ -1645,6 +1750,7 @@ def get_interview_ratings(application, stage=None):
     review_stage = stage or get_current_review_stage(application)
     return application.interview_ratings.select_related(
         "rated_by",
+        "encoded_by",
         "interview_session",
     ).filter(review_stage=review_stage).order_by("created_at")
 
@@ -1653,6 +1759,7 @@ def get_interview_rating_for_user(application, user, stage=None):
     review_stage = stage or get_current_review_stage(application)
     return application.interview_ratings.select_related(
         "interview_session",
+        "encoded_by",
     ).filter(review_stage=review_stage, rated_by=user).first()
 
 
@@ -1676,6 +1783,11 @@ def get_interview_fallback_evidence(application, stage=None):
 def user_can_manage_interview_session(user, application):
     current_stage = get_current_review_stage(application)
     if (
+        application.branch == PositionPosting.Branch.PLANTILLA
+        and current_stage == RecruitmentCase.Stage.HRMPSB_REVIEW
+    ):
+        return user_can_support_plantilla_interview(user, application)
+    if (
         user.role not in INTERVIEW_SESSION_MANAGER_ROLES
         or current_stage not in INTERVIEW_SESSION_STAGES
         or get_current_workflow_section(application) != "interview"
@@ -1692,6 +1804,12 @@ def user_can_manage_interview_session(user, application):
 def user_can_manage_interview_rating(user, application):
     current_stage = get_current_review_stage(application)
     if (
+        application.branch == PositionPosting.Branch.PLANTILLA
+        and current_stage == RecruitmentCase.Stage.HRMPSB_REVIEW
+        and user_can_support_plantilla_interview(user, application)
+    ):
+        return True
+    if (
         user.role not in INTERVIEW_RATING_ROLES_BY_STAGE.get(current_stage, set())
         or get_current_workflow_section(application) != "interview"
     ):
@@ -1701,6 +1819,11 @@ def user_can_manage_interview_rating(user, application):
 
 def user_can_upload_interview_fallback(user, application):
     current_stage = get_current_review_stage(application)
+    if (
+        application.branch == PositionPosting.Branch.PLANTILLA
+        and current_stage == RecruitmentCase.Stage.HRMPSB_REVIEW
+    ):
+        return user_can_support_plantilla_interview(user, application)
     if (
         user.role not in INTERVIEW_SESSION_MANAGER_ROLES
         or current_stage not in INTERVIEW_SESSION_STAGES
@@ -1727,6 +1850,37 @@ def _optional_decimal(value):
     return Decimal(str(value))
 
 
+def _quantize_score(value):
+    if value is None:
+        return None
+    return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _calculate_preliminary_assessment_score(level, document_review_score, exam_score, interview_score):
+    if any(value in (None, "") for value in (document_review_score, exam_score, interview_score)):
+        return None
+    weights = PLANTILLA_ASSESSMENT_WEIGHTS_BY_LEVEL.get(level)
+    if not weights:
+        return None
+    total = (
+        (Decimal(str(document_review_score)) * weights["document_review"])
+        + (Decimal(str(exam_score)) * weights["exam"])
+        + (Decimal(str(interview_score)) * weights["interview"])
+    )
+    return _quantize_score(total)
+
+
+def _assessment_weight_display(level):
+    weights = PLANTILLA_ASSESSMENT_WEIGHTS_BY_LEVEL.get(level)
+    if not weights:
+        return ""
+    return (
+        f"Document review {int(weights['document_review'] * 100)}%, "
+        f"exam {int(weights['exam'] * 100)}%, "
+        f"interview {int(weights['interview'] * 100)}%."
+    )
+
+
 def _average_interview_rating(interview_session):
     ratings = list(interview_session.ratings.all())
     if not ratings:
@@ -1741,6 +1895,11 @@ def _deliberation_snapshot_for_screening(screening_record):
         "review_stage": screening_record.review_stage,
         "completeness_status": screening_record.completeness_status,
         "qualification_outcome": screening_record.qualification_outcome,
+        "education_score": _decimal_string(screening_record.education_score),
+        "training_score": _decimal_string(screening_record.training_score),
+        "experience_score": _decimal_string(screening_record.experience_score),
+        "document_review_score": _decimal_string(screening_record.document_review_score),
+        "document_review_weight_display": screening_record.document_review_weight_display,
         "finalized_at": screening_record.finalized_at.isoformat() if screening_record.finalized_at else "",
     }
 
@@ -1805,12 +1964,42 @@ def build_deliberation_consolidation(application):
     latest_exam = exam_records[-1] if exam_records else None
     latest_interview = interview_sessions[-1] if interview_sessions else None
     latest_interview_average = _average_interview_rating(latest_interview) if latest_interview else None
+    latest_document_review_score = latest_screening.document_review_score if latest_screening else None
+    latest_exam_score = latest_exam.effective_score if latest_exam else None
+    preliminary_assessment_score = None
+    assessment_weight_display = ""
+    car_draft = None
+    if application.branch == PositionPosting.Branch.PLANTILLA:
+        car_draft = get_latest_draft_comparative_assessment_report(
+            application,
+            stage=get_current_review_stage(application),
+        )
+        preliminary_assessment_score = _calculate_preliminary_assessment_score(
+            application.level,
+            latest_document_review_score,
+            latest_exam_score,
+            latest_interview_average,
+        )
+        assessment_weight_display = _assessment_weight_display(application.level)
     return {
         "application_reference": application.reference_number or "",
         "entry_code": application.position.job_code,
         "branch": application.branch,
         "level": application.level,
         "generated_at": timezone.now().isoformat(),
+        "assessment_weight_display": assessment_weight_display,
+        "car_draft": (
+            {
+                "id": car_draft.id,
+                "version_number": car_draft.version_number,
+                "prepared_by": str(car_draft.generated_by) if car_draft.generated_by else "",
+                "prepared_by_role": car_draft.generated_by_role,
+                "candidate_count": car_draft.items.count(),
+                "summary_notes": car_draft.summary_notes,
+            }
+            if car_draft
+            else {}
+        ),
         "screening_records": [_deliberation_snapshot_for_screening(item) for item in screening_records],
         "exam_records": [_deliberation_snapshot_for_exam(item) for item in exam_records],
         "interview_sessions": [
@@ -1823,10 +2012,12 @@ def build_deliberation_consolidation(application):
             "latest_qualification_outcome": (
                 latest_screening.qualification_outcome if latest_screening else ""
             ),
+            "latest_document_review_score": _decimal_string(latest_document_review_score),
             "latest_exam_status": latest_exam.exam_status if latest_exam else "",
-            "latest_exam_score": _decimal_string(latest_exam.effective_score if latest_exam else None),
+            "latest_exam_score": _decimal_string(latest_exam_score),
             "latest_exam_components": latest_exam.component_summary if latest_exam else "",
             "latest_interview_average": _decimal_string(latest_interview_average),
+            "preliminary_assessment_score": _decimal_string(preliminary_assessment_score),
         },
     }
 
@@ -1838,6 +2029,7 @@ def get_deliberation_record(application, stage=None):
         "finalized_by",
         "recruitment_case",
         "recruitment_entry",
+        "comparative_assessment_report",
     ).filter(review_stage=review_stage).first()
 
 
@@ -1847,6 +2039,7 @@ def get_deliberation_records(application):
         "finalized_by",
         "recruitment_case",
         "recruitment_entry",
+        "comparative_assessment_report",
     ).order_by("created_at")
 
 
@@ -1856,6 +2049,7 @@ def get_latest_finalized_deliberation_record(application):
         "finalized_by",
         "recruitment_case",
         "recruitment_entry",
+        "comparative_assessment_report",
     ).filter(is_finalized=True).order_by("-finalized_at", "-created_at").first()
 
 
@@ -1872,32 +2066,55 @@ def user_can_manage_deliberation(user, application):
     return user_can_process_application(user, application)
 
 
-def get_comparative_assessment_report(application, stage=None):
+def get_comparative_assessment_report(application, stage=None, include_returned=False):
     review_stage = stage or get_current_review_stage(application)
     queryset = ComparativeAssessmentReport.objects.select_related(
         "generated_by",
         "finalized_by",
+        "returned_by",
         "evidence_item",
     ).filter(
         recruitment_entry=application.position,
         review_stage=review_stage,
-    ).order_by(
+    )
+    if not include_returned:
+        queryset = queryset.filter(is_returned=False)
+    return queryset.order_by(
         "-version_number",
         "-is_finalized",
         "-finalized_at",
         "-created_at",
-    )
-    return queryset.first()
+    ).first()
+
+
+def get_latest_draft_comparative_assessment_report(application, stage=None):
+    review_stage = stage or get_current_review_stage(application)
+    return ComparativeAssessmentReport.objects.select_related(
+        "generated_by",
+        "finalized_by",
+        "returned_by",
+        "evidence_item",
+    ).filter(
+        recruitment_entry=application.position,
+        review_stage=review_stage,
+        is_finalized=False,
+        is_returned=False,
+    ).order_by(
+        "-version_number",
+        "-created_at",
+    ).first()
 
 
 def get_latest_finalized_comparative_assessment_report(application):
     return ComparativeAssessmentReport.objects.select_related(
         "generated_by",
         "finalized_by",
+        "returned_by",
         "evidence_item",
     ).filter(
         recruitment_entry=application.position,
         is_finalized=True,
+        is_returned=False,
     ).order_by("-version_number", "-finalized_at", "-created_at").first()
 
 
@@ -1939,11 +2156,9 @@ def user_can_manage_comparative_assessment_report(user, application):
         return False
     if current_stage != CAR_REVIEW_STAGE:
         return False
-    if user.role not in CAR_MANAGER_ROLES:
-        return False
     if get_current_workflow_section(application) != "deliberation":
         return False
-    return user_can_process_application(user, application)
+    return user_can_prepare_plantilla_car(user, application)
 
 
 def get_final_decision_history(application):
@@ -2044,6 +2259,21 @@ def _decision_packet_screening_record(record):
         "completeness_status_label": record.get_completeness_status_display(),
         "qualification_outcome": record.qualification_outcome,
         "qualification_outcome_label": record.get_qualification_outcome_display(),
+        "education_score": _decimal_string(record.education_score),
+        "training_score": _decimal_string(record.training_score),
+        "experience_score": _decimal_string(record.experience_score),
+        "document_review_score": _decimal_string(record.document_review_score),
+        "document_reviews": [
+            {
+                "document_key": review.document_key,
+                "requirement_title": review.requirement_title,
+                "status": review.status,
+                "status_label": review.get_status_display(),
+                "is_required": review.is_required,
+                "evidence_item_id": review.evidence_item_id,
+            }
+            for review in record.document_reviews.all()
+        ],
         "finalized_at": record.finalized_at.isoformat() if record.finalized_at else "",
         "is_read_only": record.is_finalized,
     }
@@ -2101,8 +2331,13 @@ def _decision_packet_deliberation_record(record):
         "review_stage_label": record.get_review_stage_display(),
         "recorded_by": str(record.recorded_by) if record.recorded_by else "",
         "recorded_by_role": record.recorded_by_role,
+        "comparative_assessment_report_id": record.comparative_assessment_report_id or "",
         "deliberated_at": record.deliberated_at.isoformat(),
+        "recommendation": record.recommendation,
         "decision_support_summary": record.decision_support_summary,
+        "quorum_status": record.quorum_status,
+        "quorum_status_label": record.get_quorum_status_display(),
+        "attendance_notes": record.attendance_notes,
         "ranking_position": record.ranking_position,
         "ranking_notes": record.ranking_notes,
         "finalized_at": record.finalized_at.isoformat() if record.finalized_at else "",
@@ -2122,6 +2357,15 @@ def _decision_packet_deliberation_record(record):
             "latest_interview_average",
             "",
         ),
+        "latest_document_review_score": record.consolidated_snapshot.get("summary", {}).get(
+            "latest_document_review_score",
+            "",
+        ),
+        "preliminary_assessment_score": record.consolidated_snapshot.get("summary", {}).get(
+            "preliminary_assessment_score",
+            "",
+        ),
+        "assessment_weight_display": record.consolidated_snapshot.get("assessment_weight_display", ""),
         "is_read_only": record.is_finalized,
     }
 
@@ -2181,10 +2425,15 @@ def _decision_packet_car_item(item):
         "application_reference": application.reference_number or "",
         "applicant_name": application.applicant_display_name,
         "qualification_outcome": item.qualification_outcome,
+        "document_review_score": _decimal_string(item.document_review_score),
         "exam_status": item.exam_status,
         "exam_score": _decimal_string(item.exam_score),
         "interview_average_score": _decimal_string(item.interview_average_score),
+        "assessment_score": _decimal_string(item.assessment_score),
+        "preliminary_rank_order": item.preliminary_rank_order,
+        "recommendation": item.recommendation,
         "decision_support_summary": item.decision_support_summary,
+        "ranking_notes": item.ranking_notes,
     }
 
 
@@ -2197,10 +2446,18 @@ def _decision_packet_car_report(report):
         "review_stage_label": report.get_review_stage_display(),
         "generated_by": str(report.generated_by) if report.generated_by else "",
         "generated_by_role": report.generated_by_role,
+        "prepared_by": str(report.generated_by) if report.generated_by else "",
+        "prepared_by_role": report.generated_by_role,
         "summary_notes": report.summary_notes,
         "version_number": report.version_number,
         "candidate_count": len(items),
+        "assessment_weight_display": report.consolidated_snapshot.get("assessment_weight_display", ""),
         "finalized_at": report.finalized_at.isoformat() if report.finalized_at else "",
+        "is_returned": report.is_returned,
+        "returned_at": report.returned_at.isoformat() if report.returned_at else "",
+        "returned_by": str(report.returned_by) if report.returned_by else "",
+        "returned_by_role": report.returned_by_role,
+        "return_reason": report.return_reason,
         "evidence_item": (
             {
                 "id": evidence.id,
@@ -2357,6 +2614,164 @@ def build_submission_packet(application):
     }
 
 
+SCREENING_COMPLETENESS_BLOCKING_DOCUMENT_STATUSES = {
+    ScreeningDocumentReview.ReviewStatus.NOT_REVIEWED,
+    ScreeningDocumentReview.ReviewStatus.NEEDS_REVIEW,
+    ScreeningDocumentReview.ReviewStatus.ABSENT,
+}
+
+
+def _screening_document_review_rows(
+    application,
+    screening_record=None,
+    document_reviews=None,
+    *,
+    default_submitted_status=ScreeningDocumentReview.ReviewStatus.MEETS,
+):
+    current_documents = get_current_applicant_document_map(application)
+    requirements = get_applicant_document_requirements(application.branch)
+    provided_by_key = {
+        (row.get("document_key") or ""): row
+        for row in (document_reviews or [])
+        if row.get("document_key")
+    }
+    existing_by_key = {}
+    if screening_record and screening_record.pk:
+        existing_by_key = {
+            review.document_key: review
+            for review in screening_record.document_reviews.select_related("evidence_item")
+        }
+
+    rows = []
+    for display_order, requirement in enumerate(requirements, start=1):
+        evidence = current_documents.get(requirement.code)
+        provided = provided_by_key.get(requirement.code, {})
+        existing_review = existing_by_key.get(requirement.code)
+        is_not_applicable = (
+            requirement.conditional_on_performance_rating
+            and application.performance_rating_not_applicable
+            and evidence is None
+        )
+        is_required = requirement.is_required or (
+            requirement.conditional_on_performance_rating
+            and not application.performance_rating_not_applicable
+        )
+
+        if is_not_applicable:
+            status = ScreeningDocumentReview.ReviewStatus.NOT_APPLICABLE
+        elif evidence is None and is_required:
+            status = ScreeningDocumentReview.ReviewStatus.ABSENT
+        elif evidence is None:
+            status = ScreeningDocumentReview.ReviewStatus.NOT_APPLICABLE
+        elif provided.get("status"):
+            status = provided["status"]
+        elif existing_review is not None:
+            status = existing_review.status
+        else:
+            status = default_submitted_status
+
+        rows.append(
+            {
+                "document_key": requirement.code,
+                "requirement_title": requirement.title,
+                "requirement_label": (
+                    "Not applicable" if is_not_applicable else requirement.applicant_label
+                ),
+                "status": status,
+                "is_required": is_required,
+                "is_not_applicable": is_not_applicable,
+                "evidence_item": evidence,
+                "display_order": display_order,
+            }
+        )
+    return rows
+
+
+def _validate_screening_review_consistency(
+    *,
+    completeness_status,
+    completeness_notes,
+    qualification_outcome,
+    screening_notes,
+    document_reviews,
+):
+    if (
+        completeness_status == ScreeningRecord.CompletenessStatus.INCOMPLETE
+        and not (completeness_notes or "").strip()
+    ):
+        raise ValueError("Record completeness observations before marking this application incomplete.")
+    if (
+        completeness_status == ScreeningRecord.CompletenessStatus.INCOMPLETE
+        and qualification_outcome == ScreeningRecord.QualificationOutcome.QUALIFIED
+    ):
+        raise ValueError("Applicants with incomplete documents cannot be marked qualified.")
+    if (
+        qualification_outcome == ScreeningRecord.QualificationOutcome.NOT_QUALIFIED
+        and not (screening_notes or "").strip()
+    ):
+        raise ValueError("Record screening notes before marking this applicant not qualified.")
+
+    blocking_reviews = [
+        row
+        for row in document_reviews
+        if row["is_required"]
+        and row["status"] in SCREENING_COMPLETENESS_BLOCKING_DOCUMENT_STATUSES
+    ]
+    if (
+        completeness_status == ScreeningRecord.CompletenessStatus.COMPLETE
+        and blocking_reviews
+    ):
+        blocking_labels = "; ".join(row["requirement_title"] for row in blocking_reviews)
+        raise ValueError(
+            "Required documents must be marked Meets before using Complete: "
+            f"{blocking_labels}."
+        )
+    for row in document_reviews:
+        if (
+            row["status"] == ScreeningDocumentReview.ReviewStatus.NOT_APPLICABLE
+            and row["is_required"]
+            and not row["is_not_applicable"]
+        ):
+            raise ValueError(f"{row['requirement_title']} cannot be marked not applicable.")
+        if (
+            row["status"] == ScreeningDocumentReview.ReviewStatus.MEETS
+            and row["evidence_item"] is None
+        ):
+            raise ValueError(
+                f"{row['requirement_title']} cannot meet the requirement without an uploaded file."
+            )
+
+
+def _sync_screening_document_reviews(screening_record, document_reviews):
+    active_keys = []
+    for row in document_reviews:
+        active_keys.append(row["document_key"])
+        review, _created = ScreeningDocumentReview.objects.update_or_create(
+            screening_record=screening_record,
+            document_key=row["document_key"],
+            defaults={
+                "evidence_item": row["evidence_item"],
+                "requirement_title": row["requirement_title"],
+                "requirement_label": row["requirement_label"],
+                "status": row["status"],
+                "is_required": row["is_required"],
+                "is_not_applicable": row["is_not_applicable"],
+                "display_order": row["display_order"],
+            },
+        )
+        review.full_clean()
+        review.save()
+    screening_record.document_reviews.exclude(document_key__in=active_keys).delete()
+
+
+def _document_review_status_counts(document_reviews):
+    counts = {}
+    for row in document_reviews:
+        counts[row["status"]] = counts.get(row["status"], 0) + 1
+    return counts
+
+
+@transaction.atomic
 def save_screening_review(application, actor, cleaned_data, finalize=False):
     if not hasattr(application, "case"):
         raise ValueError("A case must exist before screening can be recorded.")
@@ -2380,21 +2795,41 @@ def save_screening_review(application, actor, cleaned_data, finalize=False):
             level=application.level,
         )
 
+    document_reviews = _screening_document_review_rows(
+        application,
+        screening_record,
+        cleaned_data.get("document_reviews"),
+    )
+    _validate_screening_review_consistency(
+        completeness_status=cleaned_data["completeness_status"],
+        completeness_notes=cleaned_data["completeness_notes"],
+        qualification_outcome=cleaned_data["qualification_outcome"],
+        screening_notes=cleaned_data["screening_notes"],
+        document_reviews=document_reviews,
+    )
+
     screening_record.recruitment_case = application.case
     screening_record.reviewed_by = actor
     screening_record.completeness_status = cleaned_data["completeness_status"]
     screening_record.completeness_notes = cleaned_data["completeness_notes"]
     screening_record.qualification_outcome = cleaned_data["qualification_outcome"]
+    screening_record.education_score = _optional_decimal(cleaned_data.get("education_score"))
+    screening_record.training_score = _optional_decimal(cleaned_data.get("training_score"))
+    screening_record.experience_score = _optional_decimal(cleaned_data.get("experience_score"))
+    screening_record.document_review_score = _optional_decimal(cleaned_data.get("document_review_score"))
     screening_record.screening_notes = cleaned_data["screening_notes"]
-    screening_record.is_finalized = finalize
-    if finalize:
-        screening_record.finalized_by = actor
-        screening_record.finalized_at = timezone.now()
-    else:
-        screening_record.finalized_by = None
-        screening_record.finalized_at = None
+    screening_record.is_finalized = False
+    screening_record.finalized_by = None
+    screening_record.finalized_at = None
     screening_record.full_clean()
     screening_record.save()
+    _sync_screening_document_reviews(screening_record, document_reviews)
+    if finalize:
+        screening_record.is_finalized = True
+        screening_record.finalized_by = actor
+        screening_record.finalized_at = timezone.now()
+        screening_record.full_clean()
+        screening_record.save()
 
     record_audit_event(
         application=application,
@@ -2415,6 +2850,11 @@ def save_screening_review(application, actor, cleaned_data, finalize=False):
             "review_stage": review_stage,
             "completeness_status": screening_record.completeness_status,
             "qualification_outcome": screening_record.qualification_outcome,
+            "education_score": _decimal_string(screening_record.education_score),
+            "training_score": _decimal_string(screening_record.training_score),
+            "experience_score": _decimal_string(screening_record.experience_score),
+            "document_review_score": _decimal_string(screening_record.document_review_score),
+            "document_review_status_counts": _document_review_status_counts(document_reviews),
             "is_finalized": screening_record.is_finalized,
         },
     )
@@ -2597,6 +3037,8 @@ def save_interview_session(application, actor, cleaned_data, finalize=False):
             "interview_session_id": interview_session.id,
             "created": created,
             "review_stage": review_stage,
+            "scheduled_by_role": actor.role,
+            "support_action": user_can_support_plantilla_interview(actor, application),
             "scheduled_for": interview_session.scheduled_for.isoformat(),
             "location": interview_session.location,
             "rating_count": existing_rating_count,
@@ -2623,7 +3065,8 @@ def save_interview_rating(application, actor, cleaned_data):
     if not interview_session:
         raise ValueError("Schedule the interview session before recording interview ratings.")
 
-    interview_rating = interview_session.ratings.filter(rated_by=actor).first()
+    rated_by = cleaned_data.get("rated_by") or actor
+    interview_rating = interview_session.ratings.filter(rated_by=rated_by).first()
     created = interview_rating is None
     if interview_rating is None:
         interview_rating = InterviewRating(
@@ -2631,11 +3074,14 @@ def save_interview_rating(application, actor, cleaned_data):
             application=application,
             recruitment_case=application.case,
             review_stage=review_stage,
-            rated_by=actor,
+            rated_by=rated_by,
+            encoded_by=actor,
             branch=application.branch,
             level=application.level,
         )
 
+    interview_rating.rated_by = rated_by
+    interview_rating.encoded_by = actor
     interview_rating.rating_score = cleaned_data["rating_score"]
     interview_rating.rating_notes = cleaned_data["rating_notes"]
     interview_rating.justification = cleaned_data["justification"]
@@ -2652,6 +3098,11 @@ def save_interview_rating(application, actor, cleaned_data):
             "interview_rating_id": interview_rating.id,
             "created": created,
             "review_stage": review_stage,
+            "rated_by_id": rated_by.id,
+            "rated_by_role": rated_by.role,
+            "encoded_by_id": actor.id,
+            "encoded_by_role": actor.role,
+            "encoded_on_behalf": actor.id != rated_by.id,
             "rating_score": str(interview_rating.rating_score),
             "has_justification": bool(interview_rating.justification),
         },
@@ -2710,6 +3161,7 @@ def _finalized_deliberation_queryset_for_entry(recruitment_entry, review_stage):
         "recruitment_entry",
         "recorded_by",
         "finalized_by",
+        "comparative_assessment_report",
     ).order_by("ranking_position", "application__reference_number")
 
 
@@ -2733,6 +3185,11 @@ def save_deliberation_record(application, actor, cleaned_data, finalize=False):
         raise ValueError(
             "Deliberation is available only during the proper decision-support step for this branch."
         )
+    car_draft = None
+    if application.branch == PositionPosting.Branch.PLANTILLA:
+        car_draft = get_latest_draft_comparative_assessment_report(application, stage=review_stage)
+        if not car_draft:
+            raise ValueError("Prepare the CAR draft before recording HRMPSB deliberation.")
 
     deliberation_record = get_deliberation_record(application, stage=review_stage)
     if deliberation_record and deliberation_record.is_finalized:
@@ -2785,12 +3242,19 @@ def save_deliberation_record(application, actor, cleaned_data, finalize=False):
 
     deliberation_record.recruitment_case = application.case
     deliberation_record.recruitment_entry = application.position
+    deliberation_record.comparative_assessment_report = car_draft
     deliberation_record.recorded_by = actor
     deliberation_record.deliberated_at = cleaned_data["deliberated_at"]
     deliberation_record.deliberation_minutes = cleaned_data["deliberation_minutes"]
+    deliberation_record.recommendation = cleaned_data.get("recommendation", "") or ""
     deliberation_record.decision_support_summary = cleaned_data["decision_support_summary"]
+    deliberation_record.quorum_status = cleaned_data.get(
+        "quorum_status",
+        DeliberationRecord.QuorumStatus.NOT_RECORDED,
+    ) or DeliberationRecord.QuorumStatus.NOT_RECORDED
+    deliberation_record.attendance_notes = cleaned_data.get("attendance_notes", "") or ""
     deliberation_record.ranking_position = cleaned_data["ranking_position"]
-    deliberation_record.ranking_notes = cleaned_data["ranking_notes"]
+    deliberation_record.ranking_notes = cleaned_data.get("ranking_notes", "") or ""
     deliberation_record.consolidated_snapshot = consolidated_snapshot
     deliberation_record.is_finalized = finalize
     if finalize:
@@ -2811,14 +3275,25 @@ def save_deliberation_record(application, actor, cleaned_data, finalize=False):
             else AuditLog.Action.DELIBERATION_RECORDED
         ),
         description=(
-            "Finalized deliberation and decision-support record."
+            (
+                "Finalized HRMPSB recommendation endorsement."
+                if application.branch == PositionPosting.Branch.PLANTILLA
+                else "Finalized deliberation and decision-support record."
+            )
             if finalize
-            else "Saved deliberation and decision-support record."
+            else (
+                "Saved HRMPSB deliberation on the CAR draft."
+                if application.branch == PositionPosting.Branch.PLANTILLA
+                else "Saved deliberation and decision-support record."
+            )
         ),
         metadata={
             "deliberation_record_id": deliberation_record.id,
+            "car_draft_id": car_draft.id if car_draft else "",
             "created": created,
             "review_stage": review_stage,
+            "recommendation_recorded": bool(deliberation_record.recommendation),
+            "quorum_status": deliberation_record.quorum_status,
             "ranking_position": deliberation_record.ranking_position,
             "finalized_screening_count": len(consolidated_snapshot["screening_records"]),
             "finalized_exam_count": len(consolidated_snapshot["exam_records"]),
@@ -2829,7 +3304,7 @@ def save_deliberation_record(application, actor, cleaned_data, finalize=False):
     return deliberation_record
 
 
-def _car_candidate_rows(recruitment_entry, review_stage):
+def _car_candidate_rows(recruitment_entry, review_stage, required_draft=None):
     rows = []
     deliberation_records = list(_finalized_deliberation_queryset_for_entry(recruitment_entry, review_stage))
     if not deliberation_records:
@@ -2866,24 +3341,158 @@ def _car_candidate_rows(recruitment_entry, review_stage):
         raise ValueError(
             "Comparative Assessment Report generation requires unique ranking positions within the same recruitment entry."
         )
+    if required_draft is not None:
+        missing_draft_references = [
+            record.application.reference_label
+            for record in deliberation_records
+            if record.comparative_assessment_report_id != required_draft.id
+        ]
+        if missing_draft_references:
+            pending_references = "; ".join(missing_draft_references)
+            raise ValueError(
+                "Finalize HRMPSB deliberation against the latest CAR draft before finalizing the CAR. "
+                f"Pending: {pending_references}."
+            )
 
     for record in deliberation_records:
         summary = record.consolidated_snapshot.get("summary", {})
+        document_review_score = summary.get("latest_document_review_score", "")
+        exam_score = summary.get("latest_exam_score", "")
+        interview_average_score = summary.get("latest_interview_average", "")
+        assessment_score = _calculate_preliminary_assessment_score(
+            record.level,
+            document_review_score,
+            exam_score,
+            interview_average_score,
+        )
         rows.append(
             {
                 "application": record.application,
                 "recruitment_case": record.recruitment_case,
                 "deliberation_record": record,
                 "rank_order": record.ranking_position,
+                "preliminary_rank_order": None,
                 "qualification_outcome": summary.get("latest_qualification_outcome", ""),
+                "document_review_score": document_review_score,
+                "finalized_document_review_count": summary.get("finalized_screening_count", 0),
                 "exam_status": summary.get("latest_exam_status", ""),
-                "exam_score": summary.get("latest_exam_score", ""),
+                "exam_score": exam_score,
                 "exam_components": summary.get("latest_exam_components", ""),
-                "interview_average_score": summary.get("latest_interview_average", ""),
+                "finalized_exam_count": summary.get("finalized_exam_count", 0),
+                "interview_average_score": interview_average_score,
+                "finalized_interview_count": summary.get("finalized_interview_count", 0),
+                "assessment_score": assessment_score,
+                "recommendation": record.recommendation,
                 "decision_support_summary": record.decision_support_summary,
+                "ranking_notes": record.ranking_notes,
             }
         )
+    scored_rows = sorted(
+        [row for row in rows if row["assessment_score"] is not None],
+        key=lambda row: (
+            -row["assessment_score"],
+            row["application"].reference_number or row["application"].reference_label,
+        ),
+    )
+    for index, row in enumerate(scored_rows, start=1):
+        row["preliminary_rank_order"] = index
     return sorted(rows, key=lambda row: (row["rank_order"], row["application"].reference_number or ""))
+
+
+def _active_plantilla_cases_for_entry(recruitment_entry, review_stage):
+    return list(
+        RecruitmentCase.objects.select_related("application", "application__position")
+        .filter(
+            application__position=recruitment_entry,
+            application__branch=PositionPosting.Branch.PLANTILLA,
+            application__status=RecruitmentApplication.Status.HRMPSB_REVIEW,
+            current_stage=review_stage,
+            case_status=RecruitmentCase.CaseStatus.ACTIVE,
+            is_stage_locked=False,
+        )
+        .order_by("application__reference_number", "application__created_at", "id")
+    )
+
+
+def _car_draft_candidate_rows(recruitment_entry, review_stage):
+    cases = _active_plantilla_cases_for_entry(recruitment_entry, review_stage)
+    if not cases:
+        raise ValueError("No active Plantilla candidates are available for CAR draft preparation.")
+
+    rows = []
+    incomplete_references = []
+    for case in cases:
+        candidate_application = case.application
+        summary = build_deliberation_consolidation(candidate_application)["summary"]
+        has_required_outputs = (
+            summary.get("finalized_screening_count", 0) > 0
+            and summary.get("finalized_exam_count", 0) > 0
+            and summary.get("finalized_interview_count", 0) > 0
+        )
+        if not has_required_outputs:
+            incomplete_references.append(candidate_application.reference_label)
+            continue
+
+        document_review_score = summary.get("latest_document_review_score", "")
+        exam_score = summary.get("latest_exam_score", "")
+        interview_average_score = summary.get("latest_interview_average", "")
+        assessment_score = _calculate_preliminary_assessment_score(
+            candidate_application.level,
+            document_review_score,
+            exam_score,
+            interview_average_score,
+        )
+        rows.append(
+            {
+                "application": candidate_application,
+                "recruitment_case": case,
+                "deliberation_record": None,
+                "rank_order": None,
+                "preliminary_rank_order": None,
+                "qualification_outcome": summary.get("latest_qualification_outcome", ""),
+                "document_review_score": document_review_score,
+                "finalized_document_review_count": summary.get("finalized_screening_count", 0),
+                "exam_status": summary.get("latest_exam_status", ""),
+                "exam_score": exam_score,
+                "exam_components": summary.get("latest_exam_components", ""),
+                "finalized_exam_count": summary.get("finalized_exam_count", 0),
+                "interview_average_score": interview_average_score,
+                "finalized_interview_count": summary.get("finalized_interview_count", 0),
+                "assessment_score": assessment_score,
+                "recommendation": "",
+                "decision_support_summary": "",
+                "ranking_notes": "",
+            }
+        )
+
+    if incomplete_references:
+        pending_references = "; ".join(incomplete_references)
+        raise ValueError(
+            "Finalize screening, exam, and interview outputs for all active applicants before preparing the CAR draft. "
+            f"Pending: {pending_references}."
+        )
+
+    scored_rows = sorted(
+        [row for row in rows if row["assessment_score"] is not None],
+        key=lambda row: (
+            -row["assessment_score"],
+            row["application"].reference_number or row["application"].reference_label,
+        ),
+    )
+    for index, row in enumerate(scored_rows, start=1):
+        row["preliminary_rank_order"] = index
+
+    ordered_rows = sorted(
+        rows,
+        key=lambda row: (
+            row["preliminary_rank_order"] is None,
+            row["preliminary_rank_order"] or 0,
+            row["application"].reference_number or row["application"].reference_label,
+        ),
+    )
+    for index, row in enumerate(ordered_rows, start=1):
+        row["rank_order"] = row["preliminary_rank_order"] or index
+    return ordered_rows
 
 
 @transaction.atomic
@@ -2897,7 +3506,7 @@ def generate_comparative_assessment_report(application, actor, cleaned_data, fin
         raise ValueError(get_applicant_pool_finalization_block_message(application))
     if not user_can_manage_comparative_assessment_report(actor, application):
         raise ValueError(
-            "This case is not currently assigned to you for the Comparative Assessment Report."
+            "This case is not currently assigned to you for CAR preparation."
         )
 
     review_stage = application.case.current_stage
@@ -2909,33 +3518,61 @@ def generate_comparative_assessment_report(application, actor, cleaned_data, fin
         recruitment_entry=application.position,
         review_stage=review_stage,
         is_finalized=True,
+        is_returned=False,
     ).exists():
         raise ValueError("A finalized CAR already exists for this vacancy.")
 
-    deliberation_record = get_deliberation_record(application, stage=review_stage)
-    if not deliberation_record or not deliberation_record.is_finalized:
-        raise ValueError(
-            "Finalize the deliberation record before generating the Comparative Assessment Report."
+    latest_draft_report = get_latest_draft_comparative_assessment_report(
+        application,
+        stage=review_stage,
+    )
+    if finalize:
+        if not latest_draft_report:
+            raise ValueError(
+                "Prepare the CAR draft before finalizing the Comparative Assessment Report."
+            )
+        candidate_rows = _car_candidate_rows(
+            application.position,
+            review_stage,
+            required_draft=latest_draft_report,
         )
-
-    candidate_rows = _car_candidate_rows(application.position, review_stage)
-    latest_report = get_comparative_assessment_report(application, stage=review_stage)
+    else:
+        candidate_rows = _car_draft_candidate_rows(application.position, review_stage)
+    latest_report = get_comparative_assessment_report(
+        application,
+        stage=review_stage,
+        include_returned=True,
+    )
     version_number = (latest_report.version_number + 1) if latest_report else 1
     consolidated_snapshot = {
         "generated_at": timezone.now().isoformat(),
+        "prepared_by_role": actor.role,
         "entry_code": application.position.job_code,
         "review_stage": review_stage,
+        "assessment_weight_display": _assessment_weight_display(application.level),
+        "source_car_draft_id": latest_draft_report.id if finalize and latest_draft_report else "",
+        "source_car_draft_version": latest_draft_report.version_number if finalize and latest_draft_report else "",
         "candidate_count": len(candidate_rows),
         "ranked_candidates": [
             {
                 "rank_order": row["rank_order"],
+                "preliminary_rank_order": row["preliminary_rank_order"],
                 "application_reference": row["application"].reference_number or "",
                 "applicant_name": row["application"].applicant_display_name,
+                "document_review_outcome": row["qualification_outcome"],
+                "document_review_score": row["document_review_score"],
+                "finalized_document_review_count": row["finalized_document_review_count"],
                 "qualification_outcome": row["qualification_outcome"],
                 "exam_status": row["exam_status"],
                 "exam_score": row["exam_score"],
                 "exam_components": row["exam_components"],
+                "finalized_exam_count": row["finalized_exam_count"],
                 "interview_average_score": row["interview_average_score"],
+                "finalized_interview_count": row["finalized_interview_count"],
+                "assessment_score": _decimal_string(row["assessment_score"]),
+                "recommendation": row["recommendation"],
+                "decision_support_summary": row["decision_support_summary"],
+                "ranking_notes": row["ranking_notes"],
             }
             for row in candidate_rows
         ],
@@ -2985,13 +3622,20 @@ def generate_comparative_assessment_report(application, actor, cleaned_data, fin
             recruitment_case=row["recruitment_case"],
             deliberation_record=row["deliberation_record"],
             rank_order=row["rank_order"],
+            preliminary_rank_order=row["preliminary_rank_order"],
             qualification_outcome=row["qualification_outcome"],
+            document_review_score=(
+                Decimal(row["document_review_score"]) if row["document_review_score"] else None
+            ),
             exam_status=row["exam_status"],
             exam_score=Decimal(row["exam_score"]) if row["exam_score"] else None,
             interview_average_score=(
                 Decimal(row["interview_average_score"]) if row["interview_average_score"] else None
             ),
+            assessment_score=row["assessment_score"],
+            recommendation=row["recommendation"],
             decision_support_summary=row["decision_support_summary"],
+            ranking_notes=row["ranking_notes"],
         )
         item.full_clean()
         item.save()
@@ -3003,7 +3647,7 @@ def generate_comparative_assessment_report(application, actor, cleaned_data, fin
         description=(
             "Finalized the Comparative Assessment Report."
             if finalize
-            else "Generated or updated the Comparative Assessment Report."
+            else "Prepared or updated the CAR draft for HRMPSB deliberation."
         ),
         metadata={
             "car_report_id": report.id,
@@ -3012,6 +3656,7 @@ def generate_comparative_assessment_report(application, actor, cleaned_data, fin
             "candidate_count": len(candidate_rows),
             "evidence_id": evidence.id,
             "is_finalized": report.is_finalized,
+            "prepared_by_role": actor.role,
         },
     )
     if finalize:
@@ -3330,9 +3975,17 @@ def get_current_applicant_document_map(application):
 
 def get_applicant_document_review_items(application):
     current_documents = get_current_applicant_document_map(application)
+    screening_record = get_screening_record(application)
+    document_reviews_by_key = {}
+    if screening_record is not None:
+        document_reviews_by_key = {
+            review.document_key: review
+            for review in screening_record.document_reviews.select_related("evidence_item")
+        }
     review_items = []
     for requirement in get_applicant_document_requirements(application.branch):
         evidence = current_documents.get(requirement.code)
+        document_review = document_reviews_by_key.get(requirement.code)
         is_not_applicable = (
             requirement.conditional_on_performance_rating
             and application.performance_rating_not_applicable
@@ -3342,10 +3995,20 @@ def get_applicant_document_review_items(application):
             {
                 "requirement": requirement,
                 "evidence": evidence,
+                "document_review": document_review,
                 "is_submitted": evidence is not None,
                 "is_not_applicable": is_not_applicable,
                 "requirement_label": (
                     "Not applicable" if is_not_applicable else requirement.applicant_label
+                ),
+                "review_status": (
+                    document_review.status
+                    if document_review is not None
+                    else (
+                        ScreeningDocumentReview.ReviewStatus.NOT_APPLICABLE
+                        if is_not_applicable
+                        else ScreeningDocumentReview.ReviewStatus.NOT_REVIEWED
+                    )
                 ),
             }
         )
@@ -4018,6 +4681,18 @@ def get_available_actions(application, user):
             ("reject", "Reject Application"),
         ]
 
+    if (
+        current_section == "decision"
+        and effective_role == RecruitmentUser.Role.APPOINTING_AUTHORITY
+        and current_stage == RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW
+        and application.branch == PositionPosting.Branch.PLANTILLA
+        and get_latest_finalized_comparative_assessment_report(application)
+        and not get_final_selection_for_application(application)
+    ):
+        return [
+            ("return_car_for_reassessment", "Return CAR for HRMPSB Reassessment"),
+        ]
+
     if current_section != "actions":
         return []
 
@@ -4036,11 +4711,9 @@ def get_available_actions(application, user):
             ("reject", "Reject Application"),
         ]
     if effective_role == RecruitmentUser.Role.HRM_CHIEF and current_stage == RecruitmentCase.Stage.HRM_CHIEF_REVIEW:
-        endorse_label = (
-            "Endorse to Appointing Authority"
-            if application.branch == PositionPosting.Branch.COS
-            else "Endorse to HRMPSB"
-        )
+        if application.branch == PositionPosting.Branch.COS:
+            return []
+        endorse_label = "Endorse to HRMPSB"
         return [
             ("endorse", endorse_label),
             ("return_to_applicant", "Return to Applicant"),
@@ -4056,9 +4729,7 @@ def get_available_actions(application, user):
         effective_role == RecruitmentUser.Role.APPOINTING_AUTHORITY
         and current_stage == RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW
     ):
-        return [
-            ("return_to_hrm_chief", "Return to HRM Chief"),
-        ]
+        return []
     return []
 
 
@@ -4088,11 +4759,7 @@ def _transition_target(application, effective_role, action):
             if current_stage != RecruitmentCase.Stage.HRM_CHIEF_REVIEW:
                 raise ValueError("Unsupported workflow action for the current stage.")
             if application.branch == PositionPosting.Branch.COS:
-                return (
-                    RecruitmentUser.Role.APPOINTING_AUTHORITY,
-                    RecruitmentApplication.Status.APPOINTING_AUTHORITY_REVIEW,
-                    "COS application endorsed by HRM Chief.",
-                )
+                raise ValueError("COS selection is recorded by HRM Chief from the decision step.")
             return RecruitmentUser.Role.HRMPSB_MEMBER, RecruitmentApplication.Status.HRMPSB_REVIEW, "Plantilla application endorsed to HRMPSB."
         if action == "return_to_applicant":
             return RecruitmentUser.Role.APPLICANT, RecruitmentApplication.Status.RETURNED_TO_APPLICANT, "Returned by HRM Chief."
@@ -4141,6 +4808,19 @@ def process_workflow_action(application, actor, action, remarks):
             )
         raise ValueError("This case is not currently assigned to you.")
     current_section = get_current_workflow_section(application)
+    if (
+        effective_role == RecruitmentUser.Role.APPOINTING_AUTHORITY
+        and action == "return_car_for_reassessment"
+    ):
+        if current_section != "decision":
+            raise ValueError(_workflow_progress_block_message(application, current_section))
+        return return_car_for_reassessment(application, actor, remarks)
+    if (
+        effective_role == RecruitmentUser.Role.APPOINTING_AUTHORITY
+        and application.branch == PositionPosting.Branch.PLANTILLA
+        and action in {"approve", "reject", "return_to_hrm_chief"}
+    ):
+        raise ValueError("Plantilla Appointing Authority actions must be recorded from the finalized CAR.")
     if action in {"endorse", "recommend"} and current_section != "actions":
         raise ValueError(_workflow_progress_block_message(application, current_section))
     if (
@@ -4282,6 +4962,117 @@ def _final_selection_items_are_ready(report):
 
 
 @transaction.atomic
+def return_car_for_reassessment(application, actor, remarks):
+    remarks = (remarks or "").strip()
+    if not remarks:
+        raise ValueError("Record the reason for returning the CAR.")
+    if application.branch != PositionPosting.Branch.PLANTILLA:
+        raise ValueError("CAR reassessment returns are only available for Plantilla vacancies.")
+    if actor.role != RecruitmentUser.Role.APPOINTING_AUTHORITY:
+        raise ValueError("Only the Appointing Authority may return the CAR for reassessment.")
+    if not user_can_process_application(actor, application):
+        raise ValueError("This case is not currently assigned to you.")
+    if get_current_workflow_section(application) != "decision":
+        raise ValueError(_workflow_progress_block_message(application))
+    if get_final_selection_for_entry(application.position):
+        raise ValueError("Final selection has already been recorded for this vacancy.")
+
+    report = get_latest_finalized_comparative_assessment_report(application)
+    if not report:
+        raise ValueError("Finalize the CAR before returning it for reassessment.")
+
+    report_items = _final_selection_items_are_ready(report)
+    report.is_returned = True
+    report.returned_by = actor
+    report.returned_at = timezone.now()
+    report.return_reason = remarks
+    report.full_clean()
+    report.save(
+        update_fields=[
+            "is_returned",
+            "returned_by",
+            "returned_by_role",
+            "returned_at",
+            "return_reason",
+            "updated_at",
+        ]
+    )
+
+    for item in report_items:
+        target_application = item.application
+        previous_role = target_application.current_handler_role
+        previous_status = target_application.status
+        deliberation_record = item.deliberation_record
+        if deliberation_record:
+            deliberation_record.is_finalized = False
+            deliberation_record.finalized_by = None
+            deliberation_record.finalized_at = None
+            deliberation_record.finalized_by_role = ""
+            deliberation_record.full_clean()
+            deliberation_record.save(
+                update_fields=[
+                    "is_finalized",
+                    "finalized_by",
+                    "finalized_at",
+                    "finalized_by_role",
+                    "updated_at",
+                ]
+            )
+
+        case_transition = _sync_case_after_workflow_action(
+            application=target_application,
+            actor=actor,
+            next_role=RecruitmentUser.Role.HRMPSB_MEMBER,
+            next_status=RecruitmentApplication.Status.HRMPSB_REVIEW,
+            remarks=remarks,
+        )
+        target_application.current_handler_role = RecruitmentUser.Role.HRMPSB_MEMBER
+        target_application.status = RecruitmentApplication.Status.HRMPSB_REVIEW
+        target_application.closed_at = None
+        target_application.save(
+            update_fields=["current_handler_role", "status", "closed_at", "updated_at"]
+        )
+
+        record_audit_event(
+            application=target_application,
+            actor=actor,
+            action=AuditLog.Action.CAR_RETURNED,
+            description="Appointing Authority returned the CAR for HRMPSB reassessment.",
+            metadata={
+                "car_report_id": report.id,
+                "car_version_number": report.version_number,
+                "car_item_id": item.id,
+                "return_reason": remarks,
+                "deliberation_record_id": deliberation_record.id if deliberation_record else "",
+                "from_status": previous_status,
+                "to_status": target_application.status,
+                "from_role": previous_role,
+                "to_role": target_application.current_handler_role,
+                "from_stage": case_transition["previous_stage"],
+                "to_stage": target_application.case.current_stage,
+                "from_case_status": case_transition["previous_case_status"],
+                "to_case_status": target_application.case.case_status,
+            },
+        )
+        record_routing_history_event(
+            application=target_application,
+            actor=actor,
+            route_type=RoutingHistory.RouteType.REOPEN,
+            description="Returned from Appointing Authority to HRMPSB for CAR reassessment.",
+            recruitment_case=target_application.case,
+            from_handler_role=previous_role,
+            to_handler_role=target_application.current_handler_role,
+            from_status=previous_status,
+            to_status=target_application.status,
+            from_stage=case_transition["previous_stage"],
+            to_stage=target_application.case.current_stage,
+            notes=remarks,
+        )
+
+    return report
+
+
+@transaction.atomic
 def record_final_selection(application, actor, cleaned_data):
     if application.branch != PositionPosting.Branch.PLANTILLA:
         raise ValueError("CAR-based final selection is only available for Plantilla vacancies.")
@@ -4308,6 +5099,19 @@ def record_final_selection(application, actor, cleaned_data):
     )
     if not selected_item:
         raise ValueError("Select an applicant from the finalized CAR.")
+    if (
+        selected_item.rank_order > TOP_FIVE_SELECTION_LIMIT
+        and not cleaned_data.get("is_deep_selection")
+    ):
+        raise ValueError(
+            "Selecting outside the top five requires deep selection documentation."
+        )
+    if cleaned_data.get("is_deep_selection") and not (
+        cleaned_data.get("deep_selection_justification") or ""
+    ).strip():
+        raise ValueError(
+            "Record the deep-selection justification before finalizing this selection."
+        )
 
     report_items = _final_selection_items_are_ready(report)
     car_snapshot = build_car_selection_packet(report)
@@ -4318,6 +5122,8 @@ def record_final_selection(application, actor, cleaned_data):
         selected_application=selected_item.application,
         selected_case=selected_item.recruitment_case,
         decided_by=actor,
+        is_deep_selection=cleaned_data.get("is_deep_selection", False),
+        deep_selection_justification=cleaned_data.get("deep_selection_justification", ""),
         decision_notes=cleaned_data["decision_notes"],
         car_snapshot=car_snapshot,
     )
@@ -4371,6 +5177,8 @@ def record_final_selection(application, actor, cleaned_data):
                     else FinalDecision.Outcome.NOT_SELECTED
                 ),
                 "decision_notes": selection.decision_notes,
+                "is_deep_selection": selection.is_deep_selection,
+                "deep_selection_justification_recorded": bool(selection.deep_selection_justification),
                 "from_status": previous_status,
                 "to_status": next_status,
                 "from_role": previous_role,
@@ -4869,9 +5677,10 @@ def _build_comparative_assessment_report_pdf(
         f"Recruitment Entry: {application.position.title} [{application.position.job_code}]",
         f"Branch: {application.position.get_branch_display()}",
         f"Workflow Stage: {application.case.get_current_stage_display()}",
-        f"Generated By: {actor}",
-        f"Generated At: {timezone.now():%Y-%m-%d %H:%M}",
+        f"Prepared By: {actor}",
+        f"Prepared At: {timezone.now():%Y-%m-%d %H:%M}",
         f"Generation Version: {generation_number}",
+        f"Preliminary Ranking Basis: {_assessment_weight_display(application.level) or 'Not available'}",
         "",
         "Ranked Candidates",
     ]
@@ -4881,16 +5690,21 @@ def _build_comparative_assessment_report_pdf(
         lines.extend(
             [
                 (
-                    f"Rank {row['rank_order']} | {row['application'].reference_number} | "
+                    f"Final Rank {row['rank_order']} | Preliminary Rank {row['preliminary_rank_order'] or 'N/A'} | "
+                    f"{row['application'].reference_number} | "
                     f"{row['application'].applicant_display_name}"
                 ),
                 (
-                    f"Qualification: {row['qualification_outcome'] or 'N/A'} | "
+                    f"Document Review: {row['qualification_outcome'] or 'N/A'} "
+                    f"({row['document_review_score'] or 'N/A'}) | "
                     f"Exam: {row['exam_status'] or 'N/A'} ({row['exam_score'] or 'N/A'}) | "
                     f"Interview Avg: {row['interview_average_score'] or 'N/A'}"
                 ),
+                f"Preliminary Assessment Score: {_decimal_string(row['assessment_score']) or 'N/A'}",
                 f"Exam Components: {row.get('exam_components') or 'N/A'}",
+                f"HRMPSB Recommendation: {row.get('recommendation') or 'N/A'}",
                 row["decision_support_summary"] or "No decision-support summary recorded.",
+                f"Ranking Notes: {row['ranking_notes'] or 'N/A'}",
                 "",
             ]
         )
@@ -5353,6 +6167,8 @@ def _manifest_json(
                 "selected_case_id": final_selection.selected_case_id,
                 "selected_applicant_name": final_selection.selected_application.applicant_display_name,
                 "decision_outcome_for_this_application": final_selection_outcome,
+                "is_deep_selection": final_selection.is_deep_selection,
+                "deep_selection_justification": final_selection.deep_selection_justification,
                 "decision_notes": final_selection.decision_notes,
                 "decided_by_role": final_selection.decided_by_role,
                 "decided_at": final_selection.decided_at.isoformat() if final_selection.decided_at else "",

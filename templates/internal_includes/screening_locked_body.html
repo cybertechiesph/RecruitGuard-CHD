@@ -97,6 +97,48 @@
             </div>
         </div>
 
+        {% if current_screening_record.document_reviews.exists %}
+        <div style="margin-bottom:1.25rem;">
+            <div style="font-size:0.72rem;font-weight:700;color:#5f6c78;
+                        text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem;">
+                Document Review
+            </div>
+            <div class="rg-scr-doc-table-wrap">
+                <table class="rg-scr-doc-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Requirement</th>
+                            <th scope="col">File</th>
+                            <th scope="col">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for review in current_screening_record.document_reviews.all %}
+                        <tr>
+                            <td>
+                                <div class="rg-scr-doc-title">{{ review.requirement_title }}</div>
+                                <div class="rg-scr-doc-meta">{{ review.requirement_label }}</div>
+                            </td>
+                            <td>
+                                {% if review.evidence_item %}
+                                    <div class="rg-scr-file-name">{{ review.evidence_item.original_filename }}</div>
+                                {% else %}
+                                    <div class="rg-scr-doc-meta">No uploaded file.</div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="rg-scr-status-pill" data-fixed-status="{{ review.status }}">
+                                    {{ review.get_status_display }}
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
         
         <div style="margin-bottom:1.25rem;">
             <div style="font-size:0.72rem;font-weight:700;color:#5f6c78;
@@ -112,6 +154,31 @@
                     </span>
                 </div>
             </div>
+
+            <div class="rg-scr-locked-field">
+                <div class="rg-scr-locked-field__label">Document Review Rating</div>
+                <div class="rg-scr-locked-field__value">
+                    {% if current_screening_record.document_review_score is not None %}
+                        {{ current_screening_record.document_review_score }} / 100
+                        <span style="color:#9aa4af;">
+                            &mdash; {{ current_screening_record.document_review_weight_display }}
+                        </span>
+                    {% else %}
+                        <span style="color:#9aa4af;font-style:italic;">No score recorded</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if current_screening_record.education_score is not None or current_screening_record.training_score is not None or current_screening_record.experience_score is not None %}
+            <div class="rg-scr-locked-field">
+                <div class="rg-scr-locked-field__label">Rating Components</div>
+                <div class="rg-scr-locked-field__value">
+                    Education: {{ current_screening_record.education_score|default:"N/A" }};
+                    Training: {{ current_screening_record.training_score|default:"N/A" }};
+                    Experience: {{ current_screening_record.experience_score|default:"N/A" }}
+                </div>
+            </div>
+            {% endif %}
 
             <div class="rg-scr-locked-field">
                 <div class="rg-scr-locked-field__label">Screening Notes</div>

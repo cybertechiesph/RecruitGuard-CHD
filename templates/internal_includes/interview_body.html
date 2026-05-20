@@ -329,23 +329,28 @@
     <div class="rg-icard__header" style="margin-bottom:0.875rem;">
         <div>
             <h3 class="rg-icard__title">
-                {% if current_user_interview_rating %}
+                {% if interview_rating_is_support_encoding %}
+                    Encode HRMPSB Rating
+                {% elif current_user_interview_rating %}
                     Your Submitted Rating
                 {% else %}
                     Submit Your Rating
                 {% endif %}
             </h3>
             <p class="rg-icard__subtitle">
-                {% if current_user_interview_rating %}
+                {% if interview_rating_is_support_encoding %}
+                    Encode the paper-based rating while preserving the actual HRMPSB rater.
+                {% elif current_user_interview_rating %}
                     Your rating has been submitted. It can be revised until the session is locked.
                 {% else %}
                     Rate this applicant on a scale of 0&ndash;100. A justification is required
-                    if your score is below 75.
+                    if your score is below 75 or above 98.
                 {% endif %}
             </p>
         </div>
     </div>
 
+    {% if not interview_rating_is_support_encoding %}
     
     <div class="rg-int-lock-distinction">
         <strong>Two-level lock process:</strong>
@@ -353,6 +358,7 @@
         (later). Other panel members cannot view individual scores until the
         <strong>Deliberation / CAR</strong> step opens.
     </div>
+    {% endif %}
 
     {% if current_user_interview_rating %}
     
@@ -410,6 +416,25 @@
           id="int-rating-form">
         {% csrf_token %}
 
+        {% if interview_rating_is_support_encoding %}
+        <div class="rg-field" style="margin-bottom:0.75rem;">
+            <label class="form-label"
+                   for="{{ interview_rating_form.rated_by.id_for_label }}">
+                {{ interview_rating_form.rated_by.label }}
+                <span style="color:#dc2626;"> *</span>
+            </label>
+            {{ interview_rating_form.rated_by }}
+            {% if interview_rating_form.rated_by.help_text %}
+                <div class="form-text">{{ interview_rating_form.rated_by.help_text }}</div>
+            {% endif %}
+            {% for error in interview_rating_form.rated_by.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+        {% else %}
+            {{ interview_rating_form.rated_by }}
+        {% endif %}
+
         
         <div class="rg-int-score-wrap">
             <div class="rg-int-score-field">
@@ -441,7 +466,7 @@
                 <circle cx="8" cy="11" r="0.6" fill="currentColor"/>
             </svg>
             <span>
-                A score below 75 requires a written justification.
+                A score below 75 or above 98 requires a written justification.
                 Please complete the Justification field below.
             </span>
         </div>
@@ -473,7 +498,7 @@
                 <span style="color:#dc2626;"> *</span>
             </label>
             {{ interview_rating_form.justification }}
-            <div class="form-text">Required when score is below 75.</div>
+            <div class="form-text">Required when score is below 75 or above 98.</div>
             {% for error in interview_rating_form.justification.errors %}
                 <div class="invalid-feedback d-block">{{ error }}</div>
             {% endfor %}
@@ -488,7 +513,7 @@
             </div>
             <div class="rg-scr-ready-item" id="int-ready-just" style="display:none;">
                 <span class="rg-scr-ready-item__icon" aria-hidden="true"></span>
-                Justification provided (required for scores below 75)
+                Justification provided (required for scores below 75 or above 98)
             </div>
         </div>
 
@@ -508,6 +533,8 @@
                 </svg>
                 {% if current_user_interview_rating %}
                     Revise &amp; Resubmit
+                {% elif interview_rating_is_support_encoding %}
+                    Encode Rating
                 {% else %}
                     Submit Rating
                 {% endif %}
@@ -557,6 +584,12 @@
                 </div>
                 <div class="rg-int-progress-item__role">
                     {{ rating.rated_by_role|role_label }}
+                    {% if rating.encoded_by_id and rating.encoded_by_id != rating.rated_by_id %}
+                        <br>
+                        <span style="font-size:0.72rem;color:#64748b;">
+                            Encoded by {{ rating.encoded_by.get_full_name|default:rating.encoded_by.username }}
+                        </span>
+                    {% endif %}
                 </div>
                 <div class="rg-int-progress-item__tag">Submitted</div>
             </div>
@@ -739,7 +772,9 @@
                  style="background:var(--rg-primary);border-bottom:none;padding:1rem 1.25rem;">
                 <h5 class="modal-title" id="modal-int-submit-rating-label"
                     style="font-size:0.9375rem;font-weight:700;color:#fff;margin:0;">
-                    {% if current_user_interview_rating %}
+                    {% if interview_rating_is_support_encoding %}
+                        Confirm: Encode HRMPSB Rating
+                    {% elif current_user_interview_rating %}
                         Confirm: Revise &amp; Resubmit Rating
                     {% else %}
                         Confirm: Submit Interview Rating
@@ -751,7 +786,11 @@
 
             <div class="modal-body" style="padding:1.25rem;">
                 <p style="font-size:0.8125rem;color:#374151;margin-bottom:0.75rem;">
-                    {% if current_user_interview_rating %}
+                    {% if interview_rating_is_support_encoding %}
+                        You are about to encode a paper-based HRMPSB rating for this applicant.
+                        The selected HRMPSB member remains the actual rater, and you will be
+                        recorded as the encoder.
+                    {% elif current_user_interview_rating %}
                         You are about to replace your previously submitted rating with a revised score.
                     {% else %}
                         You are about to submit your interview rating for this applicant.
@@ -804,7 +843,9 @@
                 </button>
                 <button type="button" class="btn-rg-finalize"
                         id="modal-int-rating-confirm-btn">
-                    {% if current_user_interview_rating %}
+                    {% if interview_rating_is_support_encoding %}
+                        Confirm Encoding
+                    {% elif current_user_interview_rating %}
                         Confirm Revision
                     {% else %}
                         Confirm &amp; Submit Rating
@@ -989,7 +1030,7 @@
 
     /* ── Threshold + justification visibility ───────────────────── */
     function updateThreshold(score) {
-        var needs = score > 0 && score < 75;
+        var needs = score >= 0 && (score < 75 || score > 98);
         if (thresholdNotice) thresholdNotice.classList.toggle("is-visible", needs);
         if (justGroup) {
             justGroup.style.display = needs ? "" : "none";
@@ -1003,7 +1044,7 @@
         var rawScore = scoreInput ? scoreInput.value.trim() : "";
         var score    = parseFloat(rawScore);
         var hasScore = rawScore.length > 0 && !isNaN(score) && score >= 0 && score <= 100;
-        var needs    = hasScore && score < 75;
+        var needs    = hasScore && (score < 75 || score > 98);
         var hasJust  = justInput ? justInput.value.trim().length > 0 : false;
         var ready    = hasScore && (!needs || hasJust);
 

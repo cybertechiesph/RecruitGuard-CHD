@@ -6,7 +6,7 @@
                 {% if screening_disposition_required %}
                     Choose what happens next for this screening result.
                 {% elif recruitment_case and recruitment_case.current_stage == "appointing_authority_review" %}
-                    Use this only when the case needs to be returned to HRM Chief.
+                    Use this only when the CAR needs to be returned for reassessment.
                 {% else %}
                     Choose what happens next for this case.
                 {% endif %}

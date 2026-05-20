@@ -263,6 +263,32 @@
                             </span>
                         </div>
                     {% endif %}
+                    {% if del.recommendation %}
+                        <div class="rg-pkt-row" style="align-items:flex-start;">
+                            <span class="rg-pkt-row__label" style="padding-top:0.1rem;">
+                                Recommendation
+                            </span>
+                            <span class="rg-pkt-row__value" style="white-space:pre-line;">
+                                {{ del.recommendation }}
+                            </span>
+                        </div>
+                    {% endif %}
+                    {% if del.quorum_status_label %}
+                        <div class="rg-pkt-row">
+                            <span class="rg-pkt-row__label">Quorum</span>
+                            <span class="rg-pkt-row__value">{{ del.quorum_status_label }}</span>
+                        </div>
+                    {% endif %}
+                    {% if del.attendance_notes %}
+                        <div class="rg-pkt-row" style="align-items:flex-start;">
+                            <span class="rg-pkt-row__label" style="padding-top:0.1rem;">
+                                Attendance
+                            </span>
+                            <span class="rg-pkt-row__value" style="white-space:pre-line;">
+                                {{ del.attendance_notes }}
+                            </span>
+                        </div>
+                    {% endif %}
                     {% if del.decision_support_summary %}
                         <div class="rg-pkt-row" style="align-items:flex-start;">
                             <span class="rg-pkt-row__label" style="padding-top:0.1rem;">
@@ -322,6 +348,14 @@
                                         {{ item.applicant_name }}
                                     </div>
                                     <div class="rg-del-car-item__scores">
+                                        {% if item.document_review_score %}
+                                            <span class="rg-del-car-item__score-cell">
+                                                <span class="rg-del-car-item__score-label">Document Review</span>
+                                                <span class="rg-del-car-item__score-val">
+                                                    {{ item.document_review_score }}
+                                                </span>
+                                            </span>
+                                        {% endif %}
                                         {% if item.exam_score %}
                                             <span class="rg-del-car-item__score-cell">
                                                 <span class="rg-del-car-item__score-label">Exam</span>
@@ -340,10 +374,36 @@
                                                 </span>
                                             </span>
                                         {% endif %}
+                                        {% if item.assessment_score %}
+                                            <span class="rg-del-car-item__score-cell">
+                                                <span class="rg-del-car-item__score-label">Preliminary Score</span>
+                                                <span class="rg-del-car-item__score-val">
+                                                    {{ item.assessment_score }}
+                                                </span>
+                                            </span>
+                                        {% endif %}
+                                        {% if item.preliminary_rank_order %}
+                                            <span class="rg-del-car-item__score-cell">
+                                                <span class="rg-del-car-item__score-label">System Rank</span>
+                                                <span class="rg-del-car-item__score-val">
+                                                    #{{ item.preliminary_rank_order }}
+                                                </span>
+                                            </span>
+                                        {% endif %}
                                     </div>
                                     {% if item.decision_support_summary %}
-                                        <div class="rg-del-car-item__decision">
-                                            {{ item.decision_support_summary }}
+                                    <div class="rg-del-car-item__decision">
+                                        {{ item.decision_support_summary }}
+                                    </div>
+                                    {% endif %}
+                                    {% if item.recommendation %}
+                                    <div class="rg-del-car-item__decision">
+                                        Recommendation: {{ item.recommendation }}
+                                    </div>
+                                    {% endif %}
+                                    {% if item.ranking_notes %}
+                                    <div class="rg-del-car-item__decision">
+                                        Ranking note: {{ item.ranking_notes }}
                                         </div>
                                     {% endif %}
                                 </div>

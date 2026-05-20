@@ -1,111 +1,99 @@
-
-
-
-<div class="rg-scr-elig-bar rg-scr-elig-bar--pending" id="scr-elig-bar" aria-live="polite">
-    <div class="rg-scr-elig-bar__icon" id="scr-elig-icon">
-        
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
-            <path d="M8 5v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            <circle cx="8" cy="11" r="0.75" fill="currentColor"/>
-        </svg>
-    </div>
-    <div class="flex-1">
-        <div class="rg-scr-elig-bar__label">Eligibility Summary</div>
-        <div class="rg-scr-elig-bar__verdict" id="scr-elig-verdict">
-            Pending review — qualification outcome not yet recorded
-        </div>
-        <div class="rg-scr-elig-bar__meta" id="scr-elig-meta">
-            Set the Qualification Outcome field to update this summary in real time.
-        </div>
-    </div>
-</div>
-
-
-<div class="rg-icard">
-    <div class="rg-icard__header">
-        <div>
-            <h3 class="rg-icard__title">Document Completeness Checklist</h3>
-            <p class="rg-icard__subtitle">
-                Review each submitted document against standard civil service requirements.
-                Use the verdict buttons to track your findings — this working checklist
-                is not individually persisted; record your overall finding in the
-                Completeness Assessment section below.
-            </p>
-        </div>
-        <div class="rg-icard__actions">
-            <span class="rg-sensitive-tag">
-                <svg width="9" height="9" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                    <path d="M6 1v5M6 9.5v.5" stroke="currentColor" stroke-width="1.5"
-                          stroke-linecap="round"/>
-                </svg>
-                Working reference
-            </span>
-        </div>
-    </div>
-
-    
-    <div id="scr-doc-checklist">
-        {% for item in applicant_document_review_items %}
-        <div class="rg-scr-doc-row" data-doc="{{ forloop.counter }}">
-            <div class="rg-scr-doc-row__content">
-                <span class="rg-scr-doc-row__name">{{ item.requirement.title }}</span>
-                <div class="rg-scr-doc-row__meta">
-                    {% if item.evidence %}
-                        <span class="rg-note">{{ item.evidence.original_filename }}</span>
-                        <span class="rg-note">Uploaded {{ item.evidence.created_at|date:"M d, Y H:i" }}</span>
-                    {% elif item.is_not_applicable %}
-                        <span class="rg-note">Applicant marked this requirement as not applicable.</span>
-                    {% else %}
-                        <span class="rg-note">No uploaded file on record yet.</span>
-                    {% endif %}
-                </div>
-            </div>
-            <span class="rg-scr-doc-row__tag">{{ item.requirement_label }}</span>
-            {% if item.evidence %}
-            <div class="rg-scr-doc-row__actions">
-                <a href="{% url 'evidence-download' application.pk item.evidence.pk %}?disposition=inline"
-                   class="btn btn-outline-secondary btn-sm"
-                   target="_blank"
-                   rel="noopener">View File</a>
-                <a href="{% url 'evidence-download' application.pk item.evidence.pk %}"
-                   class="btn btn-outline-secondary btn-sm">Download</a>
-            </div>
-            {% endif %}
-            <div class="rg-scr-doc-row__verdict">
-                <button type="button" class="rg-scr-doc-verdict-btn js-doc-verdict" data-doc="{{ forloop.counter }}" data-verdict="meets">Meets</button>
-                <button type="button" class="rg-scr-doc-verdict-btn js-doc-verdict" data-doc="{{ forloop.counter }}" data-verdict="review">Needs Review</button>
-                <button type="button" class="rg-scr-doc-verdict-btn js-doc-verdict" data-doc="{{ forloop.counter }}" data-verdict="absent">
-                    {% if item.requirement.allow_not_applicable %}Not Submitted{% else %}Absent{% endif %}
-                </button>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-</div>
-
-
-
-
-<form id="scr-form" method="post" action="{% url 'screening-review' application.pk %}"
-      novalidate>
+<form id="scr-form" method="post" action="{% url 'screening-review' application.pk %}" novalidate>
     {% csrf_token %}
-    
     <input type="hidden" name="operation" id="scr-op-field" value="save">
 
-    
-    <div class="rg-icard">
-        <div class="rg-icard__header">
+    <div class="rg-scr-decision-strip" id="scr-decision-strip" aria-live="polite">
+        <div>
+            <div class="rg-scr-kicker">Current decision</div>
+            <div class="rg-scr-decision-strip__title" id="scr-current-decision">
+                Review document completeness
+            </div>
+        </div>
+        <div class="rg-scr-step-state" aria-label="Screening decision order">
+            <span class="rg-scr-step-state__item is-current" id="scr-step-docs">Documents</span>
+            <span class="rg-scr-step-state__item" id="scr-step-completeness">Completeness</span>
+            <span class="rg-scr-step-state__item" id="scr-step-qualification">Qualification</span>
+        </div>
+    </div>
+
+    <section class="rg-scr-panel">
+        <div class="rg-scr-panel__header">
             <div>
-                <h3 class="rg-icard__title">Completeness Assessment</h3>
-                <p class="rg-icard__subtitle">
-                    Record the overall document completeness finding for this application.
-                    Use the working checklist above to guide your review.
-                </p>
+                <h3 class="rg-scr-panel__title">Document Review</h3>
+                <p class="rg-scr-panel__subtitle">Mark each requirement before recording the overall completeness finding.</p>
+            </div>
+            <span class="rg-scr-panel__tag">Official review</span>
+        </div>
+
+        <div class="rg-scr-doc-table-wrap">
+            <table class="rg-scr-doc-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Requirement</th>
+                        <th scope="col">File</th>
+                        <th scope="col">Status</th>
+                        <th scope="col" class="rg-scr-doc-table__action-head">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in screening_form.document_review_fields %}
+                    <tr class="{% if item.is_not_applicable %}is-muted{% endif %}"
+                        data-document-row
+                        data-required="{% if item.is_required_for_completeness %}true{% else %}false{% endif %}">
+                        <td>
+                            <div class="rg-scr-doc-title">{{ item.requirement.title }}</div>
+                            <div class="rg-scr-doc-meta">{{ item.requirement_label }}</div>
+                        </td>
+                        <td>
+                            {% if item.evidence %}
+                                <div class="rg-scr-file-name">{{ item.evidence.original_filename }}</div>
+                                <div class="rg-scr-doc-meta">Uploaded {{ item.evidence.created_at|date:"M d, Y H:i" }}</div>
+                            {% elif item.is_not_applicable %}
+                                <div class="rg-scr-doc-meta">Applicant marked not applicable.</div>
+                            {% else %}
+                                <div class="rg-scr-doc-meta">No uploaded file.</div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.status_is_fixed %}
+                                {{ item.field }}
+                                <span class="rg-scr-status-pill" data-fixed-status="{{ item.initial_status }}">
+                                    {{ item.initial_status_label }}
+                                </span>
+                            {% else %}
+                                {{ item.field }}
+                            {% endif %}
+                            {% for error in item.field.errors %}
+                                <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                        </td>
+                        <td class="rg-scr-doc-table__actions">
+                            {% if item.evidence %}
+                                <a href="{% url 'evidence-download' application.pk item.evidence.pk %}?disposition=inline"
+                                   class="rg-scr-primary-link"
+                                   target="_blank"
+                                   rel="noopener">View</a>
+                                <a href="{% url 'evidence-download' application.pk item.evidence.pk %}"
+                                   class="rg-scr-secondary-link">Download</a>
+                            {% else %}
+                                <span class="rg-scr-doc-meta">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="rg-scr-panel">
+        <div class="rg-scr-panel__header">
+            <div>
+                <h3 class="rg-scr-panel__title">Completeness Assessment</h3>
+                <p class="rg-scr-panel__subtitle">Record the official completeness finding for the submitted requirements.</p>
             </div>
         </div>
 
-        
         <div class="rg-field mb-3">
             <label class="form-label fw-semibold" for="{{ screening_form.completeness_status.id_for_label }}">
                 Completeness Finding
@@ -117,11 +105,6 @@
                         data-target="id_completeness_status"
                         data-value="complete"
                         data-theme="success">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                        <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
-                        <path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.5"
-                              stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
                     Complete
                 </button>
                 <button type="button"
@@ -129,16 +112,10 @@
                         data-target="id_completeness_status"
                         data-value="incomplete"
                         data-theme="warning">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                        <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
-                        <path d="M8 5v3.5M8 11v.5" stroke="currentColor" stroke-width="1.5"
-                              stroke-linecap="round"/>
-                    </svg>
                     Incomplete
                 </button>
             </div>
-            
-            <div style="display:none;">
+            <div class="visually-hidden">
                 {{ screening_form.completeness_status }}
             </div>
             {% for error in screening_form.completeness_status.errors %}
@@ -146,38 +123,57 @@
             {% endfor %}
         </div>
 
-        
         <div class="rg-field">
-            <label class="form-label fw-semibold"
-                   for="{{ screening_form.completeness_notes.id_for_label }}">
+            <label class="form-label fw-semibold" for="{{ screening_form.completeness_notes.id_for_label }}">
                 Completeness Observations
             </label>
             {{ screening_form.completeness_notes }}
-            <div class="form-text">
-                Describe any missing documents, discrepancies, or notes relevant to completeness.
+            <div class="form-text" id="scr-completeness-help">
+                Required when the finding is Incomplete.
             </div>
             {% for error in screening_form.completeness_notes.errors %}
                 <div class="invalid-feedback d-block">{{ error }}</div>
             {% endfor %}
         </div>
-    </div>
+    </section>
 
-    
-    <div class="rg-icard">
-        <div class="rg-icard__header">
+    <section class="rg-scr-panel" id="scr-qualification-panel">
+        <div class="rg-scr-panel__header">
             <div>
-                <h3 class="rg-icard__title">Qualification Assessment</h3>
-                <p class="rg-icard__subtitle">
-                    Record the formal qualification outcome for this applicant based on
-                    the position's minimum qualification requirements.
-                </p>
+                <h3 class="rg-scr-panel__title">Qualification Assessment</h3>
+                <p class="rg-scr-panel__subtitle">Use the minimum qualification reference before recording the outcome.</p>
             </div>
         </div>
 
-        
+        {% with reference=application.position.position_reference %}
+        {% if application.position.qualification_reference or reference and reference.qualification_summary %}
+        <div class="rg-scr-qualification-reference">
+            <div class="rg-scr-kicker">Minimum qualification reference</div>
+            {% if application.position.qualification_reference %}
+                <div class="rg-scr-reference-note">{{ application.position.qualification_reference|linebreaksbr }}</div>
+            {% endif %}
+            {% if reference %}
+                <div class="rg-scr-reference-grid">
+                    {% if reference.qs_education %}
+                        <div><span>Education</span><strong>{{ reference.qs_education }}</strong></div>
+                    {% endif %}
+                    {% if reference.qs_training %}
+                        <div><span>Training</span><strong>{{ reference.qs_training }}</strong></div>
+                    {% endif %}
+                    {% if reference.qs_experience %}
+                        <div><span>Experience</span><strong>{{ reference.qs_experience }}</strong></div>
+                    {% endif %}
+                    {% if reference.qs_eligibility %}
+                        <div><span>Eligibility</span><strong>{{ reference.qs_eligibility }}</strong></div>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
         <div class="rg-field mb-3">
-            <label class="form-label fw-semibold"
-                   for="{{ screening_form.qualification_outcome.id_for_label }}">
+            <label class="form-label fw-semibold" for="{{ screening_form.qualification_outcome.id_for_label }}">
                 Qualification Outcome
                 <span class="text-danger ms-1" aria-hidden="true">*</span>
             </label>
@@ -186,12 +182,8 @@
                         class="rg-scr-choice-btn js-scr-choice"
                         data-target="id_qualification_outcome"
                         data-value="qualified"
-                        data-theme="success">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                        <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
-                        <path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.5"
-                              stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
+                        data-theme="success"
+                        id="scr-qualified-choice">
                     Qualified
                 </button>
                 <button type="button"
@@ -199,16 +191,10 @@
                         data-target="id_qualification_outcome"
                         data-value="not_qualified"
                         data-theme="danger">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                        <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
-                        <path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="currentColor" stroke-width="1.5"
-                              stroke-linecap="round"/>
-                    </svg>
                     Not Qualified
                 </button>
             </div>
-            
-            <div style="display:none;">
+            <div class="visually-hidden">
                 {{ screening_form.qualification_outcome }}
             </div>
             {% for error in screening_form.qualification_outcome.errors %}
@@ -216,46 +202,85 @@
             {% endfor %}
         </div>
 
-        
+        <div class="rg-field mb-3">
+            <label class="form-label fw-semibold">
+                Document Review Rating
+                <span class="rg-scr-optional-label">optional</span>
+            </label>
+            <div class="rg-scr-score-grid">
+                <div>
+                    <label class="form-label" for="{{ screening_form.education_score.id_for_label }}">
+                        {{ screening_form.education_score.label }}
+                    </label>
+                    {{ screening_form.education_score }}
+                    {% for error in screening_form.education_score.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+                <div>
+                    <label class="form-label" for="{{ screening_form.training_score.id_for_label }}">
+                        {{ screening_form.training_score.label }}
+                    </label>
+                    {{ screening_form.training_score }}
+                    {% for error in screening_form.training_score.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+                <div>
+                    <label class="form-label" for="{{ screening_form.experience_score.id_for_label }}">
+                        {{ screening_form.experience_score.label }}
+                    </label>
+                    {{ screening_form.experience_score }}
+                    {% for error in screening_form.experience_score.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+                <div>
+                    <label class="form-label" for="{{ screening_form.document_review_score.id_for_label }}">
+                        {{ screening_form.document_review_score.label }}
+                    </label>
+                    {{ screening_form.document_review_score }}
+                    {% for error in screening_form.document_review_score.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="form-text">{{ screening_form.document_review_weight_display }}</div>
+        </div>
+
         <div class="rg-field">
-            <label class="form-label fw-semibold"
-                   for="{{ screening_form.screening_notes.id_for_label }}">
+            <label class="form-label fw-semibold" for="{{ screening_form.screening_notes.id_for_label }}">
                 Screening Notes
             </label>
             {{ screening_form.screening_notes }}
             <div class="form-text">
-                Document the qualification basis, any observed deficiencies, or supporting
-                rationale for the outcome recorded above.
+                Required when the outcome is Not Qualified.
             </div>
             {% for error in screening_form.screening_notes.errors %}
                 <div class="invalid-feedback d-block">{{ error }}</div>
             {% endfor %}
         </div>
-    </div>
-
+    </section>
 </form>
 
-
 <div class="rg-cws-fin-bar" id="scr-fin-bar">
-
-    
     <div class="rg-cws-fin-bar__info">
         <div class="rg-scr-ready-list" id="scr-ready-list" aria-label="Finalization readiness">
-
+            <div class="rg-scr-ready-item" id="scr-ready-documents">
+                <span class="rg-scr-ready-item__icon" aria-hidden="true"></span>
+                Required document statuses resolved
+            </div>
             <div class="rg-scr-ready-item" id="scr-ready-completeness">
                 <span class="rg-scr-ready-item__icon" aria-hidden="true"></span>
                 Completeness finding recorded
             </div>
-
             <div class="rg-scr-ready-item" id="scr-ready-outcome">
                 <span class="rg-scr-ready-item__icon" aria-hidden="true"></span>
                 Qualification outcome recorded
             </div>
-
         </div>
     </div>
 
-    
     <div class="rg-cws-fin-bar__actions">
         <button type="submit"
                 form="scr-form"
@@ -274,7 +299,6 @@
     </div>
 </div>
 
-
 <div class="modal fade"
      id="modal-scr-finalize"
      tabindex="-1"
@@ -282,47 +306,28 @@
      aria-labelledby="modal-scr-finalize-title"
      aria-modal="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content" style="border-radius:0.6rem;overflow:hidden;">
-
-            <div class="modal-header"
-                 style="background:var(--rg-primary);border-bottom:none;padding:1rem 1.25rem;">
-                <h5 class="modal-title" id="modal-scr-finalize-title"
-                    style="font-size:0.9375rem;font-weight:700;color:#fff;margin:0;">
-                    Confirm: Finalize &amp; Lock Screening
+        <div class="modal-content" style="border-radius:0.5rem;overflow:hidden;">
+            <div class="modal-header" style="background:var(--rg-primary);border-bottom:none;padding:1rem 1.25rem;">
+                <h5 class="modal-title" id="modal-scr-finalize-title" style="font-size:0.9375rem;font-weight:700;color:#fff;margin:0;">
+                    Confirm Screening Finalization
                 </h5>
-                <button type="button"
-                        class="btn-close btn-close-white"
-                        data-bs-dismiss="modal"
-                        aria-label="Close"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
 
-            <div class="modal-body" style="padding:1.25rem;font-size:0.8125rem;color:#374151;line-height:1.65;">
-                <p class="mb-2">
-                    You are about to finalize the screening record for
-                    <strong>{{ application.reference_label }}</strong>
-                    — <span class="text-muted">{{ application.applicant_display_name }}</span>.
-                </p>
+            <div class="modal-body" style="padding:1.25rem;font-size:0.8125rem;color:#374151;line-height:1.6;">
                 <p class="mb-3">
-                    This action will permanently lock the screening record and cannot be
-                    changed without an authorized reopen. The following will be
-                    recorded:
+                    Finalize the screening record for <strong>{{ application.reference_label }}</strong>
+                    - <span class="text-muted">{{ application.applicant_display_name }}</span>.
                 </p>
-                <ul class="mb-3" style="font-size:0.875rem;padding-left:1.25rem;">
-                    <li>Completeness finding and all supporting notes</li>
-                    <li>Qualification outcome</li>
-                    <li>Your identity as the finalizing officer and the exact timestamp</li>
-                    <li>A permanent audit event in the case timeline</li>
-                </ul>
 
-                
                 <div class="rg-scr-modal-summary" id="modal-scr-summary">
                     <div class="rg-scr-modal-summary__row">
                         <span class="rg-scr-modal-summary__label">Completeness Finding</span>
-                        <span class="rg-scr-modal-summary__value" id="modal-scr-completeness">—</span>
+                        <span class="rg-scr-modal-summary__value" id="modal-scr-completeness">-</span>
                     </div>
                     <div class="rg-scr-modal-summary__row">
                         <span class="rg-scr-modal-summary__label">Qualification Outcome</span>
-                        <span class="rg-scr-modal-summary__value" id="modal-scr-outcome">—</span>
+                        <span class="rg-scr-modal-summary__value" id="modal-scr-outcome">-</span>
                     </div>
                     <div class="rg-scr-modal-summary__row">
                         <span class="rg-scr-modal-summary__label">Review Step</span>
@@ -330,86 +335,61 @@
                             {% if recruitment_case %}
                                 {{ recruitment_case.get_current_stage_display }}
                             {% else %}
-                                —
+                                -
                             {% endif %}
                         </span>
                     </div>
                 </div>
-
-                <p class="rg-note mt-3 mb-0">
-                    Proceed only if you are satisfied that the information above is accurate
-                    and complete. Once finalized, this record is part of the permanent case file.
-                </p>
             </div>
 
-            <div class="modal-footer"
-                 style="border-top:1px solid #e2e8f0;padding:0.875rem 1.25rem;
-                        display:flex;justify-content:flex-end;gap:0.625rem;">
-                <button type="button"
-                        class="btn btn-sm btn-outline-secondary"
-                        data-bs-dismiss="modal">
-                    Cancel &mdash; Keep Editing
+            <div class="modal-footer" style="border-top:1px solid #e2e8f0;padding:0.875rem 1.25rem;display:flex;justify-content:flex-end;gap:0.625rem;">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">
+                    Keep Editing
                 </button>
-                <button type="button"
-                        id="modal-scr-confirm-btn"
-                        class="btn-rg-finalize">
-                    Yes, Finalize &amp; Lock
+                <button type="button" id="modal-scr-confirm-btn" class="btn-rg-finalize">
+                    Finalize and Lock
                 </button>
             </div>
-
         </div>
     </div>
 </div>
-
 
 <script>
 (function () {
     "use strict";
 
-    /* ── Element references ── */
-    var csField   = document.getElementById("id_completeness_status");
-    var csNotes   = document.getElementById("id_completeness_notes");
-    var qoField   = document.getElementById("id_qualification_outcome");
-    var qoNotes   = document.getElementById("id_screening_notes");
-    var eligBar   = document.getElementById("scr-elig-bar");
-    var eligIcon  = document.getElementById("scr-elig-icon");
-    var eligVerdict = document.getElementById("scr-elig-verdict");
-    var eligMeta  = document.getElementById("scr-elig-meta");
-    var finalBtn  = document.getElementById("scr-finalize-btn");
-    var opField   = document.getElementById("scr-op-field");
-    var scrForm   = document.getElementById("scr-form");
-    var modal     = document.getElementById("modal-scr-finalize");
+    var csField = document.getElementById("id_completeness_status");
+    var csNotes = document.getElementById("id_completeness_notes");
+    var qoField = document.getElementById("id_qualification_outcome");
+    var qoNotes = document.getElementById("id_screening_notes");
+    var finalBtn = document.getElementById("scr-finalize-btn");
+    var opField = document.getElementById("scr-op-field");
+    var scrForm = document.getElementById("scr-form");
+    var modal = document.getElementById("modal-scr-finalize");
     var modalConfirmBtn = document.getElementById("modal-scr-confirm-btn");
+    var decisionLabel = document.getElementById("scr-current-decision");
+    var qualifiedChoice = document.getElementById("scr-qualified-choice");
+    var qualificationPanel = document.getElementById("scr-qualification-panel");
 
-    /* ── SVG icons used by the eligibility bar ── */
-    var ICON_QUALIFIED = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/><path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-    var ICON_NOT_QUALIFIED = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
-    var ICON_PENDING = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/><path d="M8 5v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11" r="0.75" fill="currentColor"/></svg>';
+    var BLOCKING_COMPLETE_STATUSES = {
+        "not_reviewed": true,
+        "needs_review": true,
+        "absent": true
+    };
 
-    /* ── Eligibility bar update ── */
-    function updateEligBar() {
-        if (!eligBar || !qoField) return;
-        var val = qoField.value;
-        eligBar.className = "rg-scr-elig-bar";
-        if (val === "qualified") {
-            eligBar.classList.add("rg-scr-elig-bar--qualified");
-            if (eligIcon) eligIcon.innerHTML = ICON_QUALIFIED;
-            if (eligVerdict) eligVerdict.textContent = "Qualified";
-            if (eligMeta) eligMeta.textContent = "Applicant meets the qualification requirements for this position.";
-        } else if (val === "not_qualified") {
-            eligBar.classList.add("rg-scr-elig-bar--not-qualified");
-            if (eligIcon) eligIcon.innerHTML = ICON_NOT_QUALIFIED;
-            if (eligVerdict) eligVerdict.textContent = "Not Qualified";
-            if (eligMeta) eligMeta.textContent = "Applicant does not meet the qualification requirements for this position.";
-        } else {
-            eligBar.classList.add("rg-scr-elig-bar--pending");
-            if (eligIcon) eligIcon.innerHTML = ICON_PENDING;
-            if (eligVerdict) eligVerdict.textContent = "Pending review \u2014 qualification outcome not yet recorded";
-            if (eligMeta) eligMeta.textContent = "Set the Qualification Outcome field to update this summary in real time.";
-        }
+    function requiredStatusFields() {
+        return Array.prototype.slice.call(document.querySelectorAll(".js-doc-status[data-required='true']"));
     }
 
-    /* ── Readiness item helper ── */
+    function documentStatusFields() {
+        return Array.prototype.slice.call(document.querySelectorAll(".js-doc-status"));
+    }
+
+    function getFieldLabel(select) {
+        if (!select || !select.options || select.selectedIndex < 0) return "";
+        return select.options[select.selectedIndex].text;
+    }
+
     function setReady(id, met, required) {
         var el = document.getElementById(id);
         if (!el) return;
@@ -421,20 +401,113 @@
         } else if (required) {
             el.classList.add("rg-scr-ready-item--blocking");
             if (icon) icon.innerHTML = '<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2.5 2.5l5 5M7.5 2.5l-5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
-        } else {
-            if (icon) icon.innerHTML = "";
+        } else if (icon) {
+            icon.innerHTML = "";
         }
     }
 
-    /* ── Master readiness update ── */
+    function requiredDocumentsResolved() {
+        return requiredStatusFields().every(function (field) {
+            return field.value && field.value !== "not_reviewed";
+        });
+    }
+
+    function completenessContradicted() {
+        if (!csField || csField.value !== "complete") return false;
+        return requiredStatusFields().some(function (field) {
+            return Boolean(BLOCKING_COMPLETE_STATUSES[field.value]);
+        });
+    }
+
+    function requiredNotesSatisfied() {
+        var needsCompletenessNotes = csField && csField.value === "incomplete";
+        var needsScreeningNotes = qoField && qoField.value === "not_qualified";
+        var hasCompletenessNotes = csNotes && csNotes.value.trim() !== "";
+        var hasScreeningNotes = qoNotes && qoNotes.value.trim() !== "";
+        return (!needsCompletenessNotes || hasCompletenessNotes) &&
+            (!needsScreeningNotes || hasScreeningNotes);
+    }
+
+    function qualificationContradicted() {
+        return csField && qoField &&
+            csField.value === "incomplete" &&
+            qoField.value === "qualified";
+    }
+
+    function updateDecisionLabel() {
+        if (!decisionLabel) return;
+        if (!requiredDocumentsResolved()) {
+            decisionLabel.textContent = "Review document completeness";
+        } else if (!csField || !csField.value) {
+            decisionLabel.textContent = "Record completeness finding";
+        } else if (csField.value === "incomplete") {
+            decisionLabel.textContent = "Record incomplete screening basis";
+        } else if (!qoField || !qoField.value) {
+            decisionLabel.textContent = "Assess qualification outcome";
+        } else if (qoField.value === "not_qualified") {
+            decisionLabel.textContent = "Record not-qualified basis";
+        } else {
+            decisionLabel.textContent = "Ready to finalize screening";
+        }
+    }
+
+    function updateStepState() {
+        var docsStep = document.getElementById("scr-step-docs");
+        var compStep = document.getElementById("scr-step-completeness");
+        var qualStep = document.getElementById("scr-step-qualification");
+        [docsStep, compStep, qualStep].forEach(function (step) {
+            if (step) step.classList.remove("is-current", "is-complete");
+        });
+        if (docsStep && requiredDocumentsResolved()) docsStep.classList.add("is-complete");
+        if (compStep && csField && csField.value) compStep.classList.add("is-complete");
+        if (qualStep && qoField && qoField.value) qualStep.classList.add("is-complete");
+        if (!requiredDocumentsResolved() && docsStep) docsStep.classList.add("is-current");
+        else if ((!csField || !csField.value) && compStep) compStep.classList.add("is-current");
+        else if (qualStep) qualStep.classList.add("is-current");
+    }
+
+    function updateQualificationAvailability() {
+        var blocked = csField && csField.value === "incomplete";
+        if (qualifiedChoice) {
+            qualifiedChoice.disabled = Boolean(blocked);
+            qualifiedChoice.classList.toggle("is-disabled", Boolean(blocked));
+        }
+        if (qualificationPanel) {
+            qualificationPanel.classList.toggle("is-waiting", !csField || csField.value !== "complete");
+        }
+        if (blocked && qoField && qoField.value === "qualified") {
+            qoField.value = "";
+            document.querySelectorAll(".js-scr-choice[data-target='id_qualification_outcome']").forEach(function (btn) {
+                btn.classList.remove("is-active-success", "is-active-warning", "is-active-danger");
+            });
+        }
+    }
+
+    function updateDocumentRows() {
+        documentStatusFields().forEach(function (field) {
+            var row = field.closest("[data-document-row]");
+            if (!row) return;
+            row.setAttribute("data-status", field.value || "");
+        });
+        document.querySelectorAll("[data-fixed-status]").forEach(function (pill) {
+            var value = pill.getAttribute("data-fixed-status") || "";
+            pill.classList.toggle("is-absent", value === "absent");
+            pill.classList.toggle("is-not-applicable", value === "not_applicable");
+        });
+    }
+
     function updateReadiness() {
+        var docsReady = requiredDocumentsResolved();
         var hasCS = csField && csField.value !== "";
         var hasQO = qoField && qoField.value !== "";
+        var notesReady = requiredNotesSatisfied();
+        var ready = docsReady && hasCS && hasQO && notesReady &&
+            !qualificationContradicted() && !completenessContradicted();
 
-        setReady("scr-ready-completeness", hasCS, true);
-        setReady("scr-ready-outcome", hasQO, true);
+        setReady("scr-ready-documents", docsReady, true);
+        setReady("scr-ready-completeness", hasCS && !completenessContradicted(), true);
+        setReady("scr-ready-outcome", hasQO && !qualificationContradicted() && notesReady, true);
 
-        var ready = hasCS && hasQO;
         if (finalBtn) {
             if (ready) {
                 finalBtn.classList.remove("is-blocked");
@@ -444,37 +517,36 @@
                 finalBtn.setAttribute("disabled", "disabled");
             }
         }
+        updateQualificationAvailability();
+        updateDecisionLabel();
+        updateStepState();
+        updateDocumentRows();
     }
 
-    /* ── Visual choice strip (completeness + outcome) ── */
     function initChoiceStrips() {
         document.querySelectorAll(".js-scr-choice").forEach(function (btn) {
             btn.addEventListener("click", function () {
+                if (btn.disabled) return;
                 var targetId = btn.dataset.target;
-                var val      = btn.dataset.value;
-                var theme    = btn.dataset.theme;
-                var select   = document.getElementById(targetId);
+                var val = btn.dataset.value;
+                var theme = btn.dataset.theme;
+                var select = document.getElementById(targetId);
                 if (!select) return;
 
-                /* Deactivate siblings */
                 var strip = btn.closest(".rg-scr-choice-strip");
                 if (strip) {
-                    strip.querySelectorAll(".rg-scr-choice-btn").forEach(function (b) {
-                        b.classList.remove("is-active-success", "is-active-warning", "is-active-danger");
+                    strip.querySelectorAll(".rg-scr-choice-btn").forEach(function (choice) {
+                        choice.classList.remove("is-active-success", "is-active-warning", "is-active-danger");
                     });
                 }
-                /* Activate this button */
                 btn.classList.add("is-active-" + theme);
-                /* Sync hidden select */
                 select.value = val;
-                /* Trigger readiness + bar updates */
+                select.dispatchEvent(new Event("change", { bubbles: true }));
                 updateReadiness();
-                updateEligBar();
             });
         });
     }
 
-    /* ── Restore choice strip state from existing select value ── */
     function restoreChoiceStrips() {
         document.querySelectorAll(".js-scr-choice").forEach(function (btn) {
             var select = document.getElementById(btn.dataset.target);
@@ -484,39 +556,13 @@
         });
     }
 
-    /* ── Document checklist verdict buttons ── */
-    function initDocChecklist() {
-        document.querySelectorAll(".js-doc-verdict").forEach(function (btn) {
-            btn.addEventListener("click", function () {
-                var docId = btn.dataset.doc;
-                document.querySelectorAll('.js-doc-verdict[data-doc="' + docId + '"]')
-                    .forEach(function (b) {
-                        b.classList.remove("is-meets", "is-review", "is-absent");
-                    });
-                var verdict = btn.dataset.verdict;
-                if (verdict === "meets")  btn.classList.add("is-meets");
-                if (verdict === "review") btn.classList.add("is-review");
-                if (verdict === "absent") btn.classList.add("is-absent");
-            });
-        });
-    }
-
-    /* ── Modal: populate live summary when shown ── */
     function initModal() {
         if (!modal) return;
         modal.addEventListener("show.bs.modal", function () {
             var csEl = document.getElementById("modal-scr-completeness");
             var qoEl = document.getElementById("modal-scr-outcome");
-            if (csEl && csField) {
-                csEl.textContent = csField.value !== ""
-                    ? csField.options[csField.selectedIndex].text
-                    : "Not recorded";
-            }
-            if (qoEl && qoField) {
-                qoEl.textContent = qoField.value !== ""
-                    ? qoField.options[qoField.selectedIndex].text
-                    : "Not recorded";
-            }
+            if (csEl) csEl.textContent = getFieldLabel(csField) || "Not recorded";
+            if (qoEl) qoEl.textContent = getFieldLabel(qoField) || "Not recorded";
         });
         if (modalConfirmBtn) {
             modalConfirmBtn.addEventListener("click", function () {
@@ -526,28 +572,17 @@
         }
     }
 
-    /* ── Notes change listeners ── */
-    function initNoteListeners() {
-        if (qoNotes) qoNotes.addEventListener("input", updateReadiness);
-        if (csNotes) csNotes.addEventListener("input", updateReadiness);
-    }
+    documentStatusFields().forEach(function (field) {
+        field.addEventListener("change", updateReadiness);
+    });
+    if (csField) csField.addEventListener("change", updateReadiness);
+    if (qoField) qoField.addEventListener("change", updateReadiness);
+    if (csNotes) csNotes.addEventListener("input", updateReadiness);
+    if (qoNotes) qoNotes.addEventListener("input", updateReadiness);
 
-    /* ── Bootstrap. Change on hidden selects (for fallback) ── */
-    function initSelectListeners() {
-        if (csField) csField.addEventListener("change", function () { updateReadiness(); });
-        if (qoField) qoField.addEventListener("change", function () { updateEligBar(); updateReadiness(); });
-    }
-
-    /* ── Boot ── */
     restoreChoiceStrips();
     initChoiceStrips();
-    initDocChecklist();
     initModal();
-    initNoteListeners();
-    initSelectListeners();
-    updateEligBar();
     updateReadiness();
-
 })();
 </script>
-

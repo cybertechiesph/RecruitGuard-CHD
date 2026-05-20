@@ -4,6 +4,7 @@ from django.contrib.auth.admin import UserAdmin
 from .models import (
     AuditLog,
     ComparativeAssessmentReport,
+    ComparativeAssessmentReportItem,
     CompletionRecord,
     CompletionRequirement,
     DeliberationRecord,
@@ -21,6 +22,7 @@ from .models import (
     RecruitmentCase,
     RecruitmentUser,
     RoutingHistory,
+    ScreeningDocumentReview,
     ScreeningRecord,
     WorkflowOverride,
 )
@@ -198,11 +200,33 @@ class ScreeningRecordInline(admin.TabularInline):
         "completeness_status",
         "completeness_notes",
         "qualification_outcome",
+        "education_score",
+        "training_score",
+        "experience_score",
+        "document_review_score",
         "screening_notes",
         "is_finalized",
         "finalized_by",
         "finalized_at",
         "created_at",
+    )
+    can_delete = False
+
+
+class ScreeningDocumentReviewInline(admin.TabularInline):
+    model = ScreeningDocumentReview
+    extra = 0
+    readonly_fields = (
+        "document_key",
+        "requirement_title",
+        "requirement_label",
+        "status",
+        "is_required",
+        "is_not_applicable",
+        "evidence_item",
+        "display_order",
+        "created_at",
+        "updated_at",
     )
     can_delete = False
 
@@ -261,6 +285,8 @@ class InterviewRatingInline(admin.TabularInline):
         "review_stage",
         "rated_by",
         "rated_by_role",
+        "encoded_by",
+        "encoded_by_role",
         "rating_score",
         "rating_notes",
         "justification",
@@ -276,9 +302,13 @@ class DeliberationRecordInline(admin.TabularInline):
         "review_stage",
         "recorded_by",
         "recorded_by_role",
+        "comparative_assessment_report",
         "deliberated_at",
         "deliberation_minutes",
+        "recommendation",
         "decision_support_summary",
+        "quorum_status",
+        "attendance_notes",
         "ranking_position",
         "ranking_notes",
         "consolidated_snapshot",
@@ -304,9 +334,59 @@ class ComparativeAssessmentReportInline(admin.TabularInline):
         "is_finalized",
         "finalized_by",
         "finalized_at",
+        "is_returned",
+        "returned_by",
+        "returned_by_role",
+        "returned_at",
+        "return_reason",
         "created_at",
     )
     can_delete = False
+
+
+class ComparativeAssessmentReportItemInline(admin.TabularInline):
+    model = ComparativeAssessmentReportItem
+    extra = 0
+    readonly_fields = (
+        "recruitment_case",
+        "deliberation_record",
+        "rank_order",
+        "preliminary_rank_order",
+        "qualification_outcome",
+        "document_review_score",
+        "exam_status",
+        "exam_score",
+        "interview_average_score",
+        "assessment_score",
+        "recommendation",
+        "decision_support_summary",
+        "ranking_notes",
+        "created_at",
+    )
+    can_delete = False
+
+
+@admin.register(ComparativeAssessmentReport)
+class ComparativeAssessmentReportAdmin(admin.ModelAdmin):
+    list_display = (
+        "recruitment_entry",
+        "review_stage",
+        "version_number",
+        "generated_by",
+        "is_finalized",
+        "is_returned",
+        "finalized_at",
+    )
+    list_filter = ("review_stage", "branch", "is_finalized", "is_returned")
+    search_fields = ("recruitment_entry__job_code", "summary_notes", "generated_by__username")
+    readonly_fields = (
+        "created_at",
+        "updated_at",
+        "generated_by_role",
+        "finalized_by_role",
+        "returned_by_role",
+    )
+    inlines = [ComparativeAssessmentReportItemInline]
 
 
 class FinalDecisionInline(admin.TabularInline):
@@ -335,6 +415,8 @@ class FinalSelectionInline(admin.TabularInline):
         "selected_case",
         "decided_by",
         "decided_by_role",
+        "is_deep_selection",
+        "deep_selection_justification",
         "decision_notes",
         "decided_at",
         "created_at",
@@ -576,12 +658,33 @@ class ScreeningRecordAdmin(admin.ModelAdmin):
         "reviewed_by",
         "completeness_status",
         "qualification_outcome",
+        "document_review_score",
         "is_finalized",
         "finalized_at",
     )
     list_filter = ("review_stage", "branch", "level", "completeness_status", "qualification_outcome", "is_finalized")
     search_fields = ("application__reference_number", "completeness_notes", "screening_notes", "reviewed_by__username")
     readonly_fields = ("created_at", "updated_at", "reviewed_by_role", "finalized_by_role")
+    inlines = [ScreeningDocumentReviewInline]
+
+
+@admin.register(ScreeningDocumentReview)
+class ScreeningDocumentReviewAdmin(admin.ModelAdmin):
+    list_display = (
+        "screening_record",
+        "document_key",
+        "requirement_title",
+        "status",
+        "is_required",
+        "evidence_item",
+    )
+    list_filter = ("status", "is_required", "is_not_applicable")
+    search_fields = (
+        "screening_record__application__reference_number",
+        "document_key",
+        "requirement_title",
+    )
+    readonly_fields = ("created_at", "updated_at")
 
 
 @admin.register(ExamRecord)

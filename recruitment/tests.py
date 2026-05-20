@@ -31,11 +31,13 @@ from .models import (
     ComparativeAssessmentReportItem,
     CompletionRecord,
     CompletionRequirement,
+    DeliberationRecord,
     ExamRecord,
     EvidenceVaultItem,
     FinalDecision,
     FinalSelection,
     InternalMFAChallenge,
+    InterviewRating,
     NotificationLog,
     PositionReference,
     PositionPosting,
@@ -43,6 +45,7 @@ from .models import (
     RecruitmentCase,
     RecruitmentUser,
     RoutingHistory,
+    ScreeningDocumentReview,
     ScreeningRecord,
     WorkflowOverride,
 )
@@ -78,6 +81,7 @@ from .services import (
     update_recruitment_entry_status,
     upload_interview_fallback_rating,
     upload_evidence_item,
+    user_can_manage_comparative_assessment_report,
     user_can_view_application,
     verify_application_otp,
 )
@@ -285,6 +289,36 @@ class BaseRecruitmentTestCase(TestCase):
         )
         return application
 
+    def screening_document_status_payload(self, application, *, default_status=None, overrides=None):
+        default_status = default_status or ScreeningDocumentReview.ReviewStatus.MEETS
+        overrides = overrides or {}
+        payload = {}
+        for requirement in get_applicant_document_requirements(application.branch):
+            has_evidence = application.evidence_items.filter(
+                document_key=requirement.code,
+                is_current_version=True,
+                is_archived=False,
+            ).exists()
+            is_not_applicable = (
+                requirement.conditional_on_performance_rating
+                and application.performance_rating_not_applicable
+                and not has_evidence
+            )
+            is_required = requirement.is_required or (
+                requirement.conditional_on_performance_rating
+                and not application.performance_rating_not_applicable
+            )
+            if requirement.code in overrides:
+                status = overrides[requirement.code]
+            elif is_not_applicable or (not has_evidence and not is_required):
+                status = ScreeningDocumentReview.ReviewStatus.NOT_APPLICABLE
+            elif not has_evidence:
+                status = ScreeningDocumentReview.ReviewStatus.ABSENT
+            else:
+                status = default_status
+            payload[f"document_status__{requirement.code}"] = status
+        return payload
+
     def verify_application_for_submission(self, application):
         otp_code = issue_application_otp(application, actor=application.applicant)
         verify_application_otp(application, otp_code, actor=application.applicant)
@@ -299,6 +333,10 @@ class BaseRecruitmentTestCase(TestCase):
         qualification_outcome=ScreeningRecord.QualificationOutcome.QUALIFIED,
         completeness_notes="All required screening documents were reviewed.",
         screening_notes="Qualification screening completed.",
+        education_score=None,
+        training_score=None,
+        experience_score=None,
+        document_review_score=None,
     ):
         return save_screening_review(
             application=application,
@@ -307,6 +345,10 @@ class BaseRecruitmentTestCase(TestCase):
                 "completeness_status": completeness_status,
                 "completeness_notes": completeness_notes,
                 "qualification_outcome": qualification_outcome,
+                "education_score": education_score,
+                "training_score": training_score,
+                "experience_score": experience_score,
+                "document_review_score": document_review_score,
                 "screening_notes": screening_notes,
             },
             finalize=True,
@@ -364,9 +406,19 @@ class BaseRecruitmentTestCase(TestCase):
         justification="",
     ):
         scheduled_for = scheduled_for or (timezone.now() + timedelta(days=1))
+        session_actor = actor
+        if (
+            application.branch == PositionPosting.Branch.PLANTILLA
+            and application.case.current_stage == RecruitmentCase.Stage.HRMPSB_REVIEW
+        ):
+            session_actor = (
+                self.secretariat
+                if application.level == PositionPosting.Level.LEVEL_1
+                else self.hrm_chief
+            )
         save_interview_session(
             application=application,
-            actor=actor,
+            actor=session_actor,
             cleaned_data={
                 "scheduled_for": scheduled_for,
                 "location": location,
@@ -385,7 +437,7 @@ class BaseRecruitmentTestCase(TestCase):
         )
         return save_interview_session(
             application=application,
-            actor=actor,
+            actor=session_actor,
             cleaned_data={
                 "scheduled_for": scheduled_for,
                 "location": location,
@@ -444,7 +496,10 @@ class BaseRecruitmentTestCase(TestCase):
         ranking_position=None,
         deliberated_at=None,
         deliberation_minutes="Recorded structured deliberation minutes.",
+        recommendation="HRMPSB recommends this ranking based on the CAR draft.",
         decision_support_summary="Decision-support summary preserved for routing.",
+        quorum_status=DeliberationRecord.QuorumStatus.MET,
+        attendance_notes="Chairperson and HRMPSB members attended with quorum met.",
         ranking_notes="Ranking basis recorded for decision support.",
     ):
         if (
@@ -452,13 +507,32 @@ class BaseRecruitmentTestCase(TestCase):
             and application.case.current_stage == RecruitmentCase.Stage.HRMPSB_REVIEW
         ):
             self.finalize_applicant_pool_for_test(application.position)
+            car_actor = (
+                self.secretariat
+                if application.level == PositionPosting.Level.LEVEL_1
+                else self.hrm_chief
+            )
+            if not ComparativeAssessmentReport.objects.filter(
+                recruitment_entry=application.position,
+                review_stage=RecruitmentCase.Stage.HRMPSB_REVIEW,
+                is_finalized=False,
+            ).exists():
+                generate_comparative_assessment_report(
+                    application=application,
+                    actor=car_actor,
+                    cleaned_data={"summary_notes": "Draft CAR prepared for HRMPSB deliberation."},
+                    finalize=False,
+                )
         return save_deliberation_record(
             application=application,
             actor=actor,
             cleaned_data={
                 "deliberated_at": deliberated_at or timezone.now(),
                 "deliberation_minutes": deliberation_minutes,
+                "recommendation": recommendation,
                 "decision_support_summary": decision_support_summary,
+                "quorum_status": quorum_status,
+                "attendance_notes": attendance_notes,
                 "ranking_position": ranking_position,
                 "ranking_notes": ranking_notes,
             },
@@ -471,9 +545,20 @@ class BaseRecruitmentTestCase(TestCase):
         actor,
         summary_notes="Comparative ranking sheet generated for Plantilla decision support.",
     ):
+        car_actor = actor
+        if (
+            application.branch == PositionPosting.Branch.PLANTILLA
+            and application.case.current_stage == RecruitmentCase.Stage.HRMPSB_REVIEW
+            and actor.role == RecruitmentUser.Role.HRMPSB_MEMBER
+        ):
+            car_actor = (
+                self.secretariat
+                if application.level == PositionPosting.Level.LEVEL_1
+                else self.hrm_chief
+            )
         return generate_comparative_assessment_report(
             application=application,
-            actor=actor,
+            actor=car_actor,
             cleaned_data={"summary_notes": summary_notes},
             finalize=True,
         )
@@ -2606,6 +2691,10 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         self.assertEqual(application.current_handler_role, RecruitmentUser.Role.HRM_CHIEF)
         self.assertEqual(application.status, RecruitmentApplication.Status.HRM_CHIEF_REVIEW)
         self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.HRM_CHIEF_REVIEW)
+        self.assertNotIn(
+            ("endorse", "Endorse to Appointing Authority"),
+            get_available_actions(application, self.hrm_chief),
+        )
 
         with self.assertRaisesMessage(ValueError, "Complete the current workflow task before proceeding."):
             process_workflow_action(application, self.hrm_chief, "endorse", "COS endorsed.")
@@ -2986,7 +3075,11 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         self.force_login_with_mfa(client, self.secretariat)
         response = client.post(
             reverse("screening-review", kwargs={"pk": application.pk}),
-            {**self.screening_payload(), "operation": "finalize"},
+            {
+                **self.screening_payload(),
+                **self.screening_document_status_payload(application),
+                "operation": "finalize",
+            },
             follow=True,
         )
 
@@ -3010,6 +3103,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
                     completeness_notes="",
                     screening_notes="",
                 ),
+                **self.screening_document_status_payload(application),
                 "operation": "finalize",
             },
             follow=True,
@@ -3021,6 +3115,135 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         self.assertTrue(screening_record.is_finalized)
         self.assertEqual(screening_record.completeness_notes, "")
         self.assertEqual(screening_record.screening_notes, "")
+
+    def test_screening_view_persists_document_review_statuses(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        first_requirement = get_applicant_document_requirements(application.branch)[0]
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("screening-review", kwargs={"pk": application.pk}),
+            {
+                **self.screening_payload(
+                    completeness_status=ScreeningRecord.CompletenessStatus.INCOMPLETE,
+                    completeness_notes="Cover letter requires validation.",
+                    qualification_outcome=ScreeningRecord.QualificationOutcome.NOT_QUALIFIED,
+                    screening_notes="Qualification cannot proceed until the document issue is resolved.",
+                ),
+                **self.screening_document_status_payload(
+                    application,
+                    overrides={
+                        first_requirement.code: ScreeningDocumentReview.ReviewStatus.NEEDS_REVIEW,
+                    },
+                ),
+                "operation": "finalize",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Screening finalized and locked.")
+        screening_record = ScreeningRecord.objects.get(application=application)
+        document_review = screening_record.document_reviews.get(document_key=first_requirement.code)
+        self.assertEqual(document_review.status, ScreeningDocumentReview.ReviewStatus.NEEDS_REVIEW)
+        self.assertEqual(
+            screening_record.document_reviews.count(),
+            len(get_applicant_document_requirements(application.branch)),
+        )
+
+    def test_screening_view_blocks_complete_when_required_document_needs_review(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        first_requirement = get_applicant_document_requirements(application.branch)[0]
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("screening-review", kwargs={"pk": application.pk}),
+            {
+                **self.screening_payload(),
+                **self.screening_document_status_payload(
+                    application,
+                    overrides={
+                        first_requirement.code: ScreeningDocumentReview.ReviewStatus.NEEDS_REVIEW,
+                    },
+                ),
+                "operation": "finalize",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Required documents must be marked Meets before using Complete")
+        self.assertFalse(ScreeningRecord.objects.filter(application=application, is_finalized=True).exists())
+
+    def test_screening_view_blocks_qualified_when_completeness_is_incomplete(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("screening-review", kwargs={"pk": application.pk}),
+            {
+                **self.screening_payload(
+                    completeness_status=ScreeningRecord.CompletenessStatus.INCOMPLETE,
+                    completeness_notes="Missing or deficient document detected.",
+                ),
+                **self.screening_document_status_payload(application),
+                "operation": "finalize",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "cannot be marked Qualified")
+        self.assertFalse(ScreeningRecord.objects.filter(application=application, is_finalized=True).exists())
+
+    def test_document_review_score_uses_policy_component_weights(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+
+        screening_record = save_screening_review(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data=self.screening_payload(
+                education_score="90.00",
+                training_score="80.00",
+                experience_score="70.00",
+                document_review_score="10.00",
+            ),
+            finalize=True,
+        )
+
+        self.assertEqual(str(screening_record.document_review_score), "81.00")
+        self.assertEqual(str(screening_record.education_score), "90.00")
+        self.assertEqual(str(screening_record.training_score), "80.00")
+        self.assertEqual(str(screening_record.experience_score), "70.00")
+
+    def test_level2_document_review_score_uses_second_level_component_weights(self):
+        application = self.make_application(self.level2_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+
+        screening_record = save_screening_review(
+            application=application,
+            actor=self.hrm_chief,
+            cleaned_data=self.screening_payload(
+                education_score="90.00",
+                training_score="80.00",
+                experience_score="70.00",
+            ),
+            finalize=True,
+        )
+
+        self.assertEqual(str(screening_record.document_review_score), "79.00")
 
     def test_finalized_screening_output_is_locked(self):
         application = self.make_application(self.level1_position)
@@ -3251,7 +3474,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
 
         self.assertTrue(exam_record.is_finalized)
         self.assertIsNone(exam_record.exam_score)
-        self.assertIsNone(exam_record.effective_score)
+        self.assertEqual(str(exam_record.effective_score), "85.60")
 
     def test_exam_record_can_attach_optional_evidence(self):
         application = self.make_application(self.level1_position)
@@ -3688,7 +3911,7 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
         self.assertContains(response, f"{evidence_url}?disposition=inline")
         self.assertContains(response, evidence_url)
         self.assertNotContains(response, audit_url)
-        self.assertContains(response, "View File")
+        self.assertContains(response, "View")
         self.assertNotContains(response, "Evidence Vault")
 
     def test_evidence_service_rejects_unauthorized_upload_actor(self):
@@ -4906,6 +5129,140 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
                 finalize=False,
             )
 
+    def test_secretariat_schedules_plantilla_interview_and_hrmpsb_rates(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+
+        interview_session = save_interview_session(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data=self.session_payload(location="HRMS Interview Room"),
+            finalize=False,
+        )
+        interview_rating = save_interview_rating(
+            application=application,
+            actor=self.hrmpsb,
+            cleaned_data=self.rating_payload(rating_score="91.00"),
+        )
+        interview_session = save_interview_session(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data=self.session_payload(
+                location="HRMS Interview Room",
+                session_notes="HRMS support finalized the Plantilla interview session.",
+            ),
+            finalize=True,
+        )
+
+        self.assertTrue(interview_session.is_finalized)
+        self.assertEqual(interview_session.scheduled_by, self.secretariat)
+        self.assertEqual(interview_session.finalized_by, self.secretariat)
+        self.assertEqual(interview_rating.rated_by, self.hrmpsb)
+        self.assertEqual(interview_rating.encoded_by, self.hrmpsb)
+
+    def test_hrmpsb_member_cannot_schedule_plantilla_interview_session(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "This case is not currently assigned to you for interview scheduling.",
+        ):
+            save_interview_session(
+                application=application,
+                actor=self.hrmpsb,
+                cleaned_data=self.session_payload(location="Panel Room"),
+                finalize=False,
+            )
+
+    def test_secretariat_can_encode_paper_based_hrmpsb_rating(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        save_interview_session(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data=self.session_payload(location="Paper Rating Room"),
+            finalize=False,
+        )
+
+        interview_rating = save_interview_rating(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data={
+                **self.rating_payload(rating_score="88.00"),
+                "rated_by": self.hrmpsb,
+            },
+        )
+
+        self.assertEqual(interview_rating.rated_by, self.hrmpsb)
+        self.assertEqual(interview_rating.rated_by_role, RecruitmentUser.Role.HRMPSB_MEMBER)
+        self.assertEqual(interview_rating.encoded_by, self.secretariat)
+        self.assertEqual(interview_rating.encoded_by_role, RecruitmentUser.Role.SECRETARIAT)
+        self.assertTrue(
+            AuditLog.objects.filter(
+                application=application,
+                action=AuditLog.Action.INTERVIEW_RATING_RECORDED,
+                metadata__encoded_on_behalf=True,
+            ).exists()
+        )
+
+    def test_level2_plantilla_interview_support_routes_to_hrm_chief_not_secretariat(self):
+        application = self.make_application(self.level2_position)
+        self.move_application_to_hrmpsb_review(application)
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "This case is not currently assigned to you for interview scheduling.",
+        ):
+            save_interview_session(
+                application=application,
+                actor=self.secretariat,
+                cleaned_data=self.session_payload(location="Level 2 Room"),
+                finalize=False,
+            )
+
+        interview_session = save_interview_session(
+            application=application,
+            actor=self.hrm_chief,
+            cleaned_data=self.session_payload(location="Level 2 HRMS Room"),
+            finalize=False,
+        )
+
+        self.assertEqual(interview_session.scheduled_by, self.hrm_chief)
+
+    def test_extreme_interview_ratings_require_justification(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        save_interview_session(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data=self.session_payload(),
+            finalize=False,
+        )
+
+        with self.assertRaises(ValidationError) as exc:
+            save_interview_rating(
+                application=application,
+                actor=self.hrmpsb,
+                cleaned_data=self.rating_payload(rating_score="99.00", justification=""),
+            )
+        self.assertIn(
+            "Provide a justification when the interview rating is below 75 or above 98.",
+            str(exc.exception),
+        )
+
+        interview_rating = save_interview_rating(
+            application=application,
+            actor=self.hrmpsb,
+            cleaned_data=self.rating_payload(
+                rating_score="99.00",
+                justification="Exceptional technical and behavioral competency responses.",
+            ),
+        )
+
+        self.assertIsInstance(interview_rating, InterviewRating)
+        self.assertEqual(str(interview_rating.rating_score), "99.00")
+
     def test_hrm_chief_can_record_direct_interview_rating_for_cos_case(self):
         application = self.make_application(self.cos_position)
         self.move_application_to_hrm_chief_review(application)
@@ -5005,7 +5362,10 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         payload = {
             "deliberated_at": timezone.now(),
             "deliberation_minutes": "Panel reviewed the finalized applicant pool.",
+            "recommendation": "HRMPSB recommends the ranking after reviewing the CAR draft.",
             "decision_support_summary": "Decision-support summary for ranking.",
+            "quorum_status": DeliberationRecord.QuorumStatus.MET,
+            "attendance_notes": "Quorum and attendance were recorded.",
             "ranking_position": 1,
             "ranking_notes": "Ranking basis recorded.",
         }
@@ -5084,6 +5444,12 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         )
         application.position.refresh_from_db()
 
+        generate_comparative_assessment_report(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data={"summary_notes": "Draft CAR prepared after applicant pool finalization."},
+            finalize=False,
+        )
         deliberation_record = save_deliberation_record(
             application=application,
             actor=self.hrmpsb,
@@ -5094,6 +5460,85 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         self.assertTrue(deliberation_record.is_finalized)
         self.level1_position.refresh_from_db()
         self.assertTrue(self.level1_position.applicant_pool_is_finalized)
+
+    def test_hrms_prepares_car_draft_before_hrmpsb_deliberation(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb, rating_score="91.25")
+        self.finalize_applicant_pool_for_test(application.position)
+
+        draft_report = generate_comparative_assessment_report(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data={"summary_notes": "Draft CAR prepared for HRMPSB review."},
+            finalize=False,
+        )
+        draft_item = draft_report.items.get(recruitment_case=application.case)
+
+        self.assertFalse(draft_report.is_finalized)
+        self.assertEqual(draft_report.version_number, 1)
+        self.assertIsNone(draft_item.deliberation_record)
+        self.assertEqual(str(draft_item.interview_average_score), "91.25")
+        self.assertEqual(draft_item.rank_order, 1)
+
+        deliberation_record = save_deliberation_record(
+            application=application,
+            actor=self.hrmpsb,
+            cleaned_data=self.deliberation_payload(),
+            finalize=True,
+        )
+        self.assertEqual(deliberation_record.comparative_assessment_report, draft_report)
+        self.assertEqual(deliberation_record.quorum_status, DeliberationRecord.QuorumStatus.MET)
+        self.assertTrue(deliberation_record.recommendation)
+        self.assertTrue(deliberation_record.attendance_notes)
+
+    def test_plantilla_deliberation_requires_car_draft_after_pool_finalized(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb)
+        self.finalize_applicant_pool_for_test(application.position)
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "Prepare the CAR draft before recording HRMPSB deliberation.",
+        ):
+            save_deliberation_record(
+                application=application,
+                actor=self.hrmpsb,
+                cleaned_data=self.deliberation_payload(),
+                finalize=True,
+            )
+
+    def test_final_car_requires_hrmpsb_endorsement_against_latest_draft(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb)
+        self.finalize_applicant_pool_for_test(application.position)
+
+        generate_comparative_assessment_report(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data={"summary_notes": "Original draft CAR."},
+            finalize=False,
+        )
+        self.finalize_deliberation_for_current_stage(application, self.hrmpsb, ranking_position=1)
+        generate_comparative_assessment_report(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data={"summary_notes": "Updated draft after endorsement."},
+            finalize=False,
+        )
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "Finalize HRMPSB deliberation against the latest CAR draft before finalizing the CAR.",
+        ):
+            generate_comparative_assessment_report(
+                application=application,
+                actor=self.secretariat,
+                cleaned_data={"summary_notes": "Attempted final CAR from stale endorsement."},
+                finalize=True,
+            )
 
     def test_car_generation_requires_finalized_applicant_pool(self):
         application = self.make_application(self.level1_position)
@@ -5113,10 +5558,208 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         ):
             generate_comparative_assessment_report(
                 application=application,
-                actor=self.hrmpsb,
+                actor=self.secretariat,
                 cleaned_data={"summary_notes": "Attempted before pool finalization."},
                 finalize=True,
             )
+
+    def test_secretariat_prepares_level1_car_from_finalized_hrmpsb_outputs(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb, rating_score="91.25")
+        self.finalize_deliberation_for_current_stage(
+            application,
+            self.hrmpsb,
+            ranking_position=1,
+            decision_support_summary="HRMPSB recommendation summary for the CAR.",
+        )
+
+        self.assertTrue(user_can_view_application(self.secretariat, application))
+        self.assertTrue(user_can_manage_comparative_assessment_report(self.secretariat, application))
+        self.assertFalse(user_can_manage_comparative_assessment_report(self.hrmpsb, application))
+        self.assertTrue(get_queue_for_user(self.secretariat).filter(pk=application.pk).exists())
+
+        report = generate_comparative_assessment_report(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data={"summary_notes": "Prepared by HRMS from finalized HRMPSB records."},
+            finalize=True,
+        )
+        item = report.items.get(recruitment_case=application.case)
+
+        self.assertTrue(report.is_finalized)
+        self.assertEqual(report.recruitment_entry, self.level1_position)
+        self.assertEqual(report.generated_by, self.secretariat)
+        self.assertEqual(report.finalized_by, self.secretariat)
+        self.assertEqual(report.generated_by_role, RecruitmentUser.Role.SECRETARIAT)
+        self.assertEqual(item.qualification_outcome, ScreeningRecord.QualificationOutcome.QUALIFIED)
+        self.assertEqual(item.exam_status, ExamRecord.ExamStatus.COMPLETED)
+        self.assertEqual(str(item.exam_score), "88.50")
+        self.assertEqual(str(item.interview_average_score), "91.25")
+        self.assertEqual(item.recommendation, "HRMPSB recommends this ranking based on the CAR draft.")
+        self.assertEqual(item.decision_support_summary, "HRMPSB recommendation summary for the CAR.")
+        self.assertEqual(
+            report.consolidated_snapshot["ranked_candidates"][0]["decision_support_summary"],
+            "HRMPSB recommendation summary for the CAR.",
+        )
+        self.assertEqual(
+            report.consolidated_snapshot["ranked_candidates"][0]["document_review_outcome"],
+            ScreeningRecord.QualificationOutcome.QUALIFIED,
+        )
+        self.assertEqual(
+            report.consolidated_snapshot["ranked_candidates"][0]["finalized_exam_count"],
+            1,
+        )
+        self.assertEqual(
+            report.consolidated_snapshot["ranked_candidates"][0]["finalized_interview_count"],
+            1,
+        )
+
+    def test_hrm_chief_prepares_level2_car_and_secretariat_cannot_take_it(self):
+        application = self.make_application(self.level2_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb)
+        self.finalize_deliberation_for_current_stage(application, self.hrmpsb, ranking_position=1)
+
+        self.assertFalse(user_can_manage_comparative_assessment_report(self.secretariat, application))
+        self.assertFalse(user_can_view_application(self.secretariat, application))
+        self.assertTrue(user_can_manage_comparative_assessment_report(self.hrm_chief, application))
+        self.assertTrue(get_queue_for_user(self.hrm_chief).filter(pk=application.pk).exists())
+
+        report = generate_comparative_assessment_report(
+            application=application,
+            actor=self.hrm_chief,
+            cleaned_data={"summary_notes": "Level 2 CAR prepared by HRM Chief."},
+            finalize=True,
+        )
+
+        self.assertTrue(report.is_finalized)
+        self.assertEqual(report.generated_by, self.hrm_chief)
+        self.assertEqual(report.finalized_by, self.hrm_chief)
+        self.assertEqual(report.generated_by_role, RecruitmentUser.Role.HRM_CHIEF)
+
+    def test_hrmpsb_member_cannot_prepare_car_after_deliberation(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb)
+        self.finalize_deliberation_for_current_stage(application, self.hrmpsb, ranking_position=1)
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "This case is not currently assigned to you for CAR preparation.",
+        ):
+            generate_comparative_assessment_report(
+                application=application,
+                actor=self.hrmpsb,
+                cleaned_data={"summary_notes": "HRMPSB should not prepare this CAR."},
+                finalize=True,
+            )
+
+    def test_car_preserves_policy_preliminary_ranking_and_hrmpsb_ranking_notes(self):
+        primary_application = self.make_application(self.level1_position)
+        secondary_applicant = User.objects.create_user(
+            username="prelim-rank-secondary",
+            password="testpass123",
+            role=RecruitmentUser.Role.APPLICANT,
+        )
+        secondary_application = RecruitmentApplication.objects.create(
+            applicant=secondary_applicant,
+            position=self.level1_position,
+            applicant_first_name="Second",
+            applicant_last_name="Candidate",
+            applicant_email="prelim.rank.secondary@example.com",
+            applicant_phone="09179990222",
+            checklist_privacy_consent=True,
+            checklist_documents_complete=True,
+            checklist_information_certified=True,
+            qualification_summary="Second applicant for preliminary ranking.",
+            cover_letter="Applying for the same vacancy.",
+        )
+        self.upload_required_applicant_documents(
+            secondary_application,
+            secondary_applicant,
+            content_prefix="prelim-rank-secondary",
+        )
+
+        for application, applicant in (
+            (primary_application, self.applicant),
+            (secondary_application, secondary_applicant),
+        ):
+            otp_code = issue_application_otp(application, actor=applicant)
+            verify_application_otp(application, otp_code, actor=applicant)
+            submit_application(application, applicant)
+            application.refresh_from_db()
+
+        self.finalize_screening_for_current_stage(
+            primary_application,
+            self.secretariat,
+            education_score="90.00",
+            training_score="90.00",
+            experience_score="90.00",
+        )
+        self.finalize_exam_for_current_stage(
+            primary_application,
+            self.secretariat,
+            exam_score="90.00",
+            technical_score="90.00",
+            practical_score="90.00",
+        )
+        primary_application.refresh_from_db()
+        self.finalize_screening_for_current_stage(
+            secondary_application,
+            self.secretariat,
+            education_score="80.00",
+            training_score="80.00",
+            experience_score="80.00",
+        )
+        self.finalize_exam_for_current_stage(
+            secondary_application,
+            self.secretariat,
+            exam_score="80.00",
+            technical_score="80.00",
+            practical_score="80.00",
+        )
+        secondary_application.refresh_from_db()
+
+        self.finalize_interview_for_current_stage(primary_application, self.hrmpsb, rating_score="90.00")
+        self.finalize_interview_for_current_stage(secondary_application, self.hrmpsb, rating_score="80.00")
+        self.finalize_deliberation_for_current_stage(
+            primary_application,
+            self.hrmpsb,
+            ranking_position=2,
+            decision_support_summary="Higher preliminary score noted.",
+            ranking_notes="HRMPSB placed this candidate second after considering office-fit concerns.",
+        )
+        self.finalize_deliberation_for_current_stage(
+            secondary_application,
+            self.hrmpsb,
+            ranking_position=1,
+            decision_support_summary="Panel recommended this candidate despite lower preliminary score.",
+            ranking_notes="Panel justification recorded for the rank adjustment.",
+        )
+
+        report = generate_comparative_assessment_report(
+            application=secondary_application,
+            actor=self.secretariat,
+            cleaned_data={"summary_notes": "CAR includes advisory preliminary ranking."},
+            finalize=True,
+        )
+        primary_item = report.items.get(recruitment_case=primary_application.case)
+        secondary_item = report.items.get(recruitment_case=secondary_application.case)
+
+        self.assertEqual(primary_item.rank_order, 2)
+        self.assertEqual(primary_item.preliminary_rank_order, 1)
+        self.assertEqual(str(primary_item.assessment_score), "90.00")
+        self.assertEqual(str(primary_item.document_review_score), "90.00")
+        self.assertIn("office-fit concerns", primary_item.ranking_notes)
+        self.assertEqual(secondary_item.rank_order, 1)
+        self.assertEqual(secondary_item.preliminary_rank_order, 2)
+        self.assertEqual(str(secondary_item.assessment_score), "80.00")
+        self.assertIn("rank adjustment", secondary_item.ranking_notes)
+        self.assertEqual(
+            report.consolidated_snapshot["assessment_weight_display"],
+            "Document review 20%, exam 40%, interview 40%.",
+        )
 
     def test_plantilla_recommendation_requires_deliberation_and_car(self):
         application = self.make_application(self.level1_position)
@@ -5151,7 +5794,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         report = self.finalize_car_for_current_stage(application, self.hrmpsb)
 
         self.assertTrue(report.is_finalized)
-        self.assertEqual(report.version_number, 1)
+        self.assertEqual(report.version_number, 2)
         self.assertTrue(report.evidence_item.is_current_version)
         self.assertEqual(report.evidence_item.stage, RecruitmentCase.Stage.HRMPSB_REVIEW)
         self.assertEqual(report.evidence_item.artifact_scope, EvidenceVaultItem.OwnerScope.ENTRY)
@@ -5205,15 +5848,14 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         self.finalize_deliberation_for_current_stage(primary_application, self.hrmpsb, ranking_position=1)
         self.finalize_deliberation_for_current_stage(secondary_application, self.hrmpsb, ranking_position=2)
 
-        draft_report = generate_comparative_assessment_report(
-            application=primary_application,
-            actor=self.hrmpsb,
-            cleaned_data={"summary_notes": "Draft entry-level CAR."},
-            finalize=False,
+        draft_report = ComparativeAssessmentReport.objects.get(
+            recruitment_entry=self.level1_position,
+            review_stage=RecruitmentCase.Stage.HRMPSB_REVIEW,
+            is_finalized=False,
         )
         finalized_report = generate_comparative_assessment_report(
             application=secondary_application,
-            actor=self.hrmpsb,
+            actor=self.secretariat,
             cleaned_data={"summary_notes": "Final entry-level CAR."},
             finalize=True,
         )
@@ -5294,6 +5936,80 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
 
 
 class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
+    def prepare_ranked_level1_car(self, candidate_count):
+        applications = [self.make_application(self.level1_position)]
+        for index in range(2, candidate_count + 1):
+            applicant = User.objects.create_user(
+                username=f"ranked-car-applicant-{index}",
+                password="testpass123",
+                role=RecruitmentUser.Role.APPLICANT,
+            )
+            application = RecruitmentApplication.objects.create(
+                applicant=applicant,
+                position=self.level1_position,
+                applicant_first_name=f"Candidate{index}",
+                applicant_last_name="Ranked",
+                applicant_email=f"ranked.car.{index}@example.com",
+                applicant_phone=f"09179990{index:03d}",
+                checklist_privacy_consent=True,
+                checklist_documents_complete=True,
+                checklist_information_certified=True,
+                qualification_summary="Additional applicant for ranked CAR testing.",
+                cover_letter="Applying for the same vacancy.",
+                performance_rating_applicability=(
+                    RecruitmentApplication.PerformanceRatingApplicability.APPLICABLE
+                ),
+            )
+            self.upload_required_applicant_documents(
+                application,
+                applicant,
+                content_prefix=f"ranked-car-{index}",
+            )
+            applications.append(application)
+
+        for index, application in enumerate(applications, start=1):
+            self.verify_application_for_submission(application)
+            with self.captureOnCommitCallbacks(execute=True):
+                submit_application(application, application.applicant)
+            application.refresh_from_db()
+            score = f"{96 - index}.00"
+            self.finalize_screening_for_current_stage(
+                application,
+                self.secretariat,
+                education_score=score,
+                training_score=score,
+                experience_score=score,
+            )
+            self.finalize_exam_for_current_stage(
+                application,
+                self.secretariat,
+                exam_score=score,
+                technical_score=score,
+                practical_score=score,
+            )
+            application.refresh_from_db()
+
+        for index, application in enumerate(applications, start=1):
+            self.finalize_interview_for_current_stage(
+                application,
+                self.hrmpsb,
+                rating_score=f"{96 - index}.00",
+            )
+        for index, application in enumerate(applications, start=1):
+            self.finalize_deliberation_for_current_stage(
+                application,
+                self.hrmpsb,
+                ranking_position=index,
+                decision_support_summary=f"HRMPSB support summary for rank {index}.",
+                ranking_notes=f"HRMPSB ranking notes for rank {index}.",
+            )
+
+        report = self.finalize_car_for_current_stage(applications[0], self.hrmpsb)
+        for application in applications:
+            application.refresh_from_db()
+            application.case.refresh_from_db()
+        return applications, report
+
     def test_final_selection_routes_selected_plantilla_case_to_completion_and_preserves_car(self):
         application = self.make_application(self.level1_position)
         self.move_application_to_appointing_review(application)
@@ -5400,6 +6116,138 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
                 notification_type=NotificationLog.NotificationType.NON_SELECTED_APPLICANT,
             ).exists()
         )
+
+    def test_final_selection_outside_top_five_requires_deep_selection_support(self):
+        applications, report = self.prepare_ranked_level1_car(6)
+        selected_item = report.items.get(rank_order=6)
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "Selecting outside the top five requires deep selection documentation.",
+        ):
+            record_final_selection(
+                application=applications[0],
+                actor=self.appointing,
+                cleaned_data={
+                    "selected_item": selected_item,
+                    "decision_notes": "Attempted selection below the top five.",
+                },
+            )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            selection = record_final_selection(
+                application=applications[0],
+                actor=self.appointing,
+                cleaned_data={
+                    "selected_item": selected_item,
+                    "is_deep_selection": True,
+                    "deep_selection_justification": (
+                        "Appointing Authority documented superior qualifications "
+                        "for the applicant ranked outside the top five."
+                    ),
+                    "decision_notes": "Selected through documented deep selection.",
+                },
+            )
+
+        selected_application = applications[5]
+        selected_application.refresh_from_db()
+        selected_application.case.refresh_from_db()
+        applications[0].refresh_from_db()
+        applications[0].case.refresh_from_db()
+
+        self.assertTrue(selection.is_deep_selection)
+        self.assertIn("superior qualifications", selection.deep_selection_justification)
+        self.assertEqual(selection.selected_application_id, selected_application.id)
+        self.assertEqual(selected_application.status, RecruitmentApplication.Status.APPROVED)
+        self.assertEqual(selected_application.case.current_stage, RecruitmentCase.Stage.COMPLETION)
+        self.assertEqual(applications[0].status, RecruitmentApplication.Status.REJECTED)
+        self.assertEqual(applications[0].case.current_stage, RecruitmentCase.Stage.CLOSED)
+
+    def test_appointing_authority_can_return_car_for_hrmpsb_reassessment(self):
+        applications, report = self.prepare_ranked_level1_car(2)
+
+        self.assertIn(
+            ("return_car_for_reassessment", "Return CAR for HRMPSB Reassessment"),
+            get_available_actions(applications[0], self.appointing),
+        )
+        returned_report = process_workflow_action(
+            applications[0],
+            self.appointing,
+            "return_car_for_reassessment",
+            "CAR recommendation does not conform to final assessment.",
+        )
+
+        report.refresh_from_db()
+        self.assertEqual(returned_report.id, report.id)
+        self.assertTrue(report.is_returned)
+        self.assertEqual(report.returned_by, self.appointing)
+        self.assertIn("does not conform", report.return_reason)
+        self.assertIsNone(get_latest_finalized_comparative_assessment_report(applications[0]))
+
+        for application in applications:
+            application.refresh_from_db()
+            application.case.refresh_from_db()
+            deliberation_record = DeliberationRecord.objects.get(
+                application=application,
+                review_stage=RecruitmentCase.Stage.HRMPSB_REVIEW,
+            )
+            self.assertEqual(application.status, RecruitmentApplication.Status.HRMPSB_REVIEW)
+            self.assertEqual(application.current_handler_role, RecruitmentUser.Role.HRMPSB_MEMBER)
+            self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.HRMPSB_REVIEW)
+            self.assertFalse(deliberation_record.is_finalized)
+            self.assertIsNone(deliberation_record.finalized_by)
+            self.assertTrue(
+                AuditLog.objects.filter(
+                    application=application,
+                    action=AuditLog.Action.CAR_RETURNED,
+                ).exists()
+            )
+            self.assertTrue(
+                application.routing_history.filter(
+                    route_type=RoutingHistory.RouteType.REOPEN,
+                    to_handler_role=RecruitmentUser.Role.HRMPSB_MEMBER,
+                ).exists()
+            )
+
+        new_draft = generate_comparative_assessment_report(
+            application=applications[0],
+            actor=self.secretariat,
+            cleaned_data={"summary_notes": "Reassessment CAR draft after AA return."},
+            finalize=False,
+        )
+        self.assertGreater(new_draft.version_number, report.version_number)
+        for index, application in enumerate(applications, start=1):
+            self.finalize_deliberation_for_current_stage(
+                application,
+                self.hrmpsb,
+                ranking_position=index,
+                decision_support_summary=f"Reassessed support summary for rank {index}.",
+            )
+        new_report = generate_comparative_assessment_report(
+            application=applications[0],
+            actor=self.secretariat,
+            cleaned_data={"summary_notes": "Final CAR after HRMPSB reassessment."},
+            finalize=True,
+        )
+        self.assertTrue(new_report.is_finalized)
+        self.assertFalse(new_report.is_returned)
+
+    def test_appointing_authority_cannot_use_legacy_single_case_approval_actions(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_appointing_review(application)
+
+        for action in ("approve", "reject", "return_to_hrm_chief"):
+            with self.assertRaisesMessage(
+                ValueError,
+                "Plantilla Appointing Authority actions must be recorded from the finalized CAR.",
+            ):
+                process_workflow_action(
+                    application,
+                    self.appointing,
+                    action,
+                    "Legacy single-case action should not be available.",
+                )
+            application.refresh_from_db()
 
     def test_level2_final_selection_routes_selected_applicant_to_hrm_chief_completion(self):
         application = self.make_application(self.level2_position)

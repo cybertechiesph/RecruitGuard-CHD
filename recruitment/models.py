@@ -1,6 +1,6 @@
 import re
 import uuid
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
@@ -894,6 +894,30 @@ class ScreeningRecord(TimestampedModel):
         max_length=30,
         choices=QualificationOutcome.choices,
     )
+    education_score = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        blank=True,
+        null=True,
+    )
+    training_score = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        blank=True,
+        null=True,
+    )
+    experience_score = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        blank=True,
+        null=True,
+    )
+    document_review_score = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        blank=True,
+        null=True,
+    )
     screening_notes = models.TextField(blank=True)
     is_finalized = models.BooleanField(default=False)
     finalized_at = models.DateTimeField(blank=True, null=True)
@@ -916,25 +940,66 @@ class ScreeningRecord(TimestampedModel):
         ]
 
     def clean(self):
+        errors = {}
         if self.review_stage not in {
             RecruitmentCase.Stage.SECRETARIAT_REVIEW,
             RecruitmentCase.Stage.HRM_CHIEF_REVIEW,
         }:
-            raise ValidationError("Screening records are only supported for Secretariat and HRM Chief review stages.")
+            errors["review_stage"] = (
+                "Screening records are only supported for Secretariat and HRM Chief review stages."
+            )
         if self.reviewed_by.role not in {
             RecruitmentUser.Role.SECRETARIAT,
             RecruitmentUser.Role.HRM_CHIEF,
         }:
-            raise ValidationError("Only Secretariat or HRM Chief may record screening details.")
+            errors["reviewed_by"] = "Only Secretariat or HRM Chief may record screening details."
+        score_fields = {
+            "education_score": self.education_score,
+            "training_score": self.training_score,
+            "experience_score": self.experience_score,
+            "document_review_score": self.document_review_score,
+        }
+        for field_name, value in score_fields.items():
+            if value is not None and (value < 0 or value > 100):
+                errors[field_name] = "Assessment scores must be between 0 and 100."
+        component_values = [
+            self.education_score,
+            self.training_score,
+            self.experience_score,
+        ]
+        if any(value is not None for value in component_values) and not all(
+            value is not None for value in component_values
+        ):
+            errors["document_review_score"] = (
+                "Record education, training, and experience scores together, or use only the official document review score."
+            )
+        if (
+            self.completeness_status == self.CompletenessStatus.INCOMPLETE
+            and not (self.completeness_notes or "").strip()
+        ):
+            errors["completeness_notes"] = "Record completeness observations for incomplete applications."
+        if (
+            self.completeness_status == self.CompletenessStatus.INCOMPLETE
+            and self.qualification_outcome == self.QualificationOutcome.QUALIFIED
+        ):
+            errors["qualification_outcome"] = "Applicants with incomplete documents cannot be marked qualified."
+        if (
+            self.qualification_outcome == self.QualificationOutcome.NOT_QUALIFIED
+            and not (self.screening_notes or "").strip()
+        ):
+            errors["screening_notes"] = "Record screening notes for not-qualified applicants."
         if self.is_finalized and not self.finalized_by_id:
-            raise ValidationError("Finalized screening records must record the finalizing user.")
+            errors["finalized_by"] = "Finalized screening records must record the finalizing user."
         if not self.is_finalized and (self.finalized_by_id or self.finalized_at):
-            raise ValidationError("Draft screening records cannot include finalization details.")
+            errors["finalized_at"] = "Draft screening records cannot include finalization details."
+        if errors:
+            raise ValidationError(errors)
 
     def save(self, *args, **kwargs):
         self.branch = self.application.branch
         self.level = self.application.level
         self.reviewed_by_role = self.reviewed_by.role
+        self.apply_policy_score_outputs()
         if self.finalized_by_id:
             self.finalized_by_role = self.finalized_by.role
         elif not self.is_finalized:
@@ -945,8 +1010,132 @@ class ScreeningRecord(TimestampedModel):
     def is_locked(self):
         return self.is_finalized
 
+    @property
+    def document_review_component_weights(self):
+        if self.level == PositionPosting.Level.LEVEL_2:
+            return {
+                "education": Decimal("0.30"),
+                "training": Decimal("0.30"),
+                "experience": Decimal("0.40"),
+            }
+        return {
+            "education": Decimal("0.40"),
+            "training": Decimal("0.30"),
+            "experience": Decimal("0.30"),
+        }
+
+    @property
+    def document_review_weight_display(self):
+        if self.level == PositionPosting.Level.LEVEL_2:
+            return "Education 30%, training 30%, experience 40%."
+        return "Education 40%, training 30%, experience 30%."
+
+    def calculate_policy_document_review_score(self):
+        if not all(
+            value is not None
+            for value in (self.education_score, self.training_score, self.experience_score)
+        ):
+            return None
+        weights = self.document_review_component_weights
+        score = (
+            (self.education_score * weights["education"])
+            + (self.training_score * weights["training"])
+            + (self.experience_score * weights["experience"])
+        )
+        return score.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    def apply_policy_score_outputs(self):
+        calculated_score = self.calculate_policy_document_review_score()
+        if calculated_score is not None:
+            self.document_review_score = calculated_score
+
     def __str__(self):
         return f"{self.application.reference_label} {self.review_stage}"
+
+
+class ScreeningDocumentReview(TimestampedModel):
+    class ReviewStatus(models.TextChoices):
+        NOT_REVIEWED = "not_reviewed", "Not Reviewed"
+        MEETS = "meets", "Meets"
+        NEEDS_REVIEW = "needs_review", "Needs Review"
+        ABSENT = "absent", "Absent"
+        NOT_APPLICABLE = "not_applicable", "Not Applicable"
+
+    screening_record = models.ForeignKey(
+        ScreeningRecord,
+        on_delete=models.CASCADE,
+        related_name="document_reviews",
+    )
+    evidence_item = models.ForeignKey(
+        "EvidenceVaultItem",
+        on_delete=models.SET_NULL,
+        related_name="screening_document_reviews",
+        blank=True,
+        null=True,
+    )
+    document_key = models.CharField(max_length=150)
+    requirement_title = models.CharField(max_length=255)
+    requirement_label = models.CharField(max_length=40, blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=ReviewStatus.choices,
+        default=ReviewStatus.NOT_REVIEWED,
+    )
+    is_required = models.BooleanField(default=True)
+    is_not_applicable = models.BooleanField(default=False)
+    display_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["display_order", "created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["screening_record", "document_key"],
+                name="unique_screening_document_review_per_record",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["document_key", "status"]),
+            models.Index(fields=["status", "is_required"]),
+        ]
+
+    def clean(self):
+        errors = {}
+        if not (self.document_key or "").strip():
+            errors["document_key"] = "Document review rows must record the requirement code."
+        if not (self.requirement_title or "").strip():
+            errors["requirement_title"] = "Document review rows must record the requirement title."
+        if self.is_not_applicable and self.status != self.ReviewStatus.NOT_APPLICABLE:
+            errors["status"] = "Not-applicable requirements must use the Not Applicable status."
+        if not self.evidence_item_id and self.status == self.ReviewStatus.MEETS:
+            errors["status"] = "A document cannot meet the requirement without an uploaded file."
+        parent = self.screening_record
+        if parent and parent.is_finalized and self.pk:
+            original = type(self).objects.filter(pk=self.pk).first()
+            if original and (
+                original.status != self.status
+                or original.evidence_item_id != self.evidence_item_id
+                or original.requirement_title != self.requirement_title
+            ):
+                errors["status"] = "Document review rows cannot be changed after screening is finalized."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.document_key = (self.document_key or "").strip()
+        self.requirement_title = (self.requirement_title or "").strip()
+        self.requirement_label = (self.requirement_label or "").strip()
+        super().save(*args, **kwargs)
+
+    @property
+    def is_blocking_completeness(self):
+        return self.is_required and self.status in {
+            self.ReviewStatus.NOT_REVIEWED,
+            self.ReviewStatus.NEEDS_REVIEW,
+            self.ReviewStatus.ABSENT,
+        }
+
+    def __str__(self):
+        return f"{self.screening_record} - {self.requirement_title}: {self.get_status_display()}"
 
 
 class ExamRecord(TimestampedModel):
@@ -1175,11 +1364,20 @@ class ExamRecord(TimestampedModel):
 
     @property
     def component_weight_display(self):
-        return "Technical and practical scores are recorded as separate components."
+        if self.exam_type == self.ExamType.TECHNICAL_PRACTICAL:
+            return "Technical score 40%, practical score 60% when no official overall score is encoded."
+        return "Practical or end-user assessment score is used when applicable."
 
     def calculate_policy_score(self):
         if self.exam_type == self.ExamType.END_USER_ASSESSMENT:
             return self.practical_score
+        if (
+            self.exam_type == self.ExamType.TECHNICAL_PRACTICAL
+            and self.technical_score is not None
+            and self.practical_score is not None
+        ):
+            score = (self.technical_score * Decimal("0.40")) + (self.practical_score * Decimal("0.60"))
+            return score.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         return self.exam_score
 
     def apply_policy_outputs(self):
@@ -1311,7 +1509,10 @@ class InterviewSession(TimestampedModel):
         expected_roles = {
             RecruitmentCase.Stage.SECRETARIAT_REVIEW: RecruitmentUser.Role.SECRETARIAT,
             RecruitmentCase.Stage.HRM_CHIEF_REVIEW: RecruitmentUser.Role.HRM_CHIEF,
-            RecruitmentCase.Stage.HRMPSB_REVIEW: RecruitmentUser.Role.HRMPSB_MEMBER,
+        }
+        plantilla_hrmpsb_session_roles = {
+            PositionPosting.Level.LEVEL_1: {RecruitmentUser.Role.SECRETARIAT},
+            PositionPosting.Level.LEVEL_2: {RecruitmentUser.Role.HRM_CHIEF},
         }
         if not self.recruitment_case_id:
             errors["recruitment_case"] = "Interview sessions must be linked to a recruitment case."
@@ -1326,15 +1527,26 @@ class InterviewSession(TimestampedModel):
                 "Interview sessions must stay linked to the recruitment entry of the same application."
             )
         if self.review_stage not in expected_roles:
-            errors["review_stage"] = (
-                "Interview sessions are only supported during Secretariat, HRM Chief, or HRMPSB review stages."
-            )
+            if self.review_stage != RecruitmentCase.Stage.HRMPSB_REVIEW:
+                errors["review_stage"] = (
+                    "Interview sessions are only supported during Secretariat, HRM Chief, or HRMPSB review stages."
+                )
         elif self.scheduled_by.role != expected_roles[self.review_stage]:
             errors["scheduled_by"] = (
                 "Only the authorized current-stage handler may schedule or update the interview session."
             )
         if self.branch == PositionPosting.Branch.COS and self.review_stage == RecruitmentCase.Stage.HRMPSB_REVIEW:
             errors["review_stage"] = "COS interview sessions cannot be scheduled during an HRMPSB review stage."
+        if self.branch == PositionPosting.Branch.PLANTILLA and self.review_stage == RecruitmentCase.Stage.HRMPSB_REVIEW:
+            allowed_roles = plantilla_hrmpsb_session_roles.get(self.level, set())
+            if self.scheduled_by.role not in allowed_roles:
+                errors["scheduled_by"] = (
+                    "Plantilla HRMPSB interview sessions must be scheduled by the assigned HRMS support role."
+                )
+            if self.finalized_by_id and self.finalized_by.role not in allowed_roles:
+                errors["finalized_by"] = (
+                    "Plantilla HRMPSB interview sessions must be finalized by the assigned HRMS support role."
+                )
         if self.is_finalized and not self.finalized_by_id:
             errors["finalized_by"] = "Finalized interview sessions must record the finalizing user."
         if not self.is_finalized and (self.finalized_by_id or self.finalized_at):
@@ -1386,6 +1598,14 @@ class InterviewRating(TimestampedModel):
         related_name="interview_ratings",
     )
     rated_by_role = models.CharField(max_length=40, blank=True)
+    encoded_by = models.ForeignKey(
+        RecruitmentUser,
+        on_delete=models.PROTECT,
+        related_name="encoded_interview_ratings",
+        blank=True,
+        null=True,
+    )
+    encoded_by_role = models.CharField(max_length=40, blank=True)
     branch = models.CharField(max_length=20, choices=PositionPosting.Branch.choices)
     level = models.PositiveSmallIntegerField(choices=PositionPosting.Level.choices)
     rating_score = models.DecimalField(max_digits=5, decimal_places=2)
@@ -1407,6 +1627,10 @@ class InterviewRating(TimestampedModel):
             RecruitmentCase.Stage.HRM_CHIEF_REVIEW: RecruitmentUser.Role.HRM_CHIEF,
             RecruitmentCase.Stage.HRMPSB_REVIEW: RecruitmentUser.Role.HRMPSB_MEMBER,
         }
+        plantilla_support_roles = {
+            PositionPosting.Level.LEVEL_1: {RecruitmentUser.Role.SECRETARIAT},
+            PositionPosting.Level.LEVEL_2: {RecruitmentUser.Role.HRM_CHIEF},
+        }
         if self.interview_session_id and self.interview_session.is_finalized:
             errors["interview_session"] = "Finalized interview sessions cannot accept additional rating changes."
         if self.application_id and self.interview_session_id and self.interview_session.application_id != self.application_id:
@@ -1419,14 +1643,34 @@ class InterviewRating(TimestampedModel):
             errors["review_stage"] = "Direct interview ratings are only supported during HRM Chief or HRMPSB review stages."
         elif self.rated_by.role != allowed_roles[self.review_stage]:
             errors["rated_by"] = "Only the authorized evaluator for the current stage may record an interview rating."
+        if self.encoded_by_id:
+            if self.review_stage == RecruitmentCase.Stage.HRMPSB_REVIEW and self.branch == PositionPosting.Branch.PLANTILLA:
+                allowed_encoder_roles = {
+                    RecruitmentUser.Role.HRMPSB_MEMBER,
+                    *plantilla_support_roles.get(self.level, set()),
+                }
+                if self.encoded_by.role not in allowed_encoder_roles:
+                    errors["encoded_by"] = (
+                        "Only the HRMPSB rater or the assigned HRMS support role may encode this Plantilla rating."
+                    )
+            elif self.encoded_by.role != self.rated_by.role:
+                errors["encoded_by"] = "The encoder must match the authorized evaluator for this review stage."
+        else:
+            errors["encoded_by"] = "Interview ratings must record who encoded the rating."
         try:
             score = Decimal(str(self.rating_score))
         except (InvalidOperation, TypeError):
             score = None
         if score is None or score < 0 or score > 100:
             errors["rating_score"] = "Interview ratings must be between 0 and 100."
-        if score is not None and score < Decimal("75") and not self.justification:
-            errors["justification"] = "Provide a justification when the interview rating is below the passing threshold."
+        if (
+            score is not None
+            and (score < Decimal("75") or score > Decimal("98"))
+            and not self.justification
+        ):
+            errors["justification"] = (
+                "Provide a justification when the interview rating is below 75 or above 98."
+            )
         if errors:
             raise ValidationError(errors)
 
@@ -1437,6 +1681,9 @@ class InterviewRating(TimestampedModel):
         self.branch = self.interview_session.branch
         self.level = self.interview_session.level
         self.rated_by_role = self.rated_by.role
+        if not self.encoded_by_id:
+            self.encoded_by = self.rated_by
+        self.encoded_by_role = self.encoded_by.role
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -1444,6 +1691,11 @@ class InterviewRating(TimestampedModel):
 
 
 class DeliberationRecord(TimestampedModel):
+    class QuorumStatus(models.TextChoices):
+        NOT_RECORDED = "not_recorded", "Not Recorded"
+        MET = "met", "Met"
+        NOT_MET = "not_met", "Not Met"
+
     application = models.ForeignKey(
         RecruitmentApplication,
         on_delete=models.CASCADE,
@@ -1470,11 +1722,25 @@ class DeliberationRecord(TimestampedModel):
         related_name="recorded_deliberation_records",
     )
     recorded_by_role = models.CharField(max_length=40, blank=True)
+    comparative_assessment_report = models.ForeignKey(
+        "ComparativeAssessmentReport",
+        on_delete=models.PROTECT,
+        related_name="deliberation_records",
+        blank=True,
+        null=True,
+    )
     branch = models.CharField(max_length=20, choices=PositionPosting.Branch.choices)
     level = models.PositiveSmallIntegerField(choices=PositionPosting.Level.choices)
     deliberated_at = models.DateTimeField(default=timezone.now)
     deliberation_minutes = models.TextField()
+    recommendation = models.TextField(blank=True)
     decision_support_summary = models.TextField()
+    quorum_status = models.CharField(
+        max_length=20,
+        choices=QuorumStatus.choices,
+        default=QuorumStatus.NOT_RECORDED,
+    )
+    attendance_notes = models.TextField(blank=True)
     ranking_position = models.PositiveIntegerField(blank=True, null=True)
     ranking_notes = models.TextField(blank=True)
     consolidated_snapshot = models.JSONField(default=dict, blank=True)
@@ -1530,6 +1796,26 @@ class DeliberationRecord(TimestampedModel):
             )
         if expected_role and self.recorded_by.role != expected_role:
             errors["recorded_by"] = "Only the authorized decision-support handler may record deliberation minutes."
+        if self.branch == PositionPosting.Branch.PLANTILLA and self.comparative_assessment_report_id:
+            if self.comparative_assessment_report.recruitment_entry_id != self.recruitment_entry_id:
+                errors["comparative_assessment_report"] = (
+                    "HRMPSB deliberation must reference the CAR draft for the same vacancy."
+                )
+            elif self.comparative_assessment_report.is_finalized:
+                errors["comparative_assessment_report"] = (
+                    "HRMPSB deliberation must reference a CAR draft, not a finalized CAR."
+                )
+        if self.branch == PositionPosting.Branch.PLANTILLA and self.is_finalized:
+            if not self.comparative_assessment_report_id:
+                errors["comparative_assessment_report"] = (
+                    "Finalize the HRMPSB recommendation only after a CAR draft has been prepared."
+                )
+            if not self.recommendation:
+                errors["recommendation"] = "Record the HRMPSB recommendation before finalizing."
+            if self.quorum_status != self.QuorumStatus.MET:
+                errors["quorum_status"] = "Record a met quorum before finalizing the HRMPSB recommendation."
+            if not self.attendance_notes:
+                errors["attendance_notes"] = "Record HRMPSB attendance before finalizing."
         if self.ranking_position is not None and self.ranking_position < 1:
             errors["ranking_position"] = "Ranking position must be a positive whole number."
         if self.is_finalized and not self.consolidated_snapshot:
@@ -1594,6 +1880,17 @@ class ComparativeAssessmentReport(TimestampedModel):
         null=True,
     )
     finalized_by_role = models.CharField(max_length=40, blank=True)
+    is_returned = models.BooleanField(default=False)
+    returned_at = models.DateTimeField(blank=True, null=True)
+    returned_by = models.ForeignKey(
+        RecruitmentUser,
+        on_delete=models.PROTECT,
+        related_name="returned_comparative_assessment_reports",
+        blank=True,
+        null=True,
+    )
+    returned_by_role = models.CharField(max_length=40, blank=True)
+    return_reason = models.TextField(blank=True)
 
     class Meta:
         ordering = ["review_stage", "-version_number", "-created_at"]
@@ -1604,13 +1901,21 @@ class ComparativeAssessmentReport(TimestampedModel):
             ),
             models.UniqueConstraint(
                 fields=["recruitment_entry", "review_stage"],
-                condition=models.Q(is_finalized=True),
-                name="unique_finalized_car_per_entry_stage",
+                condition=models.Q(is_finalized=True, is_returned=False),
+                name="unique_active_finalized_car_per_entry_stage",
             ),
         ]
 
     def clean(self):
         errors = {}
+        preparation_roles_by_level = {
+            PositionPosting.Level.LEVEL_1: {RecruitmentUser.Role.SECRETARIAT},
+            PositionPosting.Level.LEVEL_2: {RecruitmentUser.Role.HRM_CHIEF},
+        }
+        allowed_preparation_roles = preparation_roles_by_level.get(
+            self.recruitment_entry.level,
+            set(),
+        )
         if self.recruitment_entry.branch != PositionPosting.Branch.PLANTILLA:
             errors["recruitment_entry"] = (
                 "Comparative Assessment Reports are only supported for Plantilla recruitment entries."
@@ -1619,9 +1924,9 @@ class ComparativeAssessmentReport(TimestampedModel):
             errors["review_stage"] = (
                 "Comparative Assessment Reports are only supported during the HRMPSB review stage."
             )
-        if self.generated_by.role != RecruitmentUser.Role.HRMPSB_MEMBER:
+        if self.generated_by.role not in allowed_preparation_roles:
             errors["generated_by"] = (
-                "Only an HRMPSB Member may generate or update a Comparative Assessment Report."
+                "Only the assigned HRMS support role may prepare or update a Comparative Assessment Report."
             )
         if self.version_number < 1:
             errors["version_number"] = "CAR version number must be a positive whole number."
@@ -1634,6 +1939,7 @@ class ComparativeAssessmentReport(TimestampedModel):
                 recruitment_entry_id=self.recruitment_entry_id,
                 review_stage=self.review_stage,
                 is_finalized=True,
+                is_returned=False,
             )
             if self.pk:
                 finalized_queryset = finalized_queryset.exclude(pk=self.pk)
@@ -1652,10 +1958,27 @@ class ComparativeAssessmentReport(TimestampedModel):
             errors["finalized_by"] = (
                 "Finalized Comparative Assessment Reports must record the finalizing user."
             )
+        elif self.is_finalized and self.finalized_by.role not in allowed_preparation_roles:
+            errors["finalized_by"] = (
+                "Only the assigned HRMS support role may finalize a Comparative Assessment Report."
+            )
         if not self.is_finalized and (self.finalized_by_id or self.finalized_at):
             errors["finalized_at"] = (
                 "Draft Comparative Assessment Reports cannot include finalization details."
             )
+        if self.is_returned:
+            if not self.is_finalized:
+                errors["is_returned"] = "Only finalized Comparative Assessment Reports can be returned."
+            if not self.returned_by_id:
+                errors["returned_by"] = "Returned CAR records must identify the Appointing Authority."
+            elif self.returned_by.role != RecruitmentUser.Role.APPOINTING_AUTHORITY:
+                errors["returned_by"] = "Only the Appointing Authority may return a finalized CAR."
+            if not self.returned_at:
+                errors["returned_at"] = "Returned CAR records must preserve the return timestamp."
+            if not (self.return_reason or "").strip():
+                errors["return_reason"] = "Record the reason for returning the CAR."
+        elif self.returned_by_id or self.returned_at or self.return_reason:
+            errors["is_returned"] = "Return details require the CAR to be marked returned."
         if errors:
             raise ValidationError(errors)
 
@@ -1666,6 +1989,10 @@ class ComparativeAssessmentReport(TimestampedModel):
             self.finalized_by_role = self.finalized_by.role
         elif not self.is_finalized:
             self.finalized_by_role = ""
+        if self.returned_by_id:
+            self.returned_by_role = self.returned_by.role
+        elif not self.is_returned:
+            self.returned_by_role = ""
         super().save(*args, **kwargs)
 
     @property
@@ -1691,13 +2018,20 @@ class ComparativeAssessmentReportItem(TimestampedModel):
         DeliberationRecord,
         on_delete=models.PROTECT,
         related_name="comparative_assessment_report_items",
+        blank=True,
+        null=True,
     )
     rank_order = models.PositiveIntegerField()
     qualification_outcome = models.CharField(max_length=40, blank=True)
+    document_review_score = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True)
     exam_status = models.CharField(max_length=20, blank=True)
     exam_score = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True)
     interview_average_score = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True)
+    assessment_score = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True)
+    preliminary_rank_order = models.PositiveIntegerField(blank=True, null=True)
+    recommendation = models.TextField(blank=True)
     decision_support_summary = models.TextField(blank=True)
+    ranking_notes = models.TextField(blank=True)
 
     class Meta:
         ordering = ["rank_order", "created_at"]
@@ -1730,8 +2064,21 @@ class ComparativeAssessmentReportItem(TimestampedModel):
             errors["deliberation_record"] = (
                 "CAR items must stay linked to the same recruitment case as the deliberation record."
             )
+        if self.report_id and self.report.is_finalized and not self.deliberation_record_id:
+            errors["deliberation_record"] = "Finalized CAR items must reference the endorsed HRMPSB deliberation."
         if self.rank_order < 1:
             errors["rank_order"] = "CAR rank order must be a positive whole number."
+        if self.preliminary_rank_order is not None and self.preliminary_rank_order < 1:
+            errors["preliminary_rank_order"] = "Preliminary rank must be a positive whole number."
+        score_fields = {
+            "document_review_score": self.document_review_score,
+            "exam_score": self.exam_score,
+            "interview_average_score": self.interview_average_score,
+            "assessment_score": self.assessment_score,
+        }
+        for field_name, value in score_fields.items():
+            if value is not None and (value < 0 or value > 100):
+                errors[field_name] = "CAR assessment scores must be between 0 and 100."
         if errors:
             raise ValidationError(errors)
 
@@ -1780,6 +2127,8 @@ class FinalSelection(TimestampedModel):
         related_name="recorded_final_selections",
     )
     decided_by_role = models.CharField(max_length=40, blank=True)
+    is_deep_selection = models.BooleanField(default=False)
+    deep_selection_justification = models.TextField(blank=True)
     decision_notes = models.TextField()
     car_snapshot = models.JSONField(default=dict, blank=True)
     decided_at = models.DateTimeField(default=timezone.now)
@@ -1804,6 +2153,10 @@ class FinalSelection(TimestampedModel):
                 )
             if not self.comparative_assessment_report.is_finalized:
                 errors["comparative_assessment_report"] = "Final selection requires a finalized CAR."
+            if self.comparative_assessment_report.is_returned:
+                errors["comparative_assessment_report"] = (
+                    "Returned CAR records must be reassessed before final selection."
+                )
         if self.selected_item_id:
             if (
                 self.comparative_assessment_report_id
@@ -1817,6 +2170,14 @@ class FinalSelection(TimestampedModel):
                 errors["selected_application"] = "Selected application must match the selected CAR item."
             if self.selected_case_id and self.selected_item.recruitment_case_id != self.selected_case_id:
                 errors["selected_case"] = "Selected case must match the selected CAR item."
+            if self.selected_item.rank_order > 5 and not self.is_deep_selection:
+                errors["is_deep_selection"] = (
+                    "Selecting outside the top five requires deep selection documentation."
+                )
+        if self.is_deep_selection and not (self.deep_selection_justification or "").strip():
+            errors["deep_selection_justification"] = (
+                "Record the deep-selection justification before finalizing this selection."
+            )
         if self.decided_by_id and self.decided_by.role != RecruitmentUser.Role.APPOINTING_AUTHORITY:
             errors["decided_by"] = "Only the Appointing Authority may record the final CAR selection."
         if not (self.decision_notes or "").strip():
@@ -2432,6 +2793,7 @@ class AuditLog(TimestampedModel):
         DELIBERATION_FINALIZED = "deliberation_finalized", "Deliberation Finalized"
         CAR_GENERATED = "car_generated", "Comparative Assessment Report Generated"
         CAR_FINALIZED = "car_finalized", "Comparative Assessment Report Finalized"
+        CAR_RETURNED = "car_returned", "Comparative Assessment Report Returned"
         DECISION_RECORDED = "decision_recorded", "Decision Recorded"
         COMPLETION_RECORDED = "completion_recorded", "Completion Recorded"
         CASE_CLOSED = "case_closed", "Case Closed"

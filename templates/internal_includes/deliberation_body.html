@@ -39,6 +39,12 @@
                 </div>
                 <div class="rg-del-rating-row__role">
                     {{ rating.rated_by_role|role_label }}
+                    {% if rating.encoded_by_id and rating.encoded_by_id != rating.rated_by_id %}
+                        <br>
+                        <span style="font-size:0.72rem;color:#64748b;">
+                            Encoded by {{ rating.encoded_by.get_full_name|default:rating.encoded_by.username }}
+                        </span>
+                    {% endif %}
                 </div>
                 {% if rating.rating_notes %}
                 <div class="rg-del-rating-row__notes">
@@ -82,6 +88,29 @@
 {% endif %}
 
 
+{% if deliberation_requires_car_draft %}
+<div class="rg-icard" style="margin-bottom:1rem;background:#f0f9ff;border-color:#bae6fd;">
+    <div style="display:flex;align-items:flex-start;gap:0.75rem;">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none"
+             style="flex-shrink:0;margin-top:2px;color:#0284c7;" aria-hidden="true">
+            <circle cx="10" cy="10" r="8.5" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M10 6v4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="10" cy="13" r="0.8" fill="currentColor"/>
+        </svg>
+        <div>
+            <div style="font-size:0.875rem;font-weight:700;color:#0c4a6e;margin-bottom:0.2rem;">
+                CAR draft required
+            </div>
+            <p style="font-size:0.8125rem;color:#075985;margin:0;">
+                HRMS must prepare the CAR draft first. HRMPSB deliberation records are endorsed
+                against that draft, then HRMS finalizes the CAR after endorsement.
+            </p>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+
 {% if deliberation_form %}
 <div class="rg-icard" style="margin-bottom:1rem;">
     <div class="rg-icard__header" style="margin-bottom:0.875rem;">
@@ -89,9 +118,8 @@
             <h3 class="rg-icard__title">Deliberation Record</h3>
             <p class="rg-icard__subtitle">
                 {% if application.branch == "plantilla" %}
-                    Record the HRMPSB deliberation minutes, decision-support summary,
-                    and ranking position for this applicant before generating the
-                    Comparative Assessment Report.
+                    Record the HRMPSB deliberation minutes, recommendation, quorum,
+                    attendance, and ranking position after reviewing the CAR draft.
                 {% else %}
                     Record the HRM Chief deliberation minutes and decision-support summary
                     before endorsing this COS case to the Appointing Authority.
@@ -139,7 +167,7 @@
             {% endif %}
         </div>
 
-        
+
         <div class="rg-field" style="margin-bottom:0.75rem;">
             <label class="form-label"
                    for="{{ deliberation_form.deliberation_minutes.id_for_label }}">
@@ -156,6 +184,23 @@
         </div>
 
         
+        {% if application.branch == "plantilla" %}
+        <div class="rg-field" style="margin-bottom:0.75rem;">
+            <label class="form-label"
+                   for="{{ deliberation_form.recommendation.id_for_label }}">
+                {{ deliberation_form.recommendation.label }}
+                <span style="color:#dc2626;"> *</span>
+            </label>
+            {{ deliberation_form.recommendation }}
+            <div class="form-text">
+                Record the HRMPSB recommendation to be endorsed with the CAR.
+            </div>
+            {% for error in deliberation_form.recommendation.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
         <div class="rg-field" style="margin-bottom:0.75rem;">
             <label class="form-label"
                    for="{{ deliberation_form.decision_support_summary.id_for_label }}">
@@ -173,6 +218,37 @@
 
         
         {% if application.branch == "plantilla" %}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem 1.25rem;margin-bottom:0.75rem;">
+            <div class="rg-field">
+                <label class="form-label"
+                       for="{{ deliberation_form.quorum_status.id_for_label }}">
+                    {{ deliberation_form.quorum_status.label }}
+                    <span style="color:#dc2626;"> *</span>
+                </label>
+                {{ deliberation_form.quorum_status }}
+                <div class="form-text">
+                    Final endorsement requires a met quorum.
+                </div>
+                {% for error in deliberation_form.quorum_status.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </div>
+            <div class="rg-field">
+                <label class="form-label"
+                       for="{{ deliberation_form.attendance_notes.id_for_label }}">
+                    {{ deliberation_form.attendance_notes.label }}
+                    <span style="color:#dc2626;"> *</span>
+                </label>
+                {{ deliberation_form.attendance_notes }}
+                <div class="form-text">
+                    Record member attendance or quorum basis.
+                </div>
+                {% for error in deliberation_form.attendance_notes.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </div>
+        </div>
+
         <div class="rg-field">
             <label class="form-label"
                    for="{{ deliberation_form.ranking_notes.id_for_label }}">
@@ -180,6 +256,9 @@
                 <span style="font-weight:400;color:#9aa4af;"> &mdash; optional</span>
             </label>
             {{ deliberation_form.ranking_notes }}
+            {% if deliberation_form.ranking_notes.help_text %}
+                <div class="form-text">{{ deliberation_form.ranking_notes.help_text }}</div>
+            {% endif %}
             {% for error in deliberation_form.ranking_notes.errors %}
                 <div class="invalid-feedback d-block">{{ error }}</div>
             {% endfor %}
@@ -272,6 +351,42 @@
         {% endif %}
     </div>
 
+    {% if application.branch == "plantilla" %}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem 2rem;font-size:0.8125rem;margin-top:0.6rem;">
+        <div>
+            <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;
+                        letter-spacing:0.05em;color:#5f6c78;margin-bottom:0.15rem;">
+                Quorum
+            </div>
+            <div style="color:#111827;font-weight:500;">
+                {{ current_deliberation_record.get_quorum_status_display|default:"-" }}
+            </div>
+        </div>
+        {% if current_deliberation_record.comparative_assessment_report %}
+        <div>
+            <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;
+                        letter-spacing:0.05em;color:#5f6c78;margin-bottom:0.15rem;">
+                CAR Draft
+            </div>
+            <div style="color:#111827;font-weight:500;">
+                Version {{ current_deliberation_record.comparative_assessment_report.version_number }}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if current_deliberation_record.recommendation %}
+    <div style="margin-top:0.6rem;font-size:0.79rem;color:#374151;line-height:1.55;
+                padding-top:0.6rem;border-top:1px solid #d7dde3;">
+        <strong style="color:#5f6c78;font-size:0.7rem;text-transform:uppercase;
+                        letter-spacing:0.05em;">Recommendation:</strong>
+        <span style="margin-left:0.35rem;">
+            {{ current_deliberation_record.recommendation|truncatewords:30 }}
+        </span>
+    </div>
+    {% endif %}
+    {% endif %}
+
     {% if current_deliberation_record.decision_support_summary %}
     <div style="margin-top:0.6rem;font-size:0.79rem;color:#374151;line-height:1.55;
                 padding-top:0.6rem;border-top:1px solid #d7dde3;">
@@ -310,8 +425,8 @@
         <div>
             <h3 class="rg-icard__title">Comparative Assessment Report</h3>
             <p class="rg-icard__subtitle">
-                Generate the Plantilla CAR from all finalized deliberation records for
-                this position posting. Preview candidate rankings before finalizing.
+                Prepare the CAR draft from finalized screening, exam, and interview outputs.
+                Finalize the CAR only after HRMPSB endorses its recommendation.
             </p>
         </div>
         {% if current_comparative_assessment_report %}
@@ -321,7 +436,7 @@
             </span>
             {% if current_comparative_assessment_report.generated_by %}
             <div style="font-size:0.72rem;color:#9aa4af;margin-top:0.2rem;">
-                by {{ current_comparative_assessment_report.generated_by.get_full_name }}
+                Prepared by {{ current_comparative_assessment_report.generated_by.get_full_name }}
             </div>
             {% endif %}
         </div>
@@ -351,11 +466,14 @@
                     <div class="rg-del-car-item__scores">
                         {% if item.qualification_outcome %}
                         <div class="rg-del-car-item__score-cell">
-                            <span class="rg-del-car-item__score-label">Screening</span>
+                            <span class="rg-del-car-item__score-label">Document Review</span>
                             <span class="rg-del-car-item__score-val">
                                 <span class="rg-pill rg-pill--{{ item.qualification_outcome|status_theme }} rg-pill--sm">
                                     {{ item.qualification_outcome }}
                                 </span>
+                                {% if item.document_review_score is not None %}
+                                    {{ item.document_review_score }}
+                                {% endif %}
                             </span>
                         </div>
                         {% endif %}
@@ -380,10 +498,32 @@
                             <span class="rg-del-car-item__score-val">{{ item.interview_average_score }}</span>
                         </div>
                         {% endif %}
+                        {% if item.assessment_score %}
+                        <div class="rg-del-car-item__score-cell">
+                            <span class="rg-del-car-item__score-label">Preliminary Score</span>
+                            <span class="rg-del-car-item__score-val">{{ item.assessment_score }}</span>
+                        </div>
+                        {% endif %}
+                        {% if item.preliminary_rank_order %}
+                        <div class="rg-del-car-item__score-cell">
+                            <span class="rg-del-car-item__score-label">System Rank</span>
+                            <span class="rg-del-car-item__score-val">#{{ item.preliminary_rank_order }}</span>
+                        </div>
+                        {% endif %}
                     </div>
                     {% if item.decision_support_summary %}
                     <div class="rg-del-car-item__decision">
                         {{ item.decision_support_summary|truncatewords:20 }}
+                    </div>
+                    {% endif %}
+                    {% if item.recommendation %}
+                    <div class="rg-del-car-item__decision">
+                        Recommendation: {{ item.recommendation|truncatewords:20 }}
+                    </div>
+                    {% endif %}
+                    {% if item.ranking_notes %}
+                    <div class="rg-del-car-item__decision">
+                        Ranking note: {{ item.ranking_notes|truncatewords:20 }}
                     </div>
                     {% endif %}
                 </div>
@@ -396,8 +536,8 @@
     <div style="padding:1rem;background:#f8fafc;border:1px dashed #d7dde3;
                 border-radius:0.4rem;font-size:0.8125rem;color:#9aa4af;
                 margin-bottom:1rem;text-align:center;">
-        Click <strong>Generate CAR</strong> below to compile candidate rankings from
-        all finalized deliberation records for this position.
+        Click <strong>Prepare Draft CAR</strong> below to compile the finalized
+        screening, exam, and interview outputs for this position.
     </div>
     {% endif %}
 
@@ -416,7 +556,7 @@
             </label>
             {{ car_form.summary_notes }}
             <div class="form-text">
-                Add panel-level notes to accompany the generated CAR document.
+                Add HRMS preparation notes to accompany the generated CAR draft or final CAR document.
             </div>
             {% for error in car_form.summary_notes.errors %}
                 <div class="invalid-feedback d-block">{{ error }}</div>
@@ -440,11 +580,25 @@
                 <span class="rg-scr-ready-item__icon" aria-hidden="true"></span>
                 Deliberation minutes recorded
             </div>
+            {% if application.branch == "plantilla" %}
+            <div class="rg-scr-ready-item" id="del-ready-recommendation">
+                <span class="rg-scr-ready-item__icon" aria-hidden="true"></span>
+                HRMPSB recommendation recorded
+            </div>
+            {% endif %}
             <div class="rg-scr-ready-item" id="del-ready-summary">
                 <span class="rg-scr-ready-item__icon" aria-hidden="true"></span>
                 Decision support summary completed
             </div>
             {% if application.branch == "plantilla" %}
+            <div class="rg-scr-ready-item" id="del-ready-quorum">
+                <span class="rg-scr-ready-item__icon" aria-hidden="true"></span>
+                Quorum marked as met
+            </div>
+            <div class="rg-scr-ready-item" id="del-ready-attendance">
+                <span class="rg-scr-ready-item__icon" aria-hidden="true"></span>
+                Attendance notes recorded
+            </div>
             <div class="rg-scr-ready-item" id="del-ready-ranking">
                 <span class="rg-scr-ready-item__icon" aria-hidden="true"></span>
                 Ranking position assigned
@@ -486,15 +640,21 @@
     <div class="rg-cws-fin-bar__inner">
 
         <div class="rg-scr-ready-list">
-            <div class="rg-scr-ready-item rg-scr-ready-item--met">
+            <div class="rg-scr-ready-item {% if current_deliberation_record and current_deliberation_record.is_finalized %}rg-scr-ready-item--met{% else %}rg-scr-ready-item--blocking{% endif %}">
                 <span class="rg-scr-ready-item__icon" aria-hidden="true">
+                    {% if current_deliberation_record and current_deliberation_record.is_finalized %}
                     <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
                         <path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="currentColor"
                               stroke-width="1.75" stroke-linecap="round"
                               stroke-linejoin="round"/>
                     </svg>
+                    {% endif %}
                 </span>
-                Deliberation record finalized
+                {% if current_deliberation_record and current_deliberation_record.is_finalized %}
+                    HRMPSB endorsement finalized
+                {% else %}
+                    HRMPSB endorsement pending
+                {% endif %}
             </div>
             <div class="rg-scr-ready-item" id="car-ready-items">
                 <span class="rg-scr-ready-item__icon" aria-hidden="true"></span>
@@ -503,7 +663,7 @@
                     ({{ current_comparative_assessment_report_items|length }}
                     candidate{{ current_comparative_assessment_report_items|length|pluralize }})
                 {% else %}
-                    Generate CAR to compile candidate rankings
+                    Prepare CAR to compile candidate rankings
                 {% endif %}
             </div>
         </div>
@@ -522,11 +682,16 @@
                     <path d="M2 13h12" stroke="currentColor"
                           stroke-width="1.5" stroke-linecap="round"/>
                 </svg>
-                Generate CAR
+                {% if current_comparative_assessment_report %}
+                    Update Draft CAR
+                {% else %}
+                    Prepare Draft CAR
+                {% endif %}
             </button>
             <button type="button"
-                    class="btn-rg-finalize"
+                    class="btn-rg-finalize {% if not current_deliberation_record or not current_deliberation_record.is_finalized or not current_comparative_assessment_report_items %}is-blocked{% endif %}"
                     id="car-finalize-btn"
+                    {% if not current_deliberation_record or not current_deliberation_record.is_finalized or not current_comparative_assessment_report_items %}disabled{% endif %}
                     data-bs-toggle="modal"
                     data-bs-target="#modal-car-finalize">
                 <svg width="12" height="13" viewBox="0 0 12 14" fill="none"
@@ -567,8 +732,8 @@
                 </p>
                 {% if application.branch == "plantilla" %}
                 <p style="font-size:0.8125rem;color:#374151;margin-bottom:0.875rem;">
-                    Once finalized, the Comparative Assessment Report (CAR) will become
-                    available for generation and submission.
+                    Once finalized, HRMS can finalize the Comparative Assessment Report (CAR)
+                    using this endorsed recommendation.
                 </p>
                 {% else %}
                 <p style="font-size:0.8125rem;color:#374151;margin-bottom:0.875rem;">
@@ -632,7 +797,8 @@
                         <circle cx="8" cy="11" r="0.6" fill="currentColor"/>
                     </svg>
                     <p style="margin:0;font-size:0.775rem;color:#92400e;line-height:1.5;">
-                        Ensure the minutes, decision-support summary,
+                        Ensure the minutes, recommendation, quorum, attendance,
+                        decision-support summary,
                         {% if application.branch == "plantilla" %}
                             and ranking position are
                         {% else %}
@@ -765,12 +931,18 @@
     var delOpField    = document.getElementById("del-op-field");
     var dateInput     = document.getElementById("id_deliberated_at");
     var minutesInput  = document.getElementById("id_deliberation_minutes");
+    var recommendationInput = document.getElementById("id_recommendation");
     var summaryInput  = document.getElementById("id_decision_support_summary");
+    var quorumInput   = document.getElementById("id_quorum_status");
+    var attendanceInput = document.getElementById("id_attendance_notes");
     var rankInput     = document.getElementById("id_ranking_position");
 
     var readyDate     = document.getElementById("del-ready-date");
     var readyMinutes  = document.getElementById("del-ready-minutes");
+    var readyRecommendation = document.getElementById("del-ready-recommendation");
     var readySummary  = document.getElementById("del-ready-summary");
+    var readyQuorum   = document.getElementById("del-ready-quorum");
+    var readyAttendance = document.getElementById("del-ready-attendance");
     var readyRanking  = document.getElementById("del-ready-ranking");
     var delFinalBtn   = document.getElementById("del-finalize-btn");
 
@@ -807,17 +979,25 @@
 
         var hasDate    = dateInput    ? dateInput.value.trim().length > 0    : false;
         var hasMinutes = minutesInput ? minutesInput.value.trim().length > 0 : false;
+        var hasRecommendation = recommendationInput ? recommendationInput.value.trim().length > 0 : true;
         var hasSummary = summaryInput ? summaryInput.value.trim().length > 0 : false;
+        var hasQuorum = quorumInput
+            ? (quorumInput.value.trim().length > 0 && quorumInput.value !== "not_recorded")
+            : true;
+        var hasAttendance = attendanceInput ? attendanceInput.value.trim().length > 0 : true;
         var hasRanking = rankInput
             ? (rankInput.value.trim().length > 0 && parseInt(rankInput.value, 10) > 0)
             : true; /* no ranking field = not plantilla = always ok */
 
         setReadyItem(readyDate,    hasDate);
         setReadyItem(readyMinutes, hasMinutes);
+        if (readyRecommendation) setReadyItem(readyRecommendation, hasRecommendation);
         setReadyItem(readySummary, hasSummary);
+        if (readyQuorum) setReadyItem(readyQuorum, hasQuorum);
+        if (readyAttendance) setReadyItem(readyAttendance, hasAttendance);
         if (readyRanking) setReadyItem(readyRanking, hasRanking);
 
-        var ready = hasDate && hasMinutes && hasSummary && hasRanking;
+        var ready = hasDate && hasMinutes && hasRecommendation && hasSummary && hasQuorum && hasAttendance && hasRanking;
         delFinalBtn.classList.toggle("is-blocked", !ready);
         if (ready) { delFinalBtn.removeAttribute("disabled"); }
         else       { delFinalBtn.setAttribute("disabled", "disabled"); }
@@ -856,7 +1036,7 @@
     }
 
     /* ── Event listeners: deliberation ─────────────────────────── */
-    [dateInput, minutesInput, summaryInput, rankInput].forEach(function (inp) {
+    [dateInput, minutesInput, recommendationInput, summaryInput, quorumInput, attendanceInput, rankInput].forEach(function (inp) {
         if (inp) inp.addEventListener("input", checkDelibReadiness);
         if (inp && inp.type === "datetime-local") {
             inp.addEventListener("change", checkDelibReadiness);

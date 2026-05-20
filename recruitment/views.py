@@ -38,6 +38,7 @@ from .models import (
     EvidenceVaultItem,
     PositionPosting,
     RecruitmentApplication,
+    RecruitmentCase,
     RecruitmentUser,
 )
 from .notification_services import (
@@ -127,6 +128,7 @@ from .services import (
     user_can_upload_interview_fallback,
     user_can_upload_evidence,
     user_can_view_application,
+    user_is_interview_rating_support_encoder,
 )
 
 
@@ -292,6 +294,10 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
         context["current_interview_ratings"] = get_interview_ratings(application)
         context["current_interview_fallback_evidence"] = get_interview_fallback_evidence(application)
         context["current_user_interview_rating"] = get_interview_rating_for_user(application, user)
+        context["interview_rating_is_support_encoding"] = user_is_interview_rating_support_encoder(
+            user,
+            application,
+        )
         context["deliberation_records"] = get_deliberation_records(application)
         context["current_deliberation_record"] = get_deliberation_record(application)
         context["current_comparative_assessment_report"] = get_comparative_assessment_report(application)
@@ -344,7 +350,10 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
             if screening_record and screening_record.is_finalized:
                 context["screening_locked"] = True
             else:
-                context["screening_form"] = ScreeningReviewForm(instance=screening_record)
+                context["screening_form"] = ScreeningReviewForm(
+                    instance=screening_record,
+                    application=application,
+                )
         context["screening_disposition_required"] = (
             screening_requires_disposition_for_current_stage(application)
         )
@@ -371,7 +380,9 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
                 context["interview_rating_locked"] = True
             else:
                 context["interview_rating_form"] = InterviewRatingForm(
-                    instance=context["current_user_interview_rating"]
+                    instance=context["current_user_interview_rating"],
+                    application=application,
+                    actor=user,
                 )
         if user_can_upload_interview_fallback(user, application):
             interview_session = context["current_interview_session"]
@@ -392,18 +403,23 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
             )
         elif user_can_manage_deliberation(user, application):
             deliberation_record = context["current_deliberation_record"]
+            report = context["current_comparative_assessment_report"]
             if deliberation_record and deliberation_record.is_finalized:
                 context["deliberation_locked"] = True
+            elif (
+                application.branch == PositionPosting.Branch.PLANTILLA
+                and application.case.current_stage == RecruitmentCase.Stage.HRMPSB_REVIEW
+                and not report
+            ):
+                context["deliberation_requires_car_draft"] = True
             else:
-                context["deliberation_form"] = DeliberationRecordForm(instance=deliberation_record)
+                context["deliberation_form"] = DeliberationRecordForm(
+                    instance=deliberation_record,
+                    application=application,
+                )
         if not applicant_pool_is_blocked and user_can_manage_comparative_assessment_report(user, application):
-            deliberation_record = context["current_deliberation_record"]
             report = context["current_comparative_assessment_report"]
-            if not deliberation_record:
-                context["car_requires_deliberation"] = True
-            elif not deliberation_record.is_finalized:
-                context["car_requires_finalized_deliberation"] = True
-            elif report and report.is_finalized:
+            if report and report.is_finalized:
                 context["car_locked"] = True
             else:
                 context["car_form"] = ComparativeAssessmentReportForm(instance=report)
@@ -775,7 +791,7 @@ class ScreeningReviewView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, Vi
             raise PermissionDenied
 
         operation = request.POST.get("operation", "save")
-        form = ScreeningReviewForm(request.POST)
+        form = ScreeningReviewForm(request.POST, application=application)
         if form.is_valid():
             try:
                 screening_record = save_screening_review(
@@ -886,7 +902,7 @@ class InterviewRatingView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, Vi
         if not user_can_manage_interview_rating(request.user, application):
             raise PermissionDenied
 
-        form = InterviewRatingForm(request.POST)
+        form = InterviewRatingForm(request.POST, application=application, actor=request.user)
         if form.is_valid():
             try:
                 save_interview_rating(
@@ -940,7 +956,7 @@ class DeliberationRecordView(LoginRequiredMixin, WorkflowProcessorRequiredMixin,
             raise PermissionDenied
 
         operation = request.POST.get("operation", "save")
-        form = DeliberationRecordForm(request.POST)
+        form = DeliberationRecordForm(request.POST, application=application)
         if form.is_valid():
             try:
                 deliberation_record = save_deliberation_record(
@@ -953,7 +969,10 @@ class DeliberationRecordView(LoginRequiredMixin, WorkflowProcessorRequiredMixin,
                 messages.error(request, str(exc))
             else:
                 if deliberation_record.is_finalized:
-                    messages.success(request, "Deliberation record finalized and locked.")
+                    if application.branch == PositionPosting.Branch.PLANTILLA:
+                        messages.success(request, "HRMPSB recommendation endorsed and locked.")
+                    else:
+                        messages.success(request, "Deliberation record finalized and locked.")
                 else:
                     messages.success(request, "Deliberation record saved.")
         else:
@@ -989,7 +1008,7 @@ class ComparativeAssessmentReportView(LoginRequiredMixin, WorkflowProcessorRequi
                 if report.is_finalized:
                     messages.success(request, "Comparative Assessment Report finalized and locked.")
                 else:
-                    messages.success(request, "Comparative Assessment Report saved.")
+                    messages.success(request, "CAR draft prepared for HRMPSB deliberation.")
         else:
             messages.error(request, "Provide the CAR notes before generating the report.")
         application.refresh_from_db()
