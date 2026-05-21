@@ -52,6 +52,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "config.middleware.SecurityHeadersMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -83,11 +84,11 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 
-POSTGRES_NAME = os.getenv("POSTGRES_DB")
-POSTGRES_USER = os.getenv("POSTGRES_USER")
-POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
-POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
-POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
+POSTGRES_NAME = (os.getenv("POSTGRES_DB") or "").strip()
+POSTGRES_USER = (os.getenv("POSTGRES_USER") or "").strip()
+POSTGRES_PASSWORD = (os.getenv("POSTGRES_PASSWORD") or "").strip()
+POSTGRES_HOST = (os.getenv("POSTGRES_HOST") or "localhost").strip()
+POSTGRES_PORT = (os.getenv("POSTGRES_PORT") or "5432").strip()
 
 if POSTGRES_NAME and POSTGRES_USER and POSTGRES_PASSWORD:
     DATABASES = {
@@ -194,12 +195,58 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = env_int(
 
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SECURE = env_bool("SESSION_COOKIE_SECURE", not DEBUG)
-CSRF_COOKIE_SECURE = env_bool("CSRF_COOKIE_SECURE", not DEBUG)
-SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", False)
+SESSION_COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
+CSRF_COOKIE_SAMESITE = os.getenv("CSRF_COOKIE_SAMESITE", "Lax")
+SESSION_COOKIE_SECURE = True if not DEBUG else env_bool("SESSION_COOKIE_SECURE", False)
+CSRF_COOKIE_SECURE = True if not DEBUG else env_bool("CSRF_COOKIE_SECURE", False)
+SECURE_SSL_REDIRECT = True if not DEBUG else env_bool("SECURE_SSL_REDIRECT", False)
+SECURE_HSTS_SECONDS = env_int("SECURE_HSTS_SECONDS", 0 if DEBUG else 31536000)
+if not DEBUG:
+    SECURE_HSTS_SECONDS = max(SECURE_HSTS_SECONDS, 31536000)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", not DEBUG)
+SECURE_HSTS_PRELOAD = env_bool("SECURE_HSTS_PRELOAD", not DEBUG)
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "DENY"
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+INTERNAL_LOGIN_MAX_ATTEMPTS = env_int("INTERNAL_LOGIN_MAX_ATTEMPTS", 5)
+INTERNAL_LOGIN_WINDOW_MINUTES = env_int("INTERNAL_LOGIN_WINDOW_MINUTES", 15)
+INTERNAL_LOGIN_LOCKOUT_MINUTES = env_int("INTERNAL_LOGIN_LOCKOUT_MINUTES", 15)
+INTERNAL_LOGIN_ALERT_EMAILS = env_list("INTERNAL_LOGIN_ALERT_EMAILS")
+INTERNAL_EMAIL_CHANGE_TOKEN_VALIDITY_HOURS = env_int(
+    "INTERNAL_EMAIL_CHANGE_TOKEN_VALIDITY_HOURS",
+    24,
+)
+PASSWORD_HISTORY_LIMIT = env_int("PASSWORD_HISTORY_LIMIT", 5)
+PASSWORD_RESET_TIMEOUT = env_int("PASSWORD_RESET_TIMEOUT_SECONDS", 3600)
+
+CSP_DIRECTIVES = {
+    "default-src": ("'self'",),
+    "script-src": ("'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"),
+    "style-src": (
+        "'self'",
+        "'unsafe-inline'",
+        "https://cdn.jsdelivr.net",
+        "https://fonts.googleapis.com",
+    ),
+    "font-src": ("'self'", "https://fonts.gstatic.com", "data:"),
+    "img-src": ("'self'", "data:"),
+    "connect-src": ("'self'",),
+    "object-src": ("'none'",),
+    "base-uri": ("'self'",),
+    "form-action": ("'self'",),
+    "frame-ancestors": ("'none'",),
+}
+if not DEBUG:
+    CSP_DIRECTIVES["upgrade-insecure-requests"] = ()
+
+PERMISSIONS_POLICY = {
+    "camera": (),
+    "geolocation": (),
+    "microphone": (),
+    "payment": (),
+    "usb": (),
+}
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

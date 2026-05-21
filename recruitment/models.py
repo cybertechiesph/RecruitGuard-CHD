@@ -130,6 +130,108 @@ class InternalMFAChallenge(TimestampedModel):
         return f"MFA challenge for {self.user} at {self.requested_at:%Y-%m-%d %H:%M}"
 
 
+class InternalLoginAttempt(TimestampedModel):
+    username = models.CharField(max_length=150)
+    username_normalized = models.CharField(max_length=150)
+    ip_address = models.CharField(max_length=45, blank=True)
+    user_agent = models.TextField(blank=True)
+    failure_count = models.PositiveSmallIntegerField(default=0)
+    first_failed_at = models.DateTimeField(default=timezone.now)
+    last_failed_at = models.DateTimeField(blank=True, null=True)
+    locked_until = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["-last_failed_at", "-updated_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["username_normalized", "ip_address"],
+                name="unique_internal_login_attempt_key",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["username_normalized", "ip_address"]),
+            models.Index(fields=["locked_until"]),
+        ]
+
+    @property
+    def is_locked(self):
+        return bool(self.locked_until and self.locked_until > timezone.now())
+
+    def __str__(self):
+        return f"{self.username_normalized or self.username} from {self.ip_address or 'unknown'}"
+
+
+class InternalPasswordHistory(TimestampedModel):
+    user = models.ForeignKey(
+        RecruitmentUser,
+        on_delete=models.CASCADE,
+        related_name="password_history",
+    )
+    password_hash = models.CharField(max_length=128)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"Password history for {self.user} at {self.created_at:%Y-%m-%d %H:%M}"
+
+
+class InternalEmailChangeRequest(TimestampedModel):
+    user = models.ForeignKey(
+        RecruitmentUser,
+        on_delete=models.CASCADE,
+        related_name="email_change_requests",
+    )
+    requested_by = models.ForeignKey(
+        RecruitmentUser,
+        on_delete=models.PROTECT,
+        related_name="requested_email_changes",
+    )
+    old_email = models.EmailField()
+    new_email = models.EmailField()
+    verification_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    requested_at = models.DateTimeField(default=timezone.now)
+    expires_at = models.DateTimeField()
+    verified_at = models.DateTimeField(blank=True, null=True)
+    is_used = models.BooleanField(default=False)
+    ip_address = models.GenericIPAddressField(blank=True, null=True)
+    user_agent = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-requested_at", "-created_at"]
+        indexes = [
+            models.Index(fields=["verification_token"]),
+            models.Index(fields=["user", "is_used", "expires_at"]),
+        ]
+
+    @property
+    def is_expired(self):
+        return self.expires_at <= timezone.now()
+
+    @property
+    def is_verified(self):
+        return bool(self.verified_at and self.is_used)
+
+    def clean(self):
+        errors = {}
+        if self.user_id and not self.user.is_internal_user:
+            errors["user"] = "Email change verification is only supported for internal users."
+        if self.requested_by_id and not self.requested_by.is_internal_user:
+            errors["requested_by"] = "Email change requester must be an internal user."
+        if self.old_email and self.new_email and self.old_email.lower() == self.new_email.lower():
+            errors["new_email"] = "New email address must be different from the current address."
+        if self.expires_at and self.expires_at <= self.requested_at:
+            errors["expires_at"] = "Email change expiry must be after the request time."
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return f"Email change for {self.user} to {self.new_email}"
+
+
 class PositionReference(TimestampedModel):
     class LevelClassification(models.TextChoices):
         FIRST_LEVEL = "FIRST_LEVEL", "First Level"
@@ -2755,6 +2857,10 @@ class EvidenceVaultItem(TimestampedModel):
 class AuditLog(TimestampedModel):
     class Action(models.TextChoices):
         INTERNAL_LOGIN = "internal_login", "Internal Login"
+        INTERNAL_LOGIN_FAILED = "internal_login_failed", "Internal Login Failed"
+        INTERNAL_LOGIN_LOCKED = "internal_login_locked", "Internal Login Locked"
+        INTERNAL_LOGIN_ALERT_SENT = "internal_login_alert_sent", "Internal Login Alert Sent"
+        INTERNAL_LOGIN_ALERT_FAILED = "internal_login_alert_failed", "Internal Login Alert Failed"
         INTERNAL_LOGOUT = "internal_logout", "Internal Logout"
         INTERNAL_MFA_SENT = "internal_mfa_sent", "Internal MFA Sent"
         INTERNAL_MFA_RESENT = "internal_mfa_resent", "Internal MFA Resent"
@@ -2763,8 +2869,13 @@ class AuditLog(TimestampedModel):
         INTERNAL_MFA_EXPIRED = "internal_mfa_expired", "Internal MFA Expired"
         INTERNAL_MFA_LOCKED = "internal_mfa_locked", "Internal MFA Locked"
         PASSWORD_CHANGED = "password_changed", "Password Changed"
+        PASSWORD_RESET_REQUESTED = "password_reset_requested", "Password Reset Requested"
+        PASSWORD_RESET_COMPLETED = "password_reset_completed", "Password Reset Completed"
         INTERNAL_ACCOUNT_CREATED = "internal_account_created", "Internal Account Created"
         INTERNAL_ACCOUNT_UPDATED = "internal_account_updated", "Internal Account Updated"
+        INTERNAL_EMAIL_CHANGE_REQUESTED = "internal_email_change_requested", "Internal Email Change Requested"
+        INTERNAL_EMAIL_CHANGE_VERIFIED = "internal_email_change_verified", "Internal Email Change Verified"
+        INTERNAL_EMAIL_CHANGE_FAILED = "internal_email_change_failed", "Internal Email Change Failed"
         INTERNAL_ACCOUNT_ACTIVATED = "internal_account_activated", "Internal Account Activated"
         INTERNAL_ACCOUNT_DEACTIVATED = "internal_account_deactivated", "Internal Account Deactivated"
         INTERNAL_ROLE_CHANGED = "internal_role_changed", "Internal Role Changed"
@@ -2814,6 +2925,10 @@ class AuditLog(TimestampedModel):
         Action.CASE_REOPENED,
         Action.EXPORT_GENERATED,
         Action.EVIDENCE_DOWNLOADED,
+        Action.INTERNAL_EMAIL_CHANGE_FAILED,
+        Action.INTERNAL_LOGIN_FAILED,
+        Action.INTERNAL_LOGIN_LOCKED,
+        Action.INTERNAL_LOGIN_ALERT_FAILED,
         Action.INTERNAL_MFA_FAILED,
         Action.INTERNAL_MFA_LOCKED,
         Action.OVERRIDE_GRANTED,

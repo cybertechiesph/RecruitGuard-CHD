@@ -11,10 +11,15 @@ from .entry_views import (
     RecruitmentEntryUpdateView,
 )
 from .identity_views import (
+    InternalEmailChangeVerifyView,
     InternalLoginView,
     InternalMFAVerifyView,
     InternalPasswordChangeDoneView,
     InternalPasswordChangeView,
+    InternalPasswordResetCompleteView,
+    InternalPasswordResetConfirmView,
+    InternalPasswordResetDoneView,
+    InternalPasswordResetView,
     InternalUserCreateView,
     InternalUserListView,
     InternalUserToggleActiveView,
@@ -70,9 +75,34 @@ urlpatterns = [
         InternalPasswordChangeDoneView.as_view(),
         name="password-change-done",
     ),
+    path(
+        "password/reset/",
+        InternalPasswordResetView.as_view(),
+        name="password-reset",
+    ),
+    path(
+        "password/reset/done/",
+        InternalPasswordResetDoneView.as_view(),
+        name="password-reset-done",
+    ),
+    path(
+        "password/reset/<uidb64>/<token>/",
+        InternalPasswordResetConfirmView.as_view(),
+        name="password-reset-confirm",
+    ),
+    path(
+        "password/reset/complete/",
+        InternalPasswordResetCompleteView.as_view(),
+        name="password-reset-complete",
+    ),
     path("users/", InternalUserListView.as_view(), name="internal-user-list"),
     path("users/new/", InternalUserCreateView.as_view(), name="internal-user-create"),
     path("users/<int:pk>/edit/", InternalUserUpdateView.as_view(), name="internal-user-update"),
+    path(
+        "users/email-change/<uuid:token>/verify/",
+        InternalEmailChangeVerifyView.as_view(),
+        name="internal-email-change-verify",
+    ),
     path(
         "users/<int:pk>/toggle-active/",
         InternalUserToggleActiveView.as_view(),

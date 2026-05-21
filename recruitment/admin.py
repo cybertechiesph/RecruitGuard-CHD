@@ -12,7 +12,10 @@ from .models import (
     EvidenceVaultItem,
     FinalDecision,
     FinalSelection,
+    InternalEmailChangeRequest,
+    InternalLoginAttempt,
     InternalMFAChallenge,
+    InternalPasswordHistory,
     InterviewRating,
     InterviewSession,
     NotificationLog,
@@ -80,6 +83,81 @@ class InternalMFAChallengeAdmin(admin.ModelAdmin):
         return False
 
     def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(InternalLoginAttempt)
+class InternalLoginAttemptAdmin(admin.ModelAdmin):
+    list_display = (
+        "username_normalized",
+        "ip_address",
+        "failure_count",
+        "first_failed_at",
+        "last_failed_at",
+        "locked_until",
+    )
+    list_filter = ("locked_until", "last_failed_at")
+    search_fields = ("username", "username_normalized", "ip_address")
+    readonly_fields = (
+        "username",
+        "username_normalized",
+        "ip_address",
+        "user_agent",
+        "failure_count",
+        "first_failed_at",
+        "last_failed_at",
+        "locked_until",
+        "created_at",
+        "updated_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+
+@admin.register(InternalPasswordHistory)
+class InternalPasswordHistoryAdmin(admin.ModelAdmin):
+    list_display = ("user", "created_at")
+    search_fields = ("user__username", "user__email")
+    readonly_fields = ("user", "password_hash", "created_at", "updated_at")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(InternalEmailChangeRequest)
+class InternalEmailChangeRequestAdmin(admin.ModelAdmin):
+    list_display = (
+        "user",
+        "new_email",
+        "requested_by",
+        "requested_at",
+        "expires_at",
+        "verified_at",
+        "is_used",
+    )
+    list_filter = ("is_used", "verified_at", "expires_at")
+    search_fields = ("user__username", "old_email", "new_email", "verification_token")
+    readonly_fields = (
+        "user",
+        "requested_by",
+        "old_email",
+        "new_email",
+        "verification_token",
+        "requested_at",
+        "expires_at",
+        "verified_at",
+        "is_used",
+        "ip_address",
+        "user_agent",
+        "created_at",
+        "updated_at",
+    )
+
+    def has_add_permission(self, request):
         return False
 
 

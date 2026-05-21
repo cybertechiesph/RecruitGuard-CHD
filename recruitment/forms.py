@@ -1,6 +1,13 @@
 from django import forms
 from django.conf import settings
-from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm, UserCreationForm
+from django.contrib.auth.forms import (
+    AuthenticationForm,
+    PasswordChangeForm,
+    PasswordResetForm,
+    SetPasswordForm,
+    UserCreationForm,
+)
+from django.contrib.auth.hashers import check_password
 from django.forms import BaseInlineFormSet, inlineformset_factory
 from django.forms.models import ModelChoiceIteratorValue, construct_instance
 from django.utils import timezone
@@ -17,6 +24,7 @@ from .models import (
     FinalDecision,
     InterviewRating,
     InterviewSession,
+    InternalPasswordHistory,
     PositionReference,
     PositionPosting,
     RecruitmentApplication,
@@ -35,12 +43,21 @@ from .upload_validation import validate_applicant_document_upload
 
 
 AUDIT_ACTION_CHOICE_LABELS = {
+    AuditLog.Action.INTERNAL_LOGIN_FAILED: "Internal Login Failed",
+    AuditLog.Action.INTERNAL_LOGIN_LOCKED: "Internal Login Locked",
+    AuditLog.Action.INTERNAL_LOGIN_ALERT_SENT: "Internal Login Alert Sent",
+    AuditLog.Action.INTERNAL_LOGIN_ALERT_FAILED: "Internal Login Alert Failed",
     AuditLog.Action.INTERNAL_MFA_SENT: "Internal Verification Code Sent",
     AuditLog.Action.INTERNAL_MFA_RESENT: "Internal Verification Code Resent",
     AuditLog.Action.INTERNAL_MFA_VERIFIED: "Internal MFA Verified",
     AuditLog.Action.INTERNAL_MFA_FAILED: "Internal MFA Failed",
     AuditLog.Action.INTERNAL_MFA_EXPIRED: "Internal MFA Expired",
     AuditLog.Action.INTERNAL_MFA_LOCKED: "Internal MFA Locked",
+    AuditLog.Action.PASSWORD_RESET_REQUESTED: "Password Reset Requested",
+    AuditLog.Action.PASSWORD_RESET_COMPLETED: "Password Reset Completed",
+    AuditLog.Action.INTERNAL_EMAIL_CHANGE_REQUESTED: "Internal Email Change Requested",
+    AuditLog.Action.INTERNAL_EMAIL_CHANGE_VERIFIED: "Internal Email Change Verified",
+    AuditLog.Action.INTERNAL_EMAIL_CHANGE_FAILED: "Internal Email Change Failed",
     AuditLog.Action.APPLICATION_OTP_SENT: "Verification Code Sent",
     AuditLog.Action.APPLICATION_OTP_VERIFIED: "Email Verified",
     AuditLog.Action.ROUTED: "Case Assigned",
@@ -170,6 +187,46 @@ def internal_role_choices():
     ]
 
 
+def _apply_password_strength_widget(field):
+    css_class = field.widget.attrs.get("class", "")
+    field.widget.attrs.update(
+        {
+            "class": f"{css_class} rg-password-strength-input".strip(),
+            "data-password-strength": "true",
+            "autocomplete": field.widget.attrs.get("autocomplete", "new-password"),
+        }
+    )
+
+
+def password_reuses_internal_history(user, raw_password):
+    if not user or not raw_password:
+        return False
+    if user.password and user.check_password(raw_password):
+        return True
+    return any(
+        check_password(raw_password, history.password_hash)
+        for history in user.password_history.all()[: settings.PASSWORD_HISTORY_LIMIT]
+    )
+
+
+class PasswordReuseValidationMixin:
+    reuse_error_message = (
+        "Use a password that has not been used recently for this internal account."
+    )
+
+    def _apply_password_strength_fields(self):
+        for field_name in ("password1", "password2", "new_password1", "new_password2"):
+            if field_name in self.fields:
+                _apply_password_strength_widget(self.fields[field_name])
+
+    def clean(self):
+        cleaned_data = super().clean()
+        password = cleaned_data.get("new_password2")
+        if password and password_reuses_internal_history(self.user, password):
+            self.add_error("new_password2", self.reuse_error_message)
+        return cleaned_data
+
+
 class InternalAuthenticationForm(BootstrapFormMixin, AuthenticationForm):
     username = forms.CharField(widget=forms.TextInput(attrs={"autofocus": True}))
     password = forms.CharField(strip=False, widget=forms.PasswordInput())
@@ -187,10 +244,32 @@ class InternalAuthenticationForm(BootstrapFormMixin, AuthenticationForm):
             )
 
 
-class InternalPasswordChangeForm(BootstrapFormMixin, PasswordChangeForm):
+class InternalPasswordChangeForm(PasswordReuseValidationMixin, BootstrapFormMixin, PasswordChangeForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._apply_bootstrap()
+        self._apply_password_strength_fields()
+
+
+class InternalSetPasswordForm(PasswordReuseValidationMixin, BootstrapFormMixin, SetPasswordForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
+        self._apply_password_strength_fields()
+
+
+class InternalPasswordResetForm(BootstrapFormMixin, PasswordResetForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
+
+    def get_users(self, email):
+        users = RecruitmentUser.objects.filter(
+            email__iexact=email,
+            is_active=True,
+            role__in=RecruitmentUser.internal_roles(),
+        )
+        return (user for user in users if user.has_usable_password())
 
 
 class InternalMFAOTPForm(BootstrapFormMixin, forms.Form):
@@ -227,6 +306,17 @@ class InternalUserCreateForm(BootstrapFormMixin, UserCreationForm):
         self.fields["email"].required = True
         self.fields["is_active"].initial = True
         self._apply_bootstrap()
+        _apply_password_strength_widget(self.fields["password1"])
+        _apply_password_strength_widget(self.fields["password2"])
+
+    def clean_email(self):
+        email = self.cleaned_data["email"].strip().lower()
+        if RecruitmentUser.objects.filter(
+            email__iexact=email,
+            role__in=RecruitmentUser.internal_roles(),
+        ).exists():
+            raise forms.ValidationError("This email address is already assigned to an internal account.")
+        return email
 
 
 class InternalUserUpdateForm(BootstrapFormMixin, forms.ModelForm):
@@ -248,6 +338,18 @@ class InternalUserUpdateForm(BootstrapFormMixin, forms.ModelForm):
         self.fields["role"].choices = internal_role_choices()
         self.fields["email"].required = True
         self._apply_bootstrap()
+
+    def clean_email(self):
+        email = self.cleaned_data["email"].strip().lower()
+        queryset = RecruitmentUser.objects.filter(
+            email__iexact=email,
+            role__in=RecruitmentUser.internal_roles(),
+        )
+        if self.instance and self.instance.pk:
+            queryset = queryset.exclude(pk=self.instance.pk)
+        if queryset.exists():
+            raise forms.ValidationError("This email address is already assigned to an internal account.")
+        return email
 
 
 class ApplicantPortalIntakeForm(BootstrapFormMixin, forms.Form):

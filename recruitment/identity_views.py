@@ -1,7 +1,15 @@
 from django.contrib import messages
 from django.contrib.auth import login as auth_login, logout as auth_logout
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.views import LoginView, PasswordChangeDoneView, PasswordChangeView
+from django.contrib.auth.views import (
+    LoginView,
+    PasswordChangeDoneView,
+    PasswordChangeView,
+    PasswordResetCompleteView,
+    PasswordResetConfirmView,
+    PasswordResetDoneView,
+    PasswordResetView,
+)
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
@@ -12,6 +20,8 @@ from .forms import (
     InternalAuthenticationForm,
     InternalMFAOTPForm,
     InternalPasswordChangeForm,
+    InternalPasswordResetForm,
+    InternalSetPasswordForm,
     InternalUserCreateForm,
     InternalUserUpdateForm,
 )
@@ -24,8 +34,15 @@ from .permissions import (
     internal_mfa_is_verified,
 )
 from .services import (
+    clear_internal_login_failures,
+    get_internal_login_lock,
     issue_internal_mfa_challenge,
+    issue_internal_email_change_request,
+    remember_internal_password_hash,
+    record_internal_login_failure,
+    record_internal_login_locked_attempt,
     record_system_audit_event,
+    verify_internal_email_change_request,
     verify_internal_mfa_challenge,
 )
 
@@ -33,6 +50,9 @@ from .services import (
 PENDING_INTERNAL_MFA_USER_SESSION_KEY = "pending_internal_mfa_user_id"
 PENDING_INTERNAL_MFA_CHALLENGE_SESSION_KEY = "pending_internal_mfa_challenge_token"
 PENDING_INTERNAL_MFA_NEXT_SESSION_KEY = "pending_internal_mfa_next"
+INTERNAL_LOGIN_LOCKED_MESSAGE = (
+    "Too many failed sign-in attempts. Please wait before trying again."
+)
 
 
 def _clear_pending_internal_mfa(session):
@@ -55,6 +75,22 @@ class InternalLoginView(LoginView):
             auth_logout(request)
             messages.info(request, "Please sign in again to complete internal verification.")
         return super().dispatch(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        username = request.POST.get("username", "")
+        if get_internal_login_lock(username, request) is not None:
+            record_internal_login_locked_attempt(username, request)
+            form = self.get_form()
+            form.add_error(None, INTERNAL_LOGIN_LOCKED_MESSAGE)
+            return self.form_invalid(form)
+
+        form = self.get_form()
+        if form.is_valid():
+            clear_internal_login_failures(username, request)
+            return self.form_valid(form)
+
+        record_internal_login_failure(username, request)
+        return self.form_invalid(form)
 
     def form_valid(self, form):
         user = form.get_user()
@@ -153,7 +189,10 @@ class InternalPasswordChangeView(LoginRequiredMixin, InternalUserRequiredMixin, 
     form_class = InternalPasswordChangeForm
 
     def form_valid(self, form):
+        old_password_hash = self.request.user.password
         response = super().form_valid(form)
+        remember_internal_password_hash(self.request.user, old_password_hash)
+        remember_internal_password_hash(self.request.user)
         record_system_audit_event(
             actor=self.request.user,
             action=AuditLog.Action.PASSWORD_CHANGED,
@@ -166,6 +205,54 @@ class InternalPasswordChangeView(LoginRequiredMixin, InternalUserRequiredMixin, 
 
 class InternalPasswordChangeDoneView(LoginRequiredMixin, InternalUserRequiredMixin, PasswordChangeDoneView):
     template_name = "registration/password_change_done.html"
+
+
+class InternalPasswordResetView(PasswordResetView):
+    template_name = "registration/password_reset_form.html"
+    form_class = InternalPasswordResetForm
+    email_template_name = "registration/password_reset_email.txt"
+    subject_template_name = "registration/password_reset_subject.txt"
+    success_url = reverse_lazy("password-reset-done")
+
+    def form_valid(self, form):
+        users = list(form.get_users(form.cleaned_data["email"]))
+        response = super().form_valid(form)
+        for user in users:
+            record_system_audit_event(
+                actor=user,
+                action=AuditLog.Action.PASSWORD_RESET_REQUESTED,
+                description="Internal password reset requested.",
+                metadata={"user_id": user.id},
+            )
+        return response
+
+
+class InternalPasswordResetDoneView(PasswordResetDoneView):
+    template_name = "registration/password_reset_done.html"
+
+
+class InternalPasswordResetConfirmView(PasswordResetConfirmView):
+    template_name = "registration/password_reset_confirm.html"
+    form_class = InternalSetPasswordForm
+    success_url = reverse_lazy("password-reset-complete")
+
+    def form_valid(self, form):
+        old_password_hash = self.user.password
+        response = super().form_valid(form)
+        self.user.refresh_from_db()
+        remember_internal_password_hash(self.user, old_password_hash)
+        remember_internal_password_hash(self.user)
+        record_system_audit_event(
+            actor=self.user,
+            action=AuditLog.Action.PASSWORD_RESET_COMPLETED,
+            description="Internal password reset completed.",
+            metadata={"user_id": self.user.id},
+        )
+        return response
+
+
+class InternalPasswordResetCompleteView(PasswordResetCompleteView):
+    template_name = "registration/password_reset_complete.html"
 
 
 class InternalUserListView(LoginRequiredMixin, SystemAdministratorRequiredMixin, ListView):
@@ -194,6 +281,7 @@ class InternalUserCreateView(LoginRequiredMixin, SystemAdministratorRequiredMixi
 
     def form_valid(self, form):
         response = super().form_valid(form)
+        remember_internal_password_hash(self.object)
         record_system_audit_event(
             actor=self.request.user,
             action=AuditLog.Action.INTERNAL_ACCOUNT_CREATED,
@@ -219,8 +307,8 @@ class InternalUserUpdateView(LoginRequiredMixin, SystemAdministratorRequiredMixi
     queryset = RecruitmentUser.objects.filter(role__in=RecruitmentUser.internal_roles())
 
     def form_valid(self, form):
-        original_user = self.get_object()
-        if original_user == self.request.user:
+        target_snapshot = RecruitmentUser.objects.get(pk=form.instance.pk)
+        if target_snapshot == self.request.user:
             new_role = form.cleaned_data["role"]
             new_is_active = form.cleaned_data["is_active"]
             if new_role != RecruitmentUser.Role.SYSTEM_ADMIN:
@@ -228,9 +316,31 @@ class InternalUserUpdateView(LoginRequiredMixin, SystemAdministratorRequiredMixi
             if not new_is_active:
                 raise PermissionDenied("System Administrator cannot deactivate their own account.")
 
-        previous_role = original_user.role
-        previous_is_active = original_user.is_active
+        previous_role = target_snapshot.role
+        previous_is_active = target_snapshot.is_active
+        requested_email = form.cleaned_data["email"].strip().lower()
+        email_changed = target_snapshot.email.lower() != requested_email
+        if email_changed:
+            form.instance.email = target_snapshot.email
         response = super().form_valid(form)
+        if email_changed:
+            try:
+                issue_internal_email_change_request(
+                    self.object,
+                    self.request.user,
+                    requested_email,
+                    request=self.request,
+                )
+            except Exception as exc:
+                messages.error(
+                    self.request,
+                    f"Account was updated, but email verification could not be sent: {exc}",
+                )
+            else:
+                messages.info(
+                    self.request,
+                    "Email change is pending verification from the requested address.",
+                )
         record_system_audit_event(
             actor=self.request.user,
             action=AuditLog.Action.INTERNAL_ACCOUNT_UPDATED,
@@ -308,3 +418,14 @@ class InternalUserToggleActiveView(LoginRequiredMixin, SystemAdministratorRequir
         )
         messages.success(request, description)
         return redirect("internal-user-list")
+
+
+class InternalEmailChangeVerifyView(View):
+    def get(self, request, token):
+        try:
+            verify_internal_email_change_request(token, request=request)
+        except ValueError as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(request, "Internal account email address verified.")
+        return redirect("login")

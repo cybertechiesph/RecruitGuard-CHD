@@ -36,7 +36,10 @@ from .models import (
     EvidenceVaultItem,
     FinalDecision,
     FinalSelection,
+    InternalEmailChangeRequest,
+    InternalLoginAttempt,
     InternalMFAChallenge,
+    InternalPasswordHistory,
     InterviewRating,
     NotificationLog,
     PositionReference,
@@ -659,6 +662,15 @@ class FoundationSmokeTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn(reverse("login"), response["Location"])
 
+    def test_security_headers_are_applied(self):
+        response = self.client.get(reverse("login"))
+
+        self.assertIn("default-src 'self'", response["Content-Security-Policy"])
+        self.assertIn("frame-ancestors 'none'", response["Content-Security-Policy"])
+        self.assertIn("camera=()", response["Permissions-Policy"])
+        self.assertEqual(response["Cross-Origin-Opener-Policy"], "same-origin")
+        self.assertEqual(response["X-Frame-Options"], "DENY")
+
     def test_internal_user_can_log_in(self):
         user = User.objects.create_user(
             username="secretariat",
@@ -769,6 +781,139 @@ class FoundationSmokeTests(TestCase):
             AuditLog.objects.filter(action=AuditLog.Action.INTERNAL_MFA_RESENT).exists()
         )
 
+    @override_settings(
+        INTERNAL_LOGIN_MAX_ATTEMPTS=2,
+        INTERNAL_LOGIN_WINDOW_MINUTES=15,
+        INTERNAL_LOGIN_LOCKOUT_MINUTES=15,
+    )
+    def test_internal_login_locks_after_repeated_bad_passwords(self):
+        User.objects.create_user(
+            username="sysadmin",
+            password="testpass123",
+            email="sysadmin@example.com",
+            role=RecruitmentUser.Role.SYSTEM_ADMIN,
+        )
+        User.objects.create_user(
+            username="secretariat",
+            password="testpass123",
+            email="secretariat@example.com",
+            role=RecruitmentUser.Role.SECRETARIAT,
+        )
+
+        for _attempt in range(2):
+            response = self.client.post(
+                reverse("login"),
+                {"username": "secretariat", "password": "wrongpass"},
+            )
+            self.assertEqual(response.status_code, 200)
+
+        attempt = InternalLoginAttempt.objects.get(username_normalized="secretariat")
+        self.assertTrue(attempt.is_locked)
+        self.assertTrue(
+            AuditLog.objects.filter(action=AuditLog.Action.INTERNAL_LOGIN_LOCKED).exists()
+        )
+        self.assertTrue(
+            AuditLog.objects.filter(action=AuditLog.Action.INTERNAL_LOGIN_ALERT_SENT).exists()
+        )
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("internal login lockout alert", mail.outbox[0].subject.lower())
+
+        response = self.client.post(
+            reverse("login"),
+            {"username": "secretariat", "password": "testpass123"},
+        )
+
+        self.assertContains(response, "Too many failed sign-in attempts")
+        self.assertFalse(InternalMFAChallenge.objects.exists())
+
+    def test_successful_password_entry_clears_failed_login_counter(self):
+        User.objects.create_user(
+            username="secretariat",
+            password="testpass123",
+            email="secretariat@example.com",
+            role=RecruitmentUser.Role.SECRETARIAT,
+        )
+        self.client.post(
+            reverse("login"),
+            {"username": "secretariat", "password": "wrongpass"},
+        )
+        self.assertTrue(
+            InternalLoginAttempt.objects.filter(username_normalized="secretariat").exists()
+        )
+
+        response = self.client.post(
+            reverse("login"),
+            {"username": "secretariat", "password": "testpass123"},
+            follow=True,
+        )
+
+        self.assertEqual(response.request["PATH_INFO"], reverse("internal-mfa-verify"))
+        self.assertFalse(
+            InternalLoginAttempt.objects.filter(username_normalized="secretariat").exists()
+        )
+
+    def test_internal_password_reset_uses_tokenized_email_link(self):
+        user = User.objects.create_user(
+            username="secretariat",
+            password="OriginalSecurePass123!",
+            email="secretariat@example.com",
+            role=RecruitmentUser.Role.SECRETARIAT,
+        )
+
+        response = self.client.post(
+            reverse("password-reset"),
+            {"email": "secretariat@example.com"},
+            follow=True,
+        )
+
+        self.assertEqual(response.request["PATH_INFO"], reverse("password-reset-done"))
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertTrue(
+            AuditLog.objects.filter(action=AuditLog.Action.PASSWORD_RESET_REQUESTED).exists()
+        )
+        reset_path = re.search(
+            r"http://testserver(?P<path>/internal/password/reset/[^\s]+/[^\s]+/)",
+            mail.outbox[0].body,
+        ).group("path")
+
+        response = self.client.get(reset_path, follow=True)
+        confirm_path = response.request["PATH_INFO"]
+        response = self.client.post(
+            confirm_path,
+            {
+                "new_password1": "DifferentSecurePass123!",
+                "new_password2": "DifferentSecurePass123!",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.request["PATH_INFO"], reverse("password-reset-complete"))
+        user.refresh_from_db()
+        self.assertTrue(user.check_password("DifferentSecurePass123!"))
+        self.assertTrue(
+            InternalPasswordHistory.objects.filter(user=user).exists()
+        )
+        self.assertTrue(
+            AuditLog.objects.filter(action=AuditLog.Action.PASSWORD_RESET_COMPLETED).exists()
+        )
+
+    def test_password_reset_does_not_email_applicant_accounts(self):
+        User.objects.create_user(
+            username="applicant",
+            password="ApplicantSecurePass123!",
+            email="applicant@example.com",
+            role=RecruitmentUser.Role.APPLICANT,
+        )
+
+        response = self.client.post(
+            reverse("password-reset"),
+            {"email": "applicant@example.com"},
+            follow=True,
+        )
+
+        self.assertEqual(response.request["PATH_INFO"], reverse("password-reset-done"))
+        self.assertEqual(len(mail.outbox), 0)
+
     def test_expired_internal_mfa_code_is_rejected(self):
         user = User.objects.create_user(
             username="secretariat",
@@ -858,6 +1003,114 @@ class FoundationSmokeTests(TestCase):
 
 
 class IdentityAdministrationTests(BaseRecruitmentTestCase):
+    def test_internal_user_create_form_exposes_password_strength_meter(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.sysadmin)
+
+        response = client.get(reverse("internal-user-create"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-password-strength="true"')
+
+    def test_django_admin_requires_true_superuser(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.sysadmin)
+
+        response = client.get("/admin/")
+
+        self.assertNotEqual(response.status_code, 200)
+
+        superuser = User.objects.create_superuser(
+            username="root-admin",
+            password="testpass123",
+            email="root-admin@example.com",
+            role=RecruitmentUser.Role.SYSTEM_ADMIN,
+        )
+        client.force_login(superuser)
+
+        response = client.get("/admin/")
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_internal_email_change_requires_new_email_verification(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.sysadmin)
+        response = client.post(
+            reverse("internal-user-update", kwargs={"pk": self.secretariat.pk}),
+            {
+                "username": self.secretariat.username,
+                "first_name": self.secretariat.first_name,
+                "last_name": self.secretariat.last_name,
+                "email": "new-secretariat@example.com",
+                "employee_id": self.secretariat.employee_id,
+                "office_name": self.secretariat.office_name,
+                "role": self.secretariat.role,
+                "is_active": "on",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.request["PATH_INFO"], reverse("internal-user-list"))
+        self.secretariat.refresh_from_db()
+        self.assertEqual(self.secretariat.email, "secretariat@example.com")
+        change_request = InternalEmailChangeRequest.objects.get(user=self.secretariat)
+        self.assertEqual(change_request.new_email, "new-secretariat@example.com")
+        self.assertEqual(len(mail.outbox), 1)
+        verify_path = re.search(
+            r"http://testserver(?P<path>/internal/users/email-change/[^\s]+/verify/)",
+            mail.outbox[0].body,
+        ).group("path")
+
+        response = client.get(verify_path)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], reverse("login"))
+        self.secretariat.refresh_from_db()
+        change_request.refresh_from_db()
+        self.assertEqual(self.secretariat.email, "new-secretariat@example.com")
+        self.assertTrue(change_request.is_verified)
+        self.assertTrue(
+            AuditLog.objects.filter(action=AuditLog.Action.INTERNAL_EMAIL_CHANGE_VERIFIED).exists()
+        )
+
+    def test_password_history_blocks_recent_password_reuse(self):
+        self.secretariat.set_password("OriginalSecurePass123!")
+        self.secretariat.save(update_fields=["password"])
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+
+        response = client.post(
+            reverse("password-change"),
+            {
+                "old_password": "OriginalSecurePass123!",
+                "new_password1": "DifferentSecurePass123!",
+                "new_password2": "DifferentSecurePass123!",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.request["PATH_INFO"], reverse("password-change-done"))
+        self.secretariat.refresh_from_db()
+        self.assertTrue(self.secretariat.check_password("DifferentSecurePass123!"))
+        self.assertGreaterEqual(
+            InternalPasswordHistory.objects.filter(user=self.secretariat).count(),
+            2,
+        )
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("password-change"),
+            {
+                "old_password": "DifferentSecurePass123!",
+                "new_password1": "OriginalSecurePass123!",
+                "new_password2": "OriginalSecurePass123!",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "not been used recently")
+
     def test_system_admin_can_create_internal_account(self):
         client = Client()
         self.force_login_with_mfa(client, self.sysadmin)

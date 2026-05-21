@@ -1,0 +1,4 @@
+-r requirements.txt
+bandit==1.8.6
+pip-audit==2.9.0
+pip-system-certs==5.3; platform_system == "Windows"
