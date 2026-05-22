@@ -1,0 +1,20 @@
+Dear {{ application.applicant_display_name }},
+
+Your application for {{ application.position.title }} needs corrected or updated document submission.
+
+Application ID: {{ application.reference_label }}
+
+Please review the document item{{ requested_documents|length|pluralize }} below:
+{% for document in requested_documents %}
+- {{ document.requirement_title }}
+  Instruction: {{ document.remarks }}
+{% endfor %}
+{% if workflow_remarks %}
+
+Additional note from the recruitment team:
+{{ workflow_remarks }}
+{% endif %}
+
+Please follow the instructions from the recruitment team and keep your Application ID for status checking.
+
+This notice was sent through RecruitGuard-CHD.

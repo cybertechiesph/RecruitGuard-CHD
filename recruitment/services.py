@@ -52,6 +52,7 @@ from .models import (
     WorkflowOverride,
 )
 from .notification_services import (
+    queue_document_resubmission_request_notification,
     queue_non_selected_applicant_notification,
     queue_selected_applicant_notification,
     queue_submission_acknowledgment_notification,
@@ -2676,6 +2677,7 @@ def _decision_packet_screening_record(record):
                 "requirement_title": review.requirement_title,
                 "status": review.status,
                 "status_label": review.get_status_display(),
+                "remarks": review.remarks,
                 "is_required": review.is_required,
                 "evidence_item_id": review.evidence_item_id,
             }
@@ -3024,6 +3026,7 @@ def build_submission_packet(application):
 SCREENING_COMPLETENESS_BLOCKING_DOCUMENT_STATUSES = {
     ScreeningDocumentReview.ReviewStatus.NOT_REVIEWED,
     ScreeningDocumentReview.ReviewStatus.NEEDS_REVIEW,
+    ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION,
     ScreeningDocumentReview.ReviewStatus.ABSENT,
 }
 
@@ -3076,6 +3079,9 @@ def _screening_document_review_rows(
             status = existing_review.status
         else:
             status = default_submitted_status
+        remarks = (provided.get("remarks") or "").strip()
+        if not remarks and existing_review is not None:
+            remarks = existing_review.remarks
 
         rows.append(
             {
@@ -3085,6 +3091,7 @@ def _screening_document_review_rows(
                     "Not applicable" if is_not_applicable else requirement.applicant_label
                 ),
                 "status": status,
+                "remarks": remarks,
                 "is_required": is_required,
                 "is_not_applicable": is_not_applicable,
                 "evidence_item": evidence,
@@ -3147,6 +3154,13 @@ def _validate_screening_review_consistency(
             raise ValueError(
                 f"{row['requirement_title']} cannot meet the requirement without an uploaded file."
             )
+        if (
+            row["status"] == ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION
+            and not (row.get("remarks") or "").strip()
+        ):
+            raise ValueError(
+                f"Record resubmission instructions for {row['requirement_title']}."
+            )
 
 
 def _sync_screening_document_reviews(screening_record, document_reviews):
@@ -3161,6 +3175,7 @@ def _sync_screening_document_reviews(screening_record, document_reviews):
                 "requirement_title": row["requirement_title"],
                 "requirement_label": row["requirement_label"],
                 "status": row["status"],
+                "remarks": row["remarks"],
                 "is_required": row["is_required"],
                 "is_not_applicable": row["is_not_applicable"],
                 "display_order": row["display_order"],
@@ -4417,6 +4432,7 @@ def get_applicant_document_review_items(application):
                         else ScreeningDocumentReview.ReviewStatus.NOT_REVIEWED
                     )
                 ),
+                "review_remarks": document_review.remarks if document_review is not None else "",
             }
         )
     return review_items
@@ -5344,6 +5360,25 @@ def process_workflow_action(application, actor, action, remarks):
         queue_selected_applicant_notification(application, actor=actor)
     elif next_status == RecruitmentApplication.Status.REJECTED:
         queue_non_selected_applicant_notification(application, actor=actor)
+    elif next_status == RecruitmentApplication.Status.RETURNED_TO_APPLICANT:
+        screening_record = get_screening_record(
+            application,
+            stage=case_transition["previous_stage"],
+        )
+        requested_document_reviews = []
+        if screening_record is not None:
+            requested_document_reviews = list(
+                screening_record.document_reviews.filter(
+                    status=ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION
+                ).order_by("display_order", "created_at")
+            )
+        if requested_document_reviews:
+            queue_document_resubmission_request_notification(
+                application,
+                actor=actor,
+                document_reviews=requested_document_reviews,
+                workflow_remarks=remarks,
+            )
     return application
 
 

@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.core.mail import send_mail
 from django.db import transaction
+from django.template.loader import render_to_string
 from django.utils import timezone
 
 from .models import AuditLog, NotificationLog, RecruitmentApplication, RecruitmentCase, RecruitmentUser
@@ -137,6 +138,34 @@ def _build_non_selected_notification(application):
                 "Thank you for your interest in this recruitment opportunity.",
             ]
         ),
+    )
+
+
+def _build_document_resubmission_request_notification(
+    application,
+    document_reviews,
+    workflow_remarks="",
+):
+    requested_documents = [
+        {
+            "document_key": review.document_key,
+            "requirement_title": review.requirement_title,
+            "remarks": review.remarks,
+        }
+        for review in document_reviews
+    ]
+    body = render_to_string(
+        "email/document_resubmission_request.txt",
+        {
+            "application": application,
+            "requested_documents": requested_documents,
+            "workflow_remarks": (workflow_remarks or "").strip(),
+        },
+    ).strip()
+    return (
+        f"RecruitGuard-CHD document resubmission needed: {application.position.title}",
+        body,
+        requested_documents,
     )
 
 
@@ -340,6 +369,38 @@ def queue_non_selected_applicant_notification(application, actor=None):
             "reference_number": application.reference_number,
             "status": application.status,
             "branch": application.branch,
+        },
+    )
+
+
+def queue_document_resubmission_request_notification(
+    application,
+    actor=None,
+    *,
+    document_reviews,
+    workflow_remarks="",
+):
+    document_reviews = list(document_reviews or [])
+    if not document_reviews:
+        raise ValueError("At least one document review row is required for a resubmission request.")
+    subject, body, requested_documents = _build_document_resubmission_request_notification(
+        application,
+        document_reviews,
+        workflow_remarks=workflow_remarks,
+    )
+    return queue_notification(
+        application,
+        notification_type=NotificationLog.NotificationType.DOCUMENT_RESUBMISSION_REQUEST,
+        actor=actor,
+        subject=subject,
+        body=body,
+        metadata={
+            "reference_number": application.reference_number,
+            "status": application.status,
+            "branch": application.branch,
+            "document_keys": [item["document_key"] for item in requested_documents],
+            "screening_document_review_ids": [review.id for review in document_reviews],
+            "workflow_remarks": (workflow_remarks or "").strip(),
         },
     )
 

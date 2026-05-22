@@ -4,19 +4,14 @@
 
     <div class="rg-scr-decision-strip" id="scr-decision-strip" aria-live="polite">
         <div>
-            <div class="rg-scr-kicker">Current decision</div>
+            <div class="rg-scr-kicker">Your next action</div>
             <div class="rg-scr-decision-strip__title" id="scr-current-decision">
                 Review document completeness
             </div>
         </div>
-        <div class="rg-scr-step-state" aria-label="Screening decision order">
-            <span class="rg-scr-step-state__item is-current" id="scr-step-docs">Documents</span>
-            <span class="rg-scr-step-state__item" id="scr-step-completeness">Completeness</span>
-            <span class="rg-scr-step-state__item" id="scr-step-qualification">Qualification</span>
-        </div>
     </div>
 
-    <section class="rg-scr-panel">
+    <section class="rg-scr-panel rg-scr-panel--step" data-scr-step="documents">
         <div class="rg-scr-panel__header">
             <div>
                 <h3 class="rg-scr-panel__title">Document Review</h3>
@@ -66,15 +61,30 @@
                             {% for error in item.field.errors %}
                                 <div class="invalid-feedback d-block">{{ error }}</div>
                             {% endfor %}
+                            <div class="rg-scr-doc-remarks">
+                                <label class="rg-scr-doc-remarks__label" for="{{ item.remarks_field.id_for_label }}">
+                                    Remarks / resubmission instruction
+                                </label>
+                                {{ item.remarks_field }}
+                                {% for error in item.remarks_field.errors %}
+                                    <div class="invalid-feedback d-block">{{ error }}</div>
+                                {% endfor %}
+                            </div>
                         </td>
                         <td class="rg-scr-doc-table__actions">
                             {% if item.evidence %}
-                                <a href="{% url 'evidence-download' application.pk item.evidence.pk %}?disposition=inline"
-                                   class="rg-scr-primary-link"
-                                   target="_blank"
-                                   rel="noopener">View</a>
-                                <a href="{% url 'evidence-download' application.pk item.evidence.pk %}"
-                                   class="rg-scr-secondary-link">Download</a>
+                                <button type="button"
+                                        class="rg-scr-doc-view"
+                                        data-doc-view
+                                        data-doc-url="{% url 'evidence-download' application.pk item.evidence.pk %}?disposition=inline"
+                                        data-doc-download="{% url 'evidence-download' application.pk item.evidence.pk %}"
+                                        data-doc-filename="{{ item.evidence.original_filename }}"
+                                        data-doc-title="{{ item.requirement.title }}"
+                                        aria-label="View {{ item.requirement.title }} in side panel">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                                    </svg>
+                                </button>
                             {% else %}
                                 <span class="rg-scr-doc-meta">-</span>
                             {% endif %}
@@ -86,7 +96,14 @@
         </div>
     </section>
 
-    <section class="rg-scr-panel">
+    <section class="rg-scr-panel rg-scr-panel--step is-waiting" data-scr-step="completeness" id="scr-completeness-panel">
+        <div class="rg-scr-panel__locked-banner" data-scr-locked-banner aria-hidden="true">
+            <svg width="13" height="13" viewBox="0 0 12 14" fill="none">
+                <rect x="2" y="6" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M4 6V4.5a2 2 0 0 1 4 0V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            Resolve every required document status before recording the completeness finding.
+        </div>
         <div class="rg-scr-panel__header">
             <div>
                 <h3 class="rg-scr-panel__title">Completeness Assessment</h3>
@@ -137,7 +154,14 @@
         </div>
     </section>
 
-    <section class="rg-scr-panel" id="scr-qualification-panel">
+    <section class="rg-scr-panel rg-scr-panel--step is-waiting" data-scr-step="qualification" id="scr-qualification-panel">
+        <div class="rg-scr-panel__locked-banner" data-scr-locked-banner aria-hidden="true">
+            <svg width="13" height="13" viewBox="0 0 12 14" fill="none">
+                <rect x="2" y="6" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M4 6V4.5a2 2 0 0 1 4 0V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            Mark completeness as <strong>Complete</strong> to enable qualification assessment.
+        </div>
         <div class="rg-scr-panel__header">
             <div>
                 <h3 class="rg-scr-panel__title">Qualification Assessment</h3>
@@ -202,11 +226,15 @@
             {% endfor %}
         </div>
 
-        <div class="rg-field mb-3">
-            <label class="form-label fw-semibold">
-                Document Review Rating
-                <span class="rg-scr-optional-label">optional</span>
-            </label>
+        <details class="rg-scr-disclosure mb-3">
+            <summary class="rg-scr-disclosure__summary">
+                <span class="rg-scr-disclosure__title">Add detailed scores</span>
+                <span class="rg-scr-disclosure__hint">Optional &middot; Education / Training / Experience / Document Review</span>
+                <svg class="rg-scr-disclosure__chevron" width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                    <path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </summary>
+        <div class="rg-field mt-3 mb-3">
             <div class="rg-scr-score-grid">
                 <div>
                     <label class="form-label" for="{{ screening_form.education_score.id_for_label }}">
@@ -247,6 +275,7 @@
             </div>
             <div class="form-text">{{ screening_form.document_review_weight_display }}</div>
         </div>
+        </details>
 
         <div class="rg-field">
             <label class="form-label fw-semibold" for="{{ screening_form.screening_notes.id_for_label }}">
@@ -262,6 +291,75 @@
         </div>
     </section>
 </form>
+
+{# ── Off-canvas document viewer drawer ───────────────────────── #}
+<div class="offcanvas offcanvas-end rg-scr-doc-drawer"
+     tabindex="-1"
+     id="rg-scr-doc-drawer"
+     aria-labelledby="rg-scr-doc-drawer-title">
+    <div class="offcanvas-header rg-scr-doc-drawer__header">
+        <div class="rg-scr-doc-drawer__copy">
+            <span class="rg-scr-doc-drawer__kicker">Document</span>
+            <h5 class="rg-scr-doc-drawer__title" id="rg-scr-doc-drawer-title">Select a document</h5>
+            <p class="rg-scr-doc-drawer__filename" id="rg-scr-doc-drawer-filename"></p>
+        </div>
+        <div class="rg-scr-doc-drawer__actions">
+            <a href="#" class="btn btn-sm btn-outline-secondary" id="rg-scr-doc-drawer-download" download>Download</a>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+    </div>
+    <div class="offcanvas-body rg-scr-doc-drawer__body">
+        <div class="rg-scr-doc-drawer__empty" id="rg-scr-doc-drawer-empty">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+            </svg>
+            <p>Click the eye icon next to a document to view it here.</p>
+        </div>
+        <iframe class="rg-scr-doc-drawer__frame" id="rg-scr-doc-drawer-frame" title="Document preview" hidden></iframe>
+        <img class="rg-scr-doc-drawer__image" id="rg-scr-doc-drawer-image" alt="Document preview" hidden>
+    </div>
+</div>
+
+<script>
+(function () {
+    "use strict";
+    var drawerEl = document.getElementById("rg-scr-doc-drawer");
+    if (!drawerEl || !window.bootstrap) return;
+    var drawer = new bootstrap.Offcanvas(drawerEl);
+    var frame = document.getElementById("rg-scr-doc-drawer-frame");
+    var image = document.getElementById("rg-scr-doc-drawer-image");
+    var empty = document.getElementById("rg-scr-doc-drawer-empty");
+    var titleEl = document.getElementById("rg-scr-doc-drawer-title");
+    var filenameEl = document.getElementById("rg-scr-doc-drawer-filename");
+    var dlEl = document.getElementById("rg-scr-doc-drawer-download");
+
+    function isImage(filename) {
+        return /\.(jpe?g|png|gif|webp)$/i.test(filename || "");
+    }
+
+    document.querySelectorAll("[data-doc-view]").forEach(function (btn) {
+        btn.addEventListener("click", function (e) {
+            e.preventDefault();
+            var url = btn.dataset.docUrl;
+            var dlUrl = btn.dataset.docDownload;
+            var fn = btn.dataset.docFilename || "";
+            var title = btn.dataset.docTitle || "Document";
+            titleEl.textContent = title;
+            filenameEl.textContent = fn;
+            dlEl.href = dlUrl;
+            empty.hidden = true;
+            if (isImage(fn)) {
+                frame.hidden = true; frame.removeAttribute("src");
+                image.hidden = false; image.src = url;
+            } else {
+                image.hidden = true; image.removeAttribute("src");
+                frame.hidden = false; frame.src = url;
+            }
+            drawer.show();
+        });
+    });
+})();
+</script>
 
 <div class="rg-cws-fin-bar" id="scr-fin-bar">
     <div class="rg-cws-fin-bar__info">
@@ -374,6 +472,7 @@
     var BLOCKING_COMPLETE_STATUSES = {
         "not_reviewed": true,
         "needs_review": true,
+        "request_resubmission": true,
         "absent": true
     };
 
@@ -451,19 +550,17 @@
         }
     }
 
-    function updateStepState() {
-        var docsStep = document.getElementById("scr-step-docs");
-        var compStep = document.getElementById("scr-step-completeness");
-        var qualStep = document.getElementById("scr-step-qualification");
-        [docsStep, compStep, qualStep].forEach(function (step) {
-            if (step) step.classList.remove("is-current", "is-complete");
-        });
-        if (docsStep && requiredDocumentsResolved()) docsStep.classList.add("is-complete");
-        if (compStep && csField && csField.value) compStep.classList.add("is-complete");
-        if (qualStep && qoField && qoField.value) qualStep.classList.add("is-complete");
-        if (!requiredDocumentsResolved() && docsStep) docsStep.classList.add("is-current");
-        else if ((!csField || !csField.value) && compStep) compStep.classList.add("is-current");
-        else if (qualStep) qualStep.classList.add("is-current");
+    function updateStepDisclosure() {
+        var completenessPanel = document.getElementById("scr-completeness-panel");
+        var docsResolved = requiredDocumentsResolved();
+        if (completenessPanel) {
+            completenessPanel.classList.toggle("is-waiting", !docsResolved);
+        }
+        // Auto-scroll into view when a step unlocks (only on the first transition)
+        if (completenessPanel && docsResolved && !completenessPanel.dataset.unlocked) {
+            completenessPanel.dataset.unlocked = "1";
+            completenessPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
     }
 
     function updateQualificationAvailability() {
@@ -473,7 +570,12 @@
             qualifiedChoice.classList.toggle("is-disabled", Boolean(blocked));
         }
         if (qualificationPanel) {
-            qualificationPanel.classList.toggle("is-waiting", !csField || csField.value !== "complete");
+            var qualWaiting = !csField || csField.value !== "complete";
+            qualificationPanel.classList.toggle("is-waiting", qualWaiting);
+            if (!qualWaiting && !qualificationPanel.dataset.unlocked) {
+                qualificationPanel.dataset.unlocked = "1";
+                qualificationPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            }
         }
         if (blocked && qoField && qoField.value === "qualified") {
             qoField.value = "";
@@ -517,9 +619,9 @@
                 finalBtn.setAttribute("disabled", "disabled");
             }
         }
+        updateStepDisclosure();
         updateQualificationAvailability();
         updateDecisionLabel();
-        updateStepState();
         updateDocumentRows();
     }
 

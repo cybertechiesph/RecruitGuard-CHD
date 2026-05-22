@@ -110,6 +110,7 @@
                             <th scope="col">Requirement</th>
                             <th scope="col">File</th>
                             <th scope="col">Status</th>
+                            <th scope="col">Remarks</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -130,6 +131,13 @@
                                 <span class="rg-scr-status-pill" data-fixed-status="{{ review.status }}">
                                     {{ review.get_status_display }}
                                 </span>
+                            </td>
+                            <td>
+                                {% if review.remarks %}
+                                    <div class="rg-scr-doc-meta">{{ review.remarks }}</div>
+                                {% else %}
+                                    <div class="rg-scr-doc-meta">-</div>
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}

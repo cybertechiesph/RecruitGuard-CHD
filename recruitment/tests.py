@@ -3407,6 +3407,81 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
             len(get_applicant_document_requirements(application.branch)),
         )
 
+    def test_screening_view_persists_document_resubmission_request_and_remarks(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        first_requirement = get_applicant_document_requirements(application.branch)[0]
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("screening-review", kwargs={"pk": application.pk}),
+            {
+                **self.screening_payload(
+                    completeness_status=ScreeningRecord.CompletenessStatus.INCOMPLETE,
+                    completeness_notes="A corrected document is required.",
+                    qualification_outcome=ScreeningRecord.QualificationOutcome.NOT_QUALIFIED,
+                    screening_notes="Qualification cannot proceed until the corrected document is submitted.",
+                ),
+                **self.screening_document_status_payload(
+                    application,
+                    overrides={
+                        first_requirement.code: (
+                            ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION
+                        ),
+                    },
+                ),
+                f"document_remarks__{first_requirement.code}": "Upload a signed and readable copy.",
+                "operation": "finalize",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Screening finalized and locked.")
+        screening_record = ScreeningRecord.objects.get(application=application)
+        document_review = screening_record.document_reviews.get(document_key=first_requirement.code)
+        self.assertEqual(
+            document_review.status,
+            ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION,
+        )
+        self.assertEqual(document_review.remarks, "Upload a signed and readable copy.")
+
+    def test_screening_view_requires_remarks_for_document_resubmission_request(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        first_requirement = get_applicant_document_requirements(application.branch)[0]
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("screening-review", kwargs={"pk": application.pk}),
+            {
+                **self.screening_payload(
+                    completeness_status=ScreeningRecord.CompletenessStatus.INCOMPLETE,
+                    completeness_notes="A corrected document is required.",
+                    qualification_outcome=ScreeningRecord.QualificationOutcome.NOT_QUALIFIED,
+                    screening_notes="Qualification cannot proceed until the corrected document is submitted.",
+                ),
+                **self.screening_document_status_payload(
+                    application,
+                    overrides={
+                        first_requirement.code: (
+                            ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION
+                        ),
+                    },
+                ),
+                "operation": "finalize",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Add the instruction the applicant should follow")
+        self.assertFalse(ScreeningRecord.objects.filter(application=application, is_finalized=True).exists())
+
     def test_screening_view_blocks_complete_when_required_document_needs_review(self):
         application = self.make_application(self.level1_position)
         self.verify_application_for_submission(application)
@@ -4917,6 +4992,58 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         self.assertEqual(notification.delivery_status, NotificationLog.DeliveryStatus.SENT)
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("application result", mail.outbox[0].subject.lower())
+
+    def test_return_to_applicant_sends_document_resubmission_request_notification(self):
+        application = self.make_submitted_application()
+        first_requirement = get_applicant_document_requirements(application.branch)[0]
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("screening-review", kwargs={"pk": application.pk}),
+            {
+                "completeness_status": ScreeningRecord.CompletenessStatus.INCOMPLETE,
+                "completeness_notes": "A corrected document is required.",
+                "qualification_outcome": ScreeningRecord.QualificationOutcome.NOT_QUALIFIED,
+                "screening_notes": "Screening cannot continue until the document is corrected.",
+                **self.screening_document_status_payload(
+                    application,
+                    overrides={
+                        first_requirement.code: (
+                            ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION
+                        ),
+                    },
+                ),
+                f"document_remarks__{first_requirement.code}": "Upload a signed and readable copy.",
+                "operation": "finalize",
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        mail.outbox.clear()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            process_workflow_action(
+                application,
+                self.secretariat,
+                "return_to_applicant",
+                "Please resubmit the corrected document.",
+            )
+
+        application.refresh_from_db()
+        notification = NotificationLog.objects.get(
+            application=application,
+            notification_type=NotificationLog.NotificationType.DOCUMENT_RESUBMISSION_REQUEST,
+        )
+        self.assertEqual(application.status, RecruitmentApplication.Status.RETURNED_TO_APPLICANT)
+        self.assertEqual(notification.delivery_status, NotificationLog.DeliveryStatus.SENT)
+        self.assertEqual(notification.triggered_by, self.secretariat)
+        self.assertEqual(notification.metadata["document_keys"], [first_requirement.code])
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("document resubmission needed", mail.outbox[0].subject.lower())
+        self.assertIn(first_requirement.title, mail.outbox[0].body)
+        self.assertIn("Upload a signed and readable copy.", mail.outbox[0].body)
+        self.assertIn("Please resubmit the corrected document.", mail.outbox[0].body)
 
     def test_secretariat_can_send_requirement_checklist_notification_for_level1_completion(self):
         application = self.make_approved_cos_application()

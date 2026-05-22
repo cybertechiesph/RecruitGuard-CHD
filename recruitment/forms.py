@@ -989,6 +989,7 @@ class CaseClosureForm(BootstrapFormMixin, forms.Form):
 
 class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.ModelForm):
     DOCUMENT_STATUS_PREFIX = "document_status__"
+    DOCUMENT_REMARKS_PREFIX = "document_remarks__"
     SCORE_RANGE_MESSAGE = "Enter a score from 0 to 100."
     SCORE_FIELD_NAMES = (
         "education_score",
@@ -999,6 +1000,7 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
     COMPLETENESS_BLOCKING_DOCUMENT_STATUSES = {
         ScreeningDocumentReview.ReviewStatus.NOT_REVIEWED,
         ScreeningDocumentReview.ReviewStatus.NEEDS_REVIEW,
+        ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION,
         ScreeningDocumentReview.ReviewStatus.ABSENT,
     }
 
@@ -1056,6 +1058,11 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
             field = self.fields[field_meta["field_name"]]
             existing_class = field.widget.attrs.get("class", "")
             field.widget.attrs["class"] = f"{existing_class} rg-scr-status-select js-doc-status".strip()
+            remarks_field = self.fields[field_meta["remarks_field_name"]]
+            existing_remarks_class = remarks_field.widget.attrs.get("class", "")
+            remarks_field.widget.attrs["class"] = (
+                f"{existing_remarks_class} rg-scr-remarks-field js-doc-remarks"
+            ).strip()
 
     def _document_review_weight_display(self):
         level = getattr(self.application, "level", None)
@@ -1075,6 +1082,9 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
 
     def _document_status_field_name(self, requirement):
         return f"{self.DOCUMENT_STATUS_PREFIX}{requirement.code}"
+
+    def _document_remarks_field_name(self, requirement):
+        return f"{self.DOCUMENT_REMARKS_PREFIX}{requirement.code}"
 
     def _build_document_review_fields(self):
         if self.application is None:
@@ -1116,6 +1126,7 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
                 status_is_fixed = False
 
             field_name = self._document_status_field_name(requirement)
+            remarks_field_name = self._document_remarks_field_name(requirement)
             widget = forms.HiddenInput if status_is_fixed else forms.Select
             self.fields[field_name] = forms.ChoiceField(
                 choices=ScreeningDocumentReview.ReviewStatus.choices,
@@ -1128,8 +1139,21 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
                     }
                 ),
             )
+            self.fields[remarks_field_name] = forms.CharField(
+                required=False,
+                initial=existing_review.remarks if existing_review is not None else "",
+                label=f"Remarks for {requirement.title}",
+                widget=forms.Textarea(
+                    attrs={
+                        "rows": 2,
+                        "data-document-key": requirement.code,
+                        "placeholder": "Add review notes or resubmission instructions.",
+                    }
+                ),
+            )
             metadata = {
                 "field_name": field_name,
+                "remarks_field_name": remarks_field_name,
                 "requirement": requirement,
                 "evidence": evidence,
                 "is_submitted": evidence is not None,
@@ -1144,14 +1168,23 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
                 "display_order": display_order,
             }
             self._document_review_field_metadata.append(metadata)
-            self.document_review_fields.append({**metadata, "field": self[field_name]})
+            self.document_review_fields.append(
+                {
+                    **metadata,
+                    "field": self[field_name],
+                    "remarks_field": self[remarks_field_name],
+                }
+            )
 
     def _collect_document_reviews(self, cleaned_data):
         status_values = {value for value, _label in ScreeningDocumentReview.ReviewStatus.choices}
         document_reviews = []
         for field_meta in self._document_review_field_metadata:
             field_name = field_meta["field_name"]
+            remarks_field_name = field_meta["remarks_field_name"]
             status = cleaned_data.get(field_name) or field_meta["initial_status"]
+            remarks = (cleaned_data.get(remarks_field_name) or "").strip()
+            cleaned_data[remarks_field_name] = remarks
             if field_meta["status_is_fixed"]:
                 status = field_meta["initial_status"]
                 cleaned_data[field_name] = status
@@ -1169,12 +1202,21 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
                 and field_meta["evidence"] is None
             ):
                 self.add_error(field_name, "A missing document cannot be marked Meets.")
+            if (
+                status == ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION
+                and not remarks
+            ):
+                self.add_error(
+                    remarks_field_name,
+                    "Add the instruction the applicant should follow for this resubmission.",
+                )
             document_reviews.append(
                 {
                     "document_key": field_meta["requirement"].code,
                     "requirement_title": field_meta["requirement"].title,
                     "requirement_label": field_meta["requirement_label"],
                     "status": status,
+                    "remarks": remarks,
                     "is_required": field_meta["is_required_for_completeness"],
                     "is_not_applicable": field_meta["is_not_applicable"],
                     "evidence_item": field_meta["evidence"],

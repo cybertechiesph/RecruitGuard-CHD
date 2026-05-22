@@ -679,6 +679,376 @@ body.applicant-portal-body {
     margin-top: 0.15rem;
 }
 
+/* ==========================================================================
+   SCREENING WORKSPACE — progressive disclosure
+   "See only what you need to do, or the task at hand."
+   Steps reveal in order: Documents → Completeness → Qualification.
+   ========================================================================== */
+
+.rg-scr-panel--step {
+    position: relative;
+    transition: opacity 200ms ease, filter 200ms ease;
+}
+.rg-scr-panel--step.is-waiting {
+    opacity: 0.55;
+    filter: grayscale(0.4);
+    pointer-events: none;
+}
+.rg-scr-panel--step.is-waiting > .rg-scr-panel__locked-banner {
+    display: flex;
+}
+.rg-scr-panel__locked-banner {
+    display: none;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--rg-brand-green-soft);
+    color: var(--rg-brand-green-strong);
+    border: 1px dashed var(--rg-brand-green);
+    border-radius: 6px;
+    padding: 0.5rem 0.8rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    margin-bottom: 0.85rem;
+}
+.rg-scr-panel__locked-banner svg {
+    flex-shrink: 0;
+    color: var(--rg-brand-green);
+}
+
+/* Workflow next-action choices (one button per action) */
+.rg-wf-action-choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-top: 0.75rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid #e3e8ee;
+}
+.rg-wf-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.55rem 1.1rem;
+    font-size: 0.86rem;
+    font-weight: 700;
+    border-radius: 6px;
+    border: 1.5px solid transparent;
+    cursor: pointer;
+    transition: background 120ms ease, color 120ms ease, border-color 120ms ease, transform 80ms ease;
+}
+.rg-wf-action-btn:active { transform: translateY(1px); }
+.rg-wf-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Primary/forward actions — institutional green */
+.rg-wf-action-btn--endorse,
+.rg-wf-action-btn--recommend,
+.rg-wf-action-btn--approve,
+.rg-wf-action-btn--release {
+    background: var(--rg-brand-green);
+    color: #fff;
+    border-color: var(--rg-brand-green-strong);
+    box-shadow: inset 0 -2px 0 var(--rg-brand-gold);
+    flex: 1 1 auto;
+}
+.rg-wf-action-btn--endorse:hover,
+.rg-wf-action-btn--recommend:hover,
+.rg-wf-action-btn--approve:hover,
+.rg-wf-action-btn--release:hover {
+    background: var(--rg-brand-green-strong);
+    color: #fff;
+}
+
+/* Return-to-applicant — amber outlined */
+.rg-wf-action-btn--return-to-applicant,
+.rg-wf-action-btn--return-to-hrm-chief,
+.rg-wf-action-btn--return-car-for-reassessment {
+    background: #fff;
+    color: #8a6407;
+    border-color: #ffdf88;
+}
+.rg-wf-action-btn--return-to-applicant:hover,
+.rg-wf-action-btn--return-to-hrm-chief:hover,
+.rg-wf-action-btn--return-car-for-reassessment:hover {
+    background: var(--rg-brand-gold-soft);
+    border-color: var(--rg-brand-gold);
+    color: #8a6407;
+}
+
+/* Reject — red outlined (destructive) */
+.rg-wf-action-btn--reject {
+    background: #fff;
+    color: var(--rg-brand-danger);
+    border-color: #f3c4c1;
+}
+.rg-wf-action-btn--reject:hover {
+    background: #fdeceb;
+    border-color: var(--rg-brand-danger);
+    color: var(--rg-brand-danger);
+}
+
+/* Eye-icon button for document row */
+.rg-scr-doc-view {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: var(--rg-brand-green-soft);
+    color: var(--rg-brand-green);
+    border: 1px solid #cfe0c0;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 120ms ease, color 120ms ease, transform 80ms ease;
+}
+.rg-scr-doc-view:hover,
+.rg-scr-doc-view:focus {
+    background: var(--rg-brand-green);
+    color: #fff;
+    border-color: var(--rg-brand-green-strong);
+}
+.rg-scr-doc-view:active { transform: translateY(1px); }
+
+.rg-scr-doc-remarks {
+    margin-top: 0.45rem;
+}
+.rg-scr-doc-remarks__label {
+    display: block;
+    margin-bottom: 0.25rem;
+    color: #5f6c78;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+.rg-scr-remarks-field {
+    min-width: 13rem;
+    font-size: 0.78rem;
+    resize: vertical;
+}
+.rg-scr-status-pill[data-fixed-status="request_resubmission"] {
+    border-color: #ffdf88;
+    color: #8a6407;
+    background: var(--rg-brand-gold-soft);
+}
+
+/* Off-canvas document drawer */
+.rg-scr-doc-drawer {
+    width: min(60vw, 880px) !important;
+    background: #f4f6fa;
+}
+.rg-scr-doc-drawer__header {
+    background: var(--rg-brand-green);
+    color: #fff;
+    border-bottom: 3px solid var(--rg-brand-gold);
+    padding: 0.85rem 1.1rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+.rg-scr-doc-drawer__copy { flex: 1; min-width: 0; }
+.rg-scr-doc-drawer__kicker {
+    display: block;
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--rg-brand-gold);
+    margin-bottom: 0.15rem;
+}
+.rg-scr-doc-drawer__title {
+    color: #fff;
+    font-size: 1rem;
+    margin: 0;
+    font-weight: 700;
+    line-height: 1.25;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.rg-scr-doc-drawer__filename {
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.78rem;
+    margin: 0.2rem 0 0;
+    font-family: "Courier New", monospace;
+}
+.rg-scr-doc-drawer__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+.rg-scr-doc-drawer__actions .btn-close {
+    filter: brightness(0) invert(1);
+}
+.rg-scr-doc-drawer__actions .btn-outline-secondary {
+    background: rgba(255,255,255,0.1);
+    border-color: rgba(255,255,255,0.5);
+    color: #fff;
+}
+.rg-scr-doc-drawer__actions .btn-outline-secondary:hover {
+    background: rgba(255,255,255,0.2);
+    color: #fff;
+    border-color: #fff;
+}
+.rg-scr-doc-drawer__body {
+    padding: 0;
+    background: #2a3642;
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+}
+.rg-scr-doc-drawer__frame {
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: #fff;
+}
+.rg-scr-doc-drawer__image {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    margin: auto;
+    background: #fff;
+}
+.rg-scr-doc-drawer__empty {
+    margin: auto;
+    text-align: center;
+    color: #9aa4af;
+    padding: 2rem;
+}
+.rg-scr-doc-drawer__empty p { margin-top: 0.75rem; font-size: 0.85rem; }
+
+/* Score-grid disclosure */
+.rg-scr-disclosure {
+    border: 1px solid #e3e8ee;
+    border-radius: 6px;
+    background: #fafbfc;
+}
+.rg-scr-disclosure__summary {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 0.85rem;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+.rg-scr-disclosure__summary::-webkit-details-marker { display: none; }
+.rg-scr-disclosure__title {
+    font-size: 0.86rem;
+    font-weight: 700;
+    color: var(--rg-brand-green-ink);
+}
+.rg-scr-disclosure__hint {
+    flex: 1;
+    font-size: 0.76rem;
+    color: #5f6c78;
+}
+.rg-scr-disclosure__chevron {
+    color: #5f6c78;
+    transition: transform 180ms ease;
+    flex-shrink: 0;
+}
+.rg-scr-disclosure[open] .rg-scr-disclosure__chevron {
+    transform: rotate(180deg);
+}
+.rg-scr-disclosure[open] > .rg-field {
+    padding: 0 0.85rem 0.85rem;
+}
+
+/* ==========================================================================
+   CASE WORKSPACE — collapsible pipeline summary
+   Default state: thin bar showing "Step N of M — {current stage}"
+   Click to expand: full pipeline with circles + connectors.
+   ========================================================================== */
+
+.rg-cws-pipeline--collapsible {
+    margin-bottom: 0.85rem;
+}
+.rg-pipeline-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    width: 100%;
+    background: #fff;
+    border: 1px solid #e3e8ee;
+    border-left: 3px solid var(--rg-brand-green);
+    border-radius: 6px;
+    padding: 0.55rem 0.85rem;
+    cursor: pointer;
+    text-align: left;
+    color: inherit;
+    transition: border-color 120ms ease, background 120ms ease;
+}
+.rg-pipeline-summary:hover,
+.rg-pipeline-summary:focus {
+    border-color: var(--rg-brand-green);
+    background: #fafcf7;
+}
+.rg-pipeline-summary[aria-expanded="true"] .rg-pipeline-summary__toggle svg {
+    transform: rotate(180deg);
+}
+
+.rg-pipeline-summary__progress {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    flex-shrink: 0;
+}
+.rg-pipeline-summary__tick {
+    display: block;
+    width: 16px;
+    height: 5px;
+    border-radius: 2px;
+    background: #dbe1e8;
+}
+.rg-pipeline-summary__tick.is-complete {
+    background: var(--rg-brand-green);
+}
+.rg-pipeline-summary__tick.is-current {
+    background: var(--rg-brand-gold);
+    box-shadow: 0 0 0 2px rgba(253, 184, 19, 0.18);
+}
+
+.rg-pipeline-summary__copy {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
+    flex: 1;
+    min-width: 0;
+}
+.rg-pipeline-summary__step {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--rg-brand-green);
+}
+.rg-pipeline-summary__label {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--rg-brand-green-ink);
+    margin-top: 0.1rem;
+}
+
+.rg-pipeline-summary__toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+    color: #5f6c78;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+.rg-pipeline-summary__toggle svg {
+    transition: transform 180ms ease;
+}
+
+@media (max-width: 720px) {
+    .rg-pipeline-summary__toggle-label { display: none; }
+}
+
 /* --- Public footer: 4-color GOVPH stripe + content --- */
 .rg-public-footer {
     margin-top: 3rem;

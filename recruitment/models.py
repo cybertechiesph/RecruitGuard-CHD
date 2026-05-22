@@ -1160,6 +1160,7 @@ class ScreeningDocumentReview(TimestampedModel):
         NOT_REVIEWED = "not_reviewed", "Not Reviewed"
         MEETS = "meets", "Meets"
         NEEDS_REVIEW = "needs_review", "Needs Review"
+        REQUEST_RESUBMISSION = "request_resubmission", "Request Resubmission"
         ABSENT = "absent", "Absent"
         NOT_APPLICABLE = "not_applicable", "Not Applicable"
 
@@ -1183,6 +1184,7 @@ class ScreeningDocumentReview(TimestampedModel):
         choices=ReviewStatus.choices,
         default=ReviewStatus.NOT_REVIEWED,
     )
+    remarks = models.TextField(blank=True)
     is_required = models.BooleanField(default=True)
     is_not_applicable = models.BooleanField(default=False)
     display_order = models.PositiveSmallIntegerField(default=0)
@@ -1210,6 +1212,11 @@ class ScreeningDocumentReview(TimestampedModel):
             errors["status"] = "Not-applicable requirements must use the Not Applicable status."
         if not self.evidence_item_id and self.status == self.ReviewStatus.MEETS:
             errors["status"] = "A document cannot meet the requirement without an uploaded file."
+        if (
+            self.status == self.ReviewStatus.REQUEST_RESUBMISSION
+            and not (self.remarks or "").strip()
+        ):
+            errors["remarks"] = "Record what the applicant needs to correct or resubmit."
         parent = self.screening_record
         if parent and parent.is_finalized and self.pk:
             original = type(self).objects.filter(pk=self.pk).first()
@@ -1217,6 +1224,7 @@ class ScreeningDocumentReview(TimestampedModel):
                 original.status != self.status
                 or original.evidence_item_id != self.evidence_item_id
                 or original.requirement_title != self.requirement_title
+                or original.remarks != self.remarks
             ):
                 errors["status"] = "Document review rows cannot be changed after screening is finalized."
         if errors:
@@ -1226,6 +1234,7 @@ class ScreeningDocumentReview(TimestampedModel):
         self.document_key = (self.document_key or "").strip()
         self.requirement_title = (self.requirement_title or "").strip()
         self.requirement_label = (self.requirement_label or "").strip()
+        self.remarks = (self.remarks or "").strip()
         super().save(*args, **kwargs)
 
     @property
@@ -1233,6 +1242,7 @@ class ScreeningDocumentReview(TimestampedModel):
         return self.is_required and self.status in {
             self.ReviewStatus.NOT_REVIEWED,
             self.ReviewStatus.NEEDS_REVIEW,
+            self.ReviewStatus.REQUEST_RESUBMISSION,
             self.ReviewStatus.ABSENT,
         }
 
@@ -2406,6 +2416,10 @@ class NotificationLog(TimestampedModel):
         SUBMISSION_ACKNOWLEDGMENT = "submission_acknowledgment", "Submission Acknowledgment"
         SELECTED_APPLICANT = "selected_applicant", "Selected Applicant Notification"
         NON_SELECTED_APPLICANT = "non_selected_applicant", "Non-selected Applicant Notification"
+        DOCUMENT_RESUBMISSION_REQUEST = (
+            "document_resubmission_request",
+            "Document Resubmission Request",
+        )
         REQUIREMENT_CHECKLIST = "requirement_checklist", "Requirement Checklist Notification"
         REMINDER = "reminder", "Reminder Notification"
 

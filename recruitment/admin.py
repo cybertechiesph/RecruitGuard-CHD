@@ -299,6 +299,7 @@ class ScreeningDocumentReviewInline(admin.TabularInline):
         "requirement_title",
         "requirement_label",
         "status",
+        "remarks",
         "is_required",
         "is_not_applicable",
         "evidence_item",
@@ -753,6 +754,7 @@ class ScreeningDocumentReviewAdmin(admin.ModelAdmin):
         "document_key",
         "requirement_title",
         "status",
+        "remarks",
         "is_required",
         "evidence_item",
     )
@@ -761,6 +763,7 @@ class ScreeningDocumentReviewAdmin(admin.ModelAdmin):
         "screening_record__application__reference_number",
         "document_key",
         "requirement_title",
+        "remarks",
     )
     readonly_fields = ("created_at", "updated_at")
 
