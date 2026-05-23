@@ -41,6 +41,7 @@ from .models import (
     InternalPasswordHistory,
     InterviewRating,
     InterviewSession,
+    Notification,
     PositionReference,
     PositionPosting,
     RecruitmentApplication,
@@ -52,7 +53,10 @@ from .models import (
     WorkflowOverride,
 )
 from .notification_services import (
+    create_in_app_notifications,
+    queue_application_returned_to_applicant_notification,
     queue_document_resubmission_request_notification,
+    queue_interview_session_scheduled_notifications,
     queue_non_selected_applicant_notification,
     queue_selected_applicant_notification,
     queue_submission_acknowledgment_notification,
@@ -106,6 +110,7 @@ INTERVIEW_RATING_ROLES_BY_STAGE = {
     RecruitmentCase.Stage.HRM_CHIEF_REVIEW: {RecruitmentUser.Role.HRM_CHIEF},
     RecruitmentCase.Stage.HRMPSB_REVIEW: {RecruitmentUser.Role.HRMPSB_MEMBER},
 }
+MIN_INTERVIEW_OUTPUTS_TO_FINALIZE = 1
 INTERVIEW_FALLBACK_LABEL = "Interview Rating Sheet (Fallback)"
 ARTIFACT_TYPE_APPLICANT_DOCUMENT = "applicant_document"
 ARTIFACT_TYPE_WORKFLOW_EVIDENCE = "workflow_evidence"
@@ -1337,6 +1342,18 @@ def route_case_between_secretariat_and_hrm_chief(application, actor, target_role
         notes=remarks,
         is_override=is_level2_secretariat_handoff,
     )
+    _emit_case_assignment_notification(
+        application,
+        actor,
+        target_role,
+        kind=(
+            Notification.Kind.CASE_RETURNED
+            if is_level2_return_to_hrm_chief
+            else Notification.Kind.CASE_ASSIGNED
+        ),
+        title=f"{application.reference_label} handed off to you by {_actor_display_name(actor)}",
+        body=(remarks or "").strip(),
+    )
     return application
 
 
@@ -1412,6 +1429,13 @@ def _auto_route_application(application, actor, *, next_role, next_status, descr
         from_stage=case_transition["previous_stage"],
         to_stage=application.case.current_stage,
         notes=remarks,
+    )
+    _emit_case_assignment_notification(
+        application,
+        actor,
+        next_role,
+        title=f"{application.reference_label} assigned to you",
+        body=description,
     )
     if previous_role == RecruitmentUser.Role.SECRETARIAT:
         _consume_active_secretariat_handoff(
@@ -1631,6 +1655,7 @@ def _handler_role_from_stage(stage, application=None):
 def _case_timeline_metadata(case):
     return {
         "case_stage": case.current_stage,
+        "stage_entered_at": case.stage_entered_at.isoformat() if case.stage_entered_at else "",
         "case_status": case.case_status,
         "case_handler_role": case.current_handler_role,
         "case_locked": case.is_stage_locked,
@@ -1641,6 +1666,223 @@ def _ensure_case_stage_alignment(application, case):
     expected_stage = _review_stage_from_application_status(application.status)
     if expected_stage and case.current_stage != expected_stage:
         raise ValueError("The recruitment case is out of sync with the application workflow state.")
+
+
+def _transition_case_stage(case, new_stage, *, force=False):
+    if not new_stage:
+        return False
+    if force or case.current_stage != new_stage:
+        case.current_stage = new_stage
+        case.stage_entered_at = timezone.now()
+        return True
+    return False
+
+
+def _application_detail_url(application, tab=None):
+    url = reverse("application-detail", kwargs={"pk": application.pk})
+    if tab:
+        return f"{url}?tab={tab}"
+    return url
+
+
+def _notification_tab_for_application(application):
+    section_key = get_current_workflow_section(application)
+    if section_key == "overview":
+        return "screening"
+    return section_key
+
+
+def _active_users_with_application_access(application, *, role=None, exclude_user_ids=None):
+    exclude_user_ids = set(exclude_user_ids or [])
+    queryset = RecruitmentUser.objects.filter(is_active=True).exclude(
+        role=RecruitmentUser.Role.APPLICANT,
+    )
+    if role:
+        queryset = queryset.filter(role=role)
+    queryset = queryset.order_by("last_name", "first_name", "username")
+    return [
+        user
+        for user in queryset
+        if user.id not in exclude_user_ids and user_can_view_application(user, application)
+    ]
+
+
+def _notify_application_users(
+    application,
+    recipients,
+    *,
+    kind,
+    title,
+    body="",
+    tab=None,
+):
+    return create_in_app_notifications(
+        recipients,
+        kind=kind,
+        title=title,
+        body=body,
+        related_url=_application_detail_url(
+            application,
+            tab=tab or _notification_tab_for_application(application),
+        ),
+        application=application,
+    )
+
+
+def _notify_role_for_application(
+    application,
+    role,
+    *,
+    kind,
+    title,
+    body="",
+    tab=None,
+    exclude_user_ids=None,
+):
+    return _notify_application_users(
+        application,
+        _active_users_with_application_access(
+            application,
+            role=role,
+            exclude_user_ids=exclude_user_ids,
+        ),
+        kind=kind,
+        title=title,
+        body=body,
+        tab=tab,
+    )
+
+
+def _actor_display_name(actor):
+    if not actor:
+        return "the office"
+    return actor.get_full_name() or actor.username or actor.get_role_display()
+
+
+def _emit_case_assignment_notification(
+    application,
+    actor,
+    target_role,
+    *,
+    kind=Notification.Kind.CASE_ASSIGNED,
+    title=None,
+    body="",
+    tab=None,
+):
+    if not target_role or target_role == RecruitmentUser.Role.APPLICANT:
+        return []
+    title = title or f"{application.reference_label} handed off to you by {_actor_display_name(actor)}"
+    return _notify_role_for_application(
+        application,
+        target_role,
+        kind=kind,
+        title=title,
+        body=body,
+        tab=tab,
+    )
+
+
+def _emit_screening_finalized_notification(application, actor, review_stage):
+    return _notify_role_for_application(
+        application,
+        application.current_handler_role,
+        kind=Notification.Kind.SCREENING_FINALIZED,
+        title=f"{application.reference_label} screening finalized",
+        body=f"{_actor_display_name(actor)} finalized the screening review.",
+        tab="screening",
+        exclude_user_ids={actor.id} if actor else None,
+    )
+
+
+def _emit_resubmission_received_notification(
+    application,
+    actor,
+    target_role,
+    *,
+    document_count=0,
+):
+    document_word = "document" if document_count == 1 else "documents"
+    return _emit_case_assignment_notification(
+        application,
+        actor,
+        target_role,
+        kind=Notification.Kind.RESUBMISSION_RECEIVED,
+        title=f"{application.reference_label} applicant resubmitted {document_count} {document_word}",
+        body="The returned application is ready for review.",
+        tab="screening",
+    )
+
+
+def _emit_interview_scheduled_in_app_notifications(application, interview_session, recipients):
+    scheduled_for = timezone.localtime(interview_session.scheduled_for).strftime("%B %d, %Y")
+    return _notify_application_users(
+        application,
+        [recipient for recipient in recipients if user_can_view_application(recipient, application)],
+        kind=Notification.Kind.INTERVIEW_SCHEDULED,
+        title=f"Interview scheduled for {application.reference_label} on {scheduled_for}",
+        body=f"Location / medium: {interview_session.location}",
+        tab="interview",
+    )
+
+
+def _emit_interview_finalized_in_app_notifications(application, recipients):
+    return _notify_application_users(
+        application,
+        [recipient for recipient in recipients if user_can_view_application(recipient, application)],
+        kind=Notification.Kind.INTERVIEW_FINALIZED,
+        title=f"{application.reference_label} interview session finalized",
+        body="No further interview ratings can be submitted.",
+        tab="interview",
+    )
+
+
+def emit_deadline_approaching_notifications(now=None):
+    now = now or timezone.now()
+    today = timezone.localdate(now)
+    closing_cutoff = today + timedelta(days=1)
+    applications = RecruitmentApplication.objects.select_related(
+        "position",
+        "case",
+    ).filter(
+        position__closing_date__gte=today,
+        position__closing_date__lte=closing_cutoff,
+        case__case_status=RecruitmentCase.CaseStatus.ACTIVE,
+        case__is_stage_locked=False,
+    ).exclude(
+        current_handler_role__in=["", RecruitmentUser.Role.APPLICANT],
+    )
+
+    emitted = []
+    for application in applications:
+        case = application.case
+        recipients = _active_users_with_application_access(
+            application,
+            role=case.current_handler_role,
+        )
+        if not recipients:
+            continue
+        title = f"{application.reference_label} is closing in 24 hours"
+        body = f"Posting closes on {application.position.closing_date:%Y-%m-%d}."
+        for recipient in recipients:
+            already_sent_today = Notification.objects.filter(
+                application=application,
+                recipient=recipient,
+                kind=Notification.Kind.DEADLINE_APPROACHING,
+                created_at__date=today,
+            ).exists()
+            if already_sent_today:
+                continue
+            emitted.extend(
+                _notify_application_users(
+                    application,
+                    [recipient],
+                    kind=Notification.Kind.DEADLINE_APPROACHING,
+                    title=title,
+                    body=body,
+                    tab="screening",
+                )
+            )
+    return emitted
 
 
 def get_case_timeline(application):
@@ -2244,6 +2486,36 @@ def user_can_upload_interview_fallback(user, application):
     ):
         return False
     return user_can_process_application(user, application)
+
+
+def get_interview_schedule_notification_recipients(application):
+    return [
+        user
+        for user in RecruitmentUser.objects.filter(
+            is_active=True,
+            role=RecruitmentUser.Role.HRMPSB_MEMBER,
+        ).order_by("last_name", "first_name", "username")
+        if user_can_manage_interview_rating(user, application)
+    ]
+
+
+def _interview_scheduled_for_is_past(scheduled_for):
+    return scheduled_for < timezone.now() - timedelta(minutes=5)
+
+
+def _interview_schedule_change_requires_notification(
+    *,
+    created,
+    previous_scheduled_for,
+    previous_location,
+    new_scheduled_for,
+    new_location,
+):
+    return (
+        created
+        or previous_scheduled_for != new_scheduled_for
+        or (previous_location or "").strip() != (new_location or "").strip()
+    )
 
 
 def _decimal_string(value):
@@ -3280,6 +3552,8 @@ def save_screening_review(application, actor, cleaned_data, finalize=False):
             "is_finalized": screening_record.is_finalized,
         },
     )
+    if finalize:
+        _emit_screening_finalized_notification(application, actor, review_stage)
     return screening_record
 
 
@@ -3407,6 +3681,8 @@ def save_interview_session(application, actor, cleaned_data, finalize=False):
         )
 
     created = interview_session is None
+    previous_scheduled_for = interview_session.scheduled_for if interview_session else None
+    previous_location = interview_session.location if interview_session else ""
     if interview_session is None:
         interview_session = InterviewSession(
             application=application,
@@ -3418,19 +3694,57 @@ def save_interview_session(application, actor, cleaned_data, finalize=False):
             level=application.level,
         )
 
+    scheduled_for = cleaned_data["scheduled_for"]
+    if _interview_scheduled_for_is_past(scheduled_for):
+        existing_past_schedule_unchanged = (
+            not created
+            and previous_scheduled_for == scheduled_for
+            and _interview_scheduled_for_is_past(previous_scheduled_for)
+        )
+        if not existing_past_schedule_unchanged:
+            raise ValueError("The interview can't be scheduled in the past.")
+
     interview_session.recruitment_case = application.case
     interview_session.recruitment_entry = application.position
     interview_session.scheduled_by = actor
-    interview_session.scheduled_for = cleaned_data["scheduled_for"]
+    interview_session.scheduled_for = scheduled_for
     interview_session.location = cleaned_data["location"]
     interview_session.session_notes = cleaned_data["session_notes"]
+    should_notify_panel = (
+        not finalize
+        and _interview_schedule_change_requires_notification(
+            created=created,
+            previous_scheduled_for=previous_scheduled_for,
+            previous_location=previous_location,
+            new_scheduled_for=interview_session.scheduled_for,
+            new_location=interview_session.location,
+        )
+    )
 
     existing_rating_count = interview_session.ratings.count() if interview_session.pk else 0
     fallback_count = get_interview_fallback_evidence(application, stage=review_stage).count()
-    if finalize and existing_rating_count == 0 and fallback_count == 0:
+    if (
+        finalize
+        and existing_rating_count + fallback_count < MIN_INTERVIEW_OUTPUTS_TO_FINALIZE
+    ):
         raise ValueError(
             "Record at least one interview rating or upload a fallback rating sheet before finalizing the interview session."
         )
+    schedule_notification_recipients = (
+        get_interview_schedule_notification_recipients(application)
+        if should_notify_panel
+        else []
+    )
+    unsubmitted_panel_recipients = []
+    if finalize:
+        submitted_panel_ids = set(
+            interview_session.ratings.values_list("rated_by_id", flat=True)
+        )
+        unsubmitted_panel_recipients = [
+            recipient
+            for recipient in get_interview_schedule_notification_recipients(application)
+            if recipient.id not in submitted_panel_ids
+        ]
 
     interview_session.is_finalized = finalize
     if finalize:
@@ -3468,6 +3782,23 @@ def save_interview_session(application, actor, cleaned_data, finalize=False):
             "is_finalized": interview_session.is_finalized,
         },
     )
+    if should_notify_panel:
+        queue_interview_session_scheduled_notifications(
+            application,
+            interview_session,
+            schedule_notification_recipients,
+            actor=actor,
+        )
+        _emit_interview_scheduled_in_app_notifications(
+            application,
+            interview_session,
+            schedule_notification_recipients,
+        )
+    if finalize and unsubmitted_panel_recipients:
+        _emit_interview_finalized_in_app_notifications(
+            application,
+            unsubmitted_panel_recipients,
+        )
     return interview_session
 
 
@@ -4189,11 +4520,13 @@ def _upsert_recruitment_case_for_submission(application, actor, next_role, next_
     if not next_stage:
         raise ValueError("Submitted applications must route to a valid internal review stage.")
 
+    returned_at = None
     case, created = RecruitmentCase.objects.get_or_create(
         application=application,
         defaults={
             "branch": application.branch,
             "current_stage": next_stage,
+            "stage_entered_at": timezone.now(),
             "current_handler_role": next_role,
             "case_status": RecruitmentCase.CaseStatus.ACTIVE,
             "is_stage_locked": False,
@@ -4203,7 +4536,8 @@ def _upsert_recruitment_case_for_submission(application, actor, next_role, next_
     if not created:
         if case.case_status != RecruitmentCase.CaseStatus.RETURNED_TO_APPLICANT:
             raise ValueError("A recruitment case already exists for this application.")
-        case.current_stage = next_stage
+        returned_at = case.updated_at
+        _transition_case_stage(case, next_stage, force=True)
         case.current_handler_role = next_role
         case.case_status = RecruitmentCase.CaseStatus.ACTIVE
         case.is_stage_locked = False
@@ -4214,6 +4548,7 @@ def _upsert_recruitment_case_for_submission(application, actor, next_role, next_
             update_fields=[
                 "branch",
                 "current_stage",
+                "stage_entered_at",
                 "current_handler_role",
                 "case_status",
                 "is_stage_locked",
@@ -4222,7 +4557,27 @@ def _upsert_recruitment_case_for_submission(application, actor, next_role, next_
                 "reopened_at",
                 "updated_at",
             ]
-      )
+        )
+    if created:
+        _emit_case_assignment_notification(
+            application,
+            actor,
+            next_role,
+            title=f"{application.reference_label} assigned to you",
+            body="A new application is ready for review.",
+            tab="screening",
+        )
+    else:
+        document_count = application.evidence_items.filter(
+            artifact_type=ARTIFACT_TYPE_APPLICANT_DOCUMENT,
+            created_at__gte=returned_at,
+        ).count()
+        _emit_resubmission_received_notification(
+            application,
+            actor,
+            next_role,
+            document_count=document_count,
+        )
     record_audit_event(
         application=application,
         actor=actor,
@@ -4241,7 +4596,7 @@ def _sync_case_after_workflow_action(application, actor, next_role, next_status,
 
     next_stage = _review_stage_from_application_status(next_status)
     if next_stage:
-        case.current_stage = next_stage
+        _transition_case_stage(case, next_stage)
         case.case_status = RecruitmentCase.CaseStatus.ACTIVE
         case.current_handler_role = next_role
         case.is_stage_locked = False
@@ -4255,21 +4610,21 @@ def _sync_case_after_workflow_action(application, actor, next_role, next_status,
         case.closed_at = None
     elif next_status == RecruitmentApplication.Status.APPROVED:
         if next_role:
-            case.current_stage = RecruitmentCase.Stage.COMPLETION
+            _transition_case_stage(case, RecruitmentCase.Stage.COMPLETION)
             case.case_status = RecruitmentCase.CaseStatus.ACTIVE
             case.current_handler_role = next_role
             case.is_stage_locked = False
             case.locked_stage = ""
             case.closed_at = None
         else:
-            case.current_stage = RecruitmentCase.Stage.CLOSED
+            _transition_case_stage(case, RecruitmentCase.Stage.CLOSED)
             case.case_status = RecruitmentCase.CaseStatus.APPROVED
             case.current_handler_role = ""
             case.is_stage_locked = True
             case.locked_stage = previous_stage
             case.closed_at = timezone.now()
     elif next_status == RecruitmentApplication.Status.REJECTED:
-        case.current_stage = RecruitmentCase.Stage.CLOSED
+        _transition_case_stage(case, RecruitmentCase.Stage.CLOSED)
         case.case_status = RecruitmentCase.CaseStatus.REJECTED
         case.current_handler_role = ""
         case.is_stage_locked = True
@@ -4282,6 +4637,7 @@ def _sync_case_after_workflow_action(application, actor, next_role, next_status,
         update_fields=[
             "branch",
             "current_stage",
+            "stage_entered_at",
             "current_handler_role",
             "case_status",
             "is_stage_locked",
@@ -5347,6 +5703,27 @@ def process_workflow_action(application, actor, action, remarks):
             to_stage=application.case.current_stage,
             notes=remarks,
         )
+        stage_label = application.case.get_current_stage_display()
+        if action == "endorse":
+            title = f"{application.reference_label} endorsed to you for {stage_label}"
+        elif action == "recommend":
+            title = f"{application.reference_label} recommended to you for {stage_label}"
+        elif action.startswith("return"):
+            title = f"{application.reference_label} returned to you for {stage_label}"
+        else:
+            title = f"{application.reference_label} assigned to you"
+        _emit_case_assignment_notification(
+            application,
+            actor,
+            next_role,
+            kind=(
+                Notification.Kind.CASE_RETURNED
+                if action.startswith("return")
+                else Notification.Kind.CASE_ASSIGNED
+            ),
+            title=title,
+            body=description,
+        )
     if (
         effective_role == RecruitmentUser.Role.SECRETARIAT
         and application.level == PositionPosting.Level.LEVEL_2
@@ -5377,6 +5754,12 @@ def process_workflow_action(application, actor, action, remarks):
                 application,
                 actor=actor,
                 document_reviews=requested_document_reviews,
+                workflow_remarks=remarks,
+            )
+        else:
+            queue_application_returned_to_applicant_notification(
+                application,
+                actor=actor,
                 workflow_remarks=remarks,
             )
     return application
@@ -5509,6 +5892,15 @@ def return_car_for_reassessment(application, actor, remarks):
             from_stage=case_transition["previous_stage"],
             to_stage=target_application.case.current_stage,
             notes=remarks,
+        )
+        _emit_case_assignment_notification(
+            target_application,
+            actor,
+            RecruitmentUser.Role.HRMPSB_MEMBER,
+            kind=Notification.Kind.CASE_RETURNED,
+            title=f"{target_application.reference_label} returned to you for HRMPSB Review",
+            body="The CAR was returned for reassessment.",
+            tab="deliberation",
         )
 
     return report
@@ -5660,6 +6052,14 @@ def record_final_selection(application, actor, cleaned_data):
                 to_stage=target_application.case.current_stage,
                 notes=selection.decision_notes,
             )
+            _emit_case_assignment_notification(
+                target_application,
+                actor,
+                next_role,
+                title=f"{target_application.reference_label} assigned to you for Completion Tracking",
+                body="The applicant was selected and is ready for completion tracking.",
+                tab="completion",
+            )
             queue_selected_applicant_notification(target_application, actor=actor)
         else:
             record_routing_history_event(
@@ -5800,6 +6200,14 @@ def record_final_decision(application, actor, cleaned_data):
             to_stage=application.case.current_stage,
             notes=decision.decision_notes,
         )
+        _emit_case_assignment_notification(
+            application,
+            actor,
+            next_role,
+            title=f"{application.reference_label} assigned to you for Completion Tracking",
+            body="The applicant was selected and is ready for completion tracking.",
+            tab="completion",
+        )
         queue_selected_applicant_notification(application, actor=actor)
     else:
         queue_non_selected_applicant_notification(application, actor=actor)
@@ -5837,7 +6245,7 @@ def close_recruitment_case(application, actor, closure_notes):
     previous_case_status = case.case_status
     closed_at = timezone.now()
 
-    case.current_stage = RecruitmentCase.Stage.CLOSED
+    _transition_case_stage(case, RecruitmentCase.Stage.CLOSED)
     case.case_status = RecruitmentCase.CaseStatus.APPROVED
     case.current_handler_role = ""
     case.is_stage_locked = True
@@ -5847,6 +6255,7 @@ def close_recruitment_case(application, actor, closure_notes):
         update_fields=[
             "branch",
             "current_stage",
+            "stage_entered_at",
             "current_handler_role",
             "case_status",
             "is_stage_locked",
@@ -5939,7 +6348,7 @@ def reopen_recruitment_case(application, actor, reason):
     if not reopened_status:
         raise ValueError("This finalized case does not point to a step that can be reopened.")
 
-    case.current_stage = reopened_stage
+    _transition_case_stage(case, reopened_stage)
     case.current_handler_role = _handler_role_from_stage(reopened_stage, application=application)
     case.case_status = RecruitmentCase.CaseStatus.ACTIVE
     case.is_stage_locked = False
@@ -5950,6 +6359,7 @@ def reopen_recruitment_case(application, actor, reason):
         update_fields=[
             "branch",
             "current_stage",
+            "stage_entered_at",
             "current_handler_role",
             "case_status",
             "is_stage_locked",

@@ -1,7 +1,7 @@
 {% extends "internal_base.html" %}
 {% load recruitment_ui %}
 
-{% block internal_title %}{% if is_queue %}My Assigned Cases{% else %}Cases I Can View{% endif %}{% endblock %}
+{% block internal_title %}{% if is_queue %}My Queue{% else %}Cases I Can View{% endif %}{% endblock %}
 
 {% block breadcrumb %}
 <span class="rg-breadcrumb-sep">&rsaquo;</span>
@@ -11,48 +11,38 @@
 {% block content %}
 <div class="rg-page-header">
     <div>
-        <p class="rg-eyebrow">{% if is_queue %}Cases{% else %}Internal Portal{% endif %}</p>
-        <h1 class="rg-page-title">{% if is_queue %}My Assigned Cases{% else %}Cases I Can View{% endif %}</h1>
+        <h1 class="rg-page-title">{% if is_queue %}My queue{% else %}Cases I can view{% endif %}</h1>
     </div>
     <div class="rg-page-actions">
         {% if not is_queue %}
-            <a href="{% url 'workflow-queue' %}" class="btn btn-rg-primary btn-sm">My Queue</a>
+            <a href="{% url 'workflow-queue' %}" class="btn btn-rg-primary btn-sm">My queue</a>
         {% endif %}
     </div>
 </div>
 
-{% if is_queue %}
-    {% if applications %}
-        <div class="rg-list-summary">
+{% if applications %}
+    <div class="rg-queue-toolbar">
+        <div class="rg-queue-filters" role="group" aria-label="Filter cases by type">
+            <button type="button" class="rg-queue-chip is-active" data-queue-filter="all">All</button>
+            <button type="button" class="rg-queue-chip" data-queue-filter="plantilla">Plantilla</button>
+            <button type="button" class="rg-queue-chip" data-queue-filter="cos">Contract of Service</button>
+        </div>
+        <p class="rg-queue-count js-queue-count"
+           aria-live="polite"
+           data-queue-suffix="{% if is_queue %}in your queue{% else %}you can view{% endif %}">
             <strong>{{ applications|length }}</strong>
-            <span>case{% if applications|length != 1 %}s{% endif %} need{% if applications|length == 1 %}s{% endif %} your action.</span>
-        </div>
-    {% endif %}
-{% else %}
-    <div class="rg-istat-row">
-        <div class="rg-istat">
-            <span class="rg-istat__value">{{ applications|length }}</span>
-            <span class="rg-istat__label">Cases</span>
-        </div>
-        <div class="rg-istat-row__divider"></div>
-        <div class="rg-istat">
-            <span class="rg-istat__value">Can View</span>
-            <span class="rg-istat__label">List</span>
-        </div>
-        <div class="rg-istat-row__divider"></div>
-        <div class="rg-istat">
-            <span class="rg-istat__value">Level-Based</span>
-            <span class="rg-istat__label">Assignment</span>
-        </div>
+            case{{ applications|length|pluralize }}
+            {% if is_queue %}in your queue{% else %}you can view{% endif %}.
+        </p>
     </div>
 {% endif %}
 
 {% if not applications %}
     <div class="rg-icard">
         {% if is_queue %}
-            {% include "internal_includes/state_empty.html" with title="No cases right now" copy="No cases need your action right now." %}
+            {% include "internal_includes/state_empty.html" with title="You're all caught up" copy="No cases need your action right now. New assignments will appear here." %}
         {% else %}
-            {% include "internal_includes/state_empty.html" with title="No cases found" copy="No cases match the current filter." %}
+            {% include "internal_includes/state_empty.html" with title="No cases to show" copy="Cases you are allowed to view will appear here." %}
         {% endif %}
     </div>
 {% else %}
@@ -76,7 +66,7 @@
                 </thead>
                 <tbody>
                     {% for application in applications %}
-                        <tr>
+                        <tr data-queue-row data-branch="{{ application.branch }}">
                             <td class="col-ref">
                                 <div class="fw-bold" style="font-family:'Courier New',monospace;font-size:0.78rem;color:#5f6c78;">
                                     {{ application.reference_label }}
@@ -132,13 +122,16 @@
                                 </td>
                             {% endif %}
                             <td>
-                                <span class="rg-imeta">{{ application.updated_at|date:"M d, Y" }}</span>
+                                <div style="font-size:0.8125rem;color:#374151;">
+                                    {{ application.updated_at|timesince }} ago
+                                </div>
+                                <div class="rg-imeta mt-1">{{ application.updated_at|date:"M d, Y" }}</div>
                             </td>
                             <td class="col-actions">
                                 <div class="rg-itbl-actions">
                                     <a href="{% url 'application-detail' application.pk %}"
                                        class="btn btn-outline-secondary btn-sm">
-                                        Open Case
+                                        Open case
                                     </a>
                                 </div>
                             </td>
@@ -147,6 +140,42 @@
                 </tbody>
             </table>
         </div>
+        <div class="rg-queue-noresults js-queue-noresults" hidden>
+            No cases match this filter.
+        </div>
     </div>
+
+    <script>
+    (function () {
+        "use strict";
+        var chips = document.querySelectorAll("[data-queue-filter]");
+        var rows = document.querySelectorAll("[data-queue-row]");
+        var countEl = document.querySelector(".js-queue-count");
+        var noResults = document.querySelector(".js-queue-noresults");
+        if (!chips.length) return;
+        var suffix = countEl ? (countEl.dataset.queueSuffix || "") : "";
+
+        function applyFilter(value) {
+            var visible = 0;
+            rows.forEach(function (row) {
+                var show = value === "all" || row.dataset.branch === value;
+                row.hidden = !show;
+                if (show) visible++;
+            });
+            if (countEl) {
+                countEl.innerHTML = "<strong>" + visible + "</strong> case" +
+                    (visible === 1 ? "" : "s") + " " + suffix + ".";
+            }
+            if (noResults) noResults.hidden = visible !== 0;
+        }
+        chips.forEach(function (chip) {
+            chip.addEventListener("click", function () {
+                chips.forEach(function (c) { c.classList.remove("is-active"); });
+                chip.classList.add("is-active");
+                applyFilter(chip.dataset.queueFilter);
+            });
+        });
+    })();
+    </script>
 {% endif %}
 {% endblock %}

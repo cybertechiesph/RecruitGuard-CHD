@@ -4,9 +4,9 @@
             <h3 class="rg-icard__title">Your next action</h3>
             <p class="rg-icard__subtitle">
                 {% if screening_disposition_required %}
-                    Choose what happens next for this screening result.
+                    Choose what happens next for this application.
                 {% elif recruitment_case and recruitment_case.current_stage == "appointing_authority_review" %}
-                    Use this only when the CAR needs to be returned for reassessment.
+                    Use this only when the CAR needs to go back for reassessment.
                 {% else %}
                     Choose what happens next for this case.
                 {% endif %}
@@ -17,41 +17,77 @@
         {% csrf_token %}
 
         {% if action_form.action_is_fixed %}
-            {# Single fixed action: render the read-only label + a single primary button #}
-            <div class="rg-form-grid">
-                <div class="rg-field">
-                    <label class="form-label">{{ action_form.action.label }}</label>
-                    <div class="form-control rg-fixed-value" aria-readonly="true">
-                        {{ action_form.action_fixed_label }}
-                    </div>
-                    {{ action_form.action }}
-                    {% for error in action_form.action.errors %}
-                        <div class="invalid-feedback d-block">{{ error }}</div>
-                    {% endfor %}
+            {# Single fixed action — read-only label + one primary button. #}
+            <div class="rg-field">
+                <label class="form-label">{{ action_form.action.label }}</label>
+                <div class="form-control rg-fixed-value" aria-readonly="true">
+                    {{ action_form.action_fixed_label }}
                 </div>
-                {% include "recruitment/includes/form_field.html" with field=action_form.remarks %}
+                {{ action_form.action }}
+                {% for error in action_form.action.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </div>
+            <div class="rg-field">
+                <label class="form-label" for="{{ action_form.remarks.id_for_label }}">
+                    Reason or remarks <span class="text-danger" aria-hidden="true">*</span>
+                </label>
+                {{ action_form.remarks }}
+                <div class="form-text">Required. This is saved to the case history.</div>
+                <div class="invalid-feedback d-block" id="wf-remarks-error" hidden>
+                    Add a short reason before you continue.
+                </div>
+                {% for error in action_form.remarks.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
             </div>
             <div class="rg-form-actions">
-                <button type="submit" class="btn btn-rg-primary">Save Next Step</button>
+                <button type="submit" class="btn btn-rg-primary">Save next step</button>
             </div>
         {% else %}
-            {# Multiple choices: render remarks textarea + a button group, one button per choice. #}
-            {# Hidden action field captures the chosen value when a button is clicked. #}
+            {# Multiple choices — hidden action field + one button per choice. #}
             <div style="display:none;" aria-hidden="true">{{ action_form.action }}</div>
 
-            <div class="rg-form-grid">
-                {% include "recruitment/includes/form_field.html" with field=action_form.remarks %}
+            <div class="rg-field">
+                <label class="form-label" for="{{ action_form.remarks.id_for_label }}">
+                    Reason or remarks <span class="text-danger" aria-hidden="true">*</span>
+                </label>
+                {{ action_form.remarks }}
+                <div class="form-text">
+                    Required. This is saved to the case history{% if screening_disposition_required %} and included in the message to the applicant{% endif %}.
+                </div>
+                <div class="invalid-feedback d-block" id="wf-remarks-error" hidden>
+                    Add a short reason before you continue.
+                </div>
+                {% for error in action_form.remarks.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
             </div>
 
             <div class="rg-wf-action-choices" role="group" aria-label="Next action">
                 {% for value, label in action_form.action.field.choices %}
-                    <button type="submit"
-                            class="rg-wf-action-btn rg-wf-action-btn--{{ value|slugify }}"
-                            data-wf-action="{{ value }}"
-                            name="action_choice"
-                            value="{{ value }}">
-                        {{ label }}
-                    </button>
+                    {% if value == "return_to_applicant" %}
+                        <button type="button"
+                                class="rg-wf-action-btn rg-wf-action-btn--return-to-applicant"
+                                data-wf-modal="return">
+                            {{ label }}
+                            {% if resubmission_document_reviews %}
+                                <span class="rg-wf-action-btn__badge">{{ resubmission_document_reviews|length }}</span>
+                            {% endif %}
+                        </button>
+                    {% elif value == "reject" %}
+                        <button type="button"
+                                class="rg-wf-action-btn rg-wf-action-btn--reject"
+                                data-wf-modal="reject">
+                            {{ label }}
+                        </button>
+                    {% else %}
+                        <button type="submit"
+                                class="rg-wf-action-btn rg-wf-action-btn--{{ value|slugify }}"
+                                data-wf-action="{{ value }}">
+                            {{ label }}
+                        </button>
+                    {% endif %}
                 {% endfor %}
             </div>
             {% for error in action_form.action.errors %}
@@ -61,15 +97,159 @@
     </form>
 </div>
 
+{% if not action_form.action_is_fixed %}
+{# ── Return to Applicant confirmation ────────────────────────── #}
+<div class="modal fade" id="modal-wf-return" tabindex="-1"
+     aria-labelledby="modal-wf-return-title" aria-modal="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius:0.5rem;overflow:hidden;">
+            <div class="modal-header" style="background:var(--rg-brand-gold);border-bottom:none;padding:1rem 1.25rem;">
+                <h5 class="modal-title" id="modal-wf-return-title" style="font-size:0.95rem;font-weight:700;color:#5a4106;margin:0;">
+                    Return this application to the applicant?
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="padding:1.25rem;font-size:0.83rem;color:#374151;line-height:1.6;">
+                {% if resubmission_document_reviews %}
+                    <p class="mb-2">
+                        The applicant will get an email asking them to fix or re-upload
+                        <strong>{{ resubmission_document_reviews|length }}</strong>
+                        document{{ resubmission_document_reviews|length|pluralize }}:
+                    </p>
+                    <ul class="rg-wf-return-doclist">
+                        {% for review in resubmission_document_reviews %}
+                            <li>
+                                <span class="rg-wf-return-doclist__name">{{ review.requirement_title }}</span>
+                                {% if review.remarks %}
+                                    <span class="rg-wf-return-doclist__remark">{{ review.remarks }}</span>
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="mb-2">
+                        The applicant will be told their application was returned. No individual
+                        documents were flagged &mdash; only your reason below will be sent.
+                    </p>
+                {% endif %}
+                <p class="mb-0" style="font-size:0.78rem;color:#6b7280;">
+                    Your <strong>Reason or remarks</strong> above is included in the message.
+                </p>
+            </div>
+            <div class="modal-footer" style="border-top:1px solid #e2e8f0;padding:0.875rem 1.25rem;display:flex;justify-content:flex-end;gap:0.625rem;">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">
+                    Keep reviewing
+                </button>
+                <button type="button" id="modal-wf-return-confirm"
+                        class="rg-wf-action-btn rg-wf-action-btn--return-to-applicant"
+                        data-wf-action="return_to_applicant">
+                    Return to applicant
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ── Reject confirmation (destructive) ───────────────────────── #}
+<div class="modal fade" id="modal-wf-reject" tabindex="-1"
+     aria-labelledby="modal-wf-reject-title" aria-modal="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius:0.5rem;overflow:hidden;">
+            <div class="modal-header" style="background:var(--rg-brand-danger);border-bottom:none;padding:1rem 1.25rem;">
+                <h5 class="modal-title" id="modal-wf-reject-title" style="font-size:0.95rem;font-weight:700;color:#fff;margin:0;">
+                    Reject this application?
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="padding:1.25rem;font-size:0.83rem;color:#374151;line-height:1.6;">
+                <p class="mb-2">
+                    This permanently ends the application of
+                    <strong>{{ application.applicant_display_name }}</strong>
+                    ({{ application.reference_label }}).
+                </p>
+                <p class="mb-2">
+                    The applicant will be emailed that they were not selected.
+                    <strong>This cannot be undone.</strong>
+                </p>
+                <p class="mb-0" style="font-size:0.78rem;color:#6b7280;">
+                    Your <strong>Reason or remarks</strong> above is saved to the case history.
+                </p>
+            </div>
+            <div class="modal-footer" style="border-top:1px solid #e2e8f0;padding:0.875rem 1.25rem;display:flex;justify-content:flex-end;gap:0.625rem;">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">
+                    Keep reviewing
+                </button>
+                <button type="button" id="modal-wf-reject-confirm"
+                        class="rg-wf-action-btn rg-wf-action-btn--reject"
+                        data-wf-action="reject">
+                    Reject application
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <script>
 (function () {
     "use strict";
     var form = document.getElementById("rg-wf-action-form");
     if (!form) return;
     var actionInput = form.querySelector("[name='action']");
+    var remarks = form.querySelector("[name='remarks']");
+    var remarksError = document.getElementById("wf-remarks-error");
+
+    function validateRemarks() {
+        if (!remarks) return true;
+        if (remarks.value.trim() === "") {
+            if (remarksError) remarksError.hidden = false;
+            remarks.classList.add("is-invalid");
+            remarks.focus();
+            return false;
+        }
+        if (remarksError) remarksError.hidden = true;
+        remarks.classList.remove("is-invalid");
+        return true;
+    }
+    if (remarks) {
+        remarks.addEventListener("input", function () {
+            if (remarks.value.trim() !== "") {
+                if (remarksError) remarksError.hidden = true;
+                remarks.classList.remove("is-invalid");
+            }
+        });
+    }
+
+    /* Submit buttons (Endorse / fixed action) — validate before submit. */
+    form.addEventListener("submit", function (e) {
+        if (!validateRemarks()) { e.preventDefault(); return; }
+    });
     form.querySelectorAll("[data-wf-action]").forEach(function (btn) {
-        btn.addEventListener("click", function (e) {
+        if (btn.type !== "submit") return;
+        btn.addEventListener("click", function () {
             if (actionInput) actionInput.value = btn.dataset.wfAction;
+        });
+    });
+
+    /* Modal-triggered actions (Return / Reject) — validate, then open. */
+    function openModal(id) {
+        var el = document.getElementById(id);
+        if (el && window.bootstrap) bootstrap.Modal.getOrCreateInstance(el).show();
+    }
+    form.querySelectorAll("[data-wf-modal]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+            if (!validateRemarks()) return;
+            openModal(btn.dataset.wfModal === "reject" ? "modal-wf-reject" : "modal-wf-return");
+        });
+    });
+
+    [["modal-wf-return-confirm"], ["modal-wf-reject-confirm"]].forEach(function (pair) {
+        var btn = document.getElementById(pair[0]);
+        if (!btn) return;
+        btn.addEventListener("click", function () {
+            if (!validateRemarks()) return;
+            if (actionInput) actionInput.value = btn.dataset.wfAction;
+            form.submit();
         });
     });
 })();

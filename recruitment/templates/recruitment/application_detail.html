@@ -26,6 +26,72 @@
 {% include "internal_includes/case_pipeline.html" %}
 
 
+{# Applicant submission — collapsed reference, available on every tab #}
+<details class="rg-applicant-panel">
+    <summary class="rg-applicant-panel__summary">
+        <svg class="rg-applicant-panel__icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+        </svg>
+        <span class="rg-applicant-panel__heading">Applicant submission</span>
+        <span class="rg-applicant-panel__name">{{ application.applicant_display_name }}</span>
+        <svg class="rg-applicant-panel__chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+    </summary>
+    <div class="rg-applicant-panel__body">
+        <div class="rg-applicant-panel__grid">
+            <div>
+                <span class="rg-applicant-panel__label">Email</span>
+                <strong>{{ application.applicant_email|default:"—" }}</strong>
+            </div>
+            <div>
+                <span class="rg-applicant-panel__label">Phone</span>
+                <strong>{{ application.applicant_phone|default:"—" }}</strong>
+            </div>
+            <div>
+                <span class="rg-applicant-panel__label">Submitted</span>
+                <strong>
+                    {% if application.submitted_at %}
+                        {{ application.submitted_at|date:"M d, Y H:i" }}
+                    {% else %}&mdash;{% endif %}
+                </strong>
+            </div>
+        </div>
+        <div class="rg-applicant-panel__field">
+            <span class="rg-applicant-panel__label">Qualification summary</span>
+            <p>
+                {% if application.qualification_summary %}
+                    {{ application.qualification_summary|linebreaksbr }}
+                {% else %}
+                    <span class="rg-applicant-panel__empty">Not provided</span>
+                {% endif %}
+            </p>
+        </div>
+        {% if application.cover_letter %}
+        <div class="rg-applicant-panel__field">
+            <span class="rg-applicant-panel__label">Cover letter note</span>
+            <p>{{ application.cover_letter|linebreaksbr }}</p>
+        </div>
+        {% endif %}
+        <div class="rg-applicant-panel__field">
+            <span class="rg-applicant-panel__label">Applicant's certifications</span>
+            <ul class="rg-applicant-panel__certs">
+                <li class="{% if application.checklist_privacy_consent %}is-checked{% endif %}">
+                    Consented to data privacy terms
+                </li>
+                <li class="{% if application.checklist_documents_complete %}is-checked{% endif %}">
+                    Confirmed their documents are complete
+                </li>
+                <li class="{% if application.checklist_information_certified %}is-checked{% endif %}">
+                    Certified their information is true
+                </li>
+            </ul>
+        </div>
+    </div>
+</details>
+
+
 {% if request.user.role == "system_admin" %}
 <div class="rg-cws-observer-notice">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -44,68 +110,20 @@
         
         <div class="rg-cws-main">
 
-            {% if current_detail_tab.key == "overview" %}
-            <div class="rg-cws-stage-section" id="cws-overview">
-                {% include "internal_includes/stage_titlebar.html" with title="Case Overview" %}
+            {% comment %}
+            The original "Overview" tab rendered an Applicant Snapshot card.
+            That data is now permanently surfaced by the collapsible
+            "Applicant submission" panel above the tabs (added in Slice B),
+            so this tab no longer carries unique content.
 
-                <div class="rg-icard">
-                    <div class="rg-icard__header">
-                        <div>
-                            <h3 class="rg-icard__title">Applicant Snapshot</h3>
-                            <p class="rg-icard__subtitle">
-                                Applicant details and submission information for this case.
-                            </p>
-                        </div>
-                    </div>
-                    <div class="rg-info-list">
-                        <div class="rg-info-row">
-                            <div class="rg-info-row__label">Applicant</div>
-                            <div class="rg-info-row__value">{{ application.applicant_display_name }}</div>
-                        </div>
-                        <div class="rg-info-row">
-                            <div class="rg-info-row__label">Email</div>
-                            <div class="rg-info-row__value">{{ application.applicant_email }}</div>
-                        </div>
-                        {% if application.applicant_phone %}
-                        <div class="rg-info-row">
-                            <div class="rg-info-row__label">Phone</div>
-                            <div class="rg-info-row__value">{{ application.applicant_phone }}</div>
-                        </div>
-                        {% endif %}
-                        <div class="rg-info-row">
-                            <div class="rg-info-row__label">Position</div>
-                            <div class="rg-info-row__value">
-                                {{ application.position.title }} ({{ application.position.job_code }})
-                            </div>
-                        </div>
-                        <div class="rg-info-row">
-                            <div class="rg-info-row__label">Submitted</div>
-                            <div class="rg-info-row__value">
-                                {{ application.submitted_at|date:"M d, Y H:i" }}
-                            </div>
-                        </div>
-                        {% if application.qualification_summary %}
-                        <div class="rg-info-row">
-                            <div class="rg-info-row__label">Qualification Summary</div>
-                            <div class="rg-info-row__value">{{ application.qualification_summary }}</div>
-                        </div>
-                        {% endif %}
-                        {% if application.cover_letter %}
-                        <div class="rg-info-row">
-                            <div class="rg-info-row__label">Cover Letter</div>
-                            <div class="rg-info-row__value">{{ application.cover_letter }}</div>
-                        </div>
-                        {% endif %}
-                        <div class="rg-info-row">
-                            <div class="rg-info-row__label">Performance Rating Availability</div>
-                            <div class="rg-info-row__value">{{ application.get_performance_rating_applicability_display }}</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
+            Codex backend cleanup ask: remove "overview" from
+            get_application_detail_tab(...) so it no longer appears in the
+            tab list. Until that lands, navigating with ?tab=overview
+            simply shows the case header, applicant panel, pipeline, and
+            an empty main column.
+            {% endcomment %}
 
-            
+
             {% if current_detail_tab.key == "screening" %}
             <div class="rg-cws-stage-section" id="cws-screening">
                 {% include "internal_includes/stage_titlebar.html" with title="Qualification Screening" locked=screening_locked %}

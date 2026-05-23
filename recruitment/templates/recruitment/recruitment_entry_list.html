@@ -23,17 +23,17 @@
 <div class="rg-istat-row">
     <div class="rg-istat">
         <span class="rg-istat__value">{{ entries|length }}</span>
-        <span class="rg-istat__label">Entries</span>
+        <span class="rg-istat__label">Total entries</span>
     </div>
     <div class="rg-istat-row__divider"></div>
     <div class="rg-istat">
-        <span class="rg-istat__value">Dual</span>
-        <span class="rg-istat__label">Branch</span>
+        <span class="rg-istat__value">{{ entry_active_count }}</span>
+        <span class="rg-istat__label">Active</span>
     </div>
     <div class="rg-istat-row__divider"></div>
     <div class="rg-istat">
-        <span class="rg-istat__value">Level-Based</span>
-        <span class="rg-istat__label">Assignment</span>
+        <span class="rg-istat__value">{{ entry_closing_soon_count }}</span>
+        <span class="rg-istat__label">Closing soon</span>
     </div>
 </div>
 

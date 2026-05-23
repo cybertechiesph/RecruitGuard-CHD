@@ -41,6 +41,7 @@ from .models import (
     InternalMFAChallenge,
     InternalPasswordHistory,
     InterviewRating,
+    Notification,
     NotificationLog,
     PositionReference,
     PositionPosting,
@@ -63,6 +64,7 @@ from .requirements import (
 from .services import (
     build_export_bundle,
     build_submission_packet,
+    emit_deadline_approaching_notifications,
     generate_comparative_assessment_report,
     get_latest_finalized_comparative_assessment_report,
     get_available_actions,
@@ -700,7 +702,7 @@ class FoundationSmokeTests(TestCase):
             follow=True,
         )
 
-        self.assertEqual(response.request["PATH_INFO"], reverse("dashboard"))
+        self.assertEqual(response.request["PATH_INFO"], reverse("workflow-queue"))
         self.assertTrue(
             AuditLog.objects.filter(action=AuditLog.Action.INTERNAL_LOGIN).exists()
         )
@@ -3011,6 +3013,23 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
         self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.COMPLETION)
         self.assertEqual(application.status, RecruitmentApplication.Status.APPROVED)
 
+    def test_stage_entered_at_updates_when_case_enters_new_stage(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        old_stage_entered_at = timezone.now() - timedelta(days=2)
+        application.case.stage_entered_at = old_stage_entered_at
+        application.case.save(update_fields=["stage_entered_at", "updated_at"])
+
+        self.finalize_screening_for_current_stage(application, self.secretariat)
+        self.finalize_exam_for_current_stage(application, self.secretariat)
+
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.HRMPSB_REVIEW)
+        self.assertGreater(application.case.stage_entered_at, old_stage_entered_at)
+        self.assertGreater(application.case.time_in_current_stage, timedelta(seconds=0))
+
     def test_closed_case_is_locked_after_completion_and_can_be_reopened(self):
         application = self.make_selected_application(self.cos_position)
 
@@ -4444,15 +4463,15 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
 class ViewAndExportTests(BaseRecruitmentTestCase):
     def test_dashboard_empty_state_renders_without_raw_include_tags(self):
         client = Client()
-        self.force_login_with_mfa(client, self.secretariat)
+        self.force_login_with_mfa(client, self.sysadmin)
 
         response = client.get(reverse("dashboard"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "No cases right now")
+        self.assertContains(response, "No identity events yet")
         self.assertNotContains(
             response,
-            '{% include "internal_includes/state_empty.html" with title="No cases right now" copy="No cases need your action right now." %}',
+            '{% include "internal_includes/state_empty.html" with title="No identity events yet" copy="Account creation, role changes, and activation events will appear here." %}',
         )
         self.assertNotContains(response, "{# Empty state partial.")
         self.assertNotContains(
@@ -4468,10 +4487,10 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         response = client.get(reverse("workflow-queue"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "No cases right now")
+        self.assertContains(response, "You're all caught up")
         self.assertNotContains(
             response,
-            '{% include "internal_includes/state_empty.html" with title="No cases right now" copy="No cases need your action right now." %}',
+            '{% include "internal_includes/state_empty.html" with title="You\'re all caught up" copy="No cases need your action right now. New assignments will appear here." %}',
         )
         self.assertNotContains(response, "{# Empty state partial.")
 
@@ -4523,7 +4542,7 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         self.assertContains(response, f'href="{reverse("audit-log-list")}"')
         self.assertContains(response, "User Management")
 
-    def test_non_admin_dashboard_hides_evidence_and_audit_nav_items(self):
+    def test_non_admin_dashboard_redirects_to_workflow_queue(self):
         roles = {
             "secretariat": self.secretariat,
             "hrm_chief": self.hrm_chief,
@@ -4536,15 +4555,14 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
             response = client.get(reverse("dashboard"))
 
             with self.subTest(role=label):
-                self.assertEqual(response.status_code, 200)
-                self.assertNotContains(response, f'href="{reverse("evidence-vault-list")}"')
-                self.assertNotContains(response, f'href="{reverse("audit-log-list")}"')
+                self.assertEqual(response.status_code, 302)
+                self.assertEqual(response["Location"], reverse("workflow-queue"))
 
     def test_non_admin_sidebar_keeps_only_my_queue_link_for_case_navigation(self):
         client = Client()
         self.force_login_with_mfa(client, self.hrm_chief)
 
-        response = client.get(reverse("dashboard"))
+        response = client.get(reverse("workflow-queue"))
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, f'href="{reverse("workflow-queue")}"')
@@ -4915,6 +4933,153 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
     def make_approved_level2_plantilla_application(self):
         return self.make_selected_application(self.level2_position)
 
+    def test_initial_submission_creates_in_app_case_assignment(self):
+        application = self.make_submitted_application()
+
+        notification = Notification.objects.get(
+            application=application,
+            recipient=self.secretariat,
+            kind=Notification.Kind.CASE_ASSIGNED,
+        )
+        self.assertEqual(notification.read_at, None)
+        self.assertIn(application.reference_label, notification.title)
+        self.assertIn("?tab=screening", notification.related_url)
+        self.assertFalse(
+            Notification.objects.filter(application=application, recipient=self.hrm_chief).exists()
+        )
+
+    def test_notification_endpoints_are_recipient_scoped(self):
+        application = self.make_submitted_application()
+        notification = Notification.objects.get(
+            application=application,
+            recipient=self.secretariat,
+            kind=Notification.Kind.CASE_ASSIGNED,
+        )
+        other_notification = Notification.objects.create(
+            application=application,
+            recipient=self.hrm_chief,
+            kind=Notification.Kind.CASE_ASSIGNED,
+            title="Other user's notification",
+            related_url=reverse("application-detail", kwargs={"pk": application.pk}),
+        )
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(reverse("notification-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, notification.title)
+        response = client.get(reverse("notification-unread-count"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"count": 1})
+
+        response = client.post(reverse("notification-read", kwargs={"pk": notification.pk}))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("application-detail", kwargs={"pk": application.pk}), response["Location"])
+        notification.refresh_from_db()
+        self.assertIsNotNone(notification.read_at)
+
+        response = client.post(reverse("notification-read", kwargs={"pk": other_notification.pk}))
+        self.assertEqual(response.status_code, 404)
+        other_notification.refresh_from_db()
+        self.assertIsNone(other_notification.read_at)
+
+    def test_mark_all_notifications_marks_only_current_user(self):
+        application = self.make_submitted_application()
+        Notification.objects.create(
+            application=application,
+            recipient=self.secretariat,
+            kind=Notification.Kind.SCREENING_FINALIZED,
+            title="Screening finalized",
+        )
+        other_notification = Notification.objects.create(
+            application=application,
+            recipient=self.hrm_chief,
+            kind=Notification.Kind.CASE_ASSIGNED,
+            title="Other user's notification",
+        )
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(reverse("notification-read-all"))
+        self.assertEqual(response.status_code, 302)
+
+        self.assertEqual(
+            Notification.objects.filter(recipient=self.secretariat, read_at__isnull=True).count(),
+            0,
+        )
+        other_notification.refresh_from_db()
+        self.assertIsNone(other_notification.read_at)
+
+    def test_level2_handoff_notifies_target_office_without_resetting_stage_clock(self):
+        application = self.make_submitted_application(self.level2_position)
+        Notification.objects.filter(application=application).delete()
+        old_stage_entered_at = timezone.now() - timedelta(days=3)
+        application.case.stage_entered_at = old_stage_entered_at
+        application.case.save(update_fields=["stage_entered_at", "updated_at"])
+
+        grant_secretariat_override(
+            application=application,
+            actor=self.hrm_chief,
+            reason="Secretariat document verification needed.",
+        )
+
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.HRM_CHIEF_REVIEW)
+        self.assertEqual(application.case.stage_entered_at, old_stage_entered_at)
+        notification = Notification.objects.get(
+            application=application,
+            recipient=self.secretariat,
+            kind=Notification.Kind.CASE_ASSIGNED,
+        )
+        self.assertIn("handed off", notification.title)
+
+    def test_resubmission_resets_stage_clock_and_notifies_next_handler(self):
+        application = self.make_submitted_application()
+        with self.captureOnCommitCallbacks(execute=True):
+            process_workflow_action(
+                application,
+                self.secretariat,
+                "return_to_applicant",
+                "Please update your application before resubmitting.",
+            )
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+        Notification.objects.filter(application=application).delete()
+        returned_stage_entered_at = timezone.now() - timedelta(days=4)
+        application.case.stage_entered_at = returned_stage_entered_at
+        application.case.save(update_fields=["stage_entered_at", "updated_at"])
+
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(application, self.applicant)
+
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.SECRETARIAT_REVIEW)
+        self.assertGreater(application.case.stage_entered_at, returned_stage_entered_at)
+        notification = Notification.objects.get(
+            application=application,
+            recipient=self.secretariat,
+            kind=Notification.Kind.RESUBMISSION_RECEIVED,
+        )
+        self.assertIn("resubmitted", notification.title)
+
+    def test_deadline_approaching_notifications_emit_once_per_day(self):
+        application = self.make_submitted_application()
+        application.position.closing_date = timezone.localdate() + timedelta(days=1)
+        application.position.save(update_fields=["closing_date", "updated_at"])
+        Notification.objects.filter(application=application).delete()
+
+        emitted = emit_deadline_approaching_notifications()
+        emitted_again = emit_deadline_approaching_notifications()
+
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(len(emitted_again), 0)
+        notification = emitted[0]
+        self.assertEqual(notification.recipient, self.secretariat)
+        self.assertEqual(notification.kind, Notification.Kind.DEADLINE_APPROACHING)
+        self.assertIn("closing in 24 hours", notification.title)
+
     def test_submission_acknowledgment_notification_is_sent_and_stored(self):
         application = self.make_application(self.level1_position)
         self.verify_application_for_submission(application)
@@ -5044,6 +5209,43 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         self.assertIn(first_requirement.title, mail.outbox[0].body)
         self.assertIn("Upload a signed and readable copy.", mail.outbox[0].body)
         self.assertIn("Please resubmit the corrected document.", mail.outbox[0].body)
+
+    def test_return_to_applicant_without_flagged_documents_sends_generic_return_notification(self):
+        application = self.make_submitted_application()
+        mail.outbox.clear()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            process_workflow_action(
+                application,
+                self.secretariat,
+                "return_to_applicant",
+                "Please update your submitted information before resubmitting.",
+            )
+
+        application.refresh_from_db()
+        notification = NotificationLog.objects.get(
+            application=application,
+            notification_type=NotificationLog.NotificationType.APPLICATION_RETURNED_TO_APPLICANT,
+        )
+        self.assertEqual(application.status, RecruitmentApplication.Status.RETURNED_TO_APPLICANT)
+        self.assertEqual(notification.delivery_status, NotificationLog.DeliveryStatus.SENT)
+        self.assertEqual(notification.triggered_by, self.secretariat)
+        self.assertEqual(
+            notification.metadata["workflow_remarks"],
+            "Please update your submitted information before resubmitting.",
+        )
+        self.assertFalse(
+            NotificationLog.objects.filter(
+                application=application,
+                notification_type=NotificationLog.NotificationType.DOCUMENT_RESUBMISSION_REQUEST,
+            ).exists()
+        )
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("application returned", mail.outbox[0].subject.lower())
+        self.assertIn(
+            "Please update your submitted information before resubmitting.",
+            mail.outbox[0].body,
+        )
 
     def test_secretariat_can_send_requirement_checklist_notification_for_level1_completion(self):
         application = self.make_approved_cos_application()
@@ -5539,6 +5741,197 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
         self.assertEqual(interview_session.finalized_by, self.secretariat)
         self.assertEqual(interview_rating.rated_by, self.hrmpsb)
         self.assertEqual(interview_rating.encoded_by, self.hrmpsb)
+
+    def test_interview_schedule_notifies_hrmpsb_panel_members_on_create_and_material_update(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        second_hrmpsb = User.objects.create_user(
+            username="hrmpsb-panel-2",
+            password="testpass123",
+            email="hrmpsb.panel2@example.com",
+            role=RecruitmentUser.Role.HRMPSB_MEMBER,
+        )
+        scheduled_for = timezone.now() + timedelta(days=2)
+        mail.outbox.clear()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            interview_session = save_interview_session(
+                application=application,
+                actor=self.secretariat,
+                cleaned_data=self.session_payload(
+                    scheduled_for=scheduled_for,
+                    location="Panel Room 1",
+                    session_notes="Panel interview schedule.",
+                ),
+                finalize=False,
+            )
+
+        notifications = NotificationLog.objects.filter(
+            application=application,
+            notification_type=NotificationLog.NotificationType.INTERVIEW_SESSION_SCHEDULED,
+        )
+        in_app_notifications = Notification.objects.filter(
+            application=application,
+            kind=Notification.Kind.INTERVIEW_SCHEDULED,
+        )
+        self.assertEqual(notifications.count(), 2)
+        self.assertEqual(in_app_notifications.count(), 2)
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertEqual(
+            {notification.recipient_email for notification in notifications},
+            {"hrmpsb@example.com", second_hrmpsb.email},
+        )
+        self.assertEqual(
+            {notification.recipient for notification in in_app_notifications},
+            {self.hrmpsb, second_hrmpsb},
+        )
+        self.assertTrue(
+            all(
+                notification.metadata["interview_session_id"] == interview_session.id
+                for notification in notifications
+            )
+        )
+        self.assertIn(application.applicant_display_name, mail.outbox[0].body)
+        self.assertIn(application.position.title, mail.outbox[0].body)
+        self.assertIn("Panel Room 1", mail.outbox[0].body)
+
+        mail.outbox.clear()
+        with self.captureOnCommitCallbacks(execute=True):
+            save_interview_session(
+                application=application,
+                actor=self.secretariat,
+                cleaned_data=self.session_payload(
+                    scheduled_for=scheduled_for,
+                    location="Panel Room 1",
+                    session_notes="Only notes changed.",
+                ),
+                finalize=False,
+            )
+
+        self.assertEqual(
+            NotificationLog.objects.filter(
+                application=application,
+                notification_type=NotificationLog.NotificationType.INTERVIEW_SESSION_SCHEDULED,
+            ).count(),
+            2,
+        )
+        self.assertEqual(
+            Notification.objects.filter(
+                application=application,
+                kind=Notification.Kind.INTERVIEW_SCHEDULED,
+            ).count(),
+            2,
+        )
+        self.assertEqual(len(mail.outbox), 0)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            save_interview_session(
+                application=application,
+                actor=self.secretariat,
+                cleaned_data=self.session_payload(
+                    scheduled_for=scheduled_for,
+                    location="Panel Room 2",
+                    session_notes="Location changed.",
+                ),
+                finalize=False,
+            )
+
+        self.assertEqual(
+            NotificationLog.objects.filter(
+                application=application,
+                notification_type=NotificationLog.NotificationType.INTERVIEW_SESSION_SCHEDULED,
+            ).count(),
+            4,
+        )
+        self.assertEqual(
+            Notification.objects.filter(
+                application=application,
+                kind=Notification.Kind.INTERVIEW_SCHEDULED,
+            ).count(),
+            4,
+        )
+        self.assertEqual(len(mail.outbox), 2)
+
+    def test_interview_finalize_notifies_panel_members_without_ratings(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        second_hrmpsb = User.objects.create_user(
+            username="hrmpsb-panel-2",
+            password="testpass123",
+            email="hrmpsb.panel2@example.com",
+            role=RecruitmentUser.Role.HRMPSB_MEMBER,
+        )
+        scheduled_for = timezone.now() + timedelta(days=2)
+        save_interview_session(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data=self.session_payload(
+                scheduled_for=scheduled_for,
+                location="Panel Room 1",
+            ),
+            finalize=False,
+        )
+        save_interview_rating(
+            application=application,
+            actor=self.hrmpsb,
+            cleaned_data=self.rating_payload(rating_score="88.00"),
+        )
+
+        save_interview_session(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data=self.session_payload(
+                scheduled_for=scheduled_for,
+                location="Panel Room 1",
+            ),
+            finalize=True,
+        )
+
+        finalized_notifications = Notification.objects.filter(
+            application=application,
+            kind=Notification.Kind.INTERVIEW_FINALIZED,
+        )
+        self.assertEqual(finalized_notifications.count(), 1)
+        self.assertEqual(finalized_notifications.get().recipient, second_hrmpsb)
+
+    def test_interview_session_rejects_past_schedule(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "The interview can't be scheduled in the past.",
+        ):
+            save_interview_session(
+                application=application,
+                actor=self.secretariat,
+                cleaned_data=self.session_payload(
+                    scheduled_for=timezone.now() - timedelta(hours=1),
+                ),
+                finalize=False,
+            )
+
+    def test_interview_finalize_requires_at_least_one_rating_or_fallback_sheet(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        scheduled_for = timezone.now() + timedelta(days=1)
+        save_interview_session(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data=self.session_payload(scheduled_for=scheduled_for),
+            finalize=False,
+        )
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "Record at least one interview rating or upload a fallback rating sheet before finalizing the interview session.",
+        ):
+            save_interview_session(
+                application=application,
+                actor=self.secretariat,
+                cleaned_data=self.session_payload(scheduled_for=scheduled_for),
+                finalize=True,
+            )
 
     def test_hrmpsb_member_cannot_schedule_plantilla_interview_session(self):
         application = self.make_application(self.level1_position)

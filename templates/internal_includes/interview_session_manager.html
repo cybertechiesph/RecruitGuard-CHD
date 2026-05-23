@@ -1,0 +1,459 @@
+{% load recruitment_ui %}
+
+{# ── Previous step summary ───────────────────────────────────── #}
+{% include "internal_includes/interview_previous_step.html" %}
+
+{# ── Session form / locked readout ───────────────────────────── #}
+<div class="rg-icard" id="int-session-section">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">Interview session</h3>
+            <p class="rg-icard__subtitle">
+                {% if interview_session_locked %}
+                    Session details are locked.
+                {% elif interview_session_form %}
+                    Set the date, time, and where the interview happens. Panel members can submit ratings once this is saved.
+                {% else %}
+                    Session details for this review step.
+                {% endif %}
+            </p>
+        </div>
+        {% if interview_session_locked %}
+            <span class="rg-pill rg-pill--neutral rg-pill--sm rg-int-pill-lock">
+                <svg width="9" height="10" viewBox="0 0 12 14" fill="none" aria-hidden="true">
+                    <rect x="2" y="6" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+                    <path d="M4 6V4.5a2 2 0 0 1 4 0V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                Locked
+            </span>
+        {% endif %}
+    </div>
+
+    {% if interview_session_form %}
+        <form method="post"
+              action="{% url 'interview-session' application.pk %}"
+              id="int-session-form"
+              novalidate>
+            {% csrf_token %}
+            <input type="hidden" name="operation" id="int-session-op-field" value="save">
+
+            <div class="rg-int-session-grid">
+                <div class="rg-field">
+                    <label class="form-label" for="{{ interview_session_form.scheduled_for.id_for_label }}">
+                        Date &amp; time
+                        <span class="text-danger" aria-hidden="true">*</span>
+                    </label>
+                    {{ interview_session_form.scheduled_for }}
+                    {% if interview_session_form.scheduled_for.help_text %}
+                        <div class="form-text">{{ interview_session_form.scheduled_for.help_text|safe }}</div>
+                    {% endif %}
+                    {% for error in interview_session_form.scheduled_for.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+                <div class="rg-field">
+                    <label class="form-label" for="{{ interview_session_form.location.id_for_label }}">
+                        Location or medium
+                        <span class="text-danger" aria-hidden="true">*</span>
+                    </label>
+                    {{ interview_session_form.location }}
+                    {% if interview_session_form.location.help_text %}
+                        <div class="form-text">{{ interview_session_form.location.help_text|safe }}</div>
+                    {% endif %}
+                    {% for error in interview_session_form.location.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="rg-field">
+                <label class="form-label" for="{{ interview_session_form.session_notes.id_for_label }}">
+                    {{ interview_session_form.session_notes.label }}
+                    <span class="rg-int-optional">Optional</span>
+                </label>
+                {{ interview_session_form.session_notes }}
+                {% for error in interview_session_form.session_notes.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </div>
+        </form>
+
+    {% elif current_interview_session %}
+        <div class="rg-int-readout-grid">
+            <div>
+                <span class="rg-int-readout-grid__label">Date &amp; time</span>
+                <strong>
+                    {% if current_interview_session.scheduled_for %}
+                        {{ current_interview_session.scheduled_for|date:"M d, Y" }}
+                        at {{ current_interview_session.scheduled_for|date:"H:i" }}
+                    {% else %}
+                        <span class="rg-int-prev-step__empty">Not set</span>
+                    {% endif %}
+                </strong>
+            </div>
+            <div>
+                <span class="rg-int-readout-grid__label">Where</span>
+                <strong>{{ current_interview_session.location|default:"—" }}</strong>
+            </div>
+        </div>
+        {% if current_interview_session.session_notes %}
+            <p class="rg-int-readout-notes">{{ current_interview_session.session_notes }}</p>
+        {% endif %}
+        {% if current_interview_session.is_finalized %}
+            <p class="rg-int-readout-finalmeta">
+                <svg width="11" height="11" viewBox="0 0 12 14" fill="none" aria-hidden="true">
+                    <rect x="2" y="6" width="8" height="7" rx="1.5" stroke="#9aa4af" stroke-width="1.5"/>
+                    <path d="M4 6V4.5a2 2 0 0 1 4 0V6" stroke="#9aa4af" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                Finalized
+                {% if current_interview_session.finalized_at %}
+                    {{ current_interview_session.finalized_at|date:"M d, Y" }}
+                    at {{ current_interview_session.finalized_at|date:"H:i" }}
+                {% endif %}
+                {% if current_interview_session.finalized_by_role %}
+                    · {{ current_interview_session.finalized_by_role|role_label }}
+                {% endif %}
+            </p>
+        {% endif %}
+    {% endif %}
+</div>
+
+{# ── Rating monitoring (count only, no scores) ─────────────── #}
+{% if interview_session_form or interview_session_locked %}
+<div class="rg-icard" id="int-monitor-section">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">Rating submissions</h3>
+            <p class="rg-icard__subtitle">
+                Individual scores stay private until Deliberation / CAR opens.
+            </p>
+        </div>
+        {% if current_interview_ratings %}
+            <span class="rg-pill rg-pill--success rg-pill--sm">
+                {{ current_interview_ratings|length }}
+                rating{{ current_interview_ratings|length|pluralize }} on record
+            </span>
+        {% else %}
+            <span class="rg-pill rg-pill--neutral rg-pill--sm">0 on record</span>
+        {% endif %}
+    </div>
+
+    {% if current_interview_ratings %}
+        <ul class="rg-int-monitor-list">
+            {% for rating in current_interview_ratings %}
+            <li class="rg-int-monitor-item">
+                <span class="rg-int-monitor-item__dot" aria-hidden="true"></span>
+                <div class="rg-int-monitor-item__copy">
+                    <div class="rg-int-monitor-item__name">{{ rating.rated_by.get_full_name }}</div>
+                    <div class="rg-int-monitor-item__role">
+                        {{ rating.rated_by_role|role_label }}
+                        {% if rating.encoded_by_id and rating.encoded_by_id != rating.rated_by_id %}
+                            · Encoded by {{ rating.encoded_by.get_full_name|default:rating.encoded_by.username }}
+                        {% endif %}
+                    </div>
+                </div>
+                <span class="rg-int-monitor-item__tag">Submitted</span>
+            </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p class="rg-int-prev-step__empty" style="margin:0; padding: 0.75rem 0;">
+            {% if current_interview_session %}
+                No ratings yet. Panel members can submit once the session is saved.
+            {% else %}
+                Save the session first so panel members can submit ratings.
+            {% endif %}
+        </p>
+    {% endif %}
+</div>
+{% endif %}
+
+{# ── Fallback rating sheet ──────────────────────────────────── #}
+{% if interview_fallback_form %}
+<div class="rg-icard" id="int-fallback-section">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">Fallback rating sheet</h3>
+            <p class="rg-icard__subtitle">
+                Upload a scanned paper rating sheet when digital encoding isn't the primary record.
+            </p>
+        </div>
+    </div>
+    <form method="post"
+          action="{% url 'interview-fallback-upload' application.pk %}"
+          enctype="multipart/form-data"
+          id="int-fallback-form"
+          novalidate>
+        {% csrf_token %}
+        <div class="rg-field">
+            <label class="form-label" for="{{ interview_fallback_form.file.id_for_label }}">
+                {{ interview_fallback_form.file.label }}
+                <span class="text-danger" aria-hidden="true">*</span>
+            </label>
+            {{ interview_fallback_form.file }}
+            {% for error in interview_fallback_form.file.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+        <div class="rg-field">
+            <label class="form-label" for="{{ interview_fallback_form.remarks.id_for_label }}">
+                {{ interview_fallback_form.remarks.label }}
+            </label>
+            {{ interview_fallback_form.remarks }}
+            {% for error in interview_fallback_form.remarks.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+        <div class="rg-int-fallback-actions">
+            <div class="invalid-feedback d-block" id="int-fallback-error" hidden>
+                Choose a file before uploading.
+            </div>
+            <button type="submit" class="btn btn-sm btn-outline-secondary" id="int-fallback-submit">
+                Upload fallback sheet
+            </button>
+        </div>
+    </form>
+</div>
+{% elif interview_fallback_requires_session %}
+<div class="rg-icard rg-int-banner rg-int-banner--warn">
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+        <circle cx="10" cy="10" r="8.5"/>
+        <path d="M10 6v4.5" stroke-linecap="round"/>
+        <circle cx="10" cy="13" r="0.8" fill="currentColor"/>
+    </svg>
+    <div>
+        <div class="rg-int-banner__title">Save the session first</div>
+        <p>You can upload a fallback rating sheet once the session is saved.</p>
+    </div>
+</div>
+{% elif interview_fallback_locked %}
+<div class="rg-icard rg-int-banner rg-int-banner--muted">
+    <svg width="13" height="13" viewBox="0 0 12 14" fill="none" aria-hidden="true">
+        <rect x="2" y="6" width="8" height="7" rx="1.5" stroke="#9aa4af" stroke-width="1.5"/>
+        <path d="M4 6V4.5a2 2 0 0 1 4 0V6" stroke="#9aa4af" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    <div>
+        Fallback uploads are closed because the session is finalized.
+        {% if current_interview_fallback_evidence %}
+            {{ current_interview_fallback_evidence|length }}
+            sheet{{ current_interview_fallback_evidence|length|pluralize }} on record.
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{# ── Sticky action bar (session manager) ──────────────────── #}
+{% if interview_session_form %}
+<div class="rg-int-actionbar">
+    <div class="rg-int-actionbar__msg" id="int-session-error" role="alert" hidden></div>
+    <div class="rg-int-actionbar__btns">
+        <span class="rg-autosave is-idle" id="int-session-autosave" aria-live="polite"></span>
+        <span class="rg-int-actionbar__spacer"></span>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="int-save-session-btn">
+            Save session
+        </button>
+        <button type="button" class="btn-rg-finalize" id="int-finalize-session-btn">
+            Finalize session
+        </button>
+    </div>
+</div>
+{% endif %}
+
+{# ── Finalize confirm modal ─────────────────────────────────── #}
+{% if interview_session_form %}
+<div class="modal fade" id="modal-int-finalize-session" tabindex="-1"
+     aria-labelledby="modal-int-finalize-session-label" aria-modal="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:480px;">
+        <div class="modal-content" style="border-radius:0.6rem;overflow:hidden;">
+            <div class="modal-header" style="background:var(--rg-primary);border-bottom:none;padding:1rem 1.25rem;">
+                <h5 class="modal-title" id="modal-int-finalize-session-label" style="font-size:0.95rem;font-weight:700;color:#fff;margin:0;">
+                    Finalize this interview session?
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="padding:1.25rem;font-size:0.83rem;color:#374151;line-height:1.6;">
+                <p class="mb-2">
+                    Once finalized, no new ratings or fallback uploads can be recorded for this
+                    session, and panel members can no longer revise their scores. This can only be
+                    undone with an authorized reopen.
+                </p>
+                <div class="rg-scr-modal-summary">
+                    <div class="rg-scr-modal-summary__row">
+                        <span class="rg-scr-modal-summary__label">Applicant</span>
+                        <span class="rg-scr-modal-summary__value">{{ application.applicant_display_name }}</span>
+                    </div>
+                    <div class="rg-scr-modal-summary__row">
+                        <span class="rg-scr-modal-summary__label">Date &amp; time</span>
+                        <span class="rg-scr-modal-summary__value" id="modal-int-session-date">—</span>
+                    </div>
+                    <div class="rg-scr-modal-summary__row">
+                        <span class="rg-scr-modal-summary__label">Ratings on record</span>
+                        <span class="rg-scr-modal-summary__value">
+                            {{ current_interview_ratings|length }}
+                            {% if current_interview_fallback_evidence %}
+                                + {{ current_interview_fallback_evidence|length }} fallback
+                            {% endif %}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="border-top:1px solid #e2e8f0;padding:0.875rem 1.25rem;display:flex;justify-content:flex-end;gap:0.625rem;">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">
+                    Not yet
+                </button>
+                <button type="button" class="btn-rg-finalize" id="modal-int-session-confirm">
+                    Finalize session
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+(function () {
+    "use strict";
+
+    /* ── Session form validation + actions ──────────────────── */
+    var form = document.getElementById("int-session-form");
+    if (form) {
+        var opField = document.getElementById("int-session-op-field");
+        var dateInput = document.getElementById("id_scheduled_for");
+        var locInput = document.getElementById("id_location");
+        var saveBtn = document.getElementById("int-save-session-btn");
+        var finBtn = document.getElementById("int-finalize-session-btn");
+        var errorBox = document.getElementById("int-session-error");
+        var modalEl = document.getElementById("modal-int-finalize-session");
+        var modalDateEl = document.getElementById("modal-int-session-date");
+        var confirmBtn = document.getElementById("modal-int-session-confirm");
+
+        var totalRatings = {{ current_interview_ratings|length|default:0 }};
+        var hasFallback = {% if current_interview_fallback_evidence %}true{% else %}false{% endif %};
+
+        function showError(msg, field) {
+            if (errorBox) { errorBox.textContent = msg; errorBox.hidden = false; }
+            if (field && field.focus) try { field.focus(); } catch (e) { field.focus(); }
+        }
+        function clearError() {
+            if (errorBox) { errorBox.hidden = true; errorBox.textContent = ""; }
+        }
+        function dateValueOk() {
+            if (!dateInput) return true;
+            var v = (dateInput.value || "").trim();
+            if (!v) return null;
+            try { return new Date(v); } catch (e) { return false; }
+        }
+        function validateForSave() {
+            if (!dateInput || !(dateInput.value || "").trim()) {
+                showError("Set the interview date and time before saving.", dateInput);
+                return false;
+            }
+            var d = dateValueOk();
+            if (d === false || (d instanceof Date && isNaN(d.getTime()))) {
+                showError("That date and time looks invalid. Please re-enter it.", dateInput);
+                return false;
+            }
+            if (!locInput || !(locInput.value || "").trim()) {
+                showError("Set a location or medium for the interview.", locInput);
+                return false;
+            }
+            // Sanity: schedule shouldn't be in the past.
+            if (d instanceof Date && d.getTime() < Date.now() - 5 * 60 * 1000) {
+                showError("The interview can't be scheduled in the past.", dateInput);
+                return false;
+            }
+            clearError();
+            return true;
+        }
+        function validateForFinalize() {
+            if (!validateForSave()) return false;
+            if (totalRatings === 0 && !hasFallback) {
+                showError("Record at least one panel rating or upload a fallback sheet before finalizing.", null);
+                return false;
+            }
+            clearError();
+            return true;
+        }
+
+        if (dateInput) dateInput.addEventListener("input", clearError);
+        if (locInput) locInput.addEventListener("input", clearError);
+
+        if (saveBtn) {
+            saveBtn.addEventListener("click", function () {
+                if (!validateForSave()) return;
+                if (opField) opField.value = "save";
+                form.submit();
+            });
+        }
+        if (finBtn) {
+            finBtn.addEventListener("click", function () {
+                if (!validateForFinalize()) return;
+                if (modalDateEl && dateInput && dateInput.value) {
+                    try {
+                        var d = new Date(dateInput.value);
+                        modalDateEl.textContent = d.toLocaleString("en-PH", {
+                            month: "short", day: "numeric", year: "numeric",
+                            hour: "2-digit", minute: "2-digit"
+                        });
+                    } catch (e) {
+                        modalDateEl.textContent = dateInput.value;
+                    }
+                }
+                if (modalEl && window.bootstrap) {
+                    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+                }
+            });
+        }
+        if (confirmBtn) {
+            confirmBtn.addEventListener("click", function () {
+                if (opField) opField.value = "finalize";
+                form.submit();
+            });
+        }
+    }
+
+    /* ── Fallback upload validation ──────────────────────────── */
+    var fbForm = document.getElementById("int-fallback-form");
+    if (fbForm) {
+        var fbInput = fbForm.querySelector("[name='file']");
+        var fbError = document.getElementById("int-fallback-error");
+        fbForm.addEventListener("submit", function (e) {
+            if (!fbInput || !fbInput.files || fbInput.files.length === 0) {
+                e.preventDefault();
+                if (fbError) fbError.hidden = false;
+                if (fbInput && fbInput.focus) try { fbInput.focus(); } catch (err) {}
+            }
+        });
+        if (fbInput) {
+            fbInput.addEventListener("change", function () {
+                if (fbInput.files && fbInput.files.length > 0 && fbError) fbError.hidden = true;
+            });
+        }
+    }
+})();
+</script>
+
+<script>
+(function () {
+    "use strict";
+    if (!(window.RG && window.RG.attachAutosave)) return;
+    var form = document.getElementById("int-session-form");
+    var indicator = document.getElementById("int-session-autosave");
+    if (!form) return;
+    var dateInput = document.getElementById("id_scheduled_for");
+    var locInput = document.getElementById("id_location");
+    window.RG.attachAutosave(form, {
+        indicator: indicator,
+        operationField: "operation",
+        operationValue: "save",
+        debounceMs: 1800,
+        // Avoid noisy server rejections: only autosave when both
+        // required fields have values.
+        canSave: function () {
+            var hasDate = dateInput && (dateInput.value || "").trim() !== "";
+            var hasLoc = locInput && (locInput.value || "").trim() !== "";
+            return hasDate && hasLoc;
+        }
+    });
+})();
+</script>

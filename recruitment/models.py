@@ -814,6 +814,7 @@ class RecruitmentCase(TimestampedModel):
     )
     branch = models.CharField(max_length=20, choices=PositionPosting.Branch.choices)
     current_stage = models.CharField(max_length=40, choices=Stage.choices)
+    stage_entered_at = models.DateTimeField(default=timezone.now)
     current_handler_role = models.CharField(
         max_length=40,
         choices=RecruitmentUser.Role.choices,
@@ -839,6 +840,10 @@ class RecruitmentCase(TimestampedModel):
     @property
     def timeline_entries(self):
         return self.application.audit_logs.order_by("created_at")
+
+    @property
+    def time_in_current_stage(self):
+        return timezone.now() - self.stage_entered_at
 
     def __str__(self):
         return f"Case for {self.application.reference_label}"
@@ -2420,6 +2425,14 @@ class NotificationLog(TimestampedModel):
             "document_resubmission_request",
             "Document Resubmission Request",
         )
+        APPLICATION_RETURNED_TO_APPLICANT = (
+            "application_returned_to_applicant",
+            "Application Returned to Applicant Notification",
+        )
+        INTERVIEW_SESSION_SCHEDULED = (
+            "interview_session_scheduled",
+            "Interview Session Scheduled Notification",
+        )
         REQUIREMENT_CHECKLIST = "requirement_checklist", "Requirement Checklist Notification"
         REMINDER = "reminder", "Reminder Notification"
 
@@ -2488,6 +2501,47 @@ class NotificationLog(TimestampedModel):
 
     def __str__(self):
         return f"{self.get_notification_type_display()} to {self.recipient_email}"
+
+
+class Notification(TimestampedModel):
+    class Kind(models.TextChoices):
+        CASE_ASSIGNED = "case_assigned", "Case assigned to you"
+        CASE_RETURNED = "case_returned", "Case returned to you"
+        SCREENING_FINALIZED = "screening_finalized", "Screening finalized"
+        RESUBMISSION_RECEIVED = "resubmission_received", "Resubmission received"
+        INTERVIEW_SCHEDULED = "interview_scheduled", "Interview session scheduled"
+        INTERVIEW_FINALIZED = "interview_finalized", "Interview session finalized"
+        DEADLINE_APPROACHING = "deadline_approaching", "Deadline approaching"
+
+    recipient = models.ForeignKey(
+        RecruitmentUser,
+        on_delete=models.CASCADE,
+        related_name="notifications",
+    )
+    kind = models.CharField(max_length=40, choices=Kind.choices)
+    title = models.CharField(max_length=200)
+    body = models.CharField(max_length=400, blank=True)
+    related_url = models.CharField(max_length=400, blank=True)
+    application = models.ForeignKey(
+        RecruitmentApplication,
+        on_delete=models.CASCADE,
+        related_name="in_app_notifications",
+        blank=True,
+        null=True,
+    )
+    read_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(
+                fields=["recipient", "read_at", "created_at"],
+                name="notif_rec_read_created_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.get_kind_display()} for {self.recipient}"
 
 
 class CompletionRecord(TimestampedModel):

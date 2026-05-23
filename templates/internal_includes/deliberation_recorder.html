@@ -1,0 +1,291 @@
+{% load recruitment_ui %}
+{% comment %}
+Deliberation record form, owned by:
+  - HRMPSB members deliberating a plantilla case (full plantilla fields:
+    ranking, quorum, attendance, recommendation).
+  - HRM Chief deliberating a COS case (decision-support summary only).
+
+Inline action footer (Save draft · Finalize record). No sticky bar —
+both this card and the CAR card can render on the same page for an
+HRM Chief on a COS case; each carries its own footer.
+{% endcomment %}
+
+<section class="rg-icard rg-del-recorder">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">Deliberation record</h3>
+            <p class="rg-icard__subtitle">
+                {% if application.branch == "plantilla" %}
+                    Record the HRMPSB minutes, recommendation, quorum, attendance, and ranking after reviewing the CAR draft.
+                {% else %}
+                    Record the HRM Chief deliberation minutes and decision-support summary before endorsing this COS case to the Appointing Authority.
+                {% endif %}
+                Fields marked with <span class="text-danger">*</span> are required to finalize.
+            </p>
+        </div>
+    </div>
+
+    <form method="post"
+          action="{% url 'deliberation-record' application.pk %}"
+          id="del-form"
+          novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="operation" id="del-op-field" value="save">
+
+        <div class="rg-del-recorder__grid">
+            <div class="rg-field">
+                <label class="form-label" for="{{ deliberation_form.deliberated_at.id_for_label }}">
+                    {{ deliberation_form.deliberated_at.label }}
+                    <span class="text-danger" aria-hidden="true">*</span>
+                </label>
+                {{ deliberation_form.deliberated_at }}
+                {% for error in deliberation_form.deliberated_at.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            {% if application.branch == "plantilla" %}
+            <div class="rg-field">
+                <label class="form-label" for="{{ deliberation_form.ranking_position.id_for_label }}">
+                    {{ deliberation_form.ranking_position.label }}
+                    <span class="text-danger" aria-hidden="true">*</span>
+                </label>
+                {{ deliberation_form.ranking_position }}
+                <div class="form-text">This applicant's rank among the candidates.</div>
+                {% for error in deliberation_form.ranking_position.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="rg-field">
+            <label class="form-label" for="{{ deliberation_form.deliberation_minutes.id_for_label }}">
+                {{ deliberation_form.deliberation_minutes.label }}
+                <span class="text-danger" aria-hidden="true">*</span>
+            </label>
+            {{ deliberation_form.deliberation_minutes }}
+            <div class="form-text">Record the key discussion points and any dissenting positions.</div>
+            {% for error in deliberation_form.deliberation_minutes.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+
+        {% if application.branch == "plantilla" %}
+        <div class="rg-field">
+            <label class="form-label" for="{{ deliberation_form.recommendation.id_for_label }}">
+                {{ deliberation_form.recommendation.label }}
+                <span class="text-danger" aria-hidden="true">*</span>
+            </label>
+            {{ deliberation_form.recommendation }}
+            <div class="form-text">The HRMPSB recommendation, endorsed with the CAR.</div>
+            {% for error in deliberation_form.recommendation.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="rg-field">
+            <label class="form-label" for="{{ deliberation_form.decision_support_summary.id_for_label }}">
+                {{ deliberation_form.decision_support_summary.label }}
+                <span class="text-danger" aria-hidden="true">*</span>
+            </label>
+            {{ deliberation_form.decision_support_summary }}
+            <div class="form-text">A short summary of the panel's collective assessment that supports the ranking or recommendation.</div>
+            {% for error in deliberation_form.decision_support_summary.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+
+        {% if application.branch == "plantilla" %}
+        <div class="rg-del-recorder__grid">
+            <div class="rg-field">
+                <label class="form-label" for="{{ deliberation_form.quorum_status.id_for_label }}">
+                    {{ deliberation_form.quorum_status.label }}
+                    <span class="text-danger" aria-hidden="true">*</span>
+                </label>
+                {{ deliberation_form.quorum_status }}
+                <div class="form-text">Final endorsement requires a met quorum.</div>
+                {% for error in deliberation_form.quorum_status.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </div>
+            <div class="rg-field">
+                <label class="form-label" for="{{ deliberation_form.attendance_notes.id_for_label }}">
+                    {{ deliberation_form.attendance_notes.label }}
+                    <span class="text-danger" aria-hidden="true">*</span>
+                </label>
+                {{ deliberation_form.attendance_notes }}
+                <div class="form-text">Member attendance or quorum basis.</div>
+                {% for error in deliberation_form.attendance_notes.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="rg-field">
+            <label class="form-label" for="{{ deliberation_form.ranking_notes.id_for_label }}">
+                {{ deliberation_form.ranking_notes.label }}
+                <span class="rg-int-optional">Optional</span>
+            </label>
+            {{ deliberation_form.ranking_notes }}
+            {% if deliberation_form.ranking_notes.help_text %}
+                <div class="form-text">{{ deliberation_form.ranking_notes.help_text }}</div>
+            {% endif %}
+            {% for error in deliberation_form.ranking_notes.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </form>
+
+    <div class="rg-del-recorder__footer">
+        <div class="rg-del-recorder__msg" id="del-error" role="alert" hidden></div>
+        <div class="rg-del-recorder__btns">
+            <span class="rg-autosave is-idle" id="del-autosave" aria-live="polite"></span>
+            <span class="rg-del-recorder__spacer"></span>
+            <button type="button" id="del-save-btn" class="btn btn-outline-secondary btn-sm">
+                Save draft
+            </button>
+            <button type="button" id="del-finalize-btn" class="btn-rg-finalize">
+                Finalize record
+            </button>
+        </div>
+    </div>
+</section>
+
+{# ── Finalize confirmation modal ─────────────────────────────── #}
+<div class="modal fade" id="modal-del-finalize" tabindex="-1"
+     aria-labelledby="modal-del-finalize-label" aria-modal="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:480px;">
+        <div class="modal-content" style="border-radius:0.6rem; overflow:hidden;">
+            <div class="modal-header" style="background:var(--rg-primary); border-bottom:none; padding:1rem 1.25rem;">
+                <h5 class="modal-title" id="modal-del-finalize-label" style="font-size:0.95rem; font-weight:700; color:#fff; margin:0;">
+                    Finalize the deliberation record?
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="padding:1.25rem; font-size:0.83rem; color:#374151; line-height:1.6;">
+                <p class="mb-2">
+                    Once finalized, this record can't be changed without an authorized reopen.
+                </p>
+                {% if application.branch == "plantilla" %}
+                    <p class="mb-0">
+                        After this, HRMS can finalize the Comparative Assessment Report using your endorsed recommendation.
+                    </p>
+                {% else %}
+                    <p class="mb-0">
+                        After this, the case can be endorsed to the Appointing Authority for the final decision.
+                    </p>
+                {% endif %}
+            </div>
+            <div class="modal-footer" style="border-top:1px solid #e2e8f0; padding:0.875rem 1.25rem; display:flex; justify-content:flex-end; gap:0.625rem;">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">
+                    Not yet
+                </button>
+                <button type="button" class="btn-rg-finalize" id="modal-del-finalize-confirm">
+                    Finalize and lock
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    "use strict";
+    var form = document.getElementById("del-form");
+    if (!form) return;
+
+    var opField = document.getElementById("del-op-field");
+    var saveBtn = document.getElementById("del-save-btn");
+    var finBtn = document.getElementById("del-finalize-btn");
+    var errorBox = document.getElementById("del-error");
+    var confirmBtn = document.getElementById("modal-del-finalize-confirm");
+    var modalEl = document.getElementById("modal-del-finalize");
+    var isPlantilla = {% if application.branch == "plantilla" %}true{% else %}false{% endif %};
+
+    function valOf(name) {
+        var el = form.elements[name];
+        if (!el) return "";
+        if (el.length && !("value" in el)) {
+            for (var i = 0; i < el.length; i++) if (el[i].checked) return el[i].value;
+            return "";
+        }
+        return (el.value || "").trim();
+    }
+    function showError(msg, field) {
+        if (errorBox) { errorBox.textContent = msg; errorBox.hidden = false; }
+        if (field && field.focus) try { field.focus({ preventScroll: false }); } catch (e) { field.focus(); }
+    }
+    function clearError() { if (errorBox) { errorBox.hidden = true; errorBox.textContent = ""; } }
+
+    /* Per-field validation for finalize */
+    function problems() {
+        var p = [];
+        if (!valOf("deliberated_at")) {
+            p.push({ field: form.elements["deliberated_at"], msg: "Set the date and time the deliberation took place." });
+        }
+        if (!valOf("deliberation_minutes")) {
+            p.push({ field: form.elements["deliberation_minutes"], msg: "Record the deliberation minutes before finalizing." });
+        }
+        if (!valOf("decision_support_summary")) {
+            p.push({ field: form.elements["decision_support_summary"], msg: "Add a decision-support summary before finalizing." });
+        }
+        if (isPlantilla) {
+            if (!valOf("ranking_position")) {
+                p.push({ field: form.elements["ranking_position"], msg: "Assign this applicant a ranking position." });
+            }
+            if (!valOf("recommendation")) {
+                p.push({ field: form.elements["recommendation"], msg: "Record the HRMPSB recommendation." });
+            }
+            if (!valOf("quorum_status")) {
+                p.push({ field: form.elements["quorum_status"], msg: "Choose the quorum status." });
+            }
+            if (!valOf("attendance_notes")) {
+                p.push({ field: form.elements["attendance_notes"], msg: "Record member attendance or the quorum basis." });
+            }
+        }
+        return p;
+    }
+
+    /* Save draft — partial data allowed */
+    if (saveBtn) {
+        saveBtn.addEventListener("click", function () {
+            if (opField) opField.value = "save";
+            clearError();
+            form.submit();
+        });
+    }
+
+    /* Finalize — full validation, then modal */
+    if (finBtn) {
+        finBtn.addEventListener("click", function () {
+            var probs = problems();
+            if (probs.length) { showError(probs[0].msg, probs[0].field); return; }
+            clearError();
+            if (modalEl && window.bootstrap) bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        });
+    }
+    if (confirmBtn) {
+        confirmBtn.addEventListener("click", function () {
+            if (opField) opField.value = "finalize";
+            form.submit();
+        });
+    }
+
+    /* Clear the error banner when the user resumes editing */
+    form.addEventListener("input", clearError);
+    form.addEventListener("change", clearError);
+
+    /* Wire autosave (silent draft save) */
+    if (window.RG && window.RG.attachAutosave) {
+        window.RG.attachAutosave(form, {
+            indicator: document.getElementById("del-autosave"),
+            operationField: "operation",
+            operationValue: "save",
+            debounceMs: 1800
+        });
+    }
+})();
+</script>

@@ -1,9 +1,11 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.middleware.csrf import get_token
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
+from django.utils.html import escape
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 from django.views.generic import DetailView, ListView, TemplateView
@@ -36,12 +38,18 @@ from .models import (
     AuditLog,
     CompletionRecord,
     EvidenceVaultItem,
+    Notification,
     PositionPosting,
     RecruitmentApplication,
     RecruitmentCase,
     RecruitmentUser,
+    ScreeningDocumentReview,
 )
 from .notification_services import (
+    get_recent_notifications,
+    get_unread_count,
+    mark_all_notifications_read,
+    mark_notification_read,
     send_reminder_notification,
     send_requirement_checklist_notification,
     user_can_send_reminder_notification,
@@ -202,6 +210,13 @@ def _safe_next_url(request, fallback_url):
 class DashboardView(LoginRequiredMixin, InternalUserRequiredMixin, TemplateView):
     template_name = "recruitment/dashboard.html"
 
+    def get(self, request, *args, **kwargs):
+        # Workflow roles land directly on their queue — that is their home.
+        # Only System Admin sees the dashboard (a distinct identity overview).
+        if request.user.role != RecruitmentUser.Role.SYSTEM_ADMIN:
+            return redirect("workflow-queue")
+        return super().get(request, *args, **kwargs)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
@@ -226,6 +241,97 @@ class DashboardView(LoginRequiredMixin, InternalUserRequiredMixin, TemplateView)
 
 class ForbiddenView(LoginRequiredMixin, InternalUserRequiredMixin, TemplateView):
     template_name = "forbidden.html"
+
+
+def _safe_internal_redirect(request, target_url, fallback_url):
+    if target_url and url_has_allowed_host_and_scheme(
+        target_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return target_url
+    return fallback_url
+
+
+class NotificationListView(LoginRequiredMixin, InternalUserRequiredMixin, View):
+    def get(self, request):
+        csrf_token = get_token(request)
+        rows = []
+        for notification in get_recent_notifications(request.user, limit=100):
+            status = "Unread" if notification.read_at is None else "Read"
+            body = f"<p>{escape(notification.body)}</p>" if notification.body else ""
+            rows.append(
+                "\n".join(
+                    [
+                        "<li>",
+                        f"<strong>{escape(notification.title)}</strong>",
+                        body,
+                        (
+                            f"<small>{escape(status)} · "
+                            f"{escape(notification.created_at.strftime('%Y-%m-%d %H:%M'))}</small>"
+                        ),
+                        (
+                            f'<form method="post" action="{escape(reverse("notification-read", kwargs={"pk": notification.pk}))}">'
+                            f'<input type="hidden" name="csrfmiddlewaretoken" value="{escape(csrf_token)}">'
+                            "<button type=\"submit\">Open</button>"
+                            "</form>"
+                        ),
+                        "</li>",
+                    ]
+                )
+            )
+        items_html = "\n".join(rows) if rows else "<li>No notifications yet.</li>"
+        html = "\n".join(
+            [
+                "<!doctype html>",
+                "<html>",
+                "<head><title>Notifications</title></head>",
+                "<body>",
+                "<main>",
+                "<h1>Notifications</h1>",
+                f'<form method="post" action="{escape(reverse("notification-read-all"))}">',
+                f'<input type="hidden" name="csrfmiddlewaretoken" value="{escape(csrf_token)}">',
+                '<button type="submit">Mark all as read</button>',
+                "</form>",
+                f"<ul>{items_html}</ul>",
+                "</main>",
+                "</body>",
+                "</html>",
+            ]
+        )
+        return HttpResponse(html)
+
+
+class NotificationReadView(LoginRequiredMixin, InternalUserRequiredMixin, View):
+    def post(self, request, pk):
+        try:
+            notification = mark_notification_read(pk, request.user)
+        except Notification.DoesNotExist as exc:
+            raise Http404 from exc
+        fallback_url = reverse("notification-list")
+        redirect_url = _safe_internal_redirect(
+            request,
+            notification.related_url or request.META.get("HTTP_REFERER"),
+            fallback_url,
+        )
+        return redirect(redirect_url)
+
+
+class NotificationReadAllView(LoginRequiredMixin, InternalUserRequiredMixin, View):
+    def post(self, request):
+        mark_all_notifications_read(request.user)
+        fallback_url = reverse("notification-list")
+        redirect_url = _safe_internal_redirect(
+            request,
+            request.META.get("HTTP_REFERER"),
+            fallback_url,
+        )
+        return redirect(redirect_url)
+
+
+class NotificationUnreadCountView(LoginRequiredMixin, InternalUserRequiredMixin, View):
+    def get(self, request):
+        return JsonResponse({"count": get_unread_count(request.user)})
 
 
 class PositionListView(LoginRequiredMixin, InternalUserRequiredMixin, ListView):
@@ -286,6 +392,17 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
         context["completion_requirements"] = get_completion_requirements(application)
         context["screening_records"] = get_screening_records(application)
         context["current_screening_record"] = get_screening_record(application)
+        _screening_record = context["current_screening_record"]
+        if _screening_record is not None:
+            _reviews = list(_screening_record.document_reviews.all())
+            context["screening_flagged_count"] = sum(
+                1 for r in _reviews
+                if r.status == ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION
+            )
+            context["screening_absent_count"] = sum(
+                1 for r in _reviews
+                if r.status == ScreeningDocumentReview.ReviewStatus.ABSENT
+            )
         context["applicant_document_review_items"] = get_applicant_document_review_items(application)
         context["exam_records"] = get_exam_records(application)
         context["current_exam_record"] = get_exam_record(application)
@@ -452,6 +569,13 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
             available_actions = get_available_actions(application, user)
             if available_actions:
                 context["action_form"] = WorkflowActionForm(application=application, user=user)
+                screening_record = context.get("current_screening_record")
+                if screening_record is not None:
+                    context["resubmission_document_reviews"] = list(
+                        screening_record.document_reviews.filter(
+                            status=ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION
+                        ).order_by("display_order", "created_at")
+                    )
         if get_case_handoff_options(application, user):
             context["case_handoff_form"] = CaseHandoffForm(application=application, user=user)
         if context["recruitment_case"] and user_can_reopen_case(user, context["recruitment_case"]):
@@ -764,17 +888,23 @@ class CaseHandoffView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
 
         form = CaseHandoffForm(request.POST, application=application, user=request.user)
         if form.is_valid():
+            target_role = form.cleaned_data["target_role"]
             try:
                 route_case_between_secretariat_and_hrm_chief(
                     application=application,
                     actor=request.user,
-                    target_role=form.cleaned_data["target_role"],
+                    target_role=target_role,
                     remarks=form.cleaned_data["remarks"],
                 )
             except ValueError as exc:
                 messages.error(request, str(exc))
             else:
-                messages.success(request, "Case sent and recorded.")
+                recipient = (
+                    "HRM Chief"
+                    if target_role == RecruitmentUser.Role.HRM_CHIEF
+                    else "Secretariat"
+                )
+                messages.success(request, f"Case sent to {recipient}.")
         else:
             messages.error(request, "Add remarks before sending the case.")
 
@@ -875,7 +1005,10 @@ class InterviewSessionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
             raise PermissionDenied
 
         operation = request.POST.get("operation", "save")
-        form = InterviewSessionForm(request.POST)
+        form = InterviewSessionForm(
+            request.POST,
+            instance=get_interview_session(application),
+        )
         if form.is_valid():
             try:
                 interview_session = save_interview_session(
@@ -892,7 +1025,13 @@ class InterviewSessionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
                 else:
                     messages.success(request, "Interview schedule saved.")
         else:
-            messages.error(request, "Complete the required interview scheduling fields before saving.")
+            messages.error(
+                request,
+                _format_form_errors(
+                    form,
+                    "Complete the required interview scheduling fields before saving.",
+                ),
+            )
         return redirect("application-detail", pk=pk)
 
 

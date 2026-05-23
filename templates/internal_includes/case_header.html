@@ -20,14 +20,14 @@
     </div>
     <div class="rg-cws-header__actions">
         {% if request.user.role != "system_admin" %}
-            <a href="{% url 'workflow-queue' %}" class="btn btn-outline-secondary btn-sm">&larr; Back to Queue</a>
+            <a href="{% url 'workflow-queue' %}" class="btn btn-outline-secondary btn-sm">&larr; Back to queue</a>
         {% endif %}
         {% if case_handoff_form %}
             <button type="button"
                     class="btn btn-outline-secondary btn-sm"
                     data-bs-toggle="modal"
                     data-bs-target="#caseHandoffModal">
-                Send Case
+                {{ case_handoff_form.target_role_fixed_label|default:"Send case" }}
             </button>
         {% endif %}
         {% if can_export %}
@@ -37,7 +37,8 @@
 </div>
 
 {% if case_handoff_form %}
-<div class="modal fade rg-modal-confirm rg-modal-confirm--warn"
+{% with recipient=case_handoff_form.target_recipient_label %}
+<div class="modal fade rg-modal-confirm"
      id="caseHandoffModal"
      tabindex="-1"
      aria-labelledby="caseHandoffModalLabel"
@@ -46,51 +47,78 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h2 class="modal-title h5" id="caseHandoffModalLabel">
-                    Send this case?
+                    Send this case to the {{ recipient }}?
                 </h2>
                 <button type="button"
                         class="btn-close"
                         data-bs-dismiss="modal"
                         aria-label="Close"></button>
             </div>
-            <form method="post" action="{% url 'case-handoff' application.pk %}">
+            <form method="post" action="{% url 'case-handoff' application.pk %}" id="caseHandoffForm">
                 {% csrf_token %}
                 <div class="modal-body">
                     <p class="mb-3 rg-modal-confirm__body-copy">
-                        Send this case to the other authorized office. The official step will stay the same.
+                        The {{ recipient }} will take over handling this case.
+                        The workflow step does not change &mdash; this only passes the
+                        case to the other office.
                     </p>
-                    <div class="rg-form-grid">
-                        {% if case_handoff_form.target_role_is_fixed %}
-                            <div class="rg-field">
-                                <label class="form-label">{{ case_handoff_form.target_role.label }}</label>
-                                <div class="form-control rg-fixed-value" aria-readonly="true">
-                                    {{ case_handoff_form.target_role_fixed_label }}
-                                </div>
-                                {{ case_handoff_form.target_role }}
-                                {% for error in case_handoff_form.target_role.errors %}
-                                    <div class="invalid-feedback d-block">{{ error }}</div>
-                                {% endfor %}
-                            </div>
-                            {% include "recruitment/includes/form_field.html" with field=case_handoff_form.remarks %}
-                        {% else %}
-                            {% for field in case_handoff_form %}
-                                {% include "recruitment/includes/form_field.html" with field=field %}
-                            {% endfor %}
-                        {% endif %}
+                    {# target_role is fixed to a single value; keep it in the form so it posts. #}
+                    <div style="display:none;" aria-hidden="true">{{ case_handoff_form.target_role }}</div>
+                    {% for error in case_handoff_form.target_role.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                    <div class="rg-field">
+                        <label class="form-label" for="{{ case_handoff_form.remarks.id_for_label }}">
+                            {{ case_handoff_form.remarks.label }}
+                            <span class="text-danger" aria-hidden="true">*</span>
+                        </label>
+                        {{ case_handoff_form.remarks }}
+                        <div class="form-text">Required. Saved to the case history.</div>
+                        <div class="invalid-feedback d-block" id="handoff-remarks-error" hidden>
+                            Add a short reason before sending the case.
+                        </div>
+                        {% for error in case_handoff_form.remarks.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button"
-                            class="btn btn-outline-secondary"
-                            data-bs-dismiss="modal">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
                         Cancel
                     </button>
                     <button type="submit" class="btn btn-rg-primary">
-                        Send Case
+                        Send to {{ recipient }}
                     </button>
                 </div>
             </form>
         </div>
     </div>
 </div>
+{% endwith %}
+
+<script>
+(function () {
+    "use strict";
+    var form = document.getElementById("caseHandoffForm");
+    if (!form) return;
+    var remarks = form.querySelector("[name='remarks']");
+    var error = document.getElementById("handoff-remarks-error");
+    form.addEventListener("submit", function (e) {
+        if (remarks && remarks.value.trim() === "") {
+            e.preventDefault();
+            if (error) error.hidden = false;
+            remarks.classList.add("is-invalid");
+            remarks.focus();
+        }
+    });
+    if (remarks) {
+        remarks.addEventListener("input", function () {
+            if (remarks.value.trim() !== "") {
+                if (error) error.hidden = true;
+                remarks.classList.remove("is-invalid");
+            }
+        });
+    }
+})();
+</script>
 {% endif %}

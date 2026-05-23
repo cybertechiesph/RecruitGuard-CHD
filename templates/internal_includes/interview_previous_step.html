@@ -1,0 +1,44 @@
+{% load recruitment_ui %}
+{% comment %}
+Compact previous-step summary for the interview stage.
+Slimmed to just the interview-relevant facts (applicant + position
++ branch already live in the case header and the Slice B
+applicant submission panel).
+{% endcomment %}
+<div class="rg-int-prev-step">
+    <div class="rg-int-prev-step__item">
+        <span class="rg-int-prev-step__label">Screening result</span>
+        <span class="rg-int-prev-step__value">
+            {% if current_screening_record %}
+                <span class="rg-pill rg-pill--{{ current_screening_record.qualification_outcome|status_theme }} rg-pill--sm">
+                    {{ current_screening_record.get_qualification_outcome_display }}
+                </span>
+            {% else %}
+                <span class="rg-int-prev-step__empty">Not recorded</span>
+            {% endif %}
+        </span>
+    </div>
+    <div class="rg-int-prev-step__item">
+        <span class="rg-int-prev-step__label">Exam status</span>
+        <span class="rg-int-prev-step__value">
+            {% if current_exam_record %}
+                <span class="rg-pill rg-pill--{{ current_exam_record.exam_status|status_theme }} rg-pill--sm">
+                    {{ current_exam_record.get_exam_status_display }}
+                </span>
+                {% if current_exam_record.exam_score %}
+                    <span class="rg-int-prev-step__score">{{ current_exam_record.exam_score }}</span>
+                {% elif current_exam_record.exam_result %}
+                    <span class="rg-int-prev-step__score">{{ current_exam_record.exam_result }}</span>
+                {% endif %}
+            {% else %}
+                <span class="rg-int-prev-step__empty">Not recorded</span>
+            {% endif %}
+        </span>
+    </div>
+    <div class="rg-int-prev-step__item">
+        <span class="rg-int-prev-step__label">Review step</span>
+        <span class="rg-int-prev-step__value rg-int-prev-step__value--strong">
+            {{ recruitment_case.get_current_stage_display|default:"—" }}
+        </span>
+    </div>
+</div>

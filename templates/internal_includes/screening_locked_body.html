@@ -1,7 +1,6 @@
-
 {% load recruitment_ui %}
 
-
+{# ── Result strip: the at-a-glance screening outcome ──────────── #}
 {% with outcome=current_screening_record.qualification_outcome %}
 <div class="rg-scr-elig-bar
     {% if outcome == 'qualified' %}rg-scr-elig-bar--qualified
@@ -31,24 +30,22 @@
     </div>
 
     <div class="flex-1">
-        <div class="rg-scr-elig-bar__label">Finalized Eligibility Finding</div>
+        <div class="rg-scr-elig-bar__label">Screening result</div>
         <div class="rg-scr-elig-bar__verdict">
             {{ current_screening_record.get_qualification_outcome_display }}
         </div>
         {% if current_screening_record.finalized_at %}
         <div class="rg-scr-elig-bar__meta">
-            Finalized
+            Finished
             {{ current_screening_record.finalized_at|date:"M d, Y" }}
             at {{ current_screening_record.finalized_at|date:"H:i" }}
             {% if current_screening_record.finalized_by_role %}
-                &mdash;
-                {{ current_screening_record.finalized_by_role|role_label }}
+                &mdash; {{ current_screening_record.finalized_by_role|role_label }}
             {% endif %}
         </div>
         {% endif %}
     </div>
 
-    
     <div style="flex-shrink:0;">
         <span class="rg-pill rg-pill--neutral rg-pill--sm"
               style="display:inline-flex;align-items:center;gap:4px;">
@@ -64,188 +61,212 @@
 </div>
 {% endwith %}
 
-
-<div class="rg-cws-locked-frame">
-    <div class="rg-cws-lock-ribbon" aria-hidden="true">Locked</div>
-    <div class="rg-cws-locked-frame__content">
-
-        
-        <div style="margin-bottom:1.25rem;">
-            <div style="font-size:0.72rem;font-weight:700;color:#5f6c78;
-                        text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem;">
-                Completeness Assessment
-            </div>
-
-            <div class="rg-scr-locked-field">
-                <div class="rg-scr-locked-field__label">Completeness Finding</div>
-                <div class="rg-scr-locked-field__value">
-                    <span class="rg-pill rg-pill--{{ current_screening_record.completeness_status|status_theme }} rg-pill--sm">
-                        {{ current_screening_record.get_completeness_status_display }}
-                    </span>
-                </div>
-            </div>
-
-            <div class="rg-scr-locked-field">
-                <div class="rg-scr-locked-field__label">Completeness Observations</div>
-                <div class="rg-scr-locked-field__value">
-                    {% if current_screening_record.completeness_notes %}
-                        {{ current_screening_record.completeness_notes }}
-                    {% else %}
-                        <span style="color:#9aa4af;font-style:italic;">Not provided</span>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        {% if current_screening_record.document_reviews.exists %}
-        <div style="margin-bottom:1.25rem;">
-            <div style="font-size:0.72rem;font-weight:700;color:#5f6c78;
-                        text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem;">
-                Document Review
-            </div>
-            <div class="rg-scr-doc-table-wrap">
-                <table class="rg-scr-doc-table">
-                    <thead>
-                        <tr>
-                            <th scope="col">Requirement</th>
-                            <th scope="col">File</th>
-                            <th scope="col">Status</th>
-                            <th scope="col">Remarks</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for review in current_screening_record.document_reviews.all %}
-                        <tr>
-                            <td>
-                                <div class="rg-scr-doc-title">{{ review.requirement_title }}</div>
-                                <div class="rg-scr-doc-meta">{{ review.requirement_label }}</div>
-                            </td>
-                            <td>
-                                {% if review.evidence_item %}
-                                    <div class="rg-scr-file-name">{{ review.evidence_item.original_filename }}</div>
-                                {% else %}
-                                    <div class="rg-scr-doc-meta">No uploaded file.</div>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <span class="rg-scr-status-pill" data-fixed-status="{{ review.status }}">
-                                    {{ review.get_status_display }}
-                                </span>
-                            </td>
-                            <td>
-                                {% if review.remarks %}
-                                    <div class="rg-scr-doc-meta">{{ review.remarks }}</div>
-                                {% else %}
-                                    <div class="rg-scr-doc-meta">-</div>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        {% endif %}
-
-        
-        <div style="margin-bottom:1.25rem;">
-            <div style="font-size:0.72rem;font-weight:700;color:#5f6c78;
-                        text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem;">
-                Qualification Assessment
-            </div>
-
-            <div class="rg-scr-locked-field">
-                <div class="rg-scr-locked-field__label">Qualification Outcome</div>
-                <div class="rg-scr-locked-field__value">
-                    <span class="rg-pill rg-pill--{{ current_screening_record.qualification_outcome|status_theme }} rg-pill--sm">
-                        {{ current_screening_record.get_qualification_outcome_display }}
-                    </span>
-                </div>
-            </div>
-
-            <div class="rg-scr-locked-field">
-                <div class="rg-scr-locked-field__label">Document Review Rating</div>
-                <div class="rg-scr-locked-field__value">
-                    {% if current_screening_record.document_review_score is not None %}
-                        {{ current_screening_record.document_review_score }} / 100
-                        <span style="color:#9aa4af;">
-                            &mdash; {{ current_screening_record.document_review_weight_display }}
-                        </span>
-                    {% else %}
-                        <span style="color:#9aa4af;font-style:italic;">No score recorded</span>
-                    {% endif %}
-                </div>
-            </div>
-
-            {% if current_screening_record.education_score is not None or current_screening_record.training_score is not None or current_screening_record.experience_score is not None %}
-            <div class="rg-scr-locked-field">
-                <div class="rg-scr-locked-field__label">Rating Components</div>
-                <div class="rg-scr-locked-field__value">
-                    Education: {{ current_screening_record.education_score|default:"N/A" }};
-                    Training: {{ current_screening_record.training_score|default:"N/A" }};
-                    Experience: {{ current_screening_record.experience_score|default:"N/A" }}
-                </div>
-            </div>
-            {% endif %}
-
-            <div class="rg-scr-locked-field">
-                <div class="rg-scr-locked-field__label">Screening Notes</div>
-                <div class="rg-scr-locked-field__value">
-                    {% if current_screening_record.screening_notes %}
-                        {{ current_screening_record.screening_notes }}
-                    {% else %}
-                        <span style="color:#9aa4af;font-style:italic;">Not provided</span>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        
-        <div class="rg-imeta"
-             style="border-top:1px solid #e2e8f0;padding-top:0.75rem;margin-top:0.25rem;">
-            <svg width="12" height="12" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                <rect x="2.5" y="6.5" width="9" height="6.5" rx="1.5"
-                      stroke="#9aa4af" stroke-width="1.4"/>
-                <path d="M4.5 6.5V5a2.5 2.5 0 0 1 5 0v1.5"
-                      stroke="#9aa4af" stroke-width="1.4" stroke-linecap="round"/>
-            </svg>
-            Finalized
-            {% if current_screening_record.finalized_at %}
-                {{ current_screening_record.finalized_at|date:"M d, Y" }}
-                at {{ current_screening_record.finalized_at|date:"H:i" }}
-            {% endif %}
-            {% if current_screening_record.finalized_by_role %}
-                <span class="rg-imeta__sep"></span>
-                {{ current_screening_record.finalized_by_role|role_label }}
-            {% endif %}
-            <span class="rg-imeta__sep"></span>
-            {{ current_screening_record.get_review_stage_display }}
-        </div>
-
-    </div>
+{# ── Quick facts: the decision-relevant counts ────────────────── #}
+<div class="rg-scr-result-facts">
+    <span class="rg-scr-result-facts__item">
+        Completeness:
+        <strong>{{ current_screening_record.get_completeness_status_display }}</strong>
+    </span>
+    {% if screening_flagged_count %}
+        <span class="rg-scr-result-facts__item rg-scr-result-facts__item--flag">
+            {{ screening_flagged_count }} flagged for resubmission
+        </span>
+    {% endif %}
+    {% if screening_absent_count %}
+        <span class="rg-scr-result-facts__item rg-scr-result-facts__item--absent">
+            {{ screening_absent_count }} document{{ screening_absent_count|pluralize }} missing
+        </span>
+    {% endif %}
 </div>
 
-
-<div class="rg-icard" style="background:#f8fafc;">
-    <div style="display:flex;align-items:flex-start;gap:0.75rem;">
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none"
-             style="flex-shrink:0;margin-top:0.1rem;color:var(--rg-primary);" aria-hidden="true">
-            <circle cx="10" cy="10" r="8.5" stroke="currentColor" stroke-width="1.5"/>
-            <path d="M7 10l2 2 4-4" stroke="currentColor" stroke-width="1.5"
-                  stroke-linecap="round" stroke-linejoin="round"/>
+{# ── Full detail: collapsed by default ───────────────────────── #}
+<details class="rg-scr-locked-details">
+    <summary class="rg-scr-locked-details__summary">
+        <svg class="rg-scr-locked-details__chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        <div>
-            <div style="font-size:0.875rem;font-weight:700;color:#111827;margin-bottom:0.2rem;">
-                Screening record finalized and recorded
+        View full screening details
+    </summary>
+
+    <div class="rg-cws-locked-frame">
+        <div class="rg-cws-lock-ribbon" aria-hidden="true">Locked</div>
+        <div class="rg-cws-locked-frame__content">
+
+            <div style="margin-bottom:1.25rem;">
+                <div class="rg-scr-locked-section-label">Completeness</div>
+
+                <div class="rg-scr-locked-field">
+                    <div class="rg-scr-locked-field__label">Are documents complete?</div>
+                    <div class="rg-scr-locked-field__value">
+                        <span class="rg-pill rg-pill--{{ current_screening_record.completeness_status|status_theme }} rg-pill--sm">
+                            {{ current_screening_record.get_completeness_status_display }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="rg-scr-locked-field">
+                    <div class="rg-scr-locked-field__label">Notes</div>
+                    <div class="rg-scr-locked-field__value">
+                        {% if current_screening_record.completeness_notes %}
+                            {{ current_screening_record.completeness_notes }}
+                        {% else %}
+                            <span style="color:#9aa4af;font-style:italic;">None</span>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
-            <p style="font-size:0.8125rem;color:#5f6c78;margin:0;">
-                {% if screening_disposition_required %}
-                    The screening record for this case is final. Record the applicant disposition below from this screening step.
-                {% else %}
-                    The screening record for this case is final. Complete the remaining tasks for this review step or use an authorized reopen to modify this record.
+
+            {% if current_screening_record.document_reviews.exists %}
+            <div style="margin-bottom:1.25rem;">
+                <div class="rg-scr-locked-section-label">Document review</div>
+                <div class="rg-scr-doc-table-wrap">
+                    <table class="rg-scr-doc-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Requirement</th>
+                                <th scope="col">File</th>
+                                <th scope="col">Status</th>
+                                <th scope="col">Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for review in current_screening_record.document_reviews.all %}
+                            <tr data-document-row data-status="{{ review.status }}">
+                                <td>
+                                    <div class="rg-scr-doc-title">{{ review.requirement_title }}</div>
+                                    <div class="rg-scr-doc-meta">{{ review.requirement_label }}</div>
+                                    {% if review.status == "request_resubmission" %}
+                                        <span class="rg-scr-doc-resub-tag" style="display:inline-flex;">
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
+                                            </svg>
+                                            Returned for resubmission
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if review.evidence_item %}
+                                        <div class="rg-scr-file-name">{{ review.evidence_item.original_filename }}</div>
+                                    {% else %}
+                                        <div class="rg-scr-doc-meta">No file uploaded.</div>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="rg-scr-status-pill" data-fixed-status="{{ review.status }}">
+                                        {{ review.get_status_display }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if review.remarks %}
+                                        {% if review.status == "request_resubmission" %}
+                                            <div class="rg-scr-locked-remark">{{ review.remarks }}</div>
+                                        {% else %}
+                                            <div class="rg-scr-doc-meta">{{ review.remarks }}</div>
+                                        {% endif %}
+                                    {% else %}
+                                        <div class="rg-scr-doc-meta">&mdash;</div>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+
+            <div style="margin-bottom:1.25rem;">
+                <div class="rg-scr-locked-section-label">Qualification</div>
+
+                <div class="rg-scr-locked-field">
+                    <div class="rg-scr-locked-field__label">Does the applicant qualify?</div>
+                    <div class="rg-scr-locked-field__value">
+                        <span class="rg-pill rg-pill--{{ current_screening_record.qualification_outcome|status_theme }} rg-pill--sm">
+                            {{ current_screening_record.get_qualification_outcome_display }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="rg-scr-locked-field">
+                    <div class="rg-scr-locked-field__label">Document review score</div>
+                    <div class="rg-scr-locked-field__value">
+                        {% if current_screening_record.document_review_score is not None %}
+                            {{ current_screening_record.document_review_score }} / 100
+                            <span style="color:#9aa4af;">
+                                &mdash; {{ current_screening_record.document_review_weight_display }}
+                            </span>
+                        {% else %}
+                            <span style="color:#9aa4af;font-style:italic;">No score recorded</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {% if current_screening_record.education_score is not None or current_screening_record.training_score is not None or current_screening_record.experience_score is not None %}
+                <div class="rg-scr-locked-field">
+                    <div class="rg-scr-locked-field__label">Score breakdown</div>
+                    <div class="rg-scr-locked-field__value">
+                        Education: {{ current_screening_record.education_score|default:"N/A" }};
+                        Training: {{ current_screening_record.training_score|default:"N/A" }};
+                        Experience: {{ current_screening_record.experience_score|default:"N/A" }}
+                    </div>
+                </div>
                 {% endif %}
-            </p>
+
+                <div class="rg-scr-locked-field">
+                    <div class="rg-scr-locked-field__label">Notes</div>
+                    <div class="rg-scr-locked-field__value">
+                        {% if current_screening_record.screening_notes %}
+                            {{ current_screening_record.screening_notes }}
+                        {% else %}
+                            <span style="color:#9aa4af;font-style:italic;">None</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="rg-imeta"
+                 style="border-top:1px solid #e2e8f0;padding-top:0.75rem;margin-top:0.25rem;">
+                <svg width="12" height="12" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                    <rect x="2.5" y="6.5" width="9" height="6.5" rx="1.5"
+                          stroke="#9aa4af" stroke-width="1.4"/>
+                    <path d="M4.5 6.5V5a2.5 2.5 0 0 1 5 0v1.5"
+                          stroke="#9aa4af" stroke-width="1.4" stroke-linecap="round"/>
+                </svg>
+                Finished
+                {% if current_screening_record.finalized_at %}
+                    {{ current_screening_record.finalized_at|date:"M d, Y" }}
+                    at {{ current_screening_record.finalized_at|date:"H:i" }}
+                {% endif %}
+                {% if current_screening_record.finalized_by_role %}
+                    <span class="rg-imeta__sep"></span>
+                    {{ current_screening_record.finalized_by_role|role_label }}
+                {% endif %}
+                <span class="rg-imeta__sep"></span>
+                {{ current_screening_record.get_review_stage_display }}
+            </div>
+
         </div>
     </div>
-</div>
+</details>
 
+{# ── Bridge notice to the action card ─────────────────────────── #}
+<div class="rg-icard rg-scr-locked-bridge">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"
+         style="flex-shrink:0;margin-top:0.1rem;color:var(--rg-primary);" aria-hidden="true">
+        <circle cx="10" cy="10" r="8.5" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M7 10l2 2 4-4" stroke="currentColor" stroke-width="1.5"
+              stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div>
+        <div style="font-size:0.875rem;font-weight:700;color:#111827;margin-bottom:0.2rem;">
+            This screening is final and locked.
+        </div>
+        <p style="font-size:0.8125rem;color:#5f6c78;margin:0;">
+            {% if screening_disposition_required %}
+                Choose what happens next below.
+            {% else %}
+                Continue with the remaining tasks for this step, or use an authorized reopen to change this record.
+            {% endif %}
+        </p>
+    </div>
+</div>

@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django import forms
 from django.conf import settings
 from django.contrib.auth.forms import (
@@ -797,6 +799,13 @@ class CaseHandoffForm(BootstrapFormMixin, forms.Form):
             "target_role_is_fixed",
             "target_role_fixed_label",
         )
+        # Plain name of the office that will receive the case.
+        if user.role == RecruitmentUser.Role.SECRETARIAT:
+            self.target_recipient_label = "HRM Chief"
+        elif user.role == RecruitmentUser.Role.HRM_CHIEF:
+            self.target_recipient_label = "Secretariat"
+        else:
+            self.target_recipient_label = "the other office"
         self._apply_bootstrap()
 
     def clean_target_role(self):
@@ -1515,6 +1524,22 @@ class InterviewSessionForm(DeferredModelValidationMixin, BootstrapFormMixin, for
         self.fields["session_notes"].label = "Session Notes"
         self.fields["session_notes"].required = False
         self._apply_bootstrap()
+
+    def clean_scheduled_for(self):
+        scheduled_for = self.cleaned_data.get("scheduled_for")
+        if scheduled_for is None:
+            return scheduled_for
+        cutoff = timezone.now() - timedelta(minutes=5)
+        if scheduled_for >= cutoff:
+            return scheduled_for
+        if (
+            self.instance
+            and self.instance.pk
+            and self.instance.scheduled_for == scheduled_for
+            and self.instance.scheduled_for < cutoff
+        ):
+            return scheduled_for
+        raise forms.ValidationError("The interview can't be scheduled in the past.")
 
 
 class InterviewRatingForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.ModelForm):

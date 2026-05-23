@@ -1,0 +1,314 @@
+{% load recruitment_ui %}
+{% comment %}
+Comparative Assessment Report (CAR) — owned by HRMS / Secretariat (or
+HRM Chief on COS). Two states:
+  - editable when car_form is in context (draft or unfinalized);
+  - locked when car_locked + a finalized report exist.
+{% endcomment %}
+
+{% if car_form %}
+<section class="rg-icard rg-del-car" id="del-car-section">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">Comparative Assessment Report</h3>
+            <p class="rg-icard__subtitle">
+                Prepare the CAR draft from the finalized screening, exam, and interview outputs.
+                Finalize only after HRMPSB endorses its recommendation.
+            </p>
+        </div>
+        {% if current_comparative_assessment_report %}
+        <div class="rg-del-car__version">
+            <span class="rg-pill rg-pill--neutral rg-pill--sm">
+                Version {{ current_comparative_assessment_report.version_number }}
+            </span>
+            {% if current_comparative_assessment_report.generated_by %}
+                <div class="rg-del-car__author">
+                    Prepared by {{ current_comparative_assessment_report.generated_by.get_full_name }}
+                </div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    {% if current_comparative_assessment_report_items %}
+        <div class="rg-del-car__ranklist-head">
+            Candidate rankings
+            <span class="rg-del-car__ranklist-count">
+                · {{ current_comparative_assessment_report_items|length }}
+                candidate{{ current_comparative_assessment_report_items|length|pluralize }}
+            </span>
+        </div>
+        <ul class="rg-del-car-list">
+            {% for item in current_comparative_assessment_report_items %}
+            <li class="rg-del-car-item">
+                <div class="rg-del-rank-badge">#{{ item.rank_order }}</div>
+                <div class="rg-del-car-item__body">
+                    <div class="rg-del-car-item__name">
+                        {{ item.recruitment_case.application.applicant.get_full_name }}
+                    </div>
+                    <div class="rg-del-car-item__scores">
+                        {% if item.qualification_outcome %}
+                        <div class="rg-del-car-item__score-cell">
+                            <span class="rg-del-car-item__score-label">Document review</span>
+                            <span class="rg-del-car-item__score-val">
+                                <span class="rg-pill rg-pill--{{ item.qualification_outcome|status_theme }} rg-pill--sm">
+                                    {{ item.qualification_outcome }}
+                                </span>
+                                {% if item.document_review_score is not None %}
+                                    {{ item.document_review_score }}
+                                {% endif %}
+                            </span>
+                        </div>
+                        {% endif %}
+                        {% if item.exam_score %}
+                        <div class="rg-del-car-item__score-cell">
+                            <span class="rg-del-car-item__score-label">Exam</span>
+                            <span class="rg-del-car-item__score-val">{{ item.exam_score }}</span>
+                        </div>
+                        {% elif item.exam_status %}
+                        <div class="rg-del-car-item__score-cell">
+                            <span class="rg-del-car-item__score-label">Exam</span>
+                            <span class="rg-del-car-item__score-val">
+                                <span class="rg-pill rg-pill--{{ item.exam_status|status_theme }} rg-pill--sm">
+                                    {{ item.exam_status }}
+                                </span>
+                            </span>
+                        </div>
+                        {% endif %}
+                        {% if item.interview_average_score %}
+                        <div class="rg-del-car-item__score-cell">
+                            <span class="rg-del-car-item__score-label">Interview avg</span>
+                            <span class="rg-del-car-item__score-val">{{ item.interview_average_score }}</span>
+                        </div>
+                        {% endif %}
+                        {% if item.assessment_score %}
+                        <div class="rg-del-car-item__score-cell">
+                            <span class="rg-del-car-item__score-label">Preliminary score</span>
+                            <span class="rg-del-car-item__score-val">{{ item.assessment_score }}</span>
+                        </div>
+                        {% endif %}
+                        {% if item.preliminary_rank_order %}
+                        <div class="rg-del-car-item__score-cell">
+                            <span class="rg-del-car-item__score-label">System rank</span>
+                            <span class="rg-del-car-item__score-val">#{{ item.preliminary_rank_order }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% if item.decision_support_summary %}
+                        <p class="rg-del-car-item__decision">{{ item.decision_support_summary|truncatewords:20 }}</p>
+                    {% endif %}
+                    {% if item.recommendation %}
+                        <p class="rg-del-car-item__decision"><strong>Recommendation:</strong> {{ item.recommendation|truncatewords:20 }}</p>
+                    {% endif %}
+                    {% if item.ranking_notes %}
+                        <p class="rg-del-car-item__decision"><strong>Ranking note:</strong> {{ item.ranking_notes|truncatewords:20 }}</p>
+                    {% endif %}
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p class="rg-del-car__empty">
+            Click <strong>Prepare draft CAR</strong> below to compile the finalized screening, exam, and interview outputs for this position.
+        </p>
+    {% endif %}
+
+    <form method="post"
+          action="{% url 'comparative-assessment-report' application.pk %}"
+          id="car-form"
+          novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="operation" id="car-op-field" value="save">
+
+        <div class="rg-field">
+            <label class="form-label" for="{{ car_form.summary_notes.id_for_label }}">
+                {{ car_form.summary_notes.label }}
+                <span class="rg-int-optional">Optional</span>
+            </label>
+            {{ car_form.summary_notes }}
+            <div class="form-text">Add HRMS preparation notes to accompany the generated CAR draft or final document.</div>
+            {% for error in car_form.summary_notes.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+    </form>
+
+    <div class="rg-del-car__footer">
+        <div class="rg-del-car__readiness">
+            <div class="rg-del-car__readiness-item {% if current_deliberation_record and current_deliberation_record.is_finalized %}is-met{% endif %}">
+                <span class="rg-del-car__readiness-icon" aria-hidden="true">
+                    {% if current_deliberation_record and current_deliberation_record.is_finalized %}✓{% endif %}
+                </span>
+                {% if current_deliberation_record and current_deliberation_record.is_finalized %}
+                    HRMPSB endorsement finalized
+                {% else %}
+                    HRMPSB endorsement pending
+                {% endif %}
+            </div>
+            <div class="rg-del-car__readiness-item {% if current_comparative_assessment_report_items %}is-met{% endif %}">
+                <span class="rg-del-car__readiness-icon" aria-hidden="true">
+                    {% if current_comparative_assessment_report_items %}✓{% endif %}
+                </span>
+                {% if current_comparative_assessment_report_items %}
+                    Candidate rankings generated ({{ current_comparative_assessment_report_items|length }})
+                {% else %}
+                    Prepare CAR to compile candidate rankings
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="rg-del-car__msg" id="car-error" role="alert" hidden></div>
+
+        <div class="rg-del-car__btns">
+            <span class="rg-autosave is-idle" id="car-autosave" aria-live="polite"></span>
+            <span class="rg-del-car__spacer"></span>
+            <button type="button" id="car-generate-btn" class="btn btn-outline-secondary btn-sm">
+                {% if current_comparative_assessment_report %}Update draft CAR{% else %}Prepare draft CAR{% endif %}
+            </button>
+            <button type="button" id="car-finalize-btn" class="btn-rg-finalize">
+                Finalize CAR
+            </button>
+        </div>
+    </div>
+</section>
+
+{# ── Finalize confirmation modal ─────────────────────────────── #}
+<div class="modal fade" id="modal-car-finalize" tabindex="-1"
+     aria-labelledby="modal-car-finalize-label" aria-modal="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:480px;">
+        <div class="modal-content" style="border-radius:0.6rem; overflow:hidden;">
+            <div class="modal-header" style="background:var(--rg-primary); border-bottom:none; padding:1rem 1.25rem;">
+                <h5 class="modal-title" id="modal-car-finalize-label" style="font-size:0.95rem; font-weight:700; color:#fff; margin:0;">
+                    Finalize the Comparative Assessment Report?
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="padding:1.25rem; font-size:0.83rem; color:#374151; line-height:1.6;">
+                <p class="mb-2">
+                    Once finalized, this CAR locks in. It can't be changed without an authorized reopen, and the case moves to Final Selection / Decision.
+                </p>
+                <p class="mb-0">
+                    Make sure the candidate rankings and the HRMPSB recommendation are correct before continuing.
+                </p>
+            </div>
+            <div class="modal-footer" style="border-top:1px solid #e2e8f0; padding:0.875rem 1.25rem; display:flex; justify-content:flex-end; gap:0.625rem;">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">
+                    Not yet
+                </button>
+                <button type="button" class="btn-rg-finalize" id="modal-car-finalize-confirm">
+                    Finalize and lock
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    "use strict";
+    var form = document.getElementById("car-form");
+    if (!form) return;
+
+    var opField = document.getElementById("car-op-field");
+    var generateBtn = document.getElementById("car-generate-btn");
+    var finBtn = document.getElementById("car-finalize-btn");
+    var errorBox = document.getElementById("car-error");
+    var confirmBtn = document.getElementById("modal-car-finalize-confirm");
+    var modalEl = document.getElementById("modal-car-finalize");
+
+    var deliberationFinalized = {% if current_deliberation_record and current_deliberation_record.is_finalized %}true{% else %}false{% endif %};
+    var hasRankings = {% if current_comparative_assessment_report_items %}true{% else %}false{% endif %};
+
+    function showError(msg) {
+        if (errorBox) { errorBox.textContent = msg; errorBox.hidden = false; }
+    }
+    function clearError() { if (errorBox) { errorBox.hidden = true; errorBox.textContent = ""; } }
+
+    /* Generate / update — always allowed (the server compiles items) */
+    if (generateBtn) {
+        generateBtn.addEventListener("click", function () {
+            if (opField) opField.value = "save";
+            clearError();
+            form.submit();
+        });
+    }
+
+    /* Finalize — gated by deliberation finalized + rankings present */
+    if (finBtn) {
+        finBtn.addEventListener("click", function () {
+            if (!deliberationFinalized) {
+                showError("Finalize the HRMPSB deliberation record first — the CAR needs that endorsement.");
+                return;
+            }
+            if (!hasRankings) {
+                showError("Generate the candidate rankings first — use “Prepare draft CAR”.");
+                return;
+            }
+            clearError();
+            if (modalEl && window.bootstrap) bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        });
+    }
+    if (confirmBtn) {
+        confirmBtn.addEventListener("click", function () {
+            if (opField) opField.value = "finalize";
+            form.submit();
+        });
+    }
+
+    form.addEventListener("input", clearError);
+    form.addEventListener("change", clearError);
+
+    if (window.RG && window.RG.attachAutosave) {
+        window.RG.attachAutosave(form, {
+            indicator: document.getElementById("car-autosave"),
+            operationField: "operation",
+            operationValue: "save",
+            debounceMs: 1800
+        });
+    }
+})();
+</script>
+
+{% elif car_locked and current_comparative_assessment_report %}
+{# ── Locked CAR readout ──────────────────────────────────────── #}
+<section class="rg-icard rg-del-car rg-del-car--locked">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">Comparative Assessment Report</h3>
+            <p class="rg-icard__subtitle">
+                Finalized
+                {% if current_comparative_assessment_report.finalized_at %}
+                    on {{ current_comparative_assessment_report.finalized_at|date:"M d, Y" }}
+                {% endif %}.
+                The case proceeds to Final Selection / Decision.
+            </p>
+        </div>
+        <span class="rg-pill rg-pill--neutral rg-pill--sm rg-int-pill-lock">
+            <svg width="9" height="10" viewBox="0 0 12 14" fill="none" aria-hidden="true">
+                <rect x="2" y="6" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M4 6V4.5a2 2 0 0 1 4 0V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            Locked
+        </span>
+    </div>
+
+    {% if current_comparative_assessment_report_items %}
+        <ul class="rg-del-car-list">
+            {% for item in current_comparative_assessment_report_items %}
+            <li class="rg-del-car-item">
+                <div class="rg-del-rank-badge">#{{ item.rank_order }}</div>
+                <div class="rg-del-car-item__body">
+                    <div class="rg-del-car-item__name">
+                        {{ item.recruitment_case.application.applicant.get_full_name }}
+                    </div>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+    {% if current_comparative_assessment_report.summary_notes %}
+        <p class="rg-del-car__summary-notes">{{ current_comparative_assessment_report.summary_notes }}</p>
+    {% endif %}
+</section>
+{% endif %}

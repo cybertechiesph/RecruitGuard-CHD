@@ -3,6 +3,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
+from django.utils import timezone
 from django.views import View
 from django.views.generic import CreateView, ListView, UpdateView
 
@@ -78,6 +79,19 @@ class RecruitmentEntryListView(LoginRequiredMixin, EntryManagerRequiredMixin, Li
 
     def get_queryset(self):
         return get_manageable_recruitment_entries(self.request.user)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        entries = list(context["entries"])
+        today = timezone.localdate()
+        context["entry_active_count"] = sum(
+            1 for e in entries if e.status == PositionPosting.EntryStatus.ACTIVE
+        )
+        context["entry_closing_soon_count"] = sum(
+            1 for e in entries
+            if e.closing_date and 0 <= (e.closing_date - today).days <= 7
+        )
+        return context
 
 
 class RecruitmentEntryCreateView(LoginRequiredMixin, EntryManagerRequiredMixin, CreateView):

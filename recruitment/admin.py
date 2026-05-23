@@ -18,6 +18,7 @@ from .models import (
     InternalPasswordHistory,
     InterviewRating,
     InterviewSession,
+    Notification,
     NotificationLog,
     PositionReference,
     PositionPosting,
@@ -711,6 +712,27 @@ class NotificationLogAdmin(admin.ModelAdmin):
         "failure_details",
         "metadata",
     )
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = (
+        "recipient",
+        "kind",
+        "application",
+        "title",
+        "read_at",
+        "created_at",
+    )
+    list_filter = ("kind", "read_at", "created_at")
+    search_fields = (
+        "recipient__username",
+        "recipient__email",
+        "application__reference_number",
+        "title",
+        "body",
+    )
+    readonly_fields = ("created_at", "updated_at")
 
 
 @admin.register(RoutingHistory)
