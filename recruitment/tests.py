@@ -2346,7 +2346,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Please review the highlighted fields below.")
+        self.assertContains(response, "Please fix the highlighted fields below.")
         self.assertContains(response, "This field is required.")
         self.assertFalse(
             RecruitmentApplication.objects.filter(position=self.level1_position).exists()
@@ -4035,6 +4035,136 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         self.assertNotIn("{'exam_score'", message_text)
         self.assertFalse(ExamRecord.objects.filter(application=application).exists())
 
+    def test_exam_autosave_accepts_partial_draft_without_audit_or_evidence(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        self.finalize_screening_for_current_stage(application, self.secretariat)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("exam-review", kwargs={"pk": application.pk}),
+            {
+                "exam_type": ExamRecord.ExamType.TECHNICAL_PRACTICAL,
+                "exam_status": ExamRecord.ExamStatus.COMPLETED,
+                "exam_score": "",
+                "exam_result": "",
+                "technical_score": "",
+                "technical_result": "",
+                "practical_score": "",
+                "practical_result": "",
+                "exam_date": "",
+                "administered_by": ExamRecord.AdministeredBy.HRMS,
+                "valid_from": "",
+                "valid_until": "",
+                "exam_notes": "Autosave captured a partial exam draft.",
+                "operation": "save",
+                "evidence_file": SimpleUploadedFile(
+                    "autosave-exam.pdf",
+                    b"%PDF-1.4\nautosave should not upload",
+                    content_type="application/pdf",
+                ),
+            },
+            HTTP_X_REQUESTED_WITH="RG-Autosave",
+        )
+
+        self.assertEqual(response.status_code, 204)
+        exam_record = ExamRecord.objects.get(application=application)
+        self.assertFalse(exam_record.is_finalized)
+        self.assertEqual(exam_record.exam_status, ExamRecord.ExamStatus.COMPLETED)
+        self.assertIsNone(exam_record.technical_score)
+        self.assertIsNone(exam_record.practical_score)
+        self.assertEqual(exam_record.exam_result, ExamRecord.OverallResult.INCOMPLETE)
+        self.assertIsNone(exam_record.evidence_item)
+        self.assertFalse(
+            AuditLog.objects.filter(
+                application=application,
+                action=AuditLog.Action.EXAM_RECORDED,
+            ).exists()
+        )
+        self.assertFalse(
+            EvidenceVaultItem.objects.filter(
+                application=application,
+                artifact_type="exam_supporting_evidence",
+            ).exists()
+        )
+
+    def test_exam_autosave_rejects_invalid_scores_without_creating_record(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        self.finalize_screening_for_current_stage(application, self.secretariat)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("exam-review", kwargs={"pk": application.pk}),
+            {
+                **self.exam_payload(exam_score="101"),
+                "operation": "save",
+            },
+            HTTP_X_REQUESTED_WITH="RG-Autosave",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(ExamRecord.objects.filter(application=application).exists())
+
+    def test_exam_finalize_rerenders_wizard_with_bound_field_errors(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        self.finalize_screening_for_current_stage(application, self.secretariat)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("exam-review", kwargs={"pk": application.pk}),
+            {
+                **self.exam_payload(
+                    exam_score="",
+                    technical_score="",
+                    practical_score="",
+                ),
+                "operation": "finalize",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Enter this required exam score.")
+        self.assertContains(response, "invalid-feedback")
+        self.assertContains(response, "exam-form")
+        self.assertFalse(ExamRecord.objects.filter(application=application).exists())
+
+    def test_waived_exam_clears_hidden_score_and_validity_values(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        self.finalize_screening_for_current_stage(application, self.secretariat)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("exam-review", kwargs={"pk": application.pk}),
+            {
+                **self.exam_payload(
+                    exam_status=ExamRecord.ExamStatus.WAIVED,
+                    exam_notes="Waived by authorized office control.",
+                ),
+                "operation": "finalize",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        exam_record = ExamRecord.objects.get(application=application)
+        self.assertTrue(exam_record.is_finalized)
+        self.assertEqual(exam_record.exam_status, ExamRecord.ExamStatus.WAIVED)
+        self.assertIsNone(exam_record.exam_score)
+        self.assertIsNone(exam_record.technical_score)
+        self.assertIsNone(exam_record.practical_score)
+        self.assertIsNone(exam_record.valid_from)
+        self.assertIsNone(exam_record.valid_until)
+
     def test_secretariat_cannot_record_level2_exam_without_override(self):
         application = self.make_application(self.level2_position)
         self.verify_application_for_submission(application)
@@ -5432,6 +5562,75 @@ class CompletionTrackingTests(BaseRecruitmentTestCase):
         self.assertTrue(record.requirements_ready_for_closure)
         self.assertTrue(record.ready_for_closure)
 
+    def test_completion_tracking_errors_rerender_bound_wizard_form(self):
+        application = self.make_selected_application(self.cos_position)
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+
+        response = client.post(
+            reverse("completion-tracking", kwargs={"pk": application.pk}),
+            self.completion_payload(
+                [
+                    {
+                        "item_label": "Signed contract",
+                        "status": CompletionRequirement.RequirementStatus.COMPLETED,
+                        "notes": "Submitted.",
+                    },
+                ],
+                deadline=(timezone.localdate() - timedelta(days=1)).isoformat(),
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Completion deadline cannot be earlier than today.")
+        self.assertContains(response, 'id="completion-form"')
+        self.assertContains(response, "Requirement checklist")
+        self.assertFalse(CompletionRecord.objects.filter(application=application).exists())
+
+    def test_case_close_missing_notes_rerenders_closure_step_with_bound_errors(self):
+        application = self.make_selected_application(self.cos_position)
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        client.post(
+            reverse("completion-tracking", kwargs={"pk": application.pk}),
+            self.completion_payload(
+                [
+                    {
+                        "item_label": "Signed contract",
+                        "status": CompletionRequirement.RequirementStatus.COMPLETED,
+                        "notes": "Submitted.",
+                    },
+                    {
+                        "item_label": "Government-issued ID",
+                        "status": CompletionRequirement.RequirementStatus.NOT_APPLICABLE,
+                        "notes": "Existing record reused.",
+                    },
+                ],
+                completion_reference="COS-CONTRACT-CLOSE-ERR",
+                completion_date=timezone.localdate().isoformat(),
+            ),
+        )
+
+        response = client.post(
+            reverse("case-close", kwargs={"pk": application.pk}),
+            {"closure_notes": ""},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Closure notes are required.")
+        self.assertContains(response, "This field is required.")
+        self.assertContains(response, 'data-completion-step="close"')
+        self.assertContains(response, 'id="closure-form"')
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.COMPLETION)
+        self.assertFalse(
+            AuditLog.objects.filter(
+                application=application,
+                action=AuditLog.Action.CASE_CLOSED,
+            ).exists()
+        )
+
     def test_case_close_requires_completion_reference(self):
         application = self.make_selected_application(self.cos_position)
         client = Client()
@@ -5559,7 +5758,7 @@ class CompletionTrackingTests(BaseRecruitmentTestCase):
 
         detail_response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
         self.assertEqual(detail_response.status_code, 200)
-        self.assertContains(detail_response, "Case cannot be closed yet.")
+        self.assertContains(detail_response, "The case can't be closed yet.")
         self.assertContains(
             detail_response,
             "Record the contract reference before closing the case.",
@@ -6194,6 +6393,9 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             "92.00",
         )
 
+    def test_user_full_name_falls_back_to_username_for_display(self):
+        self.assertEqual(self.applicant.get_full_name(), self.applicant.username)
+
     def test_plantilla_deliberation_requires_finalized_applicant_pool(self):
         application = self.make_application(self.level1_position)
         self.move_application_to_hrmpsb_review(application)
@@ -6264,6 +6466,173 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         self.assertEqual(deliberation_record.quorum_status, DeliberationRecord.QuorumStatus.MET)
         self.assertTrue(deliberation_record.recommendation)
         self.assertTrue(deliberation_record.attendance_notes)
+
+    def test_car_autosave_does_not_generate_report_versions_or_files(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb, rating_score="91.25")
+        self.finalize_applicant_pool_for_test(application.position)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("comparative-assessment-report", kwargs={"pk": application.pk}),
+            {"operation": "save", "summary_notes": "autosave before draft"},
+            HTTP_X_REQUESTED_WITH="RG-Autosave",
+        )
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(
+            ComparativeAssessmentReport.objects.filter(
+                recruitment_entry=application.position,
+                review_stage=RecruitmentCase.Stage.HRMPSB_REVIEW,
+            ).exists()
+        )
+        self.assertFalse(
+            EvidenceVaultItem.objects.filter(
+                recruitment_entry=application.position,
+                artifact_type="comparative_assessment_report",
+            ).exists()
+        )
+
+        response = client.post(
+            reverse("comparative-assessment-report", kwargs={"pk": application.pk}),
+            {"operation": "save", "summary_notes": "manual draft generation"},
+        )
+        self.assertEqual(response.status_code, 302)
+        draft_report = ComparativeAssessmentReport.objects.get(
+            recruitment_entry=application.position,
+            review_stage=RecruitmentCase.Stage.HRMPSB_REVIEW,
+        )
+        self.assertEqual(draft_report.version_number, 1)
+        self.assertEqual(draft_report.summary_notes, "manual draft generation")
+        self.assertEqual(
+            EvidenceVaultItem.objects.filter(
+                recruitment_entry=application.position,
+                artifact_type="comparative_assessment_report",
+            ).count(),
+            1,
+        )
+
+        response = client.post(
+            reverse("comparative-assessment-report", kwargs={"pk": application.pk}),
+            {"operation": "save", "summary_notes": "autosaved draft notes"},
+            HTTP_X_REQUESTED_WITH="RG-Autosave",
+        )
+
+        self.assertEqual(response.status_code, 204)
+        draft_report.refresh_from_db()
+        self.assertEqual(draft_report.summary_notes, "autosaved draft notes")
+        self.assertEqual(
+            ComparativeAssessmentReport.objects.filter(
+                recruitment_entry=application.position,
+                review_stage=RecruitmentCase.Stage.HRMPSB_REVIEW,
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            EvidenceVaultItem.objects.filter(
+                recruitment_entry=application.position,
+                artifact_type="comparative_assessment_report",
+            ).count(),
+            1,
+        )
+
+    def test_deliberation_autosave_accepts_partial_draft(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb, rating_score="91.25")
+        self.finalize_applicant_pool_for_test(application.position)
+        generate_comparative_assessment_report(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data={"summary_notes": "Draft CAR prepared for partial deliberation."},
+            finalize=False,
+        )
+
+        client = Client()
+        self.force_login_with_mfa(client, self.hrmpsb)
+        response = client.post(
+            reverse("deliberation-record", kwargs={"pk": application.pk}),
+            {
+                "operation": "save",
+                "deliberation_minutes": "Partial notes captured by autosave.",
+                "decision_support_summary": "",
+                "recommendation": "",
+                "quorum_status": "",
+                "attendance_notes": "",
+                "ranking_position": "",
+                "ranking_notes": "",
+            },
+            HTTP_X_REQUESTED_WITH="RG-Autosave",
+        )
+
+        self.assertEqual(response.status_code, 204)
+        deliberation_record = DeliberationRecord.objects.get(application=application)
+        self.assertFalse(deliberation_record.is_finalized)
+        self.assertEqual(deliberation_record.deliberation_minutes, "Partial notes captured by autosave.")
+        self.assertEqual(deliberation_record.decision_support_summary, "")
+        self.assertEqual(deliberation_record.quorum_status, DeliberationRecord.QuorumStatus.NOT_RECORDED)
+
+        response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
+        self.assertContains(response, "Finalize deliberation to unlock the CAR")
+        self.assertTrue(response.context["car_requires_finalized_deliberation"])
+
+    def test_slice_e_context_exposes_car_readiness_flags(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb, rating_score="91.25")
+        self.finalize_applicant_pool_for_test(application.position)
+        generate_comparative_assessment_report(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data={"summary_notes": "Draft CAR prepared for HRMPSB review."},
+            finalize=False,
+        )
+
+        client = Client()
+        self.force_login_with_mfa(client, self.hrmpsb)
+        response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "CAR is the next step")
+        self.assertTrue(response.context["car_requires_deliberation"])
+        self.assertFalse(response.context["car_readiness"]["can_finalize"])
+        self.assertIn(
+            "Finalize at least one Plantilla deliberation record",
+            response.context["car_readiness"]["finalize_block_message"],
+        )
+
+    def test_locked_deliberation_uses_slice_e_wrapper(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb, rating_score="91.25")
+        self.finalize_applicant_pool_for_test(application.position)
+        generate_comparative_assessment_report(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data={"summary_notes": "Draft CAR prepared for HRMPSB review."},
+            finalize=False,
+        )
+        save_deliberation_record(
+            application=application,
+            actor=self.hrmpsb,
+            cleaned_data=self.deliberation_payload(),
+            finalize=True,
+        )
+
+        client = Client()
+        self.force_login_with_mfa(client, self.hrmpsb)
+        response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["current_detail_tab"]["key"], "deliberation")
+        self.assertContains(response, "rg-del-locked")
+        self.assertContains(response, "Deliberation record")
+        self.assertContains(response, "Panel reviewed the finalized applicant pool.")
+        self.assertContains(response, "Quorum and attendance were recorded.")
+        self.assertContains(response, "Ranking basis recorded.")
+        self.assertNotContains(response, "rg-cws-locked-frame")
 
     def test_plantilla_deliberation_requires_car_draft_after_pool_finalized(self):
         application = self.make_application(self.level1_position)
@@ -6936,6 +7305,34 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         self.assertEqual(applications[0].status, RecruitmentApplication.Status.REJECTED)
         self.assertEqual(applications[0].case.current_stage, RecruitmentCase.Stage.CLOSED)
 
+    def test_final_selection_invalid_post_rerenders_bound_form(self):
+        applications, report = self.prepare_ranked_level1_car(6)
+        selected_item = report.items.get(rank_order=6)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.appointing)
+        response = client.post(
+            reverse("final-selection-record", kwargs={"pk": applications[0].pk}),
+            {
+                "selected_item": str(selected_item.pk),
+                "decision_notes": "Attempted to record a rank-six candidate without support.",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "Selecting outside the top five requires deep selection documentation.",
+        )
+        self.assertContains(response, "Pick the appointee")
+        self.assertRegex(
+            response.content.decode(),
+            rf'name="selected_item"\s+value="{selected_item.pk}"\s+checked',
+        )
+        self.assertFalse(
+            FinalSelection.objects.filter(recruitment_entry=self.level1_position).exists()
+        )
+
     def test_appointing_authority_can_return_car_for_hrmpsb_reassessment(self):
         applications, report = self.prepare_ranked_level1_car(2)
 
@@ -7004,6 +7401,26 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         )
         self.assertTrue(new_report.is_finalized)
         self.assertFalse(new_report.is_returned)
+
+    def test_return_car_invalid_post_rerenders_bound_form(self):
+        applications, report = self.prepare_ranked_level1_car(2)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.appointing)
+        response = client.post(
+            reverse("workflow-action", kwargs={"pk": applications[0].pk}),
+            {
+                "action": "return_car_for_reassessment",
+                "remarks": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Send the CAR back to HRMPSB")
+        self.assertContains(response, "This field is required.")
+        self.assertFalse(FinalSelection.objects.filter(recruitment_entry=self.level1_position).exists())
+        report.refresh_from_db()
+        self.assertFalse(report.is_returned)
 
     def test_appointing_authority_cannot_use_legacy_single_case_approval_actions(self):
         application = self.make_application(self.level1_position)
@@ -7099,7 +7516,56 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         self.assertNotContains(response, 'data-section="cws-deliberation"')
         self.assertContains(response, 'rg-cws-layout rg-cws-layout--full')
         self.assertNotContains(response, "Workflow Snapshot")
-        self.assertContains(response, "Final CAR Selection")
+        self.assertContains(response, "Pick the appointee")
+        self.assertNotContains(response, "Review the submission packet")
 
         packet = build_submission_packet(application)
         self.assertTrue(packet["summary"]["has_deliberation_record"])
+
+    def test_cos_application_detail_exposes_decision_wizard(self):
+        application = self.make_application(self.cos_position)
+        self.move_application_to_appointing_review(application)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'rg-cws-stage-titlebar__title">COS Selection</span>')
+        self.assertContains(response, "Review the submission packet")
+        self.assertContains(response, "Record your decision")
+        self.assertContains(response, reverse("final-decision-record", kwargs={"pk": application.pk}))
+        self.assertNotContains(response, "Pick the appointee")
+
+    def test_submission_packet_marks_missing_evaluation_records(self):
+        application = self.make_application(self.cos_position)
+        self.verify_application_for_submission(application)
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(application, self.applicant)
+
+        packet = build_submission_packet(application)
+
+        self.assertFalse(packet["summary"]["ready_for_final_decision"])
+        self.assertIn("Finalized screening record", packet["summary"]["missing_components"])
+        self.assertIn("Finalized examination record", packet["summary"]["missing_components"])
+        self.assertIn("Finalized interview session", packet["summary"]["missing_components"])
+        self.assertIn("Finalized deliberation record", packet["summary"]["missing_components"])
+
+    def test_final_decision_invalid_post_rerenders_bound_wizard_form(self):
+        application = self.make_application(self.cos_position)
+        self.move_application_to_appointing_review(application)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        response = client.post(
+            reverse("final-decision-record", kwargs={"pk": application.pk}),
+            {
+                "decision_outcome": "",
+                "decision_notes": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Choose the final outcome and provide the decision remarks.")
+        self.assertContains(response, "This field is required.")
+        self.assertContains(response, 'data-decision-step="decide"')

@@ -69,6 +69,9 @@ class RecruitmentUser(AbstractUser):
         self.is_staff = bool(self.is_superuser)
         super().save(*args, **kwargs)
 
+    def get_full_name(self):
+        return super().get_full_name().strip() or self.username
+
     @property
     def is_internal_user(self):
         return self.role in self.internal_roles()

@@ -195,13 +195,9 @@
 
                     {% include "internal_includes/state_empty.html" with title="Applicant pool not final" copy=deliberation_vacancy_closure_message %}
 
-                {% elif deliberation_form or car_form or deliberation_requires_car_draft %}
+                {% elif deliberation_form or car_form or deliberation_requires_car_draft or deliberation_locked or car_locked %}
                     
                     {% include "internal_includes/deliberation_body.html" %}
-
-                {% elif deliberation_locked or car_locked %}
-                    
-                    {% include "internal_includes/deliberation_locked_body.html" %}
 
                 {% else %}
                     

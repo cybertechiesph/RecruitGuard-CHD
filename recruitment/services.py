@@ -3228,6 +3228,12 @@ def build_submission_packet(application):
     evidence_items = list(get_evidence_items_for_application_context(application))
 
     missing_components = []
+    if not screening_records:
+        missing_components.append("Finalized screening record")
+    if not exam_records:
+        missing_components.append("Finalized examination record")
+    if not interview_sessions:
+        missing_components.append("Finalized interview session")
     if not deliberation_record:
         missing_components.append("Finalized deliberation record")
     if application.branch == PositionPosting.Branch.PLANTILLA and not comparative_assessment_report:
@@ -3558,7 +3564,15 @@ def save_screening_review(application, actor, cleaned_data, finalize=False):
 
 
 @transaction.atomic
-def save_exam_record(application, actor, cleaned_data, finalize=False, evidence_file=None):
+def save_exam_record(
+    application,
+    actor,
+    cleaned_data,
+    finalize=False,
+    evidence_file=None,
+    allow_partial=False,
+    record_audit=True,
+):
     if not hasattr(application, "case"):
         raise ValueError("A case must exist before exam details can be recorded.")
     review_stage = application.case.current_stage
@@ -3583,10 +3597,13 @@ def save_exam_record(application, actor, cleaned_data, finalize=False, evidence_
             level=application.level,
         )
 
+    allow_partial = bool(allow_partial and not finalize)
+    exam_status = cleaned_data.get("exam_status", "") or ""
+
     exam_record.recruitment_case = application.case
     exam_record.recorded_by = actor
-    exam_record.exam_type = cleaned_data["exam_type"]
-    exam_record.exam_status = cleaned_data["exam_status"]
+    exam_record.exam_type = cleaned_data.get("exam_type", "") or ""
+    exam_record.exam_status = exam_status
     exam_record.exam_score = _optional_decimal(cleaned_data.get("exam_score"))
     exam_record.exam_result = cleaned_data.get("exam_result", "")
     exam_record.technical_score = _optional_decimal(cleaned_data.get("technical_score"))
@@ -3598,6 +3615,12 @@ def save_exam_record(application, actor, cleaned_data, finalize=False, evidence_
     exam_record.valid_from = cleaned_data.get("valid_from")
     exam_record.valid_until = cleaned_data.get("valid_until")
     exam_record.exam_notes = cleaned_data.get("exam_notes", "")
+    if exam_status in {ExamRecord.ExamStatus.WAIVED, ExamRecord.ExamStatus.ABSENT}:
+        exam_record.exam_score = None
+        exam_record.technical_score = None
+        exam_record.practical_score = None
+        exam_record.valid_from = None
+        exam_record.valid_until = None
     exam_record.is_finalized = finalize
     if finalize:
         exam_record.finalized_by = actor
@@ -3606,7 +3629,10 @@ def save_exam_record(application, actor, cleaned_data, finalize=False, evidence_
         exam_record.finalized_by = None
         exam_record.finalized_at = None
     exam_record.apply_policy_outputs()
-    exam_record.full_clean()
+    if allow_partial:
+        exam_record.validate_unique()
+    else:
+        exam_record.full_clean()
     exam_record.save()
 
     evidence = None
@@ -3621,43 +3647,47 @@ def save_exam_record(application, actor, cleaned_data, finalize=False, evidence_
             artifact_type=ARTIFACT_TYPE_EXAM_EVIDENCE,
         )
         exam_record.evidence_item = evidence
-        exam_record.full_clean()
+        if allow_partial:
+            exam_record.validate_unique()
+        else:
+            exam_record.full_clean()
         exam_record.save(update_fields=["evidence_item", "updated_at"])
 
-    record_audit_event(
-        application=application,
-        actor=actor,
-        action=(
-            AuditLog.Action.EXAM_FINALIZED
-            if finalize
-            else AuditLog.Action.EXAM_RECORDED
-        ),
-        description=(
-            "Finalized examination output."
-            if finalize
-            else "Saved examination record."
-        ),
-        metadata={
-            "exam_record_id": exam_record.id,
-            "created": created,
-            "review_stage": review_stage,
-            "exam_type": exam_record.exam_type,
-            "exam_status": exam_record.exam_status,
-            "exam_score": _decimal_string(exam_record.effective_score),
-            "exam_result": exam_record.exam_result,
-            "technical_score": _decimal_string(exam_record.technical_score),
-            "technical_result": exam_record.technical_result,
-            "practical_score": _decimal_string(exam_record.practical_score),
-            "practical_result": exam_record.practical_result,
-            "exam_date": exam_record.exam_date.isoformat() if exam_record.exam_date else "",
-            "administered_by": exam_record.administered_by,
-            "valid_from": exam_record.valid_from.isoformat() if exam_record.valid_from else "",
-            "valid_until": exam_record.valid_until.isoformat() if exam_record.valid_until else "",
-            "evidence_id": evidence.id if evidence else exam_record.evidence_item_id,
-            "evidence_uploaded": bool(evidence),
-            "is_finalized": exam_record.is_finalized,
-        },
-    )
+    if record_audit:
+        record_audit_event(
+            application=application,
+            actor=actor,
+            action=(
+                AuditLog.Action.EXAM_FINALIZED
+                if finalize
+                else AuditLog.Action.EXAM_RECORDED
+            ),
+            description=(
+                "Finalized examination output."
+                if finalize
+                else "Saved examination record."
+            ),
+            metadata={
+                "exam_record_id": exam_record.id,
+                "created": created,
+                "review_stage": review_stage,
+                "exam_type": exam_record.exam_type,
+                "exam_status": exam_record.exam_status,
+                "exam_score": _decimal_string(exam_record.effective_score),
+                "exam_result": exam_record.exam_result,
+                "technical_score": _decimal_string(exam_record.technical_score),
+                "technical_result": exam_record.technical_result,
+                "practical_score": _decimal_string(exam_record.practical_score),
+                "practical_result": exam_record.practical_result,
+                "exam_date": exam_record.exam_date.isoformat() if exam_record.exam_date else "",
+                "administered_by": exam_record.administered_by,
+                "valid_from": exam_record.valid_from.isoformat() if exam_record.valid_from else "",
+                "valid_until": exam_record.valid_until.isoformat() if exam_record.valid_until else "",
+                "evidence_id": evidence.id if evidence else exam_record.evidence_item_id,
+                "evidence_uploaded": bool(evidence),
+                "is_finalized": exam_record.is_finalized,
+            },
+        )
     if finalize:
         _auto_advance_after_exam_finalized(application, actor, review_stage)
     return exam_record
@@ -3919,7 +3949,14 @@ def _finalized_deliberation_queryset_for_entry(recruitment_entry, review_stage):
 
 
 @transaction.atomic
-def save_deliberation_record(application, actor, cleaned_data, finalize=False):
+def save_deliberation_record(
+    application,
+    actor,
+    cleaned_data,
+    finalize=False,
+    allow_partial=False,
+    record_audit=True,
+):
     if not hasattr(application, "case"):
         raise ValueError("A case must exist before deliberation details can be recorded.")
     if (
@@ -3993,20 +4030,25 @@ def save_deliberation_record(application, actor, cleaned_data, finalize=False):
             "Record the ranking position before finalizing the Plantilla deliberation record."
         )
 
+    allow_partial = bool(allow_partial and not finalize)
+    deliberated_at = cleaned_data.get("deliberated_at")
+    if allow_partial and deliberated_at is None:
+        deliberated_at = getattr(deliberation_record, "deliberated_at", None) or timezone.now()
+
     deliberation_record.recruitment_case = application.case
     deliberation_record.recruitment_entry = application.position
     deliberation_record.comparative_assessment_report = car_draft
     deliberation_record.recorded_by = actor
-    deliberation_record.deliberated_at = cleaned_data["deliberated_at"]
-    deliberation_record.deliberation_minutes = cleaned_data["deliberation_minutes"]
+    deliberation_record.deliberated_at = deliberated_at
+    deliberation_record.deliberation_minutes = cleaned_data.get("deliberation_minutes") or ""
     deliberation_record.recommendation = cleaned_data.get("recommendation", "") or ""
-    deliberation_record.decision_support_summary = cleaned_data["decision_support_summary"]
+    deliberation_record.decision_support_summary = cleaned_data.get("decision_support_summary") or ""
     deliberation_record.quorum_status = cleaned_data.get(
         "quorum_status",
         DeliberationRecord.QuorumStatus.NOT_RECORDED,
     ) or DeliberationRecord.QuorumStatus.NOT_RECORDED
     deliberation_record.attendance_notes = cleaned_data.get("attendance_notes", "") or ""
-    deliberation_record.ranking_position = cleaned_data["ranking_position"]
+    deliberation_record.ranking_position = cleaned_data.get("ranking_position")
     deliberation_record.ranking_notes = cleaned_data.get("ranking_notes", "") or ""
     deliberation_record.consolidated_snapshot = consolidated_snapshot
     deliberation_record.is_finalized = finalize
@@ -4016,44 +4058,51 @@ def save_deliberation_record(application, actor, cleaned_data, finalize=False):
     else:
         deliberation_record.finalized_by = None
         deliberation_record.finalized_at = None
-    deliberation_record.full_clean()
+    validation_exclude = []
+    if allow_partial:
+        validation_exclude = [
+            "deliberation_minutes",
+            "decision_support_summary",
+        ]
+    deliberation_record.full_clean(exclude=validation_exclude)
     deliberation_record.save()
 
-    record_audit_event(
-        application=application,
-        actor=actor,
-        action=(
-            AuditLog.Action.DELIBERATION_FINALIZED
-            if finalize
-            else AuditLog.Action.DELIBERATION_RECORDED
-        ),
-        description=(
-            (
-                "Finalized HRMPSB recommendation endorsement."
-                if application.branch == PositionPosting.Branch.PLANTILLA
-                else "Finalized deliberation and decision-support record."
-            )
-            if finalize
-            else (
-                "Saved HRMPSB deliberation on the CAR draft."
-                if application.branch == PositionPosting.Branch.PLANTILLA
-                else "Saved deliberation and decision-support record."
-            )
-        ),
-        metadata={
-            "deliberation_record_id": deliberation_record.id,
-            "car_draft_id": car_draft.id if car_draft else "",
-            "created": created,
-            "review_stage": review_stage,
-            "recommendation_recorded": bool(deliberation_record.recommendation),
-            "quorum_status": deliberation_record.quorum_status,
-            "ranking_position": deliberation_record.ranking_position,
-            "finalized_screening_count": len(consolidated_snapshot["screening_records"]),
-            "finalized_exam_count": len(consolidated_snapshot["exam_records"]),
-            "finalized_interview_count": len(consolidated_snapshot["interview_sessions"]),
-            "is_finalized": deliberation_record.is_finalized,
-        },
-    )
+    if record_audit:
+        record_audit_event(
+            application=application,
+            actor=actor,
+            action=(
+                AuditLog.Action.DELIBERATION_FINALIZED
+                if finalize
+                else AuditLog.Action.DELIBERATION_RECORDED
+            ),
+            description=(
+                (
+                    "Finalized HRMPSB recommendation endorsement."
+                    if application.branch == PositionPosting.Branch.PLANTILLA
+                    else "Finalized deliberation and decision-support record."
+                )
+                if finalize
+                else (
+                    "Saved HRMPSB deliberation on the CAR draft."
+                    if application.branch == PositionPosting.Branch.PLANTILLA
+                    else "Saved deliberation and decision-support record."
+                )
+            ),
+            metadata={
+                "deliberation_record_id": deliberation_record.id,
+                "car_draft_id": car_draft.id if car_draft else "",
+                "created": created,
+                "review_stage": review_stage,
+                "recommendation_recorded": bool(deliberation_record.recommendation),
+                "quorum_status": deliberation_record.quorum_status,
+                "ranking_position": deliberation_record.ranking_position,
+                "finalized_screening_count": len(consolidated_snapshot["screening_records"]),
+                "finalized_exam_count": len(consolidated_snapshot["exam_records"]),
+                "finalized_interview_count": len(consolidated_snapshot["interview_sessions"]),
+                "is_finalized": deliberation_record.is_finalized,
+            },
+        )
     return deliberation_record
 
 
@@ -4246,6 +4295,103 @@ def _car_draft_candidate_rows(recruitment_entry, review_stage):
     for index, row in enumerate(ordered_rows, start=1):
         row["rank_order"] = row["preliminary_rank_order"] or index
     return ordered_rows
+
+
+def get_comparative_assessment_readiness(application):
+    readiness = {
+        "is_applicable": False,
+        "has_draft": False,
+        "can_prepare_draft": False,
+        "can_finalize": False,
+        "draft_candidate_count": 0,
+        "final_candidate_count": 0,
+        "prepare_block_message": "",
+        "finalize_block_message": "",
+        "latest_draft_id": None,
+    }
+    case = getattr(application, "case", None)
+    if (
+        not case
+        or application.branch != PositionPosting.Branch.PLANTILLA
+        or case.current_stage != CAR_REVIEW_STAGE
+    ):
+        return readiness
+
+    readiness["is_applicable"] = True
+    if (
+        application_requires_finalized_applicant_pool(application)
+        and not application_has_finalized_applicant_pool(application)
+    ):
+        message = get_applicant_pool_finalization_block_message(application)
+        readiness["prepare_block_message"] = message
+        readiness["finalize_block_message"] = message
+        return readiness
+
+    try:
+        draft_rows = _car_draft_candidate_rows(application.position, case.current_stage)
+    except ValueError as exc:
+        readiness["prepare_block_message"] = str(exc)
+    else:
+        readiness["can_prepare_draft"] = True
+        readiness["draft_candidate_count"] = len(draft_rows)
+
+    latest_draft_report = get_latest_draft_comparative_assessment_report(
+        application,
+        stage=case.current_stage,
+    )
+    readiness["has_draft"] = latest_draft_report is not None
+    readiness["latest_draft_id"] = latest_draft_report.id if latest_draft_report else None
+    if not latest_draft_report:
+        readiness["finalize_block_message"] = (
+            "Prepare the CAR draft before finalizing the Comparative Assessment Report."
+        )
+        return readiness
+
+    try:
+        final_rows = _car_candidate_rows(
+            application.position,
+            case.current_stage,
+            required_draft=latest_draft_report,
+        )
+    except ValueError as exc:
+        readiness["finalize_block_message"] = str(exc)
+    else:
+        readiness["can_finalize"] = True
+        readiness["final_candidate_count"] = len(final_rows)
+    return readiness
+
+
+@transaction.atomic
+def autosave_comparative_assessment_report_notes(application, actor, cleaned_data):
+    if not hasattr(application, "case"):
+        raise ValueError("A case must exist before a Comparative Assessment Report can be autosaved.")
+    if (
+        application_requires_finalized_applicant_pool(application)
+        and not application_has_finalized_applicant_pool(application)
+    ):
+        raise ValueError(get_applicant_pool_finalization_block_message(application))
+    if not user_can_manage_comparative_assessment_report(actor, application):
+        raise ValueError(
+            "This case is not currently assigned to you for CAR preparation."
+        )
+    if application.case.current_stage != CAR_REVIEW_STAGE or application.branch != PositionPosting.Branch.PLANTILLA:
+        raise ValueError(
+            "The Comparative Assessment Report is available only for Plantilla cases at the HRMPSB step."
+        )
+
+    draft_report = get_latest_draft_comparative_assessment_report(
+        application,
+        stage=application.case.current_stage,
+    )
+    if draft_report is None:
+        return None
+
+    summary_notes = cleaned_data.get("summary_notes") or ""
+    if draft_report.summary_notes != summary_notes:
+        draft_report.summary_notes = summary_notes
+        draft_report.full_clean()
+        draft_report.save(update_fields=["summary_notes", "updated_at"])
+    return draft_report
 
 
 @transaction.atomic

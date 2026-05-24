@@ -44,7 +44,7 @@ HRM Chief on COS). Two states:
                 <div class="rg-del-rank-badge">#{{ item.rank_order }}</div>
                 <div class="rg-del-car-item__body">
                     <div class="rg-del-car-item__name">
-                        {{ item.recruitment_case.application.applicant.get_full_name }}
+                        {{ item.applicant_display_name }}
                     </div>
                     <div class="rg-del-car-item__scores">
                         {% if item.qualification_outcome %}
@@ -299,8 +299,65 @@ HRM Chief on COS). Two states:
                 <div class="rg-del-rank-badge">#{{ item.rank_order }}</div>
                 <div class="rg-del-car-item__body">
                     <div class="rg-del-car-item__name">
-                        {{ item.recruitment_case.application.applicant.get_full_name }}
+                        {{ item.applicant_display_name }}
                     </div>
+                    <div class="rg-del-car-item__scores">
+                        {% if item.qualification_outcome %}
+                        <div class="rg-del-car-item__score-cell">
+                            <span class="rg-del-car-item__score-label">Document review</span>
+                            <span class="rg-del-car-item__score-val">
+                                <span class="rg-pill rg-pill--{{ item.qualification_outcome|status_theme }} rg-pill--sm">
+                                    {{ item.qualification_outcome }}
+                                </span>
+                                {% if item.document_review_score is not None %}
+                                    {{ item.document_review_score }}
+                                {% endif %}
+                            </span>
+                        </div>
+                        {% endif %}
+                        {% if item.exam_score %}
+                        <div class="rg-del-car-item__score-cell">
+                            <span class="rg-del-car-item__score-label">Exam</span>
+                            <span class="rg-del-car-item__score-val">{{ item.exam_score }}</span>
+                        </div>
+                        {% elif item.exam_status %}
+                        <div class="rg-del-car-item__score-cell">
+                            <span class="rg-del-car-item__score-label">Exam</span>
+                            <span class="rg-del-car-item__score-val">
+                                <span class="rg-pill rg-pill--{{ item.exam_status|status_theme }} rg-pill--sm">
+                                    {{ item.exam_status }}
+                                </span>
+                            </span>
+                        </div>
+                        {% endif %}
+                        {% if item.interview_average_score %}
+                        <div class="rg-del-car-item__score-cell">
+                            <span class="rg-del-car-item__score-label">Interview avg</span>
+                            <span class="rg-del-car-item__score-val">{{ item.interview_average_score }}</span>
+                        </div>
+                        {% endif %}
+                        {% if item.assessment_score %}
+                        <div class="rg-del-car-item__score-cell">
+                            <span class="rg-del-car-item__score-label">Preliminary score</span>
+                            <span class="rg-del-car-item__score-val">{{ item.assessment_score }}</span>
+                        </div>
+                        {% endif %}
+                        {% if item.preliminary_rank_order %}
+                        <div class="rg-del-car-item__score-cell">
+                            <span class="rg-del-car-item__score-label">System rank</span>
+                            <span class="rg-del-car-item__score-val">#{{ item.preliminary_rank_order }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% if item.decision_support_summary %}
+                        <p class="rg-del-car-item__decision">{{ item.decision_support_summary }}</p>
+                    {% endif %}
+                    {% if item.recommendation %}
+                        <p class="rg-del-car-item__decision"><strong>Recommendation:</strong> {{ item.recommendation }}</p>
+                    {% endif %}
+                    {% if item.ranking_notes %}
+                        <p class="rg-del-car-item__decision"><strong>Ranking note:</strong> {{ item.ranking_notes }}</p>
+                    {% endif %}
                 </div>
             </li>
             {% endfor %}

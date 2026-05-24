@@ -1346,6 +1346,7 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
 
     def __init__(self, *args, **kwargs):
         self.application = kwargs.pop("application", None)
+        self.draft = kwargs.pop("draft", False)
         super().__init__(*args, **kwargs)
         self.component_section_label = "Technical and Practical Components"
         self.component_weight_display = "Technical and practical scores are recorded separately."
@@ -1416,6 +1417,9 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
             self.fields["administered_by"].help_text = (
                 "Automatically set from the branch-specific hiring-process procedure."
             )
+        if self.draft:
+            for field in self.fields.values():
+                field.required = False
         self._apply_bootstrap()
 
     def _exam_type_choices(self):
@@ -1467,6 +1471,10 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
             value = cleaned_data.get(field_name)
             if value is not None and (value < 0 or value > 100):
                 self.add_error(field_name, self.SCORE_RANGE_MESSAGE)
+        valid_from = cleaned_data.get("valid_from")
+        valid_until = cleaned_data.get("valid_until")
+        if valid_from and valid_until and valid_until < valid_from:
+            self.add_error("valid_until", "Validity end date cannot be earlier than the validity start date.")
 
         exam_status = cleaned_data.get("exam_status")
         score_values = {
@@ -1474,20 +1482,20 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
             for field_name in self.SCORE_FIELD_NAMES
         }
         if exam_status == ExamRecord.ExamStatus.COMPLETED:
-            if not cleaned_data.get("exam_date"):
+            if not self.draft and not cleaned_data.get("exam_date"):
                 self.add_error("exam_date", "Provide the date the examination was administered.")
-            if not cleaned_data.get("administered_by"):
+            if not self.draft and not cleaned_data.get("administered_by"):
                 self.add_error("administered_by", "Select who administered the examination.")
-            for field_name in self._required_score_fields_for_type(cleaned_data.get("exam_type")):
-                if score_values[field_name] is None and not self.has_error(field_name):
-                    self.add_error(field_name, "Enter this required exam score.")
+            if not self.draft:
+                for field_name in self._required_score_fields_for_type(cleaned_data.get("exam_type")):
+                    if score_values[field_name] is None and not self.has_error(field_name):
+                        self.add_error(field_name, "Enter this required exam score.")
         elif exam_status in {ExamRecord.ExamStatus.WAIVED, ExamRecord.ExamStatus.ABSENT}:
-            for field_name, value in score_values.items():
-                if value is not None:
-                    self.add_error(field_name, "Remove numeric scores for waived or absent exams.")
-            if cleaned_data.get("valid_from") or cleaned_data.get("valid_until"):
-                self.add_error("valid_from", "Only completed exams may record a validity period.")
-            if not cleaned_data.get("exam_notes"):
+            for field_name in self.SCORE_FIELD_NAMES:
+                cleaned_data[field_name] = None
+            cleaned_data["valid_from"] = None
+            cleaned_data["valid_until"] = None
+            if not self.draft and not cleaned_data.get("exam_notes"):
                 self.add_error("exam_notes", "Provide remarks explaining the waiver or absence.")
         return cleaned_data
 
@@ -1660,6 +1668,7 @@ class DeliberationRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, f
 
     def __init__(self, *args, **kwargs):
         self.application = kwargs.pop("application", None)
+        draft = kwargs.pop("draft", False)
         super().__init__(*args, **kwargs)
         self.fields["deliberated_at"].label = "Deliberation Date and Time"
         self.fields["deliberation_minutes"].label = "Deliberation Minutes / Record"
@@ -1676,6 +1685,9 @@ class DeliberationRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, f
         self.fields["ranking_notes"].help_text = (
             "Record concerns or justification when the HRMPSB rank differs from the system's preliminary score order."
         )
+        if draft:
+            for field in self.fields.values():
+                field.required = False
         self._apply_bootstrap()
 
     def _is_plantilla_hrmpsb(self):

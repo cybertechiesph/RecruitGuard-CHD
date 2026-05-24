@@ -125,14 +125,35 @@ because it's a small read-only card.
     {% if application.branch == "plantilla" and current_deliberation_record.recommendation %}
         <div class="rg-del-locked__field">
             <span class="rg-del-locked__label">Recommendation</span>
-            <p>{{ current_deliberation_record.recommendation|truncatewords:30 }}</p>
+            <p>{{ current_deliberation_record.recommendation }}</p>
+        </div>
+    {% endif %}
+
+    {% if application.branch == "plantilla" and current_deliberation_record.ranking_notes %}
+        <div class="rg-del-locked__field">
+            <span class="rg-del-locked__label">Ranking notes</span>
+            <p>{{ current_deliberation_record.ranking_notes }}</p>
+        </div>
+    {% endif %}
+
+    {% if application.branch == "plantilla" and current_deliberation_record.attendance_notes %}
+        <div class="rg-del-locked__field">
+            <span class="rg-del-locked__label">Attendance notes</span>
+            <p>{{ current_deliberation_record.attendance_notes }}</p>
+        </div>
+    {% endif %}
+
+    {% if current_deliberation_record.deliberation_minutes %}
+        <div class="rg-del-locked__field">
+            <span class="rg-del-locked__label">Deliberation minutes</span>
+            <p>{{ current_deliberation_record.deliberation_minutes }}</p>
         </div>
     {% endif %}
 
     {% if current_deliberation_record.decision_support_summary %}
         <div class="rg-del-locked__field">
             <span class="rg-del-locked__label">Decision support</span>
-            <p>{{ current_deliberation_record.decision_support_summary|truncatewords:30 }}</p>
+            <p>{{ current_deliberation_record.decision_support_summary }}</p>
         </div>
     {% endif %}
 </section>

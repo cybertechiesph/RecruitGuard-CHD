@@ -1235,6 +1235,276 @@ body.applicant-portal-body {
 }
 
 /* ==========================================================================
+   FINAL SELECTION — lean polish helpers
+   ========================================================================== */
+.rg-fs-candidate-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.rg-fs-candidate-list > li { margin-bottom: 0.55rem; }
+.rg-fs-candidate-list > li:last-child { margin-bottom: 0; }
+.rg-fs-candidate {
+    cursor: pointer;
+    transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+.rg-fs-candidate:hover {
+    border-color: var(--rg-brand-green);
+    background: #f8fafc;
+}
+.rg-fs-candidate.is-picked {
+    border-color: var(--rg-brand-green);
+    background: var(--rg-brand-green-soft);
+    box-shadow: 0 0 0 2px rgba(30, 92, 45, 0.12);
+}
+.rg-fs-candidate__radio:focus-visible {
+    outline: 2px solid var(--rg-brand-green);
+    outline-offset: 2px;
+    border-radius: 50%;
+}
+.rg-fs-candidate__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+.rg-fs-candidate__ref {
+    color: #6b7280;
+    font-size: 0.78rem;
+    margin-top: 0.1rem;
+}
+.rg-fs-candidate__warn {
+    color: #b45309;
+    font-size: 0.78rem;
+    font-weight: 600;
+    margin-top: 0.2rem;
+}
+
+.rg-fs-deep-justification[hidden] { display: none; }
+
+/* Deep-selection lock: when the picked candidate's rank > 5, the checkbox
+   can't be unchecked. The hint explains why; the checkbox gets a subtle
+   locked treatment (still posts its value to the server). */
+.rg-fs-deep-lock {
+    margin-top: 0.35rem;
+    padding: 0.4rem 0.6rem;
+    background: var(--rg-brand-green-soft);
+    border: 1px solid #cfe0c0;
+    border-left: 3px solid var(--rg-brand-green);
+    border-radius: 4px;
+    font-size: 0.78rem;
+    color: var(--rg-brand-green-strong);
+    line-height: 1.5;
+}
+.rg-fs-deep-checkbox--locked {
+    cursor: not-allowed;
+}
+.rg-fs-actions {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #edf0f3;
+}
+.rg-fs-actions__msg {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: #fdeceb;
+    border: 1px solid #f3c4c1;
+    border-left: 3px solid var(--rg-brand-danger);
+    color: #8f231d;
+    border-radius: 6px;
+    padding: 0.5rem 0.7rem;
+    font-size: 0.83rem;
+    font-weight: 600;
+    margin-bottom: 0.55rem;
+}
+.rg-fs-actions__btns {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+.rg-fs-actions__spacer { flex: 1; }
+
+.rg-fs-return-card { border-color: #fbbf24; }
+
+/* ==========================================================================
+   COMPLETION WIZARD — helpers for the checklist + blockers + disabled rail
+   ========================================================================== */
+.rg-scr-steprail__item.is-disabled {
+    color: #cfd6dd !important;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+.rg-scr-steprail__item.is-disabled .rg-scr-steprail__num {
+    background: #f3f4f6;
+    color: #cfd6dd;
+}
+
+.rg-cmp-checklist {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e5e7eb;
+}
+.rg-cmp-checklist__header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+.rg-cmp-checklist__title {
+    flex: 1;
+    font-size: 0.86rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+.rg-cmp-checklist__count {
+    font-size: 0.78rem;
+    color: #64748b;
+}
+.rg-cmp-checklist__empty {
+    color: #9aa4af;
+    font-size: 0.83rem;
+    margin: 0.6rem 0 0;
+}
+.rg-cmp-checklist__help {
+    font-size: 0.82rem;
+    color: #5f6c78;
+    margin: 0.6rem 0 0.85rem;
+    padding: 0.5rem 0.75rem;
+    background: #f8fafc;
+    border-left: 3px solid var(--rg-brand-green);
+    border-radius: 4px;
+    line-height: 1.5;
+}
+.rg-cmp-req-label {
+    font-size: 0.8rem !important;
+}
+
+/* Visually distinguish blank "add new" rows from saved requirements. */
+.rg-cmp-req-form-row.is-new {
+    border-style: dashed;
+    background: #fafbfc;
+}
+.rg-cmp-req-form-row.is-new .rg-cmp-req-form-row__seq {
+    color: var(--rg-brand-green);
+    font-weight: 700;
+}
+
+.rg-cmp-blockers {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    margin-top: 1rem;
+    padding: 0.7rem 0.85rem;
+    background: var(--rg-brand-gold-soft);
+    border: 1px solid #fde68a;
+    border-left: 3px solid var(--rg-brand-gold);
+    border-radius: 6px;
+    font-size: 0.85rem;
+    color: #854d0e;
+    line-height: 1.55;
+}
+.rg-cmp-blockers__icon {
+    flex-shrink: 0;
+    margin-top: 1px;
+    color: #c2410c;
+}
+
+/* ==========================================================================
+   DECISION — 2-step wizard helpers (packet + decision card)
+   The packet's core rg-pkt-* classes live in recruitguard.css; these
+   are small additions used in the decision_body rewrite.
+   ========================================================================== */
+.rg-pkt-row__meta {
+    color: #6b7280;
+    font-size: 0.78rem;
+    margin-left: 0.4rem;
+}
+.rg-pkt-row__meta--small { font-size: 0.73rem; }
+.rg-pkt-row--multiline { align-items: flex-start; }
+.rg-pkt-row--multiline .rg-pkt-row__label { padding-top: 0.1rem; }
+.rg-pkt-row__value--prose { white-space: pre-line; }
+
+.rg-pkt-section__empty {
+    color: #9aa4af;
+    font-size: 0.83rem;
+    margin: 0;
+}
+.rg-pkt-section__notes {
+    margin: 0.6rem 0 0;
+    padding: 0.55rem 0.75rem;
+    background: #f8fafc;
+    border-left: 3px solid #cfd6dd;
+    border-radius: 4px;
+    font-size: 0.83rem;
+    color: #374151;
+    line-height: 1.55;
+    white-space: pre-line;
+}
+
+.rg-decision-card { margin-bottom: 1rem; }
+.rg-dec-confirm-list {
+    margin: 0 0 0.85rem;
+    padding-left: 1.2rem;
+}
+.rg-dec-confirm-list li { margin-bottom: 0.25rem; }
+.rg-dec-permanence-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+    padding: 0.6rem 0.8rem;
+    background: var(--rg-brand-gold-soft);
+    border: 1px solid #fde68a;
+    border-left: 3px solid var(--rg-brand-gold);
+    border-radius: 0.35rem;
+    font-size: 0.8rem;
+    color: #854d0e;
+    line-height: 1.5;
+}
+.rg-dec-permanence-warning svg {
+    flex-shrink: 0;
+    margin-top: 1px;
+    color: #c2410c;
+}
+
+/* ==========================================================================
+   EXAMINATION WIZARD — conditional sections for outcome
+   ========================================================================== */
+.rg-exam-cond-group {
+    margin-top: 0.85rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid #e3e8ee;
+}
+.rg-exam-cond-group__head {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #5f6c78;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.75rem;
+}
+.rg-exam-cond-group__note {
+    font-size: 0.82rem;
+    color: #5f6c78;
+    line-height: 1.5;
+    margin: 0 0 0.85rem;
+}
+.rg-exam-validation-alert {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.7rem;
+    background: var(--rg-brand-gold-soft);
+    border: 1px solid #ffdf88;
+    border-left: 3px solid var(--rg-brand-gold);
+    color: #8a6407;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    margin: 0.5rem 0;
+}
+
+/* ==========================================================================
    DELIBERATION / CAR — role-split layout
    Shared panel summary + role-specific cards (deliberation recorder,
    CAR generator). Inline action footer on each card; no sticky bar

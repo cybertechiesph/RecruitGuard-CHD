@@ -3,7 +3,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.middleware.csrf import get_token
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import Http404, HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.html import escape
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -63,6 +63,7 @@ from .permissions import (
 from .services import (
     application_has_finalized_applicant_pool,
     application_requires_finalized_applicant_pool,
+    autosave_comparative_assessment_report_notes,
     build_submission_packet,
     build_export_bundle,
     close_recruitment_case,
@@ -72,6 +73,7 @@ from .services import (
     get_application_audit_logs,
     get_comparative_assessment_report,
     get_comparative_assessment_report_items_for_report,
+    get_comparative_assessment_readiness,
     get_completion_record,
     get_completion_requirements,
     decrypt_evidence_bytes,
@@ -205,6 +207,40 @@ def _safe_next_url(request, fallback_url):
     ):
         return next_url
     return fallback_url
+
+
+def _is_autosave_request(request):
+    return request.headers.get("X-Requested-With") == "RG-Autosave"
+
+
+def _autosave_response(success=True):
+    return HttpResponse(status=204 if success else 400)
+
+
+def _add_validation_errors_to_form(form, exc):
+    if isinstance(exc, ValidationError):
+        error_dict = getattr(exc, "error_dict", None)
+        if error_dict:
+            for field_name, errors in error_dict.items():
+                target = field_name if field_name in form.fields else None
+                for error in errors:
+                    form.add_error(target, error)
+            return
+        for message in getattr(exc, "messages", None) or [str(exc)]:
+            form.add_error(None, message)
+        return
+    form.add_error(None, str(exc))
+
+
+def _render_application_detail_with_overrides(request, application, **overrides):
+    view = ApplicationDetailView()
+    view.request = request
+    view.args = ()
+    view.kwargs = {"pk": application.pk}
+    view.object = application
+    context = view.get_context_data(object=application)
+    context.update(overrides)
+    return render(request, view.template_name, context)
 
 
 class DashboardView(LoginRequiredMixin, InternalUserRequiredMixin, TemplateView):
@@ -422,10 +458,24 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
             context["current_comparative_assessment_report"] = (
                 get_latest_finalized_comparative_assessment_report(application)
             )
-        context["current_comparative_assessment_report_items"] = (
+        comparative_assessment_items = list(
             get_comparative_assessment_report_items_for_report(
                 context["current_comparative_assessment_report"]
             )
+        )
+        for item in comparative_assessment_items:
+            item.applicant_display_name = item.application.applicant_display_name
+        context["current_comparative_assessment_report_items"] = comparative_assessment_items
+        context["car_readiness"] = get_comparative_assessment_readiness(application)
+        context["car_requires_deliberation"] = False
+        context["car_requires_finalized_deliberation"] = False
+        context["car_finalize_block_message"] = context["car_readiness"].get(
+            "finalize_block_message",
+            "",
+        )
+        context["car_prepare_block_message"] = context["car_readiness"].get(
+            "prepare_block_message",
+            "",
         )
         context["evidence_items"] = []
         context["can_archive_evidence"] = False
@@ -534,6 +584,16 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
                     instance=deliberation_record,
                     application=application,
                 )
+                if (
+                    application.branch == PositionPosting.Branch.PLANTILLA
+                    and application.case.current_stage == RecruitmentCase.Stage.HRMPSB_REVIEW
+                    and report
+                    and not report.is_finalized
+                ):
+                    if deliberation_record is None:
+                        context["car_requires_deliberation"] = True
+                    elif not deliberation_record.is_finalized:
+                        context["car_requires_finalized_deliberation"] = True
         if not applicant_pool_is_blocked and user_can_manage_comparative_assessment_report(user, application):
             report = context["current_comparative_assessment_report"]
             if report and report.is_finalized:
@@ -856,6 +916,23 @@ class WorkflowQueueView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, List
 
 
 class WorkflowActionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
+    def _should_rerender_bound_action_form(self, form, request):
+        action = ""
+        if getattr(form, "is_bound", False) and "action" in getattr(form, "cleaned_data", {}):
+            action = form.cleaned_data["action"]
+        action = action or request.POST.get("action", "")
+        return action == "return_car_for_reassessment"
+
+    def _render_with_bound_action_form(self, request, application, form, message):
+        if not form.errors and "remarks" in form.fields:
+            form.add_error("remarks", message)
+        messages.error(request, message)
+        return _render_application_detail_with_overrides(
+            request,
+            application,
+            action_form=form,
+        )
+
     def post(self, request, pk):
         application = get_object_or_404(RecruitmentApplication, pk=pk)
         if not user_can_process_application(request.user, application):
@@ -870,11 +947,26 @@ class WorkflowActionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, Vie
                     remarks=form.cleaned_data["remarks"],
                 )
             except ValueError as exc:
+                if self._should_rerender_bound_action_form(form, request):
+                    return self._render_with_bound_action_form(
+                        request,
+                        application,
+                        form,
+                        str(exc),
+                    )
                 messages.error(request, str(exc))
             else:
                 messages.success(request, "Next step saved.")
         else:
-            messages.error(request, "Choose an allowed next step.")
+            message = _format_form_errors(form, "Choose an allowed next step.")
+            if self._should_rerender_bound_action_form(form, request):
+                return self._render_with_bound_action_form(
+                    request,
+                    application,
+                    form,
+                    message,
+                )
+            messages.error(request, message)
         if user_can_view_application(request.user, application):
             return redirect("application-detail", pk=pk)
         return redirect("workflow-queue")
@@ -921,6 +1013,7 @@ class ScreeningReviewView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, Vi
             raise PermissionDenied
 
         operation = request.POST.get("operation", "save")
+        is_autosave = _is_autosave_request(request) and operation != "finalize"
         form = ScreeningReviewForm(request.POST, application=application)
         if form.is_valid():
             try:
@@ -931,13 +1024,19 @@ class ScreeningReviewView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, Vi
                     finalize=operation == "finalize",
                 )
             except ValueError as exc:
+                if is_autosave:
+                    return _autosave_response(False)
                 messages.error(request, str(exc))
             else:
+                if is_autosave:
+                    return _autosave_response()
                 if screening_record.is_finalized:
                     messages.success(request, "Screening finalized and locked.")
                 else:
                     messages.success(request, "Screening draft saved.")
         else:
+            if is_autosave:
+                return _autosave_response(False)
             error_messages = []
             for field_name, errors in form.errors.items():
                 label = form.fields.get(field_name).label if field_name in form.fields else ""
@@ -960,17 +1059,29 @@ class ExaminationRecordView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, 
             raise PermissionDenied
 
         operation = request.POST.get("operation", "save")
-        form = ExamRecordForm(request.POST, request.FILES, application=application)
+        is_autosave = _is_autosave_request(request) and operation != "finalize"
+        is_finalize = operation == "finalize"
+        form = ExamRecordForm(
+            request.POST,
+            request.FILES,
+            application=application,
+            draft=not is_finalize,
+        )
         if form.is_valid():
             try:
                 exam_record = save_exam_record(
                     application=application,
                     actor=request.user,
                     cleaned_data=form.cleaned_data,
-                    finalize=operation == "finalize",
-                    evidence_file=form.cleaned_data.get("evidence_file"),
+                    finalize=is_finalize,
+                    evidence_file=None if is_autosave else form.cleaned_data.get("evidence_file"),
+                    allow_partial=not is_finalize,
+                    record_audit=not is_autosave,
                 )
             except (ValueError, ValidationError) as exc:
+                if is_autosave:
+                    return _autosave_response(False)
+                _add_validation_errors_to_form(form, exc)
                 messages.error(
                     request,
                     _format_validation_error(
@@ -979,18 +1090,34 @@ class ExaminationRecordView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, 
                         EXAM_FIELD_LABELS,
                     ),
                 )
+                return _render_application_detail_with_overrides(
+                    request,
+                    application,
+                    exam_form=form,
+                    exam_locked=False,
+                )
             else:
+                if is_autosave:
+                    return _autosave_response()
                 if exam_record.is_finalized:
                     messages.success(request, "Exam finalized and locked.")
                 else:
                     messages.success(request, "Exam draft saved.")
         else:
+            if is_autosave:
+                return _autosave_response(False)
             messages.error(
                 request,
                 _format_form_errors(
                     form,
                     "Review the examination fields before saving or finalizing.",
                 ),
+            )
+            return _render_application_detail_with_overrides(
+                request,
+                application,
+                exam_form=form,
+                exam_locked=False,
             )
         application.refresh_from_db()
         if not user_can_view_application(request.user, application):
@@ -1005,6 +1132,7 @@ class InterviewSessionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
             raise PermissionDenied
 
         operation = request.POST.get("operation", "save")
+        is_autosave = _is_autosave_request(request) and operation != "finalize"
         form = InterviewSessionForm(
             request.POST,
             instance=get_interview_session(application),
@@ -1018,13 +1146,19 @@ class InterviewSessionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
                     finalize=operation == "finalize",
                 )
             except (ValueError, ValidationError) as exc:
+                if is_autosave:
+                    return _autosave_response(False)
                 messages.error(request, str(exc))
             else:
+                if is_autosave:
+                    return _autosave_response()
                 if interview_session.is_finalized:
                     messages.success(request, "Interview session finalized and locked.")
                 else:
                     messages.success(request, "Interview schedule saved.")
         else:
+            if is_autosave:
+                return _autosave_response(False)
             messages.error(
                 request,
                 _format_form_errors(
@@ -1085,28 +1219,42 @@ class InterviewFallbackUploadView(LoginRequiredMixin, WorkflowProcessorRequiredM
 class DeliberationRecordView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
     def post(self, request, pk):
         application = get_object_or_404(RecruitmentApplication, pk=pk)
+        operation = request.POST.get("operation", "save")
+        is_autosave = _is_autosave_request(request) and operation != "finalize"
         if (
             application_requires_finalized_applicant_pool(application)
             and not application_has_finalized_applicant_pool(application)
         ):
+            if is_autosave:
+                return _autosave_response(False)
             messages.error(request, get_applicant_pool_finalization_block_message(application))
             return redirect("application-detail", pk=pk)
         if not user_can_manage_deliberation(request.user, application):
             raise PermissionDenied
 
-        operation = request.POST.get("operation", "save")
-        form = DeliberationRecordForm(request.POST, application=application)
+        is_finalize = operation == "finalize"
+        form = DeliberationRecordForm(
+            request.POST,
+            application=application,
+            draft=not is_finalize,
+        )
         if form.is_valid():
             try:
                 deliberation_record = save_deliberation_record(
                     application=application,
                     actor=request.user,
                     cleaned_data=form.cleaned_data,
-                    finalize=operation == "finalize",
+                    finalize=is_finalize,
+                    allow_partial=not is_finalize,
+                    record_audit=not is_autosave,
                 )
             except (ValueError, ValidationError) as exc:
+                if is_autosave:
+                    return _autosave_response(False)
                 messages.error(request, str(exc))
             else:
+                if is_autosave:
+                    return _autosave_response()
                 if deliberation_record.is_finalized:
                     if application.branch == PositionPosting.Branch.PLANTILLA:
                         messages.success(request, "HRMPSB recommendation endorsed and locked.")
@@ -1115,6 +1263,8 @@ class DeliberationRecordView(LoginRequiredMixin, WorkflowProcessorRequiredMixin,
                 else:
                     messages.success(request, "Deliberation record saved.")
         else:
+            if is_autosave:
+                return _autosave_response(False)
             messages.error(request, "Complete the required deliberation fields before saving.")
         return redirect("application-detail", pk=pk)
 
@@ -1122,33 +1272,49 @@ class DeliberationRecordView(LoginRequiredMixin, WorkflowProcessorRequiredMixin,
 class ComparativeAssessmentReportView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
     def post(self, request, pk):
         application = get_object_or_404(RecruitmentApplication, pk=pk)
+        operation = request.POST.get("operation", "save")
+        is_autosave = _is_autosave_request(request) and operation != "finalize"
         if (
             application_requires_finalized_applicant_pool(application)
             and not application_has_finalized_applicant_pool(application)
         ):
+            if is_autosave:
+                return _autosave_response(False)
             messages.error(request, get_applicant_pool_finalization_block_message(application))
             return redirect("application-detail", pk=pk)
         if not user_can_manage_comparative_assessment_report(request.user, application):
             raise PermissionDenied
 
-        operation = request.POST.get("operation", "save")
         form = ComparativeAssessmentReportForm(request.POST)
         if form.is_valid():
             try:
-                report = generate_comparative_assessment_report(
-                    application=application,
-                    actor=request.user,
-                    cleaned_data=form.cleaned_data,
-                    finalize=operation == "finalize",
-                )
+                if is_autosave:
+                    autosave_comparative_assessment_report_notes(
+                        application=application,
+                        actor=request.user,
+                        cleaned_data=form.cleaned_data,
+                    )
+                else:
+                    report = generate_comparative_assessment_report(
+                        application=application,
+                        actor=request.user,
+                        cleaned_data=form.cleaned_data,
+                        finalize=operation == "finalize",
+                    )
             except (ValueError, ValidationError) as exc:
+                if is_autosave:
+                    return _autosave_response(False)
                 messages.error(request, str(exc))
             else:
+                if is_autosave:
+                    return _autosave_response()
                 if report.is_finalized:
                     messages.success(request, "Comparative Assessment Report finalized and locked.")
                 else:
                     messages.success(request, "CAR draft prepared for HRMPSB deliberation.")
         else:
+            if is_autosave:
+                return _autosave_response(False)
             messages.error(request, "Provide the CAR notes before generating the report.")
         application.refresh_from_db()
         if not user_can_view_application(request.user, application):
@@ -1157,6 +1323,16 @@ class ComparativeAssessmentReportView(LoginRequiredMixin, WorkflowProcessorRequi
 
 
 class FinalSelectionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
+    def _render_with_bound_form(self, request, application, form, message):
+        if not any(form.errors.get(field_name) for field_name in form.fields):
+            form.add_error("selected_item", message)
+        messages.error(request, message)
+        return _render_application_detail_with_overrides(
+            request,
+            application,
+            final_selection_form=form,
+        )
+
     def post(self, request, pk):
         application = get_object_or_404(RecruitmentApplication, pk=pk)
         if not user_can_record_final_selection(request.user, application):
@@ -1172,7 +1348,13 @@ class FinalSelectionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, Vie
                     cleaned_data=form.cleaned_data,
                 )
             except (ValueError, ValidationError) as exc:
-                messages.error(request, str(exc))
+                _add_validation_errors_to_form(form, exc)
+                return self._render_with_bound_form(
+                    request,
+                    application,
+                    form,
+                    str(exc),
+                )
             else:
                 messages.success(
                     request,
@@ -1180,11 +1362,28 @@ class FinalSelectionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, Vie
                 )
                 return redirect("application-detail", pk=selection.selected_application_id)
         else:
-            messages.error(request, "Choose the selected appointee and provide decision remarks.")
-        return redirect("application-detail", pk=pk)
+            return self._render_with_bound_form(
+                request,
+                application,
+                form,
+                _format_form_errors(
+                    form,
+                    "Choose the selected appointee and provide decision remarks.",
+                ),
+            )
 
 
 class FinalDecisionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
+    def _render_with_bound_form(self, request, application, form, message):
+        if not form.errors:
+            form.add_error("decision_outcome", message)
+        messages.error(request, message)
+        return _render_application_detail_with_overrides(
+            request,
+            application,
+            final_decision_form=form,
+        )
+
     def post(self, request, pk):
         application = get_object_or_404(RecruitmentApplication, pk=pk)
         if not user_can_record_final_decision(request.user, application):
@@ -1199,7 +1398,12 @@ class FinalDecisionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View
                     cleaned_data=form.cleaned_data,
                 )
             except (ValueError, ValidationError) as exc:
-                messages.error(request, str(exc))
+                return self._render_with_bound_form(
+                    request,
+                    application,
+                    form,
+                    str(exc),
+                )
             else:
                 messages.success(
                     request,
@@ -1207,11 +1411,25 @@ class FinalDecisionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View
                     f"{decision.get_decision_outcome_display().lower()}.",
                 )
         else:
-            messages.error(request, "Choose the final outcome and provide the decision remarks.")
+            return self._render_with_bound_form(
+                request,
+                application,
+                form,
+                "Choose the final outcome and provide the decision remarks.",
+            )
         return redirect("application-detail", pk=pk)
 
 
 class CompletionTrackingView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
+    def _render_with_bound_forms(self, request, application, form, formset, message):
+        messages.error(request, message)
+        return _render_application_detail_with_overrides(
+            request,
+            application,
+            completion_form=form,
+            completion_requirement_formset=formset,
+        )
+
     def post(self, request, pk):
         application = get_object_or_404(RecruitmentApplication, pk=pk)
         if not user_can_manage_completion(request.user, application):
@@ -1243,7 +1461,13 @@ class CompletionTrackingView(LoginRequiredMixin, WorkflowProcessorRequiredMixin,
                     requirement_formset=formset,
                 )
             except (ValueError, ValidationError) as exc:
-                messages.error(request, str(exc))
+                return self._render_with_bound_forms(
+                    request,
+                    application,
+                    form,
+                    formset,
+                    str(exc),
+                )
             else:
                 messages.success(request, "Completion details saved.")
         else:
@@ -1256,14 +1480,31 @@ class CompletionTrackingView(LoginRequiredMixin, WorkflowProcessorRequiredMixin,
                     for error_list in requirement_form.errors.values()
                     for error in error_list
                 )
-            messages.error(
+            return self._render_with_bound_forms(
                 request,
+                application,
+                form,
+                formset,
                 "; ".join(errors) or "Complete the completion tracking fields before saving.",
             )
         return redirect("application-detail", pk=pk)
 
 
 class CaseClosureView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
+    def _render_with_bound_form(self, request, application, form, message):
+        can_close = user_can_close_case(request.user, application)
+        if can_close and not form.errors:
+            form.add_error("closure_notes", message)
+        messages.error(request, message)
+        overrides = {}
+        if can_close:
+            overrides["closure_form"] = form
+        return _render_application_detail_with_overrides(
+            request,
+            application,
+            **overrides,
+        )
+
     def post(self, request, pk):
         application = get_object_or_404(RecruitmentApplication, pk=pk)
         if not user_can_manage_completion(request.user, application):
@@ -1278,11 +1519,21 @@ class CaseClosureView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
                     closure_notes=form.cleaned_data["closure_notes"],
                 )
             except ValueError as exc:
-                messages.error(request, str(exc))
+                return self._render_with_bound_form(
+                    request,
+                    application,
+                    form,
+                    str(exc),
+                )
             else:
                 messages.success(request, "Case closed after completion.")
         else:
-            messages.error(request, "Closure notes are required.")
+            return self._render_with_bound_form(
+                request,
+                application,
+                form,
+                "Closure notes are required.",
+            )
         return redirect("application-detail", pk=pk)
 
 
