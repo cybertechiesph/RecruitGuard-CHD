@@ -1,6 +1,5 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.middleware.csrf import get_token
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -291,51 +290,17 @@ def _safe_internal_redirect(request, target_url, fallback_url):
 
 class NotificationListView(LoginRequiredMixin, InternalUserRequiredMixin, View):
     def get(self, request):
-        csrf_token = get_token(request)
-        rows = []
-        for notification in get_recent_notifications(request.user, limit=100):
-            status = "Unread" if notification.read_at is None else "Read"
-            body = f"<p>{escape(notification.body)}</p>" if notification.body else ""
-            rows.append(
-                "\n".join(
-                    [
-                        "<li>",
-                        f"<strong>{escape(notification.title)}</strong>",
-                        body,
-                        (
-                            f"<small>{escape(status)} · "
-                            f"{escape(notification.created_at.strftime('%Y-%m-%d %H:%M'))}</small>"
-                        ),
-                        (
-                            f'<form method="post" action="{escape(reverse("notification-read", kwargs={"pk": notification.pk}))}">'
-                            f'<input type="hidden" name="csrfmiddlewaretoken" value="{escape(csrf_token)}">'
-                            "<button type=\"submit\">Open</button>"
-                            "</form>"
-                        ),
-                        "</li>",
-                    ]
-                )
-            )
-        items_html = "\n".join(rows) if rows else "<li>No notifications yet.</li>"
-        html = "\n".join(
-            [
-                "<!doctype html>",
-                "<html>",
-                "<head><title>Notifications</title></head>",
-                "<body>",
-                "<main>",
-                "<h1>Notifications</h1>",
-                f'<form method="post" action="{escape(reverse("notification-read-all"))}">',
-                f'<input type="hidden" name="csrfmiddlewaretoken" value="{escape(csrf_token)}">',
-                '<button type="submit">Mark all as read</button>',
-                "</form>",
-                f"<ul>{items_html}</ul>",
-                "</main>",
-                "</body>",
-                "</html>",
-            ]
+        notifications = list(get_recent_notifications(request.user, limit=100))
+        unread_count = sum(1 for n in notifications if n.read_at is None)
+        return render(
+            request,
+            "recruitment/notification_list.html",
+            {
+                "notifications": notifications,
+                "unread_count": unread_count,
+                "has_unread": unread_count > 0,
+            },
         )
-        return HttpResponse(html)
 
 
 class NotificationReadView(LoginRequiredMixin, InternalUserRequiredMixin, View):
@@ -347,7 +312,9 @@ class NotificationReadView(LoginRequiredMixin, InternalUserRequiredMixin, View):
         fallback_url = reverse("notification-list")
         redirect_url = _safe_internal_redirect(
             request,
-            notification.related_url or request.META.get("HTTP_REFERER"),
+            request.POST.get("next")
+            or notification.related_url
+            or request.META.get("HTTP_REFERER"),
             fallback_url,
         )
         return redirect(redirect_url)
@@ -359,7 +326,7 @@ class NotificationReadAllView(LoginRequiredMixin, InternalUserRequiredMixin, Vie
         fallback_url = reverse("notification-list")
         redirect_url = _safe_internal_redirect(
             request,
-            request.META.get("HTTP_REFERER"),
+            request.POST.get("next") or request.META.get("HTTP_REFERER"),
             fallback_url,
         )
         return redirect(redirect_url)

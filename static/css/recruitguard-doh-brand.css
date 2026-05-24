@@ -2973,3 +2973,410 @@ body.applicant-portal-body {
     text-decoration: none;
 }
 .rg-public-footer__meta a:hover { text-decoration: underline; }
+
+/* ─────────────────────────────────────────────────────────────────
+   Topbar notifications bell + dropdown (Slice D1)
+───────────────────────────────────────────────────────────────── */
+.rg-notif {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+.rg-notif__bell {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 50%;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    color: var(--rg-brand-green-ink, #14532d);
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    padding: 0;
+}
+.rg-notif__bell:hover,
+.rg-notif__bell:focus-visible {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+    outline: none;
+}
+.rg-notif__bell:focus-visible {
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35);
+}
+.rg-notif__bell[aria-expanded="true"] {
+    background: #ecfdf5;
+    border-color: #86efac;
+}
+.rg-notif__bell-icon {
+    width: 1.15rem;
+    height: 1.15rem;
+}
+.rg-notif__badge {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    min-width: 1.15rem;
+    height: 1.15rem;
+    padding: 0 0.3rem;
+    border-radius: 999px;
+    background: #dc2626;
+    color: #ffffff;
+    font-size: 0.65rem;
+    font-weight: 700;
+    line-height: 1.15rem;
+    text-align: center;
+    box-shadow: 0 0 0 2px #ffffff;
+    pointer-events: none;
+}
+.rg-notif__badge.is-hidden { display: none; }
+
+.rg-notif__panel {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    right: 0;
+    width: min(22rem, calc(100vw - 2rem));
+    max-height: min(28rem, calc(100vh - 6rem));
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    box-shadow: 0 18px 38px -16px rgba(15, 23, 42, 0.25), 0 4px 12px -6px rgba(15, 23, 42, 0.1);
+    z-index: 1200;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.rg-notif__panel[hidden] { display: none; }
+.rg-notif__panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #f1f5f9;
+    background: #f8fafc;
+}
+.rg-notif__panel-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--rg-brand-green-ink, #14532d);
+    margin: 0;
+}
+.rg-notif__mark-all { margin: 0; }
+.rg-notif__mark-all-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--rg-brand-green, #16a34a);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.rg-notif__mark-all-btn:hover { text-decoration: underline; }
+.rg-notif__mark-all-btn:focus-visible {
+    outline: 2px solid rgba(59, 130, 246, 0.45);
+    outline-offset: 2px;
+    border-radius: 0.25rem;
+}
+
+.rg-notif__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    flex: 1 1 auto;
+}
+.rg-notif__item {
+    border-bottom: 1px solid #f1f5f9;
+}
+.rg-notif__item:last-child { border-bottom: none; }
+.rg-notif__item-form { margin: 0; }
+.rg-notif__item-link {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    color: inherit;
+}
+.rg-notif__item-link:hover { background: #f8fafc; }
+.rg-notif__item-link:focus-visible {
+    background: #ecfdf5;
+    outline: none;
+    box-shadow: inset 0 0 0 2px rgba(22, 163, 74, 0.45);
+}
+.rg-notif__item--unread .rg-notif__item-link { background: #f0fdf4; }
+.rg-notif__item--unread .rg-notif__item-link:hover { background: #dcfce7; }
+.rg-notif__item-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    margin-top: 0.4rem;
+    background: transparent;
+    flex: 0 0 auto;
+}
+.rg-notif__item--unread .rg-notif__item-dot {
+    background: var(--rg-brand-green, #16a34a);
+    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
+}
+.rg-notif__item-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+.rg-notif__item-title {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #0f172a;
+    line-height: 1.3;
+}
+.rg-notif__item-text {
+    font-size: 0.78rem;
+    color: #475569;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.rg-notif__item-meta {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    margin-top: 0.15rem;
+}
+.rg-notif__item-flag {
+    color: var(--rg-brand-green, #16a34a);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.rg-notif__empty {
+    padding: 1.5rem 1rem;
+    text-align: center;
+    color: #475569;
+}
+.rg-notif__empty-icon {
+    width: 2rem;
+    height: 2rem;
+    color: var(--rg-brand-green, #16a34a);
+    opacity: 0.75;
+    margin-bottom: 0.4rem;
+}
+.rg-notif__empty-title {
+    margin: 0 0 0.2rem;
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+.rg-notif__empty .rg-notif__empty-text,
+.rg-notif__empty-text {
+    margin: 0;
+    font-size: 0.78rem;
+    color: #64748b;
+}
+
+.rg-notif__panel-footer {
+    padding: 0.6rem 1rem;
+    border-top: 1px solid #f1f5f9;
+    background: #f8fafc;
+    text-align: center;
+}
+.rg-notif__view-all {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--rg-brand-green, #16a34a);
+    text-decoration: none;
+}
+.rg-notif__view-all:hover { text-decoration: underline; }
+
+/* Full-page notifications list */
+.rg-notif-page {
+    margin-top: 1rem;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    overflow: hidden;
+}
+.rg-notif-page__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.rg-notif-page__item { border-bottom: 1px solid #f1f5f9; }
+.rg-notif-page__item:last-child { border-bottom: none; }
+.rg-notif-page__form { margin: 0; }
+.rg-notif-page__row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.85rem;
+    width: 100%;
+    padding: 1rem 1.25rem;
+    background: none;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    color: inherit;
+}
+.rg-notif-page__row:hover { background: #f8fafc; }
+.rg-notif-page__row:focus-visible {
+    background: #ecfdf5;
+    outline: none;
+    box-shadow: inset 0 0 0 2px rgba(22, 163, 74, 0.45);
+}
+.rg-notif-page__item--unread .rg-notif-page__row { background: #f0fdf4; }
+.rg-notif-page__item--unread .rg-notif-page__row:hover { background: #dcfce7; }
+.rg-notif-page__dot {
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 50%;
+    margin-top: 0.4rem;
+    background: transparent;
+    flex: 0 0 auto;
+}
+.rg-notif-page__item--unread .rg-notif-page__dot {
+    background: var(--rg-brand-green, #16a34a);
+    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
+}
+.rg-notif-page__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.rg-notif-page__title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.3;
+}
+.rg-notif-page__text {
+    font-size: 0.85rem;
+    color: #475569;
+    line-height: 1.4;
+}
+.rg-notif-page__meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    color: #94a3b8;
+    margin-top: 0.15rem;
+}
+.rg-notif-page__meta-tag {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+}
+.rg-notif-page__meta-time { color: #64748b; }
+
+.rg-notif-page__empty {
+    padding: 3rem 1.5rem;
+    text-align: center;
+    color: #475569;
+}
+.rg-notif-page__empty-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    color: var(--rg-brand-green, #16a34a);
+    opacity: 0.7;
+    margin-bottom: 0.5rem;
+}
+.rg-notif-page__empty-title {
+    margin: 0 0 0.3rem;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+.rg-notif-page__empty-text {
+    margin: 0 auto;
+    max-width: 32rem;
+    font-size: 0.88rem;
+    color: #64748b;
+    line-height: 1.5;
+}
+
+@media (max-width: 540px) {
+    .rg-notif__panel {
+        right: -0.5rem;
+        width: calc(100vw - 1.5rem);
+    }
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   Stage SLA badge (Slice D5)
+   States: ok | warning | overdue | paused
+───────────────────────────────────────────────────────────────── */
+.rg-sla-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.25;
+    white-space: nowrap;
+    border: 1px solid transparent;
+    cursor: help;
+}
+.rg-sla-badge__dot {
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 50%;
+    background: currentColor;
+    flex: 0 0 auto;
+}
+.rg-sla-badge__text { color: inherit; }
+
+/* OK — quiet neutral so the queue isn't loud */
+.rg-sla-badge--ok {
+    background: #f1f5f9;
+    color: #475569;
+    border-color: #e2e8f0;
+}
+/* Warning — amber */
+.rg-sla-badge--warning {
+    background: #fef3c7;
+    color: #92400e;
+    border-color: #fde68a;
+}
+/* Overdue — red */
+.rg-sla-badge--overdue {
+    background: #fee2e2;
+    color: #991b1b;
+    border-color: #fecaca;
+}
+/* Paused — sky blue, signals "not on the office's clock" */
+.rg-sla-badge--paused {
+    background: #e0f2fe;
+    color: #075985;
+    border-color: #bae6fd;
+}
+
+/* Small variant — used inside queue rows under the task pill */
+.rg-sla-badge--sm {
+    margin-top: 0.3rem;
+    padding: 0.1rem 0.45rem;
+    font-size: 0.68rem;
+}
+.rg-sla-badge--sm .rg-sla-badge__dot {
+    width: 0.35rem;
+    height: 0.35rem;
+}
+
+/* When the badge sits in the case header facts strip, give it a touch of space */
+.rg-cws-header__facts .rg-sla-badge {
+    margin-left: 0.25rem;
+}

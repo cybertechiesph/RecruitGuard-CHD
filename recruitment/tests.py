@@ -3030,6 +3030,37 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
         self.assertGreater(application.case.stage_entered_at, old_stage_entered_at)
         self.assertGreater(application.case.time_in_current_stage, timedelta(seconds=0))
 
+    def test_stage_sla_state_uses_default_thresholds_and_pauses_returned_cases(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        case = application.case
+
+        case.stage_entered_at = timezone.now() - timedelta(days=4, minutes=59)
+        case.case_status = RecruitmentCase.CaseStatus.ACTIVE
+        case.save(update_fields=["stage_entered_at", "case_status", "updated_at"])
+        self.assertEqual(case.stage_sla_state, "ok")
+
+        case.stage_entered_at = timezone.now() - timedelta(days=5)
+        case.save(update_fields=["stage_entered_at", "updated_at"])
+        self.assertEqual(case.stage_sla_state, "warning")
+        self.assertTrue(case.stage_sla_context["is_warning"])
+
+        case.stage_entered_at = timezone.now() - timedelta(days=7)
+        case.save(update_fields=["stage_entered_at", "updated_at"])
+        self.assertEqual(case.stage_sla_state, "overdue")
+        self.assertTrue(case.stage_sla_context["is_overdue"])
+
+        case.case_status = RecruitmentCase.CaseStatus.RETURNED_TO_APPLICANT
+        case.save(update_fields=["case_status", "updated_at"])
+        self.assertEqual(case.stage_sla_state, "paused")
+        self.assertTrue(case.stage_sla_context["is_paused"])
+
+        case.current_stage = RecruitmentCase.Stage.CLOSED
+        case.case_status = RecruitmentCase.CaseStatus.APPROVED
+        case.save(update_fields=["current_stage", "case_status", "updated_at"])
+        self.assertEqual(case.stage_sla_state, "ok")
+
     def test_closed_case_is_locked_after_completion_and_can_be_reopened(self):
         application = self.make_selected_application(self.cos_position)
 
@@ -5108,6 +5139,16 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         notification.refresh_from_db()
         self.assertIsNotNone(notification.read_at)
 
+        next_url = reverse("workflow-queue")
+        notification.read_at = None
+        notification.save(update_fields=["read_at", "updated_at"])
+        response = client.post(
+            reverse("notification-read", kwargs={"pk": notification.pk}),
+            {"next": next_url},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], next_url)
+
         response = client.post(reverse("notification-read", kwargs={"pk": other_notification.pk}))
         self.assertEqual(response.status_code, 404)
         other_notification.refresh_from_db()
@@ -5130,8 +5171,10 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
 
         client = Client()
         self.force_login_with_mfa(client, self.secretariat)
-        response = client.post(reverse("notification-read-all"))
+        next_url = reverse("notification-list")
+        response = client.post(reverse("notification-read-all"), {"next": next_url})
         self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], next_url)
 
         self.assertEqual(
             Notification.objects.filter(recipient=self.secretariat, read_at__isnull=True).count(),

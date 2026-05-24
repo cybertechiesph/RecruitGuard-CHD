@@ -225,5 +225,105 @@ red and surface it as a Codex-side constant the UI can read.
 
 ---
 
+## From Slice D1 — In-app notifications UI (landed)
+
+### D1-note. Replaced NotificationListView stub with template render
+**What changed.** The shipped `NotificationListView.get` returned a
+hand-built HTML string (clearly a stub). I swapped it to:
+
+```python
+return render(request, "recruitment/notification_list.html", {
+    "notifications": notifications,
+    "unread_count": unread_count,
+    "has_unread": unread_count > 0,
+})
+```
+
+…and added the matching template at
+`recruitment/templates/recruitment/notification_list.html`. The behavior
+(login required, internal-user required, lists up to 100 most recent) is
+unchanged; only the rendering switched from inline HTML to a Django
+template that extends `internal_base.html`. The unused `get_token`
+import on that view can be cleaned up next pass if Codex prefers.
+
+### D1-followup (optional). Have form-post redirects honor `next`
+**Why.** The bell dropdown and full-page list both send a `<input
+type="hidden" name="next" value="…">` along with mark-read and
+mark-all-read POSTs. Today the views use the HTTP `Referer` header as
+the primary fallback, which works in practice but is fragile under
+strict referrer policies.
+
+**Ask (optional).** In `NotificationReadView.post` and
+`NotificationReadAllView.post`, prefer `request.POST.get("next")` over
+`HTTP_REFERER` when validating the redirect target via
+`_safe_internal_redirect`. Falls back to the existing chain otherwise.
+
+---
+
+## From Slice D5 — Time-in-stage badge (UI blocked on helper)
+
+### D5-1. SLA threshold helper for the time-in-stage badge
+**Why.** `stage_entered_at` and `time_in_current_stage` are now on
+`RecruitmentCase`, so I can render a plain *"In screening for 3 days"*
+badge on the case header and queue rows. But the user wants
+color-coded SLA states (neutral → amber → red) and your message
+flagged that the threshold policy should live on the backend so the
+queue list, the case header, and any other surface share one rule.
+
+**Ask.** Expose a small helper that returns the SLA severity + the
+elapsed duration for a case's current stage. Two shapes that would
+work — pick whichever fits the backend better:
+
+**Option A — model property** *(simpler):*
+
+```python
+# recruitment/models.py — RecruitmentCase
+@property
+def stage_sla_state(self):
+    """Return one of: 'ok', 'warning', 'overdue'."""
+    elapsed = self.time_in_current_stage
+    if elapsed >= STAGE_OVERDUE_THRESHOLD:
+        return "overdue"
+    if elapsed >= STAGE_WARNING_THRESHOLD:
+        return "warning"
+    return "ok"
+```
+
+**Option B — template tag** *(centralizes the rule alongside the other
+`recruitment_ui` tags):*
+
+```python
+@register.simple_tag
+def stage_sla_state(recruitment_case):
+    ...
+```
+
+**Thresholds.** Default suggestion (tune as you see fit):
+
+| State    | Trigger                                        |
+|----------|------------------------------------------------|
+| ok       | < 5 days in current stage                      |
+| warning  | ≥ 5 days and < 7 days                          |
+| overdue  | ≥ 7 days                                       |
+
+Per-stage thresholds would be nicer (e.g. screening = 3/5 days,
+deliberation = 7/14), but a single global pair is fine for v1 — I'd
+rather ship the badge than wait for per-stage tuning.
+
+**Care.**
+- Cases in `current_stage = CLOSED` should report `"ok"` (or be
+  excluded from SLA — your call). The badge will be hidden in that
+  case anyway, but a stable return value keeps the helper safe to call.
+- Returned-to-applicant cases: should the clock pause while the case
+  is with the applicant, or keep counting? My instinct is to **pause**
+  — the office can't act on it. But it depends on whether the SLA is
+  "office responsiveness" or "applicant journey time."
+
+I'll consume whichever shape you ship; just let me know the import
+path and I'll wire the badge in one pass on `case_header.html` and
+the queue row template.
+
+---
+
 ## (Slot for future-slice asks)
 *(none yet)*

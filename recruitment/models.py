@@ -1,5 +1,6 @@
 import re
 import uuid
+from datetime import timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.contrib.auth.models import AbstractUser
@@ -17,6 +18,8 @@ REFERENCE_LEVEL_TO_ROUTING_LEVEL = {
 ENTRY_CODE_PATTERN = re.compile(
     r"^RG-(?P<branch>PLT|COS)-(?P<year>\d{4})-(?P<sequence>\d{4})$"
 )
+STAGE_SLA_WARNING_THRESHOLD = timedelta(days=5)
+STAGE_SLA_OVERDUE_THRESHOLD = timedelta(days=7)
 
 
 def build_unique_position_slug(model_class, source_value, *, instance_pk=None):
@@ -847,6 +850,45 @@ class RecruitmentCase(TimestampedModel):
     @property
     def time_in_current_stage(self):
         return timezone.now() - self.stage_entered_at
+
+    @property
+    def stage_sla_elapsed(self):
+        if not self.stage_entered_at:
+            return timedelta(0)
+        if self.current_stage == self.Stage.CLOSED:
+            return timedelta(0)
+        if self.case_status == self.CaseStatus.RETURNED_TO_APPLICANT:
+            pause_started_at = self.updated_at or timezone.now()
+            return max(pause_started_at - self.stage_entered_at, timedelta(0))
+        return max(self.time_in_current_stage, timedelta(0))
+
+    @property
+    def stage_sla_state(self):
+        if self.current_stage == self.Stage.CLOSED:
+            return "ok"
+        if self.case_status == self.CaseStatus.RETURNED_TO_APPLICANT:
+            return "paused"
+        elapsed = self.stage_sla_elapsed
+        if elapsed >= STAGE_SLA_OVERDUE_THRESHOLD:
+            return "overdue"
+        if elapsed >= STAGE_SLA_WARNING_THRESHOLD:
+            return "warning"
+        return "ok"
+
+    @property
+    def stage_sla_context(self):
+        elapsed = self.stage_sla_elapsed
+        state = self.stage_sla_state
+        return {
+            "state": state,
+            "elapsed": elapsed,
+            "elapsed_days": elapsed.days,
+            "is_paused": state == "paused",
+            "is_overdue": state == "overdue",
+            "is_warning": state == "warning",
+            "warning_days": STAGE_SLA_WARNING_THRESHOLD.days,
+            "overdue_days": STAGE_SLA_OVERDUE_THRESHOLD.days,
+        }
 
     def __str__(self):
         return f"Case for {self.application.reference_label}"

@@ -34,7 +34,7 @@
                 </label>
                 {{ action_form.remarks }}
                 <div class="form-text">Required. This is saved to the case history.</div>
-                <div class="invalid-feedback d-block" id="wf-remarks-error" hidden>
+                <div class="invalid-feedback" id="wf-remarks-error" style="display:none;">
                     Add a short reason before you continue.
                 </div>
                 {% for error in action_form.remarks.errors %}
@@ -56,7 +56,7 @@
                 <div class="form-text">
                     Required. This is saved to the case history{% if screening_disposition_required %} and included in the message to the applicant{% endif %}.
                 </div>
-                <div class="invalid-feedback d-block" id="wf-remarks-error" hidden>
+                <div class="invalid-feedback" id="wf-remarks-error" style="display:none;">
                     Add a short reason before you continue.
                 </div>
                 {% for error in action_form.remarks.errors %}
@@ -202,19 +202,19 @@
     function validateRemarks() {
         if (!remarks) return true;
         if (remarks.value.trim() === "") {
-            if (remarksError) remarksError.hidden = false;
+            if (remarksError) remarksError.style.display = "block";
             remarks.classList.add("is-invalid");
             remarks.focus();
             return false;
         }
-        if (remarksError) remarksError.hidden = true;
+        if (remarksError) remarksError.style.display = "none";
         remarks.classList.remove("is-invalid");
         return true;
     }
     if (remarks) {
         remarks.addEventListener("input", function () {
             if (remarks.value.trim() !== "") {
-                if (remarksError) remarksError.hidden = true;
+                if (remarksError) remarksError.style.display = "none";
                 remarks.classList.remove("is-invalid");
             }
         });

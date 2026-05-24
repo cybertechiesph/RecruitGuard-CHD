@@ -17,6 +17,7 @@
         {% else %}
             <span>Closed</span>
         {% endif %}
+        {% include "internal_includes/stage_sla_badge.html" with recruitment_case=recruitment_case %}
     </div>
     <div class="rg-cws-header__actions">
         {% if request.user.role != "system_admin" %}
@@ -74,7 +75,7 @@
                         </label>
                         {{ case_handoff_form.remarks }}
                         <div class="form-text">Required. Saved to the case history.</div>
-                        <div class="invalid-feedback d-block" id="handoff-remarks-error" hidden>
+                        <div class="invalid-feedback" id="handoff-remarks-error" style="display:none;">
                             Add a short reason before sending the case.
                         </div>
                         {% for error in case_handoff_form.remarks.errors %}
@@ -106,7 +107,7 @@
     form.addEventListener("submit", function (e) {
         if (remarks && remarks.value.trim() === "") {
             e.preventDefault();
-            if (error) error.hidden = false;
+            if (error) error.style.display = "block";
             remarks.classList.add("is-invalid");
             remarks.focus();
         }
@@ -114,7 +115,7 @@
     if (remarks) {
         remarks.addEventListener("input", function () {
             if (remarks.value.trim() !== "") {
-                if (error) error.hidden = true;
+                if (error) error.style.display = "none";
                 remarks.classList.remove("is-invalid");
             }
         });

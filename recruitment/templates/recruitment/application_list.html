@@ -109,6 +109,7 @@
                                 <span class="rg-pill rg-pill--{{ task_theme }} rg-pill--sm">
                                     {{ task_label }}
                                 </span>
+                                {% include "internal_includes/stage_sla_badge.html" with recruitment_case=application.case variant="sm" %}
                             </td>
                             {% if not is_queue %}
                                 <td>

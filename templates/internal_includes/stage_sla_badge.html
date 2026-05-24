@@ -1,0 +1,37 @@
+{% load recruitment_ui %}
+{% comment %}
+Stage SLA badge.
+Inputs (set via "include ... with ..."):
+  - recruitment_case : RecruitmentCase | None
+  - variant          : "" (default) | "sm" for queue rows
+Renders nothing if there is no case or the case is closed.
+{% endcomment %}
+{% if recruitment_case and recruitment_case.current_stage and recruitment_case.current_stage != "closed" %}
+    {% stage_sla_context recruitment_case as sla %}
+    {% stage_sla_label recruitment_case as stage_name %}
+    <span class="rg-sla-badge rg-sla-badge--{{ sla.state }}{% if variant %} rg-sla-badge--{{ variant }}{% endif %}"
+          {% if sla.is_paused %}
+              title="The SLA clock is paused while this case is with the applicant."
+          {% elif sla.is_overdue %}
+              title="In {{ stage_name }} for {{ sla.elapsed_days }} day{{ sla.elapsed_days|pluralize }} — over the {{ sla.overdue_days }}-day target."
+          {% elif sla.is_warning %}
+              title="In {{ stage_name }} for {{ sla.elapsed_days }} day{{ sla.elapsed_days|pluralize }} — approaching the {{ sla.overdue_days }}-day target."
+          {% else %}
+              title="In {{ stage_name }} for {{ sla.elapsed_days }} day{{ sla.elapsed_days|pluralize }}."
+          {% endif %}>
+        <span class="rg-sla-badge__dot" aria-hidden="true"></span>
+        <span class="rg-sla-badge__text">
+            {% if sla.is_paused %}
+                Paused with applicant
+            {% else %}
+                {% if sla.elapsed_days == 0 %}
+                    In {{ stage_name }} today
+                {% elif sla.elapsed_days == 1 %}
+                    In {{ stage_name }} for 1 day
+                {% else %}
+                    In {{ stage_name }} for {{ sla.elapsed_days }} days
+                {% endif %}
+            {% endif %}
+        </span>
+    </span>
+{% endif %}

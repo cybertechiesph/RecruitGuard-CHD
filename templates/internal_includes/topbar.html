@@ -10,6 +10,7 @@
                 {{ user.role|role_label }}
             </span>
         </span>
+        {% notifications_bell %}
         <span class="rg-user-pill">{{ user.get_full_name|default:user.username }}</span>
     </div>
 </div>

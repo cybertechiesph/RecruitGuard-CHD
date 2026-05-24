@@ -84,7 +84,7 @@
                        placeholder="------"
                        aria-describedby="rg-otp-help rg-otp-error"
                        autofocus>
-                <div class="invalid-feedback d-block" id="rg-otp-error" role="alert" hidden></div>
+                <div class="invalid-feedback" id="rg-otp-error" role="alert" style="display:none;"></div>
                 {% for error in otp_form.otp.errors %}
                     <div class="invalid-feedback d-block">{{ error }}</div>
                 {% endfor %}
@@ -234,24 +234,24 @@
             if (v.length === 0) {
                 e.preventDefault();
                 err.textContent = "Enter the 6-digit code from your email.";
-                err.hidden = false;
+                err.style.display = "block";
                 input.classList.add("is-invalid");
                 try { input.focus(); } catch (x) {}
             } else if (!/^\d{6}$/.test(v)) {
                 e.preventDefault();
                 err.textContent = "The code is 6 digits — letters or extra characters won’t work.";
-                err.hidden = false;
+                err.style.display = "block";
                 input.classList.add("is-invalid");
                 try { input.focus(); } catch (x) {}
             } else {
-                err.hidden = true;
+                err.style.display = "none";
                 input.classList.remove("is-invalid");
             }
         });
         if (input) {
             input.addEventListener("input", function () {
                 if ((input.value || "").trim() === "") return;
-                err.hidden = true;
+                err.style.display = "none";
                 input.classList.remove("is-invalid");
             });
         }

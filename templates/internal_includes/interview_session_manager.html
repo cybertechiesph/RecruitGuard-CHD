@@ -205,7 +205,7 @@
             {% endfor %}
         </div>
         <div class="rg-int-fallback-actions">
-            <div class="invalid-feedback d-block" id="int-fallback-error" hidden>
+            <div class="invalid-feedback" id="int-fallback-error" style="display:none;">
                 Choose a file before uploading.
             </div>
             <button type="submit" class="btn btn-sm btn-outline-secondary" id="int-fallback-submit">
@@ -420,13 +420,13 @@
         fbForm.addEventListener("submit", function (e) {
             if (!fbInput || !fbInput.files || fbInput.files.length === 0) {
                 e.preventDefault();
-                if (fbError) fbError.hidden = false;
+                if (fbError) fbError.style.display = "block";
                 if (fbInput && fbInput.focus) try { fbInput.focus(); } catch (err) {}
             }
         });
         if (fbInput) {
             fbInput.addEventListener("change", function () {
-                if (fbInput.files && fbInput.files.length > 0 && fbError) fbError.hidden = true;
+                if (fbInput.files && fbInput.files.length > 0 && fbError) fbError.style.display = "none";
             });
         }
     }

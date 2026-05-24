@@ -6,12 +6,17 @@ from recruitment.models import (
     AuditLog,
     CompletionRequirement,
     ExamRecord,
+    Notification,
     NotificationLog,
     PositionPosting,
     RecruitmentApplication,
     RecruitmentCase,
     RecruitmentUser,
     ScreeningRecord,
+)
+from recruitment.notification_services import (
+    get_recent_notifications,
+    get_unread_count,
 )
 from recruitment.services import get_current_workflow_section
 
@@ -425,3 +430,71 @@ def queue_task_label(application):
 @register.simple_tag
 def queue_task_theme(application):
     return _queue_task_display(application)[1]
+
+
+@register.simple_tag
+def stage_sla_state(recruitment_case):
+    if not recruitment_case:
+        return "ok"
+    return recruitment_case.stage_sla_state
+
+
+@register.simple_tag
+def stage_sla_context(recruitment_case):
+    if not recruitment_case:
+        return {
+            "state": "ok",
+            "elapsed": None,
+            "elapsed_days": 0,
+            "is_paused": False,
+            "is_overdue": False,
+            "is_warning": False,
+            "warning_days": 5,
+            "overdue_days": 7,
+        }
+    return recruitment_case.stage_sla_context
+
+
+@register.simple_tag
+def stage_sla_label(recruitment_case):
+    if not recruitment_case:
+        return "current step"
+    application = getattr(recruitment_case, "application", None)
+    if application:
+        return _queue_task_display(application)[0]
+    return stage_label(recruitment_case.current_stage)
+
+
+@register.inclusion_tag("internal_includes/notifications_bell.html", takes_context=True)
+def notifications_bell(context):
+    """
+    Renders the topbar notifications bell + dropdown.
+
+    Pulls the 10 most recent notifications and the current unread count for the
+    signed-in user. Returns an empty payload when there is no authenticated
+    internal user so the topbar still renders cleanly.
+    """
+    request = context.get("request")
+    user = getattr(request, "user", None) if request else None
+    if not user or not getattr(user, "is_authenticated", False):
+        return {
+            "request": request,
+            "notifications": [],
+            "unread_count": 0,
+            "has_unread": False,
+            "badge_label": "",
+        }
+
+    notifications = list(get_recent_notifications(user, limit=10))
+    unread_count = get_unread_count(user)
+    badge_label = ""
+    if unread_count > 0:
+        badge_label = "9+" if unread_count > 9 else str(unread_count)
+
+    return {
+        "request": request,
+        "notifications": notifications,
+        "unread_count": unread_count,
+        "has_unread": unread_count > 0,
+        "badge_label": badge_label,
+    }
