@@ -224,8 +224,8 @@
                  {% if slot.saved_evidence %}data-saved-filename="{{ slot.saved_evidence.original_filename }}"{% endif %}>
                 <p class="rg-pub-upload-slot__name">
                     {{ slot.field.label }}
-                    {% if slot.is_required_now %}<span class="text-danger" aria-hidden="true">*</span>{% endif %}
-                    <span class="rg-pub-optional-tag">{{ slot.label_tag }}</span>
+                    <span class="text-danger" aria-hidden="true" data-required-marker {% if not slot.is_required_now %}hidden{% endif %}>*</span>
+                    <span class="rg-pub-optional-tag" data-requirement-tag>{% if slot.is_required_now %}Required{% else %}{{ slot.label_tag }}{% endif %}</span>
                 </p>
                 {% if slot.field.help_text %}
                     <p class="rg-pub-upload-slot__hint">{{ slot.field.help_text }}</p>
@@ -650,8 +650,22 @@
         }
         document.querySelectorAll("[data-intake-slot]").forEach(function (slot) {
             if (slot.dataset.applicabilityName !== "performance_rating_applicability") return;
+            var isApplicable = value === "applicable";
+            var isNotApplicable = value === "not_applicable";
+            var marker = slot.querySelector("[data-required-marker]");
+            var tag = slot.querySelector("[data-requirement-tag]");
+            var input = form.elements[slot.dataset.slotName];
+
             // Hide when explicitly not applicable; show otherwise (including unanswered)
-            slot.hidden = (value === "not_applicable");
+            slot.hidden = isNotApplicable;
+            slot.dataset.required = isApplicable ? "true" : "false";
+            if (marker) marker.hidden = !isApplicable;
+            if (tag) tag.textContent = isApplicable ? "Required" : "If applicable";
+            if (input) {
+                input.required = isApplicable;
+                input.disabled = isNotApplicable;
+                input.setAttribute("aria-required", isApplicable ? "true" : "false");
+            }
         });
     }
     var appFieldset = document.querySelector("[data-intake-applicability-fieldset]");

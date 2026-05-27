@@ -2,8 +2,10 @@ import csv
 import hashlib
 import hmac
 import json
+import logging
 import os
 import secrets
+import smtplib
 import textwrap
 import uuid
 import zipfile
@@ -63,10 +65,18 @@ from .notification_services import (
 )
 from .permissions import WORKFLOW_PROCESSOR_ROLES
 from .requirements import (
+    PERFORMANCE_RATING,
     get_applicant_document_requirements,
     get_required_applicant_document_requirements,
 )
 from .upload_validation import validate_applicant_document_upload
+
+
+logger = logging.getLogger(__name__)
+
+
+class ApplicationOTPDeliveryError(RuntimeError):
+    pass
 
 
 EXPORT_ROLES = {
@@ -4952,6 +4962,46 @@ def get_missing_required_applicant_document_requirements(application):
     ]
 
 
+def _archive_applicant_document_key(application, document_key, actor, archive_tag):
+    evidence_items = list(
+        get_current_applicant_document_items(application).filter(document_key=document_key)
+    )
+    if not evidence_items:
+        return []
+
+    now = timezone.now()
+    archived_ids = []
+    for evidence in evidence_items:
+        evidence.is_archived = True
+        evidence.archive_tag = archive_tag
+        evidence.archived_at = now
+        evidence.archived_by = actor
+        evidence.save(
+            update_fields=[
+                "is_archived",
+                "archive_tag",
+                "archived_at",
+                "archived_by",
+                "archived_by_role",
+                "updated_at",
+            ]
+        )
+        archived_ids.append(evidence.id)
+
+    record_audit_event(
+        application=application,
+        actor=actor,
+        action=AuditLog.Action.EVIDENCE_ARCHIVED,
+        description=f"Archived applicant document '{document_key}' because it no longer applies.",
+        metadata={
+            "document_key": document_key,
+            "evidence_ids": archived_ids,
+            "archive_tag": archive_tag,
+        },
+    )
+    return evidence_items
+
+
 def _upsert_public_application_draft(
     entry,
     cleaned_data,
@@ -5026,6 +5076,17 @@ def _upsert_public_application_draft(
     application.submitted_at = None
     application.closed_at = None
     application.save()
+    if (
+        application.performance_rating_applicability
+        == RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
+    ):
+        requirement_uploads.pop(PERFORMANCE_RATING, None)
+        _archive_applicant_document_key(
+            application,
+            PERFORMANCE_RATING,
+            applicant_user,
+            "Marked not applicable by applicant",
+        )
     requirement_catalog = {
         requirement.code: requirement
         for requirement in get_applicant_document_requirements(entry.branch)
@@ -5112,7 +5173,17 @@ def _deliver_application_otp(application, otp_code, *, actor=None, otp_expires_a
         to=[application.applicant_email],
     )
     email.attach_alternative(html_body, "text/html")
-    email.send(fail_silently=False)
+    try:
+        email.send(fail_silently=False)
+    except (OSError, smtplib.SMTPException) as exc:
+        logger.exception(
+            "Applicant OTP email delivery failed for application %s.",
+            application.pk,
+        )
+        raise ApplicationOTPDeliveryError(
+            "Your application draft and uploaded files were saved, but we could not send "
+            "the verification code right now. Please try again in a few moments."
+        ) from exc
     record_audit_event(
         application=application,
         actor=actor or application.applicant,
@@ -5122,7 +5193,7 @@ def _deliver_application_otp(application, otp_code, *, actor=None, otp_expires_a
     )
 
 
-def issue_application_otp(application, actor=None):
+def issue_application_otp(application, actor=None, *, defer_delivery=True):
     if application.status != RecruitmentApplication.Status.DRAFT:
         raise ValueError("A verification code can only be issued while the application is still in draft.")
 
@@ -5152,7 +5223,7 @@ def issue_application_otp(application, actor=None):
         )
 
     connection = transaction.get_connection(using=application._state.db or "default")
-    if connection.in_atomic_block:
+    if defer_delivery and connection.in_atomic_block:
         transaction.on_commit(deliver_otp, using=connection.alias)
     else:
         deliver_otp()
@@ -5191,7 +5262,7 @@ def create_public_application_draft(entry, cleaned_data, requirement_uploads):
         entry,
         cleaned_data,
         requirement_uploads,
-        issue_otp=True,
+        issue_otp=False,
     )
 
 

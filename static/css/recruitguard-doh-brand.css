@@ -3558,3 +3558,335 @@ body.applicant-portal-body {
     color: #475569;
     line-height: 1.5;
 }
+
+/* ─────────────────────────────────────────────────────────────────
+   Track Application — redesigned status page (TA1)
+───────────────────────────────────────────────────────────────── */
+.rg-ta-wrap {
+    max-width: 640px;
+    padding-top: 2.5rem;
+    padding-bottom: 3rem;
+}
+
+/* Intro (only shown when no result yet) */
+.rg-ta-intro {
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+.rg-ta-intro__title {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--rg-brand-green-ink, #14532d);
+    margin: 0 0 0.5rem;
+}
+.rg-ta-intro__copy {
+    font-size: 0.95rem;
+    color: #475569;
+    max-width: 44ch;
+    margin: 0 auto;
+    line-height: 1.55;
+}
+
+/* Lookup form card */
+.rg-ta-lookup-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+.rg-ta-field { margin-bottom: 1rem; }
+.rg-ta-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 0.4rem;
+}
+.rg-ta-error { font-size: 0.825rem; }
+.rg-ta-submit { width: 100%; margin-top: 0.25rem; }
+
+/* Result card — different left-border tone per state */
+.rg-ta-result-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid #0369a1;
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+}
+.rg-ta-result-card--approved { border-left-color: #15803d; }
+.rg-ta-result-card--not-selected { border-left-color: #64748b; }
+.rg-ta-result-card--returned { border-left-color: #b45309; }
+.rg-ta-result-card--evaluation { border-left-color: #6d28d9; }
+
+.rg-ta-result-card__head { margin-bottom: 1.25rem; }
+.rg-ta-result-card__ref {
+    font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, Menlo, monospace;
+    font-size: 0.78rem;
+    color: #64748b;
+    letter-spacing: 0.02em;
+    margin: 0 0 0.15rem;
+}
+.rg-ta-result-card__applicant {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0 0 0.25rem;
+    line-height: 1.25;
+}
+.rg-ta-result-card__position {
+    font-size: 0.92rem;
+    color: #475569;
+    margin: 0;
+}
+.rg-ta-sep {
+    color: #cbd5e1;
+    margin: 0 0.25rem;
+}
+
+/* 3-step pipeline */
+.rg-ta-pipeline {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 1.25rem;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+    position: relative;
+}
+.rg-ta-pipeline__step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    position: relative;
+}
+.rg-ta-pipeline__step::before {
+    content: "";
+    position: absolute;
+    top: 0.95rem;
+    left: -50%;
+    right: 50%;
+    height: 2px;
+    background: #e2e8f0;
+    z-index: 0;
+}
+.rg-ta-pipeline__step:first-child::before { content: none; }
+.rg-ta-pipeline__step--done::before {
+    background: var(--rg-brand-green, #16a34a);
+}
+.rg-ta-pipeline__num {
+    width: 1.9rem;
+    height: 1.9rem;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.85rem;
+    background: #ffffff;
+    border: 2px solid #cbd5e1;
+    color: #64748b;
+    position: relative;
+    z-index: 1;
+}
+.rg-ta-pipeline__step--done .rg-ta-pipeline__num {
+    background: var(--rg-brand-green, #16a34a);
+    border-color: var(--rg-brand-green, #16a34a);
+    color: #ffffff;
+}
+.rg-ta-pipeline__step--current .rg-ta-pipeline__num {
+    background: #ecfdf5;
+    border-color: var(--rg-brand-green, #16a34a);
+    color: var(--rg-brand-green-ink, #14532d);
+    box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.12);
+}
+.rg-ta-pipeline__label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #475569;
+    text-align: center;
+}
+.rg-ta-pipeline__step--current .rg-ta-pipeline__label,
+.rg-ta-pipeline__step--done .rg-ta-pipeline__label {
+    color: #0f172a;
+}
+
+.rg-ta-status-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.9rem;
+}
+.rg-ta-result-card__copy {
+    font-size: 0.95rem;
+    color: #1f2937;
+    line-height: 1.6;
+    margin: 0 0 1rem;
+}
+.rg-ta-expectation {
+    font-size: 0.875rem;
+    color: #475569;
+    line-height: 1.55;
+    margin: 0;
+    padding: 0.75rem 1rem;
+    background: #f8fafc;
+    border-radius: 0.5rem;
+    border: 1px solid #e2e8f0;
+}
+
+/* "What you need to do" panel */
+.rg-ta-action-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 0.65rem;
+    padding: 1rem 1.15rem;
+    margin-bottom: 1rem;
+    background: #f8fafc;
+}
+.rg-ta-action-card__title {
+    margin: 0 0 0.35rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #475569;
+}
+.rg-ta-action-card__copy {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.55;
+    color: #1f2937;
+}
+.rg-ta-action-card--needed {
+    background: #fffbeb;
+    border-color: #fde68a;
+    border-left: 4px solid #b45309;
+}
+.rg-ta-action-card--needed .rg-ta-action-card__title { color: #92400e; }
+.rg-ta-action-card--good {
+    background: #f0fdf4;
+    border-color: #86efac;
+    border-left: 4px solid #15803d;
+}
+.rg-ta-action-card--good .rg-ta-action-card__title { color: #14532d; }
+.rg-ta-action-card--rest {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+}
+
+/* Facts list */
+.rg-ta-facts {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.65rem;
+    padding: 1rem 1.15rem;
+    margin-bottom: 1rem;
+}
+.rg-ta-facts__title {
+    margin: 0 0 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #475569;
+}
+.rg-ta-facts__list { margin: 0; }
+.rg-ta-facts__row {
+    display: grid;
+    grid-template-columns: 9rem 1fr;
+    gap: 1rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 0.9rem;
+}
+.rg-ta-facts__row:last-child { border-bottom: none; }
+.rg-ta-facts__row dt {
+    color: #64748b;
+    font-weight: 600;
+    margin: 0;
+}
+.rg-ta-facts__row dd {
+    color: #0f172a;
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+.rg-ta-mono {
+    font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, Menlo, monospace;
+    font-size: 0.85rem;
+}
+
+/* Help block: phone + email side by side */
+.rg-ta-help {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid var(--rg-brand-green, #16a34a);
+    border-radius: 0.65rem;
+    padding: 1rem 1.15rem;
+    margin-bottom: 1rem;
+}
+.rg-ta-help__title {
+    margin: 0 0 0.6rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+.rg-ta-help__grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+}
+@media (max-width: 540px) {
+    .rg-ta-help__grid { grid-template-columns: 1fr; }
+    .rg-ta-facts__row {
+        grid-template-columns: 1fr;
+        gap: 0.15rem;
+    }
+}
+.rg-ta-help__channel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.6rem 0.75rem;
+    background: #f8fafc;
+    border-radius: 0.5rem;
+}
+.rg-ta-help__channel-label {
+    font-size: 0.75rem;
+    color: #64748b;
+    font-weight: 600;
+}
+.rg-ta-help__channel-value {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--rg-brand-green-ink, #14532d);
+    text-decoration: none;
+    overflow-wrap: anywhere;
+}
+.rg-ta-help__channel-value:hover { text-decoration: underline; }
+
+/* Look up a different application — collapsed disclosure */
+.rg-ta-lookup-again {
+    margin: 1rem 0 0.5rem;
+}
+.rg-ta-lookup-again__summary {
+    font-size: 0.85rem;
+    color: var(--rg-brand-green, #16a34a);
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0.4rem 0;
+}
+.rg-ta-lookup-again__summary:hover { text-decoration: underline; }
+.rg-ta-lookup-again__form {
+    margin-top: 0.75rem;
+    padding: 1rem 1.15rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.65rem;
+}
+
+.rg-ta-back {
+    text-align: center;
+    margin-top: 1.5rem;
+}

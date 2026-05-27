@@ -4,6 +4,7 @@ from django.conf import settings
 from django.core.mail import send_mail
 from django.db import transaction
 from django.template.loader import render_to_string
+from django.urls import reverse
 from django.utils import timezone
 
 from .models import (
@@ -172,6 +173,21 @@ def _format_schedule(value):
     return timezone.localtime(value).strftime("%B %d, %Y at %I:%M %p")
 
 
+def build_applicant_status_url(application):
+    path = reverse("applicant-status-link", kwargs={"token": application.public_token})
+    base_url = (getattr(settings, "APPLICANT_PORTAL_BASE_URL", "") or "").strip().rstrip("/")
+    return f"{base_url}{path}" if base_url else path
+
+
+def _append_status_link(lines, application):
+    lines.extend(
+        [
+            "",
+            f"Check your application status anytime: {build_applicant_status_url(application)}",
+        ]
+    )
+
+
 def _record_notification_audit(application, actor, action, description, metadata):
     AuditLog.objects.create(
         application=application,
@@ -184,63 +200,63 @@ def _record_notification_audit(application, actor, action, description, metadata
 
 
 def _build_submission_acknowledgment(application):
+    lines = [
+        f"Dear {application.applicant_display_name},",
+        "",
+        "Your application has been received by RecruitGuard-CHD.",
+        f"Application ID: {application.reference_number}",
+        f"Position: {application.position.title}",
+        f"Recruitment type: {application.position.get_branch_display()}",
+        f"Current status: {application.get_status_display()}",
+        "",
+        "Keep your Application ID so you can check your application status.",
+    ]
+    _append_status_link(lines, application)
     return (
         f"RecruitGuard-CHD application received: {application.reference_number}",
-        "\n".join(
-            [
-                f"Dear {application.applicant_display_name},",
-                "",
-                "Your application has been received by RecruitGuard-CHD.",
-                f"Application ID: {application.reference_number}",
-                f"Position: {application.position.title}",
-                f"Recruitment type: {application.position.get_branch_display()}",
-                f"Current status: {application.get_status_display()}",
-                "",
-                "Keep your Application ID so you can check your application status.",
-            ]
-        ),
+        "\n".join(lines),
     )
 
 
 def _build_selected_notification(application):
+    lines = [
+        f"Dear {application.applicant_display_name},",
+        "",
+        (
+            f"You have been selected for {application.position.title} "
+            f"under {application.position.get_branch_display()} recruitment."
+        ),
+        (
+            f"The next step is { _completion_label(application).lower() } "
+            "within the scope of this recruitment process."
+        ),
+        f"Application ID: {application.reference_number}",
+        "",
+        "Please wait for the requirement checklist or any additional office instructions.",
+    ]
+    _append_status_link(lines, application)
     return (
         f"RecruitGuard-CHD application result: {application.position.title}",
-        "\n".join(
-            [
-                f"Dear {application.applicant_display_name},",
-                "",
-                (
-                    f"You have been selected for {application.position.title} "
-                    f"under {application.position.get_branch_display()} recruitment."
-                ),
-                (
-                    f"The next step is { _completion_label(application).lower() } "
-                    "within the scope of this recruitment process."
-                ),
-                f"Application ID: {application.reference_number}",
-                "",
-                "Please wait for the requirement checklist or any additional office instructions.",
-            ]
-        ),
+        "\n".join(lines),
     )
 
 
 def _build_non_selected_notification(application):
+    lines = [
+        f"Dear {application.applicant_display_name},",
+        "",
+        (
+            f"Your application for {application.position.title} "
+            f"under {application.position.get_branch_display()} recruitment was not selected."
+        ),
+        f"Application ID: {application.reference_number}",
+        "",
+        "Thank you for your interest in this recruitment opportunity.",
+    ]
+    _append_status_link(lines, application)
     return (
         f"RecruitGuard-CHD application result: {application.position.title}",
-        "\n".join(
-            [
-                f"Dear {application.applicant_display_name},",
-                "",
-                (
-                    f"Your application for {application.position.title} "
-                    f"under {application.position.get_branch_display()} recruitment was not selected."
-                ),
-                f"Application ID: {application.reference_number}",
-                "",
-                "Thank you for your interest in this recruitment opportunity.",
-            ]
-        ),
+        "\n".join(lines),
     )
 
 
@@ -258,6 +274,7 @@ def _build_application_returned_to_applicant_notification(application, workflow_
     remarks = (workflow_remarks or "").strip()
     if remarks:
         lines.extend(["", "Reason or remarks:", remarks])
+    _append_status_link(lines, application)
     lines.extend(
         [
             "",
@@ -316,6 +333,7 @@ def _build_document_resubmission_request_notification(
             "application": application,
             "requested_documents": requested_documents,
             "workflow_remarks": (workflow_remarks or "").strip(),
+            "status_link": build_applicant_status_url(application),
         },
     ).strip()
     return (
@@ -348,6 +366,7 @@ def _build_requirement_checklist_notification(
         [
             "",
             f"Application ID: {application.reference_number}",
+            f"Check your application status anytime: {build_applicant_status_url(application)}",
             "This requirements checklist was sent through RecruitGuard-CHD.",
         ]
     )
@@ -367,6 +386,7 @@ def _build_reminder_notification(application, reminder_subject, reminder_message
     ]
     if deadline:
         lines.append(f"Reminder deadline: {_format_deadline(deadline)}")
+    _append_status_link(lines, application)
     lines.extend(["", "This reminder was sent through RecruitGuard-CHD."])
     return reminder_subject.strip(), "\n".join(lines)
 
@@ -495,6 +515,7 @@ def queue_submission_acknowledgment_notification(application, actor=None):
             "reference_number": application.reference_number,
             "status": application.status,
             "branch": application.branch,
+            "status_link": build_applicant_status_url(application),
         },
     )
 
@@ -511,6 +532,7 @@ def queue_selected_applicant_notification(application, actor=None):
             "reference_number": application.reference_number,
             "status": application.status,
             "branch": application.branch,
+            "status_link": build_applicant_status_url(application),
         },
     )
 
@@ -527,6 +549,7 @@ def queue_non_selected_applicant_notification(application, actor=None):
             "reference_number": application.reference_number,
             "status": application.status,
             "branch": application.branch,
+            "status_link": build_applicant_status_url(application),
         },
     )
 
@@ -552,6 +575,7 @@ def queue_application_returned_to_applicant_notification(
             "status": application.status,
             "branch": application.branch,
             "workflow_remarks": (workflow_remarks or "").strip(),
+            "status_link": build_applicant_status_url(application),
         },
     )
 
@@ -621,6 +645,7 @@ def queue_document_resubmission_request_notification(
             "document_keys": [item["document_key"] for item in requested_documents],
             "screening_document_review_ids": [review.id for review in document_reviews],
             "workflow_remarks": (workflow_remarks or "").strip(),
+            "status_link": build_applicant_status_url(application),
         },
     )
 
@@ -661,6 +686,7 @@ def send_requirement_checklist_notification(
         body=body,
         metadata={
             "deadline": deadline.isoformat() if deadline else "",
+            "status_link": build_applicant_status_url(application),
         },
     )
 
@@ -700,5 +726,6 @@ def send_reminder_notification(
         body=body,
         metadata={
             "deadline": deadline.isoformat() if deadline else "",
+            "status_link": build_applicant_status_url(application),
         },
     )

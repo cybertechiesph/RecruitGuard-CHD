@@ -5,148 +5,246 @@
 {% block main_class %}{% endblock %}
 
 {% block content %}
-<div class="rg-pub-wrap" style="max-width:580px; padding-top:2.5rem;">
+<div class="rg-pub-wrap rg-ta-wrap">
 
-    <div style="text-align:center; margin-bottom:2rem;">
-        <h1 style="font-size:1.5rem; font-weight:700; color:#111827; margin:0 0 0.5rem;">
-            Track Your Application
-        </h1>
-        <p style="font-size:0.9375rem; color:#5f6c78; max-width:44ch; margin:0 auto;">
-            Enter the Application ID you received when you submitted your application, along with the email address you used.
+    {% comment %}
+    When no application has been looked up yet, show the lookup form prominently.
+    When a successful lookup has happened, collapse the lookup form into a small
+    "Look up a different application" link below the result so the result is the
+    visual focus.
+    {% endcomment %}
+
+    {% if not application %}
+    <div class="rg-ta-intro">
+        <h1 class="rg-ta-intro__title">Track Your Application</h1>
+        <p class="rg-ta-intro__copy">
+            Enter the Application ID you received when you submitted your application,
+            along with the email address you used.
         </p>
     </div>
 
-    {# Lookup form #}
-    <div class="card p-4 mb-4">
-        <form method="post" novalidate>
+    <div class="rg-ta-lookup-card">
+        <form method="post" novalidate id="rg-ta-lookup-form"
+              action="{% url 'applicant-status-lookup' %}">
             {% csrf_token %}
 
             {% if form.non_field_errors %}
-            <div class="alert alert-danger" role="alert" style="font-size:0.9rem;">
+            <div class="alert alert-danger" role="alert">
                 {% for error in form.non_field_errors %}
-                    <p style="margin:0 0 0.25rem;">{{ error }}</p>
+                    <p class="mb-1">{{ error }}</p>
                 {% endfor %}
             </div>
             {% endif %}
 
-            <div class="rg-pub-field" style="margin-bottom:1rem;">
-                <label for="{{ form.application_id.id_for_label }}"
-                       style="display:block; font-size:0.875rem; font-weight:600; color:#374151; margin-bottom:0.4rem;">
-                    Application ID <span class="text-danger">*</span>
+            <div class="rg-pub-field rg-ta-field">
+                <label for="{{ form.application_id.id_for_label }}" class="rg-ta-label">
+                    Application ID <span class="text-danger" aria-hidden="true">*</span>
                 </label>
                 {{ form.application_id }}
                 {% if form.application_id.errors %}
-                <div class="invalid-feedback d-block" style="font-size:0.8125rem;">
+                <div class="invalid-feedback d-block rg-ta-error">
                     {{ form.application_id.errors.0 }}
                 </div>
                 {% endif %}
-                <div class="form-text">Your Application ID looks like <strong>RG-2024-00001</strong>.</div>
+                <div class="form-text">
+                    Your Application ID looks like <strong>RG-20260528-ABCDE1</strong>
+                    (year-month-day, then 6 letters or numbers).
+                </div>
             </div>
 
-            <div class="rg-pub-field" style="margin-bottom:1.25rem;">
-                <label for="{{ form.email.id_for_label }}"
-                       style="display:block; font-size:0.875rem; font-weight:600; color:#374151; margin-bottom:0.4rem;">
-                    Email Address <span class="text-danger">*</span>
+            <div class="rg-pub-field rg-ta-field">
+                <label for="{{ form.email.id_for_label }}" class="rg-ta-label">
+                    Email Address <span class="text-danger" aria-hidden="true">*</span>
                 </label>
                 {{ form.email }}
                 {% if form.email.errors %}
-                <div class="invalid-feedback d-block" style="font-size:0.8125rem;">
+                <div class="invalid-feedback d-block rg-ta-error">
                     {{ form.email.errors.0 }}
                 </div>
                 {% endif %}
                 <div class="form-text">Use the same email address you submitted with your application.</div>
             </div>
 
-            <button type="submit" class="btn btn-rg-primary btn-lg" style="width:100%;">
+            <button type="submit" class="btn btn-rg-primary btn-lg rg-ta-submit">
                 Check Status &rarr;
             </button>
         </form>
     </div>
+    {% endif %}
 
-    {# Result card — only shown after a successful lookup #}
+
+    {# ── Result block (after a successful lookup) ─────────────────── #}
     {% if application %}
-    <div class="card p-4 mb-4" style="border-left:4px solid
-        {% if status_variant == 'approved' %}#15803d
-        {% elif status_variant == 'not-selected' %}#6b7280
-        {% elif status_variant == 'returned' %}#b45309
-        {% else %}#0369a1{% endif %};">
 
-        <p style="font-size:0.75rem; font-weight:600; color:#9aa4af; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.5rem;">
-            Application Status
-        </p>
+    {% comment %}
+    Map internal status_variant to a position in the 3-step applicant pipeline:
+    Submitted → Being reviewed → Result.
+    - "review", "evaluation", "returned" → step 2 is current
+    - "approved", "not-selected" → step 3 is current
+    {% endcomment %}
 
-        <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap; margin-bottom:1.25rem;">
+    <div class="rg-ta-result-card rg-ta-result-card--{{ status_variant }}">
+        <div class="rg-ta-result-card__head">
+            <p class="rg-ta-result-card__ref">{{ application.reference_label }}</p>
+            <h1 class="rg-ta-result-card__applicant">{{ application.applicant_display_name }}</h1>
+            <p class="rg-ta-result-card__position">
+                {{ application.position.title }}
+                <span class="rg-ta-sep">&middot;</span>
+                {% if application.branch == "plantilla" %}Permanent (Plantilla){% else %}Contract of Service{% endif %}
+            </p>
+        </div>
+
+        {# ── 3-step pipeline ──────────────────────────────────────── #}
+        <ol class="rg-ta-pipeline" aria-label="Application progress">
+            <li class="rg-ta-pipeline__step rg-ta-pipeline__step--done">
+                <span class="rg-ta-pipeline__num" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                </span>
+                <span class="rg-ta-pipeline__label">Submitted</span>
+            </li>
+            <li class="rg-ta-pipeline__step
+                {% if status_variant == 'approved' or status_variant == 'not-selected' %}rg-ta-pipeline__step--done
+                {% else %}rg-ta-pipeline__step--current{% endif %}">
+                <span class="rg-ta-pipeline__num" aria-hidden="true">
+                    {% if status_variant == 'approved' or status_variant == 'not-selected' %}
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                    {% else %}2{% endif %}
+                </span>
+                <span class="rg-ta-pipeline__label">Being reviewed</span>
+            </li>
+            <li class="rg-ta-pipeline__step
+                {% if status_variant == 'approved' or status_variant == 'not-selected' %}rg-ta-pipeline__step--current{% endif %}">
+                <span class="rg-ta-pipeline__num" aria-hidden="true">3</span>
+                <span class="rg-ta-pipeline__label">Result</span>
+            </li>
+        </ol>
+
+        {# ── Status row ───────────────────────────────────────────── #}
+        <div class="rg-ta-status-row">
             <span class="rg-pub-status-badge rg-pub-status-badge--{{ status_variant }}">
                 {{ status_label }}
             </span>
         </div>
 
-        <p style="font-size:0.9375rem; color:#374151; margin-bottom:1.5rem; line-height:1.65;">
+        <p class="rg-ta-result-card__copy">
             {{ status_description }}
         </p>
 
-        <hr style="border-color:#e5e9ed; margin:0 0 1rem;">
+        {# ── Timeline expectation ─────────────────────────────────── #}
+        {% if status_variant == "review" or status_variant == "evaluation" %}
+        <p class="rg-ta-expectation">
+            Government recruitment for this position is typically 4&ndash;6 weeks.
+            We will email you at <strong>{{ application.applicant_email }}</strong>
+            when there is news.
+        </p>
+        {% endif %}
+    </div>
 
-        <dl class="rg-pub-review-dl">
-            <div class="rg-pub-review-row">
+
+    {# ── "What you need to do" panel ──────────────────────────────── #}
+    <div class="rg-ta-action-card
+        {% if status_variant == 'returned' %}rg-ta-action-card--needed
+        {% elif status_variant == 'approved' %}rg-ta-action-card--good
+        {% else %}rg-ta-action-card--rest{% endif %}">
+        <p class="rg-ta-action-card__title">What you need to do</p>
+        {% if status_variant == "returned" %}
+            <p class="rg-ta-action-card__copy">
+                Your application was returned. Please check your email at
+                <strong>{{ application.applicant_email }}</strong> for our message
+                about what needs to be fixed or resubmitted.
+            </p>
+        {% elif status_variant == "approved" %}
+            <p class="rg-ta-action-card__copy">
+                Congratulations. Watch your email at <strong>{{ application.applicant_email }}</strong>
+                for instructions on the next steps and any documents we need from you.
+            </p>
+        {% elif status_variant == "not-selected" %}
+            <p class="rg-ta-action-card__copy">
+                Thank you for applying. You are welcome to apply for other open positions
+                from our <a href="{% url 'applicant-portal' %}">Job Openings</a> page.
+            </p>
+        {% else %}
+            <p class="rg-ta-action-card__copy">
+                Nothing right now &mdash; just wait for our message.
+            </p>
+        {% endif %}
+    </div>
+
+
+    {# ── Facts ────────────────────────────────────────────────────── #}
+    <div class="rg-ta-facts">
+        <p class="rg-ta-facts__title">Application details</p>
+        <dl class="rg-ta-facts__list">
+            <div class="rg-ta-facts__row">
                 <dt>Application ID</dt>
-                <dd>{{ application.reference_label }}</dd>
+                <dd><span class="rg-ta-mono">{{ application.reference_label }}</span></dd>
             </div>
-            <div class="rg-pub-review-row">
-                <dt>Applicant</dt>
-                <dd>{{ application.applicant_display_name }}</dd>
-            </div>
-            <div class="rg-pub-review-row">
+            <div class="rg-ta-facts__row">
                 <dt>Position</dt>
                 <dd>{{ application.position.title }}</dd>
             </div>
-            <div class="rg-pub-review-row">
+            <div class="rg-ta-facts__row">
                 <dt>Type</dt>
-                <dd>
-                    {% if application.branch == "plantilla" %}Permanent (Plantilla){% else %}Contract of Service{% endif %}
-                </dd>
+                <dd>{% if application.branch == "plantilla" %}Permanent (Plantilla){% else %}Contract of Service{% endif %}</dd>
             </div>
-            <div class="rg-pub-review-row">
+            <div class="rg-ta-facts__row">
                 <dt>Submitted</dt>
-                <dd>{{ application.submitted_at|date:"F d, Y" }} at {{ application.submitted_at|date:"g:i A" }}</dd>
+                <dd>{{ application.submitted_at|date:"F j, Y" }}</dd>
             </div>
         </dl>
     </div>
 
-    {# Conditional guidance boxes #}
-    {% if status_variant == 'returned' %}
-    <div class="rg-pub-info-box rg-pub-info-box--warning" style="margin-bottom:1.5rem;">
-        <p>
-            <strong>Action needed.</strong>
-            Please check your email at <strong>{{ application.applicant_email }}</strong> for instructions from our recruitment team.
-        </p>
-    </div>
+
+    {# ── Help block — phone + email side by side ──────────────────── #}
+    <aside class="rg-ta-help" aria-label="Need help">
+        <p class="rg-ta-help__title">Need help with your application?</p>
+        <div class="rg-ta-help__grid">
+            <div class="rg-ta-help__channel">
+                <span class="rg-ta-help__channel-label">Call the Public Assistance Desk</span>
+                <a href="tel:+6382492000,4400" class="rg-ta-help__channel-value">8-249-2000 loc. 4400</a>
+            </div>
+            <div class="rg-ta-help__channel">
+                <span class="rg-ta-help__channel-label">Email the Public Assistance Desk</span>
+                <a href="mailto:chd4a_doh_calabarzon@ro4a.doh.gov.ph" class="rg-ta-help__channel-value">chd4a_doh_calabarzon@ro4a.doh.gov.ph</a>
+            </div>
+        </div>
+    </aside>
+
+
+    {# ── Look up a different application (collapsed lookup form) ────
+       Explicit action so this still works when the page is reached
+       through the token-magic-link route (which is GET-only). #}
+    <details class="rg-ta-lookup-again">
+        <summary class="rg-ta-lookup-again__summary">Look up a different application</summary>
+        <form method="post" novalidate class="rg-ta-lookup-again__form"
+              action="{% url 'applicant-status-lookup' %}">
+            {% csrf_token %}
+            <div class="rg-pub-field rg-ta-field">
+                <label for="rg-ta-relookup-id" class="rg-ta-label">Application ID</label>
+                <input type="text" name="application_id" id="rg-ta-relookup-id"
+                       class="form-control" required>
+            </div>
+            <div class="rg-pub-field rg-ta-field">
+                <label for="rg-ta-relookup-email" class="rg-ta-label">Email Address</label>
+                <input type="email" name="email" id="rg-ta-relookup-email"
+                       class="form-control" required>
+            </div>
+            <button type="submit" class="btn btn-outline-secondary">Check this one</button>
+        </form>
+    </details>
+
     {% endif %}
 
-    {% if status_variant == 'approved' %}
-    <div class="rg-pub-info-box" style="background:#f0fdf4; border-left-color:#15803d; margin-bottom:1.5rem;">
-        <p>
-            <strong>Congratulations!</strong>
-            Our recruitment team will contact you at <strong>{{ application.applicant_email }}</strong> with next steps.
-        </p>
-    </div>
-    {% endif %}
-    {% endif %}
 
-    {# Help nudge #}
-    <div style="text-align:center; font-size:0.875rem; color:#9aa4af; margin-top:0.5rem; margin-bottom:1.5rem;">
-        Can&rsquo;t find your application?
-        <a href="{% url 'applicant-help' %}" style="color:var(--rg-primary);">Visit the Help page</a>
-        or email
-        <a href="mailto:recruitment@chd4a.doh.gov.ph" style="color:var(--rg-primary);">recruitment@chd4a.doh.gov.ph</a>.
-    </div>
-
-    <div style="text-align:center;">
-        <a href="{% url 'applicant-portal' %}" class="rg-pub-back" style="justify-content:center;">
+    <div class="rg-ta-back">
+        <a href="{% url 'applicant-portal' %}" class="rg-pub-back">
             &larr; Back to Job Openings
         </a>
     </div>
 
 </div>
 {% endblock %}
-

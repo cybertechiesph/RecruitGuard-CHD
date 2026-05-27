@@ -53,7 +53,7 @@
             </div>
             <div class="rg-pub-review-row">
                 <dt>Documents</dt>
-                <dd>{{ application.evidence_items.count }} file{{ application.evidence_items.count|pluralize }} submitted</dd>
+                <dd>{{ current_applicant_document_count }} file{{ current_applicant_document_count|pluralize }} submitted</dd>
             </div>
         </dl>
     </div>
@@ -81,7 +81,7 @@
 
     {# Action buttons #}
     <div style="display:flex; flex-wrap:wrap; gap:0.75rem; justify-content:center; margin-bottom:1.25rem;">
-        <a href="{% url 'applicant-status-lookup' %}?reference={{ application.reference_label|urlencode }}&email={{ application.applicant_email|urlencode }}"
+        <a href="{% url 'applicant-status-link' application.public_token %}"
            class="btn btn-rg-primary btn-lg">
             Track My Application
         </a>
@@ -131,4 +131,3 @@
 })();
 </script>
 {% endblock %}
-

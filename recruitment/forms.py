@@ -35,7 +35,7 @@ from .models import (
     ScreeningDocumentReview,
     ScreeningRecord,
 )
-from .requirements import get_applicant_document_requirements
+from .requirements import PERFORMANCE_RATING, get_applicant_document_requirements
 from .services import (
     get_available_actions,
     get_case_handoff_options,
@@ -465,6 +465,11 @@ class ApplicantPortalIntakeForm(BootstrapFormMixin, forms.Form):
             self.existing_documents_by_code = {}
         else:
             self.existing_documents_by_code = get_current_applicant_document_map(draft)
+            if (
+                self._current_performance_rating_applicability()
+                == RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
+            ):
+                self.existing_documents_by_code.pop(PERFORMANCE_RATING, None)
         if saved_notice:
             self.saved_draft_notice = saved_notice
         self._refresh_document_slots()
