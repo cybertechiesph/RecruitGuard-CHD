@@ -215,27 +215,16 @@
     </aside>
 
 
-    {# ── Look up a different application (collapsed lookup form) ────
-       Explicit action so this still works when the page is reached
-       through the token-magic-link route (which is GET-only). #}
-    <details class="rg-ta-lookup-again">
-        <summary class="rg-ta-lookup-again__summary">Look up a different application</summary>
-        <form method="post" novalidate class="rg-ta-lookup-again__form"
-              action="{% url 'applicant-status-lookup' %}">
-            {% csrf_token %}
-            <div class="rg-pub-field rg-ta-field">
-                <label for="rg-ta-relookup-id" class="rg-ta-label">Application ID</label>
-                <input type="text" name="application_id" id="rg-ta-relookup-id"
-                       class="form-control" required>
-            </div>
-            <div class="rg-pub-field rg-ta-field">
-                <label for="rg-ta-relookup-email" class="rg-ta-label">Email Address</label>
-                <input type="email" name="email" id="rg-ta-relookup-email"
-                       class="form-control" required>
-            </div>
-            <button type="submit" class="btn btn-outline-secondary">Check this one</button>
-        </form>
-    </details>
+    {% comment %}
+    Simple link back to the canonical lookup form. Avoids duplicate-form
+    rendering on this page and works under both routes (form-POST and
+    token-magic-link).
+    {% endcomment %}
+    <p class="rg-ta-lookup-again-link">
+        <a href="{% url 'applicant-status-lookup' %}">
+            Look up a different application &rarr;
+        </a>
+    </p>
 
     {% endif %}
 

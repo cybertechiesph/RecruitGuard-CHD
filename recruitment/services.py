@@ -5193,9 +5193,15 @@ def _deliver_application_otp(application, otp_code, *, actor=None, otp_expires_a
     )
 
 
-def issue_application_otp(application, actor=None, *, defer_delivery=True):
+def issue_application_otp(application, actor=None, *, defer_delivery=True, enforce_cooldown=False):
     if application.status != RecruitmentApplication.Status.DRAFT:
         raise ValueError("A verification code can only be issued while the application is still in draft.")
+    if enforce_cooldown and application.otp_requested_at:
+        elapsed = timezone.now() - application.otp_requested_at
+        cooldown_seconds = settings.APPLICATION_OTP_RESEND_COOLDOWN_SECONDS
+        if elapsed.total_seconds() < cooldown_seconds:
+            remaining = max(1, int(cooldown_seconds - elapsed.total_seconds()))
+            raise ValueError(f"Please wait {remaining} seconds before requesting another code.")
 
     otp_code = _generate_otp_code()
     now = timezone.now()

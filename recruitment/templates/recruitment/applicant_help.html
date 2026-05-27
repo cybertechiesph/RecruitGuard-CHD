@@ -5,245 +5,409 @@
 {% block main_class %}{% endblock %}
 
 {% block content %}
-<div class="rg-pub-wrap" style="max-width:680px; padding-top:2.5rem;">
+<div class="rg-pub-wrap rg-help-wrap">
 
-    <div style="margin-bottom:2rem;">
-        <h1 style="font-size:1.5rem; font-weight:700; color:#111827; margin:0 0 0.5rem;">
-            Help &amp; Frequently Asked Questions
-        </h1>
-        <p style="font-size:0.9375rem; color:#5f6c78;">
-            Find answers to common questions about applying for positions at DOH&ndash;CHD CALABARZON.
+    <header class="rg-help-intro">
+        <h1 class="rg-help-intro__title">Help &amp; Frequently Asked Questions</h1>
+        <p class="rg-help-intro__copy">
+            Answers to common questions about applying for positions at DOH&ndash;CHD CALABARZON.
+            If you can&rsquo;t find what you need below, our Public Assistance Desk is happy to help.
         </p>
-    </div>
+    </header>
 
-    {# ── Section: Applying ─────────────────────────────────────── #}
-    <h2 style="font-size:1rem; font-weight:700; color:var(--rg-primary); text-transform:uppercase; letter-spacing:0.07em; margin-bottom:0.75rem;">
-        Applying for a Position
-    </h2>
+    {# ── Section: Applying ───────────────────────────────────────── #}
+    <section class="rg-help-section" aria-labelledby="hp-sec-applying">
+        <h2 id="hp-sec-applying" class="rg-help-section__title">Applying for a position</h2>
 
-    <div class="accordion mb-4" id="faq-applying">
+        <div class="accordion" id="faq-applying">
 
-        <div class="accordion-item border rounded mb-2">
-            <h3 class="accordion-header" id="faq-a1-hd">
-                <button class="accordion-button collapsed" type="button"
-                        data-bs-toggle="collapse" data-bs-target="#faq-a1"
-                        aria-expanded="false" aria-controls="faq-a1"
-                        style="font-size:0.9375rem; font-weight:600;">
-                    Do I need to create an account to apply?
-                </button>
-            </h3>
-            <div id="faq-a1" class="accordion-collapse collapse" aria-labelledby="faq-a1-hd">
-                <div class="accordion-body" style="font-size:0.9375rem; color:#374151; line-height:1.7;">
-                    <p>No. Applications are submitted without creating an account. You only need a valid email address. We will send a 6-digit verification code to that email to confirm your identity before your application is finalized.</p>
+            <div class="accordion-item rg-faq">
+                <h3 class="accordion-header" id="faq-a1-hd">
+                    <button class="accordion-button rg-faq__button" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#faq-a1"
+                            aria-expanded="true" aria-controls="faq-a1">
+                        Do I need to create an account to apply?
+                    </button>
+                </h3>
+                <div id="faq-a1" class="accordion-collapse collapse show" aria-labelledby="faq-a1-hd">
+                    <div class="accordion-body rg-faq__body">
+                        <p>No. You don&rsquo;t need an account. You only need a valid email address.
+                        We will send a 6-digit verification code to that email before your application is finalized.</p>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <div class="accordion-item border rounded mb-2">
-            <h3 class="accordion-header" id="faq-a2-hd">
-                <button class="accordion-button collapsed" type="button"
-                        data-bs-toggle="collapse" data-bs-target="#faq-a2"
-                        aria-expanded="false" aria-controls="faq-a2"
-                        style="font-size:0.9375rem; font-weight:600;">
-                    What documents do I need to prepare?
-                </button>
-            </h3>
-            <div id="faq-a2" class="accordion-collapse collapse" aria-labelledby="faq-a2-hd">
-                <div class="accordion-body" style="font-size:0.9375rem; color:#374151; line-height:1.7;">
-                    <p>The required documents are listed on each position's detail page before you start applying. Requirements differ between Plantilla and COS entries, but common documents include:</p>
-                    <ul>
-                        <li>Signed application or cover letter for the selected position</li>
-                        <li>Personal Data Sheet (CS Form No. 212, Revised 2025) with Work Experience Sheet</li>
-                        <li>Eligibility, rating, or license documents where required by the posting</li>
-                        <li>Diploma and transcript of records</li>
-                        <li>Employment and training certificates where applicable to the selected branch</li>
-                    </ul>
-                    <p>Documents should be saved as <strong>PDF, JPG, or PNG</strong> files, with a maximum size of 5 MB per file.</p>
+            <div class="accordion-item rg-faq">
+                <h3 class="accordion-header" id="faq-a2-hd">
+                    <button class="accordion-button rg-faq__button collapsed" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#faq-a2"
+                            aria-expanded="false" aria-controls="faq-a2">
+                        What documents do I need to prepare?
+                    </button>
+                </h3>
+                <div id="faq-a2" class="accordion-collapse collapse" aria-labelledby="faq-a2-hd">
+                    <div class="accordion-body rg-faq__body">
+                        <p>The required documents are listed on each position&rsquo;s detail page before you start applying.
+                        Requirements differ between Plantilla and COS entries, but common documents include:</p>
+                        <ul>
+                            <li>Signed application or cover letter for the selected position</li>
+                            <li>Personal Data Sheet (CS Form No. 212, Revised 2025) with Work Experience Sheet</li>
+                            <li>Eligibility, rating, or license documents where required by the posting</li>
+                            <li>Diploma and transcript of records</li>
+                            <li>Employment and training certificates where applicable to the selected branch</li>
+                        </ul>
+                        <p>Documents should be saved as <strong>PDF, JPG, or PNG</strong> files, with a maximum size of 5 MB per file.</p>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <div class="accordion-item border rounded mb-2">
-            <h3 class="accordion-header" id="faq-a3-hd">
-                <button class="accordion-button collapsed" type="button"
-                        data-bs-toggle="collapse" data-bs-target="#faq-a3"
-                        aria-expanded="false" aria-controls="faq-a3"
-                        style="font-size:0.9375rem; font-weight:600;">
-                    Can I apply for more than one position?
-                </button>
-            </h3>
-            <div id="faq-a3" class="accordion-collapse collapse" aria-labelledby="faq-a3-hd">
-                <div class="accordion-body" style="font-size:0.9375rem; color:#374151; line-height:1.7;">
-                    <p>Yes. You may apply for multiple open positions. Each position requires a separate application submission. You will receive a unique Application ID for each one.</p>
+            <div class="accordion-item rg-faq">
+                <h3 class="accordion-header" id="faq-a3-hd">
+                    <button class="accordion-button rg-faq__button collapsed" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#faq-a3"
+                            aria-expanded="false" aria-controls="faq-a3">
+                        Can I apply for more than one position?
+                    </button>
+                </h3>
+                <div id="faq-a3" class="accordion-collapse collapse" aria-labelledby="faq-a3-hd">
+                    <div class="accordion-body rg-faq__body">
+                        <p>Yes. You may apply for multiple open positions. Each position requires a separate application
+                        submission. You will receive a unique Application ID for each one.</p>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <div class="accordion-item border rounded mb-2">
-            <h3 class="accordion-header" id="faq-a4-hd">
-                <button class="accordion-button collapsed" type="button"
-                        data-bs-toggle="collapse" data-bs-target="#faq-a4"
-                        aria-expanded="false" aria-controls="faq-a4"
-                        style="font-size:0.9375rem; font-weight:600;">
-                    Can I edit or withdraw my application after submitting?
-                </button>
-            </h3>
-            <div id="faq-a4" class="accordion-collapse collapse" aria-labelledby="faq-a4-hd">
-                <div class="accordion-body" style="font-size:0.9375rem; color:#374151; line-height:1.7;">
-                    <p>Once you click <strong>"Submit My Application"</strong> and it is confirmed, your application cannot be edited online. If you need to make a correction or withdraw, please email us at <a href="mailto:recruitment@chd4a.doh.gov.ph" style="color:var(--rg-primary);">recruitment@chd4a.doh.gov.ph</a> and include your Application ID.</p>
+            <div class="accordion-item rg-faq">
+                <h3 class="accordion-header" id="faq-a4-hd">
+                    <button class="accordion-button rg-faq__button collapsed" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#faq-a4"
+                            aria-expanded="false" aria-controls="faq-a4">
+                        What&rsquo;s the difference between Plantilla and Contract of Service?
+                    </button>
+                </h3>
+                <div id="faq-a4" class="accordion-collapse collapse" aria-labelledby="faq-a4-hd">
+                    <div class="accordion-body rg-faq__body">
+                        <p><strong>Plantilla (Permanent)</strong> positions are regular government posts with full
+                        Civil Service tenure and full government benefits. They follow the standard Civil Service
+                        Commission appointment process and are funded by a regular plantilla item.</p>
+                        <p><strong>Contract of Service (COS)</strong> positions are time-bound engagements for
+                        specific work or projects. They do not carry tenure or Civil Service eligibility, and the
+                        benefits package differs from a permanent appointment.</p>
+                        <p>Each posting on the Job Openings page is labelled with its type. Choose the one that fits
+                        your career plans.</p>
+                    </div>
                 </div>
             </div>
-        </div>
 
-    </div>
-
-    {# ── Section: Email Verification ────────────────────────────── #}
-    <h2 style="font-size:1rem; font-weight:700; color:var(--rg-primary); text-transform:uppercase; letter-spacing:0.07em; margin-bottom:0.75rem;">
-        Email Verification
-    </h2>
-
-    <div class="accordion mb-4" id="faq-email">
-
-        <div class="accordion-item border rounded mb-2">
-            <h3 class="accordion-header" id="faq-e1-hd">
-                <button class="accordion-button collapsed" type="button"
-                        data-bs-toggle="collapse" data-bs-target="#faq-e1"
-                        aria-expanded="false" aria-controls="faq-e1"
-                        style="font-size:0.9375rem; font-weight:600;">
-                    I didn&rsquo;t receive the verification code. What should I do?
-                </button>
-            </h3>
-            <div id="faq-e1" class="accordion-collapse collapse" aria-labelledby="faq-e1-hd">
-                <div class="accordion-body" style="font-size:0.9375rem; color:#374151; line-height:1.7;">
-                    <ol>
-                        <li>Check your <strong>Spam</strong> or <strong>Junk Mail</strong> folder. The email comes from a government recruitment address and may be filtered.</li>
-                        <li>Make sure the email address you entered is correct — go back and check.</li>
-                        <li>Click <strong>"Resend Code"</strong> on the verification page to request a new code. You can resend once every 60 seconds.</li>
-                        <li>If you still don&rsquo;t receive it after a few minutes, try a different email address and start a new application.</li>
-                    </ol>
+            <div class="accordion-item rg-faq">
+                <h3 class="accordion-header" id="faq-a5-hd">
+                    <button class="accordion-button rg-faq__button collapsed" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#faq-a5"
+                            aria-expanded="false" aria-controls="faq-a5">
+                        What if I don&rsquo;t have a personal email address?
+                    </button>
+                </h3>
+                <div id="faq-a5" class="accordion-collapse collapse" aria-labelledby="faq-a5-hd">
+                    <div class="accordion-body rg-faq__body">
+                        <p>You will need a working email address you can check, because we send the verification code
+                        and all status updates there.</p>
+                        <p>If you don&rsquo;t have one yet, free email accounts from Gmail, Yahoo, or Outlook take a
+                        few minutes to create on a phone or computer. If you really cannot create one, you may use
+                        a trusted family member&rsquo;s email &mdash; just remember to use the same address every
+                        time you check your status.</p>
+                        <p>For help, contact the Public Assistance Desk (number below).</p>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <div class="accordion-item border rounded mb-2">
-            <h3 class="accordion-header" id="faq-e2-hd">
-                <button class="accordion-button collapsed" type="button"
-                        data-bs-toggle="collapse" data-bs-target="#faq-e2"
-                        aria-expanded="false" aria-controls="faq-e2"
-                        style="font-size:0.9375rem; font-weight:600;">
-                    How long is the verification code valid?
-                </button>
-            </h3>
-            <div id="faq-e2" class="accordion-collapse collapse" aria-labelledby="faq-e2-hd">
-                <div class="accordion-body" style="font-size:0.9375rem; color:#374151; line-height:1.7;">
-                    <p>The 6-digit code is valid for a limited time after it is sent. If it expires, click <strong>"Resend Code"</strong> to get a fresh one.</p>
+            <div class="accordion-item rg-faq">
+                <h3 class="accordion-header" id="faq-a6-hd">
+                    <button class="accordion-button rg-faq__button collapsed" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#faq-a6"
+                            aria-expanded="false" aria-controls="faq-a6">
+                        My file is too large to upload. What do I do?
+                    </button>
+                </h3>
+                <div id="faq-a6" class="accordion-collapse collapse" aria-labelledby="faq-a6-hd">
+                    <div class="accordion-body rg-faq__body">
+                        <p>Each file must be 5 MB or smaller. If you&rsquo;re over the limit, try one of these:</p>
+                        <ul>
+                            <li><strong>Scanned PDFs:</strong> scan at a lower resolution (200&ndash;300 DPI is enough
+                            for documents).</li>
+                            <li><strong>Photos:</strong> retake at a lower camera resolution, or use a free image
+                            compressor like <em>TinyPNG</em> or <em>iLovePDF</em>.</li>
+                            <li><strong>Multi-page PDFs:</strong> some scanners produce huge files because each page
+                            is saved as an image. Use a PDF compressor (iLovePDF, Smallpdf) to reduce the file size.</li>
+                            <li><strong>Long documents:</strong> if a single document genuinely needs to be larger,
+                            email us at the Public Assistance Desk and we&rsquo;ll guide you through an alternate
+                            submission.</li>
+                        </ul>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <div class="accordion-item border rounded mb-2">
-            <h3 class="accordion-header" id="faq-e3-hd">
-                <button class="accordion-button collapsed" type="button"
-                        data-bs-toggle="collapse" data-bs-target="#faq-e3"
-                        aria-expanded="false" aria-controls="faq-e3"
-                        style="font-size:0.9375rem; font-weight:600;">
-                    I entered the wrong email address. Can I correct it?
-                </button>
-            </h3>
-            <div id="faq-e3" class="accordion-collapse collapse" aria-labelledby="faq-e3-hd">
-                <div class="accordion-body" style="font-size:0.9375rem; color:#374151; line-height:1.7;">
-                    <p>Yes. On the verification page, click <strong>"Go back to edit your information"</strong> at the bottom. This will return you to the application form where you can correct your email address. You will need to re-upload your documents.</p>
+            <div class="accordion-item rg-faq">
+                <h3 class="accordion-header" id="faq-a7-hd">
+                    <button class="accordion-button rg-faq__button collapsed" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#faq-a7"
+                            aria-expanded="false" aria-controls="faq-a7">
+                        Can I edit or withdraw my application after submitting?
+                    </button>
+                </h3>
+                <div id="faq-a7" class="accordion-collapse collapse" aria-labelledby="faq-a7-hd">
+                    <div class="accordion-body rg-faq__body">
+                        <p>Once you click <strong>&ldquo;Submit My Application&rdquo;</strong> and it is confirmed,
+                        your application cannot be edited online. If you need to make a correction or withdraw, please
+                        contact the Public Assistance Desk (below) with your Application ID.</p>
+                    </div>
                 </div>
             </div>
-        </div>
 
-    </div>
+        </div>
+    </section>
+
+
+    {# ── Section: Email Verification ─────────────────────────────── #}
+    <section class="rg-help-section" aria-labelledby="hp-sec-email">
+        <h2 id="hp-sec-email" class="rg-help-section__title">Email verification</h2>
+
+        <div class="accordion" id="faq-email">
+
+            <div class="accordion-item rg-faq">
+                <h3 class="accordion-header" id="faq-e1-hd">
+                    <button class="accordion-button rg-faq__button" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#faq-e1"
+                            aria-expanded="true" aria-controls="faq-e1">
+                        I didn&rsquo;t receive the verification code. What should I do?
+                    </button>
+                </h3>
+                <div id="faq-e1" class="accordion-collapse collapse show" aria-labelledby="faq-e1-hd">
+                    <div class="accordion-body rg-faq__body">
+                        <ol>
+                            <li>Check your <strong>Spam</strong> or <strong>Junk Mail</strong> folder. The email
+                            comes from a government recruitment address and may be filtered.</li>
+                            <li>Make sure the email address you entered is correct &mdash; go back and check.</li>
+                            <li>Click <strong>&ldquo;Resend Code&rdquo;</strong> on the verification page to request
+                            a new code. You can resend once every 60 seconds.</li>
+                            <li>If you still don&rsquo;t receive it after a few minutes, try a different email address
+                            and start a new application.</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+
+            <div class="accordion-item rg-faq">
+                <h3 class="accordion-header" id="faq-e2-hd">
+                    <button class="accordion-button rg-faq__button collapsed" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#faq-e2"
+                            aria-expanded="false" aria-controls="faq-e2">
+                        How long is the verification code valid?
+                    </button>
+                </h3>
+                <div id="faq-e2" class="accordion-collapse collapse" aria-labelledby="faq-e2-hd">
+                    <div class="accordion-body rg-faq__body">
+                        <p>The 6-digit code is valid for a limited time after it is sent. If it expires, click
+                        <strong>&ldquo;Resend Code&rdquo;</strong> to get a fresh one.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="accordion-item rg-faq">
+                <h3 class="accordion-header" id="faq-e3-hd">
+                    <button class="accordion-button rg-faq__button collapsed" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#faq-e3"
+                            aria-expanded="false" aria-controls="faq-e3">
+                        I entered the wrong email address. Can I correct it?
+                    </button>
+                </h3>
+                <div id="faq-e3" class="accordion-collapse collapse" aria-labelledby="faq-e3-hd">
+                    <div class="accordion-body rg-faq__body">
+                        <p>Yes. On the verification page, click
+                        <strong>&ldquo;Go back to edit your information&rdquo;</strong> at the bottom. The form will
+                        re-open with your information pre-filled, including the documents you already uploaded. Change
+                        the email address (or anything else), then submit again to receive a new verification code.</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
 
     {# ── Section: After Submitting ──────────────────────────────── #}
-    <h2 style="font-size:1rem; font-weight:700; color:var(--rg-primary); text-transform:uppercase; letter-spacing:0.07em; margin-bottom:0.75rem;">
-        After Submitting
-    </h2>
+    <section class="rg-help-section" aria-labelledby="hp-sec-after">
+        <h2 id="hp-sec-after" class="rg-help-section__title">After submitting</h2>
 
-    <div class="accordion mb-4" id="faq-after">
+        <div class="accordion" id="faq-after">
 
-        <div class="accordion-item border rounded mb-2">
-            <h3 class="accordion-header" id="faq-s1-hd">
-                <button class="accordion-button collapsed" type="button"
-                        data-bs-toggle="collapse" data-bs-target="#faq-s1"
-                        aria-expanded="false" aria-controls="faq-s1"
-                        style="font-size:0.9375rem; font-weight:600;">
-                    What is the Application ID and where do I find it?
-                </button>
-            </h3>
-            <div id="faq-s1" class="accordion-collapse collapse" aria-labelledby="faq-s1-hd">
-                <div class="accordion-body" style="font-size:0.9375rem; color:#374151; line-height:1.7;">
-                    <p>Your Application ID is a unique reference number (e.g., <strong>RG-2024-00001</strong>) assigned to your application the moment you submit. It is shown on the confirmation page and sent to your email. Keep it — you will need it to track your application status.</p>
+            <div class="accordion-item rg-faq">
+                <h3 class="accordion-header" id="faq-s1-hd">
+                    <button class="accordion-button rg-faq__button" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#faq-s1"
+                            aria-expanded="true" aria-controls="faq-s1">
+                        What is the Application ID and where do I find it?
+                    </button>
+                </h3>
+                <div id="faq-s1" class="accordion-collapse collapse show" aria-labelledby="faq-s1-hd">
+                    <div class="accordion-body rg-faq__body">
+                        <p>Your Application ID is a unique reference number assigned to your application the moment
+                        you submit. It looks like <strong>RG-20260528-ABCDE1</strong> (year-month-day, then 6 letters
+                        or numbers). It&rsquo;s shown on the confirmation page and sent to your email. Keep it &mdash;
+                        you&rsquo;ll need it to <a href="{% url 'applicant-status-lookup' %}">track your application</a>.</p>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <div class="accordion-item border rounded mb-2">
-            <h3 class="accordion-header" id="faq-s2-hd">
-                <button class="accordion-button collapsed" type="button"
-                        data-bs-toggle="collapse" data-bs-target="#faq-s2"
-                        aria-expanded="false" aria-controls="faq-s2"
-                        style="font-size:0.9375rem; font-weight:600;">
-                    How do I check my application status?
-                </button>
-            </h3>
-            <div id="faq-s2" class="accordion-collapse collapse" aria-labelledby="faq-s2-hd">
-                <div class="accordion-body" style="font-size:0.9375rem; color:#374151; line-height:1.7;">
-                    <p>Go to the <a href="{% url 'applicant-status-lookup' %}" style="color:var(--rg-primary); font-weight:600;">Track Application</a> page and enter your Application ID and email address. The portal will show your current status in plain language.</p>
+            <div class="accordion-item rg-faq">
+                <h3 class="accordion-header" id="faq-s2-hd">
+                    <button class="accordion-button rg-faq__button collapsed" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#faq-s2"
+                            aria-expanded="false" aria-controls="faq-s2">
+                        I lost my Application ID. Can you help?
+                    </button>
+                </h3>
+                <div id="faq-s2" class="accordion-collapse collapse" aria-labelledby="faq-s2-hd">
+                    <div class="accordion-body rg-faq__body">
+                        <p>Yes. Your Application ID was sent to your email when you submitted &mdash; search your
+                        inbox (and Spam folder) for messages from us. The subject line includes &ldquo;RecruitGuard-CHD&rdquo;.</p>
+                        <p>If you still can&rsquo;t find it, contact the Public Assistance Desk (below) with your
+                        full name, the position you applied for, and the email address you used. We&rsquo;ll look it
+                        up for you.</p>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <div class="accordion-item border rounded mb-2">
-            <h3 class="accordion-header" id="faq-s3-hd">
-                <button class="accordion-button collapsed" type="button"
-                        data-bs-toggle="collapse" data-bs-target="#faq-s3"
-                        aria-expanded="false" aria-controls="faq-s3"
-                        style="font-size:0.9375rem; font-weight:600;">
-                    What does &ldquo;Action Required&rdquo; mean?
-                </button>
-            </h3>
-            <div id="faq-s3" class="accordion-collapse collapse" aria-labelledby="faq-s3-hd">
-                <div class="accordion-body" style="font-size:0.9375rem; color:#374151; line-height:1.7;">
-                    <p>This means our recruitment team has sent your application back because something needs to be addressed — for example, a missing document or additional information is required. Check your email for instructions. If you did not receive an email, contact us at <a href="mailto:recruitment@chd4a.doh.gov.ph" style="color:var(--rg-primary);">recruitment@chd4a.doh.gov.ph</a> with your Application ID.</p>
+            <div class="accordion-item rg-faq">
+                <h3 class="accordion-header" id="faq-s3-hd">
+                    <button class="accordion-button rg-faq__button collapsed" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#faq-s3"
+                            aria-expanded="false" aria-controls="faq-s3">
+                        How do I check my application status?
+                    </button>
+                </h3>
+                <div id="faq-s3" class="accordion-collapse collapse" aria-labelledby="faq-s3-hd">
+                    <div class="accordion-body rg-faq__body">
+                        <p>Go to the <a href="{% url 'applicant-status-lookup' %}">Track Application</a> page
+                        and enter your Application ID and email address. The portal will show your current status
+                        in plain language.</p>
+                        <p>Easier: every status update email we send includes a direct link straight to your
+                        status page &mdash; just click that.</p>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <div class="accordion-item border rounded mb-2">
-            <h3 class="accordion-header" id="faq-s4-hd">
-                <button class="accordion-button collapsed" type="button"
-                        data-bs-toggle="collapse" data-bs-target="#faq-s4"
-                        aria-expanded="false" aria-controls="faq-s4"
-                        style="font-size:0.9375rem; font-weight:600;">
-                    How long does the recruitment process take?
-                </button>
-            </h3>
-            <div id="faq-s4" class="accordion-collapse collapse" aria-labelledby="faq-s4-hd">
-                <div class="accordion-body" style="font-size:0.9375rem; color:#374151; line-height:1.7;">
-                    <p>Processing timelines vary depending on the position and the number of applicants. Government recruitment follows Civil Service Commission guidelines, which typically involve document review, evaluation, and approval stages. You will be contacted by our team if you are shortlisted or if any action is needed on your part.</p>
+            <div class="accordion-item rg-faq">
+                <h3 class="accordion-header" id="faq-s4-hd">
+                    <button class="accordion-button rg-faq__button collapsed" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#faq-s4"
+                            aria-expanded="false" aria-controls="faq-s4">
+                        Can I follow up by phone?
+                    </button>
+                </h3>
+                <div id="faq-s4" class="accordion-collapse collapse" aria-labelledby="faq-s4-hd">
+                    <div class="accordion-body rg-faq__body">
+                        <p>Yes. Our Public Assistance Desk is available at
+                        <a href="tel:+6382492000,4400"><strong>8-249-2000 loc. 4400</strong></a>. Have your Application
+                        ID ready so we can look up your case right away.</p>
+                    </div>
                 </div>
             </div>
+
+            <div class="accordion-item rg-faq">
+                <h3 class="accordion-header" id="faq-s5-hd">
+                    <button class="accordion-button rg-faq__button collapsed" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#faq-s5"
+                            aria-expanded="false" aria-controls="faq-s5">
+                        Can someone else check my application status for me?
+                    </button>
+                </h3>
+                <div id="faq-s5" class="accordion-collapse collapse" aria-labelledby="faq-s5-hd">
+                    <div class="accordion-body rg-faq__body">
+                        <p>Yes. Anyone with your Application ID and the email address you used can check your status
+                        on the <a href="{% url 'applicant-status-lookup' %}">Track Application</a> page. This is
+                        useful if you&rsquo;re overseas (OFW) or working in an area without good internet &mdash; a
+                        family member can check for you.</p>
+                        <p>The status page does not show personal information beyond your name and the position. We
+                        don&rsquo;t send full application data over phone or email to people other than you.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="accordion-item rg-faq">
+                <h3 class="accordion-header" id="faq-s6-hd">
+                    <button class="accordion-button rg-faq__button collapsed" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#faq-s6"
+                            aria-expanded="false" aria-controls="faq-s6">
+                        Can I view the documents I submitted?
+                    </button>
+                </h3>
+                <div id="faq-s6" class="accordion-collapse collapse" aria-labelledby="faq-s6-hd">
+                    <div class="accordion-body rg-faq__body">
+                        <p>The Track Application page does not yet show your uploaded documents back to you. If you
+                        want to confirm what we received, contact the Public Assistance Desk with your Application
+                        ID and we&rsquo;ll send you a list of the files attached to your application.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="accordion-item rg-faq">
+                <h3 class="accordion-header" id="faq-s7-hd">
+                    <button class="accordion-button rg-faq__button collapsed" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#faq-s7"
+                            aria-expanded="false" aria-controls="faq-s7">
+                        What does &ldquo;Action Required&rdquo; mean?
+                    </button>
+                </h3>
+                <div id="faq-s7" class="accordion-collapse collapse" aria-labelledby="faq-s7-hd">
+                    <div class="accordion-body rg-faq__body">
+                        <p>This means our recruitment team has sent your application back because something needs
+                        to be addressed &mdash; for example, a missing document or additional information.
+                        Check your email for instructions. If you didn&rsquo;t receive an email, contact the Public
+                        Assistance Desk (below) with your Application ID.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="accordion-item rg-faq">
+                <h3 class="accordion-header" id="faq-s8-hd">
+                    <button class="accordion-button rg-faq__button collapsed" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#faq-s8"
+                            aria-expanded="false" aria-controls="faq-s8">
+                        How long does the recruitment process take?
+                    </button>
+                </h3>
+                <div id="faq-s8" class="accordion-collapse collapse" aria-labelledby="faq-s8-hd">
+                    <div class="accordion-body rg-faq__body">
+                        <p>Government recruitment typically takes 4&ndash;6 weeks but can take longer depending on
+                        the position, the number of applicants, and Civil Service Commission timelines. We will
+                        email you when there is news on your application &mdash; you don&rsquo;t need to follow up
+                        unless your status shows &ldquo;Action Required.&rdquo;</p>
+                    </div>
+                </div>
+            </div>
+
         </div>
+    </section>
 
-    </div>
 
-    {# ── Contact block ──────────────────────────────────────────── #}
-    <div class="rg-pub-info-box rg-pub-info-box--info" style="margin-bottom:2rem;">
-        <p style="font-weight:600; margin-bottom:0.35rem;">Still have questions?</p>
-        <p style="margin:0;">
-            Email our recruitment team at
-            <a href="mailto:recruitment@chd4a.doh.gov.ph" style="color:var(--rg-primary); font-weight:600;">recruitment@chd4a.doh.gov.ph</a>
-            and include your Application ID if you are following up on a specific application.
-        </p>
-    </div>
+    {# ── Public Assistance Desk help card ─────────────────────────── #}
+    <aside class="rg-help-pad" aria-label="Public Assistance Desk">
+        <p class="rg-help-pad__title">Still have questions? We&rsquo;re here to help.</p>
+        <div class="rg-help-pad__grid">
+            <div class="rg-help-pad__channel">
+                <span class="rg-help-pad__channel-label">Call the Public Assistance Desk</span>
+                <a href="tel:+6382492000,4400" class="rg-help-pad__channel-value">8-249-2000 loc. 4400</a>
+            </div>
+            <div class="rg-help-pad__channel">
+                <span class="rg-help-pad__channel-label">Email the Public Assistance Desk</span>
+                <a href="mailto:chd4a_doh_calabarzon@ro4a.doh.gov.ph" class="rg-help-pad__channel-value">chd4a_doh_calabarzon@ro4a.doh.gov.ph</a>
+            </div>
+        </div>
+        <p class="rg-help-pad__note">Include your Application ID if you&rsquo;re asking about a specific application.</p>
+    </aside>
 
-    <div style="text-align:center; margin-bottom:2rem;">
-        <a href="{% url 'applicant-portal' %}" class="rg-pub-back" style="justify-content:center;">
+    <div class="rg-help-back">
+        <a href="{% url 'applicant-portal' %}" class="rg-pub-back">
             &larr; Back to Job Openings
         </a>
     </div>

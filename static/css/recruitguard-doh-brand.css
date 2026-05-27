@@ -3866,27 +3866,162 @@ body.applicant-portal-body {
 }
 .rg-ta-help__channel-value:hover { text-decoration: underline; }
 
-/* Look up a different application — collapsed disclosure */
-.rg-ta-lookup-again {
-    margin: 1rem 0 0.5rem;
+/* Simple "Look up a different application" link */
+.rg-ta-lookup-again-link {
+    margin: 1.25rem 0 0.5rem;
+    font-size: 0.9rem;
+    text-align: center;
 }
-.rg-ta-lookup-again__summary {
-    font-size: 0.85rem;
+.rg-ta-lookup-again-link a {
     color: var(--rg-brand-green, #16a34a);
     font-weight: 600;
-    cursor: pointer;
-    padding: 0.4rem 0;
+    text-decoration: none;
 }
-.rg-ta-lookup-again__summary:hover { text-decoration: underline; }
-.rg-ta-lookup-again__form {
-    margin-top: 0.75rem;
-    padding: 1rem 1.15rem;
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 0.65rem;
-}
+.rg-ta-lookup-again-link a:hover { text-decoration: underline; }
 
 .rg-ta-back {
+    text-align: center;
+    margin-top: 1.5rem;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   Help & FAQ page (HP1)
+───────────────────────────────────────────────────────────────── */
+.rg-help-wrap {
+    max-width: 720px;
+    padding-top: 2.5rem;
+    padding-bottom: 3rem;
+}
+
+.rg-help-intro { margin-bottom: 2rem; }
+.rg-help-intro__title {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: var(--rg-brand-green-ink, #14532d);
+    margin: 0 0 0.5rem;
+    line-height: 1.2;
+}
+.rg-help-intro__copy {
+    font-size: 0.95rem;
+    color: #475569;
+    line-height: 1.6;
+    margin: 0;
+}
+
+/* Section: real H2 styling (not eyebrow) */
+.rg-help-section {
+    margin-bottom: 2rem;
+}
+.rg-help-section__title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 0.85rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--rg-brand-green, #16a34a);
+}
+
+/* FAQ items — clean accordion */
+.rg-faq {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.55rem;
+    margin-bottom: 0.55rem;
+    overflow: hidden;
+}
+.rg-faq:last-child { margin-bottom: 0; }
+.rg-faq__button.accordion-button {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #0f172a;
+    background: #ffffff;
+    padding: 0.85rem 1rem;
+    box-shadow: none;
+}
+.rg-faq__button.accordion-button:not(.collapsed) {
+    background: #f8fafc;
+    color: var(--rg-brand-green-ink, #14532d);
+    box-shadow: none;
+}
+.rg-faq__button.accordion-button:focus {
+    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.25);
+    border-color: transparent;
+}
+.rg-faq__body {
+    font-size: 0.9rem;
+    color: #1f2937;
+    line-height: 1.65;
+    padding: 0.85rem 1rem 1rem;
+    background: #ffffff;
+    border-top: 1px solid #f1f5f9;
+}
+.rg-faq__body p { margin: 0 0 0.6rem; }
+.rg-faq__body p:last-child { margin-bottom: 0; }
+.rg-faq__body ul,
+.rg-faq__body ol {
+    margin: 0 0 0.6rem;
+    padding-left: 1.3rem;
+}
+.rg-faq__body li { margin-bottom: 0.25rem; }
+.rg-faq__body a {
+    color: var(--rg-brand-green-ink, #14532d);
+    font-weight: 600;
+    text-decoration: underline;
+}
+.rg-faq__body a:hover { color: var(--rg-brand-green, #16a34a); }
+
+/* Public Assistance Desk help card */
+.rg-help-pad {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid var(--rg-brand-green, #16a34a);
+    border-radius: 0.65rem;
+    padding: 1.1rem 1.2rem;
+    margin: 1.5rem 0 1rem;
+}
+.rg-help-pad__title {
+    margin: 0 0 0.7rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+.rg-help-pad__grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    margin-bottom: 0.7rem;
+}
+@media (max-width: 540px) {
+    .rg-help-pad__grid { grid-template-columns: 1fr; }
+}
+.rg-help-pad__channel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.6rem 0.75rem;
+    background: #f8fafc;
+    border-radius: 0.5rem;
+}
+.rg-help-pad__channel-label {
+    font-size: 0.75rem;
+    color: #64748b;
+    font-weight: 600;
+}
+.rg-help-pad__channel-value {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--rg-brand-green-ink, #14532d);
+    text-decoration: none;
+    overflow-wrap: anywhere;
+}
+.rg-help-pad__channel-value:hover { text-decoration: underline; }
+.rg-help-pad__note {
+    margin: 0;
+    font-size: 0.825rem;
+    color: #64748b;
+}
+
+.rg-help-back {
     text-align: center;
     margin-top: 1.5rem;
 }

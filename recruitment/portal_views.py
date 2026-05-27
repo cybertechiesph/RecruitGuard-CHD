@@ -324,7 +324,11 @@ class ApplicantOTPView(TemplateView):
         action = request.POST.get("action")
         if action == "resend":
             try:
-                issue_application_otp(application, defer_delivery=False)
+                issue_application_otp(
+                    application,
+                    defer_delivery=False,
+                    enforce_cooldown=True,
+                )
             except ApplicationOTPDeliveryError as exc:
                 messages.error(request, str(exc))
             except (OperationalError, ValueError) as exc:

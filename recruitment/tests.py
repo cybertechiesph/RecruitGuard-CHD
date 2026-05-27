@@ -2359,6 +2359,48 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertContains(response, "The verification code is invalid.")
         self.assertIsNone(application.otp_verified_at)
 
+    def test_applicant_otp_resend_respects_server_cooldown(self):
+        client = Client()
+        self.post_portal_intake(
+            client,
+            self.level1_position,
+            self.portal_payload(email="otp.cooldown@example.com"),
+            follow=True,
+        )
+        application = RecruitmentApplication.objects.get(
+            position=self.level1_position,
+            applicant_email="otp.cooldown@example.com",
+        )
+        original_hash = application.otp_hash
+        original_mail_count = len(mail.outbox)
+
+        response = client.post(
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            {"action": "resend"},
+            follow=True,
+        )
+
+        application.refresh_from_db()
+        self.assertContains(response, "Please wait")
+        self.assertEqual(application.otp_hash, original_hash)
+        self.assertEqual(len(mail.outbox), original_mail_count)
+
+        application.otp_requested_at = timezone.now() - timedelta(
+            seconds=settings.APPLICATION_OTP_RESEND_COOLDOWN_SECONDS + 1
+        )
+        application.save(update_fields=["otp_requested_at", "updated_at"])
+
+        response = client.post(
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            {"action": "resend"},
+            follow=True,
+        )
+
+        application.refresh_from_db()
+        self.assertContains(response, "A new verification code has been sent")
+        self.assertNotEqual(application.otp_hash, original_hash)
+        self.assertEqual(len(mail.outbox), original_mail_count + 1)
+
     def test_stale_applicant_otp_link_redirects_to_portal(self):
         client = Client()
         stale_token = uuid.uuid4()
