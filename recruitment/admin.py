@@ -4,14 +4,21 @@ from django.contrib.auth.admin import UserAdmin
 from .models import (
     AuditLog,
     ComparativeAssessmentReport,
+    ComparativeAssessmentReportItem,
     CompletionRecord,
     CompletionRequirement,
     DeliberationRecord,
     ExamRecord,
     EvidenceVaultItem,
     FinalDecision,
+    FinalSelection,
+    InternalEmailChangeRequest,
+    InternalLoginAttempt,
+    InternalMFAChallenge,
+    InternalPasswordHistory,
     InterviewRating,
     InterviewSession,
+    Notification,
     NotificationLog,
     PositionReference,
     PositionPosting,
@@ -19,6 +26,7 @@ from .models import (
     RecruitmentCase,
     RecruitmentUser,
     RoutingHistory,
+    ScreeningDocumentReview,
     ScreeningRecord,
     WorkflowOverride,
 )
@@ -41,6 +49,117 @@ class RecruitmentUserAdmin(UserAdmin):
     )
     list_display = ("username", "email", "role", "office_name", "is_active")
     list_filter = ("role", "is_active", "is_staff")
+
+
+@admin.register(InternalMFAChallenge)
+class InternalMFAChallengeAdmin(admin.ModelAdmin):
+    list_display = (
+        "user",
+        "sent_to_email",
+        "requested_at",
+        "expires_at",
+        "verified_at",
+        "attempt_count",
+        "is_used",
+    )
+    list_filter = ("is_used", "verified_at", "expires_at")
+    search_fields = ("user__username", "user__email", "sent_to_email", "challenge_token")
+    readonly_fields = (
+        "user",
+        "challenge_token",
+        "otp_hash",
+        "sent_to_email",
+        "requested_at",
+        "expires_at",
+        "verified_at",
+        "attempt_count",
+        "is_used",
+        "ip_address",
+        "user_agent",
+        "created_at",
+        "updated_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(InternalLoginAttempt)
+class InternalLoginAttemptAdmin(admin.ModelAdmin):
+    list_display = (
+        "username_normalized",
+        "ip_address",
+        "failure_count",
+        "first_failed_at",
+        "last_failed_at",
+        "locked_until",
+    )
+    list_filter = ("locked_until", "last_failed_at")
+    search_fields = ("username", "username_normalized", "ip_address")
+    readonly_fields = (
+        "username",
+        "username_normalized",
+        "ip_address",
+        "user_agent",
+        "failure_count",
+        "first_failed_at",
+        "last_failed_at",
+        "locked_until",
+        "created_at",
+        "updated_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+
+@admin.register(InternalPasswordHistory)
+class InternalPasswordHistoryAdmin(admin.ModelAdmin):
+    list_display = ("user", "created_at")
+    search_fields = ("user__username", "user__email")
+    readonly_fields = ("user", "password_hash", "created_at", "updated_at")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(InternalEmailChangeRequest)
+class InternalEmailChangeRequestAdmin(admin.ModelAdmin):
+    list_display = (
+        "user",
+        "new_email",
+        "requested_by",
+        "requested_at",
+        "expires_at",
+        "verified_at",
+        "is_used",
+    )
+    list_filter = ("is_used", "verified_at", "expires_at")
+    search_fields = ("user__username", "old_email", "new_email", "verification_token")
+    readonly_fields = (
+        "user",
+        "requested_by",
+        "old_email",
+        "new_email",
+        "verification_token",
+        "requested_at",
+        "expires_at",
+        "verified_at",
+        "is_used",
+        "ip_address",
+        "user_agent",
+        "created_at",
+        "updated_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
 
 
 @admin.register(PositionReference)
@@ -160,11 +279,34 @@ class ScreeningRecordInline(admin.TabularInline):
         "completeness_status",
         "completeness_notes",
         "qualification_outcome",
+        "education_score",
+        "training_score",
+        "experience_score",
+        "document_review_score",
         "screening_notes",
         "is_finalized",
         "finalized_by",
         "finalized_at",
         "created_at",
+    )
+    can_delete = False
+
+
+class ScreeningDocumentReviewInline(admin.TabularInline):
+    model = ScreeningDocumentReview
+    extra = 0
+    readonly_fields = (
+        "document_key",
+        "requirement_title",
+        "requirement_label",
+        "status",
+        "remarks",
+        "is_required",
+        "is_not_applicable",
+        "evidence_item",
+        "display_order",
+        "created_at",
+        "updated_at",
     )
     can_delete = False
 
@@ -223,6 +365,8 @@ class InterviewRatingInline(admin.TabularInline):
         "review_stage",
         "rated_by",
         "rated_by_role",
+        "encoded_by",
+        "encoded_by_role",
         "rating_score",
         "rating_notes",
         "justification",
@@ -238,9 +382,13 @@ class DeliberationRecordInline(admin.TabularInline):
         "review_stage",
         "recorded_by",
         "recorded_by_role",
+        "comparative_assessment_report",
         "deliberated_at",
         "deliberation_minutes",
+        "recommendation",
         "decision_support_summary",
+        "quorum_status",
+        "attendance_notes",
         "ranking_position",
         "ranking_notes",
         "consolidated_snapshot",
@@ -266,9 +414,59 @@ class ComparativeAssessmentReportInline(admin.TabularInline):
         "is_finalized",
         "finalized_by",
         "finalized_at",
+        "is_returned",
+        "returned_by",
+        "returned_by_role",
+        "returned_at",
+        "return_reason",
         "created_at",
     )
     can_delete = False
+
+
+class ComparativeAssessmentReportItemInline(admin.TabularInline):
+    model = ComparativeAssessmentReportItem
+    extra = 0
+    readonly_fields = (
+        "recruitment_case",
+        "deliberation_record",
+        "rank_order",
+        "preliminary_rank_order",
+        "qualification_outcome",
+        "document_review_score",
+        "exam_status",
+        "exam_score",
+        "interview_average_score",
+        "assessment_score",
+        "recommendation",
+        "decision_support_summary",
+        "ranking_notes",
+        "created_at",
+    )
+    can_delete = False
+
+
+@admin.register(ComparativeAssessmentReport)
+class ComparativeAssessmentReportAdmin(admin.ModelAdmin):
+    list_display = (
+        "recruitment_entry",
+        "review_stage",
+        "version_number",
+        "generated_by",
+        "is_finalized",
+        "is_returned",
+        "finalized_at",
+    )
+    list_filter = ("review_stage", "branch", "is_finalized", "is_returned")
+    search_fields = ("recruitment_entry__job_code", "summary_notes", "generated_by__username")
+    readonly_fields = (
+        "created_at",
+        "updated_at",
+        "generated_by_role",
+        "finalized_by_role",
+        "returned_by_role",
+    )
+    inlines = [ComparativeAssessmentReportItemInline]
 
 
 class FinalDecisionInline(admin.TabularInline):
@@ -287,7 +485,26 @@ class FinalDecisionInline(admin.TabularInline):
     can_delete = False
 
 
-PositionPostingAdmin.inlines = [ComparativeAssessmentReportInline]
+class FinalSelectionInline(admin.TabularInline):
+    model = FinalSelection
+    extra = 0
+    readonly_fields = (
+        "comparative_assessment_report",
+        "selected_item",
+        "selected_application",
+        "selected_case",
+        "decided_by",
+        "decided_by_role",
+        "is_deep_selection",
+        "deep_selection_justification",
+        "decision_notes",
+        "decided_at",
+        "created_at",
+    )
+    can_delete = False
+
+
+PositionPostingAdmin.inlines = [ComparativeAssessmentReportInline, FinalSelectionInline]
 
 
 class NotificationLogInline(admin.TabularInline):
@@ -497,6 +714,27 @@ class NotificationLogAdmin(admin.ModelAdmin):
     )
 
 
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = (
+        "recipient",
+        "kind",
+        "application",
+        "title",
+        "read_at",
+        "created_at",
+    )
+    list_filter = ("kind", "read_at", "created_at")
+    search_fields = (
+        "recipient__username",
+        "recipient__email",
+        "application__reference_number",
+        "title",
+        "body",
+    )
+    readonly_fields = ("created_at", "updated_at")
+
+
 @admin.register(RoutingHistory)
 class RoutingHistoryAdmin(admin.ModelAdmin):
     list_display = (
@@ -521,12 +759,35 @@ class ScreeningRecordAdmin(admin.ModelAdmin):
         "reviewed_by",
         "completeness_status",
         "qualification_outcome",
+        "document_review_score",
         "is_finalized",
         "finalized_at",
     )
     list_filter = ("review_stage", "branch", "level", "completeness_status", "qualification_outcome", "is_finalized")
     search_fields = ("application__reference_number", "completeness_notes", "screening_notes", "reviewed_by__username")
     readonly_fields = ("created_at", "updated_at", "reviewed_by_role", "finalized_by_role")
+    inlines = [ScreeningDocumentReviewInline]
+
+
+@admin.register(ScreeningDocumentReview)
+class ScreeningDocumentReviewAdmin(admin.ModelAdmin):
+    list_display = (
+        "screening_record",
+        "document_key",
+        "requirement_title",
+        "status",
+        "remarks",
+        "is_required",
+        "evidence_item",
+    )
+    list_filter = ("status", "is_required", "is_not_applicable")
+    search_fields = (
+        "screening_record__application__reference_number",
+        "document_key",
+        "requirement_title",
+        "remarks",
+    )
+    readonly_fields = ("created_at", "updated_at")
 
 
 @admin.register(ExamRecord)

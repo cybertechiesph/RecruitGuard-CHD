@@ -1,5 +1,10 @@
 # Workflow Rules
 
+Client-specific operational interpretation is documented in
+`docs/client-workflow-alignment.md`. The FRS remains the high-level baseline;
+the alignment document clarifies how Secretariat, HRMPSB, Appointing Authority,
+and COS responsibilities should be implemented.
+
 ## Shared Workflow Principles
 - One shared platform
 - One shared workflow engine
@@ -22,6 +27,12 @@
 - Steps are applied where applicable
 - No additional COS-specific actor is introduced beyond current internal roles
 - After HRM Chief deliberation, COS selection may be recorded by the HRM Chief and routed directly to completion tracking; Appointing Authority signing is not part of the COS path.
+
+## Appointing Authority Selection Rules
+- Plantilla Appointing Authority selection is recorded from the finalized vacancy-level CAR.
+- Selection should be from the top five ranked CAR candidates where practicable.
+- Selecting outside the top five requires a recorded deep-selection justification.
+- If the Appointing Authority does not agree with the CAR, the CAR may be returned for HRMPSB reassessment. The returned CAR version is preserved, active cases route back to HRMPSB, and a new CAR version must be finalized before selection can continue.
 
 ## Routing Principles
 - Level 1 -> Secretariat

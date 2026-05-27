@@ -1,0 +1,537 @@
+{% load recruitment_ui %}
+{% comment %}
+Final Selection — lean polish (no wizard chrome; single page, inline submit).
+
+Standards applied:
+  - Plain English everywhere.
+  - Inline validation with role="alert" + focus management; no
+    disabled buttons.
+  - Auto-check "deep selection" when the chosen rank > 5, with manual
+    override allowed afterwards.
+  - Confirm modal on "Record this final selection" (lighter wording —
+    a Final Decision step still follows).
+  - Confirm modal on "Send the CAR back to HRMPSB" (destructive of the
+    current CAR state — short, names the recipient, requires remarks).
+{% endcomment %}
+
+{# ─── Card 1: CAR overview ──────────────────────────────────── #}
+<div class="rg-icard">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">Pick the appointee</h3>
+            <p class="rg-icard__subtitle">
+                Review the finalized Comparative Assessment Report, then pick one appointee from the ranked list.
+            </p>
+        </div>
+        {% if final_selection_report %}
+            <span class="rg-pill rg-pill--success rg-pill--sm">CAR v{{ final_selection_report.version_number }}</span>
+        {% endif %}
+    </div>
+
+    {% if final_selection_report %}
+        <div class="rg-pkt-overview">
+            <div class="rg-pkt-row">
+                <span class="rg-pkt-row__label">Vacancy</span>
+                <span class="rg-pkt-row__value"><strong>{{ final_selection_report.recruitment_entry.title }}</strong></span>
+            </div>
+            <div class="rg-pkt-row">
+                <span class="rg-pkt-row__label">Entry code</span>
+                <span class="rg-pkt-row__value">{{ final_selection_report.recruitment_entry.job_code }}</span>
+            </div>
+            <div class="rg-pkt-row">
+                <span class="rg-pkt-row__label">Candidates ranked</span>
+                <span class="rg-pkt-row__value">{{ final_selection_items|length }}</span>
+            </div>
+            <div class="rg-pkt-row">
+                <span class="rg-pkt-row__label">Finalized</span>
+                <span class="rg-pkt-row__value">{{ final_selection_report.finalized_at|date:"N j, Y, g:i a" }}</span>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+{# ─── Card 2 + 3: Ranked candidates + notes (one form) ─────── #}
+<form method="post"
+      action="{% url 'final-selection-record' application.pk %}"
+      id="fs-form"
+      novalidate>
+    {% csrf_token %}
+
+    <div class="rg-icard">
+        <div class="rg-icard__header">
+            <div>
+                <h3 class="rg-icard__title">Ranked candidates</h3>
+                <p class="rg-icard__subtitle">
+                    Pick the appointee. Top-five candidates are preferred — picking outside the top five needs a deep-selection justification.
+                </p>
+            </div>
+        </div>
+
+        {% if final_selection_form.selected_item.errors %}
+            <div class="invalid-feedback d-block mb-2">
+                {{ final_selection_form.selected_item.errors.0 }}
+            </div>
+        {% endif %}
+
+        <ul class="rg-del-car-list rg-fs-candidate-list" role="radiogroup" aria-label="Choose the appointee from the ranked list">
+            {% for item in final_selection_items %}
+                {% with candidate=item.recruitment_case.application %}
+                <li>
+                    <label class="rg-del-car-item rg-fs-candidate" data-rank="{{ item.rank_order }}">
+                        <div class="rg-del-rank-badge">#{{ item.rank_order }}</div>
+                        <div class="rg-del-car-item__body">
+                            <div class="rg-fs-candidate__header">
+                                <div>
+                                    <div class="rg-del-car-item__name">{{ candidate.applicant_display_name }}</div>
+                                    <div class="rg-fs-candidate__ref">
+                                        {{ candidate.reference_number|default:candidate.reference_label }}
+                                    </div>
+                                    {% if item.rank_order > 5 %}
+                                    <div class="rg-fs-candidate__warn" id="fs-warn-{{ item.pk }}">
+                                        Outside the top five &mdash; deep selection required.
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                <input type="radio"
+                                       class="rg-fs-candidate__radio"
+                                       name="{{ final_selection_form.selected_item.html_name }}"
+                                       value="{{ item.pk }}"
+                                       {% if final_selection_form.selected_item.value|stringformat:"s" == item.pk|stringformat:"s" %}checked{% endif %}
+                                       {% if item.rank_order > 5 %}aria-describedby="fs-warn-{{ item.pk }}"{% endif %}>
+                            </div>
+                            <div class="rg-del-car-item__scores">
+                                {% if item.qualification_outcome %}
+                                    <span class="rg-del-car-item__score-cell">
+                                        <span class="rg-del-car-item__score-label">Document review</span>
+                                        <span class="rg-del-car-item__score-val">
+                                            {{ item.qualification_outcome }}
+                                            {% if item.document_review_score is not None %}{{ item.document_review_score }}{% endif %}
+                                        </span>
+                                    </span>
+                                {% endif %}
+                                {% if item.exam_score %}
+                                    <span class="rg-del-car-item__score-cell">
+                                        <span class="rg-del-car-item__score-label">Exam</span>
+                                        <span class="rg-del-car-item__score-val">{{ item.exam_score }}</span>
+                                    </span>
+                                {% endif %}
+                                {% if item.interview_average_score %}
+                                    <span class="rg-del-car-item__score-cell">
+                                        <span class="rg-del-car-item__score-label">Interview avg.</span>
+                                        <span class="rg-del-car-item__score-val">{{ item.interview_average_score }}</span>
+                                    </span>
+                                {% endif %}
+                                {% if item.assessment_score %}
+                                    <span class="rg-del-car-item__score-cell">
+                                        <span class="rg-del-car-item__score-label">Preliminary score</span>
+                                        <span class="rg-del-car-item__score-val">{{ item.assessment_score }}</span>
+                                    </span>
+                                {% endif %}
+                                {% if item.preliminary_rank_order %}
+                                    <span class="rg-del-car-item__score-cell">
+                                        <span class="rg-del-car-item__score-label">System rank</span>
+                                        <span class="rg-del-car-item__score-val">#{{ item.preliminary_rank_order }}</span>
+                                    </span>
+                                {% endif %}
+                            </div>
+                            {% if item.decision_support_summary %}
+                                <p class="rg-del-car-item__decision">{{ item.decision_support_summary }}</p>
+                            {% endif %}
+                            {% if item.recommendation %}
+                                <p class="rg-del-car-item__decision"><strong>Recommendation:</strong> {{ item.recommendation }}</p>
+                            {% endif %}
+                            {% if item.ranking_notes %}
+                                <p class="rg-del-car-item__decision"><strong>Ranking note:</strong> {{ item.ranking_notes }}</p>
+                            {% endif %}
+                        </div>
+                    </label>
+                </li>
+                {% endwith %}
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="rg-icard">
+        <div class="rg-field">
+            <div class="form-check">
+                <input type="checkbox"
+                       name="{{ final_selection_form.is_deep_selection.html_name }}"
+                       id="{{ final_selection_form.is_deep_selection.id_for_label }}"
+                       class="form-check-input{% if final_selection_form.is_deep_selection.errors %} is-invalid{% endif %}"
+                       {% if final_selection_form.is_deep_selection.value %}checked{% endif %}>
+                <label for="{{ final_selection_form.is_deep_selection.id_for_label }}" class="form-check-label">
+                    {{ final_selection_form.is_deep_selection.label }}
+                </label>
+                {% if final_selection_form.is_deep_selection.help_text %}
+                    <div class="form-text">{{ final_selection_form.is_deep_selection.help_text }}</div>
+                {% endif %}
+                <div class="rg-fs-deep-lock" id="fs-deep-lock" role="status" hidden>
+                    Required when picking a candidate ranked outside the top five &mdash; this can't be unchecked while that candidate is selected.
+                </div>
+                {% for error in final_selection_form.is_deep_selection.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="rg-field rg-fs-deep-justification" id="fs-justification-group">
+            <label class="form-label" for="{{ final_selection_form.deep_selection_justification.id_for_label }}">
+                {{ final_selection_form.deep_selection_justification.label }}
+                <span class="text-danger rg-fs-deep-required" aria-hidden="true" hidden>*</span>
+            </label>
+            <textarea name="{{ final_selection_form.deep_selection_justification.html_name }}"
+                      id="{{ final_selection_form.deep_selection_justification.id_for_label }}"
+                      class="form-control{% if final_selection_form.deep_selection_justification.errors %} is-invalid{% endif %}"
+                      rows="4">{{ final_selection_form.deep_selection_justification.value|default:"" }}</textarea>
+            {% if final_selection_form.deep_selection_justification.help_text %}
+                <div class="form-text">{{ final_selection_form.deep_selection_justification.help_text }}</div>
+            {% endif %}
+            {% for error in final_selection_form.deep_selection_justification.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+
+        <div class="rg-field">
+            <label class="form-label" for="{{ final_selection_form.decision_notes.id_for_label }}">
+                {{ final_selection_form.decision_notes.label }}
+                <span class="text-danger" aria-hidden="true">*</span>
+            </label>
+            <textarea name="{{ final_selection_form.decision_notes.html_name }}"
+                      id="{{ final_selection_form.decision_notes.id_for_label }}"
+                      class="form-control{% if final_selection_form.decision_notes.errors %} is-invalid{% endif %}"
+                      rows="5">{{ final_selection_form.decision_notes.value|default:"" }}</textarea>
+            <div class="form-text">Notes are preserved with the CAR-level final selection record.</div>
+            {% for error in final_selection_form.decision_notes.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+
+        <div class="rg-fs-actions">
+            <div class="rg-fs-actions__msg" id="fs-error" role="alert" hidden></div>
+            <div class="rg-fs-actions__btns">
+                <span class="rg-fs-actions__spacer"></span>
+                <button type="button" class="btn btn-rg-primary" id="fs-record-btn">
+                    Record this final selection
+                </button>
+            </div>
+        </div>
+    </div>
+</form>
+
+{# ─── Card 4: Return CAR for Reassessment (when applicable) ─── #}
+{% if action_form %}
+<form method="post"
+      action="{% url 'workflow-action' application.pk %}"
+      id="fs-return-form"
+      novalidate>
+    {% csrf_token %}
+
+    <div class="rg-icard rg-fs-return-card">
+        <div class="rg-icard__header">
+            <div>
+                <h3 class="rg-icard__title">Send the CAR back to HRMPSB</h3>
+                <p class="rg-icard__subtitle">
+                    Use this only when the finalized CAR needs to go back to HRMPSB for re-deliberation before an appointee is selected.
+                    <strong>The current CAR state will be replaced.</strong>
+                </p>
+            </div>
+        </div>
+
+        <div class="rg-form-grid">
+            {% if action_form.action_is_fixed %}
+                <div class="rg-field">
+                    <label class="form-label">{{ action_form.action.label }}</label>
+                    <div class="form-control rg-fixed-value">
+                        {{ action_form.action_fixed_label }}
+                    </div>
+                    {{ action_form.action }}
+                    {% for error in action_form.action.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+                <div class="rg-field">
+                    <label class="form-label" for="{{ action_form.remarks.id_for_label }}">
+                        {{ action_form.remarks.label }}
+                        <span class="text-danger" aria-hidden="true">*</span>
+                    </label>
+                    {{ action_form.remarks }}
+                    <div class="form-text">Required. Saved to the case history and visible to HRMPSB.</div>
+                    {% for error in action_form.remarks.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                {% for field in action_form %}
+                    {% include "recruitment/includes/form_field.html" with field=field %}
+                {% endfor %}
+            {% endif %}
+        </div>
+
+        <div class="rg-fs-actions">
+            <div class="rg-fs-actions__msg" id="fs-return-error" role="alert" hidden></div>
+            <div class="rg-fs-actions__btns">
+                <span class="rg-fs-actions__spacer"></span>
+                <button type="button" class="rg-wf-action-btn rg-wf-action-btn--return-car-for-reassessment" id="fs-return-btn">
+                    Send back to HRMPSB
+                </button>
+            </div>
+        </div>
+    </div>
+</form>
+{% endif %}
+
+{# ─── Confirm modals ──────────────────────────────────────── #}
+
+{# Record final selection #}
+<div class="modal fade" id="fsRecordConfirmModal" tabindex="-1"
+     aria-labelledby="fsRecordConfirmLabel" aria-modal="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius:0.6rem; overflow:hidden;">
+            <div class="modal-header" style="background:var(--rg-primary); border-bottom:none; padding:1rem 1.25rem;">
+                <h5 class="modal-title" id="fsRecordConfirmLabel" style="font-size:0.95rem; font-weight:700; color:#fff; margin:0;">
+                    Confirm your final selection?
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="padding:1.25rem; font-size:0.83rem; color:#374151; line-height:1.6;">
+                <p class="mb-2">You're about to record this final selection:</p>
+                <ul class="rg-dec-confirm-list">
+                    <li><strong>Appointee:</strong> <span id="fs-modal-name">—</span></li>
+                    <li><strong>CAR rank:</strong> <span id="fs-modal-rank">—</span></li>
+                    <li><strong>Deep selection:</strong> <span id="fs-modal-deep">No</span></li>
+                </ul>
+                <p class="mb-0" style="font-size:0.78rem; color:#5f6c78;">
+                    This records the official Plantilla final selection and moves the selected applicant to completion tracking.
+                </p>
+            </div>
+            <div class="modal-footer" style="border-top:1px solid #e5e7eb; padding:0.75rem 1.25rem; display:flex; justify-content:flex-end; gap:0.5rem;">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">
+                    Keep reviewing
+                </button>
+                <button type="button" class="btn btn-rg-primary" id="fs-record-confirm">
+                    Yes, record this selection
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if action_form %}
+{# Send the CAR back to HRMPSB #}
+<div class="modal fade" id="fsReturnConfirmModal" tabindex="-1"
+     aria-labelledby="fsReturnConfirmLabel" aria-modal="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius:0.6rem; overflow:hidden;">
+            <div class="modal-header" style="background:var(--rg-brand-gold); border-bottom:none; padding:1rem 1.25rem;">
+                <h5 class="modal-title" id="fsReturnConfirmLabel" style="font-size:0.95rem; font-weight:700; color:#5a4106; margin:0;">
+                    Send the CAR back to HRMPSB?
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="padding:1.25rem; font-size:0.83rem; color:#374151; line-height:1.6;">
+                <p class="mb-2">
+                    HRMPSB will re-do the deliberation. The current Comparative Assessment Report will be returned and a fresh round of evaluation begins.
+                </p>
+                <p class="mb-0" style="font-size:0.78rem; color:#5f6c78;">
+                    Your <strong>remarks</strong> above are saved to the case history and visible to HRMPSB.
+                </p>
+            </div>
+            <div class="modal-footer" style="border-top:1px solid #e5e7eb; padding:0.75rem 1.25rem; display:flex; justify-content:flex-end; gap:0.5rem;">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">
+                    Keep reviewing
+                </button>
+                <button type="button" class="rg-wf-action-btn rg-wf-action-btn--return-car-for-reassessment" id="fs-return-confirm">
+                    Yes, send back to HRMPSB
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+(function () {
+    "use strict";
+
+    /* ── Selection form ─────────────────────────────────────── */
+    var form = document.getElementById("fs-form");
+    if (!form) return;
+
+    var radios = form.querySelectorAll('input[type="radio"][name="{{ final_selection_form.selected_item.html_name }}"]');
+    var deepCheckbox = document.getElementById("{{ final_selection_form.is_deep_selection.id_for_label }}");
+    var justGroup = document.getElementById("fs-justification-group");
+    var justField = document.getElementById("{{ final_selection_form.deep_selection_justification.id_for_label }}");
+    var justRequiredMark = justGroup ? justGroup.querySelector(".rg-fs-deep-required") : null;
+    var notesField = document.getElementById("{{ final_selection_form.decision_notes.id_for_label }}");
+    var recordBtn = document.getElementById("fs-record-btn");
+    var errorBox = document.getElementById("fs-error");
+
+    var modalEl = document.getElementById("fsRecordConfirmModal");
+    var confirmBtn = document.getElementById("fs-record-confirm");
+    var modalName = document.getElementById("fs-modal-name");
+    var modalRank = document.getElementById("fs-modal-rank");
+    var modalDeep = document.getElementById("fs-modal-deep");
+
+    function selectedRadio() {
+        for (var i = 0; i < radios.length; i++) if (radios[i].checked) return radios[i];
+        return null;
+    }
+    function selectedRank() {
+        var r = selectedRadio();
+        if (!r) return null;
+        var label = r.closest(".rg-fs-candidate");
+        return label ? parseInt(label.dataset.rank, 10) : null;
+    }
+    function selectedName() {
+        var r = selectedRadio();
+        if (!r) return "";
+        var label = r.closest(".rg-fs-candidate");
+        var nameEl = label ? label.querySelector(".rg-del-car-item__name") : null;
+        return nameEl ? nameEl.textContent.trim() : "";
+    }
+
+    function showError(msg, field) {
+        if (errorBox) { errorBox.textContent = msg; errorBox.hidden = false; }
+        if (field && field.focus) try { field.focus({ preventScroll: false }); } catch (e) { field.focus(); }
+    }
+    function clearError() { if (errorBox) { errorBox.hidden = true; errorBox.textContent = ""; } }
+
+    /* Visual selected state on the picked label */
+    function syncCardSelectedState() {
+        var picked = selectedRadio();
+        var pickedLabel = picked ? picked.closest(".rg-fs-candidate") : null;
+        form.querySelectorAll(".rg-fs-candidate").forEach(function (lab) {
+            lab.classList.toggle("is-picked", lab === pickedLabel);
+        });
+    }
+
+    var deepLockHint = document.getElementById("fs-deep-lock");
+
+    /* Deep-selection visibility + required mark + rank > 5 lock */
+    function syncDeepVisibility() {
+        var rank = selectedRank();
+        var lockedByRank = !!(rank && rank > 5);
+
+        // If a rank > 5 candidate is picked, deep selection is mandatory.
+        if (lockedByRank && deepCheckbox && !deepCheckbox.checked) {
+            deepCheckbox.checked = true;
+        }
+        var on = deepCheckbox && deepCheckbox.checked;
+        if (justGroup) justGroup.hidden = !on;
+        if (justRequiredMark) justRequiredMark.hidden = !on;
+        if (justField) {
+            if (on) {
+                justField.setAttribute("aria-required", "true");
+            } else {
+                justField.removeAttribute("aria-required");
+            }
+        }
+        if (deepLockHint) deepLockHint.hidden = !lockedByRank;
+        if (deepCheckbox) {
+            deepCheckbox.setAttribute("aria-disabled", lockedByRank ? "true" : "false");
+            deepCheckbox.classList.toggle("rg-fs-deep-checkbox--locked", lockedByRank);
+        }
+        return rank;
+    }
+
+    /* Auto-check deep when rank > 5 (and forbid manual unchecking while it's selected) */
+    radios.forEach(function (r) {
+        r.addEventListener("change", function () {
+            clearError();
+            syncCardSelectedState();
+            syncDeepVisibility();
+        });
+    });
+    if (deepCheckbox) {
+        deepCheckbox.addEventListener("change", function () {
+            clearError();
+            var rank = selectedRank();
+            // Forbid unchecking while a rank > 5 candidate is selected.
+            if (rank && rank > 5 && !deepCheckbox.checked) {
+                deepCheckbox.checked = true;
+            }
+            syncDeepVisibility();
+        });
+        // Also catch a click that would have toggled to unchecked even before "change".
+        deepCheckbox.addEventListener("click", function (e) {
+            var rank = selectedRank();
+            if (rank && rank > 5 && !deepCheckbox.checked) {
+                // The click had already toggled to false; restore and prevent further default.
+                deepCheckbox.checked = true;
+                e.preventDefault();
+                syncDeepVisibility();
+            }
+        });
+    }
+    if (justField) justField.addEventListener("input", clearError);
+    if (notesField) notesField.addEventListener("input", clearError);
+
+    /* Validation on the record button */
+    function recordProblems() {
+        var p = [];
+        var picked = selectedRadio();
+        if (!picked) {
+            p.push({ field: radios[0], msg: "Pick the appointee from the ranked list before recording." });
+            return p;
+        }
+        if (deepCheckbox && deepCheckbox.checked) {
+            if (!justField || !(justField.value || "").trim()) {
+                p.push({ field: justField, msg: "Deep selection needs a written justification before recording." });
+            }
+        }
+        if (!notesField || !(notesField.value || "").trim()) {
+            p.push({ field: notesField, msg: "Add decision notes before recording the selection." });
+        }
+        return p;
+    }
+
+    if (recordBtn) {
+        recordBtn.addEventListener("click", function () {
+            var probs = recordProblems();
+            if (probs.length) { showError(probs[0].msg, probs[0].field); return; }
+            if (modalName) modalName.textContent = selectedName() || "—";
+            if (modalRank) modalRank.textContent = "#" + (selectedRank() || "—");
+            if (modalDeep) modalDeep.textContent = (deepCheckbox && deepCheckbox.checked) ? "Yes" : "No";
+            if (modalEl && window.bootstrap) bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        });
+    }
+    if (confirmBtn) {
+        confirmBtn.addEventListener("click", function () { form.submit(); });
+    }
+
+    /* Initial sync — restores state on server-validation reload */
+    syncCardSelectedState();
+    syncDeepVisibility();
+
+    /* ── Return-CAR form ────────────────────────────────────── */
+    var returnForm = document.getElementById("fs-return-form");
+    if (returnForm) {
+        var returnRemarks = returnForm.querySelector("[name='remarks']");
+        var returnBtn = document.getElementById("fs-return-btn");
+        var returnError = document.getElementById("fs-return-error");
+        var returnModalEl = document.getElementById("fsReturnConfirmModal");
+        var returnConfirm = document.getElementById("fs-return-confirm");
+
+        function returnShowError(msg, field) {
+            if (returnError) { returnError.textContent = msg; returnError.hidden = false; }
+            if (field && field.focus) try { field.focus({ preventScroll: false }); } catch (e) { field.focus(); }
+        }
+        function returnClearError() { if (returnError) { returnError.hidden = true; returnError.textContent = ""; } }
+
+        if (returnRemarks) returnRemarks.addEventListener("input", returnClearError);
+
+        if (returnBtn) {
+            returnBtn.addEventListener("click", function () {
+                if (!returnRemarks || !(returnRemarks.value || "").trim()) {
+                    returnShowError("Add remarks for HRMPSB before sending the CAR back.", returnRemarks);
+                    return;
+                }
+                if (returnModalEl && window.bootstrap) bootstrap.Modal.getOrCreateInstance(returnModalEl).show();
+            });
+        }
+        if (returnConfirm) {
+            returnConfirm.addEventListener("click", function () { returnForm.submit(); });
+        }
+    }
+})();
+</script>

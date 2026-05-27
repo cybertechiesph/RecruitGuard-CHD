@@ -105,6 +105,12 @@
                                 </div>
                                 <div class="rg-int-progress-item__role">
                                     {{ rating.rated_by_role|role_label }}
+                                    {% if rating.encoded_by_id and rating.encoded_by_id != rating.rated_by_id %}
+                                        <br>
+                                        <span style="font-size:0.72rem;color:#64748b;">
+                                            Encoded by {{ rating.encoded_by.get_full_name|default:rating.encoded_by.username }}
+                                        </span>
+                                    {% endif %}
                                 </div>
                                 <div class="rg-int-progress-item__tag">Submitted</div>
                             </div>

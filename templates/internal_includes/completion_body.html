@@ -1,437 +1,399 @@
 {% load recruitment_ui %}
+{% comment %}
+Completion stage — 2-step wizard.
 
+  Step 1  Track completion       (form + requirement checklist + Save progress)
+  Step 2  Close and archive      (notes + permanence-warning confirm modal)
 
+Step 2 is only reachable when the backend already provides closure_form
+(all requirements resolved). Until then the rail's Step-2 tile is
+visually disabled and the blockers banner shows inline at the bottom
+of Step 1.
 
-{% if latest_final_decision %}
+bi-* icons replaced with inline SVGs (the project doesn't load
+Bootstrap Icons CSS).
+{% endcomment %}
+
+{# ── Reference banner (load-bearing context, always above the rail) ── #}
+{% if latest_final_selection %}
     <div class="rg-cmp-decision-ref">
-        <span class="rg-cmp-decision-ref__icon">
-            <i class="bi bi-check2-circle"></i>
+        <span class="rg-cmp-decision-ref__icon" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </span>
+        <div>
+            <strong>Applicant selected from CAR &mdash;</strong>
+            Final selection recorded
+            {% if latest_final_selection.decided_at %} on {{ latest_final_selection.decided_at|date:"N j, Y" }}{% endif %}
+            {% if latest_final_selection.decided_by %} by <strong>{{ latest_final_selection.decided_by }}</strong>{% endif %}.
+            This step tracks
+            {% if completion_record %}{{ completion_record.completion_label|lower }}{% else %}appointment{% endif %}
+            completion and formally closes the selected case.
+        </div>
+    </div>
+{% elif latest_final_decision %}
+    <div class="rg-cmp-decision-ref">
+        <span class="rg-cmp-decision-ref__icon" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
         </span>
         <div>
             <strong>
-                {% if latest_final_decision.decision_outcome == "selected" %}
-                    Applicant Selected
-                    &mdash;
-                {% else %}
-                    Applicant Not Selected
-                    &mdash;
-                {% endif %}
+                {% if latest_final_decision.decision_outcome == "selected" %}Applicant selected{% else %}Applicant not selected{% endif %}
+                &mdash;
             </strong>
             Final decision recorded
-            {% if latest_final_decision.decided_at %}
-                on {{ latest_final_decision.decided_at|date:"N j, Y" }}
-            {% endif %}
-            {% if latest_final_decision.decided_by %}
-                by <strong>{{ latest_final_decision.decided_by }}</strong>
-            {% endif %}.
+            {% if latest_final_decision.decided_at %} on {{ latest_final_decision.decided_at|date:"N j, Y" }}{% endif %}
+            {% if latest_final_decision.decided_by %} by <strong>{{ latest_final_decision.decided_by }}</strong>{% endif %}.
             This step tracks
-            {% if completion_record %}
-                {{ completion_record.completion_label|lower }}
-            {% else %}
-                appointment / contract
-            {% endif %}
+            {% if completion_record %}{{ completion_record.completion_label|lower }}{% else %}appointment / contract{% endif %}
             completion and formally closes the case.
         </div>
     </div>
 {% endif %}
 
+{# ── Step rail ──────────────────────────────────────────────── #}
+<div class="rg-scr-steprail" role="group" aria-label="Completion steps">
+    <button type="button" class="rg-scr-steprail__item is-current"
+            data-completion-rail="track" aria-current="step">
+        <span class="rg-scr-steprail__num">1</span>
+        <span class="rg-scr-steprail__label">Track completion</span>
+    </button>
+    <span class="rg-scr-steprail__line" aria-hidden="true"></span>
+    <button type="button"
+            class="rg-scr-steprail__item {% if not closure_form %}is-disabled{% endif %}"
+            data-completion-rail="close"
+            {% if not closure_form %}aria-disabled="true"{% endif %}
+            aria-current="false">
+        <span class="rg-scr-steprail__num">2</span>
+        <span class="rg-scr-steprail__label">Close and archive</span>
+    </button>
+</div>
 
-<div class="rg-icard">
-    <div class="rg-icard__header">
-        <div>
-            <h3 class="rg-icard__title">
-                {% if completion_record %}
-                    {{ completion_record.completion_label }} Tracking
-                {% else %}
-                    Completion Tracking
-                {% endif %}
-            </h3>
-            <p class="rg-icard__subtitle">
-                Record the
-                {% if completion_record %}{{ completion_record.completion_label|lower }}{% else %}appointment/contract{% endif %}
-                reference, effective date, deadline, and any relevant announcement details.
-                Save at any time — closure requires the recorded reference, date, and all checklist items to be resolved.
-            </p>
+{# ─── Step 1: Track completion ──────────────────────────────── #}
+<section class="rg-scr-step" data-completion-step="track"
+         role="group" aria-label="Step 1: Track completion">
+
+    <div class="rg-icard">
+        <div class="rg-icard__header">
+            <div>
+                <h3 class="rg-icard__title">
+                    Step 1 &mdash;
+                    {% if completion_record %}{{ completion_record.completion_label }} tracking{% else %}Completion tracking{% endif %}
+                </h3>
+                <p class="rg-icard__subtitle">
+                    Record the
+                    {% if completion_record %}{{ completion_record.completion_label|lower }}{% else %}appointment / contract{% endif %}
+                    reference, effective date, deadline, and announcement details.
+                    Save at any time. The case can only be closed once the reference, date, and every requirement are resolved.
+                </p>
+            </div>
         </div>
-    </div>
 
-    <form id="completion-form"
-          method="post"
-          action="{% url 'completion-tracking' application.pk %}">
-        {% csrf_token %}
+        <form id="completion-form"
+              method="post"
+              action="{% url 'completion-tracking' application.pk %}"
+              novalidate>
+            {% csrf_token %}
 
-        
-        {% if completion_form %}
+            {% if completion_form %}
             <div class="row g-3 mb-3">
-                
                 <div class="col-sm-6">
-                    <label for="{{ completion_form.completion_reference.id_for_label }}"
-                           class="form-label fw-semibold" style="font-size:0.8125rem;">
+                    <label class="form-label fw-semibold" for="{{ completion_form.completion_reference.id_for_label }}">
                         {{ completion_form.completion_reference.label }}
                     </label>
                     {{ completion_form.completion_reference }}
-                    {% if completion_form.completion_reference.errors %}
-                        <div class="invalid-feedback d-block" style="font-size:0.78rem;">
-                            {{ completion_form.completion_reference.errors.0 }}
-                        </div>
-                    {% endif %}
+                    {% for error in completion_form.completion_reference.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
                 </div>
-
-                
                 <div class="col-sm-6">
-                    <label for="{{ completion_form.completion_date.id_for_label }}"
-                           class="form-label fw-semibold" style="font-size:0.8125rem;">
+                    <label class="form-label fw-semibold" for="{{ completion_form.completion_date.id_for_label }}">
                         {{ completion_form.completion_date.label }}
                     </label>
                     {{ completion_form.completion_date }}
-                    {% if completion_form.completion_date.errors %}
-                        <div class="invalid-feedback d-block" style="font-size:0.78rem;">
-                            {{ completion_form.completion_date.errors.0 }}
-                        </div>
-                    {% endif %}
+                    {% for error in completion_form.completion_date.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
                 </div>
-
-                
                 <div class="col-sm-6">
-                    <label for="{{ completion_form.deadline.id_for_label }}"
-                           class="form-label fw-semibold" style="font-size:0.8125rem;">
+                    <label class="form-label fw-semibold" for="{{ completion_form.deadline.id_for_label }}">
                         {{ completion_form.deadline.label }}
                     </label>
                     {{ completion_form.deadline }}
-                    {% if completion_form.deadline.errors %}
-                        <div class="invalid-feedback d-block" style="font-size:0.78rem;">
-                            {{ completion_form.deadline.errors.0 }}
-                        </div>
-                    {% endif %}
+                    {% for error in completion_form.deadline.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
                 </div>
-
-                
                 {% if completion_form.announcement_reference.field.widget.is_hidden == False %}
                     <div class="col-sm-6">
-                        <label for="{{ completion_form.announcement_reference.id_for_label }}"
-                               class="form-label fw-semibold" style="font-size:0.8125rem;">
+                        <label class="form-label fw-semibold" for="{{ completion_form.announcement_reference.id_for_label }}">
                             {{ completion_form.announcement_reference.label }}
                         </label>
                         {{ completion_form.announcement_reference }}
-                        {% if completion_form.announcement_reference.errors %}
-                            <div class="invalid-feedback d-block" style="font-size:0.78rem;">
-                                {{ completion_form.announcement_reference.errors.0 }}
-                            </div>
-                        {% endif %}
+                        {% for error in completion_form.announcement_reference.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
                     </div>
-
-                    
                     <div class="col-sm-6">
-                        <label for="{{ completion_form.announcement_date.id_for_label }}"
-                               class="form-label fw-semibold" style="font-size:0.8125rem;">
+                        <label class="form-label fw-semibold" for="{{ completion_form.announcement_date.id_for_label }}">
                             {{ completion_form.announcement_date.label }}
                         </label>
                         {{ completion_form.announcement_date }}
-                        {% if completion_form.announcement_date.errors %}
-                            <div class="invalid-feedback d-block" style="font-size:0.78rem;">
-                                {{ completion_form.announcement_date.errors.0 }}
-                            </div>
-                        {% endif %}
+                        {% for error in completion_form.announcement_date.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
                     </div>
                 {% endif %}
-
-                
                 <div class="col-12">
-                    <label for="{{ completion_form.remarks.id_for_label }}"
-                           class="form-label fw-semibold" style="font-size:0.8125rem;">
+                    <label class="form-label fw-semibold" for="{{ completion_form.remarks.id_for_label }}">
                         {{ completion_form.remarks.label }}
                     </label>
                     {{ completion_form.remarks }}
-                    {% if completion_form.remarks.errors %}
-                        <div class="invalid-feedback d-block" style="font-size:0.78rem;">
-                            {{ completion_form.remarks.errors.0 }}
-                        </div>
-                    {% endif %}
+                    {% for error in completion_form.remarks.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
                 </div>
             </div>
-        {% endif %}
+            {% endif %}
 
-        
-        {% if completion_requirement_formset %}
-            <div class="mt-3 pt-3" style="border-top:1px solid #e5e7eb;">
-                <div class="d-flex align-items-center mb-2" style="gap:0.5rem;">
-                    <span style="font-size:0.8125rem;font-weight:700;color:#1e293b;flex:1;">
-                        Requirement Checklist
-                    </span>
+            {% if completion_requirement_formset %}
+            <div class="rg-cmp-checklist">
+                <div class="rg-cmp-checklist__header">
+                    <span class="rg-cmp-checklist__title">Requirement checklist</span>
                     {% if completion_record %}
-                        <span style="font-size:0.75rem;color:#64748b;">
-                            {{ completion_record.completed_requirement_count }}&nbsp;/&nbsp;{{ completion_record.total_requirement_count }}
-                            resolved
+                        <span class="rg-cmp-checklist__count">
+                            {{ completion_record.completed_requirement_count }} / {{ completion_record.total_requirement_count }} resolved
                         </span>
                     {% endif %}
                 </div>
 
-                
                 {% if completion_record and completion_record.total_requirement_count %}
-                    <div class="rg-cmp-req-progress">
+                    {% with total=completion_record.total_requirement_count done=completion_record.completed_requirement_count %}
+                    <div class="rg-cmp-req-progress" role="progressbar"
+                         aria-valuemin="0"
+                         aria-valuemax="{{ total }}"
+                         aria-valuenow="{{ done }}"
+                         aria-label="Requirement checklist progress">
                         <span class="rg-cmp-req-progress__label">
-                            Progress:
-                            <span class="rg-cmp-req-progress__count">
-                                {{ completion_record.completed_requirement_count }}&nbsp;/&nbsp;{{ completion_record.total_requirement_count }}
-                            </span>
-                            resolved
+                            Progress: <span class="rg-cmp-req-progress__count">{{ done }} / {{ total }}</span> resolved
                         </span>
                         <div class="rg-cmp-req-progress__bar">
-                            
-                            {% with total=completion_record.total_requirement_count done=completion_record.completed_requirement_count %}
-                                {% if total %}
-                                    <div class="rg-cmp-req-progress__fill"
-                                         style="width:{{ done|floatformat:"0" }}00%;max-width:100%;"></div>
-                                {% endif %}
-                            {% endwith %}
+                            <div class="rg-cmp-req-progress__fill"
+                                 style="width:{% widthratio done total 100 %}%;"></div>
                         </div>
                     </div>
+                    {% endwith %}
                 {% endif %}
 
-                
                 {{ completion_requirement_formset.management_form }}
 
                 {% if completion_requirement_formset.non_form_errors %}
-                    <div class="alert alert-danger mb-3" style="font-size:0.8rem;">
-                        {{ completion_requirement_formset.non_form_errors|join:", " }}
-                    </div>
+                    <div class="alert alert-danger">{{ completion_requirement_formset.non_form_errors|join:", " }}</div>
                 {% endif %}
 
-                
+                <p class="rg-cmp-checklist__help">
+                    Fill any blank slot below to add a new requirement. New entries are saved when you click <strong>Save progress</strong>.
+                </p>
+
                 <div id="req-formset-container">
                     {% for req_form in completion_requirement_formset %}
-                        
                         {% with status_val=req_form.status.value %}
-                        <div class="rg-cmp-req-form-row"
+                        <div class="rg-cmp-req-form-row {% if not req_form.instance.pk %}is-new{% endif %}"
                              id="req-row-{{ forloop.counter0 }}"
                              data-req-status="{{ status_val|lower }}">
 
-                            
-                            {% for hidden in req_form.hidden_fields %}
-                                {{ hidden }}
-                            {% endfor %}
+                            {% for hidden in req_form.hidden_fields %}{{ hidden }}{% endfor %}
 
                             <div class="rg-cmp-req-form-row__header">
                                 <span class="rg-cmp-req-form-row__seq">
-                                    Requirement {{ forloop.counter }}
+                                    {% if req_form.instance.pk %}
+                                        Requirement {{ forloop.counter }}
+                                    {% else %}
+                                        Add a new requirement
+                                    {% endif %}
                                 </span>
                                 <label class="rg-cmp-req-form-row__delete-label"
                                        for="{{ req_form.DELETE.id_for_label }}"
                                        id="req-del-label-{{ forloop.counter0 }}">
                                     {{ req_form.DELETE }}
-                                    <i class="bi bi-trash3"></i>
-                                    Remove
+                                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                        <path d="M3 4h10M6 4V2.5h4V4M5 4l1 10h4l1-10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                    {% if req_form.instance.pk %}Remove{% else %}Discard{% endif %}
                                 </label>
                             </div>
 
                             <div class="row g-2">
-                                
                                 <div class="col-12">
-                                    <label for="{{ req_form.item_label.id_for_label }}"
-                                           class="form-label fw-semibold"
-                                           style="font-size:0.79rem;">
+                                    <label class="form-label fw-semibold rg-cmp-req-label"
+                                           for="{{ req_form.item_label.id_for_label }}">
                                         {{ req_form.item_label.label }}
                                     </label>
                                     {{ req_form.item_label }}
-                                    {% if req_form.item_label.errors %}
-                                        <div class="invalid-feedback d-block"
-                                             style="font-size:0.75rem;">
-                                            {{ req_form.item_label.errors.0 }}
-                                        </div>
-                                    {% endif %}
+                                    {% for error in req_form.item_label.errors %}
+                                        <div class="invalid-feedback d-block">{{ error }}</div>
+                                    {% endfor %}
                                 </div>
 
-                                
                                 <div class="col-sm-4">
-                                    <label for="{{ req_form.status.id_for_label }}"
-                                           class="form-label fw-semibold"
-                                           style="font-size:0.79rem;">
+                                    <label class="form-label fw-semibold rg-cmp-req-label"
+                                           for="{{ req_form.status.id_for_label }}">
                                         {{ req_form.status.label }}
                                     </label>
                                     {{ req_form.status }}
                                 </div>
 
-                                
                                 <div class="col-sm-8">
-                                    <label for="{{ req_form.notes.id_for_label }}"
-                                           class="form-label fw-semibold"
-                                           style="font-size:0.79rem;">
+                                    <label class="form-label fw-semibold rg-cmp-req-label"
+                                           for="{{ req_form.notes.id_for_label }}">
                                         {{ req_form.notes.label }}
                                     </label>
                                     {{ req_form.notes }}
                                 </div>
                             </div>
-
                         </div>
                         {% endwith %}
                     {% empty %}
-                        <p class="text-muted mb-0" style="font-size:0.8rem;">
-                            No requirement items yet. Add requirements using the formset
-                            or contact your administrator to pre-seed them.
+                        <p class="rg-cmp-checklist__empty">
+                            No requirement slots available. Save the tracking form first, then refresh to add requirements.
                         </p>
                     {% endfor %}
                 </div>
-
             </div>
-        {% endif %}
-
-        
-        <div class="d-flex justify-content-end mt-3 pt-3"
-             style="border-top:1px solid #e5e7eb;">
-            <button type="submit" class="btn btn-rg-primary btn-sm">
-                <i class="bi bi-floppy me-1"></i>Save Tracking
-            </button>
-        </div>
-
-    </form>
-
-</div>
-
-
-{% if closure_form %}
-
-<div class="rg-icard">
-    <div class="rg-icard__header">
-        <div>
-            <h3 class="rg-icard__title">Close Recruitment Case</h3>
-            <p class="rg-icard__subtitle">
-                Completion tracking is fully recorded. Provide closure notes to permanently
-                close and archive this recruitment case.
-                <strong>This action cannot be undone.</strong>
-            </p>
-        </div>
-        <span class="rg-pkt-section__badge rg-pkt-section__badge--ok">
-            <i class="bi bi-check-circle-fill me-1"></i>Ready to Close
-        </span>
-    </div>
-
-    <form id="closure-form"
-          method="post"
-          action="{% url 'case-close' application.pk %}">
-        {% csrf_token %}
-
-        <div class="mb-3">
-            <label for="{{ closure_form.closure_notes.id_for_label }}"
-                   class="form-label fw-semibold" style="font-size:0.8125rem;">
-                {{ closure_form.closure_notes.label }}
-                <span class="text-danger">*</span>
-            </label>
-            <textarea
-                name="{{ closure_form.closure_notes.html_name }}"
-                id="{{ closure_form.closure_notes.id_for_label }}"
-                class="form-control{% if closure_form.closure_notes.errors %} is-invalid{% endif %}"
-                rows="4"
-                placeholder="Summarise the completion of this recruitment process and any final remarks to be preserved in the official record."
-                style="font-size:0.8125rem;">{{ closure_form.closure_notes.value|default:"" }}</textarea>
-            {% if closure_form.closure_notes.errors %}
-                <div class="invalid-feedback" style="font-size:0.8rem;">
-                    {{ closure_form.closure_notes.errors.0 }}
-                </div>
             {% endif %}
-            <div class="form-text" style="font-size:0.75rem;">
-                These notes are preserved permanently in the closure record and audit log.
-            </div>
-        </div>
-
-        
-        <div class="d-flex justify-content-end">
-            <button type="button" class="btn btn-sm btn-rg-primary"
-                    id="closure-open-modal-btn" disabled>
-                <i class="bi bi-archive-fill me-1"></i>Close &amp; Archive Case&hellip;
-            </button>
-        </div>
-
-    </form>
-</div>
-
-
-<div class="rg-cws-fin-bar" id="closure-fin-bar">
-    <div class="rg-cws-fin-bar__checks">
-        <span class="rg-cws-fin-bar__check is-met" id="closure-ready-reqs">
-            <i class="bi bi-check-circle-fill rg-cws-fin-bar__check-icon"></i>
-            All requirements resolved
-        </span>
-        <span class="rg-cws-fin-bar__check" id="closure-ready-notes">
-            <i class="bi bi-circle rg-cws-fin-bar__check-icon"></i>
-            Closure notes provided
-        </span>
+        </form>
     </div>
-    <button type="button" class="btn-rg-finalize" id="closure-finalize-btn" disabled>
-        <i class="bi bi-archive-fill me-1"></i>Close &amp; Archive Case
-    </button>
-</div>
 
-{% else %}
-
-{% if completion_record and completion_record.closure_blockers %}
-    <div class="rg-pkt-missing-strip" style="margin-top:0;">
-        <div class="rg-pkt-missing-strip__icon">
-            <i class="bi bi-hourglass-split"></i>
+    {# Blockers inline at the bottom of Step 1 when closure isn't ready #}
+    {% if not closure_form and completion_record and completion_record.closure_blockers %}
+    <div class="rg-cmp-blockers">
+        <div class="rg-cmp-blockers__icon" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M5 2h6v2.5l-3 3 3 3V13H5v-2.5l3-3-3-3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+            </svg>
         </div>
         <div>
-            <strong>Case cannot be closed yet.</strong>
+            <strong>The case can't be closed yet.</strong>
             {{ completion_record.closure_blockers|join:" " }}
         </div>
     </div>
-{% endif %}
-{% endif %}
+    {% endif %}
+</section>
 
+{# ─── Step 2: Close and archive ─────────────────────────────── #}
+<section class="rg-scr-step" data-completion-step="close" hidden
+         role="group" aria-label="Step 2: Close and archive">
+    {% if closure_form %}
+    <div class="rg-icard">
+        <div class="rg-icard__header">
+            <div>
+                <h3 class="rg-icard__title">Step 2 &mdash; Close and archive the case</h3>
+                <p class="rg-icard__subtitle">
+                    Every requirement is resolved. Add closure notes and confirm to permanently close and archive this case.
+                    <strong>This can't be undone.</strong>
+                </p>
+            </div>
+            <span class="rg-pkt-section__badge rg-pkt-section__badge--ok">Ready to close</span>
+        </div>
 
+        <form id="closure-form"
+              method="post"
+              action="{% url 'case-close' application.pk %}"
+              novalidate>
+            {% csrf_token %}
+            <div class="rg-field">
+                <label class="form-label fw-semibold" for="{{ closure_form.closure_notes.id_for_label }}">
+                    {{ closure_form.closure_notes.label }}
+                    <span class="text-danger" aria-hidden="true">*</span>
+                </label>
+                <textarea
+                    name="{{ closure_form.closure_notes.html_name }}"
+                    id="{{ closure_form.closure_notes.id_for_label }}"
+                    class="form-control{% if closure_form.closure_notes.errors %} is-invalid{% endif %}"
+                    rows="4"
+                    placeholder="Summarise the completion of this recruitment process and any final remarks for the official record.">{{ closure_form.closure_notes.value|default:"" }}</textarea>
+                <div class="form-text">Notes are preserved permanently in the closure record and audit log.</div>
+                {% for error in closure_form.closure_notes.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </div>
+        </form>
+    </div>
+    {% endif %}
+</section>
+
+{# ── Sticky action bar ─────────────────────────────────────── #}
+<div class="rg-scr-actionbar">
+    <div class="rg-scr-actionbar__msg" id="cmp-step-error" role="alert" hidden></div>
+    <div class="rg-scr-actionbar__btns">
+        <button type="button" id="cmp-back-btn" class="btn btn-outline-secondary btn-sm" hidden>
+            &larr; Back to tracking
+        </button>
+        <span class="rg-scr-actionbar__spacer"></span>
+        <button type="submit" form="completion-form" id="cmp-save-btn" class="btn btn-outline-secondary btn-sm">
+            Save progress
+        </button>
+        {% if closure_form %}
+        <button type="button" id="cmp-next-btn" class="btn btn-rg-primary btn-sm">
+            Next: Close and archive
+        </button>
+        <button type="button" id="cmp-finalize-btn" class="btn-rg-finalize" hidden>
+            Close and archive the case
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+{# ── Confirm modal (destructive) ───────────────────────────── #}
 {% if closure_form %}
 <div class="modal fade" id="closureConfirmModal" tabindex="-1"
-     aria-labelledby="closureConfirmModalLabel" aria-hidden="true">
+     aria-labelledby="closureConfirmModalLabel" aria-modal="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content" style="border-radius:0.6rem;overflow:hidden;">
-            <div class="modal-header"
-                 style="background:var(--rg-primary);border-bottom:none;padding:1rem 1.25rem;">
-                <h5 class="modal-title" id="closureConfirmModalLabel"
-                    style="font-size:0.9375rem;font-weight:700;color:#fff;margin:0;">
-                    Close &amp; Archive Recruitment Case
+        <div class="modal-content" style="border-radius:0.6rem; overflow:hidden;">
+            <div class="modal-header" style="background:var(--rg-primary); border-bottom:none; padding:1rem 1.25rem;">
+                <h5 class="modal-title" id="closureConfirmModalLabel" style="font-size:0.95rem; font-weight:700; color:#fff; margin:0;">
+                    Close and archive this case?
                 </h5>
-                <button type="button" class="btn-close btn-close-white"
-                        data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body"
-                 style="padding:1.25rem;font-size:0.8125rem;color:#374151;line-height:1.65;">
-                <p class="mb-3">
-                    You are about to permanently close and archive the recruitment case for:
-                </p>
-                <ul class="mb-3" style="padding-left:1.2rem;">
-                    <li>
-                        <strong>Applicant:</strong>
-                        {% if latest_final_decision %}
+            <div class="modal-body" style="padding:1.25rem; font-size:0.83rem; color:#374151; line-height:1.6;">
+                <p class="mb-3">You're about to permanently close and archive the recruitment case for:</p>
+                <ul class="rg-dec-confirm-list">
+                    <li><strong>Applicant:</strong>
+                        {% if latest_final_selection %}
+                            {{ latest_final_selection.selected_application.applicant_display_name }}
+                        {% elif latest_final_decision %}
                             {{ latest_final_decision.submission_packet_snapshot.context.applicant_name|default:application.applicant_display_name }}
                         {% else %}
                             {{ application.applicant_display_name }}
                         {% endif %}
                     </li>
-                    <li>
-                        <strong>Position:</strong>
-                        {{ application.position.title }}
-                    </li>
-                    <li>
-                        <strong>Branch / Type:</strong>
-                        {{ application.get_branch_display }}
-                    </li>
+                    <li><strong>Position:</strong> {{ application.position.title }}</li>
+                    <li><strong>Branch / type:</strong> {{ application.get_branch_display }}</li>
                 </ul>
-                <div style="background:#fef9c3;border:1px solid #fde047;
-                            border-radius:0.35rem;padding:0.6rem 0.75rem;
-                            font-size:0.79rem;color:#854d0e;">
-                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
-                    <strong>This action is permanent and cannot be undone.</strong>
-                    The case will be marked as closed and all records will be
-                    preserved as final archives. The closure is audit-logged.
+                <div class="rg-dec-permanence-warning">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                        <path d="M8 2L14.5 13H1.5L8 2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                        <path d="M8 6.5v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        <circle cx="8" cy="11" r="0.6" fill="currentColor"/>
+                    </svg>
+                    <span>
+                        <strong>This is permanent and can't be undone.</strong>
+                        The case will be marked closed and every record preserved as a final archive. The closure is audit-logged.
+                    </span>
                 </div>
             </div>
-            <div class="modal-footer"
-                 style="border-top:1px solid #e5e7eb;padding:0.75rem 1.25rem;
-                        display:flex;justify-content:flex-end;gap:0.5rem;">
-                <button type="button" class="btn btn-sm btn-outline-secondary"
-                        data-bs-dismiss="modal">
-                    Cancel &mdash; Continue Editing
+            <div class="modal-footer" style="border-top:1px solid #e5e7eb; padding:0.75rem 1.25rem; display:flex; justify-content:flex-end; gap:0.5rem;">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">
+                    Keep editing
                 </button>
                 <button type="button" class="btn-rg-finalize" id="closure-confirm-btn">
-                    <i class="bi bi-archive-fill me-1"></i>Yes, Close &amp; Archive
+                    Yes, close and archive
                 </button>
             </div>
         </div>
@@ -439,95 +401,123 @@
 </div>
 {% endif %}
 
-
 <script>
 (function () {
     "use strict";
 
-    /* ── Requirement formset: status-driven row coloring ── */
-    var reqRows = document.querySelectorAll(".rg-cmp-req-form-row");
-    reqRows.forEach(function (row) {
+    /* ── Requirement formset row state ──────────────────────── */
+    document.querySelectorAll(".rg-cmp-req-form-row").forEach(function (row) {
         var statusSel = row.querySelector("select[name$='-status']");
-        var deleteCb  = row.querySelector("input[name$='-DELETE']");
-        var delLabel  = row.querySelector(".rg-cmp-req-form-row__delete-label");
-
+        var deleteCb = row.querySelector("input[name$='-DELETE']");
         function syncRowStyle() {
             if (deleteCb && deleteCb.checked) {
                 row.classList.add("is-delete-pending");
             } else {
                 row.classList.remove("is-delete-pending");
-                if (statusSel) {
-                    row.setAttribute("data-req-status", statusSel.value.toLowerCase());
-                }
+                if (statusSel) row.setAttribute("data-req-status", (statusSel.value || "").toLowerCase());
             }
         }
-
-        if (statusSel) {
-            statusSel.addEventListener("change", syncRowStyle);
-        }
+        if (statusSel) statusSel.addEventListener("change", syncRowStyle);
         if (deleteCb) {
             deleteCb.addEventListener("change", syncRowStyle);
-        }
-        /* Run once to reflect server-returned value */
-        syncRowStyle();
-
-        /* Style the hidden delete checkbox as a link via its label */
-        if (deleteCb) {
             deleteCb.style.display = "none";
         }
+        syncRowStyle();
     });
 
-    {% if closure_form %}
-    /* ── Closure fin-bar readiness ── */
-    var closureNotesTextarea = document.getElementById("{{ closure_form.closure_notes.id_for_label }}");
-    var openModalBtn         = document.getElementById("closure-open-modal-btn");
-    var finalizeBtn          = document.getElementById("closure-finalize-btn");
-    var readyNotesEl         = document.getElementById("closure-ready-notes");
-    var closureForm          = document.getElementById("closure-form");
-    var confirmBtn           = document.getElementById("closure-confirm-btn");
+    /* ── Wizard navigation ─────────────────────────────────── */
+    var STEPS = ["track", "close"];
+    var currentStep = "track";
+    var sections = {};
+    var rail = {};
+    STEPS.forEach(function (s) {
+        sections[s] = document.querySelector('[data-completion-step="' + s + '"]');
+    });
+    document.querySelectorAll("[data-completion-rail]").forEach(function (b) {
+        rail[b.dataset.completionRail] = b;
+    });
+    var backBtn = document.getElementById("cmp-back-btn");
+    var nextBtn = document.getElementById("cmp-next-btn");
+    var finalizeBtn = document.getElementById("cmp-finalize-btn");
+    var errorBox = document.getElementById("cmp-step-error");
 
+    var closureForm = document.getElementById("closure-form");
+    var closureNotes = closureForm ? closureForm.querySelector("textarea[name$='closure_notes']") : null;
     var closureModalEl = document.getElementById("closureConfirmModal");
-    var closureModal   = closureModalEl ? new bootstrap.Modal(closureModalEl) : null;
+    var confirmBtn = document.getElementById("closure-confirm-btn");
 
-    function setCheck(el, met) {
-        if (!el) return;
-        var icon = el.querySelector(".rg-cws-fin-bar__check-icon");
-        if (met) {
-            el.classList.add("is-met");
-            if (icon) { icon.classList.replace("bi-circle", "bi-check-circle-fill"); }
-        } else {
-            el.classList.remove("is-met");
-            if (icon) { icon.classList.replace("bi-check-circle-fill", "bi-circle"); }
-        }
+    var step2Available = !!closureForm;
+
+    function showError(msg, field) {
+        if (errorBox) { errorBox.textContent = msg; errorBox.hidden = false; }
+        if (field && field.focus) try { field.focus({ preventScroll: false }); } catch (e) { field.focus(); }
+    }
+    function clearError() { if (errorBox) { errorBox.hidden = true; errorBox.textContent = ""; } }
+
+    function renderStep() {
+        var idx = STEPS.indexOf(currentStep);
+        STEPS.forEach(function (s, i) {
+            if (sections[s]) sections[s].hidden = s !== currentStep;
+            if (rail[s]) {
+                rail[s].classList.toggle("is-current", s === currentStep);
+                rail[s].classList.toggle("is-done", i < idx);
+                rail[s].setAttribute("aria-current", s === currentStep ? "step" : "false");
+            }
+        });
+        if (backBtn) backBtn.hidden = idx === 0;
+        if (nextBtn) nextBtn.hidden = idx === STEPS.length - 1 || !step2Available;
+        if (finalizeBtn) finalizeBtn.hidden = idx !== STEPS.length - 1;
+        clearError();
+        if (sections[currentStep]) sections[currentStep].scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
-    function checkClosureReadiness() {
-        var hasNotes = closureNotesTextarea &&
-                       closureNotesTextarea.value.trim().length > 0;
-        setCheck(readyNotesEl, hasNotes);
-        if (openModalBtn) { openModalBtn.disabled = !hasNotes; }
-        if (finalizeBtn)  { finalizeBtn.disabled  = !hasNotes; }
+    function goToStep(name) {
+        if (name === "close" && !step2Available) return; // rail tile disabled
+        currentStep = name;
+        renderStep();
     }
 
-    if (closureNotesTextarea) {
-        closureNotesTextarea.addEventListener("input", checkClosureReadiness);
-    }
-    checkClosureReadiness();
-
-    function openClosureModal() {
-        if (closureModal) { closureModal.show(); }
-    }
-
-    if (openModalBtn) { openModalBtn.addEventListener("click", openClosureModal); }
-    if (finalizeBtn)  { finalizeBtn.addEventListener("click",  openClosureModal); }
-
-    if (confirmBtn && closureForm) {
-        confirmBtn.addEventListener("click", function () {
-            closureForm.submit();
+    if (nextBtn) {
+        nextBtn.addEventListener("click", function () {
+            if (!step2Available) return;
+            currentStep = "close";
+            renderStep();
         });
     }
-    {% endif %}
+    if (backBtn) {
+        backBtn.addEventListener("click", function () {
+            currentStep = "track";
+            renderStep();
+        });
+    }
+    Object.keys(rail).forEach(function (name) {
+        rail[name].addEventListener("click", function (e) {
+            if (rail[name].classList.contains("is-disabled")) { e.preventDefault(); return; }
+            goToStep(name);
+        });
+    });
 
+    if (finalizeBtn) {
+        finalizeBtn.addEventListener("click", function () {
+            if (!closureNotes || closureNotes.value.trim() === "") {
+                showError("Add closure notes before you close and archive the case.", closureNotes);
+                return;
+            }
+            if (closureModalEl && window.bootstrap) bootstrap.Modal.getOrCreateInstance(closureModalEl).show();
+        });
+    }
+    if (confirmBtn && closureForm) {
+        confirmBtn.addEventListener("click", function () { closureForm.submit(); });
+    }
+
+    if (closureNotes) closureNotes.addEventListener("input", clearError);
+
+    /* On reload with server-side error in closure form, jump to Step 2. */
+    var startStep = "track";
+    if (sections["close"] && sections["close"].querySelector(".invalid-feedback")) {
+        startStep = "close";
+    }
+    currentStep = startStep;
+    renderStep();
 })();
 </script>
-

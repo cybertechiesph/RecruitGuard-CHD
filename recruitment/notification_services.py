@@ -1,15 +1,113 @@
+from datetime import timedelta
+
 from django.conf import settings
 from django.core.mail import send_mail
 from django.db import transaction
+from django.template.loader import render_to_string
 from django.utils import timezone
 
-from .models import AuditLog, NotificationLog, RecruitmentApplication, RecruitmentCase, RecruitmentUser
+from .models import (
+    AuditLog,
+    Notification,
+    NotificationLog,
+    RecruitmentApplication,
+    RecruitmentCase,
+    RecruitmentUser,
+)
 
 
 NOTIFICATION_MANAGER_ROLES = {
     RecruitmentUser.Role.SECRETARIAT,
     RecruitmentUser.Role.HRM_CHIEF,
 }
+IN_APP_NOTIFICATION_RETENTION_DAYS = 90
+
+
+def _truncate(value, limit):
+    return (value or "").strip()[:limit]
+
+
+def create_in_app_notification(
+    *,
+    recipient,
+    kind,
+    title,
+    body="",
+    related_url="",
+    application=None,
+):
+    if not recipient or not getattr(recipient, "is_active", False):
+        return None
+    return Notification.objects.create(
+        recipient=recipient,
+        kind=kind,
+        title=_truncate(title, 200),
+        body=_truncate(body, 400),
+        related_url=_truncate(related_url, 400),
+        application=application,
+    )
+
+
+def create_in_app_notifications(
+    recipients,
+    *,
+    kind,
+    title,
+    body="",
+    related_url="",
+    application=None,
+):
+    notifications = []
+    seen_recipient_ids = set()
+    for recipient in recipients:
+        if not recipient or recipient.id in seen_recipient_ids:
+            continue
+        seen_recipient_ids.add(recipient.id)
+        notification = create_in_app_notification(
+            recipient=recipient,
+            kind=kind,
+            title=title,
+            body=body,
+            related_url=related_url,
+            application=application,
+        )
+        if notification is not None:
+            notifications.append(notification)
+    return notifications
+
+
+def get_recent_notifications(user, limit=10):
+    return Notification.objects.select_related("application").filter(
+        recipient=user,
+    ).order_by("-created_at")[:limit]
+
+
+def get_unread_count(user):
+    return Notification.objects.filter(recipient=user, read_at__isnull=True).count()
+
+
+def mark_notification_read(notification_id, user):
+    notification = Notification.objects.select_related("application").get(
+        pk=notification_id,
+        recipient=user,
+    )
+    if notification.read_at is None:
+        notification.read_at = timezone.now()
+        notification.save(update_fields=["read_at", "updated_at"])
+    return notification
+
+
+def mark_all_notifications_read(user):
+    now = timezone.now()
+    return Notification.objects.filter(
+        recipient=user,
+        read_at__isnull=True,
+    ).update(read_at=now, updated_at=now)
+
+
+def purge_old_notifications(days=IN_APP_NOTIFICATION_RETENTION_DAYS):
+    cutoff = timezone.now() - timedelta(days=days)
+    return Notification.objects.filter(created_at__lt=cutoff).delete()
 
 
 def user_can_send_requirement_checklist_notification(user, application):
@@ -66,6 +164,12 @@ def _format_deadline(deadline):
     if not deadline:
         return ""
     return deadline.strftime("%B %d, %Y")
+
+
+def _format_schedule(value):
+    if not value:
+        return ""
+    return timezone.localtime(value).strftime("%B %d, %Y at %I:%M %p")
 
 
 def _record_notification_audit(application, actor, action, description, metadata):
@@ -137,6 +241,87 @@ def _build_non_selected_notification(application):
                 "Thank you for your interest in this recruitment opportunity.",
             ]
         ),
+    )
+
+
+def _build_application_returned_to_applicant_notification(application, workflow_remarks=""):
+    lines = [
+        f"Dear {application.applicant_display_name},",
+        "",
+        (
+            f"Your application for {application.position.title} "
+            f"under {application.position.get_branch_display()} recruitment was returned for your action."
+        ),
+        f"Application ID: {application.reference_number}",
+        f"Current status: {application.get_status_display()}",
+    ]
+    remarks = (workflow_remarks or "").strip()
+    if remarks:
+        lines.extend(["", "Reason or remarks:", remarks])
+    lines.extend(
+        [
+            "",
+            "Please check your application status and follow the instructions from the recruitment office.",
+            "This notice was sent through RecruitGuard-CHD.",
+        ]
+    )
+    return (
+        f"RecruitGuard-CHD application returned: {application.position.title}",
+        "\n".join(lines),
+    )
+
+
+def _build_interview_session_scheduled_notification(application, interview_session, recipient):
+    recipient_name = recipient.get_full_name() or recipient.username
+    lines = [
+        f"Dear {recipient_name},",
+        "",
+        "An interview session has been scheduled and is ready for panel rating.",
+        f"Applicant: {application.applicant_display_name}",
+        f"Position: {application.position.title}",
+        f"Application ID: {application.reference_number}",
+        f"Schedule: {_format_schedule(interview_session.scheduled_for)}",
+        f"Location / medium: {interview_session.location}",
+    ]
+    if interview_session.session_notes:
+        lines.extend(["", "Session notes:", interview_session.session_notes.strip()])
+    lines.extend(
+        [
+            "",
+            "Please sign in to RecruitGuard-CHD to review the case and submit your interview rating.",
+        ]
+    )
+    return (
+        f"RecruitGuard-CHD interview scheduled: {application.position.title}",
+        "\n".join(lines),
+    )
+
+
+def _build_document_resubmission_request_notification(
+    application,
+    document_reviews,
+    workflow_remarks="",
+):
+    requested_documents = [
+        {
+            "document_key": review.document_key,
+            "requirement_title": review.requirement_title,
+            "remarks": review.remarks,
+        }
+        for review in document_reviews
+    ]
+    body = render_to_string(
+        "email/document_resubmission_request.txt",
+        {
+            "application": application,
+            "requested_documents": requested_documents,
+            "workflow_remarks": (workflow_remarks or "").strip(),
+        },
+    ).strip()
+    return (
+        f"RecruitGuard-CHD document resubmission needed: {application.position.title}",
+        body,
+        requested_documents,
     )
 
 
@@ -268,8 +453,10 @@ def queue_notification(
     subject,
     body,
     metadata=None,
+    recipient_name=None,
+    recipient_email=None,
 ):
-    recipient_email = _recipient_email(application)
+    resolved_recipient_email = (recipient_email or _recipient_email(application) or "").strip().lower()
     notification = NotificationLog.objects.create(
         application=application,
         recruitment_case=getattr(application, "case", None),
@@ -279,17 +466,17 @@ def queue_notification(
         delivery_channel=NotificationLog.DeliveryChannel.EMAIL,
         delivery_status=NotificationLog.DeliveryStatus.PENDING,
         related_status=application.status,
-        recipient_name=_recipient_name(application),
-        recipient_email=recipient_email or "missing-email@invalid.local",
+        recipient_name=recipient_name or _recipient_name(application),
+        recipient_email=resolved_recipient_email or "missing-email@invalid.local",
         subject=subject,
         body=body,
         metadata=metadata or {},
     )
 
-    if not recipient_email:
+    if not resolved_recipient_email:
         return _mark_notification_failed(
             notification,
-            "No applicant email address is available for this application.",
+            "No recipient email address is available for this notification.",
         )
 
     transaction.on_commit(lambda: _deliver_notification(notification.id))
@@ -340,6 +527,100 @@ def queue_non_selected_applicant_notification(application, actor=None):
             "reference_number": application.reference_number,
             "status": application.status,
             "branch": application.branch,
+        },
+    )
+
+
+def queue_application_returned_to_applicant_notification(
+    application,
+    actor=None,
+    *,
+    workflow_remarks="",
+):
+    subject, body = _build_application_returned_to_applicant_notification(
+        application,
+        workflow_remarks=workflow_remarks,
+    )
+    return queue_notification(
+        application,
+        notification_type=NotificationLog.NotificationType.APPLICATION_RETURNED_TO_APPLICANT,
+        actor=actor,
+        subject=subject,
+        body=body,
+        metadata={
+            "reference_number": application.reference_number,
+            "status": application.status,
+            "branch": application.branch,
+            "workflow_remarks": (workflow_remarks or "").strip(),
+        },
+    )
+
+
+def queue_interview_session_scheduled_notifications(
+    application,
+    interview_session,
+    recipients,
+    actor=None,
+):
+    notifications = []
+    for recipient in recipients:
+        subject, body = _build_interview_session_scheduled_notification(
+            application,
+            interview_session,
+            recipient,
+        )
+        notifications.append(
+            queue_notification(
+                application,
+                notification_type=NotificationLog.NotificationType.INTERVIEW_SESSION_SCHEDULED,
+                actor=actor,
+                subject=subject,
+                body=body,
+                recipient_name=recipient.get_full_name() or recipient.username,
+                recipient_email=recipient.email,
+                metadata={
+                    "reference_number": application.reference_number,
+                    "status": application.status,
+                    "branch": application.branch,
+                    "interview_session_id": interview_session.id,
+                    "scheduled_for": interview_session.scheduled_for.isoformat(),
+                    "location": interview_session.location,
+                    "recipient_user_id": recipient.id,
+                    "recipient_role": recipient.role,
+                },
+            )
+        )
+    return notifications
+
+
+def queue_document_resubmission_request_notification(
+    application,
+    actor=None,
+    *,
+    document_reviews,
+    workflow_remarks="",
+):
+    document_reviews = list(document_reviews or [])
+    if not document_reviews:
+        raise ValueError("At least one document review row is required for a resubmission request.")
+    subject, body, requested_documents = _build_document_resubmission_request_notification(
+        application,
+        document_reviews,
+        workflow_remarks=workflow_remarks,
+    )
+    return queue_notification(
+        application,
+        notification_type=NotificationLog.NotificationType.DOCUMENT_RESUBMISSION_REQUEST,
+        actor=actor,
+        subject=subject,
+        body=body,
+        metadata={
+            "reference_number": application.reference_number,
+            "status": application.status,
+            "branch": application.branch,
+            "document_keys": [item["document_key"] for item in requested_documents],
+            "screening_document_review_ids": [review.id for review in document_reviews],
+            "workflow_remarks": (workflow_remarks or "").strip(),
         },
     )
 

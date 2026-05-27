@@ -85,6 +85,40 @@
             </div>
             {% endif %}
 
+            {% if application.branch == "plantilla" %}
+            {% if current_deliberation_record.comparative_assessment_report %}
+            <div class="rg-exam-locked-field">
+                <div class="rg-exam-locked-field__label">CAR Draft Reviewed</div>
+                <div class="rg-exam-locked-field__value">
+                    Version {{ current_deliberation_record.comparative_assessment_report.version_number }}
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="rg-exam-locked-field">
+                <div class="rg-exam-locked-field__label">HRMPSB Recommendation</div>
+                <div class="rg-exam-locked-field__value">
+                    {% if current_deliberation_record.recommendation %}
+                        {{ current_deliberation_record.recommendation }}
+                    {% else %}
+                        <span style="color:#9aa4af;font-style:italic;">Not recorded</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="rg-exam-locked-field">
+                <div class="rg-exam-locked-field__label">Quorum / Attendance</div>
+                <div class="rg-exam-locked-field__value">
+                    {{ current_deliberation_record.get_quorum_status_display|default:"Not recorded" }}
+                    {% if current_deliberation_record.attendance_notes %}
+                        <span style="font-size:0.8125rem;color:#5f6c78;margin-left:0.5rem;">
+                            - {{ current_deliberation_record.attendance_notes }}
+                        </span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
             <div class="rg-exam-locked-field">
                 <div class="rg-exam-locked-field__label">Deliberation Minutes</div>
                 <div class="rg-exam-locked-field__value">
@@ -120,9 +154,12 @@
                 {% if snap.latest_qualification_outcome %}
                 <div>
                     <span style="color:#9aa4af;font-weight:600;text-transform:uppercase;
-                                 font-size:0.68rem;letter-spacing:0.04em;">Screening</span>
+                                 font-size:0.68rem;letter-spacing:0.04em;">Document Review</span>
                     <span style="margin-left:0.35rem;font-weight:600;color:#374151;">
                         {{ snap.latest_qualification_outcome }}
+                        {% if snap.latest_document_review_score %}
+                            {{ snap.latest_document_review_score }}
+                        {% endif %}
                     </span>
                 </div>
                 {% endif %}
@@ -149,6 +186,15 @@
                                  font-size:0.68rem;letter-spacing:0.04em;">Interview Avg</span>
                     <span style="margin-left:0.35rem;font-weight:600;color:#374151;">
                         {{ snap.latest_interview_average }} / 100
+                    </span>
+                </div>
+                {% endif %}
+                {% if snap.preliminary_assessment_score %}
+                <div>
+                    <span style="color:#9aa4af;font-weight:600;text-transform:uppercase;
+                                 font-size:0.68rem;letter-spacing:0.04em;">Preliminary Score</span>
+                    <span style="margin-left:0.35rem;font-weight:600;color:#374151;">
+                        {{ snap.preliminary_assessment_score }} / 100
                     </span>
                 </div>
                 {% endif %}
@@ -180,6 +226,12 @@
                         </div>
                         <div class="rg-del-rating-row__role">
                             {{ rating.rated_by_role|role_label }}
+                            {% if rating.encoded_by_id and rating.encoded_by_id != rating.rated_by_id %}
+                                <br>
+                                <span style="font-size:0.72rem;color:#64748b;">
+                                    Encoded by {{ rating.encoded_by.get_full_name|default:rating.encoded_by.username }}
+                                </span>
+                            {% endif %}
                         </div>
                         {% if rating.rating_notes %}
                         <div class="rg-del-rating-row__notes">
@@ -251,11 +303,14 @@
                 <div class="rg-del-car-item__scores">
                     {% if item.qualification_outcome %}
                     <div class="rg-del-car-item__score-cell">
-                        <span class="rg-del-car-item__score-label">Screening</span>
+                        <span class="rg-del-car-item__score-label">Document Review</span>
                         <span class="rg-del-car-item__score-val">
                             <span class="rg-pill rg-pill--{{ item.qualification_outcome|status_theme }} rg-pill--sm">
                                 {{ item.qualification_outcome }}
                             </span>
+                            {% if item.document_review_score is not None %}
+                                {{ item.document_review_score }}
+                            {% endif %}
                         </span>
                     </div>
                     {% endif %}
@@ -280,10 +335,32 @@
                         <span class="rg-del-car-item__score-val">{{ item.interview_average_score }}</span>
                     </div>
                     {% endif %}
+                    {% if item.assessment_score %}
+                    <div class="rg-del-car-item__score-cell">
+                        <span class="rg-del-car-item__score-label">Preliminary Score</span>
+                        <span class="rg-del-car-item__score-val">{{ item.assessment_score }}</span>
+                    </div>
+                    {% endif %}
+                    {% if item.preliminary_rank_order %}
+                    <div class="rg-del-car-item__score-cell">
+                        <span class="rg-del-car-item__score-label">System Rank</span>
+                        <span class="rg-del-car-item__score-val">#{{ item.preliminary_rank_order }}</span>
+                    </div>
+                    {% endif %}
                 </div>
                 {% if item.decision_support_summary %}
                 <div class="rg-del-car-item__decision">
                     {{ item.decision_support_summary }}
+                </div>
+                {% endif %}
+                {% if item.recommendation %}
+                <div class="rg-del-car-item__decision">
+                    Recommendation: {{ item.recommendation }}
+                </div>
+                {% endif %}
+                {% if item.ranking_notes %}
+                <div class="rg-del-car-item__decision">
+                    Ranking note: {{ item.ranking_notes }}
                 </div>
                 {% endif %}
             </div>
@@ -336,13 +413,22 @@
         </svg>
         <div>
             <div style="font-size:0.875rem;font-weight:700;color:#111827;margin-bottom:0.2rem;">
-                Deliberation complete — case advancing
+                {% if application.branch == "plantilla" and not current_comparative_assessment_report.is_finalized %}
+                    HRMPSB endorsement complete
+                {% else %}
+                    Deliberation complete — case advancing
+                {% endif %}
             </div>
             <p style="font-size:0.8125rem;color:#5f6c78;margin:0;">
                 {% if application.branch == "plantilla" %}
+                    {% if current_comparative_assessment_report and current_comparative_assessment_report.is_finalized %}
                     The deliberation record and Comparative Assessment Report are finalized.
                     The case is advancing to the
                     <strong>Decision / Submission Packet</strong> step for Appointing Authority review.
+                    {% else %}
+                    HRMPSB endorsement is finalized. HRMS must finalize the Comparative Assessment Report
+                    before the case can advance to Appointing Authority review.
+                    {% endif %}
                 {% else %}
                     The deliberation record is finalized. This COS case is advancing toward
                     the <strong>Decision / Submission Packet</strong> step.

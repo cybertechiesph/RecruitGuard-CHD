@@ -23,17 +23,17 @@
 <div class="rg-istat-row">
     <div class="rg-istat">
         <span class="rg-istat__value">{{ entries|length }}</span>
-        <span class="rg-istat__label">Entries</span>
+        <span class="rg-istat__label">Total entries</span>
     </div>
     <div class="rg-istat-row__divider"></div>
     <div class="rg-istat">
-        <span class="rg-istat__value">Dual</span>
-        <span class="rg-istat__label">Branch</span>
+        <span class="rg-istat__value">{{ entry_active_count }}</span>
+        <span class="rg-istat__label">Active</span>
     </div>
     <div class="rg-istat-row__divider"></div>
     <div class="rg-istat">
-        <span class="rg-istat__value">Level-Based</span>
-        <span class="rg-istat__label">Assignment</span>
+        <span class="rg-istat__value">{{ entry_closing_soon_count }}</span>
+        <span class="rg-istat__label">Closing soon</span>
     </div>
 </div>
 
@@ -54,14 +54,14 @@
                         <th>Level</th>
                         <th>Status</th>
                         <th>Schedule</th>
-                        <th class="col-actions"></th>
+                        <th class="col-actions"><span class="visually-hidden">Actions</span></th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for entry in entries %}
                         <tr>
                             <td>
-                                <div style="font-family:'Courier New',monospace;font-size:0.78rem;font-weight:700;color:#5f6c78;">
+                                <div style="font-family:ui-monospace,SFMono-Regular,'Cascadia Mono',Consolas,Menlo,monospace;font-size:0.78rem;font-weight:700;color:#5f6c78;">
                                     {{ entry.job_code }}
                                 </div>
                                 <div style="font-size:0.8125rem;font-weight:600;color:#111827;margin-top:0.15rem;">
@@ -156,7 +156,7 @@
                                                 data-bs-target="#closeModal{{ entry.pk }}">
                                             Close
                                         </button>
-                                        {% include "internal_includes/modal_confirm.html" with modal_id=entry.pk|dom_id:"closeModal" variant="destructive" title="Close this recruitment entry?" body="Closing will stop accepting new applications for this entry. Existing cases in the workflow will not be affected." confirm_label="Close Entry" form_id=entry.pk|dom_id:"closeForm" %}
+                                        {% include "internal_includes/modal_confirm.html" with modal_id=entry.pk|dom_id:"closeModal" variant="destructive" title="Close this recruitment entry?" body="Closing will stop accepting new applications for this entry and, for Plantilla vacancies, marks the applicant pool ready for HRMPSB deliberation/CAR. Existing cases in the workflow will not be affected." confirm_label="Close Entry" form_id=entry.pk|dom_id:"closeForm" %}
                                     {% endif %}
                                 </div>
                             </td>

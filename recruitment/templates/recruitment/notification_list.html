@@ -1,0 +1,79 @@
+{% extends "internal_base.html" %}
+{% load recruitment_ui %}
+
+{% block internal_title %}Notifications{% endblock %}
+
+{% block breadcrumb %}
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<span class="rg-breadcrumb-current">Notifications</span>
+{% endblock %}
+
+{% block content %}
+<div class="rg-page-header">
+    <div>
+        <p class="rg-eyebrow">Notifications</p>
+        <h1 class="rg-page-title">Notifications</h1>
+        <p class="rg-page-subtitle">Updates about cases and applications assigned to you.</p>
+    </div>
+    {% if has_unread %}
+    <div class="rg-page-actions">
+        <form method="post" action="{% url 'notification-read-all' %}" class="d-inline">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{% url 'notification-list' %}">
+            <button type="submit" class="btn btn-outline-secondary btn-sm">Mark all as read</button>
+        </form>
+    </div>
+    {% endif %}
+</div>
+
+<div class="rg-istat-row" aria-label="Notifications summary">
+    <div class="rg-istat">
+        <span class="rg-istat__value">{{ notifications|length }}</span>
+        <span class="rg-istat__label">Recent</span>
+    </div>
+    <div class="rg-istat-row__divider"></div>
+    <div class="rg-istat">
+        <span class="rg-istat__value">{{ unread_count }}</span>
+        <span class="rg-istat__label">Unread</span>
+    </div>
+</div>
+
+<div class="rg-notif-page">
+    {% if notifications %}
+    <ul class="rg-notif-page__list" role="list">
+        {% for notification in notifications %}
+        <li class="rg-notif-page__item {% if not notification.read_at %}rg-notif-page__item--unread{% endif %}">
+            <form method="post" action="{% url 'notification-read' pk=notification.pk %}" class="rg-notif-page__form">
+                {% csrf_token %}
+                <button type="submit" class="rg-notif-page__row" aria-label="Open: {{ notification.title }}">
+                    <span class="rg-notif-page__dot" aria-hidden="true"></span>
+                    <span class="rg-notif-page__body">
+                        <span class="rg-notif-page__title">{{ notification.title }}</span>
+                        {% if notification.body %}
+                        <span class="rg-notif-page__text">{{ notification.body }}</span>
+                        {% endif %}
+                        <span class="rg-notif-page__meta">
+                            {% if not notification.read_at %}
+                                <span class="rg-pill rg-pill--info" style="font-size:0.65rem;min-height:1.4rem;padding:0.1rem 0.5rem;">New</span>
+                            {% else %}
+                                <span class="rg-notif-page__meta-tag">Read</span>
+                            {% endif %}
+                            <span class="rg-notif-page__meta-time">{{ notification.created_at|timesince }} ago</span>
+                        </span>
+                    </span>
+                </button>
+            </form>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <div class="rg-notif-page__empty">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="rg-notif-page__empty-icon">
+            <path fill="currentColor" d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+        </svg>
+        <h2 class="rg-notif-page__empty-title">You&rsquo;re all caught up.</h2>
+        <p class="rg-notif-page__empty-text">When something needs your attention &mdash; a case assignment, a returned application, or a scheduled interview &mdash; it will appear here.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -34,7 +34,7 @@ Current repository boundaries:
 - PostgreSQL is supported through environment variables, but SQLite is currently used automatically for local bootstrap if PostgreSQL settings are left blank
 - OTP and notification email flows require valid SMTP credentials in `.env`
 
-The automated test suite currently includes 158 Django tests covering identity, intake, routing, workflow, evaluation, evidence, notification, completion, decision, audit, and export paths.
+The automated test suite currently includes 202 Django tests covering identity, intake, routing, workflow, evaluation, evidence, notification, completion, decision, audit, export, and security-hardening paths.
 
 ## Locked stack
 
@@ -58,8 +58,9 @@ git clone https://github.com/strongestleugim/RecruitGuard-CHD.git
 cd RecruitGuard-CHD
 py -3 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
+python -m pip install --upgrade pip setuptools
 pip install -r requirements.txt
+pip install -r requirements-dev.txt
 Copy-Item .env.example .env
 ```
 
@@ -97,8 +98,9 @@ git clone https://github.com/strongestleugim/RecruitGuard-CHD.git
 cd RecruitGuard-CHD
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install --upgrade pip
+python -m pip install --upgrade pip setuptools
 pip install -r requirements.txt
+pip install -r requirements-dev.txt
 cp .env.example .env
 ```
 
@@ -112,6 +114,21 @@ python manage.py check
 python manage.py test recruitment
 python manage.py runserver
 ```
+
+## Security checks
+
+Development security checks are installed through `requirements-dev.txt`.
+
+```powershell
+python manage.py check --deploy
+python -m bandit -r config recruitment -x recruitment/migrations,recruitment/tests.py
+python -m pip_audit
+```
+
+For production-like deployment checks, set `DJANGO_DEBUG=False` and provide
+production secrets and host values before running `python manage.py check --deploy`.
+OWASP ZAP and Burp Suite Community should be run only against the approved staging
+environment with dummy or synthetic data.
 
 ## How to run the server after first-time setup
 

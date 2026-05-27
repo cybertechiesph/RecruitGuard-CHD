@@ -3,7 +3,57 @@
 
 
 {% if recruitment_case and recruitment_case.current_stage == "closed" %}
-    {% if latest_final_decision %}
+    {% if latest_final_selection %}
+        {% if application.pk == latest_final_selection.selected_application_id %}
+            <div class="rg-cmp-closed-banner rg-cmp-closed-banner--selected">
+                <span class="rg-cmp-closed-banner__icon">
+                    <i class="bi bi-patch-check-fill"></i>
+                </span>
+                <div class="rg-cmp-closed-banner__body">
+                    <p class="rg-cmp-closed-banner__title">
+                        Case Closed &mdash; Applicant Selected from CAR
+                    </p>
+                    <p class="rg-cmp-closed-banner__meta">
+                        {% if recruitment_case.closed_at %}
+                            Closed {{ recruitment_case.closed_at|date:"N j, Y" }}.
+                        {% endif %}
+                        Final selection recorded
+                        {% if latest_final_selection.decided_at %}
+                            {{ latest_final_selection.decided_at|date:"N j, Y" }}
+                        {% endif %}
+                        {% if latest_final_selection.decided_by %}
+                            by {{ latest_final_selection.decided_by }}.
+                        {% endif %}
+                    </p>
+                    <span class="rg-cmp-closed-banner__audit-note">
+                        <i class="bi bi-shield-lock-fill"></i>
+                        Fully archived &amp; audit-logged
+                    </span>
+                </div>
+            </div>
+        {% else %}
+            <div class="rg-cmp-closed-banner rg-cmp-closed-banner--not-selected">
+                <span class="rg-cmp-closed-banner__icon">
+                    <i class="bi bi-x-circle-fill"></i>
+                </span>
+                <div class="rg-cmp-closed-banner__body">
+                    <p class="rg-cmp-closed-banner__title">
+                        Case Closed &mdash; Not Selected from CAR
+                    </p>
+                    <p class="rg-cmp-closed-banner__meta">
+                        {% if recruitment_case.closed_at %}
+                            Closed {{ recruitment_case.closed_at|date:"N j, Y" }}.
+                        {% endif %}
+                        The Appointing Authority selected another applicant from the finalized CAR.
+                    </p>
+                    <span class="rg-cmp-closed-banner__audit-note">
+                        <i class="bi bi-shield-lock-fill"></i>
+                        Fully archived &amp; audit-logged
+                    </span>
+                </div>
+            </div>
+        {% endif %}
+    {% elif latest_final_decision %}
         {% if latest_final_decision.decision_outcome == "selected" %}
             <div class="rg-cmp-closed-banner rg-cmp-closed-banner--selected">
                 <span class="rg-cmp-closed-banner__icon">
@@ -100,7 +150,78 @@
 {% endif %}
 
 
-{% if latest_final_decision %}
+{% if latest_final_selection %}
+    <div class="rg-icard">
+        <div class="rg-icard__header">
+            <div>
+                <h3 class="rg-icard__title">CAR Final Selection Record</h3>
+                <p class="rg-icard__subtitle">
+                    Selection recorded from the finalized Comparative Assessment Report.
+                </p>
+            </div>
+            <i class="bi bi-lock-fill" style="color:var(--rg-primary);font-size:1rem;"></i>
+        </div>
+
+        <div class="rg-pkt-rows">
+            <div class="rg-pkt-row">
+                <span class="rg-pkt-row__label">Outcome</span>
+                <span class="rg-pkt-row__value">
+                    {% if application.pk == latest_final_selection.selected_application_id %}
+                        <span class="rg-dec-outcome-pill rg-dec-outcome-pill--selected">
+                            <i class="bi bi-check-circle-fill"></i>Selected
+                        </span>
+                    {% else %}
+                        <span class="rg-dec-outcome-pill rg-dec-outcome-pill--not-selected">
+                            <i class="bi bi-x-circle-fill"></i>Not Selected
+                        </span>
+                    {% endif %}
+                </span>
+            </div>
+            <div class="rg-pkt-row">
+                <span class="rg-pkt-row__label">Selected Appointee</span>
+                <span class="rg-pkt-row__value">
+                    {{ latest_final_selection.selected_application.applicant_display_name }}
+                </span>
+            </div>
+            <div class="rg-pkt-row">
+                <span class="rg-pkt-row__label">Selected Rank</span>
+                <span class="rg-pkt-row__value">#{{ latest_final_selection.selected_item.rank_order }}</span>
+            </div>
+            <div class="rg-pkt-row">
+                <span class="rg-pkt-row__label">CAR Version</span>
+                <span class="rg-pkt-row__value">v{{ latest_final_selection.comparative_assessment_report.version_number }}</span>
+            </div>
+            <div class="rg-pkt-row">
+                <span class="rg-pkt-row__label">Decided</span>
+                <span class="rg-pkt-row__value">
+                    {{ latest_final_selection.decided_at|date:"N j, Y, g:i a" }}
+                </span>
+            </div>
+            <div class="rg-pkt-row">
+                <span class="rg-pkt-row__label">Decided By</span>
+                <span class="rg-pkt-row__value">
+                    {{ latest_final_selection.decided_by }}
+                    {% if latest_final_selection.decided_by_role %}
+                        <span class="text-muted" style="font-size:0.78rem;">
+                            ({{ latest_final_selection.decided_by_role }})
+                        </span>
+                    {% endif %}
+                </span>
+            </div>
+            {% if latest_final_selection.decision_notes %}
+                <div class="rg-pkt-row" style="align-items:flex-start;">
+                    <span class="rg-pkt-row__label" style="padding-top:0.1rem;">
+                        Notes
+                    </span>
+                    <span class="rg-pkt-row__value"
+                          style="white-space:pre-line;color:#374151;">
+                        {{ latest_final_selection.decision_notes }}
+                    </span>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+{% elif latest_final_decision %}
     <div class="rg-icard">
         <div class="rg-icard__header">
             <div>

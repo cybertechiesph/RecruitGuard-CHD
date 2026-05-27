@@ -1,0 +1,462 @@
+{% load recruitment_ui %}
+
+{# ── Previous step summary ───────────────────────────────────── #}
+{% include "internal_includes/interview_previous_step.html" %}
+
+{# ── Session info (read-only for raters) ────────────────────── #}
+{% if current_interview_session %}
+<div class="rg-icard rg-int-session-readout">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">Interview session</h3>
+            <p class="rg-icard__subtitle">When and where the interview will be held.</p>
+        </div>
+        {% if current_interview_session.is_finalized %}
+            <span class="rg-pill rg-pill--neutral rg-pill--sm rg-int-pill-lock">
+                <svg width="9" height="10" viewBox="0 0 12 14" fill="none" aria-hidden="true">
+                    <rect x="2" y="6" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+                    <path d="M4 6V4.5a2 2 0 0 1 4 0V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                Locked
+            </span>
+        {% endif %}
+    </div>
+    <div class="rg-int-readout-grid">
+        <div>
+            <span class="rg-int-readout-grid__label">Date &amp; time</span>
+            <strong>
+                {% if current_interview_session.scheduled_for %}
+                    {{ current_interview_session.scheduled_for|date:"M d, Y" }}
+                    at {{ current_interview_session.scheduled_for|date:"H:i" }}
+                {% else %}
+                    <span class="rg-int-prev-step__empty">Not set</span>
+                {% endif %}
+            </strong>
+        </div>
+        <div>
+            <span class="rg-int-readout-grid__label">Where</span>
+            <strong>{{ current_interview_session.location|default:"—" }}</strong>
+        </div>
+    </div>
+    {% if current_interview_session.session_notes %}
+        <p class="rg-int-readout-notes">{{ current_interview_session.session_notes }}</p>
+    {% endif %}
+</div>
+{% endif %}
+
+{# ── State-specific body ─────────────────────────────────────── #}
+
+{% if interview_rating_requires_session %}
+<div class="rg-icard rg-int-banner rg-int-banner--info">
+    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+        <circle cx="10" cy="10" r="8.5"/>
+        <path d="M10 6v4.5" stroke-linecap="round"/>
+        <circle cx="10" cy="13" r="0.8" fill="currentColor"/>
+    </svg>
+    <div>
+        <div class="rg-int-banner__title">Schedule the interview first</div>
+        <p>The session manager needs to set the date and location before you can submit a rating.</p>
+    </div>
+</div>
+
+{% elif interview_rating_locked %}
+<div class="rg-icard">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">Your rating</h3>
+            <p class="rg-icard__subtitle">The interview session has been finalized.</p>
+        </div>
+        <span class="rg-pill rg-pill--neutral rg-pill--sm rg-int-pill-lock">
+            <svg width="9" height="10" viewBox="0 0 12 14" fill="none" aria-hidden="true">
+                <rect x="2" y="6" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M4 6V4.5a2 2 0 0 1 4 0V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            Locked
+        </span>
+    </div>
+    {% if current_user_interview_rating %}
+        <div class="rg-int-submitted">
+            <div class="rg-int-submitted__dial">
+                <div class="rg-int-submitted__score">{{ current_user_interview_rating.rating_score }}</div>
+                <div class="rg-int-submitted__denom">/ 100</div>
+            </div>
+            <div class="rg-int-submitted__body">
+                <div class="rg-int-submitted__heading">Rating recorded</div>
+                {% if current_user_interview_rating.rating_notes %}
+                    <p><strong>Notes:</strong> {{ current_user_interview_rating.rating_notes }}</p>
+                {% endif %}
+                {% if current_user_interview_rating.justification %}
+                    <p><strong>Justification:</strong> {{ current_user_interview_rating.justification }}</p>
+                {% endif %}
+                <p class="rg-int-submitted__notice">
+                    Ratings can no longer be changed. Use an authorized reopen if a correction is required.
+                </p>
+            </div>
+        </div>
+    {% else %}
+        <p class="rg-int-prev-step__empty" style="margin:0;">
+            No rating was recorded for you before the session was finalized.
+        </p>
+    {% endif %}
+</div>
+
+{% elif interview_rating_form %}
+<div class="rg-icard" id="int-rating-section">
+    {% if interview_rating_is_support_encoding %}
+        <div class="rg-int-encoding-banner">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+                <path d="M2 13l2-5 5-5 3 3-5 5-5 2z"/><path d="M9 3l3 3"/>
+            </svg>
+            <span>
+                <strong>Encoding mode.</strong>
+                You are recording a paper rating on behalf of an HRMPSB member.
+                Pick the rater below.
+            </span>
+        </div>
+    {% endif %}
+
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">
+                {% if interview_rating_is_support_encoding %}
+                    Encode a panel rating
+                {% elif current_user_interview_rating %}
+                    Your submitted rating
+                {% else %}
+                    Submit your rating
+                {% endif %}
+            </h3>
+            <p class="rg-icard__subtitle">
+                {% if interview_rating_is_support_encoding %}
+                    The HRMPSB member you select stays the rater of record; you are saved as the encoder.
+                {% elif current_user_interview_rating %}
+                    Your rating is on record. You can revise it until the session is finalized.
+                {% else %}
+                    Give a score from 0 to 100. Add a justification when the score is below 75 or above 98.
+                {% endif %}
+            </p>
+        </div>
+    </div>
+
+    {% if current_user_interview_rating %}
+        {# Submitted state card, with reveal-to-revise. #}
+        <div class="rg-int-submitted" id="int-submitted-card">
+            <div class="rg-int-submitted__dial">
+                <div class="rg-int-submitted__score">{{ current_user_interview_rating.rating_score }}</div>
+                <div class="rg-int-submitted__denom">/ 100</div>
+            </div>
+            <div class="rg-int-submitted__body">
+                <div class="rg-int-submitted__heading">Rating submitted</div>
+                {% if current_user_interview_rating.rating_notes %}
+                    <p><strong>Notes:</strong> {{ current_user_interview_rating.rating_notes }}</p>
+                {% endif %}
+                {% if current_user_interview_rating.justification %}
+                    <p><strong>Justification:</strong> {{ current_user_interview_rating.justification }}</p>
+                {% endif %}
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="int-revise-toggle">
+                    Revise rating
+                </button>
+            </div>
+        </div>
+    {% endif %}
+
+    <form method="post"
+          action="{% url 'interview-rating' application.pk %}"
+          id="int-rating-form"
+          class="{% if current_user_interview_rating %}rg-int-revise-form{% endif %}"
+          {% if current_user_interview_rating %}hidden{% endif %}
+          novalidate>
+        {% csrf_token %}
+
+        {% if interview_rating_is_support_encoding %}
+        <div class="rg-field">
+            <label class="form-label" for="{{ interview_rating_form.rated_by.id_for_label }}">
+                {{ interview_rating_form.rated_by.label }}
+                <span class="text-danger" aria-hidden="true">*</span>
+            </label>
+            {{ interview_rating_form.rated_by }}
+            {% if interview_rating_form.rated_by.help_text %}
+                <div class="form-text">{{ interview_rating_form.rated_by.help_text }}</div>
+            {% endif %}
+            {% for error in interview_rating_form.rated_by.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+        {% else %}
+            {{ interview_rating_form.rated_by }}
+        {% endif %}
+
+        <div class="rg-int-score">
+            <div class="rg-int-score__field">
+                <label class="form-label" for="{{ interview_rating_form.rating_score.id_for_label }}">
+                    {{ interview_rating_form.rating_score.label }}
+                    <span class="text-danger" aria-hidden="true">*</span>
+                    <span class="rg-int-score__range">0 to 100</span>
+                </label>
+                {{ interview_rating_form.rating_score }}
+                {% for error in interview_rating_form.rating_score.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </div>
+            <div class="rg-int-score__dial" id="int-score-dial">
+                <div class="rg-int-score__val" id="int-score-val">—</div>
+                <div class="rg-int-score__label" id="int-score-dial-label">score</div>
+            </div>
+        </div>
+
+        <div class="rg-int-threshold" id="int-threshold-notice" hidden>
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <path d="M8 2L14.5 13H1.5L8 2z" stroke-linejoin="round"/>
+                <path d="M8 6.5v3" stroke-linecap="round"/>
+                <circle cx="8" cy="11" r="0.6" fill="currentColor"/>
+            </svg>
+            A score below 75 or above 98 needs a written justification.
+        </div>
+
+        <div class="rg-field">
+            <label class="form-label" for="{{ interview_rating_form.rating_notes.id_for_label }}">
+                {{ interview_rating_form.rating_notes.label }}
+                <span class="rg-int-optional">Optional</span>
+            </label>
+            {{ interview_rating_form.rating_notes }}
+            {% if interview_rating_form.rating_notes.help_text %}
+                <div class="form-text">{{ interview_rating_form.rating_notes.help_text|safe }}</div>
+            {% endif %}
+            {% for error in interview_rating_form.rating_notes.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+
+        <div class="rg-field" id="int-justification-group" hidden>
+            <label class="form-label" for="{{ interview_rating_form.justification.id_for_label }}">
+                {{ interview_rating_form.justification.label }}
+                <span class="text-danger" aria-hidden="true">*</span>
+            </label>
+            {{ interview_rating_form.justification }}
+            <div class="form-text">Required when the score is below 75 or above 98.</div>
+            {% for error in interview_rating_form.justification.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+    </form>
+</div>
+{% endif %}
+
+{# ── Sticky action bar (rater) ─────────────────────────────── #}
+{% if interview_rating_form %}
+<div class="rg-int-actionbar">
+    <div class="rg-int-actionbar__msg" id="int-rating-error" role="alert" hidden></div>
+    <div class="rg-int-actionbar__btns">
+        <span class="rg-int-actionbar__spacer"></span>
+        <button type="button" class="btn btn-rg-primary" id="int-submit-rating-btn">
+            {% if current_user_interview_rating %}
+                Revise &amp; resubmit
+            {% elif interview_rating_is_support_encoding %}
+                Encode rating
+            {% else %}
+                Submit rating
+            {% endif %}
+        </button>
+    </div>
+</div>
+{% endif %}
+
+{# ── Confirm modal ────────────────────────────────────────── #}
+{% if interview_rating_form %}
+<div class="modal fade" id="modal-int-submit-rating" tabindex="-1"
+     aria-labelledby="modal-int-submit-rating-label" aria-modal="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:460px;">
+        <div class="modal-content" style="border-radius:0.6rem;overflow:hidden;">
+            <div class="modal-header" style="background:var(--rg-primary);border-bottom:none;padding:1rem 1.25rem;">
+                <h5 class="modal-title" id="modal-int-submit-rating-label" style="font-size:0.95rem;font-weight:700;color:#fff;margin:0;">
+                    {% if interview_rating_is_support_encoding %}
+                        Encode this rating?
+                    {% elif current_user_interview_rating %}
+                        Replace your rating with this one?
+                    {% else %}
+                        Submit your rating?
+                    {% endif %}
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="padding:1.25rem;font-size:0.83rem;color:#374151;line-height:1.6;">
+                <p class="mb-2">
+                    {% if interview_rating_is_support_encoding %}
+                        Recording a paper rating on behalf of an HRMPSB member. The selected member is the rater of record; you are saved as the encoder.
+                    {% elif current_user_interview_rating %}
+                        Your previously submitted score will be replaced. You can keep revising until the session is finalized.
+                    {% else %}
+                        Once submitted, your rating is on record. You can revise it until the session manager finalizes the session.
+                    {% endif %}
+                </p>
+                <div class="rg-scr-modal-summary">
+                    <div class="rg-scr-modal-summary__row">
+                        <span class="rg-scr-modal-summary__label">Applicant</span>
+                        <span class="rg-scr-modal-summary__value">{{ application.applicant_display_name }}</span>
+                    </div>
+                    <div class="rg-scr-modal-summary__row">
+                        <span class="rg-scr-modal-summary__label">Your score</span>
+                        <span class="rg-scr-modal-summary__value" id="modal-int-rating-score">—</span>
+                    </div>
+                </div>
+                <p class="rg-int-modal-privacy">
+                    Your score stays private until Deliberation / CAR opens. Other panel members cannot see it before then.
+                </p>
+            </div>
+            <div class="modal-footer" style="border-top:1px solid #e2e8f0;padding:0.875rem 1.25rem;display:flex;justify-content:flex-end;gap:0.625rem;">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">
+                    Keep editing
+                </button>
+                <button type="button" class="btn-rg-finalize" id="modal-int-rating-confirm">
+                    {% if interview_rating_is_support_encoding %}
+                        Confirm encoding
+                    {% elif current_user_interview_rating %}
+                        Confirm revision
+                    {% else %}
+                        Submit rating
+                    {% endif %}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+(function () {
+    "use strict";
+    var form = document.getElementById("int-rating-form");
+    if (!form) return;
+
+    var scoreInput = document.getElementById("id_rating_score");
+    var justInput = document.getElementById("id_justification");
+    var ratedByInput = form.querySelector("[name='rated_by']");
+    var isEncoding = {% if interview_rating_is_support_encoding %}true{% else %}false{% endif %};
+
+    var dial = document.getElementById("int-score-dial");
+    var dialVal = document.getElementById("int-score-val");
+    var dialLabel = document.getElementById("int-score-dial-label");
+    var threshold = document.getElementById("int-threshold-notice");
+    var justGroup = document.getElementById("int-justification-group");
+    var submitBtn = document.getElementById("int-submit-rating-btn");
+    var actionError = document.getElementById("int-rating-error");
+    var modalEl = document.getElementById("modal-int-submit-rating");
+    var modalScoreEl = document.getElementById("modal-int-rating-score");
+    var confirmBtn = document.getElementById("modal-int-rating-confirm");
+
+    var reviseToggle = document.getElementById("int-revise-toggle");
+    var submittedCard = document.getElementById("int-submitted-card");
+
+    function scoreNum() {
+        if (!scoreInput) return NaN;
+        var raw = (scoreInput.value || "").trim();
+        if (!raw) return NaN;
+        return parseFloat(raw);
+    }
+    function needsJustification(n) {
+        return !isNaN(n) && (n < 75 || n > 98);
+    }
+    function updateDial() {
+        if (!dial) return;
+        var n = scoreNum();
+        ["is-passing", "is-marginal"].forEach(function (c) {
+            dial.classList.remove(c);
+            if (dialVal) dialVal.classList.remove(c);
+            if (dialLabel) dialLabel.classList.remove(c);
+        });
+        if (isNaN(n)) {
+            if (dialVal) dialVal.textContent = "—";
+            return;
+        }
+        if (dialVal) dialVal.textContent = String(scoreInput.value).trim();
+        var cls = n >= 75 ? "is-passing" : "is-marginal";
+        dial.classList.add(cls);
+        if (dialVal) dialVal.classList.add(cls);
+        if (dialLabel) dialLabel.classList.add(cls);
+    }
+    function updateThreshold() {
+        var n = scoreNum();
+        var needs = needsJustification(n);
+        if (threshold) threshold.hidden = !needs;
+        if (justGroup) justGroup.hidden = !needs;
+    }
+    function clearError() {
+        if (actionError) { actionError.hidden = true; actionError.textContent = ""; }
+    }
+    function showError(msg, field) {
+        if (actionError) { actionError.textContent = msg; actionError.hidden = false; }
+        if (field && field.focus) try { field.focus(); } catch (e) { field.focus(); }
+    }
+
+    function validate() {
+        if (isEncoding) {
+            var rb = ratedByInput && (ratedByInput.value || "").trim();
+            if (!rb) {
+                showError("Choose which HRMPSB member submitted this rating.", ratedByInput);
+                return false;
+            }
+        }
+        if (!scoreInput) return true;
+        var raw = (scoreInput.value || "").trim();
+        if (raw === "") {
+            showError("Enter a score from 0 to 100.", scoreInput);
+            return false;
+        }
+        var n = parseFloat(raw);
+        if (isNaN(n) || n < 0 || n > 100) {
+            showError("Score must be a number between 0 and 100.", scoreInput);
+            return false;
+        }
+        if (needsJustification(n)) {
+            var j = justInput && (justInput.value || "").trim();
+            if (!j) {
+                showError("Add a justification — required for scores below 75 or above 98.", justInput);
+                return false;
+            }
+        }
+        clearError();
+        return true;
+    }
+
+    function openModal() {
+        if (!modalEl || !window.bootstrap) return;
+        if (modalScoreEl) {
+            modalScoreEl.textContent = (scoreInput && scoreInput.value)
+                ? scoreInput.value + " / 100"
+                : "—";
+        }
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
+
+    if (scoreInput) {
+        scoreInput.addEventListener("input", function () {
+            updateDial();
+            updateThreshold();
+            clearError();
+        });
+    }
+    if (justInput) justInput.addEventListener("input", clearError);
+    if (ratedByInput) ratedByInput.addEventListener("change", clearError);
+
+    if (submitBtn) {
+        submitBtn.addEventListener("click", function () {
+            if (validate()) openModal();
+        });
+    }
+    if (confirmBtn) {
+        confirmBtn.addEventListener("click", function () {
+            form.submit();
+        });
+    }
+    if (reviseToggle && submittedCard) {
+        reviseToggle.addEventListener("click", function () {
+            submittedCard.hidden = true;
+            form.hidden = false;
+            if (scoreInput) try { scoreInput.focus(); } catch (e) {}
+        });
+    }
+
+    updateDial();
+    updateThreshold();
+})();
+</script>

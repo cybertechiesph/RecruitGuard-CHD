@@ -1,0 +1,82 @@
+{% load recruitment_ui %}
+{% comment %}
+Panel-rating summary, shown at the top of the deliberation stage to
+every viewer who has reached deliberation. The individual scores are
+now visible (interview was finalized) — this card is the read-only
+shared context for both the deliberation recorder and the CAR
+generator.
+{% endcomment %}
+
+{% if current_interview_ratings %}
+<section class="rg-icard rg-del-panel-summary">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">Panel ratings</h3>
+            <p class="rg-icard__subtitle">
+                Individual scores are now visible to deliberating roles. They inform the deliberation but do not, by themselves, determine the outcome.
+            </p>
+        </div>
+        <span class="rg-pill rg-pill--neutral rg-pill--sm rg-del-panel-summary__count">
+            {{ current_interview_ratings|length }}
+            evaluator{{ current_interview_ratings|length|pluralize }}
+        </span>
+    </div>
+
+    <ul class="rg-del-rating-list">
+        {% for rating in current_interview_ratings %}
+        <li class="rg-del-rating-row">
+            <div class="rg-del-score-badge
+                {% if rating.rating_score >= 75 %}rg-del-score-badge--passing
+                {% elif rating.rating_score > 0 %}rg-del-score-badge--marginal
+                {% endif %}">
+                <span class="rg-del-score-badge__num">{{ rating.rating_score }}</span>
+                <span class="rg-del-score-badge__sub">/ 100</span>
+            </div>
+
+            <div class="rg-del-rating-row__body">
+                <div class="rg-del-rating-row__evaluator">{{ rating.rated_by.get_full_name }}</div>
+                <div class="rg-del-rating-row__role">
+                    {{ rating.rated_by_role|role_label }}
+                    {% if rating.encoded_by_id and rating.encoded_by_id != rating.rated_by_id %}
+                        <span class="rg-del-rating-row__encoded">
+                            · Encoded by {{ rating.encoded_by.get_full_name|default:rating.encoded_by.username }}
+                        </span>
+                    {% endif %}
+                </div>
+                {% if rating.rating_notes %}
+                    <p class="rg-del-rating-row__notes">{{ rating.rating_notes }}</p>
+                {% endif %}
+                {% if rating.justification %}
+                    <p class="rg-del-rating-row__justification">
+                        <strong>Justification:</strong> {{ rating.justification }}
+                    </p>
+                {% endif %}
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+
+    {% if current_deliberation_record and current_deliberation_record.consolidated_snapshot %}
+        {% with avg=current_deliberation_record.consolidated_snapshot.summary.latest_interview_average %}
+        {% if avg %}
+        <div class="rg-del-avg-strip">
+            <span class="rg-del-avg-strip__label">Panel average</span>
+            <span class="rg-del-avg-strip__value">{{ avg }} / 100</span>
+        </div>
+        {% endif %}
+        {% endwith %}
+    {% endif %}
+</section>
+{% elif current_interview_session and current_interview_session.is_finalized %}
+<section class="rg-icard rg-del-panel-summary rg-del-panel-summary--empty">
+    <div class="rg-del-panel-summary__notice">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <circle cx="8" cy="8" r="6.5"/>
+            <path d="M8 5v3" stroke-linecap="round"/>
+            <circle cx="8" cy="11" r="0.75" fill="currentColor"/>
+        </svg>
+        Interview session is finalized but no digital ratings were submitted.
+        Check Secured Files for a fallback rating sheet if one was uploaded.
+    </div>
+</section>
+{% endif %}

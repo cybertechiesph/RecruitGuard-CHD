@@ -1,0 +1,79 @@
+{% load static %}
+{% comment %}
+Topbar notifications bell. Renders an accessible button + dropdown panel.
+Toggling and unread-count polling are handled by recruitguard-notifications.js.
+{% endcomment %}
+<div class="rg-notif" data-rg-notif data-rg-notif-poll-url="{% url 'notification-unread-count' %}">
+    <button
+        type="button"
+        class="rg-notif__bell"
+        data-rg-notif-toggle
+        aria-haspopup="true"
+        aria-expanded="false"
+        aria-controls="rg-notif-panel"
+        aria-label="{% if has_unread %}Notifications, {{ unread_count }} unread{% else %}Notifications{% endif %}">
+        <svg class="rg-notif__bell-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path fill="currentColor" d="M12 2a1 1 0 0 1 1 1v.6a7 7 0 0 1 6 6.9V14l1.6 2.5a1 1 0 0 1-.85 1.55H4.25a1 1 0 0 1-.85-1.55L5 14v-3.5a7 7 0 0 1 6-6.9V3a1 1 0 0 1 1-1Zm0 19a2.5 2.5 0 0 1-2.45-2H14.45A2.5 2.5 0 0 1 12 21Z"/>
+        </svg>
+        <span
+            class="rg-notif__badge {% if not has_unread %}is-hidden{% endif %}"
+            data-rg-notif-badge
+            aria-hidden="true">{{ badge_label }}</span>
+    </button>
+
+    <div
+        class="rg-notif__panel"
+        id="rg-notif-panel"
+        role="dialog"
+        aria-label="Notifications"
+        data-rg-notif-panel
+        hidden>
+        <div class="rg-notif__panel-header">
+            <h2 class="rg-notif__panel-title">Notifications</h2>
+            {% if has_unread %}
+            <form method="post" action="{% url 'notification-read-all' %}" class="rg-notif__mark-all">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button type="submit" class="rg-notif__mark-all-btn">Mark all as read</button>
+            </form>
+            {% endif %}
+        </div>
+
+        <ul class="rg-notif__list" role="list">
+            {% for notification in notifications %}
+            <li class="rg-notif__item {% if not notification.read_at %}rg-notif__item--unread{% endif %}">
+                <form method="post" action="{% url 'notification-read' pk=notification.pk %}" class="rg-notif__item-form">
+                    {% csrf_token %}
+                    <button type="submit" class="rg-notif__item-link" aria-label="Open: {{ notification.title }}">
+                        <span class="rg-notif__item-dot" aria-hidden="true"></span>
+                        <span class="rg-notif__item-body">
+                            <span class="rg-notif__item-title">{{ notification.title }}</span>
+                            {% if notification.body %}
+                            <span class="rg-notif__item-text">{{ notification.body }}</span>
+                            {% endif %}
+                            <span class="rg-notif__item-meta">
+                                {% if not notification.read_at %}<span class="rg-notif__item-flag">New</span> · {% endif %}
+                                {{ notification.created_at|timesince }} ago
+                            </span>
+                        </span>
+                    </button>
+                </form>
+            </li>
+            {% empty %}
+            <li class="rg-notif__empty">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="rg-notif__empty-icon">
+                    <path fill="currentColor" d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                </svg>
+                <p class="rg-notif__empty-title">You&rsquo;re all caught up.</p>
+                <p class="rg-notif__empty-text">New updates about your cases will appear here.</p>
+            </li>
+            {% endfor %}
+        </ul>
+
+        {% if notifications %}
+        <div class="rg-notif__panel-footer">
+            <a href="{% url 'notification-list' %}" class="rg-notif__view-all">View all notifications</a>
+        </div>
+        {% endif %}
+    </div>
+</div>

@@ -1,891 +1,163 @@
-
 {% load recruitment_ui %}
+{% comment %}
+Deliberation / CAR stage wrapper.
 
+The original ~1070-line template tried to render two distinct user
+jobs together (HRMPSB writing the deliberation record vs HRMS / Chief
+generating the Comparative Assessment Report). This wrapper now
+dispatches to small role-clear includes:
 
-{% if current_interview_ratings %}
-<div class="rg-icard" style="margin-bottom:1rem;">
-    <div class="rg-icard__header" style="margin-bottom:0.875rem;">
-        <div>
-            <h3 class="rg-icard__title">Interview Ratings — Panel Summary</h3>
-            <p class="rg-icard__subtitle">
-                Individual scores are now visible to authorized deliberating roles.
-                These scores inform but do not automatically determine the deliberation outcome.
-            </p>
-        </div>
-        {% if current_interview_ratings %}
-        <span class="rg-pill rg-pill--neutral rg-pill--sm"
-              style="flex-shrink:0;align-self:flex-start;">
-            {{ current_interview_ratings|length }}
-            evaluator{{ current_interview_ratings|length|pluralize }}
-        </span>
-        {% endif %}
-    </div>
+  - deliberation_panel_summary.html  — shared top context (revealed
+    interview scores + panel average).
+  - deliberation_recorder.html       — the deliberation record form.
+  - comparative_assessment.html      — the CAR card (editable or locked).
 
-    <div class="rg-del-rating-list">
-        {% for rating in current_interview_ratings %}
-        <div class="rg-del-rating-row">
-            
-            <div class="rg-del-score-badge
-                {% if rating.rating_score >= 75 %}rg-del-score-badge--passing
-                {% elif rating.rating_score > 0 %}rg-del-score-badge--marginal
-                {% endif %}">
-                <div class="rg-del-score-badge__num">{{ rating.rating_score }}</div>
-                <div class="rg-del-score-badge__sub">/100</div>
-            </div>
+Each include carries its own inline action footer so a user with both
+permissions (HRM Chief on a COS case) can act on either without a
+sticky-bar fight. The locked-deliberation summary stays inline here
+because it's a small read-only card.
+{% endcomment %}
 
-            <div class="rg-del-rating-row__body">
-                <div class="rg-del-rating-row__evaluator">
-                    {{ rating.rated_by.get_full_name }}
-                </div>
-                <div class="rg-del-rating-row__role">
-                    {{ rating.rated_by_role|role_label }}
-                </div>
-                {% if rating.rating_notes %}
-                <div class="rg-del-rating-row__notes">
-                    {{ rating.rating_notes }}
-                </div>
-                {% endif %}
-                {% if rating.justification %}
-                <div class="rg-del-rating-row__justification">
-                    <strong>Justification:</strong> {{ rating.justification }}
-                </div>
-                {% endif %}
-            </div>
-        </div>
-        {% endfor %}
-    </div>
+{# ── Shared panel-rating summary at the top ─────────────────── #}
+{% include "internal_includes/deliberation_panel_summary.html" %}
 
-    
-    {% if current_deliberation_record and current_deliberation_record.consolidated_snapshot %}
-        {% with avg=current_deliberation_record.consolidated_snapshot.summary.latest_interview_average %}
-        {% if avg %}
-        <div class="rg-del-avg-strip">
-            <span class="rg-del-avg-strip__label">Panel Average</span>
-            <span class="rg-del-avg-strip__value">{{ avg }} / 100</span>
-        </div>
-        {% endif %}
-        {% endwith %}
-    {% endif %}
-</div>
-{% elif current_interview_session and current_interview_session.is_finalized %}
-<div class="rg-icard" style="margin-bottom:1rem;background:#f8fafc;">
-    <div class="rg-imeta">
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <circle cx="8" cy="8" r="6.5" stroke="#9aa4af" stroke-width="1.5"/>
-            <path d="M8 5v3" stroke="#9aa4af" stroke-width="1.5" stroke-linecap="round"/>
-            <circle cx="8" cy="11" r="0.75" fill="#9aa4af"/>
-        </svg>
-        Interview session is finalized but no digital ratings were submitted.
-        Check Secured Files for a fallback rating sheet if one was uploaded.
+{# ── CAR-draft prerequisite banner (deliberation can't start yet) ── #}
+{% if deliberation_requires_car_draft %}
+<div class="rg-icard rg-int-banner rg-int-banner--info">
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+        <circle cx="10" cy="10" r="8.5"/>
+        <path d="M10 6v4.5" stroke-linecap="round"/>
+        <circle cx="10" cy="13" r="0.8" fill="currentColor"/>
+    </svg>
+    <div>
+        <div class="rg-int-banner__title">CAR draft required first</div>
+        <p>HRMS prepares the CAR draft before HRMPSB can deliberate against it. The CAR is finalized after the panel endorses its recommendation.</p>
     </div>
 </div>
 {% endif %}
 
-
+{# ── Editable deliberation record (HRMPSB plantilla / Chief COS) ── #}
 {% if deliberation_form %}
-<div class="rg-icard" style="margin-bottom:1rem;">
-    <div class="rg-icard__header" style="margin-bottom:0.875rem;">
-        <div>
-            <h3 class="rg-icard__title">Deliberation Record</h3>
-            <p class="rg-icard__subtitle">
-                {% if application.branch == "plantilla" %}
-                    Record the HRMPSB deliberation minutes, decision-support summary,
-                    and ranking position for this applicant before generating the
-                    Comparative Assessment Report.
-                {% else %}
-                    Record the HRM Chief deliberation minutes and decision-support summary
-                    before endorsing this COS case to the Appointing Authority.
-                {% endif %}
-            </p>
-        </div>
-    </div>
+    {% include "internal_includes/deliberation_recorder.html" %}
 
-    <form method="post" action="{% url 'deliberation-record' application.pk %}"
-          id="del-form">
-        {% csrf_token %}
-        <input type="hidden" name="operation" id="del-op-field" value="save">
-
-        
-        <div style="display:grid;
-                    grid-template-columns:{% if application.branch == 'plantilla' %}1fr 1fr{% else %}1fr{% endif %};
-                    gap:0.75rem 1.25rem;margin-bottom:0.75rem;">
-
-            <div class="rg-field">
-                <label class="form-label"
-                       for="{{ deliberation_form.deliberated_at.id_for_label }}">
-                    {{ deliberation_form.deliberated_at.label }}
-                </label>
-                {{ deliberation_form.deliberated_at }}
-                {% for error in deliberation_form.deliberated_at.errors %}
-                    <div class="invalid-feedback d-block">{{ error }}</div>
-                {% endfor %}
-            </div>
-
-            {% if application.branch == "plantilla" %}
-            <div class="rg-field">
-                <label class="form-label"
-                       for="{{ deliberation_form.ranking_position.id_for_label }}">
-                    {{ deliberation_form.ranking_position.label }}
-                    <span style="font-weight:400;color:#dc2626;"> *</span>
-                </label>
-                {{ deliberation_form.ranking_position }}
-                <div class="form-text">
-                    Required for Plantilla cases. Enter this applicant's rank among all candidates.
-                </div>
-                {% for error in deliberation_form.ranking_position.errors %}
-                    <div class="invalid-feedback d-block">{{ error }}</div>
-                {% endfor %}
-            </div>
-            {% endif %}
-        </div>
-
-        
-        <div class="rg-field" style="margin-bottom:0.75rem;">
-            <label class="form-label"
-                   for="{{ deliberation_form.deliberation_minutes.id_for_label }}">
-                {{ deliberation_form.deliberation_minutes.label }}
-                <span style="color:#dc2626;"> *</span>
-            </label>
-            {{ deliberation_form.deliberation_minutes }}
-            <div class="form-text">
-                Record the key points of panel discussion and any dissenting positions.
-            </div>
-            {% for error in deliberation_form.deliberation_minutes.errors %}
-                <div class="invalid-feedback d-block">{{ error }}</div>
-            {% endfor %}
-        </div>
-
-        
-        <div class="rg-field" style="margin-bottom:0.75rem;">
-            <label class="form-label"
-                   for="{{ deliberation_form.decision_support_summary.id_for_label }}">
-                {{ deliberation_form.decision_support_summary.label }}
-                <span style="color:#dc2626;"> *</span>
-            </label>
-            {{ deliberation_form.decision_support_summary }}
-            <div class="form-text">
-                Summarise the panel's collective assessment that supports the ranking or recommendation.
-            </div>
-            {% for error in deliberation_form.decision_support_summary.errors %}
-                <div class="invalid-feedback d-block">{{ error }}</div>
-            {% endfor %}
-        </div>
-
-        
-        {% if application.branch == "plantilla" %}
-        <div class="rg-field">
-            <label class="form-label"
-                   for="{{ deliberation_form.ranking_notes.id_for_label }}">
-                {{ deliberation_form.ranking_notes.label }}
-                <span style="font-weight:400;color:#9aa4af;"> &mdash; optional</span>
-            </label>
-            {{ deliberation_form.ranking_notes }}
-            {% for error in deliberation_form.ranking_notes.errors %}
-                <div class="invalid-feedback d-block">{{ error }}</div>
-            {% endfor %}
-        </div>
-        {% endif %}
-    </form>
-</div>
-
-
-{% if car_requires_deliberation %}
-<div class="rg-icard" style="margin-bottom:1rem;background:#f0f9ff;border-color:#bae6fd;">
-    <div style="display:flex;align-items:flex-start;gap:0.75rem;">
-        <svg width="16" height="16" viewBox="0 0 20 20" fill="none"
-             style="flex-shrink:0;margin-top:2px;color:#0284c7;" aria-hidden="true">
-            <circle cx="10" cy="10" r="8.5" stroke="currentColor" stroke-width="1.5"/>
-            <path d="M10 6v4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    {# Small forward-pointer to the CAR step. #}
+    {% if car_requires_deliberation %}
+    <div class="rg-icard rg-int-banner rg-int-banner--info">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <circle cx="10" cy="10" r="8.5"/>
+            <path d="M10 6v4.5" stroke-linecap="round"/>
             <circle cx="10" cy="13" r="0.8" fill="currentColor"/>
         </svg>
         <div>
-            <div style="font-size:0.875rem;font-weight:700;color:#0c4a6e;margin-bottom:0.2rem;">
-                Comparative Assessment Report — Next Step
-            </div>
-            <p style="font-size:0.8125rem;color:#075985;margin:0;">
-                The CAR will become available once the deliberation record is saved and finalized.
-            </p>
+            <div class="rg-int-banner__title">CAR is the next step</div>
+            <p>The Comparative Assessment Report opens once the deliberation record is saved and finalized.</p>
         </div>
     </div>
-</div>
-{% elif car_requires_finalized_deliberation %}
-<div class="rg-icard" style="margin-bottom:1rem;background:#fffbeb;border-color:#fcd34d;">
-    <div style="display:flex;align-items:flex-start;gap:0.75rem;">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
-             style="flex-shrink:0;margin-top:2px;color:#d97706;" aria-hidden="true">
-            <path d="M8 2L14.5 13H1.5L8 2z" stroke="currentColor"
-                  stroke-width="1.5" stroke-linejoin="round"/>
-            <path d="M8 6.5v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    {% elif car_requires_finalized_deliberation %}
+    <div class="rg-icard rg-int-banner rg-int-banner--warn">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <path d="M8 2L14.5 13H1.5L8 2z" stroke-linejoin="round"/>
+            <path d="M8 6.5v3" stroke-linecap="round"/>
             <circle cx="8" cy="11" r="0.6" fill="currentColor"/>
         </svg>
         <div>
-            <div style="font-size:0.875rem;font-weight:700;color:#92400e;margin-bottom:0.2rem;">
-                Finalize deliberation to unlock the CAR
-            </div>
-            <p style="font-size:0.8125rem;color:#78350f;margin:0;">
-                The Comparative Assessment Report will be generated once this deliberation
-                record is finalized.
+            <div class="rg-int-banner__title">Finalize deliberation to unlock the CAR</div>
+            <p>The Comparative Assessment Report will be generated once this deliberation record is finalized.</p>
+        </div>
+    </div>
+    {% endif %}
+{% endif %}
+
+{# ── Locked deliberation summary (read-only) ────────────────── #}
+{% if deliberation_locked and current_deliberation_record %}
+<section class="rg-icard rg-del-locked">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">Deliberation record</h3>
+            <p class="rg-icard__subtitle">
+                Finalized
+                {% if current_deliberation_record.finalized_at %}
+                    on {{ current_deliberation_record.finalized_at|date:"M d, Y" }}
+                {% endif %}
+                {% if current_deliberation_record.finalized_by_role %}
+                    · {{ current_deliberation_record.finalized_by_role|role_label }}
+                {% endif %}.
             </p>
         </div>
-    </div>
-</div>
-{% endif %}
-
-{% endif %}
-
-
-{% if deliberation_locked and current_deliberation_record and car_form %}
-<div class="rg-del-locked-summary" style="margin-bottom:1rem;">
-    <div class="rg-del-locked-summary__header">
-        <svg width="13" height="14" viewBox="0 0 12 14" fill="none" aria-hidden="true">
-            <rect x="2" y="6" width="8" height="7" rx="1.5"
-                  stroke="var(--rg-primary)" stroke-width="1.5"/>
-            <path d="M4 6V4.5a2 2 0 0 1 4 0V6"
-                  stroke="var(--rg-primary)" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-        <div class="rg-del-locked-summary__title">Deliberation Record — Finalized</div>
-        <span class="rg-pill rg-pill--success rg-pill--sm">Locked</span>
-    </div>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem 2rem;font-size:0.8125rem;">
-        <div>
-            <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;
-                        letter-spacing:0.05em;color:#5f6c78;margin-bottom:0.15rem;">
-                Deliberated At
-            </div>
-            <div style="color:#111827;font-weight:500;">
-                {% if current_deliberation_record.deliberated_at %}
-                    {{ current_deliberation_record.deliberated_at|date:"M d, Y H:i" }}
-                {% else %}&mdash;{% endif %}
-            </div>
-        </div>
-        {% if application.branch == "plantilla" and current_deliberation_record.ranking_position %}
-        <div>
-            <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;
-                        letter-spacing:0.05em;color:#5f6c78;margin-bottom:0.15rem;">
-                Ranking Position
-            </div>
-            <div style="color:#111827;font-weight:700;font-size:1rem;">
-                #{{ current_deliberation_record.ranking_position }}
-            </div>
-        </div>
-        {% endif %}
-    </div>
-
-    {% if current_deliberation_record.decision_support_summary %}
-    <div style="margin-top:0.6rem;font-size:0.79rem;color:#374151;line-height:1.55;
-                padding-top:0.6rem;border-top:1px solid #d7dde3;">
-        <strong style="color:#5f6c78;font-size:0.7rem;text-transform:uppercase;
-                        letter-spacing:0.05em;">Decision Support:</strong>
-        <span style="margin-left:0.35rem;">
-            {{ current_deliberation_record.decision_support_summary|truncatewords:30 }}
+        <span class="rg-pill rg-pill--success rg-pill--sm rg-int-pill-lock">
+            <svg width="9" height="10" viewBox="0 0 12 14" fill="none" aria-hidden="true">
+                <rect x="2" y="6" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M4 6V4.5a2 2 0 0 1 4 0V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            Locked
         </span>
     </div>
-    {% endif %}
 
-    <div class="rg-imeta" style="margin-top:0.75rem;padding-top:0.6rem;
-                                  border-top:1px solid #d7dde3;">
-        <svg width="11" height="11" viewBox="0 0 12 14" fill="none" aria-hidden="true">
-            <rect x="2" y="6" width="8" height="7" rx="1.5"
-                  stroke="#9aa4af" stroke-width="1.5"/>
-            <path d="M4 6V4.5a2 2 0 0 1 4 0V6"
-                  stroke="#9aa4af" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-        Finalized
-        {% if current_deliberation_record.finalized_at %}
-            {{ current_deliberation_record.finalized_at|date:"M d, Y" }}
-        {% endif %}
-        {% if current_deliberation_record.finalized_by_role %}
-            <span class="rg-imeta__sep"></span>
-            {{ current_deliberation_record.finalized_by_role|role_label }}
-        {% endif %}
-    </div>
-</div>
-{% endif %}
-
-
-{% if car_form %}
-<div class="rg-icard" style="margin-bottom:1rem;" id="del-car-section">
-    <div class="rg-icard__header" style="margin-bottom:0.875rem;">
+    <div class="rg-del-locked__facts">
         <div>
-            <h3 class="rg-icard__title">Comparative Assessment Report</h3>
-            <p class="rg-icard__subtitle">
-                Generate the Plantilla CAR from all finalized deliberation records for
-                this position posting. Preview candidate rankings before finalizing.
-            </p>
+            <span class="rg-del-locked__label">Deliberated at</span>
+            <strong>
+                {% if current_deliberation_record.deliberated_at %}
+                    {{ current_deliberation_record.deliberated_at|date:"M d, Y H:i" }}
+                {% else %}—{% endif %}
+            </strong>
         </div>
-        {% if current_comparative_assessment_report %}
-        <div style="flex-shrink:0;align-self:flex-start;text-align:right;">
-            <span class="rg-pill rg-pill--neutral rg-pill--sm">
-                Version {{ current_comparative_assessment_report.version_number }}
-            </span>
-            {% if current_comparative_assessment_report.generated_by %}
-            <div style="font-size:0.72rem;color:#9aa4af;margin-top:0.2rem;">
-                by {{ current_comparative_assessment_report.generated_by.get_full_name }}
+        {% if application.branch == "plantilla" %}
+            {% if current_deliberation_record.ranking_position %}
+            <div>
+                <span class="rg-del-locked__label">Ranking position</span>
+                <strong class="rg-del-locked__rank">#{{ current_deliberation_record.ranking_position }}</strong>
             </div>
             {% endif %}
-        </div>
+            <div>
+                <span class="rg-del-locked__label">Quorum</span>
+                <strong>{{ current_deliberation_record.get_quorum_status_display|default:"—" }}</strong>
+            </div>
+            {% if current_deliberation_record.comparative_assessment_report %}
+            <div>
+                <span class="rg-del-locked__label">CAR draft</span>
+                <strong>Version {{ current_deliberation_record.comparative_assessment_report.version_number }}</strong>
+            </div>
+            {% endif %}
         {% endif %}
     </div>
 
-    
-    {% if current_comparative_assessment_report_items %}
-    <div style="margin-bottom:1rem;">
-        <div style="font-size:0.72rem;font-weight:700;color:#5f6c78;
-                    text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.625rem;">
-            Candidate Rankings
-            <span style="font-weight:400;text-transform:none;letter-spacing:0;
-                         color:#9aa4af;margin-left:0.5rem;">
-                — {{ current_comparative_assessment_report_items|length }}
-                candidate{{ current_comparative_assessment_report_items|length|pluralize }}
-            </span>
+    {% if application.branch == "plantilla" and current_deliberation_record.recommendation %}
+        <div class="rg-del-locked__field">
+            <span class="rg-del-locked__label">Recommendation</span>
+            <p>{{ current_deliberation_record.recommendation }}</p>
         </div>
-        <div class="rg-del-car-list">
-            {% for item in current_comparative_assessment_report_items %}
-            <div class="rg-del-car-item">
-                <div class="rg-del-rank-badge">#{{ item.rank_order }}</div>
-                <div class="rg-del-car-item__body">
-                    <div class="rg-del-car-item__name">
-                        {{ item.recruitment_case.application.applicant.get_full_name }}
-                    </div>
-                    <div class="rg-del-car-item__scores">
-                        {% if item.qualification_outcome %}
-                        <div class="rg-del-car-item__score-cell">
-                            <span class="rg-del-car-item__score-label">Screening</span>
-                            <span class="rg-del-car-item__score-val">
-                                <span class="rg-pill rg-pill--{{ item.qualification_outcome|status_theme }} rg-pill--sm">
-                                    {{ item.qualification_outcome }}
-                                </span>
-                            </span>
-                        </div>
-                        {% endif %}
-                        {% if item.exam_score %}
-                        <div class="rg-del-car-item__score-cell">
-                            <span class="rg-del-car-item__score-label">Exam</span>
-                            <span class="rg-del-car-item__score-val">{{ item.exam_score }}</span>
-                        </div>
-                        {% elif item.exam_status %}
-                        <div class="rg-del-car-item__score-cell">
-                            <span class="rg-del-car-item__score-label">Exam</span>
-                            <span class="rg-del-car-item__score-val">
-                                <span class="rg-pill rg-pill--{{ item.exam_status|status_theme }} rg-pill--sm">
-                                    {{ item.exam_status }}
-                                </span>
-                            </span>
-                        </div>
-                        {% endif %}
-                        {% if item.interview_average_score %}
-                        <div class="rg-del-car-item__score-cell">
-                            <span class="rg-del-car-item__score-label">Interview Avg</span>
-                            <span class="rg-del-car-item__score-val">{{ item.interview_average_score }}</span>
-                        </div>
-                        {% endif %}
-                    </div>
-                    {% if item.decision_support_summary %}
-                    <div class="rg-del-car-item__decision">
-                        {{ item.decision_support_summary|truncatewords:20 }}
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-    {% else %}
-    
-    <div style="padding:1rem;background:#f8fafc;border:1px dashed #d7dde3;
-                border-radius:0.4rem;font-size:0.8125rem;color:#9aa4af;
-                margin-bottom:1rem;text-align:center;">
-        Click <strong>Generate CAR</strong> below to compile candidate rankings from
-        all finalized deliberation records for this position.
-    </div>
     {% endif %}
 
-    
-    <form method="post"
-          action="{% url 'comparative-assessment-report' application.pk %}"
-          id="car-form">
-        {% csrf_token %}
-        <input type="hidden" name="operation" id="car-op-field" value="save">
-
-        <div class="rg-field">
-            <label class="form-label"
-                   for="{{ car_form.summary_notes.id_for_label }}">
-                {{ car_form.summary_notes.label }}
-                <span style="font-weight:400;color:#9aa4af;"> &mdash; optional</span>
-            </label>
-            {{ car_form.summary_notes }}
-            <div class="form-text">
-                Add panel-level notes to accompany the generated CAR document.
-            </div>
-            {% for error in car_form.summary_notes.errors %}
-                <div class="invalid-feedback d-block">{{ error }}</div>
-            {% endfor %}
+    {% if application.branch == "plantilla" and current_deliberation_record.ranking_notes %}
+        <div class="rg-del-locked__field">
+            <span class="rg-del-locked__label">Ranking notes</span>
+            <p>{{ current_deliberation_record.ranking_notes }}</p>
         </div>
-    </form>
-</div>
+    {% endif %}
+
+    {% if application.branch == "plantilla" and current_deliberation_record.attendance_notes %}
+        <div class="rg-del-locked__field">
+            <span class="rg-del-locked__label">Attendance notes</span>
+            <p>{{ current_deliberation_record.attendance_notes }}</p>
+        </div>
+    {% endif %}
+
+    {% if current_deliberation_record.deliberation_minutes %}
+        <div class="rg-del-locked__field">
+            <span class="rg-del-locked__label">Deliberation minutes</span>
+            <p>{{ current_deliberation_record.deliberation_minutes }}</p>
+        </div>
+    {% endif %}
+
+    {% if current_deliberation_record.decision_support_summary %}
+        <div class="rg-del-locked__field">
+            <span class="rg-del-locked__label">Decision support</span>
+            <p>{{ current_deliberation_record.decision_support_summary }}</p>
+        </div>
+    {% endif %}
+</section>
 {% endif %}
 
-
-{% if deliberation_form %}
-<div class="rg-cws-fin-bar" id="del-fin-bar">
-    <div class="rg-cws-fin-bar__inner">
-
-        <div class="rg-scr-ready-list" id="del-ready-list">
-            <div class="rg-scr-ready-item" id="del-ready-date">
-                <span class="rg-scr-ready-item__icon" aria-hidden="true"></span>
-                Deliberation date and time set
-            </div>
-            <div class="rg-scr-ready-item" id="del-ready-minutes">
-                <span class="rg-scr-ready-item__icon" aria-hidden="true"></span>
-                Deliberation minutes recorded
-            </div>
-            <div class="rg-scr-ready-item" id="del-ready-summary">
-                <span class="rg-scr-ready-item__icon" aria-hidden="true"></span>
-                Decision support summary completed
-            </div>
-            {% if application.branch == "plantilla" %}
-            <div class="rg-scr-ready-item" id="del-ready-ranking">
-                <span class="rg-scr-ready-item__icon" aria-hidden="true"></span>
-                Ranking position assigned
-            </div>
-            {% endif %}
-        </div>
-
-        <div class="rg-cws-fin-bar__actions">
-            <button type="button"
-                    class="btn btn-sm btn-outline-secondary"
-                    id="del-save-btn"
-                    onclick="document.getElementById('del-op-field').value='save';
-                             document.getElementById('del-form').submit();">
-                Save Draft
-            </button>
-            <button type="button"
-                    class="btn-rg-finalize is-blocked"
-                    id="del-finalize-btn"
-                    disabled
-                    data-bs-toggle="modal"
-                    data-bs-target="#modal-del-finalize">
-                <svg width="12" height="13" viewBox="0 0 12 14" fill="none"
-                     aria-hidden="true" style="margin-right:5px;vertical-align:-1px;">
-                    <rect x="2" y="6" width="8" height="7" rx="1.5"
-                          stroke="currentColor" stroke-width="1.5"/>
-                    <path d="M4 6V4.5a2 2 0 0 1 4 0V6"
-                          stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                </svg>
-                Finalize &amp; Lock Deliberation
-            </button>
-        </div>
-    </div>
-</div>
-{% endif %}
-
-
-{% if car_form %}
-<div class="rg-cws-fin-bar" id="car-fin-bar">
-    <div class="rg-cws-fin-bar__inner">
-
-        <div class="rg-scr-ready-list">
-            <div class="rg-scr-ready-item rg-scr-ready-item--met">
-                <span class="rg-scr-ready-item__icon" aria-hidden="true">
-                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
-                        <path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="currentColor"
-                              stroke-width="1.75" stroke-linecap="round"
-                              stroke-linejoin="round"/>
-                    </svg>
-                </span>
-                Deliberation record finalized
-            </div>
-            <div class="rg-scr-ready-item" id="car-ready-items">
-                <span class="rg-scr-ready-item__icon" aria-hidden="true"></span>
-                {% if current_comparative_assessment_report_items %}
-                    Candidate rankings generated
-                    ({{ current_comparative_assessment_report_items|length }}
-                    candidate{{ current_comparative_assessment_report_items|length|pluralize }})
-                {% else %}
-                    Generate CAR to compile candidate rankings
-                {% endif %}
-            </div>
-        </div>
-
-        <div class="rg-cws-fin-bar__actions">
-            <button type="button"
-                    class="btn btn-sm btn-outline-secondary"
-                    id="car-generate-btn"
-                    onclick="document.getElementById('car-op-field').value='save';
-                             document.getElementById('car-form').submit();">
-                <svg width="11" height="11" viewBox="0 0 16 16" fill="none"
-                     aria-hidden="true" style="margin-right:4px;vertical-align:-1px;">
-                    <path d="M8 2v9M4 8l4 3 4-3" stroke="currentColor"
-                          stroke-width="1.5" stroke-linecap="round"
-                          stroke-linejoin="round"/>
-                    <path d="M2 13h12" stroke="currentColor"
-                          stroke-width="1.5" stroke-linecap="round"/>
-                </svg>
-                Generate CAR
-            </button>
-            <button type="button"
-                    class="btn-rg-finalize"
-                    id="car-finalize-btn"
-                    data-bs-toggle="modal"
-                    data-bs-target="#modal-car-finalize">
-                <svg width="12" height="13" viewBox="0 0 12 14" fill="none"
-                     aria-hidden="true" style="margin-right:5px;vertical-align:-1px;">
-                    <rect x="2" y="6" width="8" height="7" rx="1.5"
-                          stroke="currentColor" stroke-width="1.5"/>
-                    <path d="M4 6V4.5a2 2 0 0 1 4 0V6"
-                          stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                </svg>
-                Finalize &amp; Lock CAR
-            </button>
-        </div>
-    </div>
-</div>
-{% endif %}
-
-
-{% if deliberation_form %}
-<div class="modal fade" id="modal-del-finalize" tabindex="-1"
-     aria-labelledby="modal-del-finalize-label" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered" style="max-width:480px;">
-        <div class="modal-content" style="border-radius:0.6rem;overflow:hidden;">
-
-            <div class="modal-header"
-                 style="background:var(--rg-primary);border-bottom:none;padding:1rem 1.25rem;">
-                <h5 class="modal-title" id="modal-del-finalize-label"
-                    style="font-size:0.9375rem;font-weight:700;color:#fff;margin:0;">
-                    Confirm: Finalize &amp; Lock Deliberation
-                </h5>
-                <button type="button" class="btn-close btn-close-white"
-                        data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-
-            <div class="modal-body" style="padding:1.25rem;">
-                <p style="font-size:0.8125rem;color:#374151;margin-bottom:0.75rem;">
-                    You are about to finalize and lock the deliberation record for this case.
-                    This action cannot be changed without an authorized reopen.
-                </p>
-                {% if application.branch == "plantilla" %}
-                <p style="font-size:0.8125rem;color:#374151;margin-bottom:0.875rem;">
-                    Once finalized, the Comparative Assessment Report (CAR) will become
-                    available for generation and submission.
-                </p>
-                {% else %}
-                <p style="font-size:0.8125rem;color:#374151;margin-bottom:0.875rem;">
-                    Once finalized, this case will be ready for endorsement to the
-                    Appointing Authority.
-                </p>
-                {% endif %}
-
-                <div class="rg-scr-modal-summary">
-                    <div class="rg-scr-modal-summary__row">
-                        <span class="rg-scr-modal-summary__label">Applicant</span>
-                        <span class="rg-scr-modal-summary__value">
-                            {{ application.applicant.get_full_name }}
-                        </span>
-                    </div>
-                    <div class="rg-scr-modal-summary__row">
-                        <span class="rg-scr-modal-summary__label">Position</span>
-                        <span class="rg-scr-modal-summary__value">
-                            {{ application.entry.position_title|default:"—" }}
-                        </span>
-                    </div>
-                    <div class="rg-scr-modal-summary__row">
-                        <span class="rg-scr-modal-summary__label">Review Step</span>
-                        <span class="rg-scr-modal-summary__value">
-                            {{ recruitment_case.get_current_stage_display }}
-                        </span>
-                    </div>
-                    <div class="rg-scr-modal-summary__row">
-                        <span class="rg-scr-modal-summary__label">Deliberation Date</span>
-                        <span class="rg-scr-modal-summary__value"
-                              id="modal-del-date-val">&mdash;</span>
-                    </div>
-                    {% if application.branch == "plantilla" %}
-                    <div class="rg-scr-modal-summary__row">
-                        <span class="rg-scr-modal-summary__label">Ranking Position</span>
-                        <span class="rg-scr-modal-summary__value"
-                              id="modal-del-rank-val">&mdash;</span>
-                    </div>
-                    {% endif %}
-                    {% if current_interview_ratings %}
-                    <div class="rg-scr-modal-summary__row">
-                        <span class="rg-scr-modal-summary__label">Interview Ratings</span>
-                        <span class="rg-scr-modal-summary__value">
-                            {{ current_interview_ratings|length }}
-                            submitted
-                        </span>
-                    </div>
-                    {% endif %}
-                </div>
-
-                <div style="margin-top:0.875rem;padding:0.6rem 0.875rem;
-                            background:#fff7ed;border:1px solid #fed7aa;
-                            border-radius:0.4rem;display:flex;gap:0.6rem;
-                            align-items:flex-start;">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
-                         style="flex-shrink:0;margin-top:1px;color:#c2410c;" aria-hidden="true">
-                        <path d="M8 2L14.5 13H1.5L8 2z" stroke="currentColor"
-                              stroke-width="1.5" stroke-linejoin="round"/>
-                        <path d="M8 6.5v3" stroke="currentColor" stroke-width="1.5"
-                              stroke-linecap="round"/>
-                        <circle cx="8" cy="11" r="0.6" fill="currentColor"/>
-                    </svg>
-                    <p style="margin:0;font-size:0.775rem;color:#92400e;line-height:1.5;">
-                        Ensure the minutes, decision-support summary,
-                        {% if application.branch == "plantilla" %}
-                            and ranking position are
-                        {% else %}
-                            and all details are
-                        {% endif %}
-                        correct and complete before confirming.
-                    </p>
-                </div>
-            </div>
-
-            <div class="modal-footer"
-                 style="border-top:1px solid #e2e8f0;padding:0.875rem 1.25rem;
-                        display:flex;justify-content:flex-end;gap:0.625rem;">
-                <button type="button" class="btn btn-sm btn-outline-secondary"
-                        data-bs-dismiss="modal">
-                    Cancel &mdash; Keep Editing
-                </button>
-                <button type="button" class="btn-rg-finalize"
-                        id="modal-del-confirm-btn">
-                    Yes, Finalize &amp; Lock
-                </button>
-            </div>
-
-        </div>
-    </div>
-</div>
-{% endif %}
-
-
-{% if car_form %}
-<div class="modal fade" id="modal-car-finalize" tabindex="-1"
-     aria-labelledby="modal-car-finalize-label" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered" style="max-width:480px;">
-        <div class="modal-content" style="border-radius:0.6rem;overflow:hidden;">
-
-            <div class="modal-header"
-                 style="background:var(--rg-primary);border-bottom:none;padding:1rem 1.25rem;">
-                <h5 class="modal-title" id="modal-car-finalize-label"
-                    style="font-size:0.9375rem;font-weight:700;color:#fff;margin:0;">
-                    Confirm: Finalize &amp; Lock CAR
-                </h5>
-                <button type="button" class="btn-close btn-close-white"
-                        data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-
-            <div class="modal-body" style="padding:1.25rem;">
-                <p style="font-size:0.8125rem;color:#374151;margin-bottom:0.75rem;">
-                    You are about to finalize and lock the Comparative Assessment Report
-                    for this position posting. The CAR will be generated as a PDF document
-                    and saved with the secured case files.
-                </p>
-                <p style="font-size:0.8125rem;color:#374151;margin-bottom:0.875rem;">
-                    Once finalized, the CAR cannot be revised without an authorized reopen.
-                    The case will advance to the Decision / Submission Packet step.
-                </p>
-
-                <div class="rg-scr-modal-summary">
-                    <div class="rg-scr-modal-summary__row">
-                        <span class="rg-scr-modal-summary__label">Position</span>
-                        <span class="rg-scr-modal-summary__value">
-                            {{ application.entry.position_title|default:"—" }}
-                        </span>
-                    </div>
-                    <div class="rg-scr-modal-summary__row">
-                        <span class="rg-scr-modal-summary__label">Review Step</span>
-                        <span class="rg-scr-modal-summary__value">
-                            {{ recruitment_case.get_current_stage_display }}
-                        </span>
-                    </div>
-                    {% if current_comparative_assessment_report %}
-                    <div class="rg-scr-modal-summary__row">
-                        <span class="rg-scr-modal-summary__label">CAR Version</span>
-                        <span class="rg-scr-modal-summary__value">
-                            {{ current_comparative_assessment_report.version_number }}
-                        </span>
-                    </div>
-                    {% endif %}
-                    <div class="rg-scr-modal-summary__row">
-                        <span class="rg-scr-modal-summary__label">Candidates Ranked</span>
-                        <span class="rg-scr-modal-summary__value">
-                            {{ current_comparative_assessment_report_items|length }}
-                        </span>
-                    </div>
-                </div>
-
-                <div style="margin-top:0.875rem;padding:0.6rem 0.875rem;
-                            background:#fff7ed;border:1px solid #fed7aa;
-                            border-radius:0.4rem;display:flex;gap:0.6rem;
-                            align-items:flex-start;">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
-                         style="flex-shrink:0;margin-top:1px;color:#c2410c;" aria-hidden="true">
-                        <path d="M8 2L14.5 13H1.5L8 2z" stroke="currentColor"
-                              stroke-width="1.5" stroke-linejoin="round"/>
-                        <path d="M8 6.5v3" stroke="currentColor" stroke-width="1.5"
-                              stroke-linecap="round"/>
-                        <circle cx="8" cy="11" r="0.6" fill="currentColor"/>
-                    </svg>
-                    <p style="margin:0;font-size:0.775rem;color:#92400e;line-height:1.5;">
-                        Verify all candidate rankings before confirming.
-                        This finalizes the CAR for this step and version.
-                    </p>
-                </div>
-            </div>
-
-            <div class="modal-footer"
-                 style="border-top:1px solid #e2e8f0;padding:0.875rem 1.25rem;
-                        display:flex;justify-content:flex-end;gap:0.625rem;">
-                <button type="button" class="btn btn-sm btn-outline-secondary"
-                        data-bs-dismiss="modal">
-                    Cancel &mdash; Review First
-                </button>
-                <button type="button" class="btn-rg-finalize"
-                        id="modal-car-confirm-btn">
-                    Yes, Finalize &amp; Lock CAR
-                </button>
-            </div>
-
-        </div>
-    </div>
-</div>
-{% endif %}
-
-
-<script>
-(function () {
-    "use strict";
-
-    /* ── Deliberation form refs ─────────────────────────────────── */
-    var delForm       = document.getElementById("del-form");
-    var delOpField    = document.getElementById("del-op-field");
-    var dateInput     = document.getElementById("id_deliberated_at");
-    var minutesInput  = document.getElementById("id_deliberation_minutes");
-    var summaryInput  = document.getElementById("id_decision_support_summary");
-    var rankInput     = document.getElementById("id_ranking_position");
-
-    var readyDate     = document.getElementById("del-ready-date");
-    var readyMinutes  = document.getElementById("del-ready-minutes");
-    var readySummary  = document.getElementById("del-ready-summary");
-    var readyRanking  = document.getElementById("del-ready-ranking");
-    var delFinalBtn   = document.getElementById("del-finalize-btn");
-
-    var modalDelDateVal  = document.getElementById("modal-del-date-val");
-    var modalDelRankVal  = document.getElementById("modal-del-rank-val");
-    var modalDelConfirm  = document.getElementById("modal-del-confirm-btn");
-
-    /* ── CAR form refs ──────────────────────────────────────────── */
-    var carForm       = document.getElementById("car-form");
-    var carOpField    = document.getElementById("car-op-field");
-    var carReadyItems = document.getElementById("car-ready-items");
-    var modalCarConfirm = document.getElementById("modal-car-confirm-btn");
-
-    /* ── Shared helper ──────────────────────────────────────────── */
-    function setReadyItem(el, met) {
-        if (!el) return;
-        el.classList.toggle("rg-scr-ready-item--met", met);
-        el.classList.toggle("rg-scr-ready-item--blocking", !met);
-        var iconEl = el.querySelector(".rg-scr-ready-item__icon");
-        if (!iconEl) return;
-        if (met) {
-            iconEl.innerHTML = '<svg width="10" height="10" viewBox="0 0 10 10" fill="none"' +
-                ' aria-hidden="true"><path d="M1.5 5l2.5 2.5 4.5-4.5"' +
-                ' stroke="currentColor" stroke-width="1.75"' +
-                ' stroke-linecap="round" stroke-linejoin="round"/></svg>';
-        } else {
-            iconEl.innerHTML = "";
-        }
-    }
-
-    /* ── Deliberation readiness ─────────────────────────────────── */
-    function checkDelibReadiness() {
-        if (!delFinalBtn) return;
-
-        var hasDate    = dateInput    ? dateInput.value.trim().length > 0    : false;
-        var hasMinutes = minutesInput ? minutesInput.value.trim().length > 0 : false;
-        var hasSummary = summaryInput ? summaryInput.value.trim().length > 0 : false;
-        var hasRanking = rankInput
-            ? (rankInput.value.trim().length > 0 && parseInt(rankInput.value, 10) > 0)
-            : true; /* no ranking field = not plantilla = always ok */
-
-        setReadyItem(readyDate,    hasDate);
-        setReadyItem(readyMinutes, hasMinutes);
-        setReadyItem(readySummary, hasSummary);
-        if (readyRanking) setReadyItem(readyRanking, hasRanking);
-
-        var ready = hasDate && hasMinutes && hasSummary && hasRanking;
-        delFinalBtn.classList.toggle("is-blocked", !ready);
-        if (ready) { delFinalBtn.removeAttribute("disabled"); }
-        else       { delFinalBtn.setAttribute("disabled", "disabled"); }
-    }
-
-    /* ── Populate deliberation modal ────────────────────────────── */
-    function populateDelModal() {
-        if (modalDelDateVal && dateInput) {
-            var v = dateInput.value;
-            if (v) {
-                try {
-                    var d = new Date(v);
-                    modalDelDateVal.textContent = d.toLocaleDateString("en-PH", {
-                        month: "short", day: "numeric", year: "numeric"
-                    }) + " " + d.toLocaleTimeString("en-PH", {
-                        hour: "2-digit", minute: "2-digit"
-                    });
-                } catch (e) { modalDelDateVal.textContent = v; }
-            } else {
-                modalDelDateVal.textContent = "\u2014";
-            }
-        }
-        if (modalDelRankVal && rankInput) {
-            var rv = rankInput.value.trim();
-            modalDelRankVal.textContent = rv ? "#" + rv : "\u2014";
-        }
-    }
-
-    /* ── CAR readiness update ───────────────────────────────────── */
-    function updateCarReadiness() {
-        if (!carReadyItems) return;
-        /* Items presence is known from the pre-rendered count. Read from DOM. */
-        var listEl = document.querySelector(".rg-del-car-list");
-        var hasItems = listEl && listEl.querySelectorAll(".rg-del-car-item").length > 0;
-        setReadyItem(carReadyItems, hasItems);
-    }
-
-    /* ── Event listeners: deliberation ─────────────────────────── */
-    [dateInput, minutesInput, summaryInput, rankInput].forEach(function (inp) {
-        if (inp) inp.addEventListener("input", checkDelibReadiness);
-        if (inp && inp.type === "datetime-local") {
-            inp.addEventListener("change", checkDelibReadiness);
-        }
-    });
-
-    if (delFinalBtn) {
-        delFinalBtn.addEventListener("click", populateDelModal);
-    }
-
-    if (modalDelConfirm && delForm && delOpField) {
-        modalDelConfirm.addEventListener("click", function () {
-            delOpField.value = "finalize";
-            delForm.submit();
-        });
-    }
-
-    /* ── Event listeners: CAR ───────────────────────────────────── */
-    if (modalCarConfirm && carForm && carOpField) {
-        modalCarConfirm.addEventListener("click", function () {
-            carOpField.value = "finalize";
-            carForm.submit();
-        });
-    }
-
-    /* ── Initialization ─────────────────────────────────────────── */
-    checkDelibReadiness();
-    updateCarReadiness();
-
-})();
-</script>
-
+{# ── Comparative Assessment Report (HRMS / Chief) ───────────── #}
+{% include "internal_includes/comparative_assessment.html" %}

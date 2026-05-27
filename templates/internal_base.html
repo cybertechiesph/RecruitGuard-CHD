@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}{% block internal_title %}Internal Portal{% endblock %} | RecruitGuard-CHD{% endblock %}
 {% block body_class %}internal-portal-body {% block workspace_body_class %}{% endblock %}{% endblock %}
@@ -35,14 +36,16 @@ background:
             </div>
         {% endif %}
 
-        <div class="rg-main-content">
+        <main class="rg-main-content" id="rg-main-content">
             {% block content %}{% endblock %}
-        </div>
+        </main>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
+<script src="{% static 'js/recruitguard-autosave.js' %}?v=20260522-sliceD2"></script>
+<script src="{% static 'js/recruitguard-notifications.js' %}?v=20260524-sliceD1"></script>
 <script>
 (function () {
     "use strict";

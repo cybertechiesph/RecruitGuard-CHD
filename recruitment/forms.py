@@ -1,6 +1,15 @@
+from datetime import timedelta
+
 from django import forms
 from django.conf import settings
-from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm, UserCreationForm
+from django.contrib.auth.forms import (
+    AuthenticationForm,
+    PasswordChangeForm,
+    PasswordResetForm,
+    SetPasswordForm,
+    UserCreationForm,
+)
+from django.contrib.auth.hashers import check_password
 from django.forms import BaseInlineFormSet, inlineformset_factory
 from django.forms.models import ModelChoiceIteratorValue, construct_instance
 from django.utils import timezone
@@ -8,6 +17,7 @@ from django.utils import timezone
 from .models import (
     AuditLog,
     ComparativeAssessmentReport,
+    ComparativeAssessmentReportItem,
     CompletionRecord,
     CompletionRequirement,
     DeliberationRecord,
@@ -16,10 +26,13 @@ from .models import (
     FinalDecision,
     InterviewRating,
     InterviewSession,
+    InternalPasswordHistory,
     PositionReference,
     PositionPosting,
     RecruitmentApplication,
+    RecruitmentCase,
     RecruitmentUser,
+    ScreeningDocumentReview,
     ScreeningRecord,
 )
 from .requirements import get_applicant_document_requirements
@@ -32,6 +45,21 @@ from .upload_validation import validate_applicant_document_upload
 
 
 AUDIT_ACTION_CHOICE_LABELS = {
+    AuditLog.Action.INTERNAL_LOGIN_FAILED: "Internal Login Failed",
+    AuditLog.Action.INTERNAL_LOGIN_LOCKED: "Internal Login Locked",
+    AuditLog.Action.INTERNAL_LOGIN_ALERT_SENT: "Internal Login Alert Sent",
+    AuditLog.Action.INTERNAL_LOGIN_ALERT_FAILED: "Internal Login Alert Failed",
+    AuditLog.Action.INTERNAL_MFA_SENT: "Internal Verification Code Sent",
+    AuditLog.Action.INTERNAL_MFA_RESENT: "Internal Verification Code Resent",
+    AuditLog.Action.INTERNAL_MFA_VERIFIED: "Internal MFA Verified",
+    AuditLog.Action.INTERNAL_MFA_FAILED: "Internal MFA Failed",
+    AuditLog.Action.INTERNAL_MFA_EXPIRED: "Internal MFA Expired",
+    AuditLog.Action.INTERNAL_MFA_LOCKED: "Internal MFA Locked",
+    AuditLog.Action.PASSWORD_RESET_REQUESTED: "Password Reset Requested",
+    AuditLog.Action.PASSWORD_RESET_COMPLETED: "Password Reset Completed",
+    AuditLog.Action.INTERNAL_EMAIL_CHANGE_REQUESTED: "Internal Email Change Requested",
+    AuditLog.Action.INTERNAL_EMAIL_CHANGE_VERIFIED: "Internal Email Change Verified",
+    AuditLog.Action.INTERNAL_EMAIL_CHANGE_FAILED: "Internal Email Change Failed",
     AuditLog.Action.APPLICATION_OTP_SENT: "Verification Code Sent",
     AuditLog.Action.APPLICATION_OTP_VERIFIED: "Email Verified",
     AuditLog.Action.ROUTED: "Case Assigned",
@@ -161,6 +189,46 @@ def internal_role_choices():
     ]
 
 
+def _apply_password_strength_widget(field):
+    css_class = field.widget.attrs.get("class", "")
+    field.widget.attrs.update(
+        {
+            "class": f"{css_class} rg-password-strength-input".strip(),
+            "data-password-strength": "true",
+            "autocomplete": field.widget.attrs.get("autocomplete", "new-password"),
+        }
+    )
+
+
+def password_reuses_internal_history(user, raw_password):
+    if not user or not raw_password:
+        return False
+    if user.password and user.check_password(raw_password):
+        return True
+    return any(
+        check_password(raw_password, history.password_hash)
+        for history in user.password_history.all()[: settings.PASSWORD_HISTORY_LIMIT]
+    )
+
+
+class PasswordReuseValidationMixin:
+    reuse_error_message = (
+        "Use a password that has not been used recently for this internal account."
+    )
+
+    def _apply_password_strength_fields(self):
+        for field_name in ("password1", "password2", "new_password1", "new_password2"):
+            if field_name in self.fields:
+                _apply_password_strength_widget(self.fields[field_name])
+
+    def clean(self):
+        cleaned_data = super().clean()
+        password = cleaned_data.get("new_password2")
+        if password and password_reuses_internal_history(self.user, password):
+            self.add_error("new_password2", self.reuse_error_message)
+        return cleaned_data
+
+
 class InternalAuthenticationForm(BootstrapFormMixin, AuthenticationForm):
     username = forms.CharField(widget=forms.TextInput(attrs={"autofocus": True}))
     password = forms.CharField(strip=False, widget=forms.PasswordInput())
@@ -178,10 +246,46 @@ class InternalAuthenticationForm(BootstrapFormMixin, AuthenticationForm):
             )
 
 
-class InternalPasswordChangeForm(BootstrapFormMixin, PasswordChangeForm):
+class InternalPasswordChangeForm(PasswordReuseValidationMixin, BootstrapFormMixin, PasswordChangeForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._apply_bootstrap()
+        self._apply_password_strength_fields()
+
+
+class InternalSetPasswordForm(PasswordReuseValidationMixin, BootstrapFormMixin, SetPasswordForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
+        self._apply_password_strength_fields()
+
+
+class InternalPasswordResetForm(BootstrapFormMixin, PasswordResetForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
+
+    def get_users(self, email):
+        users = RecruitmentUser.objects.filter(
+            email__iexact=email,
+            is_active=True,
+            role__in=RecruitmentUser.internal_roles(),
+        )
+        return (user for user in users if user.has_usable_password())
+
+
+class InternalMFAOTPForm(BootstrapFormMixin, forms.Form):
+    otp = forms.CharField(max_length=6, min_length=6, label="Verification Code")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
+
+    def clean_otp(self):
+        otp = self.cleaned_data["otp"].strip()
+        if not otp.isdigit():
+            raise forms.ValidationError("Enter the 6-digit verification code sent to your email address.")
+        return otp
 
 
 class InternalUserCreateForm(BootstrapFormMixin, UserCreationForm):
@@ -204,6 +308,17 @@ class InternalUserCreateForm(BootstrapFormMixin, UserCreationForm):
         self.fields["email"].required = True
         self.fields["is_active"].initial = True
         self._apply_bootstrap()
+        _apply_password_strength_widget(self.fields["password1"])
+        _apply_password_strength_widget(self.fields["password2"])
+
+    def clean_email(self):
+        email = self.cleaned_data["email"].strip().lower()
+        if RecruitmentUser.objects.filter(
+            email__iexact=email,
+            role__in=RecruitmentUser.internal_roles(),
+        ).exists():
+            raise forms.ValidationError("This email address is already assigned to an internal account.")
+        return email
 
 
 class InternalUserUpdateForm(BootstrapFormMixin, forms.ModelForm):
@@ -225,6 +340,18 @@ class InternalUserUpdateForm(BootstrapFormMixin, forms.ModelForm):
         self.fields["role"].choices = internal_role_choices()
         self.fields["email"].required = True
         self._apply_bootstrap()
+
+    def clean_email(self):
+        email = self.cleaned_data["email"].strip().lower()
+        queryset = RecruitmentUser.objects.filter(
+            email__iexact=email,
+            role__in=RecruitmentUser.internal_roles(),
+        )
+        if self.instance and self.instance.pk:
+            queryset = queryset.exclude(pk=self.instance.pk)
+        if queryset.exists():
+            raise forms.ValidationError("This email address is already assigned to an internal account.")
+        return email
 
 
 class ApplicantPortalIntakeForm(BootstrapFormMixin, forms.Form):
@@ -672,6 +799,13 @@ class CaseHandoffForm(BootstrapFormMixin, forms.Form):
             "target_role_is_fixed",
             "target_role_fixed_label",
         )
+        # Plain name of the office that will receive the case.
+        if user.role == RecruitmentUser.Role.SECRETARIAT:
+            self.target_recipient_label = "HRM Chief"
+        elif user.role == RecruitmentUser.Role.HRM_CHIEF:
+            self.target_recipient_label = "Secretariat"
+        else:
+            self.target_recipient_label = "the other office"
         self._apply_bootstrap()
 
     def clean_target_role(self):
@@ -863,26 +997,310 @@ class CaseClosureForm(BootstrapFormMixin, forms.Form):
 
 
 class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.ModelForm):
+    DOCUMENT_STATUS_PREFIX = "document_status__"
+    DOCUMENT_REMARKS_PREFIX = "document_remarks__"
+    SCORE_RANGE_MESSAGE = "Enter a score from 0 to 100."
+    SCORE_FIELD_NAMES = (
+        "education_score",
+        "training_score",
+        "experience_score",
+        "document_review_score",
+    )
+    COMPLETENESS_BLOCKING_DOCUMENT_STATUSES = {
+        ScreeningDocumentReview.ReviewStatus.NOT_REVIEWED,
+        ScreeningDocumentReview.ReviewStatus.NEEDS_REVIEW,
+        ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION,
+        ScreeningDocumentReview.ReviewStatus.ABSENT,
+    }
+
     class Meta:
         model = ScreeningRecord
         fields = [
             "completeness_status",
             "completeness_notes",
             "qualification_outcome",
+            "education_score",
+            "training_score",
+            "experience_score",
+            "document_review_score",
             "screening_notes",
         ]
         widgets = {
             "completeness_notes": forms.Textarea(attrs={"rows": 3}),
+            "education_score": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
+            "training_score": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
+            "experience_score": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
+            "document_review_score": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
             "screening_notes": forms.Textarea(attrs={"rows": 4}),
         }
 
     def __init__(self, *args, **kwargs):
+        self.application = kwargs.pop("application", None)
+        self.document_review_fields = []
+        self._document_review_field_metadata = []
         super().__init__(*args, **kwargs)
         self.fields["completeness_status"].label = "Completeness Finding"
         self.fields["completeness_notes"].label = "Completeness Observations"
         self.fields["qualification_outcome"].label = "Qualification Outcome"
+        self.fields["education_score"].label = "Education Score"
+        self.fields["training_score"].label = "Training Score"
+        self.fields["experience_score"].label = "Experience Score"
+        self.fields["document_review_score"].label = "Official Document Review Score"
         self.fields["screening_notes"].label = "Screening Notes"
+        for field_name in self.SCORE_FIELD_NAMES:
+            self.fields[field_name].required = False
+            self.fields[field_name].widget.attrs.update(
+                {
+                    "min": "0",
+                    "max": "100",
+                    "data-score-limit": "true",
+                    "data-score-label": self.fields[field_name].label,
+                }
+            )
+        self.fields["document_review_score"].help_text = (
+            "Use an official overall document-review score when component scores are not encoded."
+        )
+        self.document_review_weight_display = self._document_review_weight_display()
+        self._build_document_review_fields()
         self._apply_bootstrap()
+        for field_meta in self._document_review_field_metadata:
+            field = self.fields[field_meta["field_name"]]
+            existing_class = field.widget.attrs.get("class", "")
+            field.widget.attrs["class"] = f"{existing_class} rg-scr-status-select js-doc-status".strip()
+            remarks_field = self.fields[field_meta["remarks_field_name"]]
+            existing_remarks_class = remarks_field.widget.attrs.get("class", "")
+            remarks_field.widget.attrs["class"] = (
+                f"{existing_remarks_class} rg-scr-remarks-field js-doc-remarks"
+            ).strip()
+
+    def _document_review_weight_display(self):
+        level = getattr(self.application, "level", None)
+        if level is None and self.instance and self.instance.pk:
+            level = self.instance.level
+        if level == PositionPosting.Level.LEVEL_2:
+            return "Policy basis: education 30%, training 30%, experience 40%."
+        return "Policy basis: education 40%, training 30%, experience 30%."
+
+    def _existing_document_reviews_by_key(self):
+        if not self.instance or not self.instance.pk:
+            return {}
+        return {
+            review.document_key: review
+            for review in self.instance.document_reviews.select_related("evidence_item")
+        }
+
+    def _document_status_field_name(self, requirement):
+        return f"{self.DOCUMENT_STATUS_PREFIX}{requirement.code}"
+
+    def _document_remarks_field_name(self, requirement):
+        return f"{self.DOCUMENT_REMARKS_PREFIX}{requirement.code}"
+
+    def _build_document_review_fields(self):
+        if self.application is None:
+            return
+
+        current_documents = get_current_applicant_document_map(self.application)
+        existing_reviews = self._existing_document_reviews_by_key()
+        status_labels = dict(ScreeningDocumentReview.ReviewStatus.choices)
+        for display_order, requirement in enumerate(
+            get_applicant_document_requirements(self.application.branch),
+            start=1,
+        ):
+            evidence = current_documents.get(requirement.code)
+            existing_review = existing_reviews.get(requirement.code)
+            is_not_applicable = (
+                requirement.conditional_on_performance_rating
+                and self.application.performance_rating_not_applicable
+                and evidence is None
+            )
+            is_required_for_completeness = requirement.is_required or (
+                requirement.conditional_on_performance_rating
+                and not self.application.performance_rating_not_applicable
+            )
+
+            if is_not_applicable:
+                initial_status = ScreeningDocumentReview.ReviewStatus.NOT_APPLICABLE
+                status_is_fixed = True
+            elif evidence is None and is_required_for_completeness:
+                initial_status = ScreeningDocumentReview.ReviewStatus.ABSENT
+                status_is_fixed = True
+            elif evidence is None:
+                initial_status = ScreeningDocumentReview.ReviewStatus.NOT_APPLICABLE
+                status_is_fixed = True
+            elif existing_review is not None:
+                initial_status = existing_review.status
+                status_is_fixed = False
+            else:
+                initial_status = ScreeningDocumentReview.ReviewStatus.NOT_REVIEWED
+                status_is_fixed = False
+
+            field_name = self._document_status_field_name(requirement)
+            remarks_field_name = self._document_remarks_field_name(requirement)
+            widget = forms.HiddenInput if status_is_fixed else forms.Select
+            self.fields[field_name] = forms.ChoiceField(
+                choices=ScreeningDocumentReview.ReviewStatus.choices,
+                required=False,
+                initial=initial_status,
+                widget=widget(
+                    attrs={
+                        "data-document-key": requirement.code,
+                        "data-required": "true" if is_required_for_completeness else "false",
+                    }
+                ),
+            )
+            self.fields[remarks_field_name] = forms.CharField(
+                required=False,
+                initial=existing_review.remarks if existing_review is not None else "",
+                label=f"Remarks for {requirement.title}",
+                widget=forms.Textarea(
+                    attrs={
+                        "rows": 2,
+                        "data-document-key": requirement.code,
+                        "placeholder": "Add review notes or resubmission instructions.",
+                    }
+                ),
+            )
+            metadata = {
+                "field_name": field_name,
+                "remarks_field_name": remarks_field_name,
+                "requirement": requirement,
+                "evidence": evidence,
+                "is_submitted": evidence is not None,
+                "is_not_applicable": is_not_applicable,
+                "is_required_for_completeness": is_required_for_completeness,
+                "requirement_label": (
+                    "Not applicable" if is_not_applicable else requirement.applicant_label
+                ),
+                "initial_status": initial_status,
+                "initial_status_label": status_labels.get(initial_status, initial_status),
+                "status_is_fixed": status_is_fixed,
+                "display_order": display_order,
+            }
+            self._document_review_field_metadata.append(metadata)
+            self.document_review_fields.append(
+                {
+                    **metadata,
+                    "field": self[field_name],
+                    "remarks_field": self[remarks_field_name],
+                }
+            )
+
+    def _collect_document_reviews(self, cleaned_data):
+        status_values = {value for value, _label in ScreeningDocumentReview.ReviewStatus.choices}
+        document_reviews = []
+        for field_meta in self._document_review_field_metadata:
+            field_name = field_meta["field_name"]
+            remarks_field_name = field_meta["remarks_field_name"]
+            status = cleaned_data.get(field_name) or field_meta["initial_status"]
+            remarks = (cleaned_data.get(remarks_field_name) or "").strip()
+            cleaned_data[remarks_field_name] = remarks
+            if field_meta["status_is_fixed"]:
+                status = field_meta["initial_status"]
+                cleaned_data[field_name] = status
+            if status not in status_values:
+                self.add_error(field_name, "Select a valid document review status.")
+                continue
+            if (
+                status == ScreeningDocumentReview.ReviewStatus.NOT_APPLICABLE
+                and field_meta["is_required_for_completeness"]
+                and not field_meta["is_not_applicable"]
+            ):
+                self.add_error(field_name, "Required documents cannot be marked not applicable.")
+            if (
+                status == ScreeningDocumentReview.ReviewStatus.MEETS
+                and field_meta["evidence"] is None
+            ):
+                self.add_error(field_name, "A missing document cannot be marked Meets.")
+            if (
+                status == ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION
+                and not remarks
+            ):
+                self.add_error(
+                    remarks_field_name,
+                    "Add the instruction the applicant should follow for this resubmission.",
+                )
+            document_reviews.append(
+                {
+                    "document_key": field_meta["requirement"].code,
+                    "requirement_title": field_meta["requirement"].title,
+                    "requirement_label": field_meta["requirement_label"],
+                    "status": status,
+                    "remarks": remarks,
+                    "is_required": field_meta["is_required_for_completeness"],
+                    "is_not_applicable": field_meta["is_not_applicable"],
+                    "evidence_item": field_meta["evidence"],
+                    "display_order": field_meta["display_order"],
+                }
+            )
+        cleaned_data["document_reviews"] = document_reviews
+        return document_reviews
+
+    def clean(self):
+        cleaned_data = super().clean()
+        document_reviews = self._collect_document_reviews(cleaned_data)
+        for field_name in self.SCORE_FIELD_NAMES:
+            value = cleaned_data.get(field_name)
+            if value is not None and (value < 0 or value > 100):
+                self.add_error(field_name, self.SCORE_RANGE_MESSAGE)
+        component_values = [
+            cleaned_data.get("education_score"),
+            cleaned_data.get("training_score"),
+            cleaned_data.get("experience_score"),
+        ]
+        if any(value is not None for value in component_values) and not all(
+            value is not None for value in component_values
+        ):
+            self.add_error(
+                "document_review_score",
+                "Record all three component scores, or leave them blank and use only the official document review score.",
+            )
+        completeness_status = cleaned_data.get("completeness_status")
+        qualification_outcome = cleaned_data.get("qualification_outcome")
+        completeness_notes = (cleaned_data.get("completeness_notes") or "").strip()
+        screening_notes = (cleaned_data.get("screening_notes") or "").strip()
+        blocking_reviews = [
+            review
+            for review in document_reviews
+            if review["is_required"]
+            and review["status"] in self.COMPLETENESS_BLOCKING_DOCUMENT_STATUSES
+        ]
+        if (
+            completeness_status == ScreeningRecord.CompletenessStatus.COMPLETE
+            and blocking_reviews
+        ):
+            blocking_labels = "; ".join(
+                review["requirement_title"] for review in blocking_reviews
+            )
+            self.add_error(
+                "completeness_status",
+                "Required documents must be marked Meets before using Complete: "
+                f"{blocking_labels}.",
+            )
+        if (
+            completeness_status == ScreeningRecord.CompletenessStatus.INCOMPLETE
+            and not completeness_notes
+        ):
+            self.add_error(
+                "completeness_notes",
+                "Record the missing documents or discrepancies before marking this incomplete.",
+            )
+        if (
+            completeness_status == ScreeningRecord.CompletenessStatus.INCOMPLETE
+            and qualification_outcome == ScreeningRecord.QualificationOutcome.QUALIFIED
+        ):
+            self.add_error(
+                "qualification_outcome",
+                "An applicant with incomplete documents cannot be marked Qualified.",
+            )
+        if (
+            qualification_outcome == ScreeningRecord.QualificationOutcome.NOT_QUALIFIED
+            and not screening_notes
+        ):
+            self.add_error(
+                "screening_notes",
+                "Record the qualification basis before marking this applicant Not Qualified.",
+            )
+        return cleaned_data
 
 
 class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.ModelForm):
@@ -928,6 +1346,7 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
 
     def __init__(self, *args, **kwargs):
         self.application = kwargs.pop("application", None)
+        self.draft = kwargs.pop("draft", False)
         super().__init__(*args, **kwargs)
         self.component_section_label = "Technical and Practical Components"
         self.component_weight_display = "Technical and practical scores are recorded separately."
@@ -973,7 +1392,7 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
         self.fields["exam_type"].help_text = "Set by the recruitment branch and hiring-process rules."
         self.fields["administered_by"].help_text = "Office responsible under the CHD hiring process."
         self.fields["exam_score"].help_text = (
-            "Use only when an official overall score is available. The system does not decide pass/fail or apply unstated weighting."
+            "Use only when an official overall score is available. Otherwise, policy component weights are used where confirmed."
         )
         if self.application:
             self.fields["technical_score"].label = "Technical Score"
@@ -998,6 +1417,9 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
             self.fields["administered_by"].help_text = (
                 "Automatically set from the branch-specific hiring-process procedure."
             )
+        if self.draft:
+            for field in self.fields.values():
+                field.required = False
         self._apply_bootstrap()
 
     def _exam_type_choices(self):
@@ -1049,6 +1471,10 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
             value = cleaned_data.get(field_name)
             if value is not None and (value < 0 or value > 100):
                 self.add_error(field_name, self.SCORE_RANGE_MESSAGE)
+        valid_from = cleaned_data.get("valid_from")
+        valid_until = cleaned_data.get("valid_until")
+        if valid_from and valid_until and valid_until < valid_from:
+            self.add_error("valid_until", "Validity end date cannot be earlier than the validity start date.")
 
         exam_status = cleaned_data.get("exam_status")
         score_values = {
@@ -1056,20 +1482,20 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
             for field_name in self.SCORE_FIELD_NAMES
         }
         if exam_status == ExamRecord.ExamStatus.COMPLETED:
-            if not cleaned_data.get("exam_date"):
+            if not self.draft and not cleaned_data.get("exam_date"):
                 self.add_error("exam_date", "Provide the date the examination was administered.")
-            if not cleaned_data.get("administered_by"):
+            if not self.draft and not cleaned_data.get("administered_by"):
                 self.add_error("administered_by", "Select who administered the examination.")
-            for field_name in self._required_score_fields_for_type(cleaned_data.get("exam_type")):
-                if score_values[field_name] is None and not self.has_error(field_name):
-                    self.add_error(field_name, "Enter this required exam score.")
+            if not self.draft:
+                for field_name in self._required_score_fields_for_type(cleaned_data.get("exam_type")):
+                    if score_values[field_name] is None and not self.has_error(field_name):
+                        self.add_error(field_name, "Enter this required exam score.")
         elif exam_status in {ExamRecord.ExamStatus.WAIVED, ExamRecord.ExamStatus.ABSENT}:
-            for field_name, value in score_values.items():
-                if value is not None:
-                    self.add_error(field_name, "Remove numeric scores for waived or absent exams.")
-            if cleaned_data.get("valid_from") or cleaned_data.get("valid_until"):
-                self.add_error("valid_from", "Only completed exams may record a validity period.")
-            if not cleaned_data.get("exam_notes"):
+            for field_name in self.SCORE_FIELD_NAMES:
+                cleaned_data[field_name] = None
+            cleaned_data["valid_from"] = None
+            cleaned_data["valid_until"] = None
+            if not self.draft and not cleaned_data.get("exam_notes"):
                 self.add_error("exam_notes", "Provide remarks explaining the waiver or absence.")
         return cleaned_data
 
@@ -1107,29 +1533,98 @@ class InterviewSessionForm(DeferredModelValidationMixin, BootstrapFormMixin, for
         self.fields["session_notes"].required = False
         self._apply_bootstrap()
 
+    def clean_scheduled_for(self):
+        scheduled_for = self.cleaned_data.get("scheduled_for")
+        if scheduled_for is None:
+            return scheduled_for
+        cutoff = timezone.now() - timedelta(minutes=5)
+        if scheduled_for >= cutoff:
+            return scheduled_for
+        if (
+            self.instance
+            and self.instance.pk
+            and self.instance.scheduled_for == scheduled_for
+            and self.instance.scheduled_for < cutoff
+        ):
+            return scheduled_for
+        raise forms.ValidationError("The interview can't be scheduled in the past.")
+
 
 class InterviewRatingForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.ModelForm):
     class Meta:
         model = InterviewRating
         fields = [
+            "rated_by",
             "rating_score",
             "rating_notes",
             "justification",
         ]
         widgets = {
+            "rated_by": forms.Select(),
             "rating_score": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
             "rating_notes": forms.Textarea(attrs={"rows": 3}),
             "justification": forms.Textarea(attrs={"rows": 3}),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, application=None, actor=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.application = application
+        self.actor = actor
+        self.is_support_encoding = self._is_support_encoding()
+        self.fields["rated_by"].label = "Actual HRMPSB Rater"
+        self.fields["rated_by"].queryset = self._rater_queryset()
         self.fields["rating_score"].label = "Interview Rating Score"
         self.fields["rating_notes"].label = "Rating Notes"
         self.fields["justification"].label = "Justification"
         self.fields["rating_notes"].required = False
         self.fields["justification"].required = False
+        if self.is_support_encoding:
+            self.fields["rated_by"].required = True
+            self.fields["rated_by"].help_text = (
+                "Select the HRMPSB member who actually gave the paper-based rating."
+            )
+        else:
+            self.fields["rated_by"].required = False
+            self.fields["rated_by"].widget = forms.HiddenInput()
+            if self.actor is not None:
+                self.fields["rated_by"].initial = self.actor.pk
         self._apply_bootstrap()
+
+    def _is_support_encoding(self):
+        if self.application is None or self.actor is None:
+            return False
+        case = getattr(self.application, "case", None)
+        return (
+            self.application.branch == PositionPosting.Branch.PLANTILLA
+            and case is not None
+            and case.current_stage == "hrmpsb_review"
+            and self.actor.role in {
+                RecruitmentUser.Role.SECRETARIAT,
+                RecruitmentUser.Role.HRM_CHIEF,
+            }
+        )
+
+    def _rater_queryset(self):
+        queryset = RecruitmentUser.objects.filter(is_active=True).order_by(
+            "last_name",
+            "first_name",
+            "username",
+        )
+        if self.is_support_encoding:
+            return queryset.filter(role=RecruitmentUser.Role.HRMPSB_MEMBER)
+        if self.actor is not None:
+            return queryset.filter(pk=self.actor.pk)
+        return queryset.none()
+
+    def clean_rated_by(self):
+        rated_by = self.cleaned_data.get("rated_by")
+        if self.is_support_encoding:
+            if rated_by is None:
+                raise forms.ValidationError("Select the HRMPSB member who gave the paper rating.")
+            if rated_by.role != RecruitmentUser.Role.HRMPSB_MEMBER:
+                raise forms.ValidationError("The actual rater must be an HRMPSB member.")
+            return rated_by
+        return self.actor or rated_by
 
 
 class InterviewFallbackUploadForm(BootstrapFormMixin, forms.Form):
@@ -1155,27 +1650,58 @@ class DeliberationRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, f
         fields = [
             "deliberated_at",
             "deliberation_minutes",
+            "recommendation",
             "decision_support_summary",
+            "quorum_status",
+            "attendance_notes",
             "ranking_position",
             "ranking_notes",
         ]
         widgets = {
             "deliberation_minutes": forms.Textarea(attrs={"rows": 4}),
+            "recommendation": forms.Textarea(attrs={"rows": 3}),
             "decision_support_summary": forms.Textarea(attrs={"rows": 4}),
+            "attendance_notes": forms.Textarea(attrs={"rows": 3}),
             "ranking_position": forms.NumberInput(attrs={"min": "1", "step": "1"}),
             "ranking_notes": forms.Textarea(attrs={"rows": 3}),
         }
 
     def __init__(self, *args, **kwargs):
+        self.application = kwargs.pop("application", None)
+        draft = kwargs.pop("draft", False)
         super().__init__(*args, **kwargs)
         self.fields["deliberated_at"].label = "Deliberation Date and Time"
         self.fields["deliberation_minutes"].label = "Deliberation Minutes / Record"
+        self.fields["recommendation"].label = "HRMPSB Recommendation"
         self.fields["decision_support_summary"].label = "Decision-Support Summary"
+        self.fields["quorum_status"].label = "Quorum Status"
+        self.fields["attendance_notes"].label = "Attendance Notes"
         self.fields["ranking_position"].label = "Ranking Position"
-        self.fields["ranking_notes"].label = "Ranking Notes"
+        self.fields["ranking_notes"].label = "Ranking Notes / Justification"
         self.fields["ranking_position"].required = False
         self.fields["ranking_notes"].required = False
+        self.fields["quorum_status"].required = False
+        self.fields["attendance_notes"].required = False
+        self.fields["ranking_notes"].help_text = (
+            "Record concerns or justification when the HRMPSB rank differs from the system's preliminary score order."
+        )
+        if draft:
+            for field in self.fields.values():
+                field.required = False
         self._apply_bootstrap()
+
+    def _is_plantilla_hrmpsb(self):
+        if self.application is not None:
+            return (
+                self.application.branch == PositionPosting.Branch.PLANTILLA
+                and getattr(getattr(self.application, "case", None), "current_stage", "")
+                == RecruitmentCase.Stage.HRMPSB_REVIEW
+            )
+        return (
+            self.instance
+            and self.instance.branch == PositionPosting.Branch.PLANTILLA
+            and self.instance.review_stage == RecruitmentCase.Stage.HRMPSB_REVIEW
+        )
 
 
 class ComparativeAssessmentReportForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.ModelForm):
@@ -1211,6 +1737,69 @@ class FinalDecisionForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.
         self.fields["decision_outcome"].label = "Final Outcome"
         self.fields["decision_notes"].label = "Decision Notes / Remarks"
         self._apply_bootstrap()
+
+
+class CARItemChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, item):
+        application = item.application
+        reference = application.reference_number or application.reference_label
+        return f"#{item.rank_order} - {application.applicant_display_name} ({reference})"
+
+
+class FinalSelectionForm(BootstrapFormMixin, forms.Form):
+    selected_item = CARItemChoiceField(
+        queryset=ComparativeAssessmentReportItem.objects.none(),
+        widget=forms.RadioSelect,
+    )
+    is_deep_selection = forms.BooleanField(required=False)
+    deep_selection_justification = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3}),
+    )
+    decision_notes = forms.CharField(widget=forms.Textarea(attrs={"rows": 4}))
+
+    def __init__(self, *args, report=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.report = report
+        if report is not None:
+            self.fields["selected_item"].queryset = report.items.select_related(
+                "recruitment_case",
+                "recruitment_case__application",
+            ).order_by("rank_order", "created_at")
+        self.fields["selected_item"].label = "Selected Appointee"
+        self.fields["is_deep_selection"].label = "Deep selection"
+        self.fields["deep_selection_justification"].label = "Deep-selection Justification"
+        self.fields["decision_notes"].label = "Decision Notes / Remarks"
+        self.fields["is_deep_selection"].help_text = (
+            "Required when selecting an applicant ranked outside the top five."
+        )
+        self.fields["deep_selection_justification"].help_text = (
+            "Explain the superior qualifications and selection basis."
+        )
+        self._apply_bootstrap()
+
+    def clean_selected_item(self):
+        selected_item = self.cleaned_data["selected_item"]
+        if self.report is not None and selected_item.report_id != self.report.id:
+            raise forms.ValidationError("Select an applicant from the finalized CAR.")
+        return selected_item
+
+    def clean(self):
+        cleaned_data = super().clean()
+        selected_item = cleaned_data.get("selected_item")
+        is_deep_selection = cleaned_data.get("is_deep_selection")
+        justification = (cleaned_data.get("deep_selection_justification") or "").strip()
+        if selected_item and selected_item.rank_order > 5 and not is_deep_selection:
+            self.add_error(
+                "is_deep_selection",
+                "Selecting outside the top five requires deep selection documentation.",
+            )
+        if is_deep_selection and not justification:
+            self.add_error(
+                "deep_selection_justification",
+                "Record the deep-selection justification before finalizing this selection.",
+            )
+        return cleaned_data
 
 
 class PositionReferenceForm(BootstrapFormMixin, forms.ModelForm):
