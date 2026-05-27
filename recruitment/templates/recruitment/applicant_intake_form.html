@@ -177,9 +177,11 @@
             </p>
 
             {% if entry.branch == "plantilla" %}
-            {# Performance-rating applicability lives here in Step 2 so the question
-               sits next to the upload slot it controls. Hides the performance_rating
-               upload slot below when the applicant chooses "not applicable". #}
+            {% comment %}
+            Performance-rating applicability lives here in Step 2 so the question
+            sits next to the upload slot it controls. Hides the performance_rating
+            upload slot below when the applicant chooses "not applicable".
+            {% endcomment %}
             <fieldset class="rg-pub-field rg-intake-fieldset rg-intake-applicability-top"
                       data-intake-applicability-fieldset>
                 <legend>
@@ -204,8 +206,10 @@
                 {% endfor %}
             </fieldset>
             {% else %}
-                {# COS — auto-set to NOT_APPLICABLE on the backend. Submit a hidden value
-                   so the form posts correctly even when the radios are not shown. #}
+                {% comment %}
+                COS — auto-set to NOT_APPLICABLE on the backend. Submit a hidden value
+                so the form posts correctly even when the radios are not shown.
+                {% endcomment %}
                 <input type="hidden" name="{{ form.performance_rating_applicability.html_name }}" value="not_applicable">
             {% endif %}
 

@@ -1,12 +1,13 @@
-{# Error state partial.
-   Usage:
-     {% include "internal_includes/state_error.html" with
-         title="Could not load records"
-         copy="An error occurred while fetching this data. Try refreshing the page."
-         retry_url=request.path
-     %}
-   All parameters optional.
-#}
+{% comment %}
+Error state partial.
+Usage:
+  {% include "internal_includes/state_error.html" with
+      title="Could not load records"
+      copy="An error occurred while fetching this data. Try refreshing the page."
+      retry_url=request.path
+  %}
+All parameters optional.
+{% endcomment %}
 <div class="rg-istate-error">
     <div class="rg-istate-error__icon">
         <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24"
