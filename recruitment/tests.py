@@ -2,6 +2,7 @@ import importlib
 import io
 import json
 import re
+import uuid
 import zipfile
 from datetime import date, timedelta
 from unittest.mock import patch
@@ -13,6 +14,7 @@ from django.contrib.messages import get_messages
 from django.core import mail
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
 from django.db import transaction
 from django.test import Client, TestCase, override_settings
 from django.template.loader import render_to_string
@@ -66,6 +68,7 @@ from .services import (
     build_submission_packet,
     emit_deadline_approaching_notifications,
     generate_comparative_assessment_report,
+    get_current_workflow_section,
     get_latest_finalized_comparative_assessment_report,
     get_available_actions,
     get_queue_for_user,
@@ -1235,6 +1238,21 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
             ).exists()
         )
 
+    def test_position_posting_salary_grade_display_uses_reference(self):
+        self.admin_aide_position.salary_grade = 7
+        self.admin_aide_position.save(update_fields=["salary_grade", "updated_at"])
+        self.level1_position.refresh_from_db()
+
+        self.assertEqual(self.level1_position.salary_grade_display, "SG 7")
+
+        entry_without_reference = PositionPosting(
+            branch=PositionPosting.Branch.COS,
+            level=PositionPosting.Level.LEVEL_1,
+            intake_mode=PositionPosting.IntakeMode.POOLING,
+            status=PositionPosting.EntryStatus.ACTIVE,
+        )
+        self.assertEqual(entry_without_reference.salary_grade_display, "")
+
     def test_position_reference_slug_generation_is_collision_safe(self):
         first = PositionReference.objects.create(
             position_title="Budget Officer",
@@ -2096,6 +2114,31 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertContains(response, "The verification code is invalid.")
         self.assertIsNone(application.otp_verified_at)
 
+    def test_stale_applicant_otp_link_redirects_to_portal(self):
+        client = Client()
+        stale_token = uuid.uuid4()
+
+        response = client.post(
+            reverse("applicant-otp", kwargs={"token": stale_token}),
+            {"action": "verify", "otp": "123456"},
+            follow=True,
+        )
+
+        self.assertRedirects(response, reverse("applicant-portal"))
+        self.assertContains(response, "This verification link is no longer available.")
+
+    def test_stale_applicant_receipt_link_redirects_to_portal(self):
+        client = Client()
+        stale_token = uuid.uuid4()
+
+        response = client.get(
+            reverse("applicant-receipt", kwargs={"token": stale_token}),
+            follow=True,
+        )
+
+        self.assertRedirects(response, reverse("applicant-portal"))
+        self.assertContains(response, "This receipt link is no longer available.")
+
     def test_portal_intake_requires_requirement_coded_documents(self):
         client = Client()
         missing_requirement = get_required_applicant_document_requirements(
@@ -2334,7 +2377,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertTrue(form.saved_draft_notice)
         self.assertIn("signed_cover_letter", form.existing_documents_by_code)
         self.assertNotIn(missing_requirement.code, form.existing_documents_by_code)
-        self.assertContains(response, "Already saved:")
+        self.assertContains(response, "You uploaded")
 
     def test_empty_portal_submission_returns_validation_errors_without_crashing(self):
         client = Client()
@@ -7612,3 +7655,50 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         self.assertContains(response, "Choose the final outcome and provide the decision remarks.")
         self.assertContains(response, "This field is required.")
         self.assertContains(response, 'data-decision-step="decide"')
+
+
+class E2ESeedCommandTests(BaseRecruitmentTestCase):
+    def test_seed_e2e_test_cases_creates_verification_cases(self):
+        out = io.StringIO()
+        call_command("seed_e2e_test_cases", stdout=out, base_email="e2e@example.test")
+
+        cos_screening = RecruitmentApplication.objects.get(reference_number="RG-COS-test-screening")
+        self.assertEqual(cos_screening.case.current_stage, RecruitmentCase.Stage.SECRETARIAT_REVIEW)
+        self.assertEqual(get_current_workflow_section(cos_screening), "screening")
+        self.assertFalse(cos_screening.screening_records.filter(is_finalized=True).exists())
+
+        exam = RecruitmentApplication.objects.get(reference_number="RG-PLT-test-exam")
+        self.assertEqual(exam.case.current_stage, RecruitmentCase.Stage.HRM_CHIEF_REVIEW)
+        self.assertEqual(get_current_workflow_section(exam), "exam")
+        self.assertTrue(exam.screening_records.filter(is_finalized=True).exists())
+
+        cos_decision = RecruitmentApplication.objects.get(reference_number="RG-COS-test-decision")
+        self.assertEqual(cos_decision.case.current_stage, RecruitmentCase.Stage.HRM_CHIEF_REVIEW)
+        self.assertEqual(get_current_workflow_section(cos_decision), "decision")
+
+        final_selection = RecruitmentApplication.objects.get(
+            reference_number="RG-PLT-test-final-selection"
+        )
+        final_selection_report = get_latest_finalized_comparative_assessment_report(
+            final_selection
+        )
+        self.assertEqual(final_selection.case.current_stage, RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW)
+        self.assertEqual(get_current_workflow_section(final_selection), "decision")
+        self.assertEqual(final_selection_report.items.count(), 6)
+        self.assertTrue(final_selection_report.items.filter(rank_order__gt=5).exists())
+
+        aa_decision = RecruitmentApplication.objects.get(reference_number="RG-PLT-test-aa-decision")
+        self.assertEqual(aa_decision.case.current_stage, RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW)
+        self.assertEqual(get_current_workflow_section(aa_decision), "decision")
+
+        completion = RecruitmentApplication.objects.get(reference_number="RG-PLT-test-completion")
+        self.assertEqual(completion.case.current_stage, RecruitmentCase.Stage.COMPLETION)
+        self.assertEqual(get_current_workflow_section(completion), "completion")
+        self.assertTrue(hasattr(completion, "completion_record"))
+        self.assertEqual(completion.completion_record.requirements.count(), 1)
+
+        call_command("seed_e2e_test_cases", stdout=io.StringIO(), base_email="e2e@example.test")
+        self.assertEqual(
+            RecruitmentApplication.objects.filter(reference_number="RG-PLT-test-exam").count(),
+            1,
+        )

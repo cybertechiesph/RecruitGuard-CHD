@@ -1147,7 +1147,7 @@ body.applicant-portal-body {
     color: rgba(255, 255, 255, 0.85);
     font-size: 0.78rem;
     margin: 0.2rem 0 0;
-    font-family: "Courier New", monospace;
+    font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, Menlo, monospace;
 }
 .rg-scr-doc-drawer__actions {
     display: flex;
@@ -1889,7 +1889,7 @@ body.applicant-portal-body {
     padding: 0.2rem 0.55rem;
     border-radius: 999px;
     background: #f3f4f6;
-    color: #6b7280;
+    color: #475569;
     font-weight: 600;
     letter-spacing: 0.01em;
 }
@@ -2058,7 +2058,7 @@ body.applicant-portal-body {
 .rg-intake-optional {
     font-size: 0.74rem;
     font-weight: 400;
-    color: #9aa4af;
+    color: #64748b;
     margin-left: 0.35rem;
 }
 
@@ -3307,6 +3307,14 @@ body.applicant-portal-body {
     line-height: 1.5;
 }
 
+/* On tablet / small-laptop widths the panel was sitting too close to the
+   role pill on its left. Shrink it slightly so it sits comfortably under
+   the bell instead of dominating the topbar row. */
+@media (max-width: 860px) {
+    .rg-notif__panel {
+        width: min(20rem, calc(100vw - 2rem));
+    }
+}
 @media (max-width: 540px) {
     .rg-notif__panel {
         right: -0.5rem;
@@ -3379,4 +3387,174 @@ body.applicant-portal-body {
 /* When the badge sits in the case header facts strip, give it a touch of space */
 .rg-cws-header__facts .rg-sla-badge {
     margin-left: 0.25rem;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   Applicant portal home page — polish slice (H1–H7)
+───────────────────────────────────────────────────────────────── */
+
+/* Job-card chips: branch type + level, sit just below the title */
+.rg-pub-job-card__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0.4rem 0 0.5rem;
+}
+.rg-pub-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.18rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    border: 1px solid transparent;
+    line-height: 1.3;
+}
+.rg-pub-chip--plantilla {
+    background: #ecfdf5;
+    color: #14532d;
+    border-color: #86efac;
+}
+.rg-pub-chip--cos {
+    background: #fef3c7;
+    color: #92400e;
+    border-color: #fde68a;
+}
+.rg-pub-chip--level {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border-color: #bfdbfe;
+}
+.rg-pub-chip--sg {
+    background: #f1f5f9;
+    color: #334155;
+    border-color: #cbd5e1;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Job-code reference line above the title — small, secondary, monospace */
+.rg-pub-job-card__ref {
+    margin: 0 0 0.15rem;
+    font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, Menlo, monospace;
+    font-size: 0.72rem;
+    color: #64748b;
+    letter-spacing: 0.02em;
+}
+
+/* Closing-soon badge inside the deadline line */
+.rg-pub-job-card__urgent {
+    display: inline-block;
+    padding: 0.1rem 0.45rem;
+    margin-right: 0.35rem;
+    border-radius: 999px;
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    vertical-align: middle;
+}
+
+/* "Need help applying?" PAD contact block */
+.rg-pub-help-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.85rem;
+    margin: 2rem 0 1rem;
+    padding: 1rem 1.15rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid var(--rg-brand-green, #16a34a);
+    border-radius: 0.6rem;
+}
+.rg-pub-help-box__icon {
+    flex: 0 0 auto;
+    width: 2rem;
+    height: 2rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #ecfdf5;
+    color: var(--rg-brand-green, #16a34a);
+}
+.rg-pub-help-box__icon svg {
+    width: 1.1rem;
+    height: 1.1rem;
+}
+.rg-pub-help-box__body { min-width: 0; }
+.rg-pub-help-box__title {
+    margin: 0 0 0.2rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+.rg-pub-help-box__copy {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #475569;
+    line-height: 1.5;
+}
+.rg-pub-help-box__copy a {
+    color: var(--rg-brand-green-ink, #14532d);
+    font-weight: 600;
+    text-decoration: none;
+}
+.rg-pub-help-box__copy a:hover { text-decoration: underline; }
+
+/* "How it works" three-step explainer */
+.rg-pub-howitworks {
+    padding-top: 2.5rem;
+    padding-bottom: 0.5rem;
+}
+.rg-pub-howitworks__heading {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: var(--rg-brand-green-ink, #14532d);
+    margin: 0 0 1.25rem;
+}
+.rg-pub-howitworks__steps {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 1rem;
+}
+.rg-pub-howitworks__step {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.85rem;
+    padding: 1rem 1.15rem;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.65rem;
+}
+.rg-pub-howitworks__num {
+    flex: 0 0 auto;
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 50%;
+    background: var(--rg-brand-green, #16a34a);
+    color: #ffffff;
+    font-weight: 800;
+    font-size: 1rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.rg-pub-howitworks__title {
+    margin: 0 0 0.2rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+.rg-pub-howitworks__copy {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #475569;
+    line-height: 1.5;
 }

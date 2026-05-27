@@ -1339,7 +1339,7 @@ textarea.form-control {
 }
 
 .rg-dash-queue-row__ref {
-    font-family: "Courier New", monospace;
+    font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, Menlo, monospace;
     font-size: 0.75rem;
     font-weight: 700;
     color: #7f8a96;
@@ -3208,7 +3208,7 @@ textarea.form-control {
     letter-spacing: 0.35em;
     text-align: center;
     font-weight: 700;
-    font-family: 'Courier New', monospace;
+    font-family: ui-monospace, SFMono-Regular, 'Cascadia Mono', Consolas, Menlo, monospace;
     max-width: 240px;
     margin: 0 auto 1rem;
     display: block;
@@ -3426,7 +3426,7 @@ textarea.form-control {
 .rg-pub-receipt-id {
     font-size: 1.65rem;
     font-weight: 700;
-    font-family: 'Courier New', monospace;
+    font-family: ui-monospace, SFMono-Regular, 'Cascadia Mono', Consolas, Menlo, monospace;
     letter-spacing: 0.05em;
     color: #111827;
     text-align: center;
@@ -4702,7 +4702,7 @@ textarea.form-control {
 
 /* Monospace reference column */
 .rg-itbl .col-ref {
-    font-family: "Courier New", monospace;
+    font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, Menlo, monospace;
     font-size: 0.78rem;
     font-weight: 700;
     color: #5f6c78;
@@ -5406,7 +5406,7 @@ textarea.form-control {
 /* Timestamp / metadata line */
 .rg-imeta {
     font-size: 0.75rem;
-    color: #9aa4af;
+    color: #5f6c78;
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
@@ -5485,7 +5485,7 @@ textarea.form-control {
 .rg-cws-header__identity { flex: 1; min-width: 0; }
 
 .rg-cws-header__ref {
-    font-family: 'Courier New', monospace;
+    font-family: ui-monospace, SFMono-Regular, 'Cascadia Mono', Consolas, Menlo, monospace;
     font-size: 0.75rem;
     font-weight: 700;
     color: #5f6c78;

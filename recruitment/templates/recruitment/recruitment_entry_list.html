@@ -54,14 +54,14 @@
                         <th>Level</th>
                         <th>Status</th>
                         <th>Schedule</th>
-                        <th class="col-actions"></th>
+                        <th class="col-actions"><span class="visually-hidden">Actions</span></th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for entry in entries %}
                         <tr>
                             <td>
-                                <div style="font-family:'Courier New',monospace;font-size:0.78rem;font-weight:700;color:#5f6c78;">
+                                <div style="font-family:ui-monospace,SFMono-Regular,'Cascadia Mono',Consolas,Menlo,monospace;font-size:0.78rem;font-weight:700;color:#5f6c78;">
                                     {{ entry.job_code }}
                                 </div>
                                 <div style="font-size:0.8125rem;font-weight:600;color:#111827;margin-top:0.15rem;">

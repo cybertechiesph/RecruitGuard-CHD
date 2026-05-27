@@ -466,6 +466,12 @@ class PositionPosting(TimestampedModel):
                 return self.position_reference.occupational_service
         return self.unit
 
+    @property
+    def salary_grade_display(self):
+        reference = getattr(self, "position_reference", None)
+        salary_grade = getattr(reference, "salary_grade", None)
+        return f"SG {salary_grade}" if salary_grade else ""
+
     def apply_position_reference_metadata(self):
         if not self.position_reference_id:
             return

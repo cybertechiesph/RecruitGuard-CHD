@@ -202,13 +202,23 @@ class ApplicantOTPView(TemplateView):
     template_name = "recruitment/applicant_otp.html"
 
     def get_application(self):
-        return get_object_or_404(
-            RecruitmentApplication.objects.select_related("position", "applicant"),
-            public_token=self.kwargs["token"],
+        return (
+            RecruitmentApplication.objects.select_related("position", "applicant")
+            .filter(public_token=self.kwargs["token"])
+            .first()
         )
+
+    def handle_missing_application(self, request):
+        messages.error(
+            request,
+            "This verification link is no longer available. Please start again from the job openings page.",
+        )
+        return redirect("applicant-portal")
 
     def get(self, request, *args, **kwargs):
         application = self.get_application()
+        if application is None:
+            return self.handle_missing_application(request)
         if application.submitted_at:
             return redirect("applicant-receipt", token=application.public_token)
         return super().get(request, *args, **kwargs)
@@ -216,6 +226,8 @@ class ApplicantOTPView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         application = kwargs.get("application") or self.get_application()
+        if application is None:
+            raise Http404
         context["application"] = application
         context["otp_form"] = kwargs.get("otp_form") or ApplicantOTPForm()
         context["otp_validity_minutes"] = settings.APPLICATION_OTP_VALIDITY_MINUTES
@@ -223,6 +235,8 @@ class ApplicantOTPView(TemplateView):
 
     def post(self, request, *args, **kwargs):
         application = self.get_application()
+        if application is None:
+            return self.handle_missing_application(request)
         if application.submitted_at:
             return redirect("applicant-receipt", token=application.public_token)
 
@@ -272,13 +286,29 @@ class ApplicantOTPView(TemplateView):
 class ApplicantReceiptView(TemplateView):
     template_name = "recruitment/applicant_receipt.html"
 
+    def get_application(self):
+        return (
+            RecruitmentApplication.objects.select_related("position")
+            .filter(public_token=self.kwargs["token"], submitted_at__isnull=False)
+            .first()
+        )
+
+    def get(self, request, *args, **kwargs):
+        self.application = self.get_application()
+        if self.application is None:
+            messages.error(
+                request,
+                "This receipt link is no longer available. If you already submitted, use Track Application with your application ID and email.",
+            )
+            return redirect("applicant-portal")
+        return super().get(request, *args, **kwargs)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["application"] = get_object_or_404(
-            RecruitmentApplication.objects.select_related("position"),
-            public_token=self.kwargs["token"],
-            submitted_at__isnull=False,
-        )
+        application = getattr(self, "application", None) or self.get_application()
+        if application is None:
+            raise Http404
+        context["application"] = application
         return context
 
 

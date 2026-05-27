@@ -1,9 +1,9 @@
 {% load recruitment_ui %}
-<div class="rg-context-bar">
-    <div class="rg-context-bar__breadcrumb">
+<header class="rg-context-bar" role="banner">
+    <nav class="rg-context-bar__breadcrumb" aria-label="Breadcrumb">
         <a href="{% url 'dashboard' %}" class="rg-breadcrumb-home">Dashboard</a>
         {% block breadcrumb %}{% endblock %}
-    </div>
+    </nav>
     <div class="rg-context-bar__right">
         <span class="rg-context-bar__role">
             <span class="rg-pill rg-pill--{{ user.role|role_theme }}" style="font-size:0.7rem;min-height:1.6rem;padding:0.2rem 0.6rem;">
@@ -13,4 +13,4 @@
         {% notifications_bell %}
         <span class="rg-user-pill">{{ user.get_full_name|default:user.username }}</span>
     </div>
-</div>
+</header>

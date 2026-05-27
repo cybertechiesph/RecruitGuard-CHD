@@ -56,7 +56,7 @@ reviewer can see the disposition at a glance without scrolling to step 2.
              role="group" aria-label="Step 1: Type and administration">
         <div class="rg-scr-panel__header">
             <div>
-                <h3 class="rg-scr-panel__title">Step 1 &mdash; Type and administration</h3>
+                <h2 class="rg-scr-panel__title">Step 1 &mdash; Type and administration</h2>
                 <p class="rg-scr-panel__subtitle">
                     What kind of exam this is, when it happened, and which office administered it.
                 </p>
@@ -66,7 +66,7 @@ reviewer can see the disposition at a glance without scrolling to step 2.
         <div class="rg-field">
             {% if exam_form.exam_type_is_fixed %}
                 <label class="form-label">{{ exam_form.exam_type.label }}</label>
-                <div class="form-control rg-fixed-value" aria-readonly="true">
+                <div class="form-control rg-fixed-value">
                     {{ exam_form.exam_type_fixed_label }}
                 </div>
                 {{ exam_form.exam_type }}
@@ -99,7 +99,7 @@ reviewer can see the disposition at a glance without scrolling to step 2.
             <div class="rg-field">
                 {% if exam_form.administered_by_is_fixed %}
                     <label class="form-label">{{ exam_form.administered_by.label }}</label>
-                    <div class="form-control rg-fixed-value" aria-readonly="true">
+                    <div class="form-control rg-fixed-value">
                         {{ exam_form.administered_by_fixed_label }}
                     </div>
                     {{ exam_form.administered_by }}
@@ -122,7 +122,7 @@ reviewer can see the disposition at a glance without scrolling to step 2.
              role="group" aria-label="Step 2: Outcome and scores">
         <div class="rg-scr-panel__header">
             <div>
-                <h3 class="rg-scr-panel__title">Step 2 &mdash; Outcome and scores</h3>
+                <h2 class="rg-scr-panel__title">Step 2 &mdash; Outcome and scores</h2>
                 <p class="rg-scr-panel__subtitle">
                     Record what happened with the exam. Score fields appear only when the applicant
                     completed it; a remarks field appears for waived or absent.
@@ -221,7 +221,7 @@ reviewer can see the disposition at a glance without scrolling to step 2.
                 </div>
                 <div class="rg-field">
                     <label class="form-label">System result</label>
-                    <div class="form-control rg-fixed-value" aria-readonly="true">
+                    <div class="form-control rg-fixed-value">
                         For evaluation
                     </div>
                     <div class="form-text">
@@ -289,7 +289,7 @@ reviewer can see the disposition at a glance without scrolling to step 2.
              role="group" aria-label="Step 3: Supporting evidence">
         <div class="rg-scr-panel__header">
             <div>
-                <h3 class="rg-scr-panel__title">Step 3 &mdash; Supporting evidence</h3>
+                <h2 class="rg-scr-panel__title">Step 3 &mdash; Supporting evidence</h2>
                 <p class="rg-scr-panel__subtitle">
                     Optional. Upload the exam sheet, rubric, or end-user assessment file.
                     Saved with the secured case files.

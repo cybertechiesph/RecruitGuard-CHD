@@ -7,7 +7,7 @@
 <section class="rg-pub-hero rg-pub-hero--photo" aria-label="DOH–CHD CALABARZON recruitment portal">
     <div class="rg-pub-wrap">
         <span class="rg-pub-hero__eyebrow">Official Online Recruitment</span>
-        <h1 class="rg-pub-hero__title">Apply for a Position at<br>DOH&ndash;CHD CALABARZON</h1>
+        <h1 class="rg-pub-hero__title">Apply for a Position at <br>DOH&ndash;CHD CALABARZON</h1>
         <p class="rg-pub-hero__copy">
             Browse current job openings, submit your application online,
             and track your status &mdash; all in one secure place.
@@ -50,33 +50,33 @@
     </div>
 </div>
 
-{# ── Quick action cards ──────────────────────────────────────── #}
-<div class="rg-pub-wrap" style="padding-top:2rem;">
-    <div class="rg-pub-action-grid">
-        <a href="#job-openings" class="rg-pub-action-card" id="browse-card">
-            <div class="rg-pub-action-card__icon" aria-hidden="true">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="3" y="4" width="18" height="16" rx="2"/>
-                    <path d="M8 2v4"/><path d="M16 2v4"/>
-                    <path d="M3 10h18"/><path d="M8 14h4"/><path d="M8 18h8"/>
-                </svg>
+{# ── How it works (3-step orientation for first-time visitors) ─ #}
+<section class="rg-pub-wrap rg-pub-howitworks" aria-labelledby="how-it-works-heading">
+    <h2 id="how-it-works-heading" class="rg-pub-howitworks__heading">How it works</h2>
+    <ol class="rg-pub-howitworks__steps">
+        <li class="rg-pub-howitworks__step">
+            <span class="rg-pub-howitworks__num" aria-hidden="true">1</span>
+            <div>
+                <p class="rg-pub-howitworks__title">Browse openings</p>
+                <p class="rg-pub-howitworks__copy">Find a position that fits you.</p>
             </div>
-            <p class="rg-pub-action-card__title">View Job Openings</p>
-            <p class="rg-pub-action-card__copy">See all available positions and apply online.</p>
-            <span class="rg-pub-action-card__cta">Browse Openings &rarr;</span>
-        </a>
-        <a href="{% url 'applicant-status-lookup' %}" class="rg-pub-action-card">
-            <div class="rg-pub-action-card__icon" aria-hidden="true">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
-                </svg>
+        </li>
+        <li class="rg-pub-howitworks__step">
+            <span class="rg-pub-howitworks__num" aria-hidden="true">2</span>
+            <div>
+                <p class="rg-pub-howitworks__title">Apply online</p>
+                <p class="rg-pub-howitworks__copy">Fill in your information, upload your documents, and verify your email.</p>
             </div>
-            <p class="rg-pub-action-card__title">Track My Application</p>
-            <p class="rg-pub-action-card__copy">Already applied? Check your application status anytime.</p>
-            <span class="rg-pub-action-card__cta">Check Status &rarr;</span>
-        </a>
-    </div>
-</div>
+        </li>
+        <li class="rg-pub-howitworks__step">
+            <span class="rg-pub-howitworks__num" aria-hidden="true">3</span>
+            <div>
+                <p class="rg-pub-howitworks__title">Track your application</p>
+                <p class="rg-pub-howitworks__copy">Check your status anytime using your reference number.</p>
+            </div>
+        </li>
+    </ol>
+</section>
 
 {# ── Job Openings List ───────────────────────────────────────── #}
 <div class="rg-pub-wrap" id="job-openings">
@@ -105,16 +105,26 @@
        aria-label="View details for {{ entry.title }}">
         <div class="rg-pub-job-card__inner">
             <div class="rg-pub-job-card__body">
+                <p class="rg-pub-job-card__ref">{{ entry.job_code }}</p>
                 <h3 class="rg-pub-job-card__title">{{ entry.title }}</h3>
+                <div class="rg-pub-job-card__chips">
+                    <span class="rg-pub-chip rg-pub-chip--plantilla">Permanent</span>
+                    <span class="rg-pub-chip rg-pub-chip--level">Level {{ entry.level }}</span>
+                    {% if entry.salary_grade_display %}
+                        <span class="rg-pub-chip rg-pub-chip--sg">{{ entry.salary_grade_display }}</span>
+                    {% endif %}
+                </div>
                 <p class="rg-pub-job-card__meta">
-                    Permanent &middot;
                     {{ entry.official_office_label|default:"CHD CALABARZON" }}
                 </p>
                 <p class="rg-pub-job-card__deadline {% if entry.is_closing_soon %}rg-pub-job-card__deadline--urgent{% endif %}">
                     {% if entry.closing_date %}
-                        {% if entry.is_closing_soon %}Closing soon &mdash; {% endif %}Closing Date: {{ entry.closing_date|date:"F d, Y" }}
+                        {% if entry.is_closing_soon %}
+                            <span class="rg-pub-job-card__urgent">Closing soon</span>
+                        {% endif %}
+                        Closes {{ entry.closing_date|date:"F d, Y" }}
                     {% else %}
-                        Open while active
+                        Always accepting applications
                     {% endif %}
                 </p>
             </div>
@@ -131,16 +141,26 @@
        aria-label="View details for {{ entry.title }}">
         <div class="rg-pub-job-card__inner">
             <div class="rg-pub-job-card__body">
+                <p class="rg-pub-job-card__ref">{{ entry.job_code }}</p>
                 <h3 class="rg-pub-job-card__title">{{ entry.title }}</h3>
+                <div class="rg-pub-job-card__chips">
+                    <span class="rg-pub-chip rg-pub-chip--cos">Contract of Service</span>
+                    <span class="rg-pub-chip rg-pub-chip--level">Level {{ entry.level }}</span>
+                    {% if entry.salary_grade_display %}
+                        <span class="rg-pub-chip rg-pub-chip--sg">{{ entry.salary_grade_display }}</span>
+                    {% endif %}
+                </div>
                 <p class="rg-pub-job-card__meta">
-                    Contract of Service &middot;
                     {{ entry.official_office_label|default:"CHD CALABARZON" }}
                 </p>
                 <p class="rg-pub-job-card__deadline {% if entry.is_closing_soon %}rg-pub-job-card__deadline--urgent{% endif %}">
                     {% if entry.closing_date %}
-                        {% if entry.is_closing_soon %}Closing soon &mdash; {% endif %}Closing Date: {{ entry.closing_date|date:"F d, Y" }}
+                        {% if entry.is_closing_soon %}
+                            <span class="rg-pub-job-card__urgent">Closing soon</span>
+                        {% endif %}
+                        Closes {{ entry.closing_date|date:"F d, Y" }}
                     {% else %}
-                        Open while active
+                        Always accepting applications
                     {% endif %}
                 </p>
             </div>
@@ -157,9 +177,27 @@
     </div>
     {% endif %}
 
-    <p class="rg-pub-result-count js-result-count" style="margin-top:1rem;" aria-live="polite">
-        Showing {{ plantilla_entries|length|add:cos_entries|length }} position{{ plantilla_entries|length|add:cos_entries|length|pluralize }}
-    </p>
+    <p class="rg-pub-result-count js-result-count" style="margin-top:1rem;" aria-live="polite"></p>
+
+    {# Need help applying? Public Assistance Desk contact. #}
+    <aside class="rg-pub-help-box" aria-label="Need help applying">
+        <div class="rg-pub-help-box__icon" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9"/>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+        </div>
+        <div class="rg-pub-help-box__body">
+            <p class="rg-pub-help-box__title">Need help applying?</p>
+            <p class="rg-pub-help-box__copy">
+                Reach the Public Assistance Desk:
+                <a href="tel:+6382492000,4400">8-249-2000 loc. 4400</a>
+                &middot;
+                <a href="mailto:chd4a_doh_calabarzon@ro4a.doh.gov.ph">chd4a_doh_calabarzon@ro4a.doh.gov.ph</a>
+            </p>
+        </div>
+    </aside>
 
 </div>
 
@@ -183,17 +221,20 @@
     }
 
     if (filterType) filterType.addEventListener('change', applyFilters);
+    // Run once on load so the count reflects the rendered cards from the start.
+    applyFilters();
 
-    [document.getElementById('browse-card'), document.getElementById('browse-cta')].forEach(function (el) {
-        if (!el) return;
-        el.addEventListener('click', function (e) {
+    // Smooth-scroll the hero "Browse Openings" CTA to the job-openings section.
+    var browseCta = document.getElementById('browse-cta');
+    if (browseCta) {
+        browseCta.addEventListener('click', function (e) {
             var target = document.getElementById('job-openings');
             if (target) {
                 e.preventDefault();
                 target.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
         });
-    });
+    }
 })();
 </script>
 {% endblock %}

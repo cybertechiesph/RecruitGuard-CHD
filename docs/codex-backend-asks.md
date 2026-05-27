@@ -325,5 +325,74 @@ the queue row template.
 
 ---
 
+## From Slice V — End-to-end verification (in flight)
+
+### V-seed. Seed late-stage test cases for live verification
+**Why.** Today's E2E pass covered Secretariat → Screening → Deliberation/CAR
+because the existing seed data only had cases at the early stages. The
+following UI surfaces still need a real-data live walk:
+
+- **Exam stage** (3-step wizard: type & administration → outcome & scores → supporting evidence)
+- **Decision stage** for both branches:
+  - COS final decision at **HRM Chief Review**
+  - Plantilla final selection at **Appointing Authority Review**
+- **Completion stage** (track completion → close & archive wizard, plus the requirement-entry rows with the blank-row "add new" behavior)
+- **Final Selection** at Appointing Authority Review (the rank/justification flow with the deep-selection lock for rank > 5)
+
+**Ask.** Add one realistic test case per missing surface, with the
+prerequisite records already in place so the templates render with real
+data — not empty/default state. Concretely:
+
+| Case | Branch | Current stage | Required prior records |
+|------|--------|---------------|------------------------|
+| RG-COS-test-screening | COS | secretariat_review | Submitted application with required documents uploaded; no finalized screening yet |
+| RG-PLT-test-exam | Plantilla | hrm_chief_review | Screening finalized (qualified, complete) |
+| RG-COS-test-decision | COS | hrm_chief_review | Screening finalized + (optional) exam record |
+| RG-PLT-test-final-selection | Plantilla | appointing_authority_review | Screening + exam + interview ratings (≥1 panel rating) + finalized deliberation + finalized CAR with at least 6 ranked items, and no final selection yet |
+| RG-PLT-test-aa-decision | Plantilla | appointing_authority_review | Finalized CAR with ranked items and no final selection yet; kept as a smaller Appointing Authority selection case |
+| RG-PLT-test-completion | Plantilla | completion | Plantilla final selection recorded + completion record initialized + at least one saved completion requirement and one blank slot |
+
+If a management command makes sense, a `seed_e2e_test_cases` would also
+let us reset the test bed cheaply.
+
+**Care.** Use the j3r1c02@gmail.com applicant pool when possible. If the
+pool does not have enough distinct applicant users for the six-person
+CAR case, create deterministic synthetic users with the `e2e_seed_applicant_`
+prefix. Make the applicant names easy to grep (e.g., "E2E Exam", "E2E
+Final Selection") so they don't clutter the real-looking test set.
+
+---
+
+## From Slice H — Applicant portal home page polish
+
+### H-A. Add a `salary_grade_display` property on `PositionPosting`
+**Why.** I want to surface salary grade ("SG 7") on the applicant home-page
+job cards next to the Level pill — biggest remaining triage signal for
+Filipino applicants. The data already exists on
+`PositionReference.salary_grade` (PositiveSmallIntegerField), but reaching
+it from a template via `entry.position_reference.salary_grade` is fragile:
+it hops a related object that may not always be prefetched, and it has no
+graceful fallback when the value is null.
+
+**Ask.** Add this property on `PositionPosting`:
+
+```python
+@property
+def salary_grade_display(self):
+    """Plain "SG 7" string or empty string when unknown."""
+    reference = getattr(self, "position_reference", None)
+    sg = getattr(reference, "salary_grade", None)
+    return f"SG {sg}" if sg else ""
+```
+
+That's it — 5 lines, no migration, no test fixture change.
+
+**Out of scope for this ask.** Converting SG → indicative monthly peso is a
+separate decision. The CSC salary-grade table changes annually and there
+are policy questions about which step to show. Land the display string
+first; we can add peso later if/when the policy is settled.
+
+---
+
 ## (Slot for future-slice asks)
 *(none yet)*

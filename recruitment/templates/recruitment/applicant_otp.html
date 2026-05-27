@@ -167,6 +167,10 @@
 
         <div class="rg-pub-info-box rg-pub-info-box--warning">
             <p>Once you submit, your application can no longer be edited. Make sure everything is correct before continuing.</p>
+            <p class="mb-0" style="margin-top:0.4rem;">
+                Need to fix something?
+                <a href="{% url 'applicant-intake' application.position.pk %}">Go back to edit your information</a>.
+            </p>
         </div>
 
         <form method="post" id="rg-otp-submit-form">
@@ -179,9 +183,9 @@
         </form>
     </div>
 
-    {# Submit confirmation modal #}
-    <div class="modal fade" id="rg-otp-submit-modal" tabindex="-1"
-         aria-labelledby="rg-otp-submit-modal-title" aria-modal="true">
+    {# Submit confirmation modal — no fade so it appears immediately on click #}
+    <div class="modal" id="rg-otp-submit-modal" tabindex="-1"
+         aria-labelledby="rg-otp-submit-modal-title">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content" style="border-radius:0.5rem; overflow:hidden;">
                 <div class="modal-header" style="background:var(--rg-primary); border-bottom:none; padding:1rem 1.25rem;">
@@ -262,7 +266,12 @@
     var submitForm = document.getElementById("rg-otp-submit-form");
     if (confirmBtn && submitForm) {
         confirmBtn.addEventListener("click", function () {
-            submitForm.submit();
+            if (confirmBtn.dataset.submitting === "1") return;  // guard against double-click
+            confirmBtn.dataset.submitting = "1";
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = "Submitting…";
+            // Brief paint tick so the disabled state shows before navigation
+            window.setTimeout(function () { submitForm.submit(); }, 30);
         });
     }
 

@@ -164,8 +164,24 @@
                 {% endfor %}
             </div>
 
+        </section>
+
+        {# ── Step 2: Documents ──────────────────────────────────── #}
+        <section class="rg-intake-step" data-intake-step="documents" hidden
+                 role="group" aria-label="Step 2: Documents">
+            <h2 class="rg-intake-step__heading">Step 2 &mdash; Upload your documents</h2>
+            <p class="rg-intake-step__subtitle">
+                Accepted file types: <strong>PDF, JPG, JPEG, PNG</strong>. Maximum size per file:
+                <strong>{{ max_upload_mb }} MB</strong>. A clear photo of a paper document works
+                if you don&rsquo;t have a scanner.
+            </p>
+
             {% if entry.branch == "plantilla" %}
-            <fieldset class="rg-pub-field rg-intake-fieldset">
+            {# Performance-rating applicability lives here in Step 2 so the question
+               sits next to the upload slot it controls. Hides the performance_rating
+               upload slot below when the applicant chooses "not applicable". #}
+            <fieldset class="rg-pub-field rg-intake-fieldset rg-intake-applicability-top"
+                      data-intake-applicability-fieldset>
                 <legend>
                     {{ form.performance_rating_applicability.label }}
                     <span class="text-danger" aria-hidden="true">*</span>
@@ -192,17 +208,6 @@
                    so the form posts correctly even when the radios are not shown. #}
                 <input type="hidden" name="{{ form.performance_rating_applicability.html_name }}" value="not_applicable">
             {% endif %}
-        </section>
-
-        {# ── Step 2: Documents ──────────────────────────────────── #}
-        <section class="rg-intake-step" data-intake-step="documents" hidden
-                 role="group" aria-label="Step 2: Documents">
-            <h2 class="rg-intake-step__heading">Step 2 &mdash; Upload your documents</h2>
-            <p class="rg-intake-step__subtitle">
-                Accepted file types: <strong>PDF, JPG, JPEG, PNG</strong>. Maximum size per file:
-                <strong>{{ max_upload_mb }} MB</strong>. A clear photo of a paper document works
-                if you don&rsquo;t have a scanner.
-            </p>
 
             {% for slot in form.document_slots %}
             <div class="rg-pub-upload-slot {% if slot.field.errors or slot.applicability_field.errors %}rg-pub-upload-slot--error{% endif %}"
@@ -222,30 +227,14 @@
                     <p class="rg-pub-upload-slot__hint">{{ slot.field.help_text }}</p>
                 {% endif %}
 
-                {% if slot.applicability_field %}
-                <fieldset class="rg-intake-applicability">
-                    <legend>
-                        {{ slot.applicability_field.label }}
-                        <span class="text-danger" aria-hidden="true">*</span>
-                    </legend>
-                    <div class="rg-intake-radio-list">
-                        {% for choice in slot.applicability_field %}
-                            <div class="form-check">
-                                {{ choice.tag }}
-                                <label class="form-check-label" for="{{ choice.id_for_label }}">
-                                    {{ choice.choice_label }}
-                                </label>
-                            </div>
-                        {% endfor %}
-                    </div>
-                    {% if slot.applicability_field.help_text %}
-                        <div class="form-text">{{ slot.applicability_field.help_text }}</div>
-                    {% endif %}
-                    {% for error in slot.applicability_field.errors %}
-                        <div class="invalid-feedback d-block">{{ error }}</div>
-                    {% endfor %}
-                </fieldset>
-                {% endif %}
+                {% comment %}
+                Performance-rating applicability is asked once, at the top of Step 2
+                (see the fieldset above this loop). It used to be rendered both here
+                inside the upload slot AND in Step 1 — which created a duplicate input
+                with the same name that visually appeared blank, confusing users into
+                thinking their earlier answer was lost (UT-002). The slot itself is
+                hidden via JS when the applicant chooses "not applicable" (UT-002b).
+                {% endcomment %}
 
                 {{ slot.field }}
 
@@ -255,9 +244,8 @@
                             <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
                             <path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
-                        Already saved:
-                        <strong>{{ slot.saved_evidence.original_filename }}</strong>.
-                        Choose a new file only if you want to replace it.
+                        You uploaded <strong>{{ slot.saved_evidence.original_filename }}</strong> earlier.
+                        We will keep this file unless you pick a new one to replace it.
                     </div>
                 {% endif %}
 
@@ -413,12 +401,6 @@
         }
         if (!valOf("qualification_summary")) {
             p.push({ field: form.elements["qualification_summary"], msg: "Please write a short summary of your qualifications." });
-        }
-        var perfField = form.elements["performance_rating_applicability"];
-        if (perfField && perfField.length && perfField[0].type === "radio") {
-            if (!valOf("performance_rating_applicability")) {
-                p.push({ field: perfField[0], msg: "Please choose your performance rating availability." });
-            }
         }
         return p;
     }
@@ -645,6 +627,35 @@
     }
     currentStep = startStep;
     renderStep();
+
+    /* ── Performance-rating slot visibility ──────────────────────
+       When the applicant picks "not applicable", hide the upload slot
+       for that requirement so they don't see a document line they don't
+       need. The slot still exists in the DOM (so backend validation can
+       reference it), it's just not visible/interactive. */
+    function updatePerformanceRatingSlot() {
+        var radios = form.elements["performance_rating_applicability"];
+        if (!radios) return;
+        var value = "";
+        if (radios.length) {
+            for (var i = 0; i < radios.length; i++) {
+                if (radios[i].checked) { value = radios[i].value; break; }
+            }
+        } else if (radios.value) {
+            value = radios.value;
+        }
+        document.querySelectorAll("[data-intake-slot]").forEach(function (slot) {
+            if (slot.dataset.applicabilityName !== "performance_rating_applicability") return;
+            // Hide when explicitly not applicable; show otherwise (including unanswered)
+            slot.hidden = (value === "not_applicable");
+        });
+    }
+    var appFieldset = document.querySelector("[data-intake-applicability-fieldset]");
+    if (appFieldset) {
+        appFieldset.addEventListener("change", updatePerformanceRatingSlot);
+    }
+    // Run once on page load to honor any pre-selected value
+    updatePerformanceRatingSlot();
 })();
 </script>
 {% endblock %}
