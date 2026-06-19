@@ -9,6 +9,23 @@ MAX_APPLICANT_DOCUMENT_UPLOAD_BYTES = 5 * 1024 * 1024
 GENERIC_CONTENT_TYPES = {"", "application/octet-stream", "binary/octet-stream"}
 VALIDATED_UPLOAD_CACHE_ATTR = "_recruitguard_validated_applicant_document"
 
+UPLOAD_ERROR_TOO_LARGE = (
+    "Each file must be 5 MB or smaller. If a photo is too big, take it again at lower quality."
+)
+UPLOAD_ERROR_EMPTY = "This file is empty. Pick a file that has something in it."
+UPLOAD_ERROR_EXTENSION = (
+    "This needs to be a PDF, JPG, or PNG file. Upload one of those."
+)
+UPLOAD_ERROR_SIGNATURE_UNREADABLE = (
+    "We couldn't read this as a PDF, JPG, or PNG. Save it again, then upload it."
+)
+UPLOAD_ERROR_SIGNATURE_MISMATCH = (
+    "This file's contents don't match a PDF, JPG, or PNG. Save it again, then upload it."
+)
+UPLOAD_ERROR_MIME_MISMATCH = (
+    "This file format does not match its filename. Save it again as a PDF, JPG, or PNG, then upload it."
+)
+
 
 @dataclass(frozen=True)
 class ValidatedApplicantDocumentUpload:
@@ -68,9 +85,9 @@ def validate_applicant_document_upload(uploaded_file):
         MAX_APPLICANT_DOCUMENT_UPLOAD_BYTES,
     )
     if file_size is not None and file_size > max_bytes:
-        raise ValueError("Each applicant document must be 5 MB or smaller.")
+        raise ValueError(UPLOAD_ERROR_TOO_LARGE)
     if file_size == 0:
-        raise ValueError("Empty files are not allowed.")
+        raise ValueError(UPLOAD_ERROR_EMPTY)
 
     filename = getattr(uploaded_file, "name", "") or ""
     extension = Path(filename).suffix.lower()
@@ -80,38 +97,30 @@ def validate_applicant_document_upload(uploaded_file):
         for allowed_extension in signature["extensions"]
     }
     if extension not in allowed_extensions:
-        raise ValueError("Upload a PDF, JPG, JPEG, or PNG file only.")
+        raise ValueError(UPLOAD_ERROR_EXTENSION)
 
     raw_bytes = uploaded_file.read()
     if hasattr(uploaded_file, "seek"):
         uploaded_file.seek(0)
     if not raw_bytes:
-        raise ValueError("Empty files are not allowed.")
+        raise ValueError(UPLOAD_ERROR_EMPTY)
     if len(raw_bytes) > max_bytes:
-        raise ValueError("Each applicant document must be 5 MB or smaller.")
+        raise ValueError(UPLOAD_ERROR_TOO_LARGE)
 
     detected_format = _detect_file_format(raw_bytes)
     if not detected_format:
-        raise ValueError(
-            "The uploaded file could not be verified as a valid PDF, JPG, JPEG, or PNG document."
-        )
+        raise ValueError(UPLOAD_ERROR_SIGNATURE_UNREADABLE)
 
     detected_signature = FILE_SIGNATURES[detected_format]
     if extension not in detected_signature["extensions"]:
-        raise ValueError(
-            "The uploaded file contents do not match the selected file extension. "
-            "Please upload the correct PDF, JPG, JPEG, or PNG file."
-        )
+        raise ValueError(UPLOAD_ERROR_SIGNATURE_MISMATCH)
 
     content_type = _normalized_content_type(uploaded_file)
     if (
         content_type not in GENERIC_CONTENT_TYPES
         and content_type not in detected_signature["content_types"]
     ):
-        raise ValueError(
-            "The uploaded file type does not match the selected document format. "
-            "Please upload a valid PDF, JPG, JPEG, or PNG file."
-        )
+        raise ValueError(UPLOAD_ERROR_MIME_MISMATCH)
 
     validated_upload = ValidatedApplicantDocumentUpload(
         canonical_content_type=detected_signature["canonical_content_type"],

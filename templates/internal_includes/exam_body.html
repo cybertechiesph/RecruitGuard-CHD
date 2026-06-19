@@ -78,7 +78,7 @@ reviewer can see the disposition at a glance without scrolling to step 2.
                 {{ exam_form.exam_type }}
             {% endif %}
             {% if exam_form.exam_type.help_text %}
-                <div class="form-text">{{ exam_form.exam_type.help_text|safe }}</div>
+                <div class="form-text">{{ exam_form.exam_type.help_text }}</div>
             {% endif %}
             {% for error in exam_form.exam_type.errors %}
                 <div class="invalid-feedback d-block">{{ error }}</div>
@@ -213,7 +213,7 @@ reviewer can see the disposition at a glance without scrolling to step 2.
                     </label>
                     {{ exam_form.exam_score }}
                     {% if exam_form.exam_score.help_text %}
-                        <div class="form-text">{{ exam_form.exam_score.help_text|safe }}</div>
+                        <div class="form-text">{{ exam_form.exam_score.help_text }}</div>
                     {% endif %}
                     {% for error in exam_form.exam_score.errors %}
                         <div class="invalid-feedback d-block">{{ error }}</div>
@@ -243,7 +243,7 @@ reviewer can see the disposition at a glance without scrolling to step 2.
                     </label>
                     {{ exam_form.valid_from }}
                     {% if exam_form.valid_from.help_text %}
-                        <div class="form-text">{{ exam_form.valid_from.help_text|safe }}</div>
+                        <div class="form-text">{{ exam_form.valid_from.help_text }}</div>
                     {% endif %}
                     {% for error in exam_form.valid_from.errors %}
                         <div class="invalid-feedback d-block">{{ error }}</div>
@@ -255,7 +255,7 @@ reviewer can see the disposition at a glance without scrolling to step 2.
                     </label>
                     {{ exam_form.valid_until }}
                     {% if exam_form.valid_until.help_text %}
-                        <div class="form-text">{{ exam_form.valid_until.help_text|safe }}</div>
+                        <div class="form-text">{{ exam_form.valid_until.help_text }}</div>
                     {% endif %}
                     {% for error in exam_form.valid_until.errors %}
                         <div class="invalid-feedback d-block">{{ error }}</div>
@@ -275,7 +275,7 @@ reviewer can see the disposition at a glance without scrolling to step 2.
                 </label>
                 {{ exam_form.exam_notes }}
                 {% if exam_form.exam_notes.help_text %}
-                    <div class="form-text">{{ exam_form.exam_notes.help_text|safe }}</div>
+                    <div class="form-text">{{ exam_form.exam_notes.help_text }}</div>
                 {% endif %}
                 {% for error in exam_form.exam_notes.errors %}
                     <div class="invalid-feedback d-block">{{ error }}</div>
@@ -317,7 +317,7 @@ reviewer can see the disposition at a glance without scrolling to step 2.
             </label>
             {{ exam_form.evidence_file }}
             {% if exam_form.evidence_file.help_text %}
-                <div class="form-text">{{ exam_form.evidence_file.help_text|safe }}</div>
+                <div class="form-text">{{ exam_form.evidence_file.help_text }}</div>
             {% endif %}
             {% for error in exam_form.evidence_file.errors %}
                 <div class="invalid-feedback d-block">{{ error }}</div>
@@ -475,11 +475,20 @@ reviewer can see the disposition at a glance without scrolling to step 2.
         }
         return (el.value || "").trim();
     }
-    function showError(msg, field) {
-        if (errorBox) { errorBox.textContent = msg; errorBox.hidden = false; }
-        if (field && field.focus) try { field.focus({ preventScroll: false }); } catch (e) { field.focus(); }
+    function clearError() {
+        if (window.RGWizardErrors) { RGWizardErrors.clearFieldErrors(form); }
+        if (errorBox) { errorBox.hidden = true; errorBox.textContent = ""; }
     }
-    function clearError() { if (errorBox) { errorBox.hidden = true; errorBox.textContent = ""; } }
+    function revealProblems(probs) {
+        if (!probs.length) return;
+        if (!window.RGWizardErrors) {
+            if (errorBox) { errorBox.textContent = probs[0].msg; errorBox.hidden = false; }
+            var f0 = probs[0].field;
+            if (f0 && f0.focus) { try { f0.focus({ preventScroll: false }); } catch (e) { f0.focus(); } }
+            return;
+        }
+        RGWizardErrors.showErrors(probs, { scope: form, summaryBox: errorBox });
+    }
 
     /* ── Status bar + conditional reveal ───────────────────── */
     function syncStatusBar() {
@@ -555,15 +564,29 @@ reviewer can see the disposition at a glance without scrolling to step 2.
             return p;
         }
         if (v === "completed") {
-            var anyBad = scoreInputs.some(function (input) {
+            // Per-field range check (mirrors backend SCORE_RANGE_MESSAGE).
+            scoreInputs.forEach(function (input) {
                 var raw = (input.value || "").trim();
-                if (raw === "") return false;
+                if (raw === "") return;
                 var n = parseFloat(raw);
-                return isNaN(n) || n < 0 || n > 100;
+                if (isNaN(n) || n < 0 || n > 100) {
+                    p.push({ field: input, msg: "Scores must be a number between 0 and 100." });
+                }
             });
-            if (anyBad) {
-                p.push({ field: scoreInputs[0], msg: "Scores must be a number between 0 and 100." });
-            }
+            // Required scores by exam type — mirrors forms.py
+            // _required_score_fields_for_type(): Technical/Practical needs both
+            // technical + practical; End-user needs practical.
+            var examType = valOf("exam_type");
+            var requiredScoreInputs = examType === "technical_practical"
+                ? [technicalScoreInput, practicalScoreInput]
+                : examType === "end_user_assessment"
+                    ? [practicalScoreInput]
+                    : [];
+            requiredScoreInputs.forEach(function (input) {
+                if (input && (input.value || "").trim() === "") {
+                    p.push({ field: input, msg: "Enter this required exam score." });
+                }
+            });
         } else if (v === "waived" || v === "absent") {
             if (notesEl && !(notesEl.value || "").trim()) {
                 p.push({ field: notesEl, msg: "Add a reason or remarks for a waived / absent outcome." });
@@ -607,7 +630,7 @@ reviewer can see the disposition at a glance without scrolling to step 2.
             var probs = stepProblems(STEPS[i]);
             if (probs.length) {
                 currentStep = STEPS[i]; renderStep();
-                showError(probs[0].msg, probs[0].field);
+                revealProblems(probs);
                 return;
             }
         }
@@ -625,7 +648,7 @@ reviewer can see the disposition at a glance without scrolling to step 2.
     if (nextBtn) {
         nextBtn.addEventListener("click", function () {
             var probs = stepProblems(currentStep);
-            if (probs.length) { showError(probs[0].msg, probs[0].field); return; }
+            if (probs.length) { revealProblems(probs); return; }
             var idx = STEPS.indexOf(currentStep);
             if (idx < STEPS.length - 1) { currentStep = STEPS[idx + 1]; renderStep(); }
         });
@@ -640,6 +663,11 @@ reviewer can see the disposition at a glance without scrolling to step 2.
         rail[name].addEventListener("click", function () { goToStep(name); });
     });
 
+    // Clear inline errors as soon as the user resumes editing (choice clicks
+    // dispatch a bubbling "change", so this covers the outcome strip too).
+    form.addEventListener("input", clearError);
+    form.addEventListener("change", clearError);
+
     if (saveBtn) {
         saveBtn.addEventListener("click", function () {
             if (opField) opField.value = "save";
@@ -651,7 +679,7 @@ reviewer can see the disposition at a glance without scrolling to step 2.
                 var probs = stepProblems(STEPS[i]);
                 if (probs.length) {
                     currentStep = STEPS[i]; renderStep();
-                    showError(probs[0].msg, probs[0].field);
+                    revealProblems(probs);
                     return;
                 }
             }

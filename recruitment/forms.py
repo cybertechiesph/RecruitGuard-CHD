@@ -1,3 +1,5 @@
+import re
+import unicodedata
 from datetime import timedelta
 
 from django import forms
@@ -12,8 +14,14 @@ from django.contrib.auth.forms import (
 from django.contrib.auth.hashers import check_password
 from django.forms import BaseInlineFormSet, inlineformset_factory
 from django.forms.models import ModelChoiceIteratorValue, construct_instance
+from django.utils.html import format_html
 from django.utils import timezone
 
+from .captcha import (
+    captcha_uses_turnstile,
+    get_or_create_captcha_challenge,
+    validate_captcha_answer,
+)
 from .models import (
     AuditLog,
     ComparativeAssessmentReport,
@@ -44,6 +52,31 @@ from .services import (
 from .upload_validation import validate_applicant_document_upload
 
 
+APPLICANT_NAME_ALLOWED_PATTERN = r"^(?=.*[^\W\d_])(?:[^\W\d_]|[ .'-])+$"
+APPLICANT_NAME_ERROR_MESSAGE = "Please enter your name using letters only."
+APPLICANT_MOBILE_ERROR_MESSAGE = (
+    "Enter a Philippine mobile number, like 0917 123 4567."
+)
+APPLICANT_QUALIFICATION_SUMMARY_MAX_LENGTH = 1000
+APPLICANT_QUALIFICATION_SUMMARY_LENGTH_ERROR_MESSAGE = (
+    "Please shorten this to 1,000 characters or less."
+)
+
+_APPLICANT_NAME_ALLOWED_RE = re.compile(APPLICANT_NAME_ALLOWED_PATTERN, re.UNICODE)
+_APPLICANT_MOBILE_SEPARATORS_RE = re.compile(r"[ ()-]")
+_APPLICANT_LOCAL_MOBILE_RE = re.compile(r"09\d{9}")
+_APPLICANT_INTERNATIONAL_MOBILE_RE = re.compile(r"(?:\+63|63)9\d{9}")
+
+
+def normalize_philippine_mobile_number(value):
+    compact_value = _APPLICANT_MOBILE_SEPARATORS_RE.sub("", (value or "").strip())
+    if _APPLICANT_LOCAL_MOBILE_RE.fullmatch(compact_value):
+        return f"+63{compact_value[1:]}"
+    if _APPLICANT_INTERNATIONAL_MOBILE_RE.fullmatch(compact_value):
+        return compact_value if compact_value.startswith("+") else f"+{compact_value}"
+    raise ValueError(APPLICANT_MOBILE_ERROR_MESSAGE)
+
+
 AUDIT_ACTION_CHOICE_LABELS = {
     AuditLog.Action.INTERNAL_LOGIN_FAILED: "Internal Login Failed",
     AuditLog.Action.INTERNAL_LOGIN_LOCKED: "Internal Login Locked",
@@ -61,6 +94,8 @@ AUDIT_ACTION_CHOICE_LABELS = {
     AuditLog.Action.INTERNAL_EMAIL_CHANGE_VERIFIED: "Internal Email Change Verified",
     AuditLog.Action.INTERNAL_EMAIL_CHANGE_FAILED: "Internal Email Change Failed",
     AuditLog.Action.APPLICATION_OTP_SENT: "Verification Code Sent",
+    AuditLog.Action.APPLICATION_OTP_FAILED: "Verification Code Failed",
+    AuditLog.Action.APPLICATION_OTP_LOCKED: "Verification Code Locked",
     AuditLog.Action.APPLICATION_OTP_VERIFIED: "Email Verified",
     AuditLog.Action.ROUTED: "Case Assigned",
     AuditLog.Action.INTERVIEW_FALLBACK_UPLOADED: "Interview Rating File Uploaded",
@@ -71,8 +106,10 @@ AUDIT_ACTION_CHOICE_LABELS = {
     AuditLog.Action.EVIDENCE_DOWNLOADED: "File Downloaded",
     AuditLog.Action.EVIDENCE_ARCHIVED: "File Archived",
     AuditLog.Action.EVIDENCE_RESTORED: "File Restored",
+    AuditLog.Action.EVIDENCE_ACCESS_DENIED: "File Access Denied",
     AuditLog.Action.EVIDENCE_VAULT_VIEWED: "Secured Files Viewed",
     AuditLog.Action.EXPORT_GENERATED: "Export Created",
+    AuditLog.Action.EXPORT_DENIED: "Export Denied",
 }
 
 
@@ -124,6 +161,88 @@ class BootstrapFormMixin:
         self.fields[field_name].initial = current_value or value
         if not self.is_bound and not current_value:
             self.initial[field_name] = value
+
+
+class TurnstileWidget(forms.Widget):
+    def render(self, name, value, attrs=None, renderer=None):
+        attrs = attrs or {}
+        widget_id = attrs.get("id", f"id_{name}")
+        site_key = getattr(settings, "TURNSTILE_SITE_KEY", "")
+        if not site_key:
+            return format_html(
+                '<div id="{}" class="alert alert-warning mb-0">'
+                "Cloudflare Turnstile is enabled but TURNSTILE_SITE_KEY is not configured."
+                "</div>",
+                widget_id,
+            )
+        return format_html(
+            '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" '
+            "async defer></script>"
+            '<div id="{}" class="cf-turnstile" data-sitekey="{}" '
+            'data-action="turnstile-spin-v1"></div>',
+            widget_id,
+            site_key,
+        )
+
+    def value_from_datadict(self, data, files, name):
+        return data.get("cf-turnstile-response") or data.get(name)
+
+
+class CaptchaFormMixin:
+    captcha_scope = "default"
+    captcha_error_message = "Complete the security check correctly."
+
+    def _make_captcha_field(self):
+        if captcha_uses_turnstile():
+            return forms.CharField(
+                label="Security check",
+                max_length=4096,
+                required=True,
+                widget=TurnstileWidget,
+                help_text="Cloudflare Turnstile protects this form from automated abuse.",
+                error_messages={"required": self.captcha_error_message},
+            )
+        return forms.CharField(
+            label="Security check",
+            max_length=10,
+            required=True,
+            help_text="Answer this question before continuing.",
+            error_messages={"required": self.captcha_error_message},
+        )
+
+    def __init__(self, *args, request=None, **kwargs):
+        if request is None and args and hasattr(args[0], "session"):
+            request = args[0]
+        self.captcha_request = request
+        super().__init__(*args, **kwargs)
+        if not getattr(settings, "CAPTCHA_ENABLED", True):
+            self.fields.pop("captcha_answer", None)
+            return
+        if "captcha_answer" not in self.fields:
+            self.fields["captcha_answer"] = self._make_captcha_field()
+        if captcha_uses_turnstile():
+            self.fields["captcha_answer"].label = "Security check"
+            return
+        challenge = get_or_create_captcha_challenge(request, self.captcha_scope)
+        field = self.fields["captcha_answer"]
+        field.label = f"Security check: {challenge}"
+        field.widget.attrs.update(
+            {
+                "autocomplete": "off",
+                "inputmode": "numeric",
+                "pattern": "[0-9]*",
+            }
+        )
+
+    def clean_captcha_answer(self):
+        answer = self.cleaned_data.get("captcha_answer", "")
+        if not validate_captcha_answer(
+            self.captcha_request,
+            self.captcha_scope,
+            answer,
+        ):
+            raise forms.ValidationError(self.captcha_error_message)
+        return answer
 
 
 class DeferredModelValidationMixin:
@@ -229,7 +348,8 @@ class PasswordReuseValidationMixin:
         return cleaned_data
 
 
-class InternalAuthenticationForm(BootstrapFormMixin, AuthenticationForm):
+class InternalAuthenticationForm(CaptchaFormMixin, BootstrapFormMixin, AuthenticationForm):
+    captcha_scope = "internal_login"
     username = forms.CharField(widget=forms.TextInput(attrs={"autofocus": True}))
     password = forms.CharField(strip=False, widget=forms.PasswordInput())
 
@@ -260,7 +380,9 @@ class InternalSetPasswordForm(PasswordReuseValidationMixin, BootstrapFormMixin, 
         self._apply_password_strength_fields()
 
 
-class InternalPasswordResetForm(BootstrapFormMixin, PasswordResetForm):
+class InternalPasswordResetForm(CaptchaFormMixin, BootstrapFormMixin, PasswordResetForm):
+    captcha_scope = "internal_password_reset"
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._apply_bootstrap()
@@ -274,7 +396,8 @@ class InternalPasswordResetForm(BootstrapFormMixin, PasswordResetForm):
         return (user for user in users if user.has_usable_password())
 
 
-class InternalMFAOTPForm(BootstrapFormMixin, forms.Form):
+class InternalMFAOTPForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form):
+    captcha_scope = "internal_mfa"
     otp = forms.CharField(max_length=6, min_length=6, label="Verification Code")
 
     def __init__(self, *args, **kwargs):
@@ -286,6 +409,14 @@ class InternalMFAOTPForm(BootstrapFormMixin, forms.Form):
         if not otp.isdigit():
             raise forms.ValidationError("Enter the 6-digit verification code sent to your email address.")
         return otp
+
+
+class InternalMFACaptchaForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form):
+    captcha_scope = "internal_mfa"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
 
 
 class InternalUserCreateForm(BootstrapFormMixin, UserCreationForm):
@@ -354,7 +485,9 @@ class InternalUserUpdateForm(BootstrapFormMixin, forms.ModelForm):
         return email
 
 
-class ApplicantPortalIntakeForm(BootstrapFormMixin, forms.Form):
+class ApplicantPortalIntakeForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form):
+    captcha_scope = "applicant_intake"
+
     first_name = forms.CharField(max_length=150)
     last_name = forms.CharField(max_length=150)
     email = forms.EmailField()
@@ -424,6 +557,33 @@ class ApplicantPortalIntakeForm(BootstrapFormMixin, forms.Form):
 
     def clean_email(self):
         return self.cleaned_data["email"].strip().lower()
+
+    def _clean_applicant_name(self, field_name):
+        value = unicodedata.normalize("NFC", self.cleaned_data[field_name])
+        value = re.sub(r"\s+", " ", value.strip())
+        if not _APPLICANT_NAME_ALLOWED_RE.fullmatch(value):
+            raise forms.ValidationError(APPLICANT_NAME_ERROR_MESSAGE)
+        return value
+
+    def clean_first_name(self):
+        return self._clean_applicant_name("first_name")
+
+    def clean_last_name(self):
+        return self._clean_applicant_name("last_name")
+
+    def clean_phone(self):
+        try:
+            return normalize_philippine_mobile_number(self.cleaned_data["phone"])
+        except ValueError as exc:
+            raise forms.ValidationError(APPLICANT_MOBILE_ERROR_MESSAGE) from exc
+
+    def clean_qualification_summary(self):
+        value = self.cleaned_data["qualification_summary"].strip()
+        if len(value) > APPLICANT_QUALIFICATION_SUMMARY_MAX_LENGTH:
+            raise forms.ValidationError(
+                APPLICANT_QUALIFICATION_SUMMARY_LENGTH_ERROR_MESSAGE
+            )
+        return value
 
     def get_requirement_uploads(self):
         return {
@@ -588,7 +748,7 @@ class ApplicantPortalIntakeForm(BootstrapFormMixin, forms.Form):
             if duplicate_exists:
                 self.add_error(
                     "email",
-                    "An application for this recruitment entry has already been submitted using this email address.",
+                    "You have already submitted an application for this position using this email address.",
                 )
 
         if (
@@ -625,7 +785,8 @@ class ApplicantPortalIntakeForm(BootstrapFormMixin, forms.Form):
         return cleaned_data
 
 
-class ApplicantOTPForm(BootstrapFormMixin, forms.Form):
+class ApplicantOTPForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form):
+    captcha_scope = "applicant_otp"
     otp = forms.CharField(max_length=6, min_length=6, label="Verification Code")
 
     def __init__(self, *args, **kwargs):
@@ -639,7 +800,17 @@ class ApplicantOTPForm(BootstrapFormMixin, forms.Form):
         return otp
 
 
-class ApplicantStatusLookupForm(BootstrapFormMixin, forms.Form):
+class ApplicantOTPCaptchaForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form):
+    captcha_scope = "applicant_otp"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
+
+
+class ApplicantStatusLookupForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form):
+    captcha_scope = "applicant_status_lookup"
+
     application_id = forms.CharField(max_length=30, label="Application ID")
     email = forms.EmailField(label="Applicant email")
 
@@ -1506,10 +1677,11 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
 
     def clean_evidence_file(self):
         uploaded_file = self.cleaned_data.get("evidence_file")
-        if uploaded_file and uploaded_file.size > settings.MAX_EVIDENCE_UPLOAD_BYTES:
-            raise forms.ValidationError(
-                "The uploaded file is larger than the allowed file size."
-            )
+        if uploaded_file:
+            try:
+                validate_applicant_document_upload(uploaded_file)
+            except ValueError as exc:
+                raise forms.ValidationError(str(exc)) from exc
         return uploaded_file
 
 
@@ -1642,6 +1814,15 @@ class InterviewFallbackUploadForm(BootstrapFormMixin, forms.Form):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._apply_bootstrap()
+
+    def clean_file(self):
+        uploaded_file = self.cleaned_data.get("file")
+        if uploaded_file:
+            try:
+                validate_applicant_document_upload(uploaded_file)
+            except ValueError as exc:
+                raise forms.ValidationError(str(exc)) from exc
+        return uploaded_file
 
 
 class DeliberationRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.ModelForm):

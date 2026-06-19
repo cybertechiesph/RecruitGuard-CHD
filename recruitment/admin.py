@@ -555,6 +555,7 @@ class RecruitmentApplicationAdmin(admin.ModelAdmin):
         "level",
         "status",
         "current_handler_role",
+        "otp_attempt_count",
     )
     list_filter = ("branch", "level", "status", "current_handler_role")
     search_fields = (

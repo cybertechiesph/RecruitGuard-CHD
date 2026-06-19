@@ -1,0 +1,98 @@
+
+--- PAGE 1 ---
+Cyber  Techies  Alignment  Matrix
+Research  Objective
+Module  /  Feature
+Functionality  Evaluation  (FURPS)
+STRIDE  Threat
+Security  Test  /  Metric
+Expected  Chapter  4  Evidence
+To  establish  structured  applicant  intake  and  completeness-checking  mechanisms  through  accountless  submission,  email  OTP  veriﬁcation,  and  application  identiﬁcation.
+Applicant  Intake  and  OTP  Veriﬁcation  Module
+Functionality  -  validates  accountless  applicant  submission,  OTP  veriﬁcation,  Application  ID  generation,  and  completeness  checking   Usability  -  supports  clear  applicant-side  submission  flow    Security  -  prevents  unveriﬁed  or  incomplete  submissions.
+Spooﬁng  OWASP  ASVS  L1  &  L2:  V6  -  Authentication  Security:  V6.5.5,  V6.6.3  V2  -  Validation,  Sanitization,  and  Encoding:  V2.2.1-V2.2.3   •  Applicant  OTP  expiration  enforcement  -  expires  after  10  minutes  (100%)  •  OTP  resend  cooldown  enforcement  -  60  seconds  (100%)  •  Invalid  OTP  lockout  accuracy  -  locks  after  5  attempts  (100%)  •  Required  document  validation  -  missing  documents  block  ﬁnal  submission  (100%)
+OTP  email  proof,  invalid/expired  OTP  test,  OTP  lockout  log,  Application  ID  output,  missing  document  validation  screenshot
+To  design  a  centralized,  stage-based,  and  rule-based  recruitment  workflow  model  for  both  plantilla  and  COS  recruitment.
+Recruitment  Case  Management  and  Workflow  Engine  Module
+Functionality  -  veriﬁes  correct  stage-based  workflow  progression  for  Plantilla  and  COS   Reliability  -  ensures  consistent  routing  and  stage  enforcement    Security  -  prevents  unauthorized  workflow  manipulation.
+Tampering  OWASP  ASVS  L1  &  L2:  V2  -  Validation,  Sanitization,  and  Encoding:  V2.3.1-V2.3.4  V8  -  Authorization:  V8.3.1   •  Invalid  workflow  transition  block  rate  (100%)  •  Stage-skipping  prevention  rate  (100%)  •  Finalized  stage  edit  rejection  rate  (100%)  •  Unauthorized  workflow  action  denial  rate  (100%)
+Workflow  progression  test,  blocked  transition  screenshot,  stage-lock  proof,  routing  history,  audit  log
+To  develop  structured  support  for  document  review  and  evaluation  adapted  to  position-level
+Document  Review  and  Qualiﬁcation  Screening  Module
+Functionality  -  veriﬁes  correctness  of  screening,  scoring,  date,  and
+Tampering  OWASP  ASVS  L1  &  L2:  V2  -  Validation,  Sanitization,  and  Encoding:  V2.2.1-V2.2.3  V8  -  Authorization:  V8.3.1
+Screening  test  result,  invalid  input  rejection  screenshot,  unauthorized  edit  denial,  screening  audit  log
+
+--- PAGE 2 ---
+Research  Objective
+Module  /  Feature
+Functionality  Evaluation  (FURPS)
+STRIDE  Threat
+Security  Test  /  Metric
+Expected  Chapter  4  Evidence
+requirements,  where  applicable.
+qualiﬁcation  validation   Reliability  -  ensures  ﬁnalized  review  records  remain  consistent    Security  -  prevents  unauthorized  review  modiﬁcation.
+V16  -  Security  Logging:  V16.3.3   •  Invalid  score/date/status  rejection  rate  (100%)  •  Unauthorized  screening  edit  denial  rate  (100%)  •  Screening  ﬁnalization  logging  completeness  (100%)  •  XSS  execution  success  rate  (0%)
+To  develop  plantilla-speciﬁc  decision-support  outputs,  including  Comparative  Assessment  Report  generation  and  deliberation  support,  together  with  recruitment-type-appropriate  outputs  for  COS  handling.
+Deliberation  and  Decision  Support  Module
+Functionality  -  veriﬁes  CAR,  deliberation,  and  decision-support  output  generation  from  valid  ﬁnalized  inputs    Reliability  -  ensures  decision  outputs  remain  consistent  after  ﬁnalization    Security  -  prevents  unauthorized  CAR  or  decision-support  access.
+Tampering  OWASP  ASVS  L1  &  L2:  V2  -  Validation,  Sanitization,  and  Encoding:  V2.3.1-V2.3.3  V8  -  Authorization:  V8.3.1  V16  -  Security  Logging:  V16.3.3   •  CAR  prerequisite  enforcement  -  generated  only  after  ﬁnalized  inputs  (100%)  •  Unauthorized  CAR  access/action  denial  rate  (100%)  •  CAR  generation/ﬁnalization/return  logging  completeness  (100%)
+CAR  sample,  locked-input  proof,  unauthorized  CAR  denial,  deliberation/CAR  audit  log
+To  establish  recruitment-grade  audit  logging  and  case  traceability  mechanisms  that  record  actor  identity,  role,  action  performed,  timestamp,  recruitment  case  reference,  and  workflow  stage.
+Audit  Logging  and  Traceability  Module
+Functionality  -  veriﬁes  complete  recording  of  security-relevant  and  workflow-critical  actions    Reliability  -  ensures  traceability  across  case  events
+Repudiation  OWASP  ASVS  L1  &  L2:  V16  -  Security  Logging  and  Error  Handling:  V16.2.1,  V16.3.1,  V16.3.3   •  Required  audit  ﬁeld  completeness  -  actor,  role,  action,  timestamp,  case,  stage  (100%)  •  Authentication  event  logging  completeness  (100%)
+Audit  log  export,  audit  ﬁeld  completeness  checklist,  case  timeline  screenshot,  sensitive  action  log
+
+--- PAGE 3 ---
+Research  Objective
+Module  /  Feature
+Functionality  Evaluation  (FURPS)
+STRIDE  Threat
+Security  Test  /  Metric
+Expected  Chapter  4  Evidence
+Security  -  supports  accountability  and  non-repudiation.
+•  Workflow/evidence/export/override/sensitive  access  logging  completeness  (100%)
+To  implement  evidence-oriented  recruitment  record  handling  through  a  centralized  Evidence  Vault  with  SHA-256  hashing,  metadata  binding,  version  preservation,  lifecycle  tagging,  and  controlled  evidence  export.
+Evidence  Vault  and  Record  Management  Module;  Evidence  Export  and  Integrity  Veriﬁcation  Module
+Functionality  -  veriﬁes  secure  evidence  upload,  storage,  versioning,  download,  and  export    Reliability  -  ensures  evidence  integrity  is  preserved   Security  -  protects  evidence  conﬁdentiality  and  integrity.
+Information  Disclosure
+OWASP  ASVS  L1  &  L2:  V5  -  File  Handling  Security:  V5.2.1,  V5.2.2,  V5.4.1  V11  -  Cryptography:  V11.3.2,  V11.4.1   •  Evidence  upload  size  enforcement  -  maximum  5  MB  (100%)  •  File  type  validation  -  PDF/JPG/JPEG/PNG  only  (100%)  •  Evidence  download  disclosure  control  -  attachment  enforced  (100%)  •  AES-GCM  evidence  encryption  enforcement  (100%)  •  SHA-256  export  veriﬁcation  match  rate  (100%)
+Evidence  inventory,  invalid  ﬁle  rejection,  download  header  proof,  SHA-256  veriﬁcation  output,  export  bundle
+To  enable  searchable  case  records  and  organized  archival  retrieval  for  recruitment  applications,  outputs,  and  related  records.
+Evidence  Vault  and  Record  Management  Module
+Functionality  -  veriﬁes  authorized  case  search,  retrieval,  and  archival  access    Reliability  -  ensures  archived  records  remain  retrievable   Security  -  prevents  unauthorized  data  exposure  and  injection  attacks.
+Information  Disclosure
+OWASP  ASVS  L1  &  L2:  V1  -  Architecture,  Design,  and  Threat  Modeling:  V1.2.4  V8  -  Authorization:  V8.2.2  V16  -  Security  Logging:  V16.3.2-V16.3.3   •  SQL  injection  success  rate  through  search/ﬁlter  inputs  (0%)  •  Unauthorized  restricted  search  result  exposure  rate  (0%)  •  Sensitive  retrieval  or  failed  authorization
+Search  result  screenshot,  SQL  injection  test  result,  restricted  access  denial,  archive  retrieval  audit  log
+
+--- PAGE 4 ---
+Research  Objective
+Module  /  Feature
+Functionality  Evaluation  (FURPS)
+STRIDE  Threat
+Security  Test  /  Metric
+Expected  Chapter  4  Evidence
+logging  where  applicable  (100%)
+To  ensure  the  system  resists  controlled  abuse  of  high-risk  authentication  and  veriﬁcation  actions  without  destructive  denial-of-service  testing.
+Identity  and  Access  Control  Module;  Applicant  Intake  and  OTP  Veriﬁcation  Module
+Reliability  -  veriﬁes  controlled  handling  of  repeated  failed  authentication  or  OTP  actions   Security  -  reduces  brute-force,  flooding,  and  automated  abuse  risks.
+Denial  of  Service
+OWASP  ASVS  L1  &  L2:  V6  -  Authentication  Security:  V6.3.1,  V6.6.3  V14  -  Conﬁguration:  rate  limiting  and  abuse  protection   •  Internal  login  lockout  trigger  accuracy  -  5  failed  attempts  within  15  minutes  locks  for  15  minutes  (100%)  •  OTP  resend  cooldown  enforcement  -  60  seconds  (100%)  •  Invalid  OTP  attempt  lockout  accuracy  -  locks  after  5  attempts  (100%)  •  Controlled  abuse-resistance  enforcement  for  high-risk  endpoints  (100%)  •  Application-level  rate  limiting  must  return  HTTP  429  after  the  conﬁgured  request  threshold  is  exceeded.
+Login  lockout  proof,  OTP  cooldown  screenshot,  OTP  lockout  log,  controlled  abuse-resistance  test  record
+To  implement  role-based  access  control,  level-based  workflow  restrictions,  and  session  controls  for  authorized  users  involved  in  recruitment  handling.
+Identity  and  Access  Control  Module;  Branch-Aware  and  Level-Aware  Routing  Module
+Functionality  -  veriﬁes  correct  role,  level,  MFA,  and  session  enforcement;    Reliability  -  ensures  access  rules  are  consistently  applied;  Security  -  prevents  privilege  escalation  and  unauthorized  access.
+Elevation  of  Privilege
+OWASP  ASVS  L1  &  L2:  V6  -  Authentication  Security:  V6.3.1,  V6.5.5,  V6.6.3  V7  -  Session  Management:  V7.2.4  V8  -  Authorization:  V8.2.1-V8.3.1   •  Internal  MFA  enforcement  rate  (100%)  •  Session  key  rotation  after  MFA  login  (100%)  •  Unauthorized  role  access  denial  rate  (100%)
+Role  access  matrix,  MFA  test  evidence,  session  rotation  proof,  Level  2  restriction  screenshot,  unauthorized  access  denial
+
+--- PAGE 5 ---
+
+Research  Objective
+Module  /  Feature
+Functionality  Evaluation  (FURPS)
+STRIDE  Threat
+Security  Test  /  Metric
+Expected  Chapter  4  Evidence
+•  Level  2  Secretariat  processing  block  rate  unless  HRM  Chief  handoff  exists  (100%)

@@ -104,6 +104,8 @@ from .services import (
     grant_secretariat_override,
     process_workflow_action,
     record_audit_log_review,
+    record_evidence_access_denied,
+    record_export_denied,
     record_final_decision,
     record_final_selection,
     record_evidence_vault_access,
@@ -753,21 +755,28 @@ class EvidenceDownloadView(LoginRequiredMixin, InternalUserRequiredMixin, View):
             pk=evidence_pk,
         )
         if not evidence_belongs_to_application_context(evidence, application):
+            record_evidence_access_denied(
+                evidence,
+                request.user,
+                application=application,
+                reason="context_mismatch",
+            )
             raise Http404
         try:
-            content = decrypt_evidence_bytes(evidence, request.user)
+            content = decrypt_evidence_bytes(evidence, request.user, application=application)
         except ValueError as exc:
             raise PermissionDenied(str(exc))
         response = HttpResponse(
             content,
             content_type=evidence.content_type or "application/octet-stream",
         )
+        # Evidence is always downloaded as an attachment to prevent uploaded
+        # active content from executing in the RecruitGuard origin.
         disposition = "attachment"
-        if request.GET.get("disposition") == "inline":
-            disposition = "inline"
         response["Content-Disposition"] = (
             f'{disposition}; filename="{evidence.original_filename}"'
         )
+        response["X-Content-Type-Options"] = "nosniff"
         return response
 
 
@@ -1507,6 +1516,10 @@ class CaseClosureView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
 class WorkflowOverrideView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
     def post(self, request, pk):
         application = get_object_or_404(RecruitmentApplication, pk=pk)
+        if not user_can_view_application(request.user, application):
+            raise Http404
+        if not user_can_process_application(request.user, application):
+            raise PermissionDenied
         form = WorkflowOverrideForm(request.POST)
         if form.is_valid():
             try:
@@ -1619,6 +1632,7 @@ class ExportApplicationBundleView(LoginRequiredMixin, InternalUserRequiredMixin,
     def get(self, request, pk):
         application = get_object_or_404(RecruitmentApplication, pk=pk)
         if not user_can_export_application(request.user, application):
+            record_export_denied(application, request.user, reason="unauthorized")
             raise PermissionDenied
         bundle = build_export_bundle(application, request.user)
         response = HttpResponse(bundle, content_type="application/zip")

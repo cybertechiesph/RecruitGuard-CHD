@@ -4025,3 +4025,31 @@ body.applicant-portal-body {
     text-align: center;
     margin-top: 1.5rem;
 }
+
+/* Inline client-side validation error, rendered directly below the field (VAL1) */
+.rg-client-error {
+    margin-top: 0.3rem;
+    font-size: 0.825rem;
+}
+
+/* Inline wizard error (shared module rg-wizard-validation.js, VAL2) */
+.rg-wiz-error {
+    margin-top: 0.3rem;
+    font-size: 0.825rem;
+}
+
+/* Intake qualification-summary character counter (VAL1) */
+.rg-intake-charcount {
+    margin-top: 0.3rem;
+    font-size: 0.78rem;
+    color: #94a3b8;
+    text-align: right;
+}
+.rg-intake-charcount.is-near {
+    color: #b45309;
+    font-weight: 600;
+}
+.rg-intake-charcount.is-full {
+    color: #b91c1c;
+    font-weight: 700;
+}

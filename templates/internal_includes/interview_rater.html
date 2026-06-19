@@ -220,7 +220,7 @@
             </label>
             {{ interview_rating_form.rating_notes }}
             {% if interview_rating_form.rating_notes.help_text %}
-                <div class="form-text">{{ interview_rating_form.rating_notes.help_text|safe }}</div>
+                <div class="form-text">{{ interview_rating_form.rating_notes.help_text }}</div>
             {% endif %}
             {% for error in interview_rating_form.rating_notes.errors %}
                 <div class="invalid-feedback d-block">{{ error }}</div>
@@ -381,39 +381,51 @@
         if (justGroup) justGroup.hidden = !needs;
     }
     function clearError() {
+        if (window.RGWizardErrors && form) { RGWizardErrors.clearFieldErrors(form); }
         if (actionError) { actionError.hidden = true; actionError.textContent = ""; }
     }
-    function showError(msg, field) {
-        if (actionError) { actionError.textContent = msg; actionError.hidden = false; }
-        if (field && field.focus) try { field.focus(); } catch (e) { field.focus(); }
+    function revealProblems(probs) {
+        if (!probs.length) return;
+        if (!window.RGWizardErrors) {
+            if (actionError) { actionError.textContent = probs[0].msg; actionError.hidden = false; }
+            var f0 = probs[0].field;
+            if (f0 && f0.focus) { try { f0.focus(); } catch (e) { f0.focus(); } }
+            return;
+        }
+        RGWizardErrors.showErrors(probs, { scope: form || document, summaryBox: actionError });
     }
 
-    function validate() {
+    function collectProblems() {
+        var p = [];
         if (isEncoding) {
             var rb = ratedByInput && (ratedByInput.value || "").trim();
             if (!rb) {
-                showError("Choose which HRMPSB member submitted this rating.", ratedByInput);
-                return false;
+                p.push({ field: ratedByInput, msg: "Choose which HRMPSB member submitted this rating." });
             }
         }
-        if (!scoreInput) return true;
-        var raw = (scoreInput.value || "").trim();
-        if (raw === "") {
-            showError("Enter a score from 0 to 100.", scoreInput);
-            return false;
-        }
-        var n = parseFloat(raw);
-        if (isNaN(n) || n < 0 || n > 100) {
-            showError("Score must be a number between 0 and 100.", scoreInput);
-            return false;
-        }
-        if (needsJustification(n)) {
-            var j = justInput && (justInput.value || "").trim();
-            if (!j) {
-                showError("Add a justification — required for scores below 75 or above 98.", justInput);
-                return false;
+        if (scoreInput) {
+            var raw = (scoreInput.value || "").trim();
+            if (raw === "") {
+                p.push({ field: scoreInput, msg: "Enter a score from 0 to 100." });
+            } else {
+                var n = parseFloat(raw);
+                if (isNaN(n) || n < 0 || n > 100) {
+                    p.push({ field: scoreInput, msg: "Score must be a number between 0 and 100." });
+                } else if (needsJustification(n)) {
+                    // Justification can only be judged once the score is valid.
+                    var j = justInput && (justInput.value || "").trim();
+                    if (!j) {
+                        p.push({ field: justInput, msg: "Add a justification — required for scores below 75 or above 98." });
+                    }
+                }
             }
         }
+        return p;
+    }
+
+    function validate() {
+        var probs = collectProblems();
+        if (probs.length) { revealProblems(probs); return false; }
         clearError();
         return true;
     }

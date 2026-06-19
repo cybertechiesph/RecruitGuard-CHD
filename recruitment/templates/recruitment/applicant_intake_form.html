@@ -134,7 +134,7 @@
                         Mobile number <span class="text-danger" aria-hidden="true">*</span>
                     </label>
                     {{ form.phone }}
-                    <div class="form-text">e.g. 09XX XXX XXXX</div>
+                    <div class="form-text">e.g. 0917 123 4567</div>
                     {% for error in form.phone.errors %}
                         <div class="invalid-feedback d-block">{{ error }}</div>
                     {% endfor %}
@@ -146,6 +146,9 @@
                     Summary of your qualifications <span class="text-danger" aria-hidden="true">*</span>
                 </label>
                 {{ form.qualification_summary }}
+                <div class="rg-intake-charcount" data-summary-count-wrap aria-live="polite">
+                    <span data-summary-count>0</span> / 1,000 characters
+                </div>
                 <div class="form-text">A short paragraph about the education, experience, and skills that match this position.</div>
                 {% for error in form.qualification_summary.errors %}
                     <div class="invalid-feedback d-block">{{ error }}</div>
@@ -168,6 +171,8 @@
 
         {# ── Step 2: Documents ──────────────────────────────────── #}
         <section class="rg-intake-step" data-intake-step="documents" hidden
+                 data-max-upload-bytes="{{ max_upload_bytes }}"
+                 data-max-upload-mb="{{ max_upload_mb }}"
                  role="group" aria-label="Step 2: Documents">
             <h2 class="rg-intake-step__heading">Step 2 &mdash; Upload your documents</h2>
             <p class="rg-intake-step__subtitle">
@@ -242,8 +247,32 @@
 
                 {{ slot.field }}
 
+                <div class="rg-pub-upload-slot__selection" data-file-selection hidden>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                        <path d="M4.5 1.75h4.25L12 5v9.25H4.5V1.75Z" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"/>
+                        <path d="M8.75 1.75V5H12" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"/>
+                    </svg>
+                    <span class="rg-pub-upload-slot__selection-name">
+                        Selected: <strong data-file-selection-name></strong><span class="rg-pub-upload-slot__selection-size" data-file-selection-size></span>
+                    </span>
+                    <button type="button"
+                            class="rg-pub-upload-slot__remove"
+                            data-file-clear
+                            aria-label="Remove selected file">
+                        Remove selected file
+                    </button>
+                </div>
+
+                {% comment %}
+                Always-present polite live region. A region that only toggles
+                hidden won't announce reliably (it starts display:none), so we
+                keep this in the DOM and write status text into it on
+                select / remove for screen-reader users.
+                {% endcomment %}
+                <span class="visually-hidden" data-file-announce aria-live="polite"></span>
+
                 {% if slot.saved_evidence %}
-                    <div class="rg-intake-saved-file" role="status">
+                    <div class="rg-intake-saved-file" role="status" data-saved-file>
                         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                             <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
                             <path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -254,7 +283,7 @@
                 {% endif %}
 
                 {% for error in slot.field.errors %}
-                    <div class="invalid-feedback d-block">{{ error }}</div>
+                    <div class="invalid-feedback d-block" data-server-file-error>{{ error }}</div>
                 {% endfor %}
             </div>
             {% endfor %}
@@ -311,6 +340,21 @@
                     {% for error in form.checklist_information_certified.errors %}
                         <div class="invalid-feedback d-block ps-4">{{ error }}</div>
                     {% endfor %}
+
+                    {% if form.captcha_answer %}
+                    <div class="rg-pub-field mt-3">
+                        <label for="{{ form.captcha_answer.id_for_label }}">
+                            {{ form.captcha_answer.label }}
+                        </label>
+                        {{ form.captcha_answer }}
+                        {% if form.captcha_answer.help_text %}
+                            <div class="form-text">{{ form.captcha_answer.help_text }}</div>
+                        {% endif %}
+                        {% for error in form.captcha_answer.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </section>
@@ -365,15 +409,110 @@
     var nextBtn = document.getElementById("rg-intake-next-btn");
     var submitBtn = document.getElementById("rg-intake-submit-btn");
     var errorBox = document.getElementById("rg-intake-error");
+    var documentsSection = document.querySelector('[data-intake-step="documents"]');
+    var MAX_UPLOAD_BYTES = parseInt(
+        documentsSection && documentsSection.dataset.maxUploadBytes,
+        10
+    ) || (5 * 1024 * 1024);
+    var MAX_UPLOAD_MB = parseInt(
+        documentsSection && documentsSection.dataset.maxUploadMb,
+        10
+    ) || 5;
+    var ALLOWED_FILE_EXTENSIONS = ["pdf", "jpg", "jpeg", "png"];
+    var ALLOWED_FILE_MIME_TYPES = {
+        pdf: ["application/pdf", "application/x-pdf"],
+        jpg: ["image/jpeg", "image/jpg", "image/pjpeg"],
+        jpeg: ["image/jpeg", "image/jpg", "image/pjpeg"],
+        png: ["image/png", "image/x-png"]
+    };
+    var GENERIC_FILE_MIME_TYPES = ["", "application/octet-stream", "binary/octet-stream"];
 
     /* ── Helpers ────────────────────────────────────────────── */
-    function showError(msg, field) {
-        if (errorBox) { errorBox.textContent = msg; errorBox.hidden = false; }
-        if (field && typeof field.focus === "function") {
-            try { field.focus({ preventScroll: false }); } catch (e) { field.focus(); }
+    function clearFieldErrors() {
+        // Remove any dynamically-inserted inline client errors and reset field state.
+        Array.prototype.forEach.call(
+            document.querySelectorAll("[data-client-error]"),
+            function (n) { n.remove(); }
+        );
+        Array.prototype.forEach.call(
+            form.querySelectorAll("[aria-invalid]"),
+            function (el) {
+                el.classList.remove("is-invalid");
+                el.removeAttribute("aria-invalid");
+                if (el.hasAttribute("data-orig-describedby")) {
+                    var orig = el.getAttribute("data-orig-describedby");
+                    if (orig) { el.setAttribute("aria-describedby", orig); }
+                    else { el.removeAttribute("aria-describedby"); }
+                    el.removeAttribute("data-orig-describedby");
+                }
+            }
+        );
+    }
+    function renderInlineError(field, msg, idx) {
+        // Mark the field, insert the message directly below it, and link the two
+        // for screen readers via aria-describedby (preserving any existing help-text
+        // association). Returns the field so the caller can focus the first one.
+        field.classList.add("is-invalid");
+        field.setAttribute("aria-invalid", "true");
+        var errId = "rg-cerr-" + (field.name || field.id || idx);
+        var inline = document.createElement("div");
+        inline.className = "invalid-feedback d-block rg-client-error";
+        inline.id = errId;
+        inline.setAttribute("data-client-error", "");
+        inline.setAttribute("data-client-error-for", field.name || field.id || String(idx));
+        inline.textContent = msg;
+        if (field.parentNode) field.parentNode.insertBefore(inline, field.nextSibling);
+        if (!field.hasAttribute("data-orig-describedby")) {
+            field.setAttribute("data-orig-describedby", field.getAttribute("aria-describedby") || "");
+        }
+        var prior = field.getAttribute("aria-describedby");
+        field.setAttribute("aria-describedby", prior ? prior + " " + errId : errId);
+        var uploadSlot = field.closest && field.closest("[data-intake-slot]");
+        if (uploadSlot) {
+            uploadSlot.classList.add("rg-pub-upload-slot--error");
+            uploadSlot.classList.remove("rg-pub-upload-slot--complete");
+        }
+    }
+    function clearClientErrorForField(field) {
+        var errorKey = field.name || field.id || "";
+        Array.prototype.forEach.call(
+            form.querySelectorAll("[data-client-error-for]"),
+            function (error) {
+                if (error.getAttribute("data-client-error-for") === errorKey) error.remove();
+            }
+        );
+        field.classList.remove("is-invalid");
+        field.removeAttribute("aria-invalid");
+        if (field.hasAttribute("data-orig-describedby")) {
+            var original = field.getAttribute("data-orig-describedby");
+            if (original) field.setAttribute("aria-describedby", original);
+            else field.removeAttribute("aria-describedby");
+            field.removeAttribute("data-orig-describedby");
+        }
+    }
+    function showErrors(problems) {
+        // Show EVERY problem on the step at once (inline below each field), so the
+        // applicant fixes them in one pass instead of one-submit-per-error. Focus the
+        // first invalid field. Field-less errors fall back to the action bar.
+        clearFieldErrors();
+        if (errorBox) { errorBox.hidden = true; errorBox.textContent = ""; }
+        if (!problems || !problems.length) return;
+        var firstField = null;
+        problems.forEach(function (pr, i) {
+            if (pr.field && pr.field.nodeType === 1) {
+                renderInlineError(pr.field, pr.msg, i);
+                if (!firstField) firstField = pr.field;
+            } else if (errorBox && !errorBox.textContent) {
+                errorBox.textContent = pr.msg;
+                errorBox.hidden = false;
+            }
+        });
+        if (firstField) {
+            try { firstField.focus({ preventScroll: false }); } catch (e) { firstField.focus(); }
         }
     }
     function clearError() {
+        clearFieldErrors();
         if (errorBox) { errorBox.hidden = true; errorBox.textContent = ""; }
     }
     function valOf(name) {
@@ -388,23 +527,156 @@
         return (el.value || "").trim();
     }
 
+    /* ── Validation rules — mirror of recruitment/forms.py ─────
+       Keep these identical to the server-side rules so the applicant
+       never sees the browser accept something the server rejects.
+       Source: forms.py constants + clean_* methods. */
+    var NAME_RE = /^(?=.*\p{L})[\p{L} .'-]+$/u;   // at least one letter; letters/space/.'- only
+    var SUMMARY_MAX = 1000;
+
+    function cleanPhoneDigits(raw) {
+        // Strip the separators the backend strips: spaces, hyphens, parentheses.
+        return String(raw || "").replace(/[\s()\-]/g, "");
+    }
+    function normalizePhone(raw) {
+        // Returns canonical +639XXXXXXXXX, or "" if not a valid PH mobile.
+        var s = cleanPhoneDigits(raw);
+        var m;
+        if ((m = /^0(9\d{9})$/.exec(s))) return "+63" + m[1];      // 09XXXXXXXXX
+        if ((m = /^\+63(9\d{9})$/.exec(s))) return "+63" + m[1];   // +639XXXXXXXXX
+        if ((m = /^63(9\d{9})$/.exec(s))) return "+63" + m[1];     // 639XXXXXXXXX
+        return "";
+    }
+    function formatPhoneIntl(canonical) {
+        // +639171234567 -> "+63 917 123 4567"
+        var m = /^\+63(9\d{2})(\d{3})(\d{4})$/.exec(canonical || "");
+        return m ? "+63 " + m[1] + " " + m[2] + " " + m[3] : canonical;
+    }
+    function tidyPhoneInput(raw) {
+        // Group a VALID number for readability, preserving the form the
+        // applicant chose (local 09… stays local). Returns null if invalid
+        // so the blur handler leaves their text untouched.
+        if (!normalizePhone(raw)) return null;
+        var s = cleanPhoneDigits(raw);
+        if (s.charAt(0) === "0") {
+            return s.replace(/^(\d{4})(\d{3})(\d{4})$/, "$1 $2 $3"); // 0917 123 4567
+        }
+        return formatPhoneIntl(normalizePhone(raw));                // +63 917 123 4567
+    }
+
     /* ── Per-step validation ───────────────────────────────── */
+    function selectedFileProblem(file) {
+        // NOTE: these four strings are kept byte-identical to the server copy in
+        // recruitment/upload_validation.py (UP-1). If you touch one, change both
+        // plus the server tests, or client/server messaging drifts.
+        if (!file) return "";
+        if (file.size === 0) return "This file is empty. Pick a file that has something in it.";
+        if (file.size > MAX_UPLOAD_BYTES) {
+            return "Each file must be 5 MB or smaller. If a photo is too big, take it again at lower quality.";
+        }
+
+        var filename = String(file.name || "");
+        var extensionMatch = /\.([^.]+)$/.exec(filename);
+        var extension = extensionMatch ? extensionMatch[1].toLowerCase() : "";
+        if (ALLOWED_FILE_EXTENSIONS.indexOf(extension) === -1) {
+            return "This needs to be a PDF, JPG, or PNG file. Upload one of those.";
+        }
+
+        var mimeType = String(file.type || "").toLowerCase().split(";", 1)[0].trim();
+        var acceptedMimeTypes = ALLOWED_FILE_MIME_TYPES[extension] || [];
+        if (
+            GENERIC_FILE_MIME_TYPES.indexOf(mimeType) === -1 &&
+            acceptedMimeTypes.indexOf(mimeType) === -1
+        ) {
+            return "This file format does not match its filename. Save it again as a PDF, JPG, or PNG, then upload it.";
+        }
+        return "";
+    }
+
+    function formatFileSize(bytes) {
+        // Human-readable size for the selection chip: "850 KB", "1.2 MB".
+        if (typeof bytes !== "number" || isNaN(bytes)) return "";
+        if (bytes < 1024) return bytes + " B";
+        var kb = bytes / 1024;
+        if (kb < 1024) return Math.round(kb) + " KB";
+        return (Math.round((kb / 1024) * 10) / 10) + " MB";
+    }
+
+    function updateFileSelection(slot, input, file, problem) {
+        var selection = slot.querySelector("[data-file-selection]");
+        var selectionName = slot.querySelector("[data-file-selection-name]");
+        var selectionSize = slot.querySelector("[data-file-selection-size]");
+        var savedFile = slot.querySelector("[data-saved-file]");
+        var announce = slot.querySelector("[data-file-announce]");
+        if (selection) selection.hidden = !file;
+        if (selectionName) selectionName.textContent = file ? file.name : "";
+        if (selectionSize) selectionSize.textContent = file ? " · " + formatFileSize(file.size) : "";
+        if (savedFile) savedFile.hidden = !!file;
+        if (announce) {
+            if (file && problem) {
+                // Speak the problem, not a false "Selected" — the inline error
+                // is describedby-linked and won't announce on its own.
+                announce.textContent = file.name + ": " + problem;
+            } else if (file) {
+                announce.textContent = "Selected " + file.name + ", " + formatFileSize(file.size) + ".";
+            } else {
+                announce.textContent = "File removed.";
+            }
+        }
+
+        var hasServerError = !!slot.querySelector(
+            ".invalid-feedback.d-block:not([data-client-error])"
+        );
+        slot.classList.toggle("rg-pub-upload-slot--error", !!problem || hasServerError);
+        slot.classList.toggle(
+            "rg-pub-upload-slot--complete",
+            !!file && !problem && !hasServerError
+        );
+        input.dataset.fileValidationError = problem || "";
+    }
+
+    function validateSelectedFileInput(input) {
+        var slot = input.closest("[data-intake-slot]");
+        if (!slot) return "";
+        var file = input.files && input.files.length ? input.files[0] : null;
+        var problem = selectedFileProblem(file);
+        clearClientErrorForField(input);
+        Array.prototype.forEach.call(
+            slot.querySelectorAll("[data-server-file-error]"),
+            function (error) { error.remove(); }
+        );
+        if (problem) renderInlineError(input, problem, input.name || input.id || 0);
+        updateFileSelection(slot, input, file, problem);
+        return problem;
+    }
+
     function informationProblems() {
         var p = [];
         ["first_name", "last_name"].forEach(function (n) {
-            if (!valOf(n)) p.push({ field: form.elements[n], msg: "Please fill in your name." });
+            var v = valOf(n);
+            if (!v) {
+                p.push({ field: form.elements[n], msg: "Please fill in your name." });
+            } else if (!NAME_RE.test(v)) {
+                p.push({ field: form.elements[n], msg: "Please enter your name using letters only." });
+            }
         });
         var email = valOf("email");
         if (!email) {
             p.push({ field: form.elements["email"], msg: "Please enter your email address." });
         } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-            p.push({ field: form.elements["email"], msg: "That email address looks wrong. Please check the format." });
+            p.push({ field: form.elements["email"], msg: "Enter an email address with an @ symbol, like name@example.com." });
         }
-        if (!valOf("phone")) {
+        var phone = valOf("phone");
+        if (!phone) {
             p.push({ field: form.elements["phone"], msg: "Please enter your mobile number." });
+        } else if (!normalizePhone(phone)) {
+            p.push({ field: form.elements["phone"], msg: "Enter a Philippine mobile number, like 0917 123 4567." });
         }
-        if (!valOf("qualification_summary")) {
+        var summary = valOf("qualification_summary");
+        if (!summary) {
             p.push({ field: form.elements["qualification_summary"], msg: "Please write a short summary of your qualifications." });
+        } else if (summary.length > SUMMARY_MAX) {
+            p.push({ field: form.elements["qualification_summary"], msg: "Please shorten this to 1,000 characters or less." });
         }
         return p;
     }
@@ -417,6 +689,7 @@
             var applicabilityName = slot.dataset.applicabilityName;
             var slotLabel = slot.dataset.slotLabel || "this document";
             var savedFile = slot.dataset.savedFilename || "";
+            var fileInput = form.elements[slotName];
 
             if (applicabilityName) {
                 var appVal = valOf(applicabilityName);
@@ -432,8 +705,18 @@
                 }
             }
 
+            var selectedFile = (
+                fileInput && fileInput.files && fileInput.files.length
+                    ? fileInput.files[0]
+                    : null
+            );
+            var selectedFileError = selectedFileProblem(selectedFile);
+            if (selectedFileError) {
+                p.push({ field: fileInput, msg: selectedFileError });
+                return;
+            }
+
             if (required) {
-                var fileInput = form.elements[slotName];
                 var hasFile = fileInput && fileInput.files && fileInput.files.length > 0;
                 if (!hasFile && !savedFile) {
                     p.push({
@@ -445,6 +728,22 @@
         });
         return p;
     }
+
+    document.querySelectorAll("[data-intake-slot] input[type='file']").forEach(function (input) {
+        var slot = input.closest("[data-intake-slot]");
+        var clearButton = slot && slot.querySelector("[data-file-clear]");
+        input.addEventListener("change", function () {
+            validateSelectedFileInput(input);
+        });
+        if (clearButton) {
+            clearButton.addEventListener("click", function () {
+                input.value = "";
+                clearClientErrorForField(input);
+                updateFileSelection(slot, input, null, "");
+                input.focus();
+            });
+        }
+    });
 
     function reviewProblems() {
         var p = [];
@@ -502,7 +801,7 @@
             if (probs.length) {
                 currentStep = STEPS[i];
                 renderStep();
-                showError(probs[0].msg, probs[0].field);
+                showErrors(probs);
                 return;
             }
         }
@@ -541,7 +840,8 @@
         html += '<dl class="rg-intake-review__list">';
         html += renderRow("Name", valOf("first_name") + " " + valOf("last_name"));
         html += renderRow("Email", valOf("email"));
-        html += renderRow("Mobile number", valOf("phone"));
+        var phoneCanonical = normalizePhone(valOf("phone"));
+        html += renderRow("Mobile number", phoneCanonical ? formatPhoneIntl(phoneCanonical) : valOf("phone"));
         html += renderRow("Qualification summary", valOf("qualification_summary"));
         var cl = valOf("cover_letter");
         if (cl) html += renderRow("Cover letter note", cl);
@@ -583,7 +883,7 @@
     if (nextBtn) {
         nextBtn.addEventListener("click", function () {
             var probs = stepProblems(currentStep);
-            if (probs.length) { showError(probs[0].msg, probs[0].field); return; }
+            if (probs.length) { showErrors(probs); return; }
             var idx = STEPS.indexOf(currentStep);
             if (idx < STEPS.length - 1) {
                 currentStep = STEPS[idx + 1];
@@ -609,7 +909,7 @@
                 e.preventDefault();
                 currentStep = STEPS[i];
                 renderStep();
-                showError(probs[0].msg, probs[0].field);
+                showErrors(probs);
                 return;
             }
         }
@@ -674,6 +974,43 @@
     }
     // Run once on page load to honor any pre-selected value
     updatePerformanceRatingSlot();
+
+    /* ── Mobile number: helpful placeholder + tidy-on-blur ────────
+       We don't hard-mask (that fights applicants who paste a +63 number).
+       Instead we set a clear example placeholder and, when they leave a
+       VALID number, group it for readability. Invalid input is left
+       untouched so the Next-button validation can show the plain error. */
+    var phoneEl = form.elements["phone"];
+    if (phoneEl) {
+        if (!phoneEl.getAttribute("placeholder")) {
+            phoneEl.setAttribute("placeholder", "0917 123 4567");
+        }
+        phoneEl.setAttribute("inputmode", "tel");
+        phoneEl.addEventListener("blur", function () {
+            var tidy = tidyPhoneInput(phoneEl.value);
+            if (tidy) phoneEl.value = tidy;
+        });
+    }
+
+    /* ── Qualification summary: live character counter + hard ceiling ─
+       maxlength stops over-typing; the counter shows where they stand and
+       turns red as they approach the limit. Mirrors SUMMARY_MAX (forms.py). */
+    var summaryEl = form.elements["qualification_summary"];
+    var countEl = document.querySelector("[data-summary-count]");
+    var countWrap = document.querySelector("[data-summary-count-wrap]");
+    if (summaryEl && countEl) {
+        summaryEl.setAttribute("maxlength", String(SUMMARY_MAX));
+        var updateCount = function () {
+            var len = (summaryEl.value || "").length;
+            countEl.textContent = len.toLocaleString("en-US");
+            if (countWrap) {
+                countWrap.classList.toggle("is-near", len >= SUMMARY_MAX * 0.9 && len < SUMMARY_MAX);
+                countWrap.classList.toggle("is-full", len >= SUMMARY_MAX);
+            }
+        };
+        summaryEl.addEventListener("input", updateCount);
+        updateCount();
+    }
 })();
 </script>
 {% endblock %}

@@ -1,0 +1,381 @@
+
+--- PAGE 1 ---
+
+ RecruitGuard-CHD
+
+System  Administrator  Post-Test  Questionnaire  Post-Test  Questionnaire  para  sa  System  Administrator  Workflow  ng  RecruitGuard-CHD
+A.   CONSENT  AND  DATA  PRIVACY
+This  questionnaire  is  for  evaluating  the  usability  and  workflow  clarity  of  RecruitGuard-CHD  for  the  System  Administrator
+role.
+
+Your
+
+participation
+
+is
+
+voluntary.
+
+Your
+
+answers
+
+will
+
+be
+
+kept
+
+confidential
+
+and
+
+used
+
+only
+
+for
+
+academic
+
+evaluation
+
+purposes.
+
+☐   I  have  read  and  understood  the  statement  above,  and  I  voluntarily  agree  to  answer  this  questionnaire.
+B.   BASIC  TESTING  PROFILE
+Item  Response  /  Sagot  Role  /  Role  System  Administrator
+Module  tested  /  Module  na  na-test
+☐  User  Management      ☐  Evidence  Vault      ☐  Audit  Log  ☐  Multiple  Modules
+Task  tested  /  Task  na  na-test
+☐  Account  Management      ☐  Evidence  Monitoring  ☐  Audit  Review      ☐  Access  Review
+
+C.   SYSTEM  ADMINISTRATOR  ROLE-SPECIFIC  QUESTIONS   /   Mga  Tanong  para  sa  System  Administrator  Role
+ Instruction:  Answer  based  on  your  experience  after  testing  the  System  Administrator  workflow  in  RecruitGuard-CHD.   /  Sagutan
+batay
+
+sa
+
+iyong
+
+karanasan
+
+pagkatapos
+
+subukan
+
+ang
+
+System
+
+Administrator
+
+workflow
+
+sa
+
+RecruitGuard-CHD.
+Scale:  5  –  Strongly  Agree      4  –  Agree      3  –  Neutral      2  –  Disagree      1  –  Strongly  Disagree
+1.   I  was  able  to  log  in  and  access  the  System  Administrator  workspace  without  difficulty.  Madali  akong  nakapag-log  in  at  nakapasok  sa  System  Administrator  workspace.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+2.   The  system  clearly  showed  that  I  was  using  a  System  Administrator  account.  Malinaw  na  ipinakita  ng  system  na  System  Administrator  account  ang  aking  ginagamit.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+
+
+--- PAGE 2 ---
+3.   The  dashboard  clearly  showed  useful  administrative  information.  Malinaw  na  ipinakita  ng  dashboard  ang  kapaki-pakinabang  na  administrative  information.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+4.   The  menu  items  for  User  Management,  Evidence  Vault,  and  Audit  Log  were  easy  to  find.  Madaling  hanapin  ang  menu  items  para  sa  User  Management,  Evidence  Vault,  at  Audit  Log.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+5.   The  system  made  it  clear  that  the  System  Administrator  role  is  for  system  administration  and  oversight,  not
+recruitment
+
+case
+
+processing.
+ Malinaw  sa  system  na  ang  System  Administrator  role  ay  para  sa  system  administration  at  oversight,  hindi  para  sa  recruitment  case
+processing.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+6.   The  system  properly  restricted  the  System  Administrator  from  ordinary  recruitment  workflow  actions  and  recruitment
+decision-making.
+ Maayos  na  ni-restrict  ng  system  ang  System  Administrator  mula  sa  ordinary  recruitment  workflow  actions  at  recruitment
+decision-making.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+7.   The  internal  user  list  was  easy  to  understand.  Madaling  maintindihan  ang  internal  user  list.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+8.   User  roles  and  account  status,  such  as  active  or  inactive,  were  clearly  displayed.  Malinaw  na  ipinakita  ang  user  roles  at  account  status  tulad  ng  active  o  inactive.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+9.   Creating  an  internal  user  account  was  easy  to  perform.  Madaling  gawin  ang  pag-create  ng  internal  user  account.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+
+--- PAGE 3 ---
+10.   Updating  an  internal  user  account  was  easy  to  perform.  Madaling  gawin  ang  pag-update  ng  internal  user  account.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+11.   Assigning  a  role  to  an  internal  user  was  clear.  Malinaw  ang  pag-assign  ng  role  sa  internal  user.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+12.   Activating  or  deactivating  an  internal  account  was  clear.  Malinaw  ang  pag-activate  o  pag-deactivate  ng  internal  account.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+13.   The  system  properly  prevented  unsafe  account  actions,  such  as  disabling  the  current  System  Administrator  account.  Maayos  na  pinigilan  ng  system  ang  unsafe  account  actions  tulad  ng  pag-disable  sa  kasalukuyang  System  Administrator  account.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+14.   User  account  changes  were  properly  recorded  for  traceability.  Maayos  na  na-record  ang  user  account  changes  para  sa  traceability.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+15.   The  Evidence  Vault  was  easy  to  access  and  navigate.  Madaling  i-access  at  i-navigate  ang  Evidence  Vault.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+16.   The  search  and  filter  options  helped  locate  secured  evidence  records.  Nakatulong  ang  search  at  filter  options  para  mahanap  ang  secured  evidence  records.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+17.   File  information  such  as  filename,  label,  uploader,  date,  stage,  and  status  was  useful.  Nakatulong  ang  file  information  tulad  ng  filename,  label,  uploader,  date,  stage,  at  status.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+
+--- PAGE 4 ---
+18.   The  system  clearly  showed  whether  evidence  files  were  active,  archived,  or  versioned  where  applicable.  Malinaw  na  ipinakita  ng  system  kung  ang  evidence  files  ay  active,  archived,  o  may  version  information  kung  applicable.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+19.   Viewing  or  downloading  evidence  files  was  understandable.  Madaling  maintindihan  ang  pag-view  o  pag-download  ng  evidence  files.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+20.   Archiving  or  restoring  an  evidence  file,  including  the  archive  reason,  was  understandable.  Madaling  maintindihan  ang  pag-archive  o  pag-restore  ng  evidence  file,  kabilang  ang  archive  reason.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+21.   The  Audit  Log  was  easy  to  access  and  understand.  Madaling  i-access  at  maintindihan  ang  Audit  Log.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+22.   The  Audit  Log  search  and  filter  options,  such  as  action,  role,  and  sensitive  access,  were  useful.  Nakatulong  ang  Audit  Log  search  at  filter  options  tulad  ng  action,  role,  at  sensitive  access.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+23.   Audit  records  clearly  showed  the  actor,  role,  action,  timestamp,  and  related  case  or  workflow  stage  when  applicable.  Malinaw  na  ipinakita  ng  audit  records  ang  actor,  role,  action,  timestamp,  at  related  case  o  workflow  stage  kung  applicable.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+24.   Overall,  the  System  Administrator  module  supports  administrative  monitoring  and  accountability  without  changing
+recruitment
+
+outcomes.
+ Sa  kabuuan,  sinusuportahan  ng  System  Administrator  module  ang  administrative  monitoring  at  accountability  nang  hindi  binabago
+ang
+
+recruitment
+
+outcomes.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+
+D.   SYSTEM  USABILITY  SCALE  (SUS)   /   System  Usability  Scale  para  sa  System  Administrator  Workflow
+
+
+--- PAGE 5 ---
+Instruction:  Answer  based  on  your  overall  experience  using  the  System  Administrator  side  of  RecruitGuard-CHD.   /  Sagutan  batay  sa
+kabuuang
+
+karanasan
+
+mo
+
+sa
+
+paggamit
+
+ng
+
+System
+
+Administrator
+
+side
+
+ng
+
+RecruitGuard-CHD.
+Scale:  5  –  Strongly  Agree      4  –  Agree      3  –  Neutral      2  –  Disagree      1  –  Strongly  Disagree
+1.   I  think  that  I  would  like  to  use  this  system  for  System  Administrator  work.  Sa  tingin  ko,  gugustuhin  kong  gamitin  ang  system  na  ito  para  sa  System  Administrator  work.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+2.   I  found  the  system  unnecessarily  complex.  Para  sa  akin,  masyadong  komplikado  ang  system  kahit  hindi  naman  kailangan.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+3.   I  thought  the  system  was  easy  to  use.  Para  sa  akin,  madaling  gamitin  ang  system.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+4.   I  think  that  I  would  need  assistance  to  be  able  to  use  this  system.  Sa  tingin  ko,  kakailanganin  ko  ng  tulong  para  magamit  ang  system  na  ito.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+5.   I  found  the  different  functions  of  the  system  well  integrated.  Para  sa  akin,  maayos  ang  pagkakakonekta  ng  iba't  ibang  functions  ng  system.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+6.   I  thought  there  was  too  much  inconsistency  in  the  system.  Para  sa  akin,  maraming  bahagi  ng  system  ang  hindi  consistent.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+7.   I  imagine  that  most  System  Administrator  users  would  learn  to  use  this  system  quickly.  Sa  tingin  ko,  mabilis  matututunan  ng  karamihan  sa  System  Administrator  users  ang  paggamit  ng  system  na  ito.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+
+--- PAGE 6 ---
+8.   I  found  the  system  cumbersome  to  use.  Para  sa  akin,  mabigat  o  mahirap  gamitin  ang  system.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+9.   I  felt  confident  using  the  system.  Confident  ako  habang  ginagamit  ang  system.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+10.   I  needed  to  learn  a  lot  of  things  before  I  could  use  this  system.  Marami  muna  akong  kailangang  matutunan  bago  ko  magamit  ang  system  na  ito.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+
+E.   OPEN-ENDED  FEEDBACK   /   Bukas  na  Tanong
+
+1.   Which  System  Administrator  function  was  easiest  to  perform?  Aling  System  Administrator  function  ang  pinakamadaling  gawin?
+____________________________________________________________________________________________
+2.   Which  System  Administrator  function  was  confusing  or  difficult?  Aling  System  Administrator  function  ang  confusing  o  mahirap  gawin?
+____________________________________________________________________________________________
+3.   What  should  be  improved  to  make  the  System  Administrator  workflow  easier  to  use?  Ano  ang  dapat  i-improve  para  mas  madaling  gamitin  ang  System  Administrator  workflow?
+____________________________________________________________________________________________

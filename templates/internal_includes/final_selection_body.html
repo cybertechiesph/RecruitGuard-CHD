@@ -390,11 +390,20 @@ Standards applied:
         return nameEl ? nameEl.textContent.trim() : "";
     }
 
-    function showError(msg, field) {
-        if (errorBox) { errorBox.textContent = msg; errorBox.hidden = false; }
-        if (field && field.focus) try { field.focus({ preventScroll: false }); } catch (e) { field.focus(); }
+    function clearError() {
+        if (window.RGWizardErrors) { RGWizardErrors.clearFieldErrors(form); }
+        if (errorBox) { errorBox.hidden = true; errorBox.textContent = ""; }
     }
-    function clearError() { if (errorBox) { errorBox.hidden = true; errorBox.textContent = ""; } }
+    function revealProblems(probs) {
+        if (!probs.length) return;
+        if (!window.RGWizardErrors) {
+            if (errorBox) { errorBox.textContent = probs[0].msg; errorBox.hidden = false; }
+            var f0 = probs[0].field;
+            if (f0 && f0.focus) { try { f0.focus({ preventScroll: false }); } catch (e) { f0.focus(); } }
+            return;
+        }
+        RGWizardErrors.showErrors(probs, { scope: form, summaryBox: errorBox });
+    }
 
     /* Visual selected state on the picked label */
     function syncCardSelectedState() {
@@ -471,7 +480,9 @@ Standards applied:
         var p = [];
         var picked = selectedRadio();
         if (!picked) {
-            p.push({ field: radios[0], msg: "Pick the appointee from the ranked list before recording." });
+            // Radios live inside candidate cards — focus the first, but show the
+            // message in the summary box rather than splitting the ranked list.
+            p.push({ field: radios[0], summaryOnly: true, msg: "Pick the appointee from the ranked list before recording." });
             return p;
         }
         if (deepCheckbox && deepCheckbox.checked) {
@@ -488,7 +499,7 @@ Standards applied:
     if (recordBtn) {
         recordBtn.addEventListener("click", function () {
             var probs = recordProblems();
-            if (probs.length) { showError(probs[0].msg, probs[0].field); return; }
+            if (probs.length) { revealProblems(probs); return; }
             if (modalName) modalName.textContent = selectedName() || "—";
             if (modalRank) modalRank.textContent = "#" + (selectedRank() || "—");
             if (modalDeep) modalDeep.textContent = (deepCheckbox && deepCheckbox.checked) ? "Yes" : "No";

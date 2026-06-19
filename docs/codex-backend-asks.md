@@ -531,5 +531,99 @@ With a button that re-issues the OTP for that draft.
 
 ---
 
+## From VAL1 — Align the email error message (client now diverges)
+
+### VAL1-email. Match the server-side email error to the client copy
+**Why.** Per a UX-copy review (CMS/Healthcare.gov, GOV.UK guidance), the
+intake email error should be specific with an example. I changed the
+**client-side** wizard message to:
+
+> Enter an email address with an @ symbol, like name@example.com.
+
+The **server-side** `EmailField` still uses Django's default *"Enter a
+valid email address."* — so the two layers now show different text for
+the same failure. We want them identical (dual-layer consistency).
+
+**Ask.** On `ApplicantPortalIntakeForm`'s email field, set:
+
+```python
+email = forms.EmailField(
+    error_messages={"invalid": "Enter an email address with an @ symbol, like name@example.com."},
+    ...
+)
+```
+
+(or override in `__init__` if the field is declared elsewhere). Keep the
+"required" message as-is. Small string-only change; no migration.
+
+**Note on tone.** We deliberately **kept "Please"** on the other intake
+error strings (name/phone/summary empty-field prompts) — that's a
+considered choice for the Filipino-applicant audience (courtesy over
+Western directness). Do **not** strip "Please" from the existing
+strings. Only the email message changes, and only because it gains an
+example. Leave the verbatim strings you already implemented for name,
+phone, and summary untouched.
+
+---
+
+## From upload validation — plain-English error copy (coordinated)
+
+### UP-1. Rewrite applicant upload error strings in lockstep (server + client + tests)
+**✅ RESOLVED (both layers).** Backend: six canonical constants in
+`recruitment/upload_validation.py` (line 12), six failure-state tests at
+`recruitment/tests.py:5404`. Client: the four mirrored strings in
+`applicant_intake_form.html` `selectedFileProblem()` are now byte-identical
+to the server constants (verified programmatically); the two
+signature-only messages stay backend. No further action.
+
+**Why.** Codex shipped solid upload validation. But the error strings in
+[`recruitment/upload_validation.py`](../recruitment/upload_validation.py)
+are system-voice ("Empty files are not allowed.", "applicant document"),
+which breaks the plain-English, actionable voice used everywhere else in
+the applicant flow. Some of these strings are also **already drifting**
+from the client mirror in `applicant_intake_form.html` — e.g. the
+MIME/format mismatch reads *"does not match its extension"* (client) vs
+*"does not match the selected document format"* (server). These are
+applicant-facing.
+
+**This must move as ONE change** across three places, or the layers
+drift further:
+1. `recruitment/upload_validation.py` (the `raise ValueError(...)` strings)
+2. `applicant_intake_form.html` `selectedFileProblem()` JS mirror
+3. The server tests that assert these exact strings.
+
+Codex owns (1) + (3); Claude will sync (2) the moment the strings are
+locked. **The strings below are the proposal — confirm or adjust, then
+we both land the same text.**
+
+**Canonical strings (proposed):**
+
+| Trigger | Server line (current) | New copy |
+|---|---|---|
+| Size > 5 MB | "Each applicant document must be 5 MB or smaller." | **"Each file must be 5 MB or smaller. If a photo is too big, take it again at lower quality."** |
+| Empty / 0 bytes | "Empty files are not allowed." | **"This file is empty. Pick a file that has something in it."** |
+| Wrong extension | "Upload a PDF, JPG, JPEG, or PNG file only." | **"This needs to be a PDF, JPG, or PNG file. Upload one of those."** |
+| MIME ≠ filename (client + server line ~111) | client: "…does not match its extension…" / server: "…does not match the selected document format…" | **"This file format does not match its filename. Save it again as a PDF, JPG, or PNG, then upload it."** (Codex's wording — accurate, since the browser checks declared type vs filename, not the signature) |
+
+**Server-only (no client mirror — Claude can't read signatures):**
+
+| Trigger | Server line (current) | New copy |
+|---|---|---|
+| Signature not detected (line ~96) | "The uploaded file could not be verified as a valid PDF, JPG, JPEG, or PNG document." | **"We couldn't read this as a PDF, JPG, or PNG. Save it again, then upload it."** |
+| Signature ≠ extension (line ~102) | "The uploaded file contents do not match the selected file extension. Please upload the correct PDF, JPG, JPEG, or PNG file." | **"This file's contents don't match a PDF, JPG, or PNG. Save it again, then upload it."** |
+
+**Note on tone.** Unlike the name/phone/summary prompts (which keep
+"Please"), these are *correction* messages where the actionable
+instruction carries the courtesy — so no "Please" needed. Each tells the
+applicant what to **do** next, not just what's wrong.
+
+**Backend resolution.** Codex accepted the six proposed strings as canonical,
+centralized them in `recruitment/upload_validation.py`, and added direct tests
+for every trigger. Claude still needs to mirror the first four client-visible
+states in `selectedFileProblem()`; signature detection and signature/extension
+mismatch remain server-only.
+
+---
+
 ## (Slot for future-slice asks)
 *(none yet)*

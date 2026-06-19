@@ -1,0 +1,331 @@
+
+--- PAGE 1 ---
+
+ RecruitGuard-CHD
+ HRMPSB  Member  Post-Test  Questionnaire  Post-Test  Questionnaire  para  sa  HRMPSB  Member  Workflow  ng  RecruitGuard-CHD
+A.   CONSENT  AND  DATA  PRIVACY
+This  questionnaire  is  for  evaluating  the  usability  and  workflow  clarity  of  RecruitGuard-CHD  for  the  HRMPSB  Member  role.  Your
+participation
+
+is
+
+voluntary.
+
+Your
+
+answers
+
+will
+
+be
+
+kept
+
+confidential
+
+and
+
+used
+
+only
+
+for
+
+academic
+
+evaluation
+
+purposes.
+ ☐   I  have  read  and  understood  the  statement  above,  and  I  voluntarily  agree  to  answer  this  questionnaire.
+B.   BASIC  TESTING  PROFILE
+Item  Response  /  Sagot  Role  /  Role  HRMPSB  Member  Branch  tested  /  Branch  na  na-test  ☐  Plantilla      ☐  COS      ☐  Both  /  Pareho  Case  level  tested  /  Case  level  na  na-test  ☐  Level  1      ☐  Level  2      ☐  Both  /  Pareho
+HRMPSB  task  tested  /  HRMPSB  task  na  na-test
+☐  Interview  Rating      ☐  Deliberation  /  CAR  Review      ☐  Recommendation  /  Ranking      ☐  Multiple  Tasks
+
+C.   HRMPSB  MEMBER  ROLE-SPECIFIC  QUESTIONS   /   Mga  Tanong  para  sa  HRMPSB  Member  Role
+Instruction:  Answer  based  on  your  experience  after  testing  the  HRMPSB  Member  workflow  in  RecruitGuard-CHD.   /  Sagutan  batay
+sa
+
+iyong
+
+karanasan
+
+pagkatapos
+
+subukan
+
+ang
+
+HRMPSB
+
+Member
+
+workflow
+
+sa
+
+RecruitGuard-CHD.
+
+Scale:  5  –  Strongly  Agree      4  –  Agree      3  –  Neutral      2  –  Disagree      1  –  Strongly  Disagree
+1.   I  was  able  to  log  in  and  access  the  HRMPSB  Member  workspace  without  difficulty.  Madali  akong  nakapag-log  in  at  nakapasok  sa  HRMPSB  Member  workspace.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ 2.   The  dashboard  clearly  showed  the  recruitment  cases  that  needed  HRMPSB  review  or  action.  Malinaw  na  ipinakita  ng  dashboard  ang  recruitment  cases  na  kailangan  ng  HRMPSB  review  o  action.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ 3.   The  queue  or  case  list  was  easy  to  understand.  Madaling  maintindihan  ang  queue  o  listahan  ng  cases.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+
+--- PAGE 2 ---
+ 4.   The  case  details  clearly  showed  important  information  such  as  Application  ID,  applicant  name,  position,  branch,  level,
+and
+
+current
+
+step.
+ Malinaw  na  ipinakita  ng  case  details  ang  mahahalagang  impormasyon  tulad  ng  Application  ID,  applicant  name,  position,  branch,  level,
+at
+
+current
+
+step.
+
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ 5.   The  workflow  stage  or  pipeline  helped  me  understand  where  the  application  was  in  the  recruitment  process.  Nakatulong  ang  workflow  stage  o  pipeline  para  maintindihan  ko  kung  nasaan  na  ang  application  sa  recruitment  process.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ 6.   The  system  clearly  showed  when  a  case  was  ready  for  HRMPSB  review.  Malinaw  na  ipinakita  ng  system  kung  kailan  ready  na  ang  case  para  sa  HRMPSB  review.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ 7.   The  system  made  it  clear  when  HRMPSB  action  was  not  yet  available  because  previous  steps  were  not  yet  completed.  Malinaw  sa  system  kung  bakit  hindi  pa  available  ang  HRMPSB  action  kapag  may  naunang  step  na  hindi  pa  tapos.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ 8.   The  interview  session  details  were  easy  to  find  and  understand.  Madaling  hanapin  at  maintindihan  ang  interview  session  details.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ 9.   The  interview  rating  form  was  clear  and  easy  to  use.  Malinaw  at  madaling  gamitin  ang  interview  rating  form.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ 10.   Entering  an  interview  score  from  0  to  100  was  easy  to  understand.  Madaling  maintindihan  ang  paglagay  ng  interview  score  mula  0  hanggang  100.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ 11.   The  rating  notes  field  was  useful  for  adding  evaluation  remarks.  Nakatulong  ang  rating  notes  field  para  makapagdagdag  ng  evaluation  remarks.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+--- PAGE 3 ---
+ 12.   The  system  clearly  explained  when  a  justification  was  required  for  very  low  or  very  high  interview  ratings.  Malinaw  na  ipinaliwanag  ng  system  kung  kailan  kailangan  ng  justification  para  sa  napakababa  o  napakataas  na  interview  rating.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ 13.   The  system  clearly  showed  when  my  interview  rating  had  been  submitted.  Malinaw  na  ipinakita  ng  system  kung  na-submit  na  ang  aking  interview  rating.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ 14.   The  system  clearly  showed  when  interview  ratings  were  already  locked  or  finalized.  Malinaw  na  ipinakita  ng  system  kapag  locked  o  finalized  na  ang  interview  ratings.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ 15.   The  system  helped  protect  the  confidentiality  of  HRMPSB  ratings  before  deliberation.  Nakatulong  ang  system  na  maprotektahan  ang  confidentiality  ng  HRMPSB  ratings  bago  ang  deliberation.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ 16.   The  Deliberation  or  CAR  section  was  easy  to  find.  Madaling  hanapin  ang  Deliberation  o  CAR  section.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ 17.   The  CAR  draft  or  candidate  evaluation  summary  was  easy  to  understand.  Madaling  maintindihan  ang  CAR  draft  o  candidate  evaluation  summary.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ 18.   The  system  clearly  showed  the  consolidated  results  from  screening,  examination,  and  interview  ratings.  Malinaw  na  ipinakita  ng  system  ang  consolidated  results  mula  sa  screening,  examination,  at  interview  ratings.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ 19.   The  preliminary  score  or  ranking  information  was  easy  to  understand.  Madaling  maintindihan  ang  preliminary  score  o  ranking  information.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+
+--- PAGE 4 ---
+20.   The  recommendation  field  was  clear  for  recording  the  HRMPSB  recommendation.  Malinaw  ang  recommendation  field  para  sa  pag-record  ng  HRMPSB  recommendation.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ 21.   The  system  made  it  clear  that  the  HRMPSB  recommends  or  endorses,  but  does  not  make  the  final  appointment
+decision.
+ Malinaw  sa  system  na  ang  HRMPSB  ay  nagre-recommend  o  nag-eendorse,  ngunit  hindi  ang  gumagawa  ng  final  appointment  decision.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ 22.   Finalizing  and  locking  the  HRMPSB  deliberation  or  recommendation  record  was  clearly  presented.  Malinaw  na  ipinakita  ang  pag-finalize  at  pag-lock  ng  HRMPSB  deliberation  o  recommendation  record.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ 23.   Overall,  the  system  supports  the  HRMPSB  Member’s  evaluation  and  deliberation  responsibilities.  Sa  kabuuan,  sinusuportahan  ng  system  ang  evaluation  at  deliberation  responsibilities  ng  HRMPSB  Member.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ 24.   Overall,  the  system  helps  organize  HRMPSB  ratings  and  recommendations  better  than  manual  tracking.  Sa  kabuuan,  nakakatulong  ang  system  na  mas  maayos  ang  HRMPSB  ratings  at  recommendations  kumpara  sa  manual  tracking.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+D.   SYSTEM  USABILITY  SCALE  (SUS)   /   System  Usability  Scale  para  sa  HRMPSB  Member  Workflow
+Instruction:  Answer  based  on  your  overall  experience  using  the  HRMPSB  Member  side  of  RecruitGuard-CHD.   /  Sagutan  batay  sa
+kabuuang
+
+karanasan
+
+mo
+
+sa
+
+paggamit
+
+ng
+
+HRMPSB
+
+Member
+
+side
+
+ng
+
+RecruitGuard-CHD.
+
+Scale:  5  –  Strongly  Agree      4  –  Agree      3  –  Neutral      2  –  Disagree      1  –  Strongly  Disagree
+1.   I  think  that  I  would  like  to  use  this  system  for  HRMPSB  recruitment  work.  Sa  tingin  ko,  gugustuhin  kong  gamitin  ang  system  na  ito  para  sa  HRMPSB  recruitment  work.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ 2.   I  found  the  system  unnecessarily  complex.  Para  sa  akin,  masyadong  komplikado  ang  system  kahit  hindi  naman  kailangan.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+
+--- PAGE 5 ---
+3.   I  thought  the  system  was  easy  to  use.  Para  sa  akin,  madaling  gamitin  ang  system.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ 4.   I  think  that  I  would  need  assistance  to  be  able  to  use  this  system.  Sa  tingin  ko,  kakailanganin  ko  ng  tulong  para  magamit  ang  system  na  ito.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ 5.   I  found  the  different  functions  of  the  system  well  integrated.  Para  sa  akin,  maayos  ang  pagkakaugnay  ng  iba’t  ibang  functions  ng  system.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ 6.   I  thought  there  was  too  much  inconsistency  in  the  system.  Para  sa  akin,  maraming  bahagi  ng  system  ang  hindi  consistent.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ 7.   I  imagine  that  most  HRMPSB  users  would  learn  to  use  this  system  quickly.  Sa  tingin  ko,  mabilis  matututunan  ng  karamihan  sa  HRMPSB  users  ang  paggamit  ng  system  na  ito.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ 8.   I  found  the  system  cumbersome  to  use.  Para  sa  akin,  mabigat  o  mahirap  gamitin  ang  system.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ 9.   I  felt  confident  using  the  system.  Confident  ako  habang  ginagamit  ang  system.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ 10.   I  needed  to  learn  a  lot  of  things  before  I  could  use  this  system.  Marami  muna  akong  kailangang  matutunan  bago  ko  magamit  ang  system  na  ito.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+
+--- PAGE 6 ---
+E.   OPEN-ENDED  FEEDBACK   /   Bukas  na  Tanong
+1.   Which  HRMPSB  task  was  easiest  to  perform?  Aling  HRMPSB  task  ang  pinakamadaling  gawin?
+2.   Which  HRMPSB  task  was  confusing  or  difficult?  Aling  HRMPSB  task  ang  confusing  o  mahirap  gawin?
+3.   What  should  be  improved  to  make  the  HRMPSB  Member  workflow  easier  to  use?  Ano  ang  dapat  i-improve  para  mas  madaling  gamitin  ang  HRMPSB  Member  workflow?

@@ -214,11 +214,20 @@ HRM Chief on a COS case; each carries its own footer.
         }
         return (el.value || "").trim();
     }
-    function showError(msg, field) {
-        if (errorBox) { errorBox.textContent = msg; errorBox.hidden = false; }
-        if (field && field.focus) try { field.focus({ preventScroll: false }); } catch (e) { field.focus(); }
+    function clearError() {
+        if (window.RGWizardErrors) { RGWizardErrors.clearFieldErrors(form); }
+        if (errorBox) { errorBox.hidden = true; errorBox.textContent = ""; }
     }
-    function clearError() { if (errorBox) { errorBox.hidden = true; errorBox.textContent = ""; } }
+    function revealProblems(probs) {
+        if (!probs.length) return;
+        if (!window.RGWizardErrors) {
+            if (errorBox) { errorBox.textContent = probs[0].msg; errorBox.hidden = false; }
+            var f0 = probs[0].field;
+            if (f0 && f0.focus) { try { f0.focus({ preventScroll: false }); } catch (e) { f0.focus(); } }
+            return;
+        }
+        RGWizardErrors.showErrors(probs, { scope: form, summaryBox: errorBox });
+    }
 
     /* Per-field validation for finalize */
     function problems() {
@@ -262,7 +271,7 @@ HRM Chief on a COS case; each carries its own footer.
     if (finBtn) {
         finBtn.addEventListener("click", function () {
             var probs = problems();
-            if (probs.length) { showError(probs[0].msg, probs[0].field); return; }
+            if (probs.length) { revealProblems(probs); return; }
             clearError();
             if (modalEl && window.bootstrap) bootstrap.Modal.getOrCreateInstance(modalEl).show();
         });

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>RecruitGuard-CHD Internal Verification Code</title>
+</head>
+<body style="margin:0; padding:0; background:#f4f6fa; color:#1f2933; font-family:Arial, Helvetica, sans-serif;">
+    <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:transparent;">
+        Your RecruitGuard-CHD internal verification code is {{ otp_code }}.
+    </div>
+
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f6fa; margin:0; padding:28px 12px;">
+        <tr>
+            <td align="center">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px; background:#ffffff; border:1px solid #d7dde3; border-radius:12px; overflow:hidden;">
+                    <tr>
+                        <td style="background:#1e5c2d; padding:18px 24px; border-bottom:4px solid #fdb813;">
+                            <div style="font-size:12px; line-height:1.4; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#fdb813;">
+                                DOH-CHD CALABARZON
+                            </div>
+                            <div style="font-size:22px; line-height:1.25; font-weight:700; color:#ffffff; margin-top:4px;">
+                                RecruitGuard-CHD
+                            </div>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td style="padding:28px 28px 8px; text-align:center;">
+                            <h1 style="margin:0; color:#111827; font-size:22px; line-height:1.3; font-weight:700;">
+                                Internal Verification Code
+                            </h1>
+                            <p style="margin:10px 0 0; color:#5f6c78; font-size:14px; line-height:1.6;">
+                                Use this code to complete your internal sign-in.
+                            </p>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td align="center" style="padding:18px 28px;">
+                            <div style="display:inline-block; padding:16px 26px; border:1px solid #cfe0c0; border-radius:10px; background:#f7fbf3;">
+                                <div style="font-size:34px; line-height:1; font-weight:800; letter-spacing:0.18em; color:#1e5c2d;">
+                                    {{ otp_code }}
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td style="padding:0 28px 24px; text-align:center;">
+                            <p style="margin:0; color:#374151; font-size:14px; line-height:1.65;">
+                                This code expires in <strong>{{ otp_validity_minutes }} minute{{ otp_validity_minutes|pluralize }}</strong>.
+                            </p>
+                            {% if challenge.expires_at %}
+                                <p style="margin:6px 0 0; color:#7b8794; font-size:12px; line-height:1.5;">
+                                    Valid until {{ challenge.expires_at|date:"M d, Y h:i A" }}.
+                                </p>
+                            {% endif %}
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td style="padding:0 28px 24px;">
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#fff8e6; border:1px solid #ffdf88; border-radius:8px;">
+                                <tr>
+                                    <td style="padding:14px 16px; color:#6b4d06; font-size:13px; line-height:1.6;">
+                                        <strong>Security reminder:</strong> Do not share this code. RecruitGuard-CHD staff will never ask for it.
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td style="padding:18px 28px; background:#f8fafc; border-top:1px solid #edf0f3; color:#6b7280; font-size:12px; line-height:1.6;">
+                            <div>
+                                This message was sent for your RecruitGuard-CHD internal sign-in.
+                            </div>
+                            <div style="margin-top:4px;">
+                                Internal account: <strong style="color:#374151;">{{ challenge.user.username }}</strong>
+                            </div>
+                            <div style="margin-top:4px;">
+                                If you did not request this code, contact your System Administrator.
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

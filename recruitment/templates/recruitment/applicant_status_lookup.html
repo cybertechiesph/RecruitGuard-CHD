@@ -65,6 +65,23 @@
                 <div class="form-text">Use the same email address you submitted with your application.</div>
             </div>
 
+            {% if form.captcha_answer %}
+            <div class="rg-pub-field rg-ta-field">
+                <label for="{{ form.captcha_answer.id_for_label }}" class="rg-ta-label">
+                    {{ form.captcha_answer.label }} <span class="text-danger" aria-hidden="true">*</span>
+                </label>
+                {{ form.captcha_answer }}
+                {% if form.captcha_answer.errors %}
+                <div class="invalid-feedback d-block rg-ta-error">
+                    {{ form.captcha_answer.errors.0 }}
+                </div>
+                {% endif %}
+                {% if form.captcha_answer.help_text %}
+                    <div class="form-text">{{ form.captcha_answer.help_text }}</div>
+                {% endif %}
+            </div>
+            {% endif %}
+
             <button type="submit" class="btn btn-rg-primary btn-lg rg-ta-submit">
                 Check Status &rarr;
             </button>

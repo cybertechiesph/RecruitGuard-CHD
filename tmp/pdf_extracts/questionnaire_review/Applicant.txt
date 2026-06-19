@@ -1,0 +1,300 @@
+
+--- PAGE 1 ---
+
+ RecruitGuard-CHD
+ Applicant-Side  Post-Test  Questionnaire  Post-Test  Questionnaire  para  sa  Applicant  Portal  ng  RecruitGuard-CHD
+ A.   CONSENT  AND  DATA  PRIVACY  This  questionnaire  is  for  evaluating  the  usability  and  workflow  clarity  of  RecruitGuard-CHD  for  the  Secretariat  role.  Your
+participation
+
+is
+
+voluntary.
+
+Your
+
+answers
+
+will
+
+be
+
+kept
+
+confidential
+
+and
+
+used
+
+only
+
+for
+
+academic
+
+evaluation
+
+purposes.
+ ☐   I  have  read  and  understood  the  statement  above,  and  I  voluntarily  agree  to  answer  this  questionnaire.
+B.   BASIC  TESTING  PROFILE
+Item  Response  /  Sagot
+Device  used  /  Device  na  ginamit  ☐  Mobile  Phone  /  Cellphone      ☐  Laptop      ☐  Desktop      ☐  Tablet
+Internet  connection  used  /  Internet  na  ginamit
+☐  Mobile  Data      ☐  Wi-Fi      ☐  Other  /  Iba  pa:  ____________________
+Application  path  tested  /  Na-test  na  application  path
+☐  Plantilla      ☐  COS      ☐  Both  /  Pareho      ☐  Not  sure  /  Hindi  sigurado
+Have  you  tried  applying  online  before?  /  Nakapag-apply  ka  na  ba  online  dati?
+☐  Yes  /  Oo      ☐  No  /  Hindi      ☐  A  few  times  only  /  Ilang  beses  lang
+ C.   APPLICANT  PORTAL  FEATURE-SPECIFIC  QUESTIONS  /   Mga  Tanong  Tungkol  sa  Applicant  Portal  Instruction:  Answer  each  item  based  on  your  experience  after  testing  the  Applicant  Portal.  Check  one  rating  per  item.   /  Sagutan
+ang
+
+bawat
+
+item
+
+batay
+
+sa
+
+iyong
+
+karanasan
+
+pagkatapos
+
+subukan
+
+ang
+
+Applicant
+
+Portal.
+
+Lagyan
+
+ng
+
+check
+
+ang
+
+isang
+
+rating
+
+bawat
+
+item.  Scale:  5  –  Strongly  Agree      4  –  Agree      3  –  Neutral      2  –  Disagree      1  –  Strongly  Disagree
+1.   I  was  able  to  easily  find  the  list  of  available  job  openings.  Madali  kong  nakita  ang  listahan  ng  mga  available  job  openings.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+2.   The  difference  between  Plantilla/Permanent  and  Contract  of  Service/COS  positions  was  clear  to  me.  Malinaw  sa  akin  ang  pagkakaiba  ng  Plantilla/Permanent  at  Contract  of  Service/COS  positions.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+
+--- PAGE 2 ---
+3.   The  position  details,  such  as  title,  office/unit,  deadline,  and  status,  were  clear.  Malinaw  ang  position  details  tulad  ng  title,  office/unit,  deadline,  at  status  ng  position.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+4.   The  qualifications  and  required  documents  were  easy  to  understand  before  applying.  Madali  kong  naintindihan  ang  qualifications  at  required  documents  bago  mag-apply.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+5.   The  Data  Privacy  Notice  in  the  Applicant  Portal  was  easy  to  notice  and  understand.  Madaling  makita  at  maintindihan  ang  Data  Privacy  Notice  sa  Applicant  Portal.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+6.   The  application  steps  were  clear  from  filling  out  information  up  to  final  submission.  Malinaw  ang  application  steps  mula  sa  pagsagot  ng  impormasyon  hanggang  sa  final  submission.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+7.   The  personal  information  fields  were  easy  to  answer.  Madaling  sagutan  ang  personal  information  fields.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+8.   The  instructions  for  the  Summary  of  Qualifications  and  optional  notes  were  clear.  Malinaw  ang  instructions  para  sa  Summary  of  Qualifications  at  optional  notes.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+9.   It  was  easy  to  identify  which  fields  were  required  and  which  were  optional.  Madaling  malaman  kung  aling  fields  ang  required  at  alin  ang  optional.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+10.   When  I  made  an  error  or  missed  something,  the  system  clearly  explained  what  I  needed  to  fix.  Kapag  may  mali  o  kulang,  malinaw  na  sinabi  ng  system  kung  ano  ang  dapat  ayusin.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+--- PAGE 3 ---
+11.   It  was  clear  and  convenient  that  I  did  not  need  to  create  an  account  to  submit  an  application.  Malinaw  at  convenient  na  hindi  na  kailangang  gumawa  ng  account  para  makapag-submit  ng  application.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon  Section  C  (continued  —  items  12–22) Scale:  5  –  Strongly  Agree      4  –  Agree      3  –  Neutral      2  –  Disagree      1  –  Strongly  Disagree
+12.   It  was  clear  which  documents  were  required  and  which  were  only  needed  if  applicable.  Malinaw  kung  aling  documents  ang  required  at  alin  ang  kailangan  lang  kung  applicable.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+13.   The  file  requirements,  such  as  allowed  file  types  and  file  size  limit,  were  clear.  Malinaw  ang  file  requirements  tulad  ng  allowed  file  types  at  file  size  limit.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+14.   I  was  able  to  upload  documents  from  my  device  without  difficulty.  Madali  akong  nakapag-upload  ng  documents  mula  sa  device  ko.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+15.   The  tips  for  preparing  clear  document  photos  or  scans  were  helpful.  Nakakatulong  ang  tips  para  sa  malinaw  na  photo  o  scan  ng  documents.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+16.   If  a  document  was  missing  or  invalid,  the  system  clearly  explained  what  needed  to  be  corrected.  Kapag  may  kulang  o  invalid  na  document,  malinaw  na  sinabi  ng  system  kung  ano  ang  kailangang  ayusin.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+17.   It  was  clear  that  a  6-digit  verification  code  would  be  sent  to  my  email.  Malinaw  na  may  6-digit  verification  code  na  ipapadala  sa  aking  email.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+18.   Entering  the  verification  code  in  the  system  was  easy.  Madaling  ilagay  ang  verification  code  sa  system.
+☐   5  —  Strongly  Agree  ☐   4  —  Agree  ☐   3  —  Neutral  ☐   2  —  Disagree  ☐   1  —  Strongly  Disagree
+
+--- PAGE 4 ---
+Lubos  na  Sumasang-ayon Sumasang-ayon Hindi  Sigurado Hindi  Sumasang-ayon Lubos  na  Hindi  Sumasang-ayon
+19.   The  instructions  about  code  expiration,  resending  the  code,  and  checking  Spam/Junk  were  clear.  Malinaw  ang  instructions  tungkol  sa  expiration  ng  code,  resend  code,  at  pag-check  ng  Spam/Junk  folder.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+20.   The  review  page  clearly  showed  my  application  details  before  final  submission.  Malinaw  na  ipinakita  ng  review  page  ang  application  details  bago  ang  final  submission.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+21.   The  confirmation,  Application  ID,  receipt,  and  print/save  option  were  easy  to  understand.  Madaling  maintindihan  ang  confirmation,  Application  ID,  receipt,  at  print/save  option.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+22.   The  Track  Application  page,  Help/FAQ  page,  and  contact  information  were  easy  to  find  and  understand.  Madaling  mahanap  at  maintindihan  ang  Track  Application  page,  Help/FAQ  page,  at  contact  information.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ D.   SYSTEM  USABILITY  SCALE  (SUS)  /   System  Usability  Scale  para  sa  Applicant  Portal  Instruction:  Answer  the  following  SUS  items  based  on  your  overall  experience  using  the  Applicant  Portal.  Check  one  rating  per  item.   /  Sagutan  ang  sumusunod  na  SUS  items  batay  sa  kabuuang  karanasan  mo  sa  paggamit  ng  Applicant  Portal.  Lagyan  ng  check  ang  isang
+rating
+
+bawat
+
+item.  Scale:  5  –  Strongly  Agree      4  –  Agree      3  –  Neutral      2  –  Disagree      1  –  Strongly  Disagree
+1.   I  think  that  I  would  like  to  use  this  Applicant  Portal  whenever  I  need  to  submit  an  application.  Sa  tingin  ko,  gugustuhin  kong  gamitin  ang  Applicant  Portal  na  ito  kapag  kailangan  kong  mag-submit  ng  application.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+2.   I  found  the  Applicant  Portal  unnecessarily  complex.  Para  sa  akin,  masyadong  komplikado  ang  Applicant  Portal  kahit  hindi  naman  kailangan.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+--- PAGE 5 ---
+3.   I  thought  the  Applicant  Portal  was  easy  to  use.  Para  sa  akin,  madaling  gamitin  ang  Applicant  Portal.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+4.   I  think  that  I  would  need  assistance  to  be  able  to  use  this  Applicant  Portal.  Sa  tingin  ko,  kakailanganin  ko  ng  tulong  para  magamit  ang  Applicant  Portal  na  ito.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+5.   I  found  the  different  functions  of  the  Applicant  Portal  well  integrated.  Para  sa  akin,  maayos  ang  pagkakakonekta  ng  iba't  ibang  functions  ng  Applicant  Portal.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+6.   I  thought  there  was  too  much  inconsistency  in  the  Applicant  Portal.  Para  sa  akin,  maraming  bahagi  ng  Applicant  Portal  ang  hindi  consistent.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+7.   I  imagine  that  most  people  would  learn  to  use  this  Applicant  Portal  quickly.  Sa  tingin  ko,  mabilis  matututunan  ng  karamihan  ang  paggamit  ng  Applicant  Portal  na  ito.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+8.   I  found  the  Applicant  Portal  cumbersome  to  use.  Para  sa  akin,  mabigat  o  mahirap  gamitin  ang  Applicant  Portal.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+9.   I  felt  confident  using  the  Applicant  Portal.  Confident  ako  habang  ginagamit  ang  Applicant  Portal.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+10.   I  needed  to  learn  a  lot  of  things  before  I  could  use  this  Applicant  Portal.  Marami  muna  akong  kailangang  matutunan  bago  ko  magamit  ang  Applicant  Portal.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+--- PAGE 6 ---
+ E.   OPEN-ENDED  FEEDBACK  /   Bukas  na  Tanong
+
+1.   What  part  of  the  Applicant  Portal  was  the  easiest  to  use?  Ano  ang  pinakamadaling  bahagi  ng  Applicant  Portal  gamitin?
+
+2.   What  part  of  the  Applicant  Portal  was  confusing  or  difficult  to  use?  Anong  bahagi  ng  Applicant  Portal  ang  confusing  o  mahirap  gamitin?
+
+3.   What  should  be  improved  to  make  the  Applicant  Portal  easier  for  applicants?  Ano  ang  dapat  idagdag  o  baguhin  para  mas  madaling  gamitin  ng  aplikante  ang  Applicant  Portal?

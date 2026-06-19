@@ -6,7 +6,12 @@ from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 from django.views.generic import FormView, TemplateView
 
-from .forms import ApplicantOTPForm, ApplicantPortalIntakeForm, ApplicantStatusLookupForm
+from .forms import (
+    ApplicantOTPCaptchaForm,
+    ApplicantOTPForm,
+    ApplicantPortalIntakeForm,
+    ApplicantStatusLookupForm,
+)
 from .models import PositionPosting, RecruitmentApplication
 from .requirements import get_applicant_document_requirements
 from .services import (
@@ -19,6 +24,7 @@ from .services import (
     submit_application,
     verify_application_otp,
 )
+from .upload_validation import MAX_APPLICANT_DOCUMENT_UPLOAD_BYTES
 
 
 _APPLICANT_STATUS_LABELS = {
@@ -147,6 +153,7 @@ class ApplicantPortalIntakeView(FormView):
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["entry"] = self.entry
+        kwargs["request"] = self.request
         return kwargs
 
     def get_draft_from_token(self):
@@ -181,7 +188,15 @@ class ApplicantPortalIntakeView(FormView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["entry"] = self.entry
-        max_bytes = getattr(settings, "MAX_EVIDENCE_UPLOAD_BYTES", 5 * 1024 * 1024)
+        max_bytes = min(
+            getattr(
+                settings,
+                "MAX_EVIDENCE_UPLOAD_BYTES",
+                MAX_APPLICANT_DOCUMENT_UPLOAD_BYTES,
+            ),
+            MAX_APPLICANT_DOCUMENT_UPLOAD_BYTES,
+        )
+        context["max_upload_bytes"] = max_bytes
         context["max_upload_mb"] = max_bytes // (1024 * 1024)
         return context
 
@@ -192,6 +207,7 @@ class ApplicantPortalIntakeView(FormView):
 
         form = self.get_form_class()(
             entry=self.entry,
+            request=self.request,
             initial=self.get_initial_from_draft(draft),
         )
         form.attach_existing_draft(
@@ -250,6 +266,7 @@ class ApplicantPortalIntakeView(FormView):
             valid_requirement_uploads
             and form.can_persist_draft_uploads()
             and "email" not in form.errors
+            and "captcha_answer" not in form.errors
             and not form.non_field_errors()
         ):
             try:
@@ -307,7 +324,11 @@ class ApplicantOTPView(TemplateView):
         if application is None:
             raise Http404
         context["application"] = application
-        context["otp_form"] = kwargs.get("otp_form") or ApplicantOTPForm()
+        context["otp_form"] = kwargs.get("otp_form") or ApplicantOTPForm(request=self.request)
+        context["captcha_form"] = kwargs.get("captcha_form") or ApplicantOTPCaptchaForm(
+            request=self.request,
+            prefix="otp_action",
+        )
         context["otp_validity_minutes"] = settings.APPLICATION_OTP_VALIDITY_MINUTES
         context["current_applicant_document_count"] = (
             get_current_applicant_document_items(application).count()
@@ -323,6 +344,19 @@ class ApplicantOTPView(TemplateView):
 
         action = request.POST.get("action")
         if action == "resend":
+            captcha_form = ApplicantOTPCaptchaForm(
+                request.POST,
+                request=request,
+                prefix="otp_action",
+            )
+            if not captcha_form.is_valid():
+                messages.error(request, "Complete the security check correctly before requesting a new code.")
+                return self.render_to_response(
+                    self.get_context_data(
+                        application=application,
+                        captcha_form=captcha_form,
+                    )
+                )
             try:
                 issue_application_otp(
                     application,
@@ -344,7 +378,7 @@ class ApplicantOTPView(TemplateView):
             return redirect("applicant-otp", token=application.public_token)
 
         if action == "verify":
-            otp_form = ApplicantOTPForm(request.POST)
+            otp_form = ApplicantOTPForm(request.POST, request=request)
             if otp_form.is_valid():
                 try:
                     verify_application_otp(application, otp_form.cleaned_data["otp"])
@@ -358,6 +392,19 @@ class ApplicantOTPView(TemplateView):
             )
 
         if action == "finalize":
+            captcha_form = ApplicantOTPCaptchaForm(
+                request.POST,
+                request=request,
+                prefix="otp_action",
+            )
+            if not captcha_form.is_valid():
+                messages.error(request, "Complete the security check correctly before submitting.")
+                return self.render_to_response(
+                    self.get_context_data(
+                        application=application,
+                        captcha_form=captcha_form,
+                    )
+                )
             try:
                 submit_application(application, application.applicant)
             except ValueError as exc:
@@ -405,6 +452,11 @@ class ApplicantReceiptView(TemplateView):
 class ApplicantStatusLookupView(FormView):
     template_name = "recruitment/applicant_status_lookup.html"
     form_class = ApplicantStatusLookupForm
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["request"] = self.request
+        return kwargs
 
     def get_unfinished_draft(self, application_id, email):
         return (
@@ -488,6 +540,7 @@ class ApplicantStatusLinkView(TemplateView):
         if application is None or application.submitted_at is None:
             raise Http404
         context["form"] = ApplicantStatusLookupForm(
+            request=self.request,
             initial={
                 "application_id": application.reference_number,
                 "email": application.applicant_email,

@@ -3112,6 +3112,7 @@ textarea.form-control {
     border-radius: 6px;
     font-size: 0.8125rem;
     color: #15803d;
+    margin-top: 0.625rem;
 }
 
 .rg-pub-upload-slot__success-name {
@@ -3120,6 +3121,55 @@ textarea.form-control {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.rg-pub-upload-slot__selection {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem 0.75rem;
+    margin-top: 0.625rem;
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 0.8125rem;
+    color: #334155;
+}
+
+.rg-pub-upload-slot__selection[hidden] {
+    display: none;
+}
+
+.rg-pub-upload-slot--complete .rg-pub-upload-slot__selection {
+    background: #dcfce7;
+    border-color: #86efac;
+    color: #15803d;
+}
+
+.rg-pub-upload-slot--error .rg-pub-upload-slot__selection {
+    background: #fff5f5;
+    border-color: #fca5a5;
+    color: #b91c1c;
+}
+
+.rg-pub-upload-slot__selection-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rg-pub-upload-slot__selection-size {
+    color: #64748b;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+}
+
+.rg-pub-upload-slot--complete .rg-pub-upload-slot__selection-size,
+.rg-pub-upload-slot--error .rg-pub-upload-slot__selection-size {
+    color: inherit;
+    opacity: 0.85;
 }
 
 .rg-pub-upload-slot__remove {
@@ -3135,6 +3185,12 @@ textarea.form-control {
 
 .rg-pub-upload-slot__remove:hover {
     text-decoration: underline;
+}
+
+.rg-pub-upload-slot__remove:focus-visible {
+    outline: 3px solid #1d4ed8;
+    outline-offset: 3px;
+    border-radius: 2px;
 }
 
 .rg-pub-optional-tag {
