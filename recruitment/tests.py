@@ -2,9 +2,11 @@ import importlib
 import io
 import json
 import re
+import urllib.parse
 import uuid
 import zipfile
 from datetime import date, timedelta
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django import forms
@@ -23,15 +25,21 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 
-from .captcha import CAPTCHA_ANSWER_SESSION_KEY, validate_turnstile_token
+from .captcha import (
+    CAPTCHA_ANSWER_SESSION_KEY,
+    validate_recaptcha_token,
+    validate_turnstile_token,
+)
 from .forms import (
     APPLICANT_MOBILE_ERROR_MESSAGE,
     APPLICANT_NAME_ERROR_MESSAGE,
     APPLICANT_QUALIFICATION_SUMMARY_LENGTH_ERROR_MESSAGE,
     APPLICANT_QUALIFICATION_SUMMARY_MAX_LENGTH,
+    ApplicantOTPForm,
     ApplicantPortalIntakeForm,
     CaseHandoffForm,
     ExamRecordForm,
+    InternalMFAOTPForm,
     WorkflowActionForm,
 )
 from .models import (
@@ -1146,7 +1154,7 @@ class CaptchaProtectionTests(TestCase):
         self.assertEqual(response["Location"], reverse("internal-mfa-verify"))
         self.assertEqual(InternalMFAChallenge.objects.count(), 1)
 
-    def test_internal_mfa_resend_requires_valid_captcha(self):
+    def test_internal_mfa_page_uses_cooldown_without_duplicate_captcha(self):
         user = User.objects.create_user(
             username="secretariat",
             password="testpass123",
@@ -1166,7 +1174,7 @@ class CaptchaProtectionTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
 
         response = self.client.get(reverse("internal-mfa-verify"))
-        self.assertContains(response, "Security check: What is")
+        self.assertNotContains(response, "Security check")
 
         response = self.client.post(
             reverse("internal-mfa-verify"),
@@ -1174,9 +1182,13 @@ class CaptchaProtectionTests(TestCase):
             follow=True,
         )
 
-        self.assertContains(response, "Complete the security check correctly")
+        self.assertContains(response, "Please wait")
         self.assertEqual(InternalMFAChallenge.objects.filter(user=user).count(), 1)
         self.assertEqual(len(mail.outbox), 1)
+
+    def test_otp_verification_forms_do_not_duplicate_captcha(self):
+        self.assertNotIn("captcha_answer", ApplicantOTPForm().fields)
+        self.assertNotIn("captcha_answer", InternalMFAOTPForm().fields)
 
     def test_internal_password_reset_requires_valid_captcha(self):
         User.objects.create_user(
@@ -1258,6 +1270,7 @@ class TurnstileCaptchaTests(TestCase):
         self.assertContains(response, 'class="cf-turnstile"')
         self.assertContains(response, 'data-sitekey="0x4AAAAAADmkw6o9jbb0OdQs"')
         self.assertContains(response, 'data-action="turnstile-spin-v1"')
+        self.assertContains(response, 'data-callback="rgCaptchaSuccess"')
 
     def test_turnstile_worker_success_allows_internal_login_challenge(self):
         user = User.objects.create_user(
@@ -1293,6 +1306,46 @@ class TurnstileCaptchaTests(TestCase):
             json.loads(request.data.decode("utf-8"))["token"],
             "valid-turnstile-token",
         )
+        self.assertNotIn("remoteip", json.loads(request.data.decode("utf-8")))
+
+    def test_turnstile_direct_secret_takes_priority_over_worker(self):
+        with self.settings(TURNSTILE_SECRET_KEY="configured-secret"):
+            with patch(
+                "recruitment.captcha.urllib.request.urlopen",
+                return_value=self.fake_turnstile_response(True),
+            ) as urlopen:
+                is_valid = validate_turnstile_token(None, "valid-turnstile-token")
+
+        self.assertTrue(is_valid)
+        request = urlopen.call_args.args[0]
+        self.assertEqual(
+            request.full_url,
+            "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+        )
+        payload = urllib.parse.parse_qs(request.data.decode("utf-8"))
+        self.assertEqual(payload["secret"], ["configured-secret"])
+        self.assertEqual(payload["response"], ["valid-turnstile-token"])
+        self.assertNotIn("remoteip", payload)
+
+    def test_turnstile_forwards_public_client_ip(self):
+        with patch(
+            "recruitment.captcha.urllib.request.urlopen",
+            return_value=self.fake_turnstile_response(True),
+        ) as urlopen:
+            is_valid = validate_turnstile_token(
+                SimpleNamespace(
+                    META={
+                        "HTTP_X_FORWARDED_FOR": "8.8.8.8, 10.0.0.1",
+                        "REMOTE_ADDR": "10.0.0.1",
+                    }
+                ),
+                "valid-turnstile-token",
+            )
+
+        self.assertTrue(is_valid)
+        request = urlopen.call_args.args[0]
+        payload = json.loads(request.data.decode("utf-8"))
+        self.assertEqual(payload["remoteip"], "8.8.8.8")
 
     def test_turnstile_worker_failure_blocks_internal_login_challenge(self):
         User.objects.create_user(
@@ -1333,6 +1386,123 @@ class TurnstileCaptchaTests(TestCase):
         ):
             with patch("recruitment.captcha.urllib.request.urlopen") as urlopen:
                 is_valid = validate_turnstile_token(None, "token")
+
+        self.assertFalse(is_valid)
+        urlopen.assert_not_called()
+
+
+@override_settings(
+    CAPTCHA_ENABLED=True,
+    CAPTCHA_PROVIDER="recaptcha",
+    RECAPTCHA_SITE_KEY="test-recaptcha-site-key",
+    RECAPTCHA_SECRET_KEY="test-recaptcha-secret-key",
+    RECAPTCHA_TIMEOUT_SECONDS=5,
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    RATE_LIMIT_ENABLED=False,
+)
+class RecaptchaCaptchaTests(TestCase):
+    class FakeResponse(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+    def fake_recaptcha_response(self, success):
+        payload = json.dumps({"success": success}).encode("utf-8")
+        return self.FakeResponse(payload)
+
+    def test_recaptcha_widget_renders_on_internal_login(self):
+        response = self.client.get(reverse("login"))
+
+        self.assertContains(response, "https://www.google.com/recaptcha/api.js")
+        self.assertContains(response, 'class="g-recaptcha"')
+        self.assertContains(response, 'data-sitekey="test-recaptcha-site-key"')
+        self.assertContains(response, 'data-callback="rgCaptchaSuccess"')
+
+    def test_recaptcha_success_allows_internal_login_challenge(self):
+        user = User.objects.create_user(
+            username="secretariat",
+            password="testpass123",
+            email="secretariat@example.com",
+            role=RecruitmentUser.Role.SECRETARIAT,
+        )
+
+        with patch(
+            "recruitment.captcha.urllib.request.urlopen",
+            return_value=self.fake_recaptcha_response(True),
+        ) as urlopen:
+            response = self.client.post(
+                reverse("login"),
+                {
+                    "username": "secretariat",
+                    "password": "testpass123",
+                    "g-recaptcha-response": "valid-recaptcha-token",
+                },
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], reverse("internal-mfa-verify"))
+        self.assertEqual(InternalMFAChallenge.objects.filter(user=user).count(), 1)
+        request = urlopen.call_args.args[0]
+        self.assertEqual(
+            request.full_url,
+            "https://www.google.com/recaptcha/api/siteverify",
+        )
+        payload = urllib.parse.parse_qs(request.data.decode("utf-8"))
+        self.assertEqual(payload["secret"], ["test-recaptcha-secret-key"])
+        self.assertEqual(payload["response"], ["valid-recaptcha-token"])
+        self.assertNotIn("remoteip", payload)
+
+    def test_recaptcha_failure_blocks_internal_login_challenge(self):
+        User.objects.create_user(
+            username="secretariat",
+            password="testpass123",
+            email="secretariat@example.com",
+            role=RecruitmentUser.Role.SECRETARIAT,
+        )
+
+        with patch(
+            "recruitment.captcha.urllib.request.urlopen",
+            return_value=self.fake_recaptcha_response(False),
+        ):
+            response = self.client.post(
+                reverse("login"),
+                {
+                    "username": "secretariat",
+                    "password": "testpass123",
+                    "g-recaptcha-response": "invalid-recaptcha-token",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Complete the security check correctly.")
+        self.assertFalse(InternalMFAChallenge.objects.exists())
+
+    def test_recaptcha_forwards_public_client_ip(self):
+        with patch(
+            "recruitment.captcha.urllib.request.urlopen",
+            return_value=self.fake_recaptcha_response(True),
+        ) as urlopen:
+            is_valid = validate_recaptcha_token(
+                SimpleNamespace(
+                    META={
+                        "HTTP_X_FORWARDED_FOR": "8.8.8.8, 10.0.0.1",
+                        "REMOTE_ADDR": "10.0.0.1",
+                    }
+                ),
+                "valid-recaptcha-token",
+            )
+
+        self.assertTrue(is_valid)
+        request = urlopen.call_args.args[0]
+        payload = urllib.parse.parse_qs(request.data.decode("utf-8"))
+        self.assertEqual(payload["remoteip"], ["8.8.8.8"])
+
+    def test_recaptcha_without_secret_fails_closed(self):
+        with self.settings(RECAPTCHA_SECRET_KEY=""):
+            with patch("recruitment.captcha.urllib.request.urlopen") as urlopen:
+                is_valid = validate_recaptcha_token(None, "token")
 
         self.assertFalse(is_valid)
         urlopen.assert_not_called()
@@ -5425,10 +5595,7 @@ class ApplicantUploadValidationTests(TestCase):
             filename="oversized.pdf",
             content=b"%PDF-" + (b"A" * (5 * 1024 * 1024)),
             content_type="application/pdf",
-            message=(
-                "Each file must be 5 MB or smaller. "
-                "If a photo is too big, take it again at lower quality."
-            ),
+            message="This file is too large. Choose a file that is 5 MB or smaller.",
         )
 
     def test_wrong_extension_uses_actionable_error_copy(self):
@@ -5612,7 +5779,7 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
 
         with self.assertRaisesMessage(
             ValueError,
-            "Each file must be 5 MB or smaller. If a photo is too big, take it again at lower quality.",
+            "This file is too large. Choose a file that is 5 MB or smaller.",
         ):
             upload_evidence_item(
                 application=application,
@@ -9022,6 +9189,35 @@ class E2ESeedCommandTests(BaseRecruitmentTestCase):
         self.assertEqual(get_current_workflow_section(exam), "exam")
         self.assertTrue(exam.screening_records.filter(is_finalized=True).exists())
 
+        interview = RecruitmentApplication.objects.get(
+            reference_number="RG-PLT-test-interview"
+        )
+        self.assertEqual(
+            interview.case.current_stage,
+            RecruitmentCase.Stage.HRMPSB_REVIEW,
+        )
+        self.assertEqual(get_current_workflow_section(interview), "interview")
+        self.assertFalse(
+            interview.interview_sessions.filter(is_finalized=True).exists()
+        )
+
+        deliberation = RecruitmentApplication.objects.get(
+            reference_number="RG-PLT-test-deliberation"
+        )
+        self.assertEqual(
+            deliberation.case.current_stage,
+            RecruitmentCase.Stage.HRMPSB_REVIEW,
+        )
+        self.assertEqual(get_current_workflow_section(deliberation), "deliberation")
+        self.assertTrue(
+            deliberation.interview_sessions.filter(is_finalized=True).exists()
+        )
+        self.assertTrue(
+            deliberation.position.comparative_assessment_reports.filter(
+                is_finalized=False
+            ).exists()
+        )
+
         cos_decision = RecruitmentApplication.objects.get(reference_number="RG-COS-test-decision")
         self.assertEqual(cos_decision.case.current_stage, RecruitmentCase.Stage.HRM_CHIEF_REVIEW)
         self.assertEqual(get_current_workflow_section(cos_decision), "decision")
@@ -9050,5 +9246,17 @@ class E2ESeedCommandTests(BaseRecruitmentTestCase):
         call_command("seed_e2e_test_cases", stdout=io.StringIO(), base_email="e2e@example.test")
         self.assertEqual(
             RecruitmentApplication.objects.filter(reference_number="RG-PLT-test-exam").count(),
+            1,
+        )
+        self.assertEqual(
+            RecruitmentApplication.objects.filter(
+                reference_number="RG-PLT-test-interview"
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            RecruitmentApplication.objects.filter(
+                reference_number="RG-PLT-test-deliberation"
+            ).count(),
             1,
         )

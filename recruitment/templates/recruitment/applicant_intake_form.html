@@ -54,7 +54,8 @@
     {% endif %}
 
     {% if form.errors and not form.non_field_errors %}
-        <div class="alert alert-danger" role="alert">
+        <div class="alert alert-danger" role="alert"
+             {% if form.errors|length == 1 and form.captcha_answer.errors %}data-captcha-error-summary{% endif %}>
             <strong>Please fix the highlighted fields below.</strong>
             Your typed information has been kept. You may need to re-select your files.
         </div>
@@ -351,7 +352,7 @@
                             <div class="form-text">{{ form.captcha_answer.help_text }}</div>
                         {% endif %}
                         {% for error in form.captcha_answer.errors %}
-                            <div class="invalid-feedback d-block">{{ error }}</div>
+                            <div class="invalid-feedback d-block" data-captcha-server-error>{{ error }}</div>
                         {% endfor %}
                     </div>
                     {% endif %}
@@ -572,7 +573,7 @@
         if (!file) return "";
         if (file.size === 0) return "This file is empty. Pick a file that has something in it.";
         if (file.size > MAX_UPLOAD_BYTES) {
-            return "Each file must be 5 MB or smaller. If a photo is too big, take it again at lower quality.";
+            return "This file is too large. Choose a file that is 5 MB or smaller.";
         }
 
         var filename = String(file.name || "");

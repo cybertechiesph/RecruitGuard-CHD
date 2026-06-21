@@ -18,6 +18,7 @@ from django.utils.html import format_html
 from django.utils import timezone
 
 from .captcha import (
+    captcha_uses_recaptcha,
     captcha_uses_turnstile,
     get_or_create_captcha_challenge,
     validate_captcha_answer,
@@ -176,10 +177,15 @@ class TurnstileWidget(forms.Widget):
                 widget_id,
             )
         return format_html(
+            '<script>window.rgCaptchaSuccess=function(){{'
+            'document.querySelectorAll("[data-captcha-server-error],'
+            '[data-captcha-error-summary]").forEach(function(element){{'
+            'element.remove();}});}};</script>'
             '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" '
             "async defer></script>"
             '<div id="{}" class="cf-turnstile" data-sitekey="{}" '
-            'data-action="turnstile-spin-v1"></div>',
+            'data-action="turnstile-spin-v1" '
+            'data-callback="rgCaptchaSuccess"></div>',
             widget_id,
             site_key,
         )
@@ -188,11 +194,48 @@ class TurnstileWidget(forms.Widget):
         return data.get("cf-turnstile-response") or data.get(name)
 
 
+class RecaptchaWidget(forms.Widget):
+    def render(self, name, value, attrs=None, renderer=None):
+        attrs = attrs or {}
+        widget_id = attrs.get("id", f"id_{name}")
+        site_key = getattr(settings, "RECAPTCHA_SITE_KEY", "")
+        if not site_key:
+            return format_html(
+                '<div id="{}" class="alert alert-warning mb-0">'
+                "Google reCAPTCHA is enabled but RECAPTCHA_SITE_KEY is not configured."
+                "</div>",
+                widget_id,
+            )
+        return format_html(
+            '<script>window.rgCaptchaSuccess=function(){{'
+            'document.querySelectorAll("[data-captcha-server-error],'
+            '[data-captcha-error-summary]").forEach(function(element){{'
+            'element.remove();}});}};</script>'
+            '<script src="https://www.google.com/recaptcha/api.js" async defer></script>'
+            '<div id="{}" class="g-recaptcha" data-sitekey="{}" '
+            'data-callback="rgCaptchaSuccess"></div>',
+            widget_id,
+            site_key,
+        )
+
+    def value_from_datadict(self, data, files, name):
+        return data.get("g-recaptcha-response") or data.get(name)
+
+
 class CaptchaFormMixin:
     captcha_scope = "default"
     captcha_error_message = "Complete the security check correctly."
 
     def _make_captcha_field(self):
+        if captcha_uses_recaptcha():
+            return forms.CharField(
+                label="Security check",
+                max_length=4096,
+                required=True,
+                widget=RecaptchaWidget,
+                help_text="Google reCAPTCHA protects this form from automated abuse.",
+                error_messages={"required": self.captcha_error_message},
+            )
         if captcha_uses_turnstile():
             return forms.CharField(
                 label="Security check",
@@ -220,7 +263,7 @@ class CaptchaFormMixin:
             return
         if "captcha_answer" not in self.fields:
             self.fields["captcha_answer"] = self._make_captcha_field()
-        if captcha_uses_turnstile():
+        if captcha_uses_turnstile() or captcha_uses_recaptcha():
             self.fields["captcha_answer"].label = "Security check"
             return
         challenge = get_or_create_captcha_challenge(request, self.captcha_scope)
@@ -396,8 +439,7 @@ class InternalPasswordResetForm(CaptchaFormMixin, BootstrapFormMixin, PasswordRe
         return (user for user in users if user.has_usable_password())
 
 
-class InternalMFAOTPForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form):
-    captcha_scope = "internal_mfa"
+class InternalMFAOTPForm(BootstrapFormMixin, forms.Form):
     otp = forms.CharField(max_length=6, min_length=6, label="Verification Code")
 
     def __init__(self, *args, **kwargs):
@@ -409,14 +451,6 @@ class InternalMFAOTPForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form):
         if not otp.isdigit():
             raise forms.ValidationError("Enter the 6-digit verification code sent to your email address.")
         return otp
-
-
-class InternalMFACaptchaForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form):
-    captcha_scope = "internal_mfa"
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._apply_bootstrap()
 
 
 class InternalUserCreateForm(BootstrapFormMixin, UserCreationForm):
@@ -785,8 +819,7 @@ class ApplicantPortalIntakeForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form
         return cleaned_data
 
 
-class ApplicantOTPForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form):
-    captcha_scope = "applicant_otp"
+class ApplicantOTPForm(BootstrapFormMixin, forms.Form):
     otp = forms.CharField(max_length=6, min_length=6, label="Verification Code")
 
     def __init__(self, *args, **kwargs):
@@ -798,14 +831,6 @@ class ApplicantOTPForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form):
         if not otp.isdigit():
             raise forms.ValidationError("Enter the 6-digit verification code sent to your email address.")
         return otp
-
-
-class ApplicantOTPCaptchaForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form):
-    captcha_scope = "applicant_otp"
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._apply_bootstrap()
 
 
 class ApplicantStatusLookupForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form):

@@ -26,13 +26,15 @@ This document summarizes the key cybersecurity rules and protection logic of Rec
 - Internal users must authenticate before accessing protected system pages.
 - Only active internal accounts may authenticate successfully.
 - Passwords must be stored using secure hashing.
-- CAPTCHA must be required on internal login, internal password reset, and
-  internal MFA resend/verification surfaces when CAPTCHA is enabled.
-- For public deployment, CAPTCHA should use Cloudflare Turnstile with
+- CAPTCHA must be required on internal login and internal password reset when
+  CAPTCHA is enabled. Internal MFA verification and resend use attempt limits,
+  cooldowns, rate limiting, and the authenticated first-factor session instead.
+- For public deployment, CAPTCHA should use Google reCAPTCHA v2 with
   server-side token verification. The local arithmetic CAPTCHA is only a
   fallback for offline development and demonstration.
-- Turnstile verification requests must use HTTPS and must target only
-  configured allowed verification hosts.
+- reCAPTCHA verification requests must use Google's fixed HTTPS verification
+  endpoint. Production credentials must be supplied through environment
+  variables; Google's public test keys are allowed only in debug mode.
 - Session handling must reduce reuse or misuse of authenticated access.
 - Authenticated sessions must have a defined inactivity timeout. The default
   timeout is 30 minutes and is refreshed only by continued user activity.
@@ -44,11 +46,12 @@ This document summarizes the key cybersecurity rules and protection logic of Rec
 - OTP must expire after the defined validity window.
 - Repeated invalid OTP attempts must be limited and require a new code after the configured attempt limit.
 - Final submission must be blocked if OTP is invalid, expired, or incomplete.
-- CAPTCHA must be required on applicant intake, applicant OTP
-  resend/verification/finalization actions, and applicant status lookup when
-  CAPTCHA is enabled.
-- Applicant-facing Turnstile tokens must be verified by the server before the
-  intake, OTP, status lookup, or final submission action is processed.
+- CAPTCHA must be required on applicant intake and applicant status lookup when
+  CAPTCHA is enabled. Applicant OTP verification, resend, and final submission
+  rely on the unguessable application token, OTP attempt limits, resend
+  cooldowns, rate limiting, and verified-email state instead.
+- Applicant-facing CAPTCHA tokens must be verified by the server before an
+  intake or status lookup action is processed.
 
 ---
 

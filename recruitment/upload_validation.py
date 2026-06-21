@@ -9,9 +9,7 @@ MAX_APPLICANT_DOCUMENT_UPLOAD_BYTES = 5 * 1024 * 1024
 GENERIC_CONTENT_TYPES = {"", "application/octet-stream", "binary/octet-stream"}
 VALIDATED_UPLOAD_CACHE_ATTR = "_recruitguard_validated_applicant_document"
 
-UPLOAD_ERROR_TOO_LARGE = (
-    "Each file must be 5 MB or smaller. If a photo is too big, take it again at lower quality."
-)
+UPLOAD_ERROR_TOO_LARGE = "This file is too large. Choose a file that is 5 MB or smaller."
 UPLOAD_ERROR_EMPTY = "This file is empty. Pick a file that has something in it."
 UPLOAD_ERROR_EXTENSION = (
     "This needs to be a PDF, JPG, or PNG file. Upload one of those."

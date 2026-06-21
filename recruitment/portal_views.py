@@ -7,7 +7,6 @@ from django.utils import timezone
 from django.views.generic import FormView, TemplateView
 
 from .forms import (
-    ApplicantOTPCaptchaForm,
     ApplicantOTPForm,
     ApplicantPortalIntakeForm,
     ApplicantStatusLookupForm,
@@ -324,11 +323,7 @@ class ApplicantOTPView(TemplateView):
         if application is None:
             raise Http404
         context["application"] = application
-        context["otp_form"] = kwargs.get("otp_form") or ApplicantOTPForm(request=self.request)
-        context["captcha_form"] = kwargs.get("captcha_form") or ApplicantOTPCaptchaForm(
-            request=self.request,
-            prefix="otp_action",
-        )
+        context["otp_form"] = kwargs.get("otp_form") or ApplicantOTPForm()
         context["otp_validity_minutes"] = settings.APPLICATION_OTP_VALIDITY_MINUTES
         context["current_applicant_document_count"] = (
             get_current_applicant_document_items(application).count()
@@ -344,19 +339,6 @@ class ApplicantOTPView(TemplateView):
 
         action = request.POST.get("action")
         if action == "resend":
-            captcha_form = ApplicantOTPCaptchaForm(
-                request.POST,
-                request=request,
-                prefix="otp_action",
-            )
-            if not captcha_form.is_valid():
-                messages.error(request, "Complete the security check correctly before requesting a new code.")
-                return self.render_to_response(
-                    self.get_context_data(
-                        application=application,
-                        captcha_form=captcha_form,
-                    )
-                )
             try:
                 issue_application_otp(
                     application,
@@ -378,7 +360,7 @@ class ApplicantOTPView(TemplateView):
             return redirect("applicant-otp", token=application.public_token)
 
         if action == "verify":
-            otp_form = ApplicantOTPForm(request.POST, request=request)
+            otp_form = ApplicantOTPForm(request.POST)
             if otp_form.is_valid():
                 try:
                     verify_application_otp(application, otp_form.cleaned_data["otp"])
@@ -392,19 +374,6 @@ class ApplicantOTPView(TemplateView):
             )
 
         if action == "finalize":
-            captcha_form = ApplicantOTPCaptchaForm(
-                request.POST,
-                request=request,
-                prefix="otp_action",
-            )
-            if not captcha_form.is_valid():
-                messages.error(request, "Complete the security check correctly before submitting.")
-                return self.render_to_response(
-                    self.get_context_data(
-                        application=application,
-                        captcha_form=captcha_form,
-                    )
-                )
             try:
                 submit_application(application, application.applicant)
             except ValueError as exc:

@@ -600,7 +600,7 @@ we both land the same text.**
 
 | Trigger | Server line (current) | New copy |
 |---|---|---|
-| Size > 5 MB | "Each applicant document must be 5 MB or smaller." | **"Each file must be 5 MB or smaller. If a photo is too big, take it again at lower quality."** |
+| Size > 5 MB | "Each applicant document must be 5 MB or smaller." | **"This file is too large. Choose a file that is 5 MB or smaller."** |
 | Empty / 0 bytes | "Empty files are not allowed." | **"This file is empty. Pick a file that has something in it."** |
 | Wrong extension | "Upload a PDF, JPG, JPEG, or PNG file only." | **"This needs to be a PDF, JPG, or PNG file. Upload one of those."** |
 | MIME ≠ filename (client + server line ~111) | client: "…does not match its extension…" / server: "…does not match the selected document format…" | **"This file format does not match its filename. Save it again as a PDF, JPG, or PNG, then upload it."** (Codex's wording — accurate, since the browser checks declared type vs filename, not the signature) |

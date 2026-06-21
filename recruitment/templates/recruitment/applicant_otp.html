@@ -94,21 +94,6 @@
                 The code is valid for {{ otp_validity_minutes }} minute{{ otp_validity_minutes|pluralize }}.
             </p>
 
-            {% if otp_form.captcha_answer %}
-            <div class="rg-pub-field">
-                <label for="{{ otp_form.captcha_answer.id_for_label }}" class="rg-pub-otp-label">
-                    {{ otp_form.captcha_answer.label }}
-                </label>
-                {{ otp_form.captcha_answer }}
-                {% for error in otp_form.captcha_answer.errors %}
-                    <div class="invalid-feedback d-block">{{ error }}</div>
-                {% endfor %}
-                {% if otp_form.captcha_answer.help_text %}
-                    <div class="form-text">{{ otp_form.captcha_answer.help_text }}</div>
-                {% endif %}
-            </div>
-            {% endif %}
-
             <button type="submit" class="btn btn-rg-primary btn-lg w-100">
                 Verify and continue &rarr;
             </button>
@@ -124,17 +109,6 @@
             <form method="post" class="d-inline">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="resend">
-                {% if captcha_form.captcha_answer %}
-                <div class="rg-pub-field text-start">
-                    <label for="{{ captcha_form.captcha_answer.id_for_label }}" class="rg-pub-otp-label">
-                        {{ captcha_form.captcha_answer.label }}
-                    </label>
-                    {{ captcha_form.captcha_answer }}
-                    {% for error in captcha_form.captcha_answer.errors %}
-                        <div class="invalid-feedback d-block">{{ error }}</div>
-                    {% endfor %}
-                </div>
-                {% endif %}
                 <button type="submit" class="rg-pub-resend-link" id="resend-btn">Resend the code</button>
             </form>
             <span id="resend-timer" class="rg-pub-resend-timer"></span>
@@ -202,20 +176,6 @@
         <form method="post" id="rg-otp-submit-form">
             {% csrf_token %}
             <input type="hidden" name="action" value="finalize">
-            {% if captcha_form.captcha_answer %}
-            <div class="rg-pub-field text-start">
-                <label for="{{ captcha_form.captcha_answer.id_for_label }}" class="rg-pub-otp-label">
-                    {{ captcha_form.captcha_answer.label }}
-                </label>
-                {{ captcha_form.captcha_answer }}
-                {% for error in captcha_form.captcha_answer.errors %}
-                    <div class="invalid-feedback d-block">{{ error }}</div>
-                {% endfor %}
-                {% if captcha_form.captcha_answer.help_text %}
-                    <div class="form-text">{{ captcha_form.captcha_answer.help_text }}</div>
-                {% endif %}
-            </div>
-            {% endif %}
             <button type="button" class="btn btn-rg-primary btn-lg w-100" id="rg-otp-submit-btn"
                     data-bs-toggle="modal" data-bs-target="#rg-otp-submit-modal">
                 Submit my application &rarr;

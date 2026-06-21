@@ -18,7 +18,6 @@ from django.views.generic import CreateView, FormView, ListView, UpdateView
 
 from .forms import (
     InternalAuthenticationForm,
-    InternalMFACaptchaForm,
     InternalMFAOTPForm,
     InternalPasswordChangeForm,
     InternalPasswordResetForm,
@@ -145,29 +144,10 @@ class InternalMFAVerifyView(FormView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["pending_user"] = self.pending_user
-        context["captcha_form"] = kwargs.get("captcha_form") or InternalMFACaptchaForm(
-            request=self.request,
-            prefix="mfa_resend",
-        )
         return context
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs["request"] = self.request
-        return kwargs
 
     def post(self, request, *args, **kwargs):
         if request.POST.get("action") == "resend":
-            captcha_form = InternalMFACaptchaForm(
-                request.POST,
-                request=request,
-                prefix="mfa_resend",
-            )
-            if not captcha_form.is_valid():
-                messages.error(request, "Complete the security check correctly before requesting a new code.")
-                return self.render_to_response(
-                    self.get_context_data(captcha_form=captcha_form)
-                )
             try:
                 challenge = issue_internal_mfa_challenge(
                     self.pending_user,

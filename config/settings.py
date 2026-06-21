@@ -205,6 +205,15 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = env_int(
 )
 CAPTCHA_ENABLED = env_bool("CAPTCHA_ENABLED", True)
 CAPTCHA_PROVIDER = (os.getenv("CAPTCHA_PROVIDER") or "local").strip().lower()
+RECAPTCHA_TEST_SITE_KEY = "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
+RECAPTCHA_TEST_SECRET_KEY = "6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe"
+RECAPTCHA_USE_TEST_KEYS = env_bool("RECAPTCHA_USE_TEST_KEYS", DEBUG)
+RECAPTCHA_SITE_KEY = (os.getenv("RECAPTCHA_SITE_KEY") or "").strip()
+RECAPTCHA_SECRET_KEY = (os.getenv("RECAPTCHA_SECRET_KEY") or "").strip()
+RECAPTCHA_TIMEOUT_SECONDS = env_int("RECAPTCHA_TIMEOUT_SECONDS", 5)
+TURNSTILE_TEST_SITE_KEY = "1x00000000000000000000AA"
+TURNSTILE_TEST_SECRET_KEY = "1x0000000000000000000000000000000AA"
+TURNSTILE_USE_TEST_KEYS = env_bool("TURNSTILE_USE_TEST_KEYS", DEBUG)
 TURNSTILE_SITE_KEY = (os.getenv("TURNSTILE_SITE_KEY") or "").strip()
 TURNSTILE_VERIFY_URL = (os.getenv("TURNSTILE_VERIFY_URL") or "").strip().rstrip("/")
 TURNSTILE_SECRET_KEY = (os.getenv("TURNSTILE_SECRET_KEY") or "").strip()
@@ -214,12 +223,35 @@ TURNSTILE_VERIFY_ALLOWED_HOSTS = env_list(
     "challenges.cloudflare.com,turnstile-siteverify-recruitguard-chd.recruitguard-chd.workers.dev",
 )
 
+if RECAPTCHA_USE_TEST_KEYS:
+    if not DEBUG:
+        raise ImproperlyConfigured(
+            "RECAPTCHA_USE_TEST_KEYS cannot be enabled when DJANGO_DEBUG is False."
+        )
+    RECAPTCHA_SITE_KEY = RECAPTCHA_TEST_SITE_KEY
+    RECAPTCHA_SECRET_KEY = RECAPTCHA_TEST_SECRET_KEY
+
+if TURNSTILE_USE_TEST_KEYS:
+    if not DEBUG:
+        raise ImproperlyConfigured(
+            "TURNSTILE_USE_TEST_KEYS cannot be enabled when DJANGO_DEBUG is False."
+        )
+    TURNSTILE_SITE_KEY = TURNSTILE_TEST_SITE_KEY
+    TURNSTILE_SECRET_KEY = TURNSTILE_TEST_SECRET_KEY
+    TURNSTILE_VERIFY_URL = ""
+
 if not DEBUG and CAPTCHA_ENABLED and CAPTCHA_PROVIDER == "turnstile":
     if not TURNSTILE_SITE_KEY:
         raise ImproperlyConfigured("TURNSTILE_SITE_KEY must be set for production Turnstile CAPTCHA.")
     if not TURNSTILE_VERIFY_URL and not TURNSTILE_SECRET_KEY:
         raise ImproperlyConfigured(
             "Set TURNSTILE_VERIFY_URL or TURNSTILE_SECRET_KEY for production Turnstile CAPTCHA."
+        )
+
+if not DEBUG and CAPTCHA_ENABLED and CAPTCHA_PROVIDER == "recaptcha":
+    if not RECAPTCHA_SITE_KEY or not RECAPTCHA_SECRET_KEY:
+        raise ImproperlyConfigured(
+            "RECAPTCHA_SITE_KEY and RECAPTCHA_SECRET_KEY must be set for production reCAPTCHA."
         )
 
 SESSION_COOKIE_HTTPONLY = True
@@ -277,6 +309,9 @@ PASSWORD_HISTORY_LIMIT = env_int("PASSWORD_HISTORY_LIMIT", 5)
 PASSWORD_RESET_TIMEOUT = env_int("PASSWORD_RESET_TIMEOUT_SECONDS", 3600)
 
 CLOUDFLARE_TURNSTILE_ORIGIN = "https://challenges.cloudflare.com"
+GOOGLE_RECAPTCHA_ORIGIN = "https://www.google.com"
+GOOGLE_RECAPTCHA_STATIC_ORIGIN = "https://www.gstatic.com"
+GOOGLE_RECAPTCHA_FRAME_ORIGIN = "https://recaptcha.google.com"
 
 CSP_DIRECTIVES = {
     "default-src": ("'self'",),
@@ -285,6 +320,8 @@ CSP_DIRECTIVES = {
         "'unsafe-inline'",
         "https://cdn.jsdelivr.net",
         CLOUDFLARE_TURNSTILE_ORIGIN,
+        GOOGLE_RECAPTCHA_ORIGIN,
+        GOOGLE_RECAPTCHA_STATIC_ORIGIN,
     ),
     "style-src": (
         "'self'",
@@ -294,8 +331,16 @@ CSP_DIRECTIVES = {
     ),
     "font-src": ("'self'", "https://fonts.gstatic.com", "data:"),
     "img-src": ("'self'", "data:"),
-    "connect-src": ("'self'", CLOUDFLARE_TURNSTILE_ORIGIN),
-    "frame-src": (CLOUDFLARE_TURNSTILE_ORIGIN,),
+    "connect-src": (
+        "'self'",
+        CLOUDFLARE_TURNSTILE_ORIGIN,
+        GOOGLE_RECAPTCHA_ORIGIN,
+    ),
+    "frame-src": (
+        CLOUDFLARE_TURNSTILE_ORIGIN,
+        GOOGLE_RECAPTCHA_ORIGIN,
+        GOOGLE_RECAPTCHA_FRAME_ORIGIN,
+    ),
     "object-src": ("'none'",),
     "base-uri": ("'self'",),
     "form-action": ("'self'",),

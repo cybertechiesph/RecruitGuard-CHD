@@ -35,9 +35,6 @@ background: #0e2f14;
                 {% endif %}
                 <div class="rg-form-grid">
                     {% include "recruitment/includes/form_field.html" with field=form.otp %}
-                    {% if form.captcha_answer %}
-                        {% include "recruitment/includes/form_field.html" with field=form.captcha_answer %}
-                    {% endif %}
                 </div>
                 <div class="rg-form-actions mt-3">
                     <button type="submit" class="btn btn-rg-primary w-100">Verify</button>
@@ -47,9 +44,6 @@ background: #0e2f14;
             <form method="post" class="mt-3">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="resend">
-                {% if captcha_form.captcha_answer %}
-                    {% include "recruitment/includes/form_field.html" with field=captcha_form.captcha_answer %}
-                {% endif %}
                 <button type="submit" class="btn btn-outline-secondary w-100">Send New Code</button>
             </form>
 
