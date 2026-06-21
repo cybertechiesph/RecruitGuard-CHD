@@ -49,7 +49,7 @@
                         <th scope="col">Requirement</th>
                         <th scope="col">File</th>
                         <th scope="col">Status</th>
-                        <th scope="col" class="rg-scr-doc-table__action-head">View</th>
+                        <th scope="col" class="rg-scr-doc-table__action-head">Download</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -110,18 +110,16 @@
                         </td>
                         <td class="rg-scr-doc-table__actions">
                             {% if item.evidence %}
-                                <button type="button"
-                                        class="rg-scr-doc-view"
-                                        data-doc-view
-                                        data-doc-url="{% url 'evidence-download' application.pk item.evidence.pk %}?disposition=inline"
-                                        data-doc-download="{% url 'evidence-download' application.pk item.evidence.pk %}"
-                                        data-doc-filename="{{ item.evidence.original_filename }}"
-                                        data-doc-title="{{ item.requirement.title }}"
-                                        aria-label="View {{ item.requirement.title }}">
+                                <a href="{% url 'evidence-download' application.pk item.evidence.pk %}"
+                                   class="rg-scr-doc-view"
+                                   title="Download {{ item.requirement.title }}"
+                                   aria-label="Download {{ item.requirement.title }}">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                        <polyline points="7 10 12 15 17 10"/>
+                                        <line x1="12" y1="15" x2="12" y2="3"/>
                                     </svg>
-                                </button>
+                                </a>
                             {% else %}
                                 <span class="rg-scr-doc-meta">&mdash;</span>
                             {% endif %}
@@ -428,47 +426,7 @@
 <script>
 /* ── Document viewer drawer ─────────────────────────────────────
    Runs after DOMContentLoaded so the Bootstrap bundle is loaded. */
-function rgInitScreeningDocDrawer() {
-    "use strict";
-    var drawerEl = document.getElementById("rg-scr-doc-drawer");
-    if (!drawerEl || !window.bootstrap) return;
-    var drawer = bootstrap.Offcanvas.getOrCreateInstance(drawerEl);
-    var frame = document.getElementById("rg-scr-doc-drawer-frame");
-    var image = document.getElementById("rg-scr-doc-drawer-image");
-    var empty = document.getElementById("rg-scr-doc-drawer-empty");
-    var titleEl = document.getElementById("rg-scr-doc-drawer-title");
-    var filenameEl = document.getElementById("rg-scr-doc-drawer-filename");
-    var dlEl = document.getElementById("rg-scr-doc-drawer-download");
-
-    function isImage(filename) {
-        return /\.(jpe?g|png|gif|webp)$/i.test(filename || "");
-    }
-
-    document.querySelectorAll("[data-doc-view]").forEach(function (btn) {
-        btn.addEventListener("click", function (e) {
-            e.preventDefault();
-            var url = btn.dataset.docUrl;
-            var fn = btn.dataset.docFilename || "";
-            titleEl.textContent = btn.dataset.docTitle || "Document";
-            filenameEl.textContent = fn;
-            dlEl.href = btn.dataset.docDownload;
-            empty.hidden = true;
-            if (isImage(fn)) {
-                frame.hidden = true; frame.removeAttribute("src");
-                image.hidden = false; image.src = url;
-            } else {
-                image.hidden = true; image.removeAttribute("src");
-                frame.hidden = false; frame.src = url;
-            }
-            drawer.show();
-        });
-    });
-}
-if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", rgInitScreeningDocDrawer);
-} else {
-    rgInitScreeningDocDrawer();
-}
+function rgInitScreeningDocDrawer() {}
 </script>
 
 <script>
@@ -533,6 +491,9 @@ if (document.readyState === "loading") {
                 field: requiredStatusFields().filter(function (f) {
                     return !f.value || f.value === "not_reviewed";
                 })[0],
+                // Hidden <select>s with their own row highlight — route the
+                // message to the summary box, not an invisible inline node.
+                summaryOnly: true,
                 msg: "Set a status for every required document before continuing."
             });
         }
@@ -554,6 +515,7 @@ if (document.readyState === "loading") {
         if (!csField || !csField.value) {
             problems.push({
                 field: document.querySelector("#scr-completeness-strip .js-scr-choice"),
+                anchor: document.getElementById("scr-completeness-strip"),
                 msg: "Choose whether the application is Complete or Incomplete."
             });
         } else if (csField.value === "incomplete" && csNotes && csNotes.value.trim() === "") {
@@ -569,6 +531,7 @@ if (document.readyState === "loading") {
         if (!qoField || !qoField.value) {
             problems.push({
                 field: document.querySelector("#scr-outcome-strip .js-scr-choice"),
+                anchor: document.getElementById("scr-outcome-strip"),
                 msg: "Choose whether the applicant is Qualified or Not qualified."
             });
         } else if (qoField.value === "not_qualified" && qoNotes && qoNotes.value.trim() === "") {
@@ -588,32 +551,31 @@ if (document.readyState === "loading") {
         return stepProblems(name).length === 0;
     }
 
-    /* ── Error messaging ─────────────────────────────────────────── */
-    function showError(msg) {
-        if (!stepError) return;
-        stepError.textContent = msg;
-        stepError.hidden = false;
-    }
+    /* ── Error messaging (shared module: show every problem at once) ─ */
     function clearError() {
-        if (!stepError) return;
-        stepError.hidden = true;
-        stepError.textContent = "";
+        if (window.RGWizardErrors) { RGWizardErrors.clearFieldErrors(form); }
+        if (stepError) { stepError.hidden = true; stepError.textContent = ""; }
     }
     function revealProblems(problems) {
         if (!problems.length) return;
-        showError(problems[0].msg);
-        if (currentStep === "documents") {
-            requiredStatusFields().forEach(function (f) {
-                var row = f.closest("[data-document-row]");
-                if (row) {
-                    row.classList.toggle("is-missing", !f.value || f.value === "not_reviewed");
-                }
-            });
+        if (!window.RGWizardErrors) {
+            // Defensive fallback if the shared module failed to load.
+            if (stepError) { stepError.textContent = problems[0].msg; stepError.hidden = false; }
+            return;
         }
-        var first = problems[0].field;
-        if (first && typeof first.focus === "function") {
-            try { first.focus({ preventScroll: false }); } catch (e) { first.focus(); }
-        }
+        RGWizardErrors.showErrors(problems, {
+            scope: form,
+            summaryBox: stepError,
+            onShow: function () {
+                if (currentStep !== "documents") return;
+                requiredStatusFields().forEach(function (f) {
+                    var row = f.closest("[data-document-row]");
+                    if (row) {
+                        row.classList.toggle("is-missing", !f.value || f.value === "not_reviewed");
+                    }
+                });
+            }
+        });
     }
 
     /* ── Step rendering ──────────────────────────────────────────── */
@@ -910,9 +872,10 @@ if (document.readyState === "loading") {
     [csField, qoField].forEach(function (f) {
         if (f) f.addEventListener("change", refresh);
     });
-    [csNotes, qoNotes].forEach(function (f) {
-        if (f) f.addEventListener("input", clearError);
-    });
+    // Clear all inline errors the moment the user resumes editing anything
+    // (choice clicks dispatch a bubbling "change", so this covers them too).
+    form.addEventListener("input", clearError);
+    form.addEventListener("change", clearError);
 
     initChoiceStrips();
     initRemarksDisclosure();

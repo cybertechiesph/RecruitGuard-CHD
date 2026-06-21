@@ -670,11 +670,20 @@ they were purely decorative.
     var applicantName = "{{ submission_packet.context.applicant_name|default:'—'|escapejs }}";
     var positionTitle = "{{ submission_packet.context.recruitment_entry_title|default:'—'|escapejs }}";
 
-    function showError(msg, field) {
-        if (errorBox) { errorBox.textContent = msg; errorBox.hidden = false; }
-        if (field && field.focus) try { field.focus({ preventScroll: false }); } catch (e) { field.focus(); }
+    function clearError() {
+        if (window.RGWizardErrors) { RGWizardErrors.clearFieldErrors(form); }
+        if (errorBox) { errorBox.hidden = true; errorBox.textContent = ""; }
     }
-    function clearError() { if (errorBox) { errorBox.hidden = true; errorBox.textContent = ""; } }
+    function revealProblems(probs) {
+        if (!probs.length) return;
+        if (!window.RGWizardErrors) {
+            if (errorBox) { errorBox.textContent = probs[0].msg; errorBox.hidden = false; }
+            var f0 = probs[0].field;
+            if (f0 && f0.focus) { try { f0.focus({ preventScroll: false }); } catch (e) { f0.focus(); } }
+            return;
+        }
+        RGWizardErrors.showErrors(probs, { scope: form, summaryBox: errorBox });
+    }
 
     function setOutcome(val) {
         if (!outcomeSelect) return;
@@ -752,7 +761,7 @@ they were purely decorative.
         finalizeBtn.addEventListener("click", function () {
             var probs = decideProblems();
             if (probs.length) {
-                showError(probs[0].msg, probs[0].field);
+                revealProblems(probs);
                 return;
             }
             var val = outcomeSelect ? outcomeSelect.value : "";

@@ -373,14 +373,8 @@
                                             </span>
                                         {% endif %}
                                     </div>
-                                    <div class="d-flex gap-2">
-                                        <a href="{% url 'evidence-download' application.pk item.pk %}?disposition=inline"
-                                           class="btn btn-outline-secondary btn-sm"
-                                           target="_blank"
-                                           rel="noopener">View</a>
-                                        <a href="{% url 'evidence-download' application.pk item.pk %}"
-                                           class="btn btn-outline-secondary btn-sm">Download</a>
-                                    </div>
+                                    <a href="{% url 'evidence-download' application.pk item.pk %}"
+                                       class="btn btn-outline-secondary btn-sm">Download</a>
                                 </article>
                             {% endfor %}
                         </div>

@@ -448,11 +448,20 @@ Bootstrap Icons CSS).
 
     var step2Available = !!closureForm;
 
-    function showError(msg, field) {
-        if (errorBox) { errorBox.textContent = msg; errorBox.hidden = false; }
-        if (field && field.focus) try { field.focus({ preventScroll: false }); } catch (e) { field.focus(); }
+    function clearError() {
+        if (window.RGWizardErrors && closureForm) { RGWizardErrors.clearFieldErrors(closureForm); }
+        if (errorBox) { errorBox.hidden = true; errorBox.textContent = ""; }
     }
-    function clearError() { if (errorBox) { errorBox.hidden = true; errorBox.textContent = ""; } }
+    function revealProblems(probs) {
+        if (!probs.length) return;
+        if (!window.RGWizardErrors) {
+            if (errorBox) { errorBox.textContent = probs[0].msg; errorBox.hidden = false; }
+            var f0 = probs[0].field;
+            if (f0 && f0.focus) { try { f0.focus({ preventScroll: false }); } catch (e) { f0.focus(); } }
+            return;
+        }
+        RGWizardErrors.showErrors(probs, { scope: closureForm || document, summaryBox: errorBox });
+    }
 
     function renderStep() {
         var idx = STEPS.indexOf(currentStep);
@@ -500,7 +509,7 @@ Bootstrap Icons CSS).
     if (finalizeBtn) {
         finalizeBtn.addEventListener("click", function () {
             if (!closureNotes || closureNotes.value.trim() === "") {
-                showError("Add closure notes before you close and archive the case.", closureNotes);
+                revealProblems([{ field: closureNotes, msg: "Add closure notes before you close and archive the case." }]);
                 return;
             }
             if (closureModalEl && window.bootstrap) bootstrap.Modal.getOrCreateInstance(closureModalEl).show();

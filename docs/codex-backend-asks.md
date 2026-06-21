@@ -394,5 +394,236 @@ first; we can add peso later if/when the policy is settled.
 
 ---
 
+## From UT-006 — Pre-fill the intake form from an existing draft token  ✅ LANDED
+
+### UT-006. `ApplicantPortalIntakeView.get` should rehydrate from `?token=...`
+**Why.** Today the OTP page's "Use a different email" link sends the applicant back to the intake form — and the form is blank. Their name, contact, qualification summary, etc. are gone, even though the draft application still exists in the database with all of that data. Uploaded documents persist (the form's POST validation already finds them via `attach_existing_draft`), but the typed fields don't.
+
+I've added an honest `window.confirm()` warning on the OTP link so users aren't surprised. But the right fix is server-side: detect `?token=...` on `applicant-intake` GET, look up the draft, and use its data as form initial values.
+
+**Where.** `recruitment/portal_views.py`, `ApplicantPortalIntakeView`.
+
+**Ask.** Override `get`:
+
+```python
+def get(self, request, *args, **kwargs):
+    token = request.GET.get("token")
+    draft = None
+    if token:
+        draft = (
+            RecruitmentApplication.objects
+            .filter(
+                public_token=token,
+                position=self.entry,
+                submitted_at__isnull=True,
+                status=RecruitmentApplication.Status.DRAFT,
+            )
+            .prefetch_related("evidence_items")
+            .first()
+        )
+    if draft is None:
+        return super().get(request, *args, **kwargs)
+
+    initial = {
+        "first_name": draft.first_name,
+        "last_name": draft.last_name,
+        "email": draft.applicant_email,
+        # ...add every applicant-facing field that's on the draft
+    }
+    form = self.get_form_class()(entry=self.entry, initial=initial)
+    form.attach_existing_draft(draft)
+    return self.render_to_response(self.get_context_data(form=form))
+```
+
+The exact `initial` mapping depends on which fields `ApplicantPortalIntakeForm` exposes and how they map to `RecruitmentApplication`. Codex's call.
+
+**Care.**
+- The token comes from the OTP page, so we know the applicant has at least started the draft. No new privacy surface — the draft was already accessible via the OTP URL.
+- If the token is invalid or doesn't match this position, silently fall through to the empty form (don't 404 — applicants don't need to see that).
+- After Codex lands this, the front-end can drop the `window.confirm()` warning. I'll do that in a follow-up.
+
+**Out of scope.** Auto-saving the form while the applicant types is a separate (larger) ask; not needed for this bug.
+
+**Resolution.** Codex implemented this in `ApplicantPortalIntakeView.get`. Valid token rehydrates name, email, phone, qualification summary, cover letter note, performance-rating choice, checklist confirmations, and re-attaches uploaded documents. Invalid/mismatched tokens silently fall through to a blank form. Frontend confirm-warning has been removed; "Go back to edit your information" copy restored.
+
+---
+
+## From TA1 — Track Application redesign (follow-ups)
+
+### TA-M1. Include a magic-link to the status page in applicant emails
+**Why.** The redesigned status page is now useful enough that applicants will want to come back to it. Today they have to remember their Application ID + email and re-type both each time. Filipino applicants often use shared devices (internet cafés, family laptops, borrowed phones) — bookmarks aren't a reliable form of "come back." Their email inbox is.
+
+**Ask.** Generate a one-click status-page URL per application and embed it in:
+
+1. **Submission confirmation email** — first delivery of the link
+2. **Status-change emails** — every time we send a status update notification, include the same link so each email is self-sufficient
+
+**Shape.** The simplest form is `/apply/<token>/status/` where `<token>` is the application's `public_token` (already used for the OTP / receipt flow). A new view that accepts the token, looks up the application, and renders `applicant_status_lookup.html` with the same context the current form-based view produces.
+
+```python
+# Sketch:
+path("<uuid:token>/status/", ApplicantStatusLinkView.as_view(), name="applicant-status-link"),
+
+class ApplicantStatusLinkView(TemplateView):
+    template_name = "recruitment/applicant_status_lookup.html"
+
+    def get(self, request, *args, **kwargs):
+        application = (
+            RecruitmentApplication.objects
+            .select_related("position")
+            .filter(public_token=self.kwargs["token"], submitted_at__isnull=False)
+            .first()
+        )
+        if application is None:
+            messages.error(request, "This status link is no longer available...")
+            return redirect("applicant-status-lookup")
+        # build the same context as the lookup view's form_valid
+        ...
+```
+
+**Email template snippet.** In every applicant email (existing + future), add a line near the end:
+
+> **Check your application status anytime:** {{ status_link }}
+
+**Care.**
+- The token is essentially a long-lived bearer credential. Same risk surface as the existing OTP/receipt links — acceptable for "check status," not for any write actions.
+- If the application is in DRAFT (OTP not yet verified) the link should redirect to the OTP page instead of 404'ing.
+
+**Resolution.** Codex added `/apply/<token>/status/`, backed by `ApplicantStatusLinkView`. Submitted applications render the same redesigned status page context as the form lookup. Draft/unsubmitted applications redirect to the OTP page with a clear message so the applicant can verify or resend the code. Applicant-facing notification emails now include `Check your application status anytime: ...`; set `APPLICANT_PORTAL_BASE_URL` for absolute email links outside localhost.
+
+---
+
+### TA-M2. SMS notifications on status changes
+**Why.** Email isn't the primary communication channel for many Filipino workers — SMS is. Today the system notifies applicants by email only (status changes, OTP, etc.). A status-change-by-SMS would land far faster and be far more reliable for the segment we're serving (entry-level health workers, OFW returnees, fresh graduates).
+
+**Ask.** Add SMS-sending capability alongside email for applicant-facing notifications. Suggested order of priority for which events trigger SMS:
+
+1. **Application returned to applicant** (high urgency — they need to do something)
+2. **Selected for the position** (high impact — they want to know immediately)
+3. **Interview scheduled** (high impact + time-sensitive)
+4. **Not selected** (less urgent but emotionally important)
+5. **Email verification reminder** (after N hours of unverified OTP)
+
+**Care.**
+- This is a real cost (SMS per message). Worth confirming a budget / provider preference before building.
+- Capture the applicant's mobile number during intake (already required) and respect it as the SMS destination.
+- Add a unified "Stop SMS" / opt-out mechanism — PH telecoms require this for transactional SMS.
+- Status-change emails (TA-M1) should continue as the primary channel; SMS is secondary "tap" alert with the magic link inside.
+
+**Out of scope for now.** Two-way SMS (replies). Promotional/marketing SMS. WhatsApp / Viber (separate decision).
+
+**Status.** Deferred. This needs provider choice, cost/budget approval, sender/brand setup, opt-out language, and delivery logging before implementation.
+
+---
+
+### TA-M3. "Unverified email" lookup state
+**Why.** Today `ApplicantStatusLookupView` filters by `submitted_at__isnull=False`. If an applicant started intake and didn't verify their OTP (so the application is still DRAFT), their lookup gets a generic "We could not find an application with that ID and email combination" error. They might think they applied to the wrong portal, or that their application was deleted.
+
+**Ask.** When a lookup matches a record but it's still in DRAFT / unverified state, return a state-specific message instead of the generic "not found":
+
+> **Your application is not finished yet.** You started an application for {position} on {date}, but you haven't verified your email. Check your inbox for the verification code, or **[resend the code]**.
+
+With a button that re-issues the OTP for that draft.
+
+**Out of scope.** Showing the draft's contents on the status page — they already have access via the OTP page once they verify.
+
+**Resolution.** Codex added a safe draft path. If the status-link token belongs to an unsubmitted draft, the applicant is redirected to the OTP page. If the form lookup ever matches a draft by both Application ID and email, it also redirects to OTP. The lookup intentionally does not match drafts by email alone to avoid exposing draft existence to someone who only knows an email address.
+
+---
+
+## From VAL1 — Align the email error message (client now diverges)
+
+### VAL1-email. Match the server-side email error to the client copy
+**Why.** Per a UX-copy review (CMS/Healthcare.gov, GOV.UK guidance), the
+intake email error should be specific with an example. I changed the
+**client-side** wizard message to:
+
+> Enter an email address with an @ symbol, like name@example.com.
+
+The **server-side** `EmailField` still uses Django's default *"Enter a
+valid email address."* — so the two layers now show different text for
+the same failure. We want them identical (dual-layer consistency).
+
+**Ask.** On `ApplicantPortalIntakeForm`'s email field, set:
+
+```python
+email = forms.EmailField(
+    error_messages={"invalid": "Enter an email address with an @ symbol, like name@example.com."},
+    ...
+)
+```
+
+(or override in `__init__` if the field is declared elsewhere). Keep the
+"required" message as-is. Small string-only change; no migration.
+
+**Note on tone.** We deliberately **kept "Please"** on the other intake
+error strings (name/phone/summary empty-field prompts) — that's a
+considered choice for the Filipino-applicant audience (courtesy over
+Western directness). Do **not** strip "Please" from the existing
+strings. Only the email message changes, and only because it gains an
+example. Leave the verbatim strings you already implemented for name,
+phone, and summary untouched.
+
+---
+
+## From upload validation — plain-English error copy (coordinated)
+
+### UP-1. Rewrite applicant upload error strings in lockstep (server + client + tests)
+**✅ RESOLVED (both layers).** Backend: six canonical constants in
+`recruitment/upload_validation.py` (line 12), six failure-state tests at
+`recruitment/tests.py:5404`. Client: the four mirrored strings in
+`applicant_intake_form.html` `selectedFileProblem()` are now byte-identical
+to the server constants (verified programmatically); the two
+signature-only messages stay backend. No further action.
+
+**Why.** Codex shipped solid upload validation. But the error strings in
+[`recruitment/upload_validation.py`](../recruitment/upload_validation.py)
+are system-voice ("Empty files are not allowed.", "applicant document"),
+which breaks the plain-English, actionable voice used everywhere else in
+the applicant flow. Some of these strings are also **already drifting**
+from the client mirror in `applicant_intake_form.html` — e.g. the
+MIME/format mismatch reads *"does not match its extension"* (client) vs
+*"does not match the selected document format"* (server). These are
+applicant-facing.
+
+**This must move as ONE change** across three places, or the layers
+drift further:
+1. `recruitment/upload_validation.py` (the `raise ValueError(...)` strings)
+2. `applicant_intake_form.html` `selectedFileProblem()` JS mirror
+3. The server tests that assert these exact strings.
+
+Codex owns (1) + (3); Claude will sync (2) the moment the strings are
+locked. **The strings below are the proposal — confirm or adjust, then
+we both land the same text.**
+
+**Canonical strings (proposed):**
+
+| Trigger | Server line (current) | New copy |
+|---|---|---|
+| Size > 5 MB | "Each applicant document must be 5 MB or smaller." | **"This file is too large. Choose a file that is 5 MB or smaller."** |
+| Empty / 0 bytes | "Empty files are not allowed." | **"This file is empty. Pick a file that has something in it."** |
+| Wrong extension | "Upload a PDF, JPG, JPEG, or PNG file only." | **"This needs to be a PDF, JPG, or PNG file. Upload one of those."** |
+| MIME ≠ filename (client + server line ~111) | client: "…does not match its extension…" / server: "…does not match the selected document format…" | **"This file format does not match its filename. Save it again as a PDF, JPG, or PNG, then upload it."** (Codex's wording — accurate, since the browser checks declared type vs filename, not the signature) |
+
+**Server-only (no client mirror — Claude can't read signatures):**
+
+| Trigger | Server line (current) | New copy |
+|---|---|---|
+| Signature not detected (line ~96) | "The uploaded file could not be verified as a valid PDF, JPG, JPEG, or PNG document." | **"We couldn't read this as a PDF, JPG, or PNG. Save it again, then upload it."** |
+| Signature ≠ extension (line ~102) | "The uploaded file contents do not match the selected file extension. Please upload the correct PDF, JPG, JPEG, or PNG file." | **"This file's contents don't match a PDF, JPG, or PNG. Save it again, then upload it."** |
+
+**Note on tone.** Unlike the name/phone/summary prompts (which keep
+"Please"), these are *correction* messages where the actionable
+instruction carries the courtesy — so no "Please" needed. Each tells the
+applicant what to **do** next, not just what's wrong.
+
+**Backend resolution.** Codex accepted the six proposed strings as canonical,
+centralized them in `recruitment/upload_validation.py`, and added direct tests
+for every trigger. Claude still needs to mirror the first four client-visible
+states in `selectedFileProblem()`; signature detection and signature/extension
+mismatch remain server-only.
+
+---
+
 ## (Slot for future-slice asks)
 *(none yet)*

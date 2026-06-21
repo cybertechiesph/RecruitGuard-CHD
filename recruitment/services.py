@@ -2,8 +2,10 @@ import csv
 import hashlib
 import hmac
 import json
+import logging
 import os
 import secrets
+import smtplib
 import textwrap
 import uuid
 import zipfile
@@ -15,7 +17,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.mail import EmailMultiAlternatives
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -63,10 +65,18 @@ from .notification_services import (
 )
 from .permissions import WORKFLOW_PROCESSOR_ROLES
 from .requirements import (
+    PERFORMANCE_RATING,
     get_applicant_document_requirements,
     get_required_applicant_document_requirements,
 )
 from .upload_validation import validate_applicant_document_upload
+
+
+logger = logging.getLogger(__name__)
+
+
+class ApplicationOTPDeliveryError(RuntimeError):
+    pass
 
 
 EXPORT_ROLES = {
@@ -649,12 +659,21 @@ def _send_internal_mfa_email(challenge, otp_code):
         f"It expires in {settings.INTERNAL_MFA_OTP_VALIDITY_MINUTES} minutes.\n\n"
         "Do not share this code. RecruitGuard-CHD staff will never ask for it."
     )
+    html_body = render_to_string(
+        "email/internal_mfa_otp.html",
+        {
+            "challenge": challenge,
+            "otp_code": otp_code,
+            "otp_validity_minutes": settings.INTERNAL_MFA_OTP_VALIDITY_MINUTES,
+        },
+    )
     email = EmailMultiAlternatives(
         subject=subject,
         body=text_body,
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=[challenge.sent_to_email],
     )
+    email.attach_alternative(html_body, "text/html")
     email.send(fail_silently=False)
 
 
@@ -1448,6 +1467,18 @@ def _auto_route_application(application, actor, *, next_role, next_status, descr
 
 def _auto_advance_after_exam_finalized(application, actor, review_stage):
     if application.branch == PositionPosting.Branch.PLANTILLA and review_stage in SCREENING_STAGES:
+        if (
+            review_stage == RecruitmentCase.Stage.HRM_CHIEF_REVIEW
+            and application.current_handler_role == RecruitmentUser.Role.SECRETARIAT
+        ):
+            return _auto_route_application(
+                application,
+                actor,
+                next_role=RecruitmentUser.Role.HRM_CHIEF,
+                next_status=RecruitmentApplication.Status.HRM_CHIEF_REVIEW,
+                description="Automatically returned to HRM Chief after Plantilla examination was finalized by Secretariat.",
+                remarks="Plantilla examination finalized by Secretariat; next assigned office is HRM Chief.",
+            )
         return _auto_route_application(
             application,
             actor,
@@ -3909,6 +3940,8 @@ def upload_interview_fallback_rating(application, actor, uploaded_file, remarks)
     if not interview_session:
         raise ValueError("Schedule the interview session before uploading a fallback rating sheet.")
 
+    validate_applicant_document_upload(uploaded_file)
+
     evidence = upload_evidence_item(
         application=application,
         actor=actor,
@@ -4846,6 +4879,18 @@ def get_reusable_public_application_draft(entry, applicant_email):
     )
 
 
+def get_reusable_public_application_for_applicant(entry, applicant):
+    return (
+        RecruitmentApplication.objects.select_related("applicant", "position")
+        .filter(
+            position=entry,
+            applicant=applicant,
+        )
+        .order_by("-updated_at", "-created_at")
+        .first()
+    )
+
+
 def get_portal_applicant_identity_by_email(applicant_email):
     return (
         RecruitmentUser.objects.filter(
@@ -4952,6 +4997,46 @@ def get_missing_required_applicant_document_requirements(application):
     ]
 
 
+def _archive_applicant_document_key(application, document_key, actor, archive_tag):
+    evidence_items = list(
+        get_current_applicant_document_items(application).filter(document_key=document_key)
+    )
+    if not evidence_items:
+        return []
+
+    now = timezone.now()
+    archived_ids = []
+    for evidence in evidence_items:
+        evidence.is_archived = True
+        evidence.archive_tag = archive_tag
+        evidence.archived_at = now
+        evidence.archived_by = actor
+        evidence.save(
+            update_fields=[
+                "is_archived",
+                "archive_tag",
+                "archived_at",
+                "archived_by",
+                "archived_by_role",
+                "updated_at",
+            ]
+        )
+        archived_ids.append(evidence.id)
+
+    record_audit_event(
+        application=application,
+        actor=actor,
+        action=AuditLog.Action.EVIDENCE_ARCHIVED,
+        description=f"Archived applicant document '{document_key}' because it no longer applies.",
+        metadata={
+            "document_key": document_key,
+            "evidence_ids": archived_ids,
+            "archive_tag": archive_tag,
+        },
+    )
+    return evidence_items
+
+
 def _upsert_public_application_draft(
     entry,
     cleaned_data,
@@ -4962,19 +5047,28 @@ def _upsert_public_application_draft(
     updated_description="Applicant reused and refreshed an existing accountless application draft.",
 ):
     applicant_email = normalize_applicant_email(cleaned_data["email"])
-    if RecruitmentApplication.objects.filter(
+    existing_submitted_application = RecruitmentApplication.objects.filter(
         position=entry,
         applicant_email__iexact=applicant_email,
         submitted_at__isnull=False,
-    ).exists():
+    ).exists()
+    if existing_submitted_application:
         raise ValueError(
-            "An application for this recruitment entry has already been submitted using this email address."
+            "You have already submitted an application for this position using this email address."
         )
 
-    application = get_reusable_public_application_draft(entry, applicant_email)
+    applicant_user = get_portal_applicant_identity_by_email(applicant_email)
+    application = None
+    if applicant_user is not None:
+        application = get_reusable_public_application_for_applicant(entry, applicant_user)
+        if application and application.submitted_at:
+            raise ValueError(
+                "You have already submitted an application for this position using this email address."
+            )
+    if application is None:
+        application = get_reusable_public_application_draft(entry, applicant_email)
     created = application is None
     if application is None:
-        applicant_user = get_portal_applicant_identity_by_email(applicant_email)
         if applicant_user is None:
             applicant_user = create_portal_applicant_identity(
                 first_name=cleaned_data["first_name"],
@@ -5025,7 +5119,25 @@ def _upsert_public_application_draft(
     application.submission_hash = ""
     application.submitted_at = None
     application.closed_at = None
-    application.save()
+    try:
+        application.save()
+    except IntegrityError as exc:
+        if "unique_application_per_applicant_position" not in str(exc):
+            raise
+        raise ValueError(
+            "An application for this recruitment entry already exists for this applicant."
+        ) from exc
+    if (
+        application.performance_rating_applicability
+        == RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
+    ):
+        requirement_uploads.pop(PERFORMANCE_RATING, None)
+        _archive_applicant_document_key(
+            application,
+            PERFORMANCE_RATING,
+            applicant_user,
+            "Marked not applicable by applicant",
+        )
     requirement_catalog = {
         requirement.code: requirement
         for requirement in get_applicant_document_requirements(entry.branch)
@@ -5112,7 +5224,17 @@ def _deliver_application_otp(application, otp_code, *, actor=None, otp_expires_a
         to=[application.applicant_email],
     )
     email.attach_alternative(html_body, "text/html")
-    email.send(fail_silently=False)
+    try:
+        email.send(fail_silently=False)
+    except (OSError, smtplib.SMTPException) as exc:
+        logger.exception(
+            "Applicant OTP email delivery failed for application %s.",
+            application.pk,
+        )
+        raise ApplicationOTPDeliveryError(
+            "Your application draft and uploaded files were saved, but we could not send "
+            "the verification code right now. Please try again in a few moments."
+        ) from exc
     record_audit_event(
         application=application,
         actor=actor or application.applicant,
@@ -5122,9 +5244,15 @@ def _deliver_application_otp(application, otp_code, *, actor=None, otp_expires_a
     )
 
 
-def issue_application_otp(application, actor=None):
+def issue_application_otp(application, actor=None, *, defer_delivery=True, enforce_cooldown=False):
     if application.status != RecruitmentApplication.Status.DRAFT:
         raise ValueError("A verification code can only be issued while the application is still in draft.")
+    if enforce_cooldown and application.otp_requested_at:
+        elapsed = timezone.now() - application.otp_requested_at
+        cooldown_seconds = settings.APPLICATION_OTP_RESEND_COOLDOWN_SECONDS
+        if elapsed.total_seconds() < cooldown_seconds:
+            remaining = max(1, int(cooldown_seconds - elapsed.total_seconds()))
+            raise ValueError(f"Please wait {remaining} seconds before requesting another code.")
 
     otp_code = _generate_otp_code()
     now = timezone.now()
@@ -5132,12 +5260,14 @@ def issue_application_otp(application, actor=None):
     application.otp_requested_at = now
     application.otp_expires_at = now + timedelta(minutes=settings.APPLICATION_OTP_VALIDITY_MINUTES)
     application.otp_verified_at = None
+    application.otp_attempt_count = 0
     application.save(
         update_fields=[
             "otp_hash",
             "otp_requested_at",
             "otp_expires_at",
             "otp_verified_at",
+            "otp_attempt_count",
             "updated_at",
         ]
     )
@@ -5152,30 +5282,72 @@ def issue_application_otp(application, actor=None):
         )
 
     connection = transaction.get_connection(using=application._state.db or "default")
-    if connection.in_atomic_block:
+    if defer_delivery and connection.in_atomic_block:
         transaction.on_commit(deliver_otp, using=connection.alias)
     else:
         deliver_otp()
     return otp_code
 
 
-def verify_application_otp(application, otp_code, actor=None):
-    if application.status != RecruitmentApplication.Status.DRAFT:
-        raise ValueError("Email verification is only available before final submission.")
-    if not application.otp_hash or not application.otp_expires_at:
-        raise ValueError("Request a verification code first.")
-    if application.otp_expires_at < timezone.now():
-        raise ValueError("The verification code has expired. Request a new code before final submission.")
+def _application_otp_max_attempts():
+    return max(1, int(getattr(settings, "APPLICATION_OTP_MAX_ATTEMPTS", 5)))
 
-    expected_hash = _hash_application_otp(application, otp_code)
-    if not hmac.compare_digest(application.otp_hash, expected_hash):
-        raise ValueError("The verification code is invalid.")
 
-    application.otp_verified_at = timezone.now()
-    application.save(update_fields=["otp_verified_at", "updated_at"])
+def _record_application_otp_failure(application, actor, *, reason, locked=False):
+    max_attempts = _application_otp_max_attempts()
     record_audit_event(
         application=application,
         actor=actor or application.applicant,
+        action=(
+            AuditLog.Action.APPLICATION_OTP_LOCKED
+            if locked
+            else AuditLog.Action.APPLICATION_OTP_FAILED
+        ),
+        description=(
+            "Applicant verification code locked after too many invalid attempts."
+            if locked
+            else "Applicant verification code verification failed."
+        ),
+        metadata={
+            "reason": reason,
+            "attempt_count": application.otp_attempt_count,
+            "max_attempts": max_attempts,
+        },
+    )
+
+
+def verify_application_otp(application, otp_code, actor=None):
+    application = RecruitmentApplication.objects.get(pk=application.pk)
+    actor = actor or application.applicant
+    locked_error = "Too many invalid verification attempts. Request a new code before final submission."
+    if application.status != RecruitmentApplication.Status.DRAFT:
+        raise ValueError("Email verification is only available before final submission.")
+    if not application.otp_hash or not application.otp_expires_at:
+        _record_application_otp_failure(application, actor, reason="missing_code")
+        raise ValueError("Request a verification code first.")
+    if application.otp_expires_at < timezone.now():
+        _record_application_otp_failure(application, actor, reason="expired")
+        raise ValueError("The verification code has expired. Request a new code before final submission.")
+    if application.otp_attempt_count >= _application_otp_max_attempts():
+        _record_application_otp_failure(application, actor, reason="attempt_limit", locked=True)
+        raise ValueError(locked_error)
+
+    expected_hash = _hash_application_otp(application, otp_code)
+    if not hmac.compare_digest(application.otp_hash, expected_hash):
+        application.otp_attempt_count += 1
+        application.save(update_fields=["otp_attempt_count", "updated_at"])
+        locked = application.otp_attempt_count >= _application_otp_max_attempts()
+        _record_application_otp_failure(application, actor, reason="invalid_code", locked=locked)
+        if locked:
+            raise ValueError(locked_error)
+        raise ValueError("The verification code is invalid.")
+
+    application.otp_verified_at = timezone.now()
+    application.otp_attempt_count = 0
+    application.save(update_fields=["otp_verified_at", "otp_attempt_count", "updated_at"])
+    record_audit_event(
+        application=application,
+        actor=actor,
         action=AuditLog.Action.APPLICATION_OTP_VERIFIED,
         description="Applicant verification code verified successfully.",
         metadata={"verified_at": application.otp_verified_at.isoformat()},
@@ -5191,7 +5363,7 @@ def create_public_application_draft(entry, cleaned_data, requirement_uploads):
         entry,
         cleaned_data,
         requirement_uploads,
-        issue_otp=True,
+        issue_otp=False,
     )
 
 
@@ -5210,9 +5382,35 @@ def _decrypt_evidence_bytes(evidence):
     return cipher.decrypt(bytes(evidence.nonce), bytes(evidence.ciphertext), None)
 
 
-def decrypt_evidence_bytes(evidence, actor):
-    context_application = get_evidence_context_application_for_user(actor, evidence)
+def record_evidence_access_denied(evidence, actor, *, application=None, reason="unauthorized"):
+    metadata = {
+        "reason": reason,
+        "evidence_id": evidence.id,
+        "filename": evidence.original_filename,
+        "stage": evidence.stage,
+        "artifact_scope": evidence.artifact_scope,
+        "artifact_type": evidence.artifact_type,
+        "version_family": str(evidence.version_family),
+        "version_number": evidence.version_number,
+        "requested_application_id": application.id if application is not None else None,
+    }
+    return record_audit_event(
+        application=application,
+        actor=actor,
+        action=AuditLog.Action.EVIDENCE_ACCESS_DENIED,
+        description="Denied evidence download request.",
+        metadata=metadata,
+    )
+
+
+def decrypt_evidence_bytes(evidence, actor, *, application=None):
+    context_application = get_evidence_context_application_for_user(
+        actor,
+        evidence,
+        preferred_application=application,
+    )
     if context_application is None:
+        record_evidence_access_denied(evidence, actor, application=application, reason="unauthorized")
         raise ValueError("You cannot access this evidence item.")
     plaintext = _decrypt_evidence_bytes(evidence)
     record_audit_event(
@@ -5351,22 +5549,10 @@ def upload_evidence_item(
         raise ValueError("You cannot upload files for this application.")
     if artifact_scope == EvidenceVaultItem.OwnerScope.CASE and not hasattr(application, "case"):
         raise ValueError("A case must exist before case files can be uploaded.")
-    validated_upload = None
-    file_size = getattr(uploaded_file, "size", None)
-    if artifact_type == ARTIFACT_TYPE_APPLICANT_DOCUMENT:
-        validated_upload = validate_applicant_document_upload(uploaded_file)
-    elif file_size is not None and file_size > settings.MAX_EVIDENCE_UPLOAD_BYTES:
-        raise ValueError("The uploaded file is larger than the allowed file size.")
-    if validated_upload is not None:
-        raw_bytes = validated_upload.raw_bytes
-        content_type = validated_upload.canonical_content_type
-        file_size = validated_upload.size_bytes
-    else:
-        raw_bytes = uploaded_file.read()
-        if hasattr(uploaded_file, "seek"):
-            uploaded_file.seek(0)
-        content_type = getattr(uploaded_file, "content_type", "") or ""
-        file_size = len(raw_bytes)
+    validated_upload = validate_applicant_document_upload(uploaded_file)
+    raw_bytes = validated_upload.raw_bytes
+    content_type = validated_upload.canonical_content_type
+    file_size = validated_upload.size_bytes
     sha256_digest = hashlib.sha256(raw_bytes).hexdigest()
     nonce, ciphertext = encrypt_evidence_bytes(raw_bytes)
     stage = _evidence_stage_for_application(application)
@@ -5616,6 +5802,16 @@ def get_available_actions(application, user):
     ):
         return [
             ("return_car_for_reassessment", "Return CAR for HRMPSB Reassessment"),
+        ]
+
+    if (
+        current_section == "decision"
+        and effective_role == RecruitmentUser.Role.APPOINTING_AUTHORITY
+        and current_stage == RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW
+        and application.branch == PositionPosting.Branch.COS
+    ):
+        return [
+            ("return_to_hrm_chief", "Return to HRM Chief"),
         ]
 
     if current_section != "actions":
@@ -7294,8 +7490,22 @@ def _build_verification_summary_pdf(application, actor, generated_at, verificati
     )
 
 
+def record_export_denied(application, actor, *, reason="unauthorized"):
+    return record_audit_event(
+        application=application,
+        actor=actor,
+        action=AuditLog.Action.EXPORT_DENIED,
+        description="Denied controlled export request.",
+        metadata={
+            "reason": reason,
+            "requested_application_id": application.id,
+        },
+    )
+
+
 def build_export_bundle(application, actor):
     if not user_can_export_application(actor, application):
+        record_export_denied(application, actor, reason="unauthorized")
         raise ValueError("You cannot export this application.")
     bundle_root = _export_bundle_root(application)
     generated_at = timezone.now()

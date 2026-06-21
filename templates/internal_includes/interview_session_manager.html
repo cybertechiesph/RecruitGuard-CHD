@@ -45,7 +45,7 @@
                     </label>
                     {{ interview_session_form.scheduled_for }}
                     {% if interview_session_form.scheduled_for.help_text %}
-                        <div class="form-text">{{ interview_session_form.scheduled_for.help_text|safe }}</div>
+                        <div class="form-text">{{ interview_session_form.scheduled_for.help_text }}</div>
                     {% endif %}
                     {% for error in interview_session_form.scheduled_for.errors %}
                         <div class="invalid-feedback d-block">{{ error }}</div>
@@ -58,7 +58,7 @@
                     </label>
                     {{ interview_session_form.location }}
                     {% if interview_session_form.location.help_text %}
-                        <div class="form-text">{{ interview_session_form.location.help_text|safe }}</div>
+                        <div class="form-text">{{ interview_session_form.location.help_text }}</div>
                     {% endif %}
                     {% for error in interview_session_form.location.errors %}
                         <div class="invalid-feedback d-block">{{ error }}</div>
@@ -330,12 +330,19 @@
         var totalRatings = {{ current_interview_ratings|length|default:0 }};
         var hasFallback = {% if current_interview_fallback_evidence %}true{% else %}false{% endif %};
 
-        function showError(msg, field) {
-            if (errorBox) { errorBox.textContent = msg; errorBox.hidden = false; }
-            if (field && field.focus) try { field.focus(); } catch (e) { field.focus(); }
-        }
         function clearError() {
+            if (window.RGWizardErrors && form) { RGWizardErrors.clearFieldErrors(form); }
             if (errorBox) { errorBox.hidden = true; errorBox.textContent = ""; }
+        }
+        function revealProblems(probs) {
+            if (!probs.length) return;
+            if (!window.RGWizardErrors) {
+                if (errorBox) { errorBox.textContent = probs[0].msg; errorBox.hidden = false; }
+                var f0 = probs[0].field;
+                if (f0 && f0.focus) { try { f0.focus(); } catch (e) { f0.focus(); } }
+                return;
+            }
+            RGWizardErrors.showErrors(probs, { scope: form || document, summaryBox: errorBox });
         }
         function dateValueOk() {
             if (!dateInput) return true;
@@ -343,34 +350,40 @@
             if (!v) return null;
             try { return new Date(v); } catch (e) { return false; }
         }
-        function validateForSave() {
+        function collectSaveProblems() {
+            var p = [];
+            var d = null;
             if (!dateInput || !(dateInput.value || "").trim()) {
-                showError("Set the interview date and time before saving.", dateInput);
-                return false;
-            }
-            var d = dateValueOk();
-            if (d === false || (d instanceof Date && isNaN(d.getTime()))) {
-                showError("That date and time looks invalid. Please re-enter it.", dateInput);
-                return false;
+                p.push({ field: dateInput, msg: "Set the interview date and time before saving." });
+            } else {
+                d = dateValueOk();
+                if (d === false || (d instanceof Date && isNaN(d.getTime()))) {
+                    p.push({ field: dateInput, msg: "That date and time looks invalid. Please re-enter it." });
+                    d = null;
+                }
             }
             if (!locInput || !(locInput.value || "").trim()) {
-                showError("Set a location or medium for the interview.", locInput);
-                return false;
+                p.push({ field: locInput, msg: "Set a location or medium for the interview." });
             }
-            // Sanity: schedule shouldn't be in the past.
+            // Past-date check only applies once we have a valid date.
             if (d instanceof Date && d.getTime() < Date.now() - 5 * 60 * 1000) {
-                showError("The interview can't be scheduled in the past.", dateInput);
-                return false;
+                p.push({ field: dateInput, msg: "The interview can't be scheduled in the past." });
             }
+            return p;
+        }
+        function validateForSave() {
+            var probs = collectSaveProblems();
+            if (probs.length) { revealProblems(probs); return false; }
             clearError();
             return true;
         }
         function validateForFinalize() {
-            if (!validateForSave()) return false;
+            var probs = collectSaveProblems();
             if (totalRatings === 0 && !hasFallback) {
-                showError("Record at least one panel rating or upload a fallback sheet before finalizing.", null);
-                return false;
+                // No field to attach to — route to the summary box.
+                probs.push({ field: null, summaryOnly: true, msg: "Record at least one panel rating or upload a fallback sheet before finalizing." });
             }
+            if (probs.length) { revealProblems(probs); return false; }
             clearError();
             return true;
         }

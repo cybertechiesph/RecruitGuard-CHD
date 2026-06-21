@@ -735,6 +735,7 @@ class RecruitmentApplication(TimestampedModel):
     otp_requested_at = models.DateTimeField(blank=True, null=True)
     otp_expires_at = models.DateTimeField(blank=True, null=True)
     otp_verified_at = models.DateTimeField(blank=True, null=True)
+    otp_attempt_count = models.PositiveSmallIntegerField(default=0)
     submission_hash = models.CharField(max_length=64, blank=True)
     submitted_at = models.DateTimeField(blank=True, null=True)
     closed_at = models.DateTimeField(blank=True, null=True)
@@ -3006,6 +3007,8 @@ class AuditLog(TimestampedModel):
         APPLICATION_CREATED = "application_created", "Application Created"
         APPLICATION_UPDATED = "application_updated", "Application Updated"
         APPLICATION_OTP_SENT = "application_otp_sent", "Application OTP Sent"
+        APPLICATION_OTP_FAILED = "application_otp_failed", "Application OTP Failed"
+        APPLICATION_OTP_LOCKED = "application_otp_locked", "Application OTP Locked"
         APPLICATION_OTP_VERIFIED = "application_otp_verified", "Application OTP Verified"
         APPLICATION_SUBMITTED = "application_submitted", "Application Submitted"
         CASE_CREATED = "case_created", "Case Created"
@@ -3035,15 +3038,21 @@ class AuditLog(TimestampedModel):
         EVIDENCE_DOWNLOADED = "evidence_downloaded", "Evidence Downloaded"
         EVIDENCE_ARCHIVED = "evidence_archived", "Evidence Archived"
         EVIDENCE_RESTORED = "evidence_restored", "Evidence Restored"
+        EVIDENCE_ACCESS_DENIED = "evidence_access_denied", "Evidence Access Denied"
         PROTECTED_RECORD_VIEWED = "protected_record_viewed", "Protected Record Viewed"
         EVIDENCE_VAULT_VIEWED = "evidence_vault_viewed", "Evidence Vault Viewed"
         AUDIT_LOG_VIEWED = "audit_log_viewed", "Audit Log Viewed"
         EXPORT_GENERATED = "export_generated", "Export Generated"
+        EXPORT_DENIED = "export_denied", "Export Denied"
 
     SENSITIVE_ACTIONS = {
         Action.CASE_REOPENED,
         Action.EXPORT_GENERATED,
+        Action.EXPORT_DENIED,
         Action.EVIDENCE_DOWNLOADED,
+        Action.EVIDENCE_ACCESS_DENIED,
+        Action.APPLICATION_OTP_FAILED,
+        Action.APPLICATION_OTP_LOCKED,
         Action.INTERNAL_EMAIL_CHANGE_FAILED,
         Action.INTERNAL_LOGIN_FAILED,
         Action.INTERNAL_LOGIN_LOCKED,

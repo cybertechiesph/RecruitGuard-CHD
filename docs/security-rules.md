@@ -26,14 +26,32 @@ This document summarizes the key cybersecurity rules and protection logic of Rec
 - Internal users must authenticate before accessing protected system pages.
 - Only active internal accounts may authenticate successfully.
 - Passwords must be stored using secure hashing.
+- CAPTCHA must be required on internal login and internal password reset when
+  CAPTCHA is enabled. Internal MFA verification and resend use attempt limits,
+  cooldowns, rate limiting, and the authenticated first-factor session instead.
+- For public deployment, CAPTCHA should use Google reCAPTCHA v2 with
+  server-side token verification. The local arithmetic CAPTCHA is only a
+  fallback for offline development and demonstration.
+- reCAPTCHA verification requests must use Google's fixed HTTPS verification
+  endpoint. Production credentials must be supplied through environment
+  variables; Google's public test keys are allowed only in debug mode.
 - Session handling must reduce reuse or misuse of authenticated access.
+- Authenticated sessions must have a defined inactivity timeout. The default
+  timeout is 30 minutes and is refreshed only by continued user activity.
 
 ### Applicants
 - Applicant submission is accountless.
 - OTP verification is required before final submission is accepted.
 - OTP records must be stored in hashed form.
 - OTP must expire after the defined validity window.
+- Repeated invalid OTP attempts must be limited and require a new code after the configured attempt limit.
 - Final submission must be blocked if OTP is invalid, expired, or incomplete.
+- CAPTCHA must be required on applicant intake and applicant status lookup when
+  CAPTCHA is enabled. Applicant OTP verification, resend, and final submission
+  rely on the unguessable application token, OTP attempt limits, resend
+  cooldowns, rate limiting, and verified-email state instead.
+- Applicant-facing CAPTCHA tokens must be verified by the server before an
+  intake or status lookup action is processed.
 
 ---
 
@@ -155,6 +173,7 @@ The following categories must be logged where applicable:
 - notification events where traceability is needed
 - export generation
 - sensitive access events
+- denied evidence download and export attempts where applicable
 - audit-log viewing where applicable
 
 ---
@@ -177,7 +196,18 @@ Export bundles should include, where applicable:
 
 ---
 
-## 11. Availability Rules Within Prototype Scope
+## 11. Rate Limiting and Logging Rules
+- Public and internal request surfaces must have basic application-level rate
+  limiting in addition to any deployment-layer throttling.
+- Rate-limit thresholds must be configured through environment variables.
+- Logs must avoid storing passwords, OTPs, tokens, secrets, cookies,
+  authorization headers, and CSRF values.
+- Production logging should use redaction filters before records are written to
+  the configured log sink.
+
+---
+
+## 12. Availability Rules Within Prototype Scope
 - The system should remain stable during scheduled evaluation sessions.
 - The academic prototype does not include destructive testing.
 - Denial-of-service testing and brute-force campaigns are out of scope.
@@ -185,7 +215,7 @@ Export bundles should include, where applicable:
 
 ---
 
-## 12. Scope Constraints
+## 13. Scope Constraints
 - Recruitment only
 - Full onboarding is out of scope
 - Offboarding, termination, payroll, and full employee lifecycle management are out of scope
@@ -193,7 +223,7 @@ Export bundles should include, where applicable:
 
 ---
 
-## 13. Developer Reminders
+## 14. Developer Reminders
 - Never hard-code secrets
 - Use environment variables for:
   - Django secret key

@@ -6,17 +6,24 @@ from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 from django.views.generic import FormView, TemplateView
 
-from .forms import ApplicantOTPForm, ApplicantPortalIntakeForm, ApplicantStatusLookupForm
+from .forms import (
+    ApplicantOTPForm,
+    ApplicantPortalIntakeForm,
+    ApplicantStatusLookupForm,
+)
 from .models import PositionPosting, RecruitmentApplication
 from .requirements import get_applicant_document_requirements
 from .services import (
+    ApplicationOTPDeliveryError,
     create_public_application_draft,
+    get_current_applicant_document_items,
     get_public_recruitment_entries,
     issue_application_otp,
     save_public_application_draft_progress,
     submit_application,
     verify_application_otp,
 )
+from .upload_validation import MAX_APPLICANT_DOCUMENT_UPLOAD_BYTES
 
 
 _APPLICANT_STATUS_LABELS = {
@@ -77,6 +84,19 @@ def _posting_is_closing_soon(posting):
     return False
 
 
+def _build_applicant_status_context(application):
+    status_info = _APPLICANT_STATUS_LABELS.get(application.status)
+    status_label = status_info[0] if status_info else "Received"
+    status_variant = status_info[1] if status_info else "review"
+    status_description = status_info[2] if status_info else "Your application has been received."
+    return {
+        "application": application,
+        "status_label": status_label,
+        "status_variant": status_variant,
+        "status_description": status_description,
+    }
+
+
 class ApplicantPortalView(TemplateView):
     template_name = "recruitment/applicant_portal.html"
 
@@ -132,14 +152,70 @@ class ApplicantPortalIntakeView(FormView):
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["entry"] = self.entry
+        kwargs["request"] = self.request
         return kwargs
+
+    def get_draft_from_token(self):
+        token = (self.request.GET.get("token") or "").strip()
+        if not token:
+            return None
+        return (
+            RecruitmentApplication.objects.filter(
+                public_token=token,
+                position=self.entry,
+                submitted_at__isnull=True,
+                status=RecruitmentApplication.Status.DRAFT,
+            )
+            .prefetch_related("evidence_items")
+            .first()
+        )
+
+    def get_initial_from_draft(self, draft):
+        return {
+            "first_name": draft.applicant_first_name,
+            "last_name": draft.applicant_last_name,
+            "email": draft.applicant_email,
+            "phone": draft.applicant_phone,
+            "qualification_summary": draft.qualification_summary,
+            "cover_letter": draft.cover_letter,
+            "performance_rating_applicability": draft.performance_rating_applicability,
+            "checklist_privacy_consent": draft.checklist_privacy_consent,
+            "checklist_documents_complete": draft.checklist_documents_complete,
+            "checklist_information_certified": draft.checklist_information_certified,
+        }
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["entry"] = self.entry
-        max_bytes = getattr(settings, "MAX_EVIDENCE_UPLOAD_BYTES", 5 * 1024 * 1024)
+        max_bytes = min(
+            getattr(
+                settings,
+                "MAX_EVIDENCE_UPLOAD_BYTES",
+                MAX_APPLICANT_DOCUMENT_UPLOAD_BYTES,
+            ),
+            MAX_APPLICANT_DOCUMENT_UPLOAD_BYTES,
+        )
+        context["max_upload_bytes"] = max_bytes
         context["max_upload_mb"] = max_bytes // (1024 * 1024)
         return context
+
+    def get(self, request, *args, **kwargs):
+        draft = self.get_draft_from_token()
+        if draft is None:
+            return super().get(request, *args, **kwargs)
+
+        form = self.get_form_class()(
+            entry=self.entry,
+            request=self.request,
+            initial=self.get_initial_from_draft(draft),
+        )
+        form.attach_existing_draft(
+            draft,
+            saved_notice=(
+                "Your saved draft was loaded. Review your information and update anything that needs correction."
+            ),
+        )
+        return self.render_to_response(self.get_context_data(form=form))
 
     def form_valid(self, form):
         try:
@@ -158,6 +234,23 @@ class ApplicantPortalIntakeView(FormView):
             )
             return self.form_invalid(form)
 
+        try:
+            issue_application_otp(
+                application,
+                actor=application.applicant,
+                defer_delivery=False,
+            )
+        except ApplicationOTPDeliveryError as exc:
+            form.add_error(None, str(exc))
+            form.attach_existing_draft(
+                application,
+                saved_notice=(
+                    "Your application draft and uploaded files were saved. "
+                    "You only need to retry sending the verification code."
+                ),
+            )
+            return self.render_to_response(self.get_context_data(form=form))
+
         messages.success(
             self.request,
             "Your application draft is ready. Check your email for the verification code.",
@@ -172,6 +265,7 @@ class ApplicantPortalIntakeView(FormView):
             valid_requirement_uploads
             and form.can_persist_draft_uploads()
             and "email" not in form.errors
+            and "captcha_answer" not in form.errors
             and not form.non_field_errors()
         ):
             try:
@@ -231,6 +325,9 @@ class ApplicantOTPView(TemplateView):
         context["application"] = application
         context["otp_form"] = kwargs.get("otp_form") or ApplicantOTPForm()
         context["otp_validity_minutes"] = settings.APPLICATION_OTP_VALIDITY_MINUTES
+        context["current_applicant_document_count"] = (
+            get_current_applicant_document_items(application).count()
+        )
         return context
 
     def post(self, request, *args, **kwargs):
@@ -243,7 +340,13 @@ class ApplicantOTPView(TemplateView):
         action = request.POST.get("action")
         if action == "resend":
             try:
-                issue_application_otp(application)
+                issue_application_otp(
+                    application,
+                    defer_delivery=False,
+                    enforce_cooldown=True,
+                )
+            except ApplicationOTPDeliveryError as exc:
+                messages.error(request, str(exc))
             except (OperationalError, ValueError) as exc:
                 if isinstance(exc, OperationalError):
                     messages.error(
@@ -309,12 +412,32 @@ class ApplicantReceiptView(TemplateView):
         if application is None:
             raise Http404
         context["application"] = application
+        context["current_applicant_document_count"] = (
+            get_current_applicant_document_items(application).count()
+        )
         return context
 
 
 class ApplicantStatusLookupView(FormView):
     template_name = "recruitment/applicant_status_lookup.html"
     form_class = ApplicantStatusLookupForm
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["request"] = self.request
+        return kwargs
+
+    def get_unfinished_draft(self, application_id, email):
+        return (
+            RecruitmentApplication.objects.select_related("position")
+            .filter(
+                reference_number=application_id,
+                applicant_email__iexact=email,
+                submitted_at__isnull=True,
+                status=RecruitmentApplication.Status.DRAFT,
+            )
+            .first()
+        )
 
     def form_valid(self, form):
         application = (
@@ -327,20 +450,70 @@ class ApplicantStatusLookupView(FormView):
             .first()
         )
         if not application:
+            draft = self.get_unfinished_draft(
+                form.cleaned_data["application_id"],
+                form.cleaned_data["email"],
+            )
+            if draft is not None:
+                messages.info(
+                    self.request,
+                    (
+                        f"Your application for {draft.position.title} is not finished yet. "
+                        "Verify your email to continue, or use Resend the code if the code expired."
+                    ),
+                )
+                return redirect("applicant-otp", token=draft.public_token)
             form.add_error(
                 None,
                 "We could not find an application with that ID and email combination. "
                 "Please check your Application ID and email address and try again.",
             )
             return self.form_invalid(form)
-        status_info = _APPLICANT_STATUS_LABELS.get(application.status)
-        status_label = status_info[0] if status_info else "Received"
-        status_variant = status_info[1] if status_info else "review"
-        status_description = status_info[2] if status_info else "Your application has been received."
-        return self.render_to_response(self.get_context_data(
-            form=form,
-            application=application,
-            status_label=status_label,
-            status_variant=status_variant,
-            status_description=status_description,
-        ))
+        return self.render_to_response(
+            self.get_context_data(form=form, **_build_applicant_status_context(application))
+        )
+
+
+class ApplicantStatusLinkView(TemplateView):
+    template_name = "recruitment/applicant_status_lookup.html"
+
+    def get_application(self):
+        return (
+            RecruitmentApplication.objects.select_related("position")
+            .filter(public_token=self.kwargs["token"])
+            .first()
+        )
+
+    def get(self, request, *args, **kwargs):
+        self.application = self.get_application()
+        if self.application is None:
+            messages.error(
+                request,
+                "This status link is no longer available. Use your Application ID and email to check your status.",
+            )
+            return redirect("applicant-status-lookup")
+        if self.application.submitted_at is None:
+            messages.info(
+                request,
+                (
+                    f"Your application for {self.application.position.title} is not finished yet. "
+                    "Verify your email to continue, or use Resend the code if the code expired."
+                ),
+            )
+            return redirect("applicant-otp", token=self.application.public_token)
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        application = getattr(self, "application", None) or self.get_application()
+        if application is None or application.submitted_at is None:
+            raise Http404
+        context["form"] = ApplicantStatusLookupForm(
+            request=self.request,
+            initial={
+                "application_id": application.reference_number,
+                "email": application.applicant_email,
+            }
+        )
+        context.update(_build_applicant_status_context(application))
+        return context

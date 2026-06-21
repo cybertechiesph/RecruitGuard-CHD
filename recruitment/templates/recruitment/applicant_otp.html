@@ -115,7 +115,7 @@
 
             <p class="rg-pub-otp-wrongmail">
                 Wrong email address?
-                <a href="{% url 'applicant-intake' application.position.pk %}">
+                <a href="{% url 'applicant-intake' application.position.pk %}?token={{ application.public_token }}">
                     &larr; Go back to edit your information
                 </a>
             </p>
@@ -159,7 +159,7 @@
                     </div>
                     <div class="rg-pub-review-row">
                         <dt>Documents</dt>
-                        <dd>{{ application.evidence_items.count }} file{{ application.evidence_items.count|pluralize }} uploaded</dd>
+                        <dd>{{ current_applicant_document_count }} file{{ current_applicant_document_count|pluralize }} uploaded</dd>
                     </div>
                 </dl>
             </div>
@@ -169,7 +169,7 @@
             <p>Once you submit, your application can no longer be edited. Make sure everything is correct before continuing.</p>
             <p class="mb-0" style="margin-top:0.4rem;">
                 Need to fix something?
-                <a href="{% url 'applicant-intake' application.position.pk %}">Go back to edit your information</a>.
+                <a href="{% url 'applicant-intake' application.position.pk %}?token={{ application.public_token }}">Go back to edit your information</a>.
             </p>
         </div>
 
@@ -207,7 +207,7 @@
                     <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">
                         Not yet
                     </button>
-                    <button type="button" class="btn btn-rg-primary" id="rg-otp-submit-confirm">
+                    <button type="submit" form="rg-otp-submit-form" class="btn btn-rg-primary" id="rg-otp-submit-confirm">
                         Yes, submit my application
                     </button>
                 </div>
@@ -261,17 +261,23 @@
         }
     }
 
+
     /* ── Submit confirmation modal ─────────────────────────────── */
-    var confirmBtn = document.getElementById("rg-otp-submit-confirm");
     var submitForm = document.getElementById("rg-otp-submit-form");
-    if (confirmBtn && submitForm) {
-        confirmBtn.addEventListener("click", function () {
-            if (confirmBtn.dataset.submitting === "1") return;  // guard against double-click
-            confirmBtn.dataset.submitting = "1";
-            confirmBtn.disabled = true;
-            confirmBtn.textContent = "Submitting…";
-            // Brief paint tick so the disabled state shows before navigation
-            window.setTimeout(function () { submitForm.submit(); }, 30);
+    var submitBtn = document.getElementById("rg-otp-submit-btn");
+    var confirmBtn = document.getElementById("rg-otp-submit-confirm");
+    if (submitForm) {
+        submitForm.addEventListener("submit", function (e) {
+            if (submitForm.dataset.submitting === "1") {
+                e.preventDefault();
+                return;
+            }
+            submitForm.dataset.submitting = "1";
+            if (confirmBtn) {
+                confirmBtn.disabled = true;
+                confirmBtn.textContent = "Submitting…";
+            }
+            if (submitBtn) submitBtn.disabled = true;
         });
     }
 

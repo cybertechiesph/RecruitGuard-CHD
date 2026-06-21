@@ -95,7 +95,11 @@ class InternalLoginView(LoginView):
     def form_valid(self, form):
         user = form.get_user()
         try:
-            challenge = issue_internal_mfa_challenge(user, self.request)
+            challenge = issue_internal_mfa_challenge(
+                user,
+                self.request,
+                enforce_cooldown=True,
+            )
         except ValueError as exc:
             form.add_error(None, str(exc))
             return self.form_invalid(form)
@@ -213,6 +217,11 @@ class InternalPasswordResetView(PasswordResetView):
     email_template_name = "registration/password_reset_email.txt"
     subject_template_name = "registration/password_reset_subject.txt"
     success_url = reverse_lazy("password-reset-done")
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["request"] = self.request
+        return kwargs
 
     def form_valid(self, form):
         users = list(form.get_users(form.cleaned_data["email"]))

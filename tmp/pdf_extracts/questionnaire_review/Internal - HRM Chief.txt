@@ -1,0 +1,373 @@
+
+--- PAGE 1 ---
+
+ RecruitGuard-CHD
+ HRM  Chief  Post-Test  Questionnaire  Post-Test  Questionnaire  para  sa  HRM  Chief  Workflow  ng  RecruitGuard-CHD
+ A.   CONSENT  AND  DATA  PRIVACY  This  questionnaire  is  for  evaluating  the  usability  and  workflow  clarity  of  RecruitGuard-CHD  for  the  HRM  Chief  role.  Your
+participation
+
+is
+
+voluntary.
+
+Your
+
+answers
+
+will
+
+be
+
+kept
+
+confidential
+
+and
+
+used
+
+only
+
+for
+
+academic
+
+evaluation
+
+purposes.
+ ☐   I  agree  to  answer  this  questionnaire.
+B.   BASIC  TESTING  PROFILE
+Item  Response  /  Sagot  Role  /  Role  HRM  Chief  Branch  tested  /  Branch  na  na-test  ☐  Plantilla      ☐  COS      ☐  Both  /  Pareho  Case  level  tested  /  Case  level  na  na-test  ☐  Level  1      ☐  Level  2      ☐  Both  /  Pareho
+HRM  Chief  task  tested  /  HRM  Chief  task  na  na-test
+☐  Level  2  Screening      ☐  Examination  Management  ☐  Plantilla  Handoff      ☐  COS  Decision  ☐  Completion  Tracking      ☐  Multiple  Tasks
+ C.   HRM  CHIEF  ROLE-SPECIFIC  QUESTIONS   /   Mga  Tanong  para  sa  HRM  Chief  Role  Instruction:  Answer  based  on  your  experience  after  testing  the  HRM  Chief  workflow  in  RecruitGuard-CHD.   /  Sagutan  batay  sa  iyong
+karanasan
+
+pagkatapos
+
+subukan
+
+ang
+
+HRM
+
+Chief
+
+workflow
+
+sa
+
+RecruitGuard-CHD.  Scale:  5  –  Strongly  Agree      4  –  Agree      3  –  Neutral      2  –  Disagree      1  –  Strongly  Disagree
+1.   I  was  able  to  log  in  and  access  the  HRM  Chief  workspace  without  difficulty.  Madali  akong  nakapag-log  in  at  nakapasok  sa  HRM  Chief  workspace.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+2.   The  system  clearly  showed  that  I  was  using  an  HRM  Chief  account.  Malinaw  na  ipinakita  ng  system  na  HRM  Chief  account  ang  aking  ginagamit.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+3.   The  dashboard  and  My  Queue  page  clearly  showed  the  cases  assigned  to  the  HRM  Chief.  Malinaw  na  ipinakita  ng  dashboard  at  My  Queue  page  ang  cases  na  naka-assign  sa  HRM  Chief.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+
+--- PAGE 2 ---
+4.   The  case  details  clearly  showed  important  information  such  as  Application  ID,  applicant  name,  position,  branch,  level,
+and
+
+current
+
+step.
+ Malinaw  na  ipinakita  ng  case  details  ang  mahahalagang  impormasyon  tulad  ng  Application  ID,  applicant  name,  position,  branch,
+level,
+
+at
+
+current
+
+step.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+5.   The  system  clearly  showed  whether  a  case  was  Plantilla  or  COS  and  whether  it  was  Level  1  or  Level  2.  Malinaw  na  ipinakita  ng  system  kung  ang  case  ay  Plantilla  o  COS  at  kung  ito  ay  Level  1  o  Level  2.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+6.   The  system  made  it  clear  that  Level  2  cases  are  handled  by  the  HRM  Chief.  Malinaw  sa  system  na  ang  Level  2  cases  ay  hinahandle  ng  HRM  Chief.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+7.   The  Entries  and  Positions  module  was  easy  to  access.  Madaling  i-access  ang  Entries  and  Positions  module.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+8.   The  recruitment  entry  details,  such  as  position  title,  branch,  level,  and  entry  status,  were  easy  to  understand.  Madaling  maintindihan  ang  recruitment  entry  details  tulad  ng  position  title,  branch,  level,  at  entry  status.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+9.   The  recruitment  entry  information  was  useful  before  reviewing  applicants.  Nakatulong  ang  recruitment  entry  information  bago  mag-review  ng  applicants.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+10.   The  screening  section  and  submitted  applicant  information  were  easy  to  find  and  review.  Madaling  hanapin  at  i-review  ang  screening  section  at  submitted  applicant  information.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+11.   The  document  completeness  and  qualification  outcome  fields  were  clear  and  easy  to  use.  Malinaw  at  madaling  gamitin  ang  document  completeness  at  qualification  outcome  fields.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+12.   The  education,  training,  experience  score,  and  screening  notes  fields  were  useful  for  Level  2  review.  Nakatulong  ang  education,  training,  experience  score,  at  screening  notes  fields  para  sa  Level  2  review.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+--- PAGE 3 ---
+13.   Finalizing  and  locking  the  screening  record,  including  the  related  workflow  control,  was  clearly  presented.  Malinaw  na  ipinakita  ang  pag-finalize  at  pag-lock  ng  screening  record,  kasama  ang  kaugnay  na  workflow  control.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+14.   The  examination  section  was  easy  to  find.  Madaling  hanapin  ang  examination  section.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+15.   The  exam  type,  exam  status,  score  fields,  and  technical  or  practical  exam  fields  were  clear  where  applicable.  Malinaw  ang  exam  type,  exam  status,  score  fields,  at  technical  o  practical  exam  fields  kung  applicable.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+16.   The  exam  date,  administered-by  field,  evidence  attachment,  and  exam  remarks  were  understandable.  Madaling  maintindihan  ang  exam  date,  administered-by  field,  evidence  attachment,  at  exam  remarks.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+17.   Finalizing  and  locking  the  exam  record,  including  the  related  workflow  control,  was  clearly  presented.  Malinaw  na  ipinakita  ang  pag-finalize  at  pag-lock  ng  exam  record,  kasama  ang  kaugnay  na  workflow  control.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+18.   The  system  clearly  separated  Plantilla  Level  2  cases  from  COS  cases.  Malinaw  na  inihiwalay  ng  system  ang  Plantilla  Level  2  cases  mula  sa  COS  cases.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+19.   The  system  supported  HRM  Chief  review  before  routing  Plantilla  Level  2  cases  to  the  HRMPSB.  Sinuportahan  ng  system  ang  HRM  Chief  review  bago  i-route  ang  Plantilla  Level  2  cases  sa  HRMPSB.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+20.   The  system  made  it  clear  when  a  Plantilla  Level  2  case  was  ready  to  move  to  the  HRMPSB.  Malinaw  sa  system  kung  kailan  ready  na  ang  Plantilla  Level  2  case  na  ilipat  sa  HRMPSB.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+21.   The  system  clearly  separated  HRM  Chief  review  from  Appointing  Authority  final  selection.  Malinaw  na  inihiwalay  ng  system  ang  HRM  Chief  review  mula  sa  final  selection  ng  Appointing  Authority.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+--- PAGE 4 ---
+22.   For  Level  2  Plantilla  cases,  interview  scheduling  or  rating  encoding  was  understandable  where  applicable.  Para  sa  Level  2  Plantilla  cases,  madaling  maintindihan  ang  interview  scheduling  o  rating  encoding  kung  applicable.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+23.   For  Level  2  Plantilla  cases,  the  system  preserved  the  actual  rater  separately  from  the  encoder  where  applicable.  Para  sa  Level  2  Plantilla  cases,  napreserba  ng  system  ang  actual  rater  nang  hiwalay  sa  encoder  kung  applicable.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+24.   The  CAR  preparation  or  consolidation  support  was  understandable  where  applicable.  Madaling  maintindihan  ang  CAR  preparation  o  consolidation  support  kung  applicable.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+25.   The  COS  workflow  was  easy  to  understand  and  was  clearly  separated  from  the  Plantilla  workflow.  Madaling  maintindihan  ang  COS  workflow  at  malinaw  itong  naiiba  sa  Plantilla  workflow.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+26.   The  system  made  it  clear  that  COS  cases  do  not  go  to  the  Appointing  Authority  in  this  workflow.  Malinaw  sa  system  na  ang  COS  cases  ay  hindi  dumadaan  sa  Appointing  Authority  sa  workflow  na  ito.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+27.   The  system  supported  COS  screening,  examination  recording,  interview  handling,  and  decision-support  notes  where
+applicable.
+ Sinuportahan  ng  system  ang  COS  screening,  examination  recording,  interview  handling,  at  decision-support  notes  kung  applicable.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+28.   The  system  allowed  the  HRM  Chief  to  record  a  COS  selected  or  not-selected  decision  and  related  notes.  Pinayagan  ng  system  ang  HRM  Chief  na  mag-record  ng  COS  selected  o  not-selected  decision  at  kaugnay  na  notes.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+29.   Routing  or  handoff  actions,  including  controlled  handoff  to  the  Secretariat  and  handoff  remarks,  were
+understandable.
+ Madaling  maintindihan  ang  routing  o  handoff  actions,  kasama  ang  controlled  handoff  sa  Secretariat  at  handoff  remarks.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+--- PAGE 5 ---
+30.   Completion  tracking,  including  checklist,  deadline,  appointment  or  contract  details,  remarks,  and  case  closure,  was
+easy
+
+to
+
+understand.
+ Madaling  maintindihan  ang  completion  tracking,  kasama  ang  checklist,  deadline,  appointment  o  contract  details,  remarks,  at  case
+closure.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+31.   The  system  recorded  HRM  Chief  actions  clearly  and  improved  traceability  of  Level  2  recruitment  processing.  Malinaw  na  ni-record  ng  system  ang  HRM  Chief  actions  at  pinabuti  ang  traceability  ng  Level  2  recruitment  processing.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+32.   Overall,  the  system  supports  the  HRM  Chief  workflow  and  matches  the  expected  recruitment  responsibilities.  Sa  kabuuan,  sinusuportahan  ng  system  ang  HRM  Chief  workflow  at  tumutugma  ito  sa  expected  recruitment  responsibilities.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon  D.   SYSTEM  USABILITY  SCALE  (SUS)   /   System  Usability  Scale  para  sa  HRM  Chief  Workflow  Instruction:  Answer  based  on  your  overall  experience  using  the  HRM  Chief  side  of  RecruitGuard-CHD.   /  Sagutan  batay  sa  kabuuang
+karanasan
+
+mo
+
+sa
+
+paggamit
+
+ng
+
+HRM
+
+Chief
+
+side
+
+ng
+
+RecruitGuard-CHD.  Scale:  5  –  Strongly  Agree      4  –  Agree      3  –  Neutral      2  –  Disagree      1  –  Strongly  Disagree
+1.   I  think  that  I  would  like  to  use  this  system  for  HRM  Chief  recruitment  work.  Sa  tingin  ko,  gugustuhin  kong  gamitin  ang  system  na  ito  para  sa  HRM  Chief  recruitment  work.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+2.   I  found  the  system  unnecessarily  complex.  Para  sa  akin,  masyadong  komplikado  ang  system  kahit  hindi  naman  kailangan.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+3.   I  thought  the  system  was  easy  to  use.  Para  sa  akin,  madaling  gamitin  ang  system.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+4.   I  think  that  I  would  need  assistance  to  be  able  to  use  this  system.  Sa  tingin  ko,  kakailanganin  ko  ng  tulong  para  magamit  ang  system  na  ito.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+--- PAGE 6 ---
+5.   I  found  the  different  functions  of  the  system  well  integrated.  Para  sa  akin,  maayos  ang  pagkakaugnay  ng  iba’t  ibang  functions  ng  system.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+6.   I  thought  there  was  too  much  inconsistency  in  the  system.  Para  sa  akin,  maraming  bahagi  ng  system  ang  hindi  consistent.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+7.   I  imagine  that  most  HRM  Chief  users  would  learn  to  use  this  system  quickly.  Sa  tingin  ko,  mabilis  matututunan  ng  karamihan  sa  HRM  Chief  users  ang  paggamit  ng  system  na  ito.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+8.   I  found  the  system  cumbersome  to  use.  Para  sa  akin,  mabigat  o  mahirap  gamitin  ang  system.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+9.   I  felt  confident  using  the  system.  Confident  ako  habang  ginagamit  ang  system.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+10.   I  needed  to  learn  a  lot  of  things  before  I  could  use  this  system.  Marami  muna  akong  kailangang  matutunan  bago  ko  magamit  ang  system  na  ito.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon  E.   OPEN-ENDED  FEEDBACK   /   Bukas  na  Tanong
+
+1.   Which  HRM  Chief  task  was  easiest  to  perform?  Aling  HRM  Chief  task  ang  pinakamadaling  gawin?
+_______________________________________________________________________________________________
+2.   Which  HRM  Chief  task  was  confusing  or  difficult?  Aling  HRM  Chief  task  ang  confusing  o  mahirap  gawin?
+_______________________________________________________________________________________________
+3.   What  should  be  improved  to  make  the  HRM  Chief  workflow  easier  to  use?  Ano  ang  dapat  i-improve  para  mas  madaling  gamitin  ang  HRM  Chief  workflow?
+_______________________________________________________________________________________________

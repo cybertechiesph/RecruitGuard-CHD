@@ -2,16 +2,20 @@ import importlib
 import io
 import json
 import re
+import urllib.parse
 import uuid
 import zipfile
 from datetime import date, timedelta
+from types import SimpleNamespace
 from unittest.mock import patch
 
+from django import forms
 from django.apps import apps as django_apps
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.messages import get_messages
 from django.core import mail
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
@@ -21,10 +25,21 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 
+from .captcha import (
+    CAPTCHA_ANSWER_SESSION_KEY,
+    validate_recaptcha_token,
+    validate_turnstile_token,
+)
 from .forms import (
+    APPLICANT_MOBILE_ERROR_MESSAGE,
+    APPLICANT_NAME_ERROR_MESSAGE,
+    APPLICANT_QUALIFICATION_SUMMARY_LENGTH_ERROR_MESSAGE,
+    APPLICANT_QUALIFICATION_SUMMARY_MAX_LENGTH,
+    ApplicantOTPForm,
     ApplicantPortalIntakeForm,
     CaseHandoffForm,
     ExamRecordForm,
+    InternalMFAOTPForm,
     WorkflowActionForm,
 )
 from .models import (
@@ -93,12 +108,17 @@ from .services import (
     user_can_view_application,
     verify_application_otp,
 )
+from .upload_validation import validate_applicant_document_upload
 
 
 User = get_user_model()
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+@override_settings(
+    CAPTCHA_ENABLED=False,
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    RATE_LIMIT_ENABLED=False,
+)
 class BaseRecruitmentTestCase(TestCase):
     def setUp(self):
         self.applicant = User.objects.create_user(
@@ -635,7 +655,11 @@ class BaseRecruitmentTestCase(TestCase):
         return application
 
 
-@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+@override_settings(
+    CAPTCHA_ENABLED=False,
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    RATE_LIMIT_ENABLED=False,
+)
 class FoundationSmokeTests(TestCase):
     def extract_internal_mfa_code(self):
         return re.search(r"\b(\d{6})\b", mail.outbox[-1].body).group(1)
@@ -698,6 +722,12 @@ class FoundationSmokeTests(TestCase):
         challenge = InternalMFAChallenge.objects.get(user=user)
         otp_code = self.extract_internal_mfa_code()
         self.assertNotEqual(challenge.otp_hash, otp_code)
+        self.assertEqual(len(mail.outbox[-1].alternatives), 1)
+        html_body, mime_type = mail.outbox[-1].alternatives[0]
+        self.assertEqual(mime_type, "text/html")
+        self.assertIn("Internal Verification Code", html_body)
+        self.assertIn("DOH-CHD CALABARZON", html_body)
+        self.assertIn(otp_code, html_body)
 
         response = self.client.post(
             reverse("internal-mfa-verify"),
@@ -712,6 +742,40 @@ class FoundationSmokeTests(TestCase):
         self.assertTrue(
             AuditLog.objects.filter(action=AuditLog.Action.INTERNAL_MFA_VERIFIED).exists()
         )
+
+    def test_internal_mfa_login_rotates_session_key_and_marks_session_verified(self):
+        user = User.objects.create_user(
+            username="secretariat",
+            password="testpass123",
+            email="secretariat@example.com",
+            role=RecruitmentUser.Role.SECRETARIAT,
+        )
+        session = self.client.session
+        session["pre_login_marker"] = "before-mfa"
+        session.save()
+        initial_session_key = session.session_key
+
+        response = self.client.post(
+            reverse("login"),
+            {"username": "secretariat", "password": "testpass123"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], reverse("internal-mfa-verify"))
+        pending_session_key = self.client.session.session_key
+        self.assertNotEqual(initial_session_key, pending_session_key)
+
+        response = self.client.post(
+            reverse("internal-mfa-verify"),
+            {"action": "verify", "otp": self.extract_internal_mfa_code()},
+            follow=True,
+        )
+
+        self.assertEqual(response.request["PATH_INFO"], reverse("workflow-queue"))
+        verified_session = self.client.session
+        self.assertNotEqual(initial_session_key, verified_session.session_key)
+        self.assertTrue(verified_session[INTERNAL_MFA_VERIFIED_SESSION_KEY])
+        self.assertEqual(verified_session[INTERNAL_MFA_USER_SESSION_KEY], user.id)
 
     def test_internal_login_requires_registered_email_for_mfa(self):
         User.objects.create_user(
@@ -744,6 +808,46 @@ class FoundationSmokeTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertIn(reverse("login"), response["Location"])
+
+    def test_session_inactivity_timeout_is_configured(self):
+        self.assertEqual(settings.SESSION_COOKIE_AGE, 30 * 60)
+        self.assertTrue(settings.SESSION_SAVE_EVERY_REQUEST)
+
+    def test_internal_login_challenge_respects_cooldown(self):
+        user = User.objects.create_user(
+            username="secretariat",
+            password="testpass123",
+            email="secretariat@example.com",
+            role=RecruitmentUser.Role.SECRETARIAT,
+        )
+        self.client.post(
+            reverse("login"),
+            {"username": "secretariat", "password": "testpass123"},
+        )
+        challenge = InternalMFAChallenge.objects.get(user=user)
+
+        response = self.client.post(
+            reverse("login"),
+            {"username": "secretariat", "password": "testpass123"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Please wait")
+        self.assertEqual(InternalMFAChallenge.objects.filter(user=user).count(), 1)
+
+        challenge.requested_at = timezone.now() - timedelta(
+            seconds=settings.INTERNAL_MFA_RESEND_COOLDOWN_SECONDS + 1
+        )
+        challenge.save(update_fields=["requested_at", "updated_at"])
+
+        response = self.client.post(
+            reverse("login"),
+            {"username": "secretariat", "password": "testpass123"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], reverse("internal-mfa-verify"))
+        self.assertEqual(InternalMFAChallenge.objects.filter(user=user).count(), 2)
 
     def test_internal_mfa_resend_respects_cooldown(self):
         user = User.objects.create_user(
@@ -1005,6 +1109,464 @@ class FoundationSmokeTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Please enter a correct username and password")
+
+
+@override_settings(
+    CAPTCHA_ENABLED=True,
+    CAPTCHA_PROVIDER="local",
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    RATE_LIMIT_ENABLED=False,
+)
+class CaptchaProtectionTests(TestCase):
+    def captcha_answer(self, scope):
+        return self.client.session[CAPTCHA_ANSWER_SESSION_KEY.format(scope=scope)]
+
+    def test_internal_login_requires_valid_captcha(self):
+        User.objects.create_user(
+            username="secretariat",
+            password="testpass123",
+            email="secretariat@example.com",
+            role=RecruitmentUser.Role.SECRETARIAT,
+        )
+
+        response = self.client.get(reverse("login"))
+        self.assertContains(response, "Security check: What is")
+
+        response = self.client.post(
+            reverse("login"),
+            {"username": "secretariat", "password": "testpass123"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Complete the security check correctly.")
+        self.assertFalse(InternalMFAChallenge.objects.exists())
+
+        response = self.client.post(
+            reverse("login"),
+            {
+                "username": "secretariat",
+                "password": "testpass123",
+                "captcha_answer": self.captcha_answer("internal_login"),
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], reverse("internal-mfa-verify"))
+        self.assertEqual(InternalMFAChallenge.objects.count(), 1)
+
+    def test_internal_mfa_page_uses_cooldown_without_duplicate_captcha(self):
+        user = User.objects.create_user(
+            username="secretariat",
+            password="testpass123",
+            email="secretariat@example.com",
+            role=RecruitmentUser.Role.SECRETARIAT,
+        )
+        self.client.get(reverse("login"))
+        self.client.post(
+            reverse("login"),
+            {
+                "username": "secretariat",
+                "password": "testpass123",
+                "captcha_answer": self.captcha_answer("internal_login"),
+            },
+        )
+        self.assertEqual(InternalMFAChallenge.objects.filter(user=user).count(), 1)
+        self.assertEqual(len(mail.outbox), 1)
+
+        response = self.client.get(reverse("internal-mfa-verify"))
+        self.assertNotContains(response, "Security check")
+
+        response = self.client.post(
+            reverse("internal-mfa-verify"),
+            {"action": "resend"},
+            follow=True,
+        )
+
+        self.assertContains(response, "Please wait")
+        self.assertEqual(InternalMFAChallenge.objects.filter(user=user).count(), 1)
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_otp_verification_forms_do_not_duplicate_captcha(self):
+        self.assertNotIn("captcha_answer", ApplicantOTPForm().fields)
+        self.assertNotIn("captcha_answer", InternalMFAOTPForm().fields)
+
+    def test_internal_password_reset_requires_valid_captcha(self):
+        User.objects.create_user(
+            username="secretariat",
+            password="testpass123",
+            email="secretariat@example.com",
+            role=RecruitmentUser.Role.SECRETARIAT,
+        )
+
+        response = self.client.get(reverse("password-reset"))
+        self.assertContains(response, "Security check: What is")
+
+        response = self.client.post(
+            reverse("password-reset"),
+            {"email": "secretariat@example.com"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Complete the security check correctly.")
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_applicant_status_lookup_requires_valid_captcha(self):
+        response = self.client.get(reverse("applicant-status-lookup"))
+        self.assertContains(response, "Security check: What is")
+
+        response = self.client.post(
+            reverse("applicant-status-lookup"),
+            {
+                "application_id": "RG-20260528-ABCDE1",
+                "email": "applicant@example.com",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Complete the security check correctly.")
+
+        response = self.client.post(
+            reverse("applicant-status-lookup"),
+            {
+                "application_id": "RG-20260528-ABCDE1",
+                "email": "applicant@example.com",
+                "captcha_answer": self.captcha_answer("applicant_status_lookup"),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "We could not find an application")
+
+
+@override_settings(
+    CAPTCHA_ENABLED=True,
+    CAPTCHA_PROVIDER="turnstile",
+    TURNSTILE_SITE_KEY="0x4AAAAAADmkw6o9jbb0OdQs",
+    TURNSTILE_VERIFY_URL="https://turnstile-siteverify.example.workers.dev",
+    TURNSTILE_VERIFY_ALLOWED_HOSTS="turnstile-siteverify.example.workers.dev,challenges.cloudflare.com",
+    TURNSTILE_SECRET_KEY="",
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    RATE_LIMIT_ENABLED=False,
+)
+class TurnstileCaptchaTests(TestCase):
+    class FakeResponse(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+    def fake_turnstile_response(self, success):
+        payload = json.dumps({"success": success}).encode("utf-8")
+        return self.FakeResponse(payload)
+
+    def test_turnstile_widget_renders_on_internal_login(self):
+        response = self.client.get(reverse("login"))
+
+        self.assertContains(
+            response,
+            "https://challenges.cloudflare.com/turnstile/v0/api.js",
+        )
+        self.assertContains(response, 'class="cf-turnstile"')
+        self.assertContains(response, 'data-sitekey="0x4AAAAAADmkw6o9jbb0OdQs"')
+        self.assertContains(response, 'data-action="turnstile-spin-v1"')
+        self.assertContains(response, 'data-callback="rgCaptchaSuccess"')
+
+    def test_turnstile_worker_success_allows_internal_login_challenge(self):
+        user = User.objects.create_user(
+            username="secretariat",
+            password="testpass123",
+            email="secretariat@example.com",
+            role=RecruitmentUser.Role.SECRETARIAT,
+        )
+
+        with patch(
+            "recruitment.captcha.urllib.request.urlopen",
+            return_value=self.fake_turnstile_response(True),
+        ) as urlopen:
+            response = self.client.post(
+                reverse("login"),
+                {
+                    "username": "secretariat",
+                    "password": "testpass123",
+                    "cf-turnstile-response": "valid-turnstile-token",
+                },
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], reverse("internal-mfa-verify"))
+        self.assertEqual(InternalMFAChallenge.objects.filter(user=user).count(), 1)
+        request = urlopen.call_args.args[0]
+        self.assertEqual(
+            request.full_url,
+            "https://turnstile-siteverify.example.workers.dev",
+        )
+        self.assertEqual(request.headers["Content-type"], "application/json")
+        self.assertEqual(
+            json.loads(request.data.decode("utf-8"))["token"],
+            "valid-turnstile-token",
+        )
+        self.assertNotIn("remoteip", json.loads(request.data.decode("utf-8")))
+
+    def test_turnstile_direct_secret_takes_priority_over_worker(self):
+        with self.settings(TURNSTILE_SECRET_KEY="configured-secret"):
+            with patch(
+                "recruitment.captcha.urllib.request.urlopen",
+                return_value=self.fake_turnstile_response(True),
+            ) as urlopen:
+                is_valid = validate_turnstile_token(None, "valid-turnstile-token")
+
+        self.assertTrue(is_valid)
+        request = urlopen.call_args.args[0]
+        self.assertEqual(
+            request.full_url,
+            "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+        )
+        payload = urllib.parse.parse_qs(request.data.decode("utf-8"))
+        self.assertEqual(payload["secret"], ["configured-secret"])
+        self.assertEqual(payload["response"], ["valid-turnstile-token"])
+        self.assertNotIn("remoteip", payload)
+
+    def test_turnstile_forwards_public_client_ip(self):
+        with patch(
+            "recruitment.captcha.urllib.request.urlopen",
+            return_value=self.fake_turnstile_response(True),
+        ) as urlopen:
+            is_valid = validate_turnstile_token(
+                SimpleNamespace(
+                    META={
+                        "HTTP_X_FORWARDED_FOR": "8.8.8.8, 10.0.0.1",
+                        "REMOTE_ADDR": "10.0.0.1",
+                    }
+                ),
+                "valid-turnstile-token",
+            )
+
+        self.assertTrue(is_valid)
+        request = urlopen.call_args.args[0]
+        payload = json.loads(request.data.decode("utf-8"))
+        self.assertEqual(payload["remoteip"], "8.8.8.8")
+
+    def test_turnstile_worker_failure_blocks_internal_login_challenge(self):
+        User.objects.create_user(
+            username="secretariat",
+            password="testpass123",
+            email="secretariat@example.com",
+            role=RecruitmentUser.Role.SECRETARIAT,
+        )
+
+        with patch(
+            "recruitment.captcha.urllib.request.urlopen",
+            return_value=self.fake_turnstile_response(False),
+        ):
+            response = self.client.post(
+                reverse("login"),
+                {
+                    "username": "secretariat",
+                    "password": "testpass123",
+                    "cf-turnstile-response": "invalid-turnstile-token",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Complete the security check correctly.")
+        self.assertFalse(InternalMFAChallenge.objects.exists())
+
+    def test_turnstile_rejects_unallowed_verify_host_before_network_call(self):
+        with self.settings(TURNSTILE_VERIFY_URL="https://evil.example/turnstile"):
+            with patch("recruitment.captcha.urllib.request.urlopen") as urlopen:
+                is_valid = validate_turnstile_token(None, "token")
+
+        self.assertFalse(is_valid)
+        urlopen.assert_not_called()
+
+    def test_turnstile_rejects_non_https_verify_url_before_network_call(self):
+        with self.settings(
+            TURNSTILE_VERIFY_URL="http://turnstile-siteverify.example.workers.dev"
+        ):
+            with patch("recruitment.captcha.urllib.request.urlopen") as urlopen:
+                is_valid = validate_turnstile_token(None, "token")
+
+        self.assertFalse(is_valid)
+        urlopen.assert_not_called()
+
+
+@override_settings(
+    CAPTCHA_ENABLED=True,
+    CAPTCHA_PROVIDER="recaptcha",
+    RECAPTCHA_SITE_KEY="test-recaptcha-site-key",
+    RECAPTCHA_SECRET_KEY="test-recaptcha-secret-key",
+    RECAPTCHA_TIMEOUT_SECONDS=5,
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    RATE_LIMIT_ENABLED=False,
+)
+class RecaptchaCaptchaTests(TestCase):
+    class FakeResponse(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+    def fake_recaptcha_response(self, success):
+        payload = json.dumps({"success": success}).encode("utf-8")
+        return self.FakeResponse(payload)
+
+    def test_recaptcha_widget_renders_on_internal_login(self):
+        response = self.client.get(reverse("login"))
+
+        self.assertContains(response, "https://www.google.com/recaptcha/api.js")
+        self.assertContains(response, 'class="g-recaptcha"')
+        self.assertContains(response, 'data-sitekey="test-recaptcha-site-key"')
+        self.assertContains(response, 'data-callback="rgCaptchaSuccess"')
+
+    def test_recaptcha_success_allows_internal_login_challenge(self):
+        user = User.objects.create_user(
+            username="secretariat",
+            password="testpass123",
+            email="secretariat@example.com",
+            role=RecruitmentUser.Role.SECRETARIAT,
+        )
+
+        with patch(
+            "recruitment.captcha.urllib.request.urlopen",
+            return_value=self.fake_recaptcha_response(True),
+        ) as urlopen:
+            response = self.client.post(
+                reverse("login"),
+                {
+                    "username": "secretariat",
+                    "password": "testpass123",
+                    "g-recaptcha-response": "valid-recaptcha-token",
+                },
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], reverse("internal-mfa-verify"))
+        self.assertEqual(InternalMFAChallenge.objects.filter(user=user).count(), 1)
+        request = urlopen.call_args.args[0]
+        self.assertEqual(
+            request.full_url,
+            "https://www.google.com/recaptcha/api/siteverify",
+        )
+        payload = urllib.parse.parse_qs(request.data.decode("utf-8"))
+        self.assertEqual(payload["secret"], ["test-recaptcha-secret-key"])
+        self.assertEqual(payload["response"], ["valid-recaptcha-token"])
+        self.assertNotIn("remoteip", payload)
+
+    def test_recaptcha_failure_blocks_internal_login_challenge(self):
+        User.objects.create_user(
+            username="secretariat",
+            password="testpass123",
+            email="secretariat@example.com",
+            role=RecruitmentUser.Role.SECRETARIAT,
+        )
+
+        with patch(
+            "recruitment.captcha.urllib.request.urlopen",
+            return_value=self.fake_recaptcha_response(False),
+        ):
+            response = self.client.post(
+                reverse("login"),
+                {
+                    "username": "secretariat",
+                    "password": "testpass123",
+                    "g-recaptcha-response": "invalid-recaptcha-token",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Complete the security check correctly.")
+        self.assertFalse(InternalMFAChallenge.objects.exists())
+
+    def test_recaptcha_forwards_public_client_ip(self):
+        with patch(
+            "recruitment.captcha.urllib.request.urlopen",
+            return_value=self.fake_recaptcha_response(True),
+        ) as urlopen:
+            is_valid = validate_recaptcha_token(
+                SimpleNamespace(
+                    META={
+                        "HTTP_X_FORWARDED_FOR": "8.8.8.8, 10.0.0.1",
+                        "REMOTE_ADDR": "10.0.0.1",
+                    }
+                ),
+                "valid-recaptcha-token",
+            )
+
+        self.assertTrue(is_valid)
+        request = urlopen.call_args.args[0]
+        payload = urllib.parse.parse_qs(request.data.decode("utf-8"))
+        self.assertEqual(payload["remoteip"], ["8.8.8.8"])
+
+    def test_recaptcha_without_secret_fails_closed(self):
+        with self.settings(RECAPTCHA_SECRET_KEY=""):
+            with patch("recruitment.captcha.urllib.request.urlopen") as urlopen:
+                is_valid = validate_recaptcha_token(None, "token")
+
+        self.assertFalse(is_valid)
+        urlopen.assert_not_called()
+
+
+@override_settings(RATE_LIMIT_ENABLED=False)
+class OutputEncodingTests(TestCase):
+    def test_shared_form_field_template_escapes_help_text(self):
+        class UnsafeHelpTextForm(forms.Form):
+            name = forms.CharField(help_text="<script>alert(1)</script>")
+
+        rendered = render_to_string(
+            "recruitment/includes/form_field.html",
+            {"field": UnsafeHelpTextForm()["name"]},
+        )
+
+        self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", rendered)
+        self.assertNotIn("<script>alert(1)</script>", rendered)
+
+
+@override_settings(
+    CAPTCHA_ENABLED=False,
+    RATE_LIMIT_ENABLED=True,
+    RATE_LIMIT_RULES={"default": {"limit": 2, "window": 60}},
+    CACHES={
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "rate-limit-test-cache",
+        }
+    },
+)
+class RateLimitMiddlewareTests(TestCase):
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_default_rate_limit_returns_429_after_threshold(self):
+        self.assertEqual(self.client.get(reverse("login")).status_code, 200)
+        self.assertEqual(self.client.get(reverse("login")).status_code, 200)
+
+        response = self.client.get(reverse("login"))
+
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response["X-RateLimit-Limit"], "2")
+        self.assertEqual(response["X-RateLimit-Remaining"], "0")
+        self.assertIn("Retry-After", response)
+
+
+@override_settings(RATE_LIMIT_ENABLED=False)
+class LoggingRedactionTests(TestCase):
+    def test_sensitive_values_are_redacted_from_log_text(self):
+        from config.logging import redact_sensitive_text
+
+        redacted = redact_sensitive_text(
+            "password=hunter2 otp:123456 token='abc123' Authorization: Bearer secret-token"
+        )
+
+        self.assertIn("[REDACTED]", redacted)
+        self.assertNotIn("hunter2", redacted)
+        self.assertNotIn("123456", redacted)
+        self.assertNotIn("abc123", redacted)
+        self.assertNotIn("secret-token", redacted)
 
 
 class IdentityAdministrationTests(BaseRecruitmentTestCase):
@@ -1930,6 +2492,127 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         payload.update(overrides)
         return payload
 
+    def intake_field_validation_form(self, **overrides):
+        data = {
+            "first_name": "Pat",
+            "last_name": "Applicant",
+            "email": "portal.validation@example.com",
+            "phone": "09171234567",
+            "qualification_summary": "Qualified applicant.",
+            "performance_rating_applicability": (
+                RecruitmentApplication.PerformanceRatingApplicability.APPLICABLE
+            ),
+            "checklist_privacy_consent": "on",
+            "checklist_documents_complete": "on",
+            "checklist_information_certified": "on",
+        }
+        data.update(overrides)
+        form = ApplicantPortalIntakeForm(data=data, entry=self.level1_position)
+        form.is_valid()
+        return form
+
+    def test_intake_rejects_names_without_letters(self):
+        for field_name in ("first_name", "last_name"):
+            for value in ("2121323", "---"):
+                with self.subTest(field_name=field_name, value=value):
+                    form = self.intake_field_validation_form(**{field_name: value})
+                    self.assertEqual(
+                        form.errors[field_name],
+                        [APPLICANT_NAME_ERROR_MESSAGE],
+                    )
+
+    def test_intake_accepts_permissive_unicode_names(self):
+        valid_names = [
+            "Ma. Cristina",
+            "de la Cruz",
+            "dela Cruz",
+            "Ni\u00f1o",
+            "Jos\u00e9",
+            "Dela Cruz-Santos",
+            "Jr.",
+        ]
+        for value in valid_names:
+            with self.subTest(value=value):
+                form = self.intake_field_validation_form(first_name=value, last_name=value)
+                self.assertNotIn("first_name", form.errors)
+                self.assertNotIn("last_name", form.errors)
+                self.assertEqual(form.cleaned_data["first_name"], value)
+                self.assertEqual(form.cleaned_data["last_name"], value)
+
+    def test_intake_normalizes_name_whitespace(self):
+        form = self.intake_field_validation_form(
+            first_name="  Ma.   Cristina  ",
+            last_name="  de   la   Cruz  ",
+        )
+
+        self.assertEqual(form.cleaned_data["first_name"], "Ma. Cristina")
+        self.assertEqual(form.cleaned_data["last_name"], "de la Cruz")
+
+    def test_intake_rejects_malformed_mobile_numbers(self):
+        invalid_numbers = ["3123123", "0917123456", "+638171234567", "0917ABC4567"]
+        for value in invalid_numbers:
+            with self.subTest(value=value):
+                form = self.intake_field_validation_form(phone=value)
+                self.assertEqual(form.errors["phone"], [APPLICANT_MOBILE_ERROR_MESSAGE])
+
+    def test_intake_accepts_and_normalizes_supported_mobile_shapes(self):
+        valid_numbers = [
+            "0917 123 4567",
+            "+63 (917) 123-4567",
+            "639171234567",
+        ]
+        for value in valid_numbers:
+            with self.subTest(value=value):
+                form = self.intake_field_validation_form(phone=value)
+                self.assertNotIn("phone", form.errors)
+                self.assertEqual(form.cleaned_data["phone"], "+639171234567")
+
+    def test_intake_stores_normalized_mobile_number(self):
+        self.post_portal_intake(
+            self.client,
+            self.level1_position,
+            self.portal_payload(
+                email="normalized.mobile@example.com",
+                phone="(0917) 123-4567",
+            ),
+        )
+
+        application = RecruitmentApplication.objects.get(
+            position=self.level1_position,
+            applicant_email="normalized.mobile@example.com",
+        )
+        self.assertEqual(application.applicant_phone, "+639171234567")
+
+    def test_intake_qualification_summary_allows_one_character(self):
+        form = self.intake_field_validation_form(qualification_summary=" X ")
+
+        self.assertNotIn("qualification_summary", form.errors)
+        self.assertEqual(form.cleaned_data["qualification_summary"], "X")
+
+    def test_intake_rejects_qualification_summary_over_limit(self):
+        form = self.intake_field_validation_form(
+            qualification_summary="X"
+            * (APPLICANT_QUALIFICATION_SUMMARY_MAX_LENGTH + 1)
+        )
+
+        self.assertEqual(
+            form.errors["qualification_summary"],
+            [APPLICANT_QUALIFICATION_SUMMARY_LENGTH_ERROR_MESSAGE],
+        )
+
+    def test_intake_email_validation_behavior_is_unchanged(self):
+        invalid_form = self.intake_field_validation_form(email="not-an-email")
+        valid_form = self.intake_field_validation_form(
+            email="  Portal.Validation@Example.COM  "
+        )
+
+        self.assertIn("email", invalid_form.errors)
+        self.assertNotIn("email", valid_form.errors)
+        self.assertEqual(
+            valid_form.cleaned_data["email"],
+            "portal.validation@example.com",
+        )
+
     def test_shared_portal_lists_plantilla_and_cos_paths(self):
         response = self.client.get(reverse("applicant-portal"))
 
@@ -1941,6 +2624,20 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertNotContains(response, "My Queue")
         self.assertNotContains(response, "Manage Entries")
         self.assertNotContains(response, "Internal Users")
+
+    @override_settings(MAX_EVIDENCE_UPLOAD_BYTES=10 * 1024 * 1024)
+    def test_intake_document_controls_use_effective_server_upload_limit(self):
+        response = self.client.get(
+            reverse("applicant-intake", kwargs={"pk": self.level1_position.pk})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["max_upload_bytes"], 5 * 1024 * 1024)
+        self.assertEqual(response.context["max_upload_mb"], 5)
+        self.assertContains(response, 'data-max-upload-bytes="5242880"')
+        self.assertContains(response, "data-file-selection")
+        self.assertContains(response, "data-file-clear")
+        self.assertContains(response, "Remove selected file")
 
     def test_deadline_passed_vacancy_is_not_open_for_applicant_intake(self):
         self.level1_position.closing_date = timezone.localdate() - timedelta(days=1)
@@ -2036,6 +2733,9 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertEqual(response.status_code, 200)
         application.refresh_from_db()
         self.assertIsNotNone(application.otp_verified_at)
+        self.assertContains(response, f"?token={application.public_token}")
+        self.assertContains(response, 'id="rg-otp-submit-confirm"')
+        self.assertContains(response, 'form="rg-otp-submit-form"')
 
         response = client.post(
             reverse("applicant-otp", kwargs={"token": application.public_token}),
@@ -2052,6 +2752,233 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
                 action=AuditLog.Action.APPLICATION_OTP_VERIFIED,
             ).exists()
         )
+
+    def test_verified_otp_summary_counts_only_current_active_applicant_documents(self):
+        client = Client()
+        self.post_portal_intake(
+            client,
+            self.level1_position,
+            self.portal_payload(email="document.count@example.com"),
+            follow=True,
+        )
+        application = RecruitmentApplication.objects.get(
+            position=self.level1_position,
+            applicant_email="document.count@example.com",
+        )
+        first_document = application.evidence_items.filter(
+            artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
+            artifact_type="applicant_document",
+            document_key="signed_cover_letter",
+            is_current_version=True,
+            is_archived=False,
+        ).get()
+        upload_evidence_item(
+            application=application,
+            actor=application.applicant,
+            label=first_document.label,
+            uploaded_file=self.build_valid_applicant_document_upload(
+                "signed_cover_letter",
+                content_prefix="replacement",
+            ),
+            document_key="signed_cover_letter",
+            artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
+            artifact_type="applicant_document",
+        )
+        application.evidence_items.filter(
+            artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
+            artifact_type="applicant_document",
+            document_key="performance_rating",
+        ).update(is_archived=True, archive_tag="Marked not applicable by applicant")
+        application.performance_rating_applicability = (
+            RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
+        )
+        application.save(update_fields=["performance_rating_applicability", "updated_at"])
+
+        client.post(
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            {"action": "verify", "otp": self.extract_otp_from_last_email()},
+            follow=True,
+        )
+        response = client.get(reverse("applicant-otp", kwargs={"token": application.public_token}))
+
+        self.assertContains(response, "8 files uploaded")
+        self.assertNotContains(response, "10 files uploaded")
+
+        receipt_response = client.post(
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            {"action": "finalize"},
+            follow=True,
+        )
+        self.assertContains(receipt_response, "8 files submitted")
+        self.assertNotContains(receipt_response, "10 files submitted")
+
+    def test_otp_delivery_failure_keeps_saved_draft_without_server_error(self):
+        client = Client()
+
+        with self.assertLogs("recruitment.services", level="ERROR"):
+            with patch(
+                "recruitment.services.EmailMultiAlternatives.send",
+                side_effect=PermissionError("denied"),
+            ):
+                response = self.post_portal_intake(
+                    client,
+                    self.level1_position,
+                    self.portal_payload(email="otp.delivery.fail@example.com"),
+                )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "could not send the verification code right now")
+        application = RecruitmentApplication.objects.get(
+            position=self.level1_position,
+            applicant_email="otp.delivery.fail@example.com",
+        )
+        self.assertTrue(application.otp_hash)
+        self.assertIsNone(application.submitted_at)
+        form = response.context["form"]
+        self.assertTrue(form.saved_draft_notice)
+        self.assertIn("signed_cover_letter", form.existing_documents_by_code)
+
+    def test_intake_get_rehydrates_existing_draft_from_token(self):
+        client = Client()
+        self.post_portal_intake(
+            client,
+            self.level1_position,
+            self.portal_payload(
+                email="rehydrate.draft@example.com",
+                first_name="Maria",
+                last_name="Santos",
+                phone="09991234567",
+                qualification_summary="Saved qualification summary.",
+                cover_letter="Saved cover letter note.",
+                performance_rating_applicability=(
+                    RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
+                ),
+            ),
+            follow=True,
+        )
+        application = RecruitmentApplication.objects.get(
+            position=self.level1_position,
+            applicant_email="rehydrate.draft@example.com",
+        )
+
+        response = client.get(
+            reverse("applicant-intake", kwargs={"pk": self.level1_position.pk}),
+            {"token": application.public_token},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        form = response.context["form"]
+        self.assertEqual(form["first_name"].value(), "Maria")
+        self.assertEqual(form["last_name"].value(), "Santos")
+        self.assertEqual(form["email"].value(), "rehydrate.draft@example.com")
+        self.assertEqual(form["phone"].value(), "+639991234567")
+        self.assertEqual(form["qualification_summary"].value(), "Saved qualification summary.")
+        self.assertEqual(form["cover_letter"].value(), "Saved cover letter note.")
+        self.assertEqual(
+            form["performance_rating_applicability"].value(),
+            RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE,
+        )
+        self.assertTrue(form["checklist_privacy_consent"].value())
+        self.assertTrue(form.saved_draft_notice)
+        self.assertIn("signed_cover_letter", form.existing_documents_by_code)
+
+    def test_intake_reuses_identity_draft_when_application_email_drifted(self):
+        client = Client()
+        self.post_portal_intake(
+            client,
+            self.level1_position,
+            self.portal_payload(email="identity.old@example.com"),
+            follow=True,
+        )
+        application = RecruitmentApplication.objects.get(
+            position=self.level1_position,
+            applicant_email="identity.old@example.com",
+        )
+        original_token = application.public_token
+        application.applicant.email = "identity.new@example.com"
+        application.applicant.save(update_fields=["email"])
+
+        response = self.post_portal_intake(
+            client,
+            self.level1_position,
+            self.portal_payload(email="identity.new@example.com"),
+            follow=True,
+        )
+
+        application.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            RecruitmentApplication.objects.filter(position=self.level1_position).count(),
+            1,
+        )
+        self.assertEqual(application.public_token, original_token)
+        self.assertEqual(application.applicant_email, "identity.new@example.com")
+        self.assertContains(response, "Resend the code")
+
+    def test_intake_blocks_submitted_identity_duplicate_without_server_error(self):
+        client = Client()
+        self.post_portal_intake(
+            client,
+            self.level1_position,
+            self.portal_payload(email="submitted.old@example.com"),
+            follow=True,
+        )
+        application = RecruitmentApplication.objects.get(
+            position=self.level1_position,
+            applicant_email="submitted.old@example.com",
+        )
+        client.post(
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            {"action": "verify", "otp": self.extract_otp_from_last_email()},
+            follow=True,
+        )
+        client.post(
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            {"action": "finalize"},
+            follow=True,
+        )
+        application.refresh_from_db()
+        application.applicant.email = "submitted.new@example.com"
+        application.applicant.save(update_fields=["email"])
+
+        response = self.post_portal_intake(
+            client,
+            self.level1_position,
+            self.portal_payload(email="submitted.new@example.com"),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "You have already submitted an application for this position using this email address.",
+        )
+        self.assertEqual(
+            RecruitmentApplication.objects.filter(position=self.level1_position).count(),
+            1,
+        )
+
+    def test_intake_get_ignores_invalid_or_mismatched_draft_token(self):
+        client = Client()
+        self.post_portal_intake(
+            client,
+            self.level1_position,
+            self.portal_payload(email="wrong.position.token@example.com"),
+            follow=True,
+        )
+        application = RecruitmentApplication.objects.get(
+            position=self.level1_position,
+            applicant_email="wrong.position.token@example.com",
+        )
+
+        response = client.get(
+            reverse("applicant-intake", kwargs={"pk": self.cos_position.pk}),
+            {"token": application.public_token},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        form = response.context["form"]
+        self.assertIsNone(form["first_name"].value())
+        self.assertFalse(form.saved_draft_notice)
 
     def test_cos_public_submission_completes_and_status_lookup_works(self):
         client = Client()
@@ -2078,6 +3005,10 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
 
         application.refresh_from_db()
         self.assertContains(receipt_response, application.reference_number)
+        self.assertContains(
+            receipt_response,
+            reverse("applicant-status-link", kwargs={"token": application.public_token}),
+        )
         self.assertEqual(application.branch, PositionPosting.Branch.COS)
         self.assertEqual(application.status, RecruitmentApplication.Status.SECRETARIAT_REVIEW)
 
@@ -2090,6 +3021,92 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         )
         self.assertContains(status_response, "Under Review")
         self.assertContains(status_response, application.reference_number)
+
+    def test_applicant_status_magic_link_renders_status_page(self):
+        client = Client()
+        self.post_portal_intake(
+            client,
+            self.cos_position,
+            self.portal_payload(position=self.cos_position, email="magic.status@example.com"),
+            follow=True,
+        )
+        application = RecruitmentApplication.objects.get(
+            position=self.cos_position,
+            applicant_email="magic.status@example.com",
+        )
+        client.post(
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            {"action": "verify", "otp": self.extract_otp_from_last_email()},
+            follow=True,
+        )
+        client.post(
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            {"action": "finalize"},
+            follow=True,
+        )
+        application.refresh_from_db()
+
+        response = client.get(reverse("applicant-status-link", kwargs={"token": application.public_token}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, application.reference_number)
+        self.assertContains(response, application.applicant_display_name)
+        self.assertContains(response, "Application details")
+
+    def test_unfinished_draft_status_link_redirects_to_otp(self):
+        client = Client()
+        self.post_portal_intake(
+            client,
+            self.level1_position,
+            self.portal_payload(email="draft.status.link@example.com"),
+            follow=True,
+        )
+        application = RecruitmentApplication.objects.get(
+            position=self.level1_position,
+            applicant_email="draft.status.link@example.com",
+        )
+
+        response = client.get(
+            reverse("applicant-status-link", kwargs={"token": application.public_token}),
+            follow=True,
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+        )
+        self.assertContains(response, "is not finished yet")
+        self.assertContains(response, "Resend the code")
+
+    def test_status_lookup_for_single_unfinished_draft_redirects_to_otp(self):
+        client = Client()
+        self.post_portal_intake(
+            client,
+            self.level1_position,
+            self.portal_payload(email="draft.status.lookup@example.com"),
+            follow=True,
+        )
+        application = RecruitmentApplication.objects.get(
+            position=self.level1_position,
+            applicant_email="draft.status.lookup@example.com",
+        )
+        application.reference_number = "RG-20260528-DRAFT1"
+        application.save(update_fields=["reference_number", "updated_at"])
+
+        response = client.post(
+            reverse("applicant-status-lookup"),
+            {
+                "application_id": "RG-20260528-DRAFT1",
+                "email": "draft.status.lookup@example.com",
+            },
+            follow=True,
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+        )
+        self.assertContains(response, "is not finished yet")
 
     def test_invalid_otp_is_rejected(self):
         client = Client()
@@ -2113,6 +3130,124 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         application.refresh_from_db()
         self.assertContains(response, "The verification code is invalid.")
         self.assertIsNone(application.otp_verified_at)
+
+    @override_settings(APPLICATION_OTP_MAX_ATTEMPTS=2)
+    def test_applicant_otp_locks_after_too_many_invalid_attempts_until_resend(self):
+        client = Client()
+        self.post_portal_intake(
+            client,
+            self.level1_position,
+            self.portal_payload(email="otp.lockout@example.com"),
+            follow=True,
+        )
+        application = RecruitmentApplication.objects.get(
+            position=self.level1_position,
+            applicant_email="otp.lockout@example.com",
+        )
+        original_code = self.extract_otp_from_last_email()
+
+        response = client.post(
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            {"action": "verify", "otp": "000000"},
+            follow=True,
+        )
+        self.assertContains(response, "The verification code is invalid.")
+
+        response = client.post(
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            {"action": "verify", "otp": "111111"},
+            follow=True,
+        )
+        self.assertContains(response, "Too many invalid verification attempts")
+
+        application.refresh_from_db()
+        self.assertEqual(application.otp_attempt_count, 2)
+        self.assertIsNone(application.otp_verified_at)
+        self.assertTrue(
+            AuditLog.objects.filter(
+                application=application,
+                action=AuditLog.Action.APPLICATION_OTP_FAILED,
+                metadata__reason="invalid_code",
+            ).exists()
+        )
+        self.assertTrue(
+            AuditLog.objects.filter(
+                application=application,
+                action=AuditLog.Action.APPLICATION_OTP_LOCKED,
+                metadata__attempt_count=2,
+            ).exists()
+        )
+
+        response = client.post(
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            {"action": "verify", "otp": original_code},
+            follow=True,
+        )
+        self.assertContains(response, "Too many invalid verification attempts")
+        application.refresh_from_db()
+        self.assertIsNone(application.otp_verified_at)
+
+        application.otp_requested_at = timezone.now() - timedelta(
+            seconds=settings.APPLICATION_OTP_RESEND_COOLDOWN_SECONDS + 1
+        )
+        application.save(update_fields=["otp_requested_at", "updated_at"])
+        response = client.post(
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            {"action": "resend"},
+            follow=True,
+        )
+        self.assertContains(response, "A new verification code has been sent")
+
+        application.refresh_from_db()
+        self.assertEqual(application.otp_attempt_count, 0)
+        response = client.post(
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            {"action": "verify", "otp": self.extract_otp_from_last_email()},
+            follow=True,
+        )
+        self.assertContains(response, "Email verified")
+
+    def test_applicant_otp_resend_respects_server_cooldown(self):
+        client = Client()
+        self.post_portal_intake(
+            client,
+            self.level1_position,
+            self.portal_payload(email="otp.cooldown@example.com"),
+            follow=True,
+        )
+        application = RecruitmentApplication.objects.get(
+            position=self.level1_position,
+            applicant_email="otp.cooldown@example.com",
+        )
+        original_hash = application.otp_hash
+        original_mail_count = len(mail.outbox)
+
+        response = client.post(
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            {"action": "resend"},
+            follow=True,
+        )
+
+        application.refresh_from_db()
+        self.assertContains(response, "Please wait")
+        self.assertEqual(application.otp_hash, original_hash)
+        self.assertEqual(len(mail.outbox), original_mail_count)
+
+        application.otp_requested_at = timezone.now() - timedelta(
+            seconds=settings.APPLICATION_OTP_RESEND_COOLDOWN_SECONDS + 1
+        )
+        application.save(update_fields=["otp_requested_at", "updated_at"])
+
+        response = client.post(
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            {"action": "resend"},
+            follow=True,
+        )
+
+        application.refresh_from_db()
+        self.assertContains(response, "A new verification code has been sent")
+        self.assertNotEqual(application.otp_hash, original_hash)
+        self.assertEqual(len(mail.outbox), original_mail_count + 1)
 
     def test_stale_applicant_otp_link_redirects_to_portal(self):
         client = Client()
@@ -2297,6 +3432,12 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
             response,
             "Upload the required document for Performance Rating in the last rating period.",
         )
+        performance_slot = next(
+            slot
+            for slot in response.context["form"].document_slots
+            if slot["requirement"].code == "performance_rating"
+        )
+        self.assertTrue(performance_slot["is_required_now"])
 
     def test_performance_rating_not_applicable_allows_submission_without_file(self):
         client = Client()
@@ -2345,6 +3486,79 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         application.refresh_from_db()
         self.assertIsNotNone(application.submitted_at)
         self.assertContains(receipt_response, application.reference_number)
+
+    def test_performance_rating_not_applicable_archives_saved_rating_evidence(self):
+        client = Client()
+        applicant_email = "saved.rating.not.applicable@example.com"
+        duplicate_bytes = self.build_valid_applicant_document_bytes(
+            "duplicate-rating",
+            content_prefix="same-file",
+        )
+        first_payload = self.portal_payload(email=applicant_email)
+        first_payload["performance_rating"] = SimpleUploadedFile(
+            "performance-rating.pdf",
+            duplicate_bytes,
+            content_type="application/pdf",
+        )
+
+        self.post_portal_intake(client, self.level1_position, first_payload, follow=True)
+        application = RecruitmentApplication.objects.get(
+            position=self.level1_position,
+            applicant_email=applicant_email,
+        )
+        self.assertTrue(
+            application.evidence_items.filter(
+                artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
+                artifact_type="applicant_document",
+                document_key="performance_rating",
+                is_current_version=True,
+                is_archived=False,
+            ).exists()
+        )
+
+        second_payload = self.portal_payload(
+            email=applicant_email,
+            performance_rating_applicability=(
+                RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
+            ),
+        )
+        second_payload["diploma"] = SimpleUploadedFile(
+            "diploma.pdf",
+            duplicate_bytes,
+            content_type="application/pdf",
+        )
+
+        response = self.post_portal_intake(
+            client,
+            self.level1_position,
+            second_payload,
+            follow=True,
+        )
+
+        application.refresh_from_db()
+        self.assertEqual(
+            application.performance_rating_applicability,
+            RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE,
+        )
+        self.assertFalse(
+            application.evidence_items.filter(
+                artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
+                artifact_type="applicant_document",
+                document_key="performance_rating",
+                is_current_version=True,
+                is_archived=False,
+            ).exists()
+        )
+        self.assertTrue(
+            application.evidence_items.filter(
+                artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
+                artifact_type="applicant_document",
+                document_key="performance_rating",
+                is_archived=True,
+                archive_tag="Marked not applicable by applicant",
+            ).exists()
+        )
+        self.assertNotContains(response, "Performance Rating in the last rating period")
 
     def test_invalid_submission_preserves_non_file_inputs_and_saved_valid_uploads(self):
         client = Client()
@@ -2773,6 +3987,21 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
         self.assertEqual(response.status_code, 404)
 
+    def test_legacy_override_endpoint_rejects_unauthorized_case_before_processing(self):
+        application = self.make_application(self.level2_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("workflow-override", kwargs={"pk": application.pk}),
+            {"reason": "Unauthorized probing."},
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(WorkflowOverride.objects.filter(application=application).exists())
+
     def test_override_allows_secretariat_processing_of_level2(self):
         application = self.make_application(self.level2_position)
         self.verify_application_for_submission(application)
@@ -2804,9 +4033,9 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         )
         self.finalize_exam_for_current_stage(application, self.secretariat)
         application.refresh_from_db()
-        self.assertEqual(application.current_handler_role, RecruitmentUser.Role.HRMPSB_MEMBER)
-        self.assertEqual(application.status, RecruitmentApplication.Status.HRMPSB_REVIEW)
-        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.HRMPSB_REVIEW)
+        self.assertEqual(application.current_handler_role, RecruitmentUser.Role.HRM_CHIEF)
+        self.assertEqual(application.status, RecruitmentApplication.Status.HRM_CHIEF_REVIEW)
+        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.HRM_CHIEF_REVIEW)
         self.assertFalse(WorkflowOverride.objects.filter(application=application, is_active=True).exists())
         routing_events = list(application.routing_history.values_list("route_type", "to_handler_role"))
         self.assertEqual(
@@ -2814,7 +4043,7 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
             [
                 (RoutingHistory.RouteType.INITIAL, RecruitmentUser.Role.HRM_CHIEF),
                 (RoutingHistory.RouteType.OVERRIDE, RecruitmentUser.Role.SECRETARIAT),
-                (RoutingHistory.RouteType.FORWARD, RecruitmentUser.Role.HRMPSB_MEMBER),
+                (RoutingHistory.RouteType.FORWARD, RecruitmentUser.Role.HRM_CHIEF),
             ],
         )
         self.assertTrue(
@@ -2857,6 +4086,49 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.HRM_CHIEF_REVIEW)
         self.assertEqual(application.case.current_handler_role, RecruitmentUser.Role.HRM_CHIEF)
         self.assertFalse(WorkflowOverride.objects.filter(application=application, is_active=True).exists())
+
+    def test_legacy_cos_authority_review_can_return_to_hrm_chief(self):
+        application = self.make_application(self.cos_position)
+        self.move_application_to_hrm_chief_review(application)
+
+        case = application.case
+        application.current_handler_role = RecruitmentUser.Role.APPOINTING_AUTHORITY
+        application.status = RecruitmentApplication.Status.APPOINTING_AUTHORITY_REVIEW
+        application.save(update_fields=["current_handler_role", "status", "updated_at"])
+        case.current_stage = RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW
+        case.current_handler_role = RecruitmentUser.Role.APPOINTING_AUTHORITY
+        case.case_status = RecruitmentCase.CaseStatus.ACTIVE
+        case.is_stage_locked = False
+        case.locked_stage = ""
+        case.save(
+            update_fields=[
+                "current_stage",
+                "current_handler_role",
+                "case_status",
+                "is_stage_locked",
+                "locked_stage",
+                "updated_at",
+            ]
+        )
+
+        self.assertEqual(get_current_workflow_section(application), "decision")
+        self.assertEqual(
+            get_available_actions(application, self.appointing),
+            [("return_to_hrm_chief", "Return to HRM Chief")],
+        )
+
+        process_workflow_action(
+            application,
+            self.appointing,
+            "return_to_hrm_chief",
+            "Return legacy COS case to HRM Chief.",
+        )
+
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+        self.assertEqual(application.current_handler_role, RecruitmentUser.Role.HRM_CHIEF)
+        self.assertEqual(application.status, RecruitmentApplication.Status.HRM_CHIEF_REVIEW)
+        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.HRM_CHIEF_REVIEW)
 
     def test_repair_auto_advance_moves_stale_exam_boundary_case(self):
         application = self.make_application(self.level1_position)
@@ -3942,6 +5214,49 @@ class ExamRecordTests(BaseRecruitmentTestCase):
             ).exists()
         )
 
+    def test_exam_evidence_rejects_active_content_upload(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        self.finalize_screening_for_current_stage(application, self.secretariat)
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "This needs to be a PDF, JPG, or PNG file. Upload one of those.",
+        ):
+            save_exam_record(
+                application=application,
+                actor=self.secretariat,
+                cleaned_data={
+                    "exam_type": ExamRecord.ExamType.TECHNICAL_PRACTICAL,
+                    "exam_status": ExamRecord.ExamStatus.COMPLETED,
+                    "exam_score": "91.00",
+                    "exam_result": "",
+                    "technical_score": "90.00",
+                    "technical_result": "",
+                    "practical_score": "92.00",
+                    "practical_result": "",
+                    "exam_date": timezone.localdate(),
+                    "administered_by": ExamRecord.AdministeredBy.HRMS,
+                    "valid_from": timezone.localdate(),
+                    "valid_until": timezone.localdate() + timedelta(days=365),
+                    "exam_notes": "Active content should not be stored.",
+                },
+                evidence_file=SimpleUploadedFile(
+                    "exam-result.html",
+                    b"<html><script>alert(1)</script></html>",
+                    content_type="text/html",
+                ),
+                finalize=True,
+            )
+
+        self.assertFalse(
+            EvidenceVaultItem.objects.filter(
+                application=application,
+                artifact_type="exam_supporting_evidence",
+            ).exists()
+        )
+
     def test_finalized_exam_output_is_locked(self):
         application = self.make_application(self.level1_position)
         self.verify_application_for_submission(application)
@@ -4256,6 +5571,75 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         self.assertEqual(response.status_code, 403)
 
 
+class ApplicantUploadValidationTests(TestCase):
+    def assert_upload_error(self, *, filename, content, content_type, message):
+        with self.assertRaisesMessage(ValueError, message):
+            validate_applicant_document_upload(
+                SimpleUploadedFile(
+                    filename,
+                    content,
+                    content_type=content_type,
+                )
+            )
+
+    def test_empty_file_uses_actionable_error_copy(self):
+        self.assert_upload_error(
+            filename="empty.pdf",
+            content=b"",
+            content_type="application/pdf",
+            message="This file is empty. Pick a file that has something in it.",
+        )
+
+    def test_oversized_file_uses_actionable_error_copy(self):
+        self.assert_upload_error(
+            filename="oversized.pdf",
+            content=b"%PDF-" + (b"A" * (5 * 1024 * 1024)),
+            content_type="application/pdf",
+            message="This file is too large. Choose a file that is 5 MB or smaller.",
+        )
+
+    def test_wrong_extension_uses_actionable_error_copy(self):
+        self.assert_upload_error(
+            filename="document.html",
+            content=b"<html></html>",
+            content_type="text/html",
+            message="This needs to be a PDF, JPG, or PNG file. Upload one of those.",
+        )
+
+    def test_unreadable_signature_uses_actionable_error_copy(self):
+        self.assert_upload_error(
+            filename="document.pdf",
+            content=b"not-a-real-document",
+            content_type="application/pdf",
+            message=(
+                "We couldn't read this as a PDF, JPG, or PNG. "
+                "Save it again, then upload it."
+            ),
+        )
+
+    def test_signature_extension_mismatch_uses_actionable_error_copy(self):
+        self.assert_upload_error(
+            filename="document.pdf",
+            content=b"\x89PNG\r\n\x1a\nimage-data",
+            content_type="application/octet-stream",
+            message=(
+                "This file's contents don't match a PDF, JPG, or PNG. "
+                "Save it again, then upload it."
+            ),
+        )
+
+    def test_mime_filename_mismatch_uses_actionable_error_copy(self):
+        self.assert_upload_error(
+            filename="document.pdf",
+            content=b"%PDF-1.4\ndocument",
+            content_type="image/png",
+            message=(
+                "This file format does not match its filename. "
+                "Save it again as a PDF, JPG, or PNG, then upload it."
+            ),
+        )
+
+
 class EvidenceVaultTests(BaseRecruitmentTestCase):
     def test_evidence_is_encrypted_and_digest_is_stored_with_stage_metadata(self):
         application = RecruitmentApplication.objects.create(
@@ -4263,19 +5647,23 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
             position=self.level1_position,
             qualification_summary="Qualified applicant.",
         )
+        resume_bytes = self.build_valid_applicant_document_bytes(
+            "resume",
+            content_prefix="plain-text resume",
+        )
         upload_evidence_item(
             application=application,
             actor=self.applicant,
             label="Resume",
             uploaded_file=SimpleUploadedFile(
-                "resume.txt",
-                b"plain-text resume",
-                content_type="text/plain",
+                "resume.pdf",
+                resume_bytes,
+                content_type="application/pdf",
             ),
         )
 
         evidence = EvidenceVaultItem.objects.get(application=application)
-        self.assertNotEqual(bytes(evidence.ciphertext), b"plain-text resume")
+        self.assertNotEqual(bytes(evidence.ciphertext), resume_bytes)
         self.assertEqual(len(evidence.sha256_digest), 64)
         self.assertEqual(evidence.digest_algorithm, "sha256")
         self.assertEqual(evidence.stage, EvidenceVaultItem.Stage.APPLICANT_INTAKE)
@@ -4298,9 +5686,12 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
             actor=self.applicant,
             label="Resume",
             uploaded_file=SimpleUploadedFile(
-                "resume-v1.txt",
-                b"resume version one",
-                content_type="text/plain",
+                "resume-v1.pdf",
+                self.build_valid_applicant_document_bytes(
+                    "resume",
+                    content_prefix="resume version one",
+                ),
+                content_type="application/pdf",
             ),
         )
         second_version = upload_evidence_item(
@@ -4308,9 +5699,12 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
             actor=self.applicant,
             label="Resume",
             uploaded_file=SimpleUploadedFile(
-                "resume-v2.txt",
-                b"resume version two",
-                content_type="text/plain",
+                "resume-v2.pdf",
+                self.build_valid_applicant_document_bytes(
+                    "resume",
+                    content_prefix="resume version two",
+                ),
+                content_type="application/pdf",
             ),
         )
 
@@ -4334,7 +5728,7 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
 
         with self.assertRaisesMessage(
             ValueError,
-            "could not be verified as a valid PDF, JPG, JPEG, or PNG document",
+            "We couldn't read this as a PDF, JPG, or PNG. Save it again, then upload it.",
         ):
             upload_evidence_item(
                 application=application,
@@ -4350,6 +5744,31 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
                 artifact_type="applicant_document",
             )
 
+    def test_generic_evidence_upload_rejects_active_content(self):
+        application = RecruitmentApplication.objects.create(
+            applicant=self.applicant,
+            position=self.level1_position,
+            qualification_summary="Qualified applicant.",
+        )
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "This needs to be a PDF, JPG, or PNG file. Upload one of those.",
+        ):
+            upload_evidence_item(
+                application=application,
+                actor=self.applicant,
+                label="Active Content",
+                uploaded_file=SimpleUploadedFile(
+                    "workflow-note.html",
+                    b"<html><script>alert(1)</script></html>",
+                    content_type="text/html",
+                ),
+                artifact_type="workflow_evidence",
+            )
+
+        self.assertFalse(EvidenceVaultItem.objects.filter(application=application).exists())
+
     def test_applicant_document_upload_rejects_files_larger_than_five_mb(self):
         application = RecruitmentApplication.objects.create(
             applicant=self.applicant,
@@ -4360,7 +5779,7 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
 
         with self.assertRaisesMessage(
             ValueError,
-            "Each applicant document must be 5 MB or smaller.",
+            "This file is too large. Choose a file that is 5 MB or smaller.",
         ):
             upload_evidence_item(
                 application=application,
@@ -4409,7 +5828,7 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
             ).exists()
         )
 
-    def test_system_admin_can_open_uploaded_evidence_inline(self):
+    def test_system_admin_inline_request_still_downloads_as_attachment(self):
         application = self.make_application(self.level1_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
@@ -4433,8 +5852,9 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response["Content-Disposition"],
-            f'inline; filename="{evidence.original_filename}"',
+            f'attachment; filename="{evidence.original_filename}"',
         )
+        self.assertEqual(response["X-Content-Type-Options"], "nosniff")
 
     def test_application_detail_hides_evidence_vault_and_audit_links_for_non_admin_users(self):
         application = self.make_application(self.level1_position)
@@ -4459,10 +5879,10 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, evidence.label)
         self.assertContains(response, evidence.original_filename)
-        self.assertContains(response, f"{evidence_url}?disposition=inline")
+        self.assertNotContains(response, f"{evidence_url}?disposition=inline")
         self.assertContains(response, evidence_url)
         self.assertNotContains(response, audit_url)
-        self.assertContains(response, "View")
+        self.assertContains(response, "Download")
         self.assertNotContains(response, "Evidence Vault")
 
     def test_evidence_service_rejects_unauthorized_upload_actor(self):
@@ -4496,9 +5916,12 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
             actor=self.secretariat,
             label="Secretariat Routing Notes",
             uploaded_file=SimpleUploadedFile(
-                "routing-notes.txt",
-                b"internal routing notes",
-                content_type="text/plain",
+                "routing-notes.pdf",
+                self.build_valid_applicant_document_bytes(
+                    "routing-notes",
+                    content_prefix="internal routing notes",
+                ),
+                content_type="application/pdf",
             ),
             artifact_scope=EvidenceVaultItem.OwnerScope.CASE,
             artifact_type="workflow_evidence",
@@ -4621,6 +6044,18 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
                     )
                 )
                 self.assertEqual(response.status_code, 403)
+
+        denied_logs = AuditLog.objects.filter(
+            application=application,
+            action=AuditLog.Action.EVIDENCE_ACCESS_DENIED,
+            metadata__evidence_id=evidence.id,
+        )
+        self.assertEqual(denied_logs.count(), len(roles))
+        self.assertTrue(all(log.is_sensitive_access for log in denied_logs))
+        self.assertEqual(
+            set(denied_logs.values_list("metadata__reason", flat=True)),
+            {"unauthorized"},
+        )
 
     def test_non_admin_roles_cannot_access_evidence_vault_routes(self):
         application = self.make_application(self.level1_position)
@@ -4917,9 +6352,12 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
             actor=self.appointing,
             label="Appointing Review Notes",
             uploaded_file=SimpleUploadedFile(
-                "appointing-notes.txt",
-                b"appointing review notes",
-                content_type="text/plain",
+                "appointing-notes.pdf",
+                self.build_valid_applicant_document_bytes(
+                    "appointing-notes",
+                    content_prefix="appointing review notes",
+                ),
+                content_type="application/pdf",
             ),
             artifact_scope=EvidenceVaultItem.OwnerScope.CASE,
             artifact_type="workflow_evidence",
@@ -4963,6 +6401,13 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         response = client.get(reverse("application-export", kwargs={"pk": application.pk}))
 
         self.assertEqual(response.status_code, 403)
+        denied_log = AuditLog.objects.get(
+            application=application,
+            actor=self.hrmpsb,
+            action=AuditLog.Action.EXPORT_DENIED,
+        )
+        self.assertTrue(denied_log.is_sensitive_access)
+        self.assertEqual(denied_log.metadata["reason"], "unauthorized")
 
     def test_export_service_rejects_unauthorized_actor(self):
         application = self.make_application(self.level1_position)
@@ -4974,6 +6419,13 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
             "You cannot export this application.",
         ):
             build_export_bundle(application, self.hrmpsb)
+        self.assertTrue(
+            AuditLog.objects.filter(
+                application=application,
+                actor=self.hrmpsb,
+                action=AuditLog.Action.EXPORT_DENIED,
+            ).exists()
+        )
 
 
 class AuditLoggingTraceabilityTests(BaseRecruitmentTestCase):
@@ -5314,6 +6766,9 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         self.assertEqual(notification.recipient_email, "applicant@example.com")
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn(application.reference_number, mail.outbox[0].subject)
+        status_link = reverse("applicant-status-link", kwargs={"token": application.public_token})
+        self.assertIn(status_link, mail.outbox[0].body)
+        self.assertIn(status_link, notification.metadata["status_link"])
         self.assertTrue(
             AuditLog.objects.filter(
                 application=application,
@@ -5356,6 +6811,10 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("application result", mail.outbox[0].subject.lower())
         self.assertIn("COS", mail.outbox[0].body)
+        self.assertIn(
+            reverse("applicant-status-link", kwargs={"token": application.public_token}),
+            mail.outbox[0].body,
+        )
 
     def test_rejection_sends_non_selected_applicant_notification(self):
         application = self.make_submitted_application()
@@ -5373,6 +6832,10 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         self.assertEqual(notification.delivery_status, NotificationLog.DeliveryStatus.SENT)
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("application result", mail.outbox[0].subject.lower())
+        self.assertIn(
+            reverse("applicant-status-link", kwargs={"token": application.public_token}),
+            mail.outbox[0].body,
+        )
 
     def test_return_to_applicant_sends_document_resubmission_request_notification(self):
         application = self.make_submitted_application()
@@ -5425,6 +6888,10 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         self.assertIn(first_requirement.title, mail.outbox[0].body)
         self.assertIn("Upload a signed and readable copy.", mail.outbox[0].body)
         self.assertIn("Please resubmit the corrected document.", mail.outbox[0].body)
+        self.assertIn(
+            reverse("applicant-status-link", kwargs={"token": application.public_token}),
+            mail.outbox[0].body,
+        )
 
     def test_return_to_applicant_without_flagged_documents_sends_generic_return_notification(self):
         application = self.make_submitted_application()
@@ -5462,6 +6929,10 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
             "Please update your submitted information before resubmitting.",
             mail.outbox[0].body,
         )
+        self.assertIn(
+            reverse("applicant-status-link", kwargs={"token": application.public_token}),
+            mail.outbox[0].body,
+        )
 
     def test_secretariat_can_send_requirement_checklist_notification_for_level1_completion(self):
         application = self.make_approved_cos_application()
@@ -5489,6 +6960,10 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         self.assertEqual(notification.triggered_by, self.secretariat)
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].subject, notification.subject)
+        self.assertIn(
+            reverse("applicant-status-link", kwargs={"token": application.public_token}),
+            mail.outbox[0].body,
+        )
         self.assertContains(response, "Send Requirement Checklist")
 
     def test_secretariat_cannot_send_requirement_checklist_before_selection(self):
@@ -5532,6 +7007,10 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         self.assertEqual(notification.delivery_status, NotificationLog.DeliveryStatus.SENT)
         self.assertEqual(notification.triggered_by, self.hrm_chief)
         self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(
+            reverse("applicant-status-link", kwargs={"token": application.public_token}),
+            mail.outbox[0].body,
+        )
         self.assertContains(response, "Send Reminder")
 
 
@@ -6405,6 +7884,40 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
         interview_session.refresh_from_db()
         self.assertTrue(interview_session.is_finalized)
 
+    def test_interview_fallback_rejects_active_content_upload(self):
+        application = self.make_application(self.cos_position)
+        self.move_application_to_hrm_chief_review(application)
+        self.finalize_screening_for_current_stage(application, self.hrm_chief)
+        self.finalize_exam_for_current_stage(application, self.hrm_chief)
+        save_interview_session(
+            application=application,
+            actor=self.hrm_chief,
+            cleaned_data=self.session_payload(),
+            finalize=False,
+        )
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "This needs to be a PDF, JPG, or PNG file. Upload one of those.",
+        ):
+            upload_interview_fallback_rating(
+                application=application,
+                actor=self.hrm_chief,
+                uploaded_file=SimpleUploadedFile(
+                    "fallback.html",
+                    b"<html><script>alert(1)</script></html>",
+                    content_type="text/html",
+                ),
+                remarks="Fallback upload.",
+            )
+
+        self.assertFalse(
+            EvidenceVaultItem.objects.filter(
+                application=application,
+                artifact_type="interview_fallback_rating_sheet",
+            ).exists()
+        )
+
 
 class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
     def session_payload(self, **overrides):
@@ -6915,6 +8428,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         ):
             otp_code = issue_application_otp(application, actor=applicant)
             verify_application_otp(application, otp_code, actor=applicant)
+            application.refresh_from_db()
             submit_application(application, applicant)
             application.refresh_from_db()
 
@@ -7066,6 +8580,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         self.move_application_to_hrmpsb_review(primary_application)
         otp_code = issue_application_otp(secondary_application, actor=secondary_applicant)
         verify_application_otp(secondary_application, otp_code, actor=secondary_applicant)
+        secondary_application.refresh_from_db()
         submit_application(secondary_application, secondary_applicant)
         self.finalize_screening_for_current_stage(secondary_application, self.secretariat)
         self.finalize_exam_for_current_stage(secondary_application, self.secretariat)
@@ -7134,6 +8649,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         self.move_application_to_hrmpsb_review(primary_application)
         otp_code = issue_application_otp(secondary_application, actor=secondary_applicant)
         verify_application_otp(secondary_application, otp_code, actor=secondary_applicant)
+        secondary_application.refresh_from_db()
         submit_application(secondary_application, secondary_applicant)
         self.finalize_screening_for_current_stage(secondary_application, self.secretariat)
         self.finalize_exam_for_current_stage(secondary_application, self.secretariat)
@@ -7294,6 +8810,7 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         self.move_application_to_hrmpsb_review(primary_application)
         otp_code = issue_application_otp(secondary_application, actor=secondary_applicant)
         verify_application_otp(secondary_application, otp_code, actor=secondary_applicant)
+        secondary_application.refresh_from_db()
         submit_application(secondary_application, secondary_applicant)
         self.finalize_screening_for_current_stage(secondary_application, self.secretariat)
         self.finalize_exam_for_current_stage(secondary_application, self.secretariat)
@@ -7672,6 +9189,35 @@ class E2ESeedCommandTests(BaseRecruitmentTestCase):
         self.assertEqual(get_current_workflow_section(exam), "exam")
         self.assertTrue(exam.screening_records.filter(is_finalized=True).exists())
 
+        interview = RecruitmentApplication.objects.get(
+            reference_number="RG-PLT-test-interview"
+        )
+        self.assertEqual(
+            interview.case.current_stage,
+            RecruitmentCase.Stage.HRMPSB_REVIEW,
+        )
+        self.assertEqual(get_current_workflow_section(interview), "interview")
+        self.assertFalse(
+            interview.interview_sessions.filter(is_finalized=True).exists()
+        )
+
+        deliberation = RecruitmentApplication.objects.get(
+            reference_number="RG-PLT-test-deliberation"
+        )
+        self.assertEqual(
+            deliberation.case.current_stage,
+            RecruitmentCase.Stage.HRMPSB_REVIEW,
+        )
+        self.assertEqual(get_current_workflow_section(deliberation), "deliberation")
+        self.assertTrue(
+            deliberation.interview_sessions.filter(is_finalized=True).exists()
+        )
+        self.assertTrue(
+            deliberation.position.comparative_assessment_reports.filter(
+                is_finalized=False
+            ).exists()
+        )
+
         cos_decision = RecruitmentApplication.objects.get(reference_number="RG-COS-test-decision")
         self.assertEqual(cos_decision.case.current_stage, RecruitmentCase.Stage.HRM_CHIEF_REVIEW)
         self.assertEqual(get_current_workflow_section(cos_decision), "decision")
@@ -7700,5 +9246,17 @@ class E2ESeedCommandTests(BaseRecruitmentTestCase):
         call_command("seed_e2e_test_cases", stdout=io.StringIO(), base_email="e2e@example.test")
         self.assertEqual(
             RecruitmentApplication.objects.filter(reference_number="RG-PLT-test-exam").count(),
+            1,
+        )
+        self.assertEqual(
+            RecruitmentApplication.objects.filter(
+                reference_number="RG-PLT-test-interview"
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            RecruitmentApplication.objects.filter(
+                reference_number="RG-PLT-test-deliberation"
+            ).count(),
             1,
         )

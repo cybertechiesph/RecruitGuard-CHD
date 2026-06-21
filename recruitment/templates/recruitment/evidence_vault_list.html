@@ -82,14 +82,8 @@
                                 <td style="font-size:.7rem;font-family:monospace;">{{ item.sha256_digest|truncatechars:14 }}</td>
                                 <td>
                                     {% if item.context_application %}
-                                        <div class="d-flex flex-wrap gap-2">
-                                            <a href="{% url 'evidence-download' item.context_application.pk item.pk %}?disposition=inline"
-                                               class="btn btn-outline-secondary btn-sm"
-                                               target="_blank"
-                                               rel="noopener">View</a>
-                                            <a href="{% url 'evidence-download' item.context_application.pk item.pk %}"
-                                               class="btn btn-outline-secondary btn-sm">Download</a>
-                                        </div>
+                                        <a href="{% url 'evidence-download' item.context_application.pk item.pk %}"
+                                           class="btn btn-outline-secondary btn-sm">Download</a>
                                     {% else %}
                                         <span class="rg-note" style="font-size:.7rem;">Unavailable</span>
                                     {% endif %}

@@ -46,6 +46,8 @@ SEED_USER_PREFIX = "e2e_seed_applicant_"
 PRIMARY_REFERENCES = {
     "cos_screening": "RG-COS-test-screening",
     "exam": "RG-PLT-test-exam",
+    "interview": "RG-PLT-test-interview",
+    "deliberation": "RG-PLT-test-deliberation",
     "cos_decision": "RG-COS-test-decision",
     "final_selection": "RG-PLT-test-final-selection",
     "aa_decision": "RG-PLT-test-aa-decision",
@@ -129,6 +131,8 @@ class Command(BaseCommand):
             seeded = {
                 "Secretariat COS screening": self._seed_cos_screening_case(users, applicants[0]),
                 "Exam wizard": self._seed_exam_case(users, applicants[0]),
+                "Interview wizard": self._seed_interview_case(users, applicants[4]),
+                "Deliberation wizard": self._seed_deliberation_case(users, applicants[5]),
                 "COS decision wizard": self._seed_cos_decision_case(users, applicants[1]),
                 "Final selection deep-lock": self._seed_final_selection_case(
                     users,
@@ -564,6 +568,73 @@ class Command(BaseCommand):
             first_name="E2E",
             last_name="COS Screening",
             label=PRIMARY_REFERENCES["cos_screening"],
+        )
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+        return application
+
+    def _seed_interview_case(self, users, applicant):
+        entry = self._create_entry(
+            code=PRIMARY_REFERENCES["interview"],
+            branch=PositionPosting.Branch.PLANTILLA,
+            level=PositionPosting.Level.LEVEL_1,
+            reference_title="Administrative Aide VI",
+            created_by=users["secretariat"],
+        )
+        application = self._create_application(
+            entry=entry,
+            applicant=applicant,
+            reference=PRIMARY_REFERENCES["interview"],
+            first_name="E2E",
+            last_name="Interview",
+            label=PRIMARY_REFERENCES["interview"],
+        )
+        self._advance_to_hrmpsb(application, users)
+        save_interview_session(
+            application=application,
+            actor=users["secretariat"],
+            cleaned_data={
+                "scheduled_for": timezone.now() + timedelta(days=2),
+                "location": "E2E Verification Room",
+                "session_notes": "E2E interview scheduled (awaiting ratings).",
+            },
+            finalize=False,
+        )
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+        return application
+
+    def _seed_deliberation_case(self, users, applicant):
+        entry = self._create_entry(
+            code=PRIMARY_REFERENCES["deliberation"],
+            branch=PositionPosting.Branch.PLANTILLA,
+            level=PositionPosting.Level.LEVEL_1,
+            reference_title="Administrative Aide VI",
+            created_by=users["secretariat"],
+        )
+        application = self._create_application(
+            entry=entry,
+            applicant=applicant,
+            reference=PRIMARY_REFERENCES["deliberation"],
+            first_name="E2E",
+            last_name="Deliberation",
+            label=PRIMARY_REFERENCES["deliberation"],
+        )
+        self._advance_to_hrmpsb(application, users)
+        self._finalize_interview(
+            application,
+            session_actor=users["secretariat"],
+            rating_actor=users["hrmpsb"],
+        )
+        self._close_entry_pool(entry)
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+        application.position.refresh_from_db()
+        generate_comparative_assessment_report(
+            application=application,
+            actor=users["secretariat"],
+            cleaned_data={"summary_notes": "E2E CAR draft for deliberation."},
+            finalize=False,
         )
         application.refresh_from_db()
         application.case.refresh_from_db()

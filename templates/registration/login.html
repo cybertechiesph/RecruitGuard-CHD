@@ -36,6 +36,9 @@ background: #0e2f14;
                 <div class="rg-form-grid">
                     {% include "recruitment/includes/form_field.html" with field=form.username %}
                     {% include "recruitment/includes/form_field.html" with field=form.password %}
+                    {% if form.captcha_answer %}
+                        {% include "recruitment/includes/form_field.html" with field=form.captcha_answer %}
+                    {% endif %}
                 </div>
                 <div class="rg-form-actions mt-3">
                     <button type="submit" class="btn btn-rg-primary w-100">Sign In</button>

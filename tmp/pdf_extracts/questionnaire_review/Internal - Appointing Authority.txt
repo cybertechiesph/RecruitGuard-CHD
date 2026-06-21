@@ -1,0 +1,371 @@
+
+--- PAGE 1 ---
+
+ RecruitGuard-CHD
+ Appointing  Authority  Post-Test  Questionnaire  Post-Test  Questionnaire  para  sa  Appointing  Authority  Workflow  ng  RecruitGuard-CHD
+ A.   CONSENT  AND  DATA  PRIVACY  This  questionnaire  is  for  evaluating  the  usability  and  workflow  clarity  of  RecruitGuard-CHD  for  the  Appointing  Authority  role.  Your
+participation
+
+is
+
+voluntary.
+
+Your
+
+answers
+
+will
+
+be
+
+kept
+
+confidential
+
+and
+
+used
+
+only
+
+for
+
+academic
+
+evaluation
+
+purposes.
+ ☐   I  have  read  and  understood  the  statement  above,  and  I  voluntarily  agree  to  answer  this  questionnaire.
+B.   BASIC  TESTING  PROFILE
+Item  Response  /  Sagot
+Role  /  Role  Appointing  Authority
+Branch  tested  /  Branch  na  na-test  ☐  Plantilla
+Case  level  tested  /  Case  level  na  na-test  ☐  Level  1      ☐  Level  2      ☐  Both  /  Pareho
+Appointing  Authority  task  tested  /  Appointing  Authority  task  na  na-test
+☐  Review  Finalized  CAR      ☐  Select  Appointee      ☐  Record  Decision  Notes      ☐  Return  CAR  for  Reassessment
+ C.   APPOINTING  AUTHORITY  ROLE-SPECIFIC  QUESTIONS   /   Mga  Tanong  para  sa  Appointing  Authority  Role   Instruction:  Answer  based  on  your  experience  after  testing  the  Appointing  Authority  workflow  in  RecruitGuard-CHD.   /  Sagutan
+batay
+
+sa
+
+iyong
+
+karanasan
+
+pagkatapos
+
+subukan
+
+ang
+
+Appointing
+
+Authority
+
+workflow
+
+sa
+
+RecruitGuard-CHD.
+  Scale:  5  –  Strongly  Agree      4  –  Agree      3  –  Neutral      2  –  Disagree      1  –  Strongly  Disagree
+1.   I  was  able  to  log  in  and  access  the  Appointing  Authority  workspace  without  difficulty.  Madali  akong  nakapag-log  in  at  nakapasok  sa  Appointing  Authority  workspace.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+2.   The  dashboard  clearly  showed  the  recruitment  cases  that  were  ready  for  Appointing  Authority  review  or  action.  Malinaw  na  ipinakita  ng  dashboard  ang  recruitment  cases  na  ready  para  sa  Appointing  Authority  review  o  action.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+3.   The  queue  or  case  list  was  easy  to  understand.  Madaling  maintindihan  ang  queue  o  listahan  ng  cases.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+
+--- PAGE 2 ---
+4.   The  case  details  clearly  showed  important  information  such  as  vacancy,  Application  ID,  applicant  name,  position,
+branch,
+
+level,
+
+and
+
+current
+
+step.
+ Malinaw  na  ipinakita  ng  case  details  ang  mahahalagang  impormasyon  tulad  ng  vacancy,  Application  ID,  applicant  name,  position,
+branch,
+
+level,
+
+at
+
+current
+
+step.
+
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+5.   The  workflow  stage  or  pipeline  helped  me  understand  that  the  case  was  already  at  Appointing  Authority  review.  Nakatulong  ang  workflow  stage  o  pipeline  para  maintindihan  ko  na  ang  case  ay  nasa  Appointing  Authority  review  na.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+6.   The  system  made  it  clear  that  Appointing  Authority  action  applies  only  after  the  CAR  has  been  finalized.  Malinaw  sa  system  na  ang  Appointing  Authority  action  ay  ginagawa  lamang  pagkatapos  ma-finalize  ang  CAR.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+7.   The  system  made  it  clear  that  COS  or  Contractual  cases  do  not  require  Appointing  Authority  selection  in  this  workflow.  Malinaw  sa  system  na  ang  COS  o  Contractual  cases  ay  hindi  nangangailangan  ng  Appointing  Authority  selection  sa  workflow  na  ito.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+8.   The  finalized  CAR  was  easy  to  find.  Madaling  hanapin  ang  finalized  CAR.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+9.   The  CAR  details,  such  as  vacancy  title,  entry  code,  CAR  version,  and  number  of  ranked  candidates,  were  clearly  shown.  Malinaw  na  ipinakita  ang  CAR  details  tulad  ng  vacancy  title,  entry  code,  CAR  version,  at  number  of  ranked  candidates.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+10.   The  ranked  applicant  list  was  easy  to  understand.  Madaling  maintindihan  ang  ranked  applicant  list.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+11.   The  system  clearly  showed  each  applicant's  CAR  ranking.  Malinaw  na  ipinakita  ng  system  ang  CAR  ranking  ng  bawat  applicant.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+--- PAGE 3 ---
+12.   The  decision-support  information,  such  as  document  review,  exam  score,  interview  average,  preliminary  score,  or
+system
+
+rank,
+
+was
+
+easy
+
+to
+
+understand.
+ Madaling  maintindihan  ang  decision-support  information  tulad  ng  document  review,  exam  score,  interview  average,  preliminary
+score,
+
+o
+
+system
+
+rank.
+
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+13.   The  HRMPSB  recommendation  or  ranking  notes  were  understandable  in  the  CAR  view.  Madaling  maintindihan  ang  HRMPSB  recommendation  o  ranking  notes  sa  CAR  view.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+14.   The  CAR  view  helped  me  compare  applicants  before  selecting  an  appointee.  Nakatulong  ang  CAR  view  para  maikumpara  ang  applicants  bago  pumili  ng  appointee.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+15.   The  system  made  it  clear  that  the  CAR  is  for  one  vacancy  and  not  for  separate  unrelated  applicant  approvals.  Malinaw  sa  system  na  ang  CAR  ay  para  sa  isang  vacancy  at  hindi  para  sa  magkakahiwalay  na  unrelated  applicant  approvals.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+16.   The  final  selection  screen  made  it  clear  that  I  should  choose  one  appointee  from  the  CAR  list.  Malinaw  sa  final  selection  screen  na  dapat  pumili  ng  isang  appointee  mula  sa  CAR  list.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+17.   Selecting  an  applicant  from  the  ranked  list  was  easy  to  do.  Madaling  pumili  ng  applicant  mula  sa  ranked  list.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+18.   The  system  clearly  showed  when  an  applicant  was  within  or  outside  the  top  five  ranking.  Malinaw  na  ipinakita  ng  system  kung  ang  applicant  ay  nasa  loob  o  labas  ng  top  five  ranking.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+19.   The  deep-selection  option  and  justification  field  were  understandable  when  selecting  outside  the  top  five.  Madaling  maintindihan  ang  deep-selection  option  at  justification  field  kapag  pumipili  sa  labas  ng  top  five.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+20.   The  decision  notes  or  remarks  field  was  clear  for  recording  the  basis  of  selection.  Malinaw  ang  decision  notes  o  remarks  field  para  i-record  ang  basehan  ng  selection.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+
+--- PAGE 4 ---
+
+21.   The  system  made  it  clear  that  final  selection  is  recorded  once  for  the  vacancy  and  that  other  CAR  applicants  are
+marked
+
+not
+
+selected.
+ Malinaw  sa  system  na  ang  final  selection  ay  nire-record  nang  isang  beses  para  sa  vacancy  at  ang  ibang  CAR  applicants  ay  marked  as
+not
+
+selected.
+
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+22.   The  return-to-HRMPSB  reassessment  option  and  remarks  field  were  clear  and  easy  to  distinguish  from  final
+appointee
+
+selection.
+ Malinaw  ang  return-to-HRMPSB  reassessment  option  at  remarks  field,  at  madaling  maiba  sa  final  appointee  selection.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+23.   After  final  selection,  the  system  clearly  showed  the  selected  appointee,  related  rank,  CAR  version,  and  decision
+notes.
+ Pagkatapos  ng  final  selection,  malinaw  na  ipinakita  ng  system  ang  selected  appointee,  related  rank,  CAR  version,  at  decision  notes.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+24.   Overall,  the  system  supports  the  Appointing  Authority's  final  Plantilla  selection  responsibilities.  Sa  kabuuan,  sinusuportahan  ng  system  ang  final  Plantilla  selection  responsibilities  ng  Appointing  Authority.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ D.   SYSTEM  USABILITY  SCALE  (SUS)   /   System  Usability  Scale  para  sa  Appointing  Authority  Workflow
+ Instruction:  Answer  based  on  your  overall  experience  using  the  Appointing  Authority  side  of  RecruitGuard-CHD.   /  Sagutan  batay  sa
+kabuuang
+
+karanasan
+
+mo
+
+sa
+
+paggamit
+
+ng
+
+Appointing
+
+Authority
+
+side
+
+ng
+
+RecruitGuard-CHD.
+  Scale:  5  –  Strongly  Agree      4  –  Agree      3  –  Neutral      2  –  Disagree      1  –  Strongly  Disagree
+1.   I  think  that  I  would  like  to  use  this  system  for  Appointing  Authority  recruitment  decisions.  Sa  tingin  ko,  gugustuhin  kong  gamitin  ang  system  na  ito  para  sa  Appointing  Authority  recruitment  decisions.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+2.   I  found  the  system  unnecessarily  complex.  Para  sa  akin,  masyadong  komplikado  ang  system  kahit  hindi  naman  kailangan.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+3.   I  thought  the  system  was  easy  to  use.  Para  sa  akin,  madaling  gamitin  ang  system.
+☐   5  —  Strongly  Agree  ☐   4  —  Agree  ☐   3  —  Neutral  ☐   2  —  Disagree  ☐   1  —  Strongly  Disagree
+
+--- PAGE 5 ---
+Lubos  na  Sumasang-ayon  Sumasang-ayon  Hindi  Sigurado  Hindi  Sumasang-ayon  Lubos  na  Hindi  Sumasang-ayon
+4.   I  think  that  I  would  need  assistance  to  be  able  to  use  this  system.  Sa  tingin  ko,  kakailanganin  ko  ng  tulong  para  magamit  ang  system  na  ito.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+5.   I  found  the  different  functions  of  the  system  well  integrated.  Para  sa  akin,  maayos  ang  pagkakaugnay  ng  iba’t  ibang  functions  ng  system.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+6.   I  thought  there  was  too  much  inconsistency  in  the  system.  Para  sa  akin,  maraming  bahagi  ng  system  ang  hindi  consistent.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+7.   I  imagine  that  most  Appointing  Authority  users  would  learn  to  use  this  system  quickly.  Sa  tingin  ko,  mabilis  matututunan  ng  karamihan  sa  Appointing  Authority  users  ang  paggamit  ng  system  na  ito.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+8.   I  found  the  system  cumbersome  to  use.  Para  sa  akin,  mabigat  o  mahirap  gamitin  ang  system.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+9.   I  felt  confident  using  the  system.  Confident  ako  habang  ginagamit  ang  system.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+10.   I  needed  to  learn  a  lot  of  things  before  I  could  use  this  system.  Marami  muna  akong  kailangang  matutunan  bago  ko  magamit  ang  system  na  ito.
+☐   5  —  Strongly  Agree  Lubos  na  Sumasang-ayon
+☐   4  —  Agree  Sumasang-ayon
+☐   3  —  Neutral  Hindi  Sigurado
+☐   2  —  Disagree  Hindi  Sumasang-ayon
+☐   1  —  Strongly  Disagree  Lubos  na  Hindi  Sumasang-ayon
+ E.   OPEN-ENDED  FEEDBACK   /   Bukas  na  Tanong
+
+1.   Which  Appointing  Authority  task  was  easiest  to  perform?  Aling  Appointing  Authority  task  ang  pinakamadaling  gawin?
+
+--- PAGE 6 ---
+
+
+2.   Which  Appointing  Authority  task  was  confusing  or  difficult?  Aling  Appointing  Authority  task  ang  confusing  o  mahirap  gawin?
+
+3.   What  should  be  improved  to  make  the  Appointing  Authority  workflow  easier  to  use?  Ano  ang  dapat  i-improve  para  mas  madaling  gamitin  ang  Appointing  Authority  workflow?
