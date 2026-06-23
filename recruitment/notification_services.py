@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 
 from django.conf import settings
@@ -16,6 +17,8 @@ from .models import (
     RecruitmentUser,
 )
 
+
+logger = logging.getLogger(__name__)
 
 NOTIFICATION_MANAGER_ROLES = {
     RecruitmentUser.Role.SECRETARIAT,
@@ -314,6 +317,46 @@ def _build_interview_session_scheduled_notification(application, interview_sessi
     )
 
 
+def _build_document_resubmission_fallback_body(
+    application,
+    requested_documents,
+    workflow_remarks="",
+):
+    item_label = "item" if len(requested_documents) == 1 else "items"
+    lines = [
+        f"Dear {application.applicant_display_name},",
+        "",
+        (
+            f"Your application for {application.position.title} "
+            "needs corrected or updated document submission."
+        ),
+        "",
+        f"Application ID: {application.reference_label}",
+        "",
+        f"Please review the document {item_label} below:",
+    ]
+    for document in requested_documents:
+        lines.append(f"- {document['requirement_title']}")
+        lines.append(f"  Instruction: {document['remarks']}")
+    remarks = (workflow_remarks or "").strip()
+    if remarks:
+        lines.extend(["", "Additional note from the recruitment team:", remarks])
+    lines.extend(
+        [
+            "",
+            (
+                "Please follow the instructions from the recruitment team and "
+                "keep your Application ID for status checking."
+            ),
+            "",
+            f"Check your application status anytime: {build_applicant_status_url(application)}",
+            "",
+            "This notice was sent through RecruitGuard-CHD.",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def _build_document_resubmission_request_notification(
     application,
     document_reviews,
@@ -327,15 +370,31 @@ def _build_document_resubmission_request_notification(
         }
         for review in document_reviews
     ]
-    body = render_to_string(
-        "email/document_resubmission_request.txt",
-        {
-            "application": application,
-            "requested_documents": requested_documents,
-            "workflow_remarks": (workflow_remarks or "").strip(),
-            "status_link": build_applicant_status_url(application),
-        },
-    ).strip()
+    try:
+        body = render_to_string(
+            "email/document_resubmission_request.txt",
+            {
+                "application": application,
+                "requested_documents": requested_documents,
+                "workflow_remarks": (workflow_remarks or "").strip(),
+                "status_link": build_applicant_status_url(application),
+            },
+        ).strip()
+    except Exception:
+        # This body is rendered synchronously inside the atomic workflow action
+        # (process_workflow_action), so an unguarded template failure would roll
+        # back the reviewer's entire "return to applicant" transaction and surface
+        # as a 500. Fall back to an equivalent plain-text body built in Python.
+        logger.exception(
+            "Failed to render document resubmission email for application %s; "
+            "falling back to a plain-text body.",
+            application.pk,
+        )
+        body = _build_document_resubmission_fallback_body(
+            application,
+            requested_documents,
+            workflow_remarks=workflow_remarks,
+        )
     return (
         f"RecruitGuard-CHD document resubmission needed: {application.position.title}",
         body,
@@ -426,16 +485,28 @@ def _render_notification_html(notification):
         return ""
 
     application = notification.application
-    return render_to_string(
-        "email/application_received.html",
-        {
-            "application": application,
-            "status_link": (
-                notification.metadata.get("status_link")
-                or build_applicant_status_url(application)
-            ),
-        },
-    ).strip()
+    try:
+        return render_to_string(
+            "email/application_received.html",
+            {
+                "application": application,
+                "status_link": (
+                    notification.metadata.get("status_link")
+                    or build_applicant_status_url(application)
+                ),
+            },
+        ).strip()
+    except Exception:
+        # The HTML body is only a richer alternative to the plain-text message
+        # that is already set as the email body. If the template is missing or
+        # raises while rendering, degrade gracefully to text-only delivery
+        # rather than failing the whole acknowledgment send.
+        logger.exception(
+            "Failed to render HTML email for submission acknowledgment "
+            "notification %s; falling back to plain-text body.",
+            notification.id,
+        )
+        return ""
 
 
 def _deliver_notification(notification_id):

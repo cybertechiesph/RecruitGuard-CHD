@@ -743,6 +743,45 @@ class FoundationSmokeTests(TestCase):
             AuditLog.objects.filter(action=AuditLog.Action.INTERNAL_MFA_VERIFIED).exists()
         )
 
+    def test_internal_mfa_email_falls_back_to_text_when_html_render_fails(self):
+        user = User.objects.create_user(
+            username="secretariat",
+            password="testpass123",
+            email="secretariat@example.com",
+            role=RecruitmentUser.Role.SECRETARIAT,
+        )
+
+        # Simulate a missing/broken "email/internal_mfa_otp.html" template. The
+        # MFA code email is sent synchronously inside an atomic block, so a render
+        # failure must not roll back the challenge or block staff login; it should
+        # degrade to text-only delivery (the code lives in the plain-text body).
+        with patch(
+            "recruitment.services.render_to_string",
+            side_effect=RuntimeError("template render boom"),
+        ), self.assertLogs("recruitment.services", level="ERROR") as logs:
+            response = self.client.post(
+                reverse("login"),
+                {"username": "secretariat", "password": "testpass123"},
+                follow=True,
+            )
+
+        # Login still advances to the MFA verification step.
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.request["PATH_INFO"], reverse("internal-mfa-verify"))
+
+        # The challenge row survived (the atomic block did not roll back)...
+        challenge = InternalMFAChallenge.objects.get(user=user)
+        # ...and the code email went out, degraded to text-only.
+        otp_code = self.extract_internal_mfa_code()
+        self.assertNotEqual(challenge.otp_hash, otp_code)
+        self.assertEqual(mail.outbox[-1].alternatives, [])
+        self.assertTrue(
+            any(
+                "Failed to render internal MFA HTML email" in message
+                for message in logs.output
+            )
+        )
+
     def test_internal_mfa_login_rotates_session_key_and_marks_session_verified(self):
         user = User.objects.create_user(
             username="secretariat",
@@ -3954,6 +3993,32 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertIn("Applicant Verification Code", html_body)
         self.assertIn(otp_code, html_body)
 
+    def test_applicant_otp_falls_back_to_text_when_html_render_fails(self):
+        application = self.make_application(self.level1_position)
+        mail.outbox.clear()
+
+        # Simulate a missing/broken "email/applicant_otp.html" template. The HTML
+        # is only an alternative to the plain-text body, which already carries the
+        # verification code, so delivery must degrade to text-only rather than
+        # blocking the applicant's submission verification.
+        with patch(
+            "recruitment.services.render_to_string",
+            side_effect=RuntimeError("template render boom"),
+        ), self.assertLogs("recruitment.services", level="ERROR") as logs:
+            with self.captureOnCommitCallbacks(execute=True):
+                otp_code = issue_application_otp(application, actor=application.applicant)
+
+        # The code email is still delivered, degraded to text-only.
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(otp_code, mail.outbox[0].body)
+        self.assertEqual(mail.outbox[0].alternatives, [])
+        self.assertTrue(
+            any(
+                "Failed to render applicant OTP HTML email" in message
+                for message in logs.output
+            )
+        )
+
 
 class WorkflowRoutingTests(BaseRecruitmentTestCase):
     def test_level1_submission_routes_to_secretariat(self):
@@ -6885,6 +6950,51 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
             ).exists()
         )
 
+    def test_submission_acknowledgment_falls_back_to_text_when_html_render_fails(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        mail.outbox.clear()
+
+        # Simulate a missing/broken "email/application_received.html" template.
+        # The only render_to_string call in the submission delivery path lives in
+        # _render_notification_html, so this isolates the HTML render failure.
+        with patch(
+            "recruitment.notification_services.render_to_string",
+            side_effect=RuntimeError("template render boom"),
+        ), self.assertLogs("recruitment.notification_services", level="ERROR") as logs:
+            with self.captureOnCommitCallbacks(execute=True):
+                submit_application(application, self.applicant)
+
+        application.refresh_from_db()
+        notification = NotificationLog.objects.get(
+            application=application,
+            notification_type=NotificationLog.NotificationType.SUBMISSION_ACKNOWLEDGMENT,
+        )
+        # Delivery still succeeds on the already-prepared plain-text body.
+        self.assertEqual(notification.delivery_status, NotificationLog.DeliveryStatus.SENT)
+        self.assertIsNotNone(notification.sent_at)
+        self.assertEqual(notification.failure_details, "")
+
+        # The email went out, but degraded to text-only (no HTML alternative).
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].alternatives, [])
+        status_link = reverse("applicant-status-link", kwargs={"token": application.public_token})
+        self.assertIn(status_link, mail.outbox[0].body)
+
+        # The render failure is logged rather than swallowed silently.
+        self.assertTrue(
+            any("Failed to render HTML email" in message for message in logs.output)
+        )
+
+        # The successful-send audit trail is still recorded.
+        self.assertTrue(
+            AuditLog.objects.filter(
+                application=application,
+                action=AuditLog.Action.NOTIFICATION_SENT,
+                metadata__notification_type=NotificationLog.NotificationType.SUBMISSION_ACKNOWLEDGMENT,
+            ).exists()
+        )
+
     def test_approval_sends_selected_applicant_notification(self):
         application = self.make_application(self.cos_position)
         self.verify_application_for_submission(application)
@@ -6999,6 +7109,82 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         self.assertIn(
             reverse("applicant-status-link", kwargs={"token": application.public_token}),
             mail.outbox[0].body,
+        )
+
+    def test_return_to_applicant_falls_back_to_text_when_resubmission_template_fails(self):
+        application = self.make_submitted_application()
+        first_requirement = get_applicant_document_requirements(application.branch)[0]
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("screening-review", kwargs={"pk": application.pk}),
+            {
+                "completeness_status": ScreeningRecord.CompletenessStatus.INCOMPLETE,
+                "completeness_notes": "A corrected document is required.",
+                "qualification_outcome": ScreeningRecord.QualificationOutcome.NOT_QUALIFIED,
+                "screening_notes": "Screening cannot continue until the document is corrected.",
+                **self.screening_document_status_payload(
+                    application,
+                    overrides={
+                        first_requirement.code: (
+                            ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION
+                        ),
+                    },
+                ),
+                f"document_remarks__{first_requirement.code}": "Upload a signed and readable copy.",
+                "operation": "finalize",
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        mail.outbox.clear()
+
+        # Simulate a missing/broken "email/document_resubmission_request.txt"
+        # template. This body is rendered synchronously inside the atomic
+        # process_workflow_action, so the fallback must keep the reviewer's
+        # "return to applicant" action from rolling back.
+        with patch(
+            "recruitment.notification_services.render_to_string",
+            side_effect=RuntimeError("template render boom"),
+        ), self.assertLogs("recruitment.notification_services", level="ERROR") as logs:
+            with self.captureOnCommitCallbacks(execute=True):
+                process_workflow_action(
+                    application,
+                    self.secretariat,
+                    "return_to_applicant",
+                    "Please resubmit the corrected document.",
+                )
+
+        # The workflow action still commits despite the template failure.
+        application.refresh_from_db()
+        self.assertEqual(application.status, RecruitmentApplication.Status.RETURNED_TO_APPLICANT)
+
+        notification = NotificationLog.objects.get(
+            application=application,
+            notification_type=NotificationLog.NotificationType.DOCUMENT_RESUBMISSION_REQUEST,
+        )
+        self.assertEqual(notification.delivery_status, NotificationLog.DeliveryStatus.SENT)
+        self.assertEqual(notification.failure_details, "")
+        self.assertEqual(notification.metadata["document_keys"], [first_requirement.code])
+
+        # The applicant still receives a complete, actionable plain-text body.
+        self.assertEqual(len(mail.outbox), 1)
+        body = mail.outbox[0].body
+        self.assertIn(first_requirement.title, body)
+        self.assertIn("Upload a signed and readable copy.", body)
+        self.assertIn("Please resubmit the corrected document.", body)
+        self.assertIn(
+            reverse("applicant-status-link", kwargs={"token": application.public_token}),
+            body,
+        )
+
+        # The render failure is logged rather than swallowed silently.
+        self.assertTrue(
+            any(
+                "Failed to render document resubmission email" in message
+                for message in logs.output
+            )
         )
 
     def test_return_to_applicant_without_flagged_documents_sends_generic_return_notification(self):

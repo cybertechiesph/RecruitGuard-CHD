@@ -659,21 +659,34 @@ def _send_internal_mfa_email(challenge, otp_code):
         f"It expires in {settings.INTERNAL_MFA_OTP_VALIDITY_MINUTES} minutes.\n\n"
         "Do not share this code. RecruitGuard-CHD staff will never ask for it."
     )
-    html_body = render_to_string(
-        "email/internal_mfa_otp.html",
-        {
-            "challenge": challenge,
-            "otp_code": otp_code,
-            "otp_validity_minutes": settings.INTERNAL_MFA_OTP_VALIDITY_MINUTES,
-        },
-    )
+    try:
+        html_body = render_to_string(
+            "email/internal_mfa_otp.html",
+            {
+                "challenge": challenge,
+                "otp_code": otp_code,
+                "otp_validity_minutes": settings.INTERNAL_MFA_OTP_VALIDITY_MINUTES,
+            },
+        )
+    except Exception:
+        # The HTML body is only a richer alternative to the plain-text message,
+        # which already carries the verification code. Degrade to text-only
+        # delivery rather than blocking the code email (and rolling back the MFA
+        # challenge) on a template failure.
+        logger.exception(
+            "Failed to render internal MFA HTML email for challenge %s; "
+            "falling back to plain-text body.",
+            challenge.pk,
+        )
+        html_body = ""
     email = EmailMultiAlternatives(
         subject=subject,
         body=text_body,
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=[challenge.sent_to_email],
     )
-    email.attach_alternative(html_body, "text/html")
+    if html_body:
+        email.attach_alternative(html_body, "text/html")
     email.send(fail_silently=False)
 
 
@@ -5231,22 +5244,34 @@ def _deliver_application_otp(application, otp_code, *, actor=None, otp_expires_a
         f"It expires in {settings.APPLICATION_OTP_VALIDITY_MINUTES} minutes.\n\n"
         "Do not share this code. RecruitGuard-CHD staff will never ask for it."
     )
-    html_body = render_to_string(
-        "email/applicant_otp.html",
-        {
-            "application": application,
-            "otp_code": otp_code,
-            "otp_expires_at": otp_expires_at,
-            "otp_validity_minutes": settings.APPLICATION_OTP_VALIDITY_MINUTES,
-        },
-    )
+    try:
+        html_body = render_to_string(
+            "email/applicant_otp.html",
+            {
+                "application": application,
+                "otp_code": otp_code,
+                "otp_expires_at": otp_expires_at,
+                "otp_validity_minutes": settings.APPLICATION_OTP_VALIDITY_MINUTES,
+            },
+        )
+    except Exception:
+        # The HTML body is only a richer alternative to the plain-text message,
+        # which already carries the verification code. Degrade to text-only
+        # delivery rather than blocking the code email on a template failure.
+        logger.exception(
+            "Failed to render applicant OTP HTML email for application %s; "
+            "falling back to plain-text body.",
+            application.pk,
+        )
+        html_body = ""
     email = EmailMultiAlternatives(
         subject=subject,
         body=text_body,
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=[application.applicant_email],
     )
-    email.attach_alternative(html_body, "text/html")
+    if html_body:
+        email.attach_alternative(html_body, "text/html")
     try:
         email.send(fail_silently=False)
     except (OSError, smtplib.SMTPException) as exc:
