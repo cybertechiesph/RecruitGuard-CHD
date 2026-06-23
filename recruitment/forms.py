@@ -536,11 +536,20 @@ class ApplicantPortalIntakeForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form
         widget=forms.RadioSelect,
         label="Performance Rating Availability",
     )
+    submission_confirmation = forms.BooleanField(
+        required=False,
+        label=(
+            "I confirm that my information and uploaded documents are true and complete, "
+            "and I consent to the use of my submitted data for recruitment processing."
+        ),
+    )
     checklist_privacy_consent = forms.BooleanField(
+        required=False,
         label="I consent to the use of my submitted information for recruitment processing.",
     )
-    checklist_documents_complete = forms.BooleanField()
+    checklist_documents_complete = forms.BooleanField(required=False)
     checklist_information_certified = forms.BooleanField(
+        required=False,
         label="I certify that the submitted information and uploaded documents are true and complete.",
     )
 
@@ -550,7 +559,8 @@ class ApplicantPortalIntakeForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form
         self.existing_draft = None
         self.existing_documents_by_code = {}
         self.document_slots = []
-        self.duplicate_document_warnings = []
+        self.duplicate_document_errors = []
+        self.duplicate_document_warnings = self.duplicate_document_errors
         self.saved_draft_notice = ""
         self.document_requirements = get_applicant_document_requirements(
             entry.branch if entry else None
@@ -706,7 +716,7 @@ class ApplicantPortalIntakeForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form
             )
         self.document_upload_fields = [slot["field"] for slot in self.document_slots]
 
-    def _build_duplicate_document_warnings(self):
+    def _build_duplicate_document_groups(self):
         digest_to_codes = {}
         for requirement_code, uploaded_file in self.get_valid_requirement_uploads().items():
             try:
@@ -718,20 +728,29 @@ class ApplicantPortalIntakeForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form
             )
         for requirement_code, evidence in self.existing_documents_by_code.items():
             digest_to_codes.setdefault(evidence.sha256_digest, set()).add(requirement_code)
-        warnings = []
+        duplicate_groups = []
         for requirement_codes in digest_to_codes.values():
             if len(requirement_codes) < 2:
                 continue
-            requirement_titles = ", ".join(
+            duplicate_groups.append(
                 sorted(
-                    self.document_requirements_by_code[requirement_code].title
+                    requirement_code
                     for requirement_code in requirement_codes
                     if requirement_code in self.document_requirements_by_code
                 )
             )
+        return duplicate_groups
+
+    def _build_duplicate_document_warnings(self):
+        warnings = []
+        for requirement_codes in self._build_duplicate_document_groups():
+            requirement_titles = ", ".join(
+                self.document_requirements_by_code[requirement_code].title
+                for requirement_code in requirement_codes
+            )
             warnings.append(
-                "The same file appears to be attached to multiple document slots: "
-                f"{requirement_titles}. Please confirm each slot has the correct file."
+                "The same file cannot be used for multiple document slots: "
+                f"{requirement_titles}. Upload a different file for each document."
             )
         return warnings
 
@@ -815,6 +834,35 @@ class ApplicantPortalIntakeForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form
                     f"Upload the required document for {requirement.title}.",
                 )
         self.duplicate_document_warnings = self._build_duplicate_document_warnings()
+        self.duplicate_document_errors = self.duplicate_document_warnings
+        for requirement_codes in self._build_duplicate_document_groups():
+            requirement_titles = ", ".join(
+                self.document_requirements_by_code[requirement_code].title
+                for requirement_code in requirement_codes
+            )
+            duplicate_message = (
+                "This appears to be the same file used for another document slot: "
+                f"{requirement_titles}. Upload a different file for this document."
+            )
+            for requirement_code in requirement_codes:
+                requirement = self.document_requirements_by_code[requirement_code]
+                self.add_error(requirement.file_field_name, duplicate_message)
+
+        confirmation_checked = bool(cleaned_data.get("submission_confirmation"))
+        legacy_confirmation_checked = all(
+            bool(cleaned_data.get(field_name))
+            for field_name in (
+                "checklist_privacy_consent",
+                "checklist_documents_complete",
+                "checklist_information_certified",
+            )
+        )
+        if not (confirmation_checked or legacy_confirmation_checked):
+            self.add_error("submission_confirmation", "Confirm before continuing.")
+        cleaned_data["submission_confirmation"] = confirmation_checked or legacy_confirmation_checked
+        cleaned_data["checklist_privacy_consent"] = cleaned_data["submission_confirmation"]
+        cleaned_data["checklist_documents_complete"] = cleaned_data["submission_confirmation"]
+        cleaned_data["checklist_information_certified"] = cleaned_data["submission_confirmation"]
         self._refresh_document_slots()
         return cleaned_data
 

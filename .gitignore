@@ -5,6 +5,7 @@ venv/
 .claude/
 .codex-ui-review/
 .codex-runlogs/
+.codex-remote-attachments/
 __pycache__/
 *.pyc
 *.pyo

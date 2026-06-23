@@ -2625,6 +2625,37 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertNotContains(response, "Manage Entries")
         self.assertNotContains(response, "Internal Users")
 
+    @override_settings(APPLICATION_OTP_VALIDITY_MINUTES=12)
+    def test_applicant_help_displays_configured_otp_duration(self):
+        response = self.client.get(reverse("applicant-help"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "The verification code is valid for 12 minutes.")
+
+    def test_applicant_home_shows_trust_notes_at_bottom_only(self):
+        response = self.client.get(reverse("applicant-portal"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "rg-pub-home-footer-notes")
+        self.assertNotContains(response, "rg-pub-trust-strip")
+        self.assertContains(response, "Official DOH&ndash;CHD CALABARZON portal")
+        self.assertContains(response, "RA 10173 Data Privacy compliant")
+        self.assertContains(response, "ro4a.doh.gov.ph")
+
+    def test_vacancy_detail_uses_single_bottom_apply_button_without_clock_icon(self):
+        response = self.client.get(
+            reverse("applicant-vacancy-detail", kwargs={"pk": self.level1_position.pk})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.content.decode("utf-8").count(
+                reverse("applicant-intake", kwargs={"pk": self.level1_position.pk})
+            ),
+            1,
+        )
+        self.assertNotContains(response, "&#9200;")
+
     @override_settings(MAX_EVIDENCE_UPLOAD_BYTES=10 * 1024 * 1024)
     def test_intake_document_controls_use_effective_server_upload_limit(self):
         response = self.client.get(
@@ -2638,6 +2669,10 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertContains(response, "data-file-selection")
         self.assertContains(response, "data-file-clear")
         self.assertContains(response, "Remove selected file")
+        self.assertContains(response, 'name="submission_confirmation"')
+        self.assertNotContains(response, 'name="checklist_privacy_consent"')
+        self.assertNotContains(response, 'name="checklist_documents_complete"')
+        self.assertNotContains(response, 'name="checklist_information_certified"')
 
     def test_deadline_passed_vacancy_is_not_open_for_applicant_intake(self):
         self.level1_position.closing_date = timezone.localdate() - timedelta(days=1)
@@ -3336,6 +3371,10 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         }
         self.assertEqual(vacancy_labels["performance_rating"], "If applicable")
         self.assertEqual(vacancy_labels["signed_cover_letter"], "Required")
+        self.assertEqual(
+            vacancy_response.context["document_requirements"][-1].code,
+            "performance_rating",
+        )
 
         intake_response = self.client.get(
             reverse("applicant-intake", kwargs={"pk": self.level1_position.pk})
@@ -3591,7 +3630,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertTrue(form.saved_draft_notice)
         self.assertIn("signed_cover_letter", form.existing_documents_by_code)
         self.assertNotIn(missing_requirement.code, form.existing_documents_by_code)
-        self.assertContains(response, "You uploaded")
+        self.assertContains(response, "Saved to this draft")
 
     def test_empty_portal_submission_returns_validation_errors_without_crashing(self):
         client = Client()
@@ -3634,7 +3673,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertIsNone(form._normalize_requirement_upload(BrowserEmptyUpload()))
         self.assertEqual(form._build_duplicate_document_warnings(), [])
 
-    def test_duplicate_applicant_document_file_warning_is_shown(self):
+    def test_duplicate_applicant_document_file_blocks_intake(self):
         client = Client()
         duplicate_bytes = b"%PDF-1.4\nshared-applicant-document\n%%EOF\n"
         payload = self.portal_payload(email="duplicate.file@example.com")
@@ -3659,8 +3698,16 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(
             response,
-            "The same file appears to be attached to multiple document slots",
+            "The same file cannot be used for multiple document slots",
         )
+        self.assertContains(response, "rg-pub-upload-slot--error")
+        self.assertFalse(mail.outbox)
+        application = RecruitmentApplication.objects.filter(
+            position=self.level1_position,
+            applicant_email="duplicate.file@example.com",
+        ).first()
+        if application is not None:
+            self.assertFalse(application.otp_hash)
 
     def test_final_submission_uses_requirement_codes_not_arbitrary_file_count(self):
         application = RecruitmentApplication.objects.create(
@@ -3704,6 +3751,59 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
             submit_application(application, self.applicant)
 
         self.assertIn("Signed Cover Letter", str(exc.exception))
+
+    def test_final_submission_rejects_duplicate_document_content(self):
+        application = RecruitmentApplication.objects.create(
+            applicant=self.applicant,
+            position=self.level1_position,
+            applicant_first_name="Duplicate",
+            applicant_last_name="Content",
+            applicant_email="duplicate.content@example.com",
+            applicant_phone="09171230000",
+            checklist_privacy_consent=True,
+            checklist_documents_complete=True,
+            checklist_information_certified=True,
+            qualification_summary="Application with duplicate document content.",
+            performance_rating_applicability=(
+                RecruitmentApplication.PerformanceRatingApplicability.APPLICABLE
+            ),
+        )
+        duplicate_bytes = b"%PDF-1.4\nsame-file-for-two-document-slots\n%%EOF\n"
+
+        for index, requirement in enumerate(
+            get_required_applicant_document_requirements(branch=self.level1_position.branch)
+        ):
+            file_bytes = (
+                duplicate_bytes
+                if index < 2
+                else self.build_valid_applicant_document_bytes(
+                    requirement.code,
+                    content_prefix=f"unique-{index}",
+                )
+            )
+            upload_evidence_item(
+                application=application,
+                actor=self.applicant,
+                label=requirement.title,
+                uploaded_file=SimpleUploadedFile(
+                    f"{requirement.code}.pdf",
+                    file_bytes,
+                    content_type="application/pdf",
+                ),
+                document_key=requirement.code,
+                artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
+                artifact_type="applicant_document",
+            )
+
+        self.verify_application_for_submission(application)
+        with self.assertRaisesMessage(
+            ValueError,
+            "Each document slot must use a different file before final submission.",
+        ):
+            submit_application(application, self.applicant)
+
+        application.refresh_from_db()
+        self.assertIsNone(application.submitted_at)
 
     def test_portal_reuses_existing_draft_and_requirement_documents_for_same_entry_email(self):
         client = Client()
@@ -6768,6 +6868,14 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         self.assertIn(application.reference_number, mail.outbox[0].subject)
         status_link = reverse("applicant-status-link", kwargs={"token": application.public_token})
         self.assertIn(status_link, mail.outbox[0].body)
+        self.assertEqual(len(mail.outbox[0].alternatives), 1)
+        html_body, mime_type = mail.outbox[0].alternatives[0]
+        self.assertEqual(mime_type, "text/html")
+        self.assertIn("Application Received", html_body)
+        self.assertIn("DOH-CHD CALABARZON", html_body)
+        self.assertIn(application.reference_number, html_body)
+        self.assertIn(application.position.title, html_body)
+        self.assertIn(status_link, html_body)
         self.assertIn(status_link, notification.metadata["status_link"])
         self.assertTrue(
             AuditLog.objects.filter(

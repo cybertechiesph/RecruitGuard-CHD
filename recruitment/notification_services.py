@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 from django.conf import settings
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -418,22 +418,46 @@ def _mark_notification_failed(notification, reason):
     return notification
 
 
+def _render_notification_html(notification):
+    if (
+        notification.notification_type
+        != NotificationLog.NotificationType.SUBMISSION_ACKNOWLEDGMENT
+    ):
+        return ""
+
+    application = notification.application
+    return render_to_string(
+        "email/application_received.html",
+        {
+            "application": application,
+            "status_link": (
+                notification.metadata.get("status_link")
+                or build_applicant_status_url(application)
+            ),
+        },
+    ).strip()
+
+
 def _deliver_notification(notification_id):
     notification = NotificationLog.objects.select_related(
         "application",
+        "application__position",
         "triggered_by",
     ).get(pk=notification_id)
     if notification.delivery_status != NotificationLog.DeliveryStatus.PENDING:
         return notification
 
     try:
-        sent_count = send_mail(
+        email = EmailMultiAlternatives(
             subject=notification.subject,
-            message=notification.body,
+            body=notification.body,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[notification.recipient_email],
-            fail_silently=False,
+            to=[notification.recipient_email],
         )
+        html_body = _render_notification_html(notification)
+        if html_body:
+            email.attach_alternative(html_body, "text/html")
+        sent_count = email.send(fail_silently=False)
         if sent_count != 1:
             raise RuntimeError("Email backend did not confirm delivery.")
     except Exception as exc:  # pragma: no cover - exercised via status update path

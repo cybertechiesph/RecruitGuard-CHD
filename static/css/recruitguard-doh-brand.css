@@ -571,6 +571,36 @@ body.applicant-portal-body {
     flex-shrink: 0;
 }
 
+.rg-pub-home-footer-notes {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.6rem 1.25rem;
+    margin: 2rem 0 0;
+    padding: 1rem 0 0;
+    border-top: 1px solid #d7dde3;
+    color: #5f6c78;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+.rg-pub-home-footer-notes__item {
+    display: inline-flex;
+    align-items: center;
+}
+.rg-pub-home-footer-notes__item + .rg-pub-home-footer-notes__item::before {
+    content: "";
+    width: 4px;
+    height: 4px;
+    margin-right: 1.25rem;
+    border-radius: 999px;
+    background: #cbd5e1;
+}
+.rg-pub-home-footer-notes a {
+    color: var(--rg-brand-green);
+    text-decoration: none;
+}
+.rg-pub-home-footer-notes a:hover { text-decoration: underline; }
+
 /* --- Action-card icon: SVG sized, green ink --- */
 .rg-pub-action-card__icon {
     width: 44px;
@@ -2214,6 +2244,16 @@ body.applicant-portal-body {
     display: flex;
     flex-direction: column;
     gap: 0.55rem;
+}
+.rg-intake-confirm .form-check-input.is-invalid {
+    border-color: var(--rg-brand-danger);
+}
+.rg-intake-confirm .form-check-input.is-invalid:focus {
+    box-shadow: 0 0 0 0.2rem rgba(185, 28, 28, 0.16);
+}
+.rg-intake-confirm .form-check-input.is-invalid + .form-check-label {
+    color: var(--rg-brand-danger);
+    font-weight: 600;
 }
 
 /* --- Sticky action bar --- */

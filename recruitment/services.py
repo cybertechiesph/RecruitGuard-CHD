@@ -4997,6 +4997,29 @@ def get_missing_required_applicant_document_requirements(application):
     ]
 
 
+def get_duplicate_applicant_document_groups(application):
+    requirement_titles = {
+        requirement.code: requirement.title
+        for requirement in get_applicant_document_requirements(application.branch)
+    }
+    digest_to_codes = {}
+    for evidence in get_current_applicant_document_items(application):
+        if evidence.document_key not in requirement_titles:
+            continue
+        digest_to_codes.setdefault(evidence.sha256_digest, set()).add(evidence.document_key)
+    return [
+        [
+            {
+                "code": document_key,
+                "title": requirement_titles[document_key],
+            }
+            for document_key in sorted(document_keys)
+        ]
+        for document_keys in digest_to_codes.values()
+        if len(document_keys) > 1
+    ]
+
+
 def _archive_applicant_document_key(application, document_key, actor, archive_tag):
     evidence_items = list(
         get_current_applicant_document_items(application).filter(document_key=document_key)
@@ -5703,6 +5726,16 @@ def submit_application(application, actor):
         raise ValueError(
             "Upload the required requirement-coded applicant documents before final submission. "
             f"Missing: {missing_labels}."
+        )
+    duplicate_document_groups = get_duplicate_applicant_document_groups(application)
+    if duplicate_document_groups:
+        duplicate_labels = "; ".join(
+            ", ".join(item["title"] for item in group)
+            for group in duplicate_document_groups
+        )
+        raise ValueError(
+            "Each document slot must use a different file before final submission. "
+            f"Duplicates: {duplicate_labels}."
         )
     if not application.position.is_open_for_intake:
         raise ValueError("This recruitment entry is not currently open for intake.")

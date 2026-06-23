@@ -65,11 +65,11 @@
         <div class="alert alert-info" role="status">{{ form.saved_draft_notice }}</div>
     {% endif %}
 
-    {% if form.duplicate_document_warnings %}
-        <div class="alert alert-warning" role="alert">
-            <p class="mb-1"><strong>Duplicate file warning</strong></p>
+    {% if form.duplicate_document_errors %}
+        <div class="alert alert-danger" role="alert">
+            <p class="mb-1"><strong>Duplicate file detected</strong></p>
             <ul class="mb-0 ps-3">
-                {% for warning in form.duplicate_document_warnings %}<li>{{ warning }}</li>{% endfor %}
+                {% for error in form.duplicate_document_errors %}<li>{{ error }}</li>{% endfor %}
             </ul>
         </div>
     {% endif %}
@@ -150,7 +150,7 @@
                 <div class="rg-intake-charcount" data-summary-count-wrap aria-live="polite">
                     <span data-summary-count>0</span> / 1,000 characters
                 </div>
-                <div class="form-text">A short paragraph about the education, experience, and skills that match this position.</div>
+                <div class="form-text">This helps us review your application against the position requirements. Include the education, experience, and skills that best match this role.</div>
                 {% for error in form.qualification_summary.errors %}
                     <div class="invalid-feedback d-block">{{ error }}</div>
                 {% endfor %}
@@ -224,10 +224,10 @@
                  id="slot-{{ slot.field.html_name }}"
                  data-intake-slot
                  data-required="{% if slot.is_required_now %}true{% else %}false{% endif %}"
-                 data-slot-name="{{ slot.field.html_name }}"
-                 data-slot-label="{{ slot.field.label }}"
-                 data-applicability-name="{% if slot.applicability_field %}{{ slot.applicability_field.html_name }}{% endif %}"
-                 {% if slot.saved_evidence %}data-saved-filename="{{ slot.saved_evidence.original_filename }}"{% endif %}>
+                  data-slot-name="{{ slot.field.html_name }}"
+                  data-slot-label="{{ slot.field.label }}"
+                  data-applicability-name="{% if slot.applicability_field %}{{ slot.applicability_field.html_name }}{% endif %}"
+                  {% if slot.saved_evidence %}data-saved-filename="{{ slot.saved_evidence.original_filename }}" data-saved-digest="{{ slot.saved_evidence.sha256_digest }}"{% endif %}>
                 <p class="rg-pub-upload-slot__name">
                     {{ slot.field.label }}
                     <span class="text-danger" aria-hidden="true" data-required-marker {% if not slot.is_required_now %}hidden{% endif %}>*</span>
@@ -278,7 +278,7 @@
                             <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
                             <path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
-                        You uploaded <strong>{{ slot.saved_evidence.original_filename }}</strong> earlier.
+                        Saved to this draft: <strong>{{ slot.saved_evidence.original_filename }}</strong>.
                         We will keep this file unless you pick a new one to replace it.
                     </div>
                 {% endif %}
@@ -313,34 +313,11 @@
                 <h3 class="rg-intake-confirm__heading">Confirm before continuing</h3>
                 <div class="rg-intake-confirm__list">
                     <div class="form-check">
-                        {{ form.checklist_privacy_consent }}
-                        <label class="form-check-label" for="{{ form.checklist_privacy_consent.id_for_label }}">
-                            {{ form.checklist_privacy_consent.label }}
+                        {{ form.submission_confirmation }}
+                        <label class="form-check-label" for="{{ form.submission_confirmation.id_for_label }}">
+                            {{ form.submission_confirmation.label }}
                         </label>
                     </div>
-                    {% for error in form.checklist_privacy_consent.errors %}
-                        <div class="invalid-feedback d-block ps-4">{{ error }}</div>
-                    {% endfor %}
-
-                    <div class="form-check">
-                        {{ form.checklist_documents_complete }}
-                        <label class="form-check-label" for="{{ form.checklist_documents_complete.id_for_label }}">
-                            {{ form.checklist_documents_complete.label }}
-                        </label>
-                    </div>
-                    {% for error in form.checklist_documents_complete.errors %}
-                        <div class="invalid-feedback d-block ps-4">{{ error }}</div>
-                    {% endfor %}
-
-                    <div class="form-check">
-                        {{ form.checklist_information_certified }}
-                        <label class="form-check-label" for="{{ form.checklist_information_certified.id_for_label }}">
-                            {{ form.checklist_information_certified.label }}
-                        </label>
-                    </div>
-                    {% for error in form.checklist_information_certified.errors %}
-                        <div class="invalid-feedback d-block ps-4">{{ error }}</div>
-                    {% endfor %}
 
                     {% if form.captcha_answer %}
                     <div class="rg-pub-field mt-3">
@@ -449,12 +426,13 @@
             }
         );
     }
-    function renderInlineError(field, msg, idx) {
+    function renderInlineError(field, msg, idx, suppressMessage) {
         // Mark the field, insert the message directly below it, and link the two
         // for screen readers via aria-describedby (preserving any existing help-text
         // association). Returns the field so the caller can focus the first one.
         field.classList.add("is-invalid");
         field.setAttribute("aria-invalid", "true");
+        if (suppressMessage) return;
         var errId = "rg-cerr-" + (field.name || field.id || idx);
         var inline = document.createElement("div");
         inline.className = "invalid-feedback d-block rg-client-error";
@@ -501,7 +479,7 @@
         var firstField = null;
         problems.forEach(function (pr, i) {
             if (pr.field && pr.field.nodeType === 1) {
-                renderInlineError(pr.field, pr.msg, i);
+                renderInlineError(pr.field, pr.msg, i, pr.suppressMessage);
                 if (!firstField) firstField = pr.field;
             } else if (errorBox && !errorBox.textContent) {
                 errorBox.textContent = pr.msg;
@@ -684,12 +662,14 @@
 
     function documentsProblems() {
         var p = [];
+        var duplicateCandidates = [];
         document.querySelectorAll("[data-intake-slot]").forEach(function (slot) {
             var slotName = slot.dataset.slotName;
             var required = slot.dataset.required === "true";
             var applicabilityName = slot.dataset.applicabilityName;
             var slotLabel = slot.dataset.slotLabel || "this document";
             var savedFile = slot.dataset.savedFilename || "";
+            var savedDigest = slot.dataset.savedDigest || "";
             var fileInput = form.elements[slotName];
 
             if (applicabilityName) {
@@ -716,6 +696,23 @@
                 p.push({ field: fileInput, msg: selectedFileError });
                 return;
             }
+            if (selectedFile) {
+                duplicateCandidates.push({
+                    key: [
+                        selectedFile.name,
+                        selectedFile.size,
+                        selectedFile.lastModified || 0
+                    ].join("|"),
+                    field: fileInput,
+                    label: slotLabel
+                });
+            } else if (savedDigest) {
+                duplicateCandidates.push({
+                    key: "saved:" + savedDigest,
+                    field: fileInput,
+                    label: slotLabel
+                });
+            }
 
             if (required) {
                 var hasFile = fileInput && fileInput.files && fileInput.files.length > 0;
@@ -726,6 +723,23 @@
                     });
                 }
             }
+        });
+        var duplicateGroups = {};
+        duplicateCandidates.forEach(function (item) {
+            if (!item.key) return;
+            if (!duplicateGroups[item.key]) duplicateGroups[item.key] = [];
+            duplicateGroups[item.key].push(item);
+        });
+        Object.keys(duplicateGroups).forEach(function (key) {
+            var group = duplicateGroups[key];
+            if (group.length < 2) return;
+            var labels = group.map(function (item) { return item.label; }).join(", ");
+            group.forEach(function (item) {
+                p.push({
+                    field: item.field,
+                    msg: "Use a different file for this document. The same file is selected for: " + labels + "."
+                });
+            });
         });
         return p;
     }
@@ -748,14 +762,10 @@
 
     function reviewProblems() {
         var p = [];
-        [
-            { name: "checklist_privacy_consent", msg: "Please confirm the data privacy consent before submitting." },
-            { name: "checklist_documents_complete", msg: "Please confirm your documents are complete." },
-            { name: "checklist_information_certified", msg: "Please certify that the information you provided is true." }
-        ].forEach(function (item) {
-            var el = form.elements[item.name];
-            if (el && !el.checked) p.push({ field: el, msg: item.msg });
-        });
+        var confirmation = form.elements["submission_confirmation"];
+        if (confirmation && !confirmation.checked) {
+            p.push({ field: confirmation, msg: "", suppressMessage: true });
+        }
         return p;
     }
 
@@ -925,7 +935,7 @@
     // On reload with server-side errors, open the first step containing one
     var startStep = "information";
     for (var s = 0; s < STEPS.length; s++) {
-        if (sections[STEPS[s]] && sections[STEPS[s]].querySelector(".invalid-feedback")) {
+        if (sections[STEPS[s]] && sections[STEPS[s]].querySelector(".invalid-feedback, .is-invalid")) {
             startStep = STEPS[s];
             break;
         }

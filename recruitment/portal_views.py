@@ -12,7 +12,7 @@ from .forms import (
     ApplicantStatusLookupForm,
 )
 from .models import PositionPosting, RecruitmentApplication
-from .requirements import get_applicant_document_requirements
+from .requirements import PERFORMANCE_RATING, get_applicant_document_requirements
 from .services import (
     ApplicationOTPDeliveryError,
     create_public_application_draft,
@@ -126,7 +126,11 @@ class ApplicantVacancyDetailView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["entry"] = self.entry
-        context["document_requirements"] = get_applicant_document_requirements(self.entry.branch)
+        document_requirements = list(get_applicant_document_requirements(self.entry.branch))
+        document_requirements.sort(
+            key=lambda requirement: requirement.code == PERFORMANCE_RATING
+        )
+        context["document_requirements"] = document_requirements
         context["is_closing_soon"] = _posting_is_closing_soon(self.entry)
         context["can_apply"] = self.entry.is_open_for_intake
         return context
@@ -134,6 +138,11 @@ class ApplicantVacancyDetailView(TemplateView):
 
 class ApplicantHelpView(TemplateView):
     template_name = "recruitment/applicant_help.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["otp_validity_minutes"] = settings.APPLICATION_OTP_VALIDITY_MINUTES
+        return context
 
 
 class ApplicantPortalIntakeView(FormView):
@@ -179,6 +188,7 @@ class ApplicantPortalIntakeView(FormView):
             "qualification_summary": draft.qualification_summary,
             "cover_letter": draft.cover_letter,
             "performance_rating_applicability": draft.performance_rating_applicability,
+            "submission_confirmation": draft.checklist_complete,
             "checklist_privacy_consent": draft.checklist_privacy_consent,
             "checklist_documents_complete": draft.checklist_documents_complete,
             "checklist_information_certified": draft.checklist_information_certified,
@@ -255,8 +265,6 @@ class ApplicantPortalIntakeView(FormView):
             self.request,
             "Your application draft is ready. Check your email for the verification code.",
         )
-        for warning in form.duplicate_document_warnings:
-            messages.warning(self.request, warning)
         return redirect("applicant-otp", token=application.public_token)
 
     def form_invalid(self, form):
@@ -367,7 +375,6 @@ class ApplicantOTPView(TemplateView):
                 except ValueError as exc:
                     otp_form.add_error("otp", str(exc))
                 else:
-                    messages.success(request, "Email verified. You may now submit your application.")
                     return redirect("applicant-otp", token=application.public_token)
             return self.render_to_response(
                 self.get_context_data(application=application, otp_form=otp_form)
