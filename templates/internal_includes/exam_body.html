@@ -508,8 +508,16 @@ reviewer can see the disposition at a glance without scrolling to step 2.
     }
     function syncConditionalGroups() {
         var v = valOf("exam_status");
-        if (condCompleted) condCompleted.hidden = v !== "completed";
-        if (condRemarks) condRemarks.hidden = !(v === "waived" || v === "absent");
+        if (condCompleted) {
+            var showCompleted = v === "completed";
+            condCompleted.hidden = !showCompleted;
+            condCompleted.classList.toggle("is-visible", showCompleted);
+        }
+        if (condRemarks) {
+            var showRemarks = v === "waived" || v === "absent";
+            condRemarks.hidden = !showRemarks;
+            condRemarks.classList.toggle("is-visible", showRemarks);
+        }
     }
 
     /* Choice strip wiring */

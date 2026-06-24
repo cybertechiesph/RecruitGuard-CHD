@@ -1001,6 +1001,7 @@ class FoundationSmokeTests(TestCase):
         )
 
     def test_internal_password_reset_uses_tokenized_email_link(self):
+        cache.clear()
         user = User.objects.create_user(
             username="secretariat",
             password="OriginalSecurePass123!",
@@ -1045,7 +1046,92 @@ class FoundationSmokeTests(TestCase):
             AuditLog.objects.filter(action=AuditLog.Action.PASSWORD_RESET_COMPLETED).exists()
         )
 
+    def test_password_reset_page_shows_logo_and_rate_limit_notice(self):
+        response = self.client.get(reverse("password-reset"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "rg-login-card__seal")
+        self.assertContains(
+            response,
+            "For security, repeated reset requests may be temporarily delayed.",
+        )
+
+    def test_password_reset_email_cooldown_suppresses_repeat_email_neutrally(self):
+        cache.clear()
+        User.objects.create_user(
+            username="secretariat",
+            password="OriginalSecurePass123!",
+            email="secretariat@example.com",
+            role=RecruitmentUser.Role.SECRETARIAT,
+        )
+
+        first_response = self.client.post(
+            reverse("password-reset"),
+            {"email": "secretariat@example.com"},
+            follow=True,
+        )
+        second_response = self.client.post(
+            reverse("password-reset"),
+            {"email": "secretariat@example.com"},
+            follow=True,
+        )
+
+        self.assertEqual(first_response.request["PATH_INFO"], reverse("password-reset-done"))
+        self.assertEqual(second_response.request["PATH_INFO"], reverse("password-reset-done"))
+        self.assertContains(
+            second_response,
+            "If the email address matches an active internal account, a password reset link will be sent.",
+        )
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(
+            AuditLog.objects.filter(action=AuditLog.Action.PASSWORD_RESET_REQUESTED).count(),
+            1,
+        )
+
+    @override_settings(
+        PASSWORD_RESET_EMAIL_COOLDOWN_SECONDS=0,
+        PASSWORD_RESET_EMAIL_MAX_PER_WINDOW=0,
+        PASSWORD_RESET_IP_MAX_PER_WINDOW=1,
+        PASSWORD_RESET_IP_WINDOW_SECONDS=3600,
+    )
+    def test_password_reset_ip_limit_suppresses_additional_reset_email_neutrally(self):
+        cache.clear()
+        User.objects.create_user(
+            username="secretariat-one",
+            password="OriginalSecurePass123!",
+            email="secretariat.one@example.com",
+            role=RecruitmentUser.Role.SECRETARIAT,
+        )
+        User.objects.create_user(
+            username="secretariat-two",
+            password="OriginalSecurePass123!",
+            email="secretariat.two@example.com",
+            role=RecruitmentUser.Role.SECRETARIAT,
+        )
+
+        first_response = self.client.post(
+            reverse("password-reset"),
+            {"email": "secretariat.one@example.com"},
+            follow=True,
+            REMOTE_ADDR="203.0.113.10",
+        )
+        second_response = self.client.post(
+            reverse("password-reset"),
+            {"email": "secretariat.two@example.com"},
+            follow=True,
+            REMOTE_ADDR="203.0.113.10",
+        )
+
+        self.assertEqual(first_response.request["PATH_INFO"], reverse("password-reset-done"))
+        self.assertEqual(second_response.request["PATH_INFO"], reverse("password-reset-done"))
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(
+            AuditLog.objects.filter(action=AuditLog.Action.PASSWORD_RESET_REQUESTED).count(),
+            1,
+        )
+
     def test_password_reset_does_not_email_applicant_accounts(self):
+        cache.clear()
         User.objects.create_user(
             username="applicant",
             password="ApplicantSecurePass123!",
@@ -4627,6 +4713,30 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
         self.assertNotContains(response, "{#")
         self.assertNotContains(response, "{% include")
 
+    def test_application_detail_uses_compressed_pipeline_and_expanded_applicant_panel(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Step 1 of 6')
+        self.assertContains(response, '<details class="rg-applicant-panel" open>')
+        self.assertContains(response, "Applicant Profile &amp; Submission")
+        for label in ["Screening", "Exam", "Interview", "Deliberation", "Decision", "Completion"]:
+            self.assertContains(
+                response,
+                f'<span class="rg-pipeline__label">{label}</span>',
+            )
+        for removed_label in ["Publication", "Intake", "Submission", "Appointment", "Archive", "Deliberation/CAR"]:
+            self.assertNotContains(
+                response,
+                f'<span class="rg-pipeline__label">{removed_label}</span>',
+            )
+
     def test_application_detail_shows_only_the_current_task_tab(self):
         application = self.make_application(self.level2_position)
         self.verify_application_for_submission(application)
@@ -4697,6 +4807,7 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'rg-cws-stage-titlebar__title">Examination</span>')
+        self.assertContains(response, "Step 2 of 6")
         content = response.content.decode()
         self.assertRegex(
             content,
@@ -5210,6 +5321,27 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         self.assertEqual(
             cos_form.administered_by_fixed_label,
             ExamRecord.AdministeredBy.END_USER.label,
+        )
+
+    def test_exam_wizard_reveals_conditional_fields_for_outcome_validation(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        self.finalize_screening_for_current_stage(application, self.secretariat)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "rg-wizard-validation.js?v=20260624-val2c")
+        self.assertContains(
+            response,
+            'condCompleted.classList.toggle("is-visible", showCompleted);',
+        )
+        self.assertContains(
+            response,
+            'condRemarks.classList.toggle("is-visible", showRemarks);',
         )
 
     def test_exam_form_rejects_scores_outside_allowed_range(self):

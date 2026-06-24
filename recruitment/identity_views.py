@@ -42,6 +42,7 @@ from .services import (
     record_internal_login_failure,
     record_internal_login_locked_attempt,
     record_system_audit_event,
+    reserve_internal_password_reset_request,
     verify_internal_email_change_request,
     verify_internal_mfa_challenge,
 )
@@ -224,7 +225,12 @@ class InternalPasswordResetView(PasswordResetView):
         return kwargs
 
     def form_valid(self, form):
-        users = list(form.get_users(form.cleaned_data["email"]))
+        email = form.cleaned_data["email"]
+        can_send = reserve_internal_password_reset_request(email, self.request)
+        users = list(form.get_users(email)) if can_send else []
+        if not can_send:
+            return redirect(self.get_success_url())
+
         response = super().form_valid(form)
         for user in users:
             record_system_audit_event(

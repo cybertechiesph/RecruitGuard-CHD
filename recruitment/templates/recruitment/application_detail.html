@@ -26,14 +26,14 @@
 {% include "internal_includes/case_pipeline.html" %}
 
 
-{# Applicant submission — collapsed reference, available on every tab #}
-<details class="rg-applicant-panel">
+{# Applicant profile and submission context, available on every tab. #}
+<details class="rg-applicant-panel" open>
     <summary class="rg-applicant-panel__summary">
         <svg class="rg-applicant-panel__icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
         </svg>
-        <span class="rg-applicant-panel__heading">Applicant submission</span>
+        <span class="rg-applicant-panel__heading">Applicant Profile &amp; Submission</span>
         <span class="rg-applicant-panel__name">{{ application.applicant_display_name }}</span>
         <svg class="rg-applicant-panel__chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
             <path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
@@ -113,7 +113,7 @@
             {% comment %}
             The original "Overview" tab rendered an Applicant Snapshot card.
             That data is now permanently surfaced by the collapsible
-            "Applicant submission" panel above the tabs (added in Slice B),
+            "Applicant Profile & Submission" panel above the tabs (added in Slice B),
             so this tab no longer carries unique content.
 
             Codex backend cleanup ask: remove "overview" from
@@ -237,7 +237,7 @@
             
             {% if current_detail_tab.key == "completion" %}
             <div class="rg-cws-stage-section" id="cws-completion">
-                {% include "internal_includes/stage_titlebar.html" with title="Completion &amp; Archive" locked=completion_record %}
+                {% include "internal_includes/stage_titlebar.html" with title="Completion" locked=completion_record %}
 
                 {% if completion_form or closure_form %}
                     
@@ -256,7 +256,7 @@
 
                 {% else %}
                     
-                    {% include "internal_includes/state_empty.html" with title="Completion &amp; Archive not yet available" copy="This step will open after a final decision is recorded." %}
+                    {% include "internal_includes/state_empty.html" with title="Completion not yet available" copy="This step will open after a final decision is recorded." %}
                 {% endif %}
             </div>
             {% endif %}

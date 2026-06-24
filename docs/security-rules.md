@@ -29,6 +29,9 @@ This document summarizes the key cybersecurity rules and protection logic of Rec
 - CAPTCHA must be required on internal login and internal password reset when
   CAPTCHA is enabled. Internal MFA verification and resend use attempt limits,
   cooldowns, rate limiting, and the authenticated first-factor session instead.
+- Internal password reset must not disclose whether an email address belongs to
+  an active account, and reset email delivery must be guarded by configurable
+  email and IP throttles.
 - For public deployment, CAPTCHA should use Google reCAPTCHA v2 with
   server-side token verification. The local arithmetic CAPTCHA is only a
   fallback for offline development and demonstration.

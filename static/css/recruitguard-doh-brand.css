@@ -2734,8 +2734,15 @@ body.applicant-portal-body {
     cursor: pointer;
     list-style: none;
     user-select: none;
+    border-radius: 8px 8px 0 0;
 }
 .rg-applicant-panel__summary::-webkit-details-marker { display: none; }
+.rg-applicant-panel__summary:focus {
+    outline: none;
+}
+.rg-applicant-panel__summary:focus-visible {
+    box-shadow: inset 0 0 0 2px rgba(30, 92, 45, 0.28);
+}
 .rg-applicant-panel__icon { color: var(--rg-brand-green); flex-shrink: 0; }
 .rg-applicant-panel__heading {
     font-size: 0.86rem;
@@ -2758,14 +2765,14 @@ body.applicant-portal-body {
 }
 .rg-applicant-panel[open] .rg-applicant-panel__chevron { transform: rotate(180deg); }
 .rg-applicant-panel__body {
-    padding: 0.25rem 0.9rem 0.9rem;
+    padding: 0.2rem 0.9rem 0.8rem;
     border-top: 1px solid #eef1f4;
 }
 .rg-applicant-panel__grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
     gap: 0.6rem 1.2rem;
-    margin: 0.75rem 0;
+    margin: 0.65rem 0;
 }
 .rg-applicant-panel__grid > div {
     display: flex;
@@ -2785,8 +2792,8 @@ body.applicant-portal-body {
     font-weight: 600;
 }
 .rg-applicant-panel__field {
-    margin-top: 0.75rem;
-    padding-top: 0.75rem;
+    margin-top: 0.6rem;
+    padding-top: 0.6rem;
     border-top: 1px solid #eef1f4;
 }
 .rg-applicant-panel__field p {

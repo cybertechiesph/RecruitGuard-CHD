@@ -15,6 +15,7 @@ from io import BytesIO, StringIO
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from django.conf import settings
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.mail import EmailMultiAlternatives
 from django.db import IntegrityError, transaction
@@ -469,6 +470,66 @@ def remember_internal_password_hash(user, password_hash=None):
     if stale_ids:
         InternalPasswordHistory.objects.filter(id__in=stale_ids).delete()
     return history
+
+
+def normalize_internal_password_reset_email(email):
+    return (email or "").strip().lower()
+
+
+def _password_reset_cache_key(kind, value):
+    digest = hashlib.sha256((value or "").encode("utf-8")).hexdigest()
+    return f"recruitguard:internal-password-reset:{kind}:{digest}"
+
+
+def _increment_cache_counter(cache_key, timeout_seconds):
+    if timeout_seconds <= 0:
+        return 0
+    try:
+        if cache.add(cache_key, 1, timeout=timeout_seconds):
+            return 1
+        return cache.incr(cache_key)
+    except ValueError:
+        cache.set(cache_key, 1, timeout=timeout_seconds)
+        return 1
+
+
+def reserve_internal_password_reset_request(email, request=None):
+    normalized_email = normalize_internal_password_reset_email(email)
+    if not normalized_email:
+        return False
+
+    ip_address = _request_ip_address(request) or "unknown"
+    allowed = True
+
+    email_cooldown_seconds = int(
+        getattr(settings, "PASSWORD_RESET_EMAIL_COOLDOWN_SECONDS", 300)
+    )
+    if email_cooldown_seconds > 0:
+        cooldown_key = _password_reset_cache_key("email-cooldown", normalized_email)
+        if cache.get(cooldown_key):
+            allowed = False
+
+    email_window_seconds = int(
+        getattr(settings, "PASSWORD_RESET_EMAIL_WINDOW_SECONDS", 3600)
+    )
+    email_limit = int(getattr(settings, "PASSWORD_RESET_EMAIL_MAX_PER_WINDOW", 3))
+    if email_limit > 0 and email_window_seconds > 0:
+        email_counter_key = _password_reset_cache_key("email-window", normalized_email)
+        email_count = _increment_cache_counter(email_counter_key, email_window_seconds)
+        if email_count > email_limit:
+            allowed = False
+
+    ip_window_seconds = int(getattr(settings, "PASSWORD_RESET_IP_WINDOW_SECONDS", 3600))
+    ip_limit = int(getattr(settings, "PASSWORD_RESET_IP_MAX_PER_WINDOW", 10))
+    if ip_limit > 0 and ip_window_seconds > 0:
+        ip_counter_key = _password_reset_cache_key("ip-window", ip_address)
+        ip_count = _increment_cache_counter(ip_counter_key, ip_window_seconds)
+        if ip_count > ip_limit:
+            allowed = False
+
+    if allowed and email_cooldown_seconds > 0:
+        cache.set(cooldown_key, True, timeout=email_cooldown_seconds)
+    return allowed
 
 
 def _send_internal_email_change_verification(change_request, request=None):

@@ -279,24 +279,21 @@ def workflow_stage_state(branch, current_stage, step_value, case_status=""):
 
 
 PIPELINE_STAGES = [
-    {"key": "publication", "label": "Publication"},
-    {"key": "intake", "label": "Intake"},
     {"key": "screening", "label": "Screening"},
     {"key": "exam", "label": "Exam"},
     {"key": "interview", "label": "Interview"},
-    {"key": "deliberation", "label": "Deliberation/CAR"},
-    {"key": "submission", "label": "Submission"},
-    {"key": "appointment", "label": "Appointment"},
-    {"key": "archive", "label": "Archive"},
+    {"key": "deliberation", "label": "Deliberation"},
+    {"key": "decision", "label": "Decision"},
+    {"key": "completion", "label": "Completion"},
 ]
 
 PIPELINE_STAGE_MAP = {
     RecruitmentCase.Stage.SECRETARIAT_REVIEW: "screening",
     RecruitmentCase.Stage.HRM_CHIEF_REVIEW: "screening",
     RecruitmentCase.Stage.HRMPSB_REVIEW: "deliberation",
-    RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW: "submission",
-    RecruitmentCase.Stage.COMPLETION: "appointment",
-    RecruitmentCase.Stage.CLOSED: "archive",
+    RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW: "decision",
+    RecruitmentCase.Stage.COMPLETION: "completion",
+    RecruitmentCase.Stage.CLOSED: "completion",
 }
 
 PIPELINE_SECTION_MAP = {
@@ -304,8 +301,8 @@ PIPELINE_SECTION_MAP = {
     "exam": "exam",
     "interview": "interview",
     "deliberation": "deliberation",
-    "decision": "submission",
-    "completion": "appointment",
+    "decision": "decision",
+    "completion": "completion",
 }
 
 QUEUE_TASK_LABELS = {
@@ -313,10 +310,10 @@ QUEUE_TASK_LABELS = {
     "screening": "Screening",
     "exam": "Exam",
     "interview": "Interview",
-    "deliberation": "Deliberation/CAR",
+    "deliberation": "Deliberation",
     "actions": "Disposition",
     "decision": "Decision",
-    "completion": "Appointment",
+    "completion": "Completion",
 }
 
 QUEUE_TASK_THEMES = {
@@ -343,7 +340,7 @@ def _pipeline_step_for_actions(application, current_stage):
     }:
         return "interview"
     if current_stage == RecruitmentCase.Stage.HRMPSB_REVIEW:
-        return "submission"
+        return "decision"
     return PIPELINE_STAGE_MAP.get(current_stage, "screening")
 
 
@@ -352,8 +349,6 @@ def pipeline_stage_state(application, case_status, step_key):
     recruitment_case = getattr(application, "case", None)
     current_stage = getattr(recruitment_case, "current_stage", "")
     if not current_stage:
-        if step_key in ("publication", "intake"):
-            return "complete"
         return "future"
 
     current_section = get_current_workflow_section(application)
@@ -369,18 +364,27 @@ def pipeline_stage_state(application, case_status, step_key):
     try:
         current_idx = order.index(mapped)
     except ValueError:
-        current_idx = 2
+        current_idx = 0
 
     try:
         step_idx = order.index(step_key)
     except ValueError:
         return "future"
 
-    if case_status in {
-        RecruitmentCase.CaseStatus.APPROVED,
-        RecruitmentCase.CaseStatus.REJECTED,
-    }:
-        return "complete"
+    if case_status == RecruitmentCase.CaseStatus.REJECTED:
+        terminal_idx = order.index("decision")
+        if step_idx < terminal_idx:
+            return "complete"
+        if step_idx == terminal_idx:
+            return "current"
+        return "future"
+    if case_status == RecruitmentCase.CaseStatus.APPROVED:
+        terminal_idx = order.index("completion")
+        if step_idx < terminal_idx:
+            return "complete"
+        if step_idx == terminal_idx:
+            return "current"
+        return "future"
 
     if step_idx < current_idx:
         return "complete"

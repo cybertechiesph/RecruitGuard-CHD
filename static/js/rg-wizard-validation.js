@@ -97,7 +97,7 @@
             var anchor = pr.anchor || stripAnchor || field;
             // summaryOnly: no clean visible anchor (e.g. a hidden <select> with
             // its own row highlight) — route the message to the summary box.
-            if (!pr.summaryOnly && anchor && anchor.nodeType === 1) {
+            if (!pr.summaryOnly && anchor && anchor.nodeType === 1 && isVisible(anchor)) {
                 renderInlineError(field, pr.msg, i, anchor);
                 inlineCount += 1;
             } else if (summaryMsgs.indexOf(pr.msg) === -1) {
@@ -144,7 +144,15 @@
     function isFocusable(el) {
         // Visible + focusable. offsetParent is null for display:none / detached
         // nodes (good enough for our wizards; none use position:fixed fields).
-        return !!(el && el.nodeType === 1 && typeof el.focus === "function" && el.offsetParent !== null);
+        return !!(el && el.nodeType === 1 && typeof el.focus === "function" && isVisible(el));
+    }
+
+    function isVisible(el) {
+        return !!(
+            el &&
+            el.nodeType === 1 &&
+            (el.offsetParent !== null || el.getClientRects().length > 0)
+        );
     }
 
     global.RGWizardErrors = {
