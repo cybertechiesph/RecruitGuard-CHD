@@ -6,9 +6,6 @@
     {% if latest_final_selection %}
         {% if application.pk == latest_final_selection.selected_application_id %}
             <div class="rg-cmp-closed-banner rg-cmp-closed-banner--selected">
-                <span class="rg-cmp-closed-banner__icon">
-                    <i class="bi bi-patch-check-fill"></i>
-                </span>
                 <div class="rg-cmp-closed-banner__body">
                     <p class="rg-cmp-closed-banner__title">
                         Case Closed &mdash; Applicant Selected from CAR
@@ -26,16 +23,12 @@
                         {% endif %}
                     </p>
                     <span class="rg-cmp-closed-banner__audit-note">
-                        <i class="bi bi-shield-lock-fill"></i>
-                        Fully archived &amp; audit-logged
+                                                Fully archived &amp; audit-logged
                     </span>
                 </div>
             </div>
         {% else %}
             <div class="rg-cmp-closed-banner rg-cmp-closed-banner--not-selected">
-                <span class="rg-cmp-closed-banner__icon">
-                    <i class="bi bi-x-circle-fill"></i>
-                </span>
                 <div class="rg-cmp-closed-banner__body">
                     <p class="rg-cmp-closed-banner__title">
                         Case Closed &mdash; Not Selected from CAR
@@ -47,8 +40,7 @@
                         The Appointing Authority selected another applicant from the finalized CAR.
                     </p>
                     <span class="rg-cmp-closed-banner__audit-note">
-                        <i class="bi bi-shield-lock-fill"></i>
-                        Fully archived &amp; audit-logged
+                                                Fully archived &amp; audit-logged
                     </span>
                 </div>
             </div>
@@ -56,9 +48,6 @@
     {% elif latest_final_decision %}
         {% if latest_final_decision.decision_outcome == "selected" %}
             <div class="rg-cmp-closed-banner rg-cmp-closed-banner--selected">
-                <span class="rg-cmp-closed-banner__icon">
-                    <i class="bi bi-patch-check-fill"></i>
-                </span>
                 <div class="rg-cmp-closed-banner__body">
                     <p class="rg-cmp-closed-banner__title">
                         Case Closed &mdash; Applicant Selected
@@ -76,16 +65,12 @@
                         {% endif %}
                     </p>
                     <span class="rg-cmp-closed-banner__audit-note">
-                        <i class="bi bi-shield-lock-fill"></i>
-                        Fully archived &amp; audit-logged
+                                                Fully archived &amp; audit-logged
                     </span>
                 </div>
             </div>
         {% else %}
             <div class="rg-cmp-closed-banner rg-cmp-closed-banner--not-selected">
-                <span class="rg-cmp-closed-banner__icon">
-                    <i class="bi bi-x-circle-fill"></i>
-                </span>
                 <div class="rg-cmp-closed-banner__body">
                     <p class="rg-cmp-closed-banner__title">
                         Case Closed &mdash; Not Selected
@@ -103,17 +88,13 @@
                         {% endif %}
                     </p>
                     <span class="rg-cmp-closed-banner__audit-note">
-                        <i class="bi bi-shield-lock-fill"></i>
-                        Fully archived &amp; audit-logged
+                                                Fully archived &amp; audit-logged
                     </span>
                 </div>
             </div>
         {% endif %}
     {% else %}
         <div class="rg-cmp-closed-banner rg-cmp-closed-banner--neutral">
-            <span class="rg-cmp-closed-banner__icon">
-                <i class="bi bi-archive-fill"></i>
-            </span>
             <div class="rg-cmp-closed-banner__body">
                 <p class="rg-cmp-closed-banner__title">
                     Recruitment Case Closed
@@ -125,8 +106,7 @@
                     All records are preserved as final archives.
                 </p>
                 <span class="rg-cmp-closed-banner__audit-note">
-                    <i class="bi bi-shield-lock-fill"></i>
-                    Fully archived &amp; audit-logged
+                                        Fully archived &amp; audit-logged
                 </span>
             </div>
         </div>
@@ -134,9 +114,6 @@
 {% elif completion_record %}
     
     <div class="rg-cmp-closed-banner rg-cmp-closed-banner--neutral">
-        <span class="rg-cmp-closed-banner__icon">
-            <i class="bi bi-hourglass-split"></i>
-        </span>
         <div class="rg-cmp-closed-banner__body">
             <p class="rg-cmp-closed-banner__title">
                 Completion Tracking In Progress
@@ -159,7 +136,6 @@
                     Selection recorded from the finalized Comparative Assessment Report.
                 </p>
             </div>
-            <i class="bi bi-lock-fill" style="color:var(--rg-primary);font-size:1rem;"></i>
         </div>
 
         <div class="rg-pkt-rows">
@@ -168,11 +144,11 @@
                 <span class="rg-pkt-row__value">
                     {% if application.pk == latest_final_selection.selected_application_id %}
                         <span class="rg-dec-outcome-pill rg-dec-outcome-pill--selected">
-                            <i class="bi bi-check-circle-fill"></i>Selected
+                            Selected
                         </span>
                     {% else %}
                         <span class="rg-dec-outcome-pill rg-dec-outcome-pill--not-selected">
-                            <i class="bi bi-x-circle-fill"></i>Not Selected
+                            Not Selected
                         </span>
                     {% endif %}
                 </span>
@@ -230,7 +206,6 @@
                     Decision recorded at Appointing Authority review step.
                 </p>
             </div>
-            <i class="bi bi-lock-fill" style="color:var(--rg-primary);font-size:1rem;"></i>
         </div>
 
         <div class="rg-pkt-rows">
@@ -239,11 +214,11 @@
                 <span class="rg-pkt-row__value">
                     {% if latest_final_decision.decision_outcome == "selected" %}
                         <span class="rg-dec-outcome-pill rg-dec-outcome-pill--selected">
-                            <i class="bi bi-check-circle-fill"></i>Selected
+                            Selected
                         </span>
                     {% else %}
                         <span class="rg-dec-outcome-pill rg-dec-outcome-pill--not-selected">
-                            <i class="bi bi-x-circle-fill"></i>Not Selected
+                            Not Selected
                         </span>
                     {% endif %}
                 </span>
@@ -292,7 +267,6 @@
                     Completion tracking details as recorded at closure.
                 </p>
             </div>
-            <i class="bi bi-lock-fill" style="color:var(--rg-primary);font-size:1rem;"></i>
         </div>
 
         <div class="rg-pkt-rows mb-3">
@@ -377,18 +351,15 @@
                             {% with s=req.status|lower %}
                             {% if s == "completed" %}
                                 <span class="rg-cmp-req-status-badge rg-cmp-req-status-badge--completed">
-                                    <i class="bi bi-check-circle-fill"></i>
-                                    {{ req.get_status_display }}
+                                                                        {{ req.get_status_display }}
                                 </span>
                             {% elif s == "pending" %}
                                 <span class="rg-cmp-req-status-badge rg-cmp-req-status-badge--pending">
-                                    <i class="bi bi-hourglass-split"></i>
-                                    {{ req.get_status_display }}
+                                                                        {{ req.get_status_display }}
                                 </span>
                             {% else %}
                                 <span class="rg-cmp-req-status-badge rg-cmp-req-status-badge--na">
-                                    <i class="bi bi-dash-circle"></i>
-                                    {{ req.get_status_display }}
+                                                                        {{ req.get_status_display }}
                                 </span>
                             {% endif %}
                             {% endwith %}
@@ -459,7 +430,7 @@
                 <a href="{{ audit_log_url }}"
                    class="btn btn-sm btn-outline-secondary"
                    style="font-size:0.75rem;white-space:nowrap;">
-                    <i class="bi bi-shield-lock me-1"></i>Full Audit Log
+                    Full Audit Log
                 </a>
             {% endif %}
         </div>
@@ -502,15 +473,11 @@
 {% elif audit_log_url %}
     
     <div class="rg-dec-handoff">
-        <span class="rg-dec-handoff__icon">
-            <i class="bi bi-shield-lock-fill"></i>
-        </span>
         <div>
             <strong>Audit Log.</strong>
             The complete audit trail for this case is preserved and accessible.
             <a href="{{ audit_log_url }}" class="ms-1">
-                View full audit log <i class="bi bi-arrow-right ms-1"></i>
-            </a>
+                View full audit log            </a>
         </div>
     </div>
 {% endif %}
@@ -519,7 +486,6 @@
 {% if reopen_form %}
     <div class="rg-cmp-reopen-zone">
         <div class="rg-cmp-reopen-zone__header">
-            <i class="bi bi-exclamation-triangle-fill rg-cmp-reopen-zone__icon"></i>
             <span class="rg-cmp-reopen-zone__title">
                 Authorized Reopen Request
             </span>
@@ -542,7 +508,7 @@
                 class="btn btn-sm btn-outline-danger"
                 data-bs-toggle="modal"
                 data-bs-target="#reopenConfirmModal">
-            <i class="bi bi-arrow-counterclockwise me-1"></i>Request Reopen&hellip;
+            Request Reopen&hellip;
         </button>
     </div>
 
@@ -555,8 +521,7 @@
                      style="background:#991b1b;border-bottom:none;padding:1rem 1.25rem;">
                     <h5 class="modal-title" id="reopenConfirmModalLabel"
                         style="font-size:0.9375rem;font-weight:700;color:#fff;margin:0;">
-                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                        Reopen Closed Recruitment Case
+                                                Reopen Closed Recruitment Case
                     </h5>
                     <button type="button" class="btn-close btn-close-white"
                             data-bs-dismiss="modal" aria-label="Close"></button>
@@ -571,8 +536,7 @@
                              style="background:#fef2f2;border:1px solid #fca5a5;
                                     border-radius:0.35rem;padding:0.65rem 0.75rem;
                                     font-size:0.8rem;color:#991b1b;">
-                            <i class="bi bi-exclamation-triangle-fill me-1"></i>
-                            <strong>This is a controlled, audit-logged action.</strong>
+                                            <strong>This is a controlled, audit-logged action.</strong>
                             The reopen event will be permanently recorded against this case.
                             Only proceed if you have a documented administrative or legal basis.
                         </div>
@@ -608,8 +572,7 @@
                         <button type="submit"
                                 class="btn btn-sm btn-danger"
                                 id="reopen-confirm-btn">
-                            <i class="bi bi-arrow-counterclockwise me-1"></i>
-                            Confirm Reopen
+                                                        Confirm Reopen
                         </button>
                     </div>
                 </form>
@@ -623,9 +586,6 @@
         
     {% elif audit_log_url and recruitment_case and recruitment_case.current_stage == "closed" %}
         <div class="rg-dec-handoff">
-            <span class="rg-dec-handoff__icon">
-                <i class="bi bi-shield-lock-fill"></i>
-            </span>
             <div>
                 <strong>Read-only archive.</strong>
                 All records for this case are preserved and immutable.

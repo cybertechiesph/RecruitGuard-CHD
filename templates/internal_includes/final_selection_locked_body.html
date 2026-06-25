@@ -2,15 +2,12 @@
 
 {% with selection=latest_final_selection %}
 <div class="rg-dec-status-bar rg-dec-status-bar--selected">
-    <i class="bi bi-check-circle-fill"></i>
     Final Selection Recorded &mdash; <strong>{{ selection.selected_application.applicant_display_name }}</strong>
 </div>
 
 <div class="rg-dec-locked-frame">
     <div class="rg-dec-locked-frame__header">
-        <i class="bi bi-lock-fill" style="color:var(--rg-primary);font-size:0.875rem;"></i>
         <span class="rg-dec-locked-frame__header-title">CAR Final Selection Record</span>
-        <i class="bi bi-shield-lock text-muted" style="font-size:0.8rem;"></i>
     </div>
     <div class="rg-dec-locked-frame__body">
         <div class="rg-pkt-rows">
@@ -159,9 +156,6 @@
 {% endif %}
 
 <div class="rg-dec-handoff">
-    <span class="rg-dec-handoff__icon">
-        <i class="bi bi-arrow-right-circle-fill"></i>
-    </span>
     <div>
         {% if application.pk == selection.selected_application_id %}
             <strong>Selected from CAR.</strong>

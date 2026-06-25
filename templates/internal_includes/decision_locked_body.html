@@ -7,12 +7,10 @@
 
 {% if dec.decision_outcome == "selected" %}
     <div class="rg-dec-status-bar rg-dec-status-bar--selected">
-        <i class="bi bi-check-circle-fill"></i>
         Decision Recorded &mdash; <strong>Selected</strong>
     </div>
 {% else %}
     <div class="rg-dec-status-bar rg-dec-status-bar--not-selected">
-        <i class="bi bi-x-circle-fill"></i>
         Decision Recorded &mdash; <strong>Not Selected</strong>
     </div>
 {% endif %}
@@ -20,9 +18,7 @@
 
 <div class="rg-dec-locked-frame">
     <div class="rg-dec-locked-frame__header">
-        <i class="bi bi-lock-fill" style="color:var(--rg-primary);font-size:0.875rem;"></i>
         <span class="rg-dec-locked-frame__header-title">Final Decision Record</span>
-        <i class="bi bi-shield-lock text-muted" style="font-size:0.8rem;"></i>
     </div>
     <div class="rg-dec-locked-frame__body">
 
@@ -33,11 +29,11 @@
                 <span class="rg-pkt-row__value">
                     {% if dec.decision_outcome == "selected" %}
                         <span class="rg-dec-outcome-pill rg-dec-outcome-pill--selected">
-                            <i class="bi bi-check-circle-fill"></i>Selected
+                            Selected
                         </span>
                     {% else %}
                         <span class="rg-dec-outcome-pill rg-dec-outcome-pill--not-selected">
-                            <i class="bi bi-x-circle-fill"></i>Not Selected
+                            Not Selected
                         </span>
                     {% endif %}
                 </span>
@@ -102,7 +98,6 @@
                     Submission packet as captured at the time this decision was recorded.
                 </p>
             </div>
-            <i class="bi bi-archive text-muted" style="font-size:1.1rem;"></i>
         </div>
 
         
@@ -165,7 +160,7 @@
                     <span class="rg-pkt-row__value">
                         {% if ssum.has_deliberation_record %}
                             <span class="text-success fw-semibold">
-                                <i class="bi bi-check-circle-fill me-1"></i>Present
+                                Present
                             </span>
                         {% else %}
                             <span class="text-muted">—</span>
@@ -179,7 +174,7 @@
                         </span>
                         <span class="rg-pkt-row__value">
                             <span class="text-success fw-semibold">
-                                <i class="bi bi-check-circle-fill me-1"></i>Present
+                                Present
                             </span>
                         </span>
                     </div>
@@ -211,9 +206,6 @@
 
 
 <div class="rg-dec-handoff">
-    <span class="rg-dec-handoff__icon">
-        <i class="bi bi-arrow-right-circle-fill"></i>
-    </span>
     <div>
         {% if snap and snap.summary and snap.summary.has_comparative_assessment_report %}
             
