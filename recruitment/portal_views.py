@@ -84,6 +84,47 @@ def _posting_is_closing_soon(posting):
     return False
 
 
+def _build_applicant_upcoming_schedules(application):
+    """Upcoming exam / interview the applicant was notified about, soonest first.
+    Only future, applicant-facing schedules are shown so the page reflects what the
+    applicant still needs to attend."""
+    now = timezone.now()
+    schedules = []
+    exam_schedule = (
+        application.exam_schedules.filter(
+            applicant_notified_at__isnull=False,
+            scheduled_for__gte=now,
+        )
+        .order_by("scheduled_for")
+        .first()
+    )
+    if exam_schedule:
+        schedules.append(
+            {
+                "kind": "Examination",
+                "scheduled_for": exam_schedule.scheduled_for,
+                "location": exam_schedule.venue,
+                "instructions": exam_schedule.instructions,
+            }
+        )
+    interview_session = (
+        application.interview_sessions.filter(scheduled_for__gte=now)
+        .order_by("scheduled_for")
+        .first()
+    )
+    if interview_session:
+        schedules.append(
+            {
+                "kind": "Interview",
+                "scheduled_for": interview_session.scheduled_for,
+                "location": interview_session.location,
+                "instructions": "",
+            }
+        )
+    schedules.sort(key=lambda item: item["scheduled_for"])
+    return schedules
+
+
 def _build_applicant_status_context(application):
     status_info = _APPLICANT_STATUS_LABELS.get(application.status)
     status_label = status_info[0] if status_info else "Received"
@@ -94,6 +135,7 @@ def _build_applicant_status_context(application):
         "status_label": status_label,
         "status_variant": status_variant,
         "status_description": status_description,
+        "upcoming_schedules": _build_applicant_upcoming_schedules(application),
     }
 
 

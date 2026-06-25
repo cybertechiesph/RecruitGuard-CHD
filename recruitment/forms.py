@@ -31,6 +31,7 @@ from .models import (
     CompletionRequirement,
     DeliberationRecord,
     ExamRecord,
+    ExamSchedule,
     EvidenceVaultItem,
     FinalDecision,
     InterviewRating,
@@ -44,6 +45,7 @@ from .models import (
     ScreeningDocumentReview,
     ScreeningRecord,
 )
+from .notification_services import REQUIREMENT_CHECKLIST_DEFAULT_DEADLINE_DAYS
 from .requirements import PERFORMANCE_RATING, get_applicant_document_requirements
 from .services import (
     get_available_actions,
@@ -1105,6 +1107,13 @@ class RequirementChecklistNotificationForm(BootstrapFormMixin, forms.Form):
         super().__init__(*args, **kwargs)
         self.fields["checklist_items"].label = "Requirement Checklist"
         self.fields["additional_message"].label = "Additional Instructions"
+        self.fields["deadline"].label = "Submission Deadline"
+        self.fields["deadline"].initial = timezone.localdate() + timedelta(
+            days=REQUIREMENT_CHECKLIST_DEFAULT_DEADLINE_DAYS
+        )
+        self.fields["deadline"].help_text = (
+            "Defaults to two weeks from today; adjust if the office set a different window."
+        )
         self._apply_bootstrap()
 
     def clean_deadline(self):
@@ -1756,6 +1765,50 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
             except ValueError as exc:
                 raise forms.ValidationError(str(exc)) from exc
         return uploaded_file
+
+
+class ExamScheduleForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.ModelForm):
+    scheduled_for = forms.DateTimeField(
+        input_formats=["%Y-%m-%dT%H:%M"],
+        widget=forms.DateTimeInput(attrs={"type": "datetime-local"}),
+    )
+
+    class Meta:
+        model = ExamSchedule
+        fields = [
+            "scheduled_for",
+            "venue",
+            "instructions",
+            "notice_delivery",
+        ]
+        widgets = {
+            "instructions": forms.Textarea(attrs={"rows": 4}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["scheduled_for"].label = "Exam Schedule"
+        self.fields["venue"].label = "Exam Venue"
+        self.fields["instructions"].label = "Instructions for the Applicant"
+        self.fields["instructions"].required = False
+        self.fields["notice_delivery"].label = "How the applicant will be notified"
+        self._apply_bootstrap()
+
+    def clean_scheduled_for(self):
+        scheduled_for = self.cleaned_data.get("scheduled_for")
+        if scheduled_for is None:
+            return scheduled_for
+        cutoff = timezone.now() - timedelta(minutes=5)
+        if scheduled_for >= cutoff:
+            return scheduled_for
+        if (
+            self.instance
+            and self.instance.pk
+            and self.instance.scheduled_for == scheduled_for
+            and self.instance.scheduled_for < cutoff
+        ):
+            return scheduled_for
+        raise forms.ValidationError("The exam can't be scheduled in the past.")
 
 
 class InterviewSessionForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.ModelForm):

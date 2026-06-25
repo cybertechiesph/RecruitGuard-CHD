@@ -10,6 +10,7 @@ from django.contrib.auth.views import (
     PasswordResetDoneView,
     PasswordResetView,
 )
+from django.conf import settings
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
@@ -95,6 +96,14 @@ class InternalLoginView(LoginView):
 
     def form_valid(self, form):
         user = form.get_user()
+        if not getattr(settings, "INTERNAL_MFA_ENABLED", True):
+            auth_login(self.request, user)
+            _clear_pending_internal_mfa(self.request.session)
+            self.request.session[INTERNAL_MFA_VERIFIED_SESSION_KEY] = True
+            self.request.session[INTERNAL_MFA_USER_SESSION_KEY] = user.id
+            messages.success(self.request, "Signed in.")
+            return redirect(self.get_success_url())
+
         try:
             challenge = issue_internal_mfa_challenge(
                 user,

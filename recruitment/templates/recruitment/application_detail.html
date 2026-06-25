@@ -153,6 +153,8 @@
 
                 {% if exam_form %}
                     
+                    {% include "internal_includes/exam_schedule_card.html" %}
+
                     {% include "internal_includes/exam_body.html" %}
 
                 {% elif exam_locked and current_exam_record %}

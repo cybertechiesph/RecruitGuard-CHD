@@ -20,6 +20,7 @@ from .forms import (
     EvidenceArchiveForm,
     EvidenceVaultSearchForm,
     ExamRecordForm,
+    ExamScheduleForm,
     EvidenceUploadForm,
     FinalDecisionForm,
     FinalSelectionForm,
@@ -82,6 +83,7 @@ from .services import (
     get_evidence_context_application_for_user,
     get_evidence_queryset_for_user,
     get_exam_record,
+    get_exam_schedule,
     get_exam_records,
     get_final_decision_history,
     get_final_selection_for_application,
@@ -115,6 +117,7 @@ from .services import (
     save_completion_tracking,
     save_deliberation_record,
     save_exam_record,
+    save_exam_schedule,
     save_interview_rating,
     save_interview_session,
     save_screening_review,
@@ -495,6 +498,8 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
         )
         if user_can_manage_exam(user, application):
             exam_record = context["current_exam_record"]
+            exam_schedule = get_exam_schedule(application)
+            context["current_exam_schedule"] = exam_schedule
             if exam_record and exam_record.is_finalized:
                 context["exam_locked"] = True
             else:
@@ -502,6 +507,7 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
                     instance=exam_record,
                     application=application,
                 )
+                context["exam_schedule_form"] = ExamScheduleForm(instance=exam_schedule)
         if user_can_manage_interview_session(user, application):
             interview_session = context["current_interview_session"]
             if interview_session and interview_session.is_finalized:
@@ -1098,6 +1104,41 @@ class ExaminationRecordView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, 
         application.refresh_from_db()
         if not user_can_view_application(request.user, application):
             return redirect("workflow-queue")
+        return redirect("application-detail", pk=pk)
+
+
+class ExamScheduleView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
+    def post(self, request, pk):
+        application = get_object_or_404(RecruitmentApplication, pk=pk)
+        if not user_can_manage_exam(request.user, application):
+            raise PermissionDenied
+
+        form = ExamScheduleForm(
+            request.POST,
+            instance=get_exam_schedule(application),
+        )
+        if form.is_valid():
+            try:
+                save_exam_schedule(
+                    application=application,
+                    actor=request.user,
+                    cleaned_data=form.cleaned_data,
+                )
+            except (ValueError, ValidationError) as exc:
+                messages.error(request, str(exc))
+            else:
+                messages.success(
+                    request,
+                    "Exam schedule saved and the applicant was notified.",
+                )
+        else:
+            messages.error(
+                request,
+                _format_form_errors(
+                    form,
+                    "Complete the required exam scheduling fields before saving.",
+                ),
+            )
         return redirect("application-detail", pk=pk)
 
 

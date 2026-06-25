@@ -1621,6 +1621,111 @@ class ExamRecord(TimestampedModel):
         return f"{self.application.reference_label} {self.review_stage} examination"
 
 
+class ExamSchedule(TimestampedModel):
+    """Applicant-facing exam invitation (date / venue) that must be issued before
+    examination results can be recorded. Mirrors InterviewSession: one schedule per
+    application + review stage, owned by the current Secretariat/HRM Chief handler.
+    Saving a schedule notifies the applicant; this is the "passed screening, here is
+    your exam" touchpoint that previously lived entirely outside the system.
+    """
+
+    class NoticeDelivery(models.TextChoices):
+        SYSTEM_EMAIL = "system_email", "Emailed to applicant"
+        PRINTED_NOTICE = "printed_notice", "Hand-delivered printed notice"
+
+    application = models.ForeignKey(
+        RecruitmentApplication,
+        on_delete=models.CASCADE,
+        related_name="exam_schedules",
+    )
+    recruitment_case = models.ForeignKey(
+        RecruitmentCase,
+        on_delete=models.CASCADE,
+        related_name="exam_schedules",
+        blank=True,
+        null=True,
+    )
+    recruitment_entry = models.ForeignKey(
+        PositionPosting,
+        on_delete=models.PROTECT,
+        related_name="exam_schedules",
+        blank=True,
+        null=True,
+    )
+    review_stage = models.CharField(max_length=40, choices=RecruitmentCase.Stage.choices)
+    scheduled_by = models.ForeignKey(
+        RecruitmentUser,
+        on_delete=models.PROTECT,
+        related_name="scheduled_exam_schedules",
+    )
+    scheduled_by_role = models.CharField(max_length=40, blank=True)
+    branch = models.CharField(max_length=20, choices=PositionPosting.Branch.choices)
+    level = models.PositiveSmallIntegerField(choices=PositionPosting.Level.choices)
+    scheduled_for = models.DateTimeField()
+    venue = models.CharField(max_length=255)
+    instructions = models.TextField(blank=True)
+    notice_delivery = models.CharField(
+        max_length=20,
+        choices=NoticeDelivery.choices,
+        default=NoticeDelivery.SYSTEM_EMAIL,
+    )
+    applicant_notified_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["review_stage", "scheduled_for", "created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["application", "review_stage"],
+                name="unique_exam_schedule_per_application_stage",
+            )
+        ]
+
+    def clean(self):
+        errors = {}
+        if not self.recruitment_case_id:
+            errors["recruitment_case"] = "Exam schedules must be linked to a recruitment case."
+        elif self.application_id and self.recruitment_case.application_id != self.application_id:
+            errors["recruitment_case"] = (
+                "Exam schedules must stay linked to the recruitment case of the same application."
+            )
+        if not self.recruitment_entry_id:
+            errors["recruitment_entry"] = "Exam schedules must reference the recruitment entry of the application."
+        elif self.application_id and self.recruitment_entry_id != self.application.position_id:
+            errors["recruitment_entry"] = (
+                "Exam schedules must stay linked to the recruitment entry of the same application."
+            )
+        if self.review_stage not in {
+            RecruitmentCase.Stage.SECRETARIAT_REVIEW,
+            RecruitmentCase.Stage.HRM_CHIEF_REVIEW,
+        }:
+            errors["review_stage"] = (
+                "Exam scheduling is only supported during the Secretariat or HRM Chief review stages."
+            )
+        if self.scheduled_by.role not in {
+            RecruitmentUser.Role.SECRETARIAT,
+            RecruitmentUser.Role.HRM_CHIEF,
+        }:
+            errors["scheduled_by"] = (
+                "Only the Secretariat or HRM Chief may schedule the examination."
+            )
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.branch = self.application.branch
+        self.level = self.application.level
+        self.recruitment_entry = self.application.position
+        self.scheduled_by_role = self.scheduled_by.role
+        super().save(*args, **kwargs)
+
+    @property
+    def applicant_was_notified(self):
+        return self.applicant_notified_at is not None
+
+    def __str__(self):
+        return f"{self.application.reference_label} {self.review_stage} exam schedule"
+
+
 class InterviewSession(TimestampedModel):
     application = models.ForeignKey(
         RecruitmentApplication,
@@ -2485,6 +2590,11 @@ class NotificationLog(TimestampedModel):
             "interview_session_scheduled",
             "Interview Session Scheduled Notification",
         )
+        EXAM_INVITATION = "exam_invitation", "Exam Invitation Notification"
+        APPLICANT_INTERVIEW_NOTICE = (
+            "applicant_interview_notice",
+            "Applicant Interview Notice Notification",
+        )
         REQUIREMENT_CHECKLIST = "requirement_checklist", "Requirement Checklist Notification"
         REMINDER = "reminder", "Reminder Notification"
 
@@ -3016,6 +3126,7 @@ class AuditLog(TimestampedModel):
         ROUTED = "routed", "Application Routed"
         SCREENING_RECORDED = "screening_recorded", "Screening Recorded"
         SCREENING_FINALIZED = "screening_finalized", "Screening Finalized"
+        EXAM_SCHEDULED = "exam_scheduled", "Exam Scheduled"
         EXAM_RECORDED = "exam_recorded", "Exam Recorded"
         EXAM_FINALIZED = "exam_finalized", "Exam Finalized"
         INTERVIEW_SCHEDULED = "interview_scheduled", "Interview Scheduled"

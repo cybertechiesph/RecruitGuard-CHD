@@ -35,6 +35,7 @@ from .models import (
     CompletionRequirement,
     DeliberationRecord,
     ExamRecord,
+    ExamSchedule,
     EvidenceVaultItem,
     FinalDecision,
     FinalSelection,
@@ -57,8 +58,10 @@ from .models import (
 )
 from .notification_services import (
     create_in_app_notifications,
+    queue_applicant_interview_notice_notification,
     queue_application_returned_to_applicant_notification,
     queue_document_resubmission_request_notification,
+    queue_exam_invitation_notification,
     queue_interview_session_scheduled_notifications,
     queue_non_selected_applicant_notification,
     queue_selected_applicant_notification,
@@ -2459,6 +2462,15 @@ def get_exam_records(application):
     ).order_by("created_at")
 
 
+def get_exam_schedule(application, stage=None):
+    review_stage = stage or get_current_review_stage(application)
+    return application.exam_schedules.select_related(
+        "scheduled_by",
+        "recruitment_case",
+        "recruitment_entry",
+    ).filter(review_stage=review_stage).first()
+
+
 def user_can_manage_exam(user, application):
     current_stage = get_current_review_stage(application)
     if (
@@ -3665,7 +3677,122 @@ def save_screening_review(application, actor, cleaned_data, finalize=False):
     )
     if finalize:
         _emit_screening_finalized_notification(application, actor, review_stage)
+        # Coupling (Gap B): a *definitive* Not-Qualified screening cut rejects the
+        # applicant and notifies them in the same action, so a screened-out applicant
+        # can never be silently stranded. A cut is "definitive" only when the documents
+        # are complete and nothing is flagged for resubmission — i.e. a true QS failure
+        # with nothing left to fix. When documents are incomplete or a resubmission was
+        # requested, the handler keeps the reject-or-return choice (both of which notify
+        # the applicant), so we do not auto-reject. The rejection notice uses
+        # screening-specific wording because the reject fires from a screening stage.
+        is_definitive_screening_cut = (
+            screening_record.qualification_outcome
+            == ScreeningRecord.QualificationOutcome.NOT_QUALIFIED
+            and screening_record.completeness_status
+            == ScreeningRecord.CompletenessStatus.COMPLETE
+            and not screening_record.document_reviews.filter(
+                status=ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION
+            ).exists()
+        )
+        if is_definitive_screening_cut:
+            process_workflow_action(
+                application,
+                actor,
+                "reject",
+                screening_record.screening_notes
+                or "Did not meet the Qualification Standards at screening.",
+            )
     return screening_record
+
+
+@transaction.atomic
+def save_exam_schedule(application, actor, cleaned_data, record_audit=True):
+    if not hasattr(application, "case"):
+        raise ValueError("A case must exist before the exam can be scheduled.")
+    review_stage = application.case.current_stage
+    if review_stage not in EXAM_STAGES:
+        raise ValueError(
+            "Exam scheduling is available only while the case is assigned to Secretariat or HRM Chief review."
+        )
+    if not user_can_manage_exam(actor, application):
+        raise ValueError("This case is not currently assigned to you for exam scheduling.")
+
+    exam_schedule = get_exam_schedule(application, stage=review_stage)
+    created = exam_schedule is None
+    previous_scheduled_for = exam_schedule.scheduled_for if exam_schedule else None
+    previous_venue = exam_schedule.venue if exam_schedule else ""
+    if exam_schedule is None:
+        exam_schedule = ExamSchedule(
+            application=application,
+            recruitment_case=application.case,
+            recruitment_entry=application.position,
+            review_stage=review_stage,
+            scheduled_by=actor,
+            branch=application.branch,
+            level=application.level,
+        )
+
+    scheduled_for = cleaned_data["scheduled_for"]
+    if _interview_scheduled_for_is_past(scheduled_for):
+        existing_past_schedule_unchanged = (
+            not created
+            and previous_scheduled_for == scheduled_for
+            and _interview_scheduled_for_is_past(previous_scheduled_for)
+        )
+        if not existing_past_schedule_unchanged:
+            raise ValueError("The exam can't be scheduled in the past.")
+
+    notice_delivery = (
+        cleaned_data.get("notice_delivery") or ExamSchedule.NoticeDelivery.SYSTEM_EMAIL
+    )
+    exam_schedule.recruitment_case = application.case
+    exam_schedule.recruitment_entry = application.position
+    exam_schedule.scheduled_by = actor
+    exam_schedule.scheduled_for = scheduled_for
+    exam_schedule.venue = cleaned_data["venue"]
+    exam_schedule.instructions = cleaned_data.get("instructions", "")
+    exam_schedule.notice_delivery = notice_delivery
+
+    should_notify = _interview_schedule_change_requires_notification(
+        created=created,
+        previous_scheduled_for=previous_scheduled_for,
+        previous_location=previous_venue,
+        new_scheduled_for=exam_schedule.scheduled_for,
+        new_location=exam_schedule.venue,
+    )
+    if should_notify:
+        # Saving a new or rescheduled exam invitation is the applicant touchpoint:
+        # record that the notice was issued (emailed, or hand-delivered for
+        # applicants with no email on file).
+        exam_schedule.applicant_notified_at = timezone.now()
+
+    exam_schedule.full_clean()
+    exam_schedule.save()
+
+    if should_notify and notice_delivery == ExamSchedule.NoticeDelivery.SYSTEM_EMAIL:
+        queue_exam_invitation_notification(application, exam_schedule, actor=actor)
+
+    if record_audit:
+        record_audit_event(
+            application=application,
+            actor=actor,
+            action=AuditLog.Action.EXAM_SCHEDULED,
+            description=(
+                "Saved examination schedule and notified the applicant."
+                if should_notify
+                else "Saved examination schedule."
+            ),
+            metadata={
+                "exam_schedule_id": exam_schedule.id,
+                "created": created,
+                "review_stage": review_stage,
+                "scheduled_for": exam_schedule.scheduled_for.isoformat(),
+                "venue": exam_schedule.venue,
+                "notice_delivery": exam_schedule.notice_delivery,
+                "applicant_notified": should_notify,
+            },
+        )
+    return exam_schedule
 
 
 @transaction.atomic
@@ -3690,6 +3817,12 @@ def save_exam_record(
         )
     if review_stage not in EXAM_STAGES:
         raise ValueError("Exam details can only be edited while the case is assigned to Secretariat or HRM Chief review.")
+    if finalize:
+        exam_schedule = get_exam_schedule(application, stage=review_stage)
+        if exam_schedule is None or not exam_schedule.applicant_was_notified:
+            raise ValueError(
+                "Schedule the examination and notify the applicant before recording final results."
+            )
 
     created = exam_record is None
     if exam_record is None:
@@ -3928,6 +4061,13 @@ def save_interview_session(application, actor, cleaned_data, finalize=False):
             application,
             interview_session,
             schedule_notification_recipients,
+        )
+        # Notify the applicant of their own interview details. Previously only the
+        # HRMPSB panel was emailed; the applicant had no system-issued notice.
+        queue_applicant_interview_notice_notification(
+            application,
+            interview_session,
+            actor=actor,
         )
     if finalize and unsubmitted_panel_recipients:
         _emit_interview_finalized_in_app_notifications(
@@ -6197,7 +6337,11 @@ def process_workflow_action(application, actor, action, remarks):
     if next_status == RecruitmentApplication.Status.APPROVED:
         queue_selected_applicant_notification(application, actor=actor)
     elif next_status == RecruitmentApplication.Status.REJECTED:
-        queue_non_selected_applicant_notification(application, actor=actor)
+        queue_non_selected_applicant_notification(
+            application,
+            actor=actor,
+            cut_at_screening=case_transition["previous_stage"] in SCREENING_STAGES,
+        )
     elif next_status == RecruitmentApplication.Status.RETURNED_TO_APPLICANT:
         screening_record = get_screening_record(
             application,

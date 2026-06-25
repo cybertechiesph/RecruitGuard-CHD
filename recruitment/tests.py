@@ -97,6 +97,7 @@ from .services import (
     record_system_audit_event,
     save_deliberation_record,
     save_exam_record,
+    save_exam_schedule,
     save_interview_rating,
     save_interview_session,
     save_screening_review,
@@ -382,6 +383,17 @@ class BaseRecruitmentTestCase(TestCase):
             finalize=True,
         )
 
+    def schedule_exam_for_current_stage(self, application, actor, scheduled_for=None):
+        return save_exam_schedule(
+            application=application,
+            actor=actor,
+            cleaned_data={
+                "scheduled_for": scheduled_for or (timezone.now() + timedelta(hours=1)),
+                "venue": "CHD CALABARZON Examination Room",
+                "instructions": "Bring a valid government ID.",
+            },
+        )
+
     def finalize_exam_for_current_stage(
         self,
         application,
@@ -401,6 +413,15 @@ class BaseRecruitmentTestCase(TestCase):
         exam_notes="Formal examination output recorded.",
     ):
         exam_date = exam_date or timezone.localdate()
+        save_exam_schedule(
+            application=application,
+            actor=actor,
+            cleaned_data={
+                "scheduled_for": timezone.now() + timedelta(hours=1),
+                "venue": "CHD CALABARZON Examination Room",
+                "instructions": "Bring a valid government ID.",
+            },
+        )
         return save_exam_record(
             application=application,
             actor=actor,
@@ -742,6 +763,28 @@ class FoundationSmokeTests(TestCase):
         self.assertTrue(
             AuditLog.objects.filter(action=AuditLog.Action.INTERNAL_MFA_VERIFIED).exists()
         )
+
+    @override_settings(INTERNAL_MFA_ENABLED=False)
+    def test_internal_login_can_bypass_mfa_when_disabled(self):
+        user = User.objects.create_user(
+            username="secretariat",
+            password="testpass123",
+            email="secretariat@example.com",
+            role=RecruitmentUser.Role.SECRETARIAT,
+        )
+
+        response = self.client.post(
+            reverse("login"),
+            {"username": "secretariat", "password": "testpass123"},
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.request["PATH_INFO"], reverse("workflow-queue"))
+        self.assertFalse(InternalMFAChallenge.objects.filter(user=user).exists())
+        self.assertEqual(mail.outbox, [])
+        self.assertTrue(self.client.session[INTERNAL_MFA_VERIFIED_SESSION_KEY])
+        self.assertEqual(self.client.session[INTERNAL_MFA_USER_SESSION_KEY], user.id)
 
     def test_internal_mfa_email_falls_back_to_text_when_html_render_fails(self):
         user = User.objects.create_user(
@@ -4875,6 +4918,34 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
         self.assertEqual(application.case.case_status, RecruitmentCase.CaseStatus.REJECTED)
         self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.CLOSED)
 
+    def test_definitive_not_qualified_screening_auto_rejects_and_notifies(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        mail.outbox.clear()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            self.finalize_screening_for_current_stage(
+                application,
+                self.secretariat,
+                completeness_status=ScreeningRecord.CompletenessStatus.COMPLETE,
+                qualification_outcome=ScreeningRecord.QualificationOutcome.NOT_QUALIFIED,
+                screening_notes="Does not meet the education requirement under the QS.",
+            )
+
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+        self.assertEqual(application.status, RecruitmentApplication.Status.REJECTED)
+        self.assertEqual(application.case.case_status, RecruitmentCase.CaseStatus.REJECTED)
+        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.CLOSED)
+        notification = NotificationLog.objects.get(
+            application=application,
+            notification_type=NotificationLog.NotificationType.NON_SELECTED_APPLICANT,
+        )
+        self.assertTrue(notification.metadata.get("cut_at_screening"))
+        self.assertEqual(notification.delivery_status, NotificationLog.DeliveryStatus.SENT)
+        self.assertIn("Qualification Standards", notification.body)
+
     def test_future_stage_posts_are_blocked_until_the_current_task_is_finalized(self):
         application = self.make_application(self.level2_position)
         self.verify_application_for_submission(application)
@@ -5365,6 +5436,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
         self.finalize_screening_for_current_stage(application, self.secretariat)
+        self.schedule_exam_for_current_stage(application, self.secretariat)
 
         exam_record = save_exam_record(
             application=application,
@@ -5440,6 +5512,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
         self.finalize_screening_for_current_stage(application, self.secretariat)
+        self.schedule_exam_for_current_stage(application, self.secretariat)
 
         exam_record = save_exam_record(
             application=application,
@@ -5471,6 +5544,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
         self.finalize_screening_for_current_stage(application, self.secretariat)
+        self.schedule_exam_for_current_stage(application, self.secretariat)
 
         exam_record = save_exam_record(
             application=application,
@@ -5516,6 +5590,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
         self.finalize_screening_for_current_stage(application, self.secretariat)
+        self.schedule_exam_for_current_stage(application, self.secretariat)
 
         with self.assertRaisesMessage(
             ValueError,
@@ -5596,6 +5671,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
         self.finalize_screening_for_current_stage(application, self.secretariat)
+        self.schedule_exam_for_current_stage(application, self.secretariat)
 
         exam_record = save_exam_record(
             application=application,
@@ -5827,6 +5903,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
         self.finalize_screening_for_current_stage(application, self.secretariat)
+        self.schedule_exam_for_current_stage(application, self.secretariat)
 
         client = Client()
         self.force_login_with_mfa(client, self.secretariat)
@@ -7392,6 +7469,32 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         )
         self.assertContains(response, "Send Requirement Checklist")
 
+    def test_requirement_checklist_without_deadline_defaults_to_two_weeks(self):
+        application = self.make_approved_cos_application()
+        mail.outbox.clear()
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = client.post(
+                reverse("notification-checklist", kwargs={"pk": application.pk}),
+                {
+                    "checklist_items": "- Signed contract\n- Government-issued ID",
+                    "deadline": "",
+                    "additional_message": "",
+                },
+                follow=True,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        notification = NotificationLog.objects.filter(
+            application=application,
+            notification_type=NotificationLog.NotificationType.REQUIREMENT_CHECKLIST,
+        ).latest("created_at")
+        expected_deadline = timezone.localdate() + timedelta(days=14)
+        self.assertEqual(notification.metadata["deadline"], expected_deadline.isoformat())
+        self.assertIn("Submission deadline", notification.body)
+
     def test_secretariat_cannot_send_requirement_checklist_before_selection(self):
         application = self.make_submitted_application()
         client = Client()
@@ -7966,7 +8069,15 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
         )
         self.assertEqual(notifications.count(), 2)
         self.assertEqual(in_app_notifications.count(), 2)
-        self.assertEqual(len(mail.outbox), 2)
+        # 2 HRMPSB panel emails + 1 applicant interview notice
+        self.assertEqual(len(mail.outbox), 3)
+        self.assertEqual(
+            NotificationLog.objects.filter(
+                application=application,
+                notification_type=NotificationLog.NotificationType.APPLICANT_INTERVIEW_NOTICE,
+            ).count(),
+            1,
+        )
         self.assertEqual(
             {notification.recipient_email for notification in notifications},
             {"hrmpsb@example.com", second_hrmpsb.email},
@@ -8040,7 +8151,15 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
             ).count(),
             4,
         )
-        self.assertEqual(len(mail.outbox), 2)
+        # 2 panel emails + 1 applicant interview notice on the material update
+        self.assertEqual(len(mail.outbox), 3)
+        self.assertEqual(
+            NotificationLog.objects.filter(
+                application=application,
+                notification_type=NotificationLog.NotificationType.APPLICANT_INTERVIEW_NOTICE,
+            ).count(),
+            2,
+        )
 
     def test_interview_finalize_notifies_panel_members_without_ratings(self):
         application = self.make_application(self.level1_position)

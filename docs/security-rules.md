@@ -32,6 +32,8 @@ This document summarizes the key cybersecurity rules and protection logic of Rec
 - Internal password reset must not disclose whether an email address belongs to
   an active account, and reset email delivery must be guarded by configurable
   email and IP throttles.
+- Internal MFA must remain enabled outside debug/local demonstration mode.
+  `INTERNAL_MFA_ENABLED=False` is allowed only while `DJANGO_DEBUG=True`.
 - For public deployment, CAPTCHA should use Google reCAPTCHA v2 with
   server-side token verification. The local arithmetic CAPTCHA is only a
   fallback for offline development and demonstration.

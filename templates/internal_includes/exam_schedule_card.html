@@ -1,0 +1,72 @@
+{% comment %}
+Exam schedule & applicant invitation. Saving (or rescheduling) the exam emails the
+applicant the date, venue, and instructions. An issued invitation is required before
+exam results can be finalized — this is the "passed screening, here is your exam" step
+that previously happened entirely outside the system.
+{% endcomment %}
+<section class="rg-scr-panel" id="exam-schedule-card" aria-label="Exam schedule and applicant invitation">
+    <div class="rg-scr-panel__header">
+        <div>
+            <h2 class="rg-scr-panel__title">Schedule exam &amp; invite applicant</h2>
+            <p class="rg-scr-panel__subtitle">
+                The applicant is notified of the schedule when you save it. An invitation must be
+                issued before exam results can be finalized.
+            </p>
+        </div>
+    </div>
+
+    {% if current_exam_schedule and current_exam_schedule.applicant_was_notified %}
+        <div class="alert alert-success" role="status">
+            <strong>Applicant invited.</strong>
+            Exam set for {{ current_exam_schedule.scheduled_for }} at {{ current_exam_schedule.venue }}
+            ({{ current_exam_schedule.get_notice_delivery_display }}).
+        </div>
+    {% endif %}
+
+    {% if exam_schedule_form %}
+    <form method="post" action="{% url 'exam-schedule' application.pk %}" novalidate>
+        {% csrf_token %}
+        <div class="rg-field">
+            <label class="form-label" for="{{ exam_schedule_form.scheduled_for.id_for_label }}">
+                {{ exam_schedule_form.scheduled_for.label }}
+                <span class="text-danger" aria-hidden="true">*</span>
+            </label>
+            {{ exam_schedule_form.scheduled_for }}
+            {% for error in exam_schedule_form.scheduled_for.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+        <div class="rg-field">
+            <label class="form-label" for="{{ exam_schedule_form.venue.id_for_label }}">
+                {{ exam_schedule_form.venue.label }}
+                <span class="text-danger" aria-hidden="true">*</span>
+            </label>
+            {{ exam_schedule_form.venue }}
+            {% for error in exam_schedule_form.venue.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+        <div class="rg-field">
+            <label class="form-label" for="{{ exam_schedule_form.instructions.id_for_label }}">
+                {{ exam_schedule_form.instructions.label }}
+            </label>
+            {{ exam_schedule_form.instructions }}
+            {% for error in exam_schedule_form.instructions.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+        <div class="rg-field">
+            <label class="form-label" for="{{ exam_schedule_form.notice_delivery.id_for_label }}">
+                {{ exam_schedule_form.notice_delivery.label }}
+            </label>
+            {{ exam_schedule_form.notice_delivery }}
+            <div class="form-text">Choose "Hand-delivered printed notice" only when the applicant has no email on file.</div>
+        </div>
+        <div style="margin-top:0.75rem;">
+            <button type="submit" class="btn btn-rg-primary">
+                {% if current_exam_schedule %}Update schedule &amp; re-notify applicant{% else %}Schedule &amp; notify applicant{% endif %}
+            </button>
+        </div>
+    </form>
+    {% endif %}
+</section>

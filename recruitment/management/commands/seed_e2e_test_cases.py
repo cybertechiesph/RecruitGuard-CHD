@@ -33,6 +33,7 @@ from recruitment.services import (
     record_final_selection,
     save_deliberation_record,
     save_exam_record,
+    save_exam_schedule,
     save_interview_rating,
     save_interview_session,
     save_screening_review,
@@ -381,6 +382,15 @@ class Command(BaseCommand):
         )
 
     def _finalize_exam(self, application, actor, score="89.00"):
+        save_exam_schedule(
+            application=application,
+            actor=actor,
+            cleaned_data={
+                "scheduled_for": timezone.now() + timedelta(hours=2),
+                "venue": "CHD CALABARZON Examination Room",
+                "instructions": "Bring a valid government ID.",
+            },
+        )
         return save_exam_record(
             application=application,
             actor=actor,

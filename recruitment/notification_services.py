@@ -25,6 +25,10 @@ NOTIFICATION_MANAGER_ROLES = {
     RecruitmentUser.Role.HRM_CHIEF,
 }
 IN_APP_NOTIFICATION_RETENTION_DAYS = 90
+# Post-selection "memo" submission window: the successful applicant has two weeks to
+# submit the hard-copy requirements (per HRMPSB Secretariat interviews). Used as the
+# default deadline when the handler does not set one, so the memo always carries a date.
+REQUIREMENT_CHECKLIST_DEFAULT_DEADLINE_DAYS = 14
 
 
 def _truncate(value, limit):
@@ -244,17 +248,31 @@ def _build_selected_notification(application):
     )
 
 
-def _build_non_selected_notification(application):
+def _build_non_selected_notification(application, cut_at_screening=False):
+    if cut_at_screening:
+        result_line = (
+            f"After the initial screening of qualifications for {application.position.title} "
+            f"under {application.position.get_branch_display()} recruitment, your application "
+            "did not meet the Qualification Standards (QS) for this position and will not "
+            "proceed to the examination."
+        )
+        closing = (
+            "Thank you for your interest. You are welcome to apply for other open positions "
+            "that match your qualifications."
+        )
+    else:
+        result_line = (
+            f"Your application for {application.position.title} "
+            f"under {application.position.get_branch_display()} recruitment was not selected."
+        )
+        closing = "Thank you for your interest in this recruitment opportunity."
     lines = [
         f"Dear {application.applicant_display_name},",
         "",
-        (
-            f"Your application for {application.position.title} "
-            f"under {application.position.get_branch_display()} recruitment was not selected."
-        ),
+        result_line,
         f"Application ID: {application.reference_number}",
         "",
-        "Thank you for your interest in this recruitment opportunity.",
+        closing,
     ]
     _append_status_link(lines, application)
     return (
@@ -632,8 +650,8 @@ def queue_selected_applicant_notification(application, actor=None):
     )
 
 
-def queue_non_selected_applicant_notification(application, actor=None):
-    subject, body = _build_non_selected_notification(application)
+def queue_non_selected_applicant_notification(application, actor=None, cut_at_screening=False):
+    subject, body = _build_non_selected_notification(application, cut_at_screening=cut_at_screening)
     return queue_notification(
         application,
         notification_type=NotificationLog.NotificationType.NON_SELECTED_APPLICANT,
@@ -644,6 +662,7 @@ def queue_non_selected_applicant_notification(application, actor=None):
             "reference_number": application.reference_number,
             "status": application.status,
             "branch": application.branch,
+            "cut_at_screening": cut_at_screening,
             "status_link": build_applicant_status_url(application),
         },
     )
@@ -712,6 +731,104 @@ def queue_interview_session_scheduled_notifications(
     return notifications
 
 
+def _build_exam_invitation_notification(application, exam_schedule):
+    lines = [
+        f"Dear {application.applicant_display_name},",
+        "",
+        (
+            f"Good news. You passed the initial screening for {application.position.title} "
+            "and are invited to take the examination. Please note the details below:"
+        ),
+        "",
+        f"Schedule: {_format_schedule(exam_schedule.scheduled_for)}",
+        f"Venue: {exam_schedule.venue}",
+    ]
+    if exam_schedule.instructions:
+        lines.extend(["", "Instructions:", exam_schedule.instructions.strip()])
+    lines.extend(
+        [
+            "",
+            f"Application ID: {application.reference_number}",
+            f"Check your application status anytime: {build_applicant_status_url(application)}",
+            "",
+            "This exam invitation was sent through RecruitGuard-CHD.",
+        ]
+    )
+    return (
+        f"RecruitGuard-CHD exam invitation: {application.position.title}",
+        "\n".join(lines),
+    )
+
+
+def queue_exam_invitation_notification(application, exam_schedule, actor=None):
+    subject, body = _build_exam_invitation_notification(application, exam_schedule)
+    return queue_notification(
+        application,
+        notification_type=NotificationLog.NotificationType.EXAM_INVITATION,
+        actor=actor,
+        subject=subject,
+        body=body,
+        metadata={
+            "reference_number": application.reference_number,
+            "status": application.status,
+            "branch": application.branch,
+            "exam_schedule_id": exam_schedule.id,
+            "review_stage": exam_schedule.review_stage,
+            "scheduled_for": exam_schedule.scheduled_for.isoformat(),
+            "venue": exam_schedule.venue,
+            "status_link": build_applicant_status_url(application),
+        },
+    )
+
+
+def _build_applicant_interview_notice_notification(application, interview_session):
+    lines = [
+        f"Dear {application.applicant_display_name},",
+        "",
+        (
+            f"You are scheduled for an interview for {application.position.title}. "
+            "Please note the details below:"
+        ),
+        "",
+        f"Schedule: {_format_schedule(interview_session.scheduled_for)}",
+        f"Location / medium: {interview_session.location}",
+    ]
+    lines.extend(
+        [
+            "",
+            f"Application ID: {application.reference_number}",
+            f"Check your application status anytime: {build_applicant_status_url(application)}",
+            "",
+            "This interview notice was sent through RecruitGuard-CHD.",
+        ]
+    )
+    return (
+        f"RecruitGuard-CHD interview schedule: {application.position.title}",
+        "\n".join(lines),
+    )
+
+
+def queue_applicant_interview_notice_notification(application, interview_session, actor=None):
+    subject, body = _build_applicant_interview_notice_notification(application, interview_session)
+    return queue_notification(
+        application,
+        notification_type=NotificationLog.NotificationType.APPLICANT_INTERVIEW_NOTICE,
+        actor=actor,
+        subject=subject,
+        body=body,
+        metadata={
+            "reference_number": application.reference_number,
+            "status": application.status,
+            "branch": application.branch,
+            "interview_session_id": interview_session.id,
+            "review_stage": interview_session.review_stage,
+            "scheduled_for": interview_session.scheduled_for.isoformat(),
+            "location": interview_session.location,
+            "status_link": build_applicant_status_url(application),
+        },
+    )
+
+
 def queue_document_resubmission_request_notification(
     application,
     actor=None,
@@ -766,6 +883,11 @@ def send_requirement_checklist_notification(
         raise ValueError("Requirement checklists can only be sent during active completion.")
     if case.current_handler_role != actor.role:
         raise ValueError("Only the office assigned to completion may send the requirement checklist.")
+
+    if deadline is None:
+        deadline = timezone.localdate() + timedelta(
+            days=REQUIREMENT_CHECKLIST_DEFAULT_DEADLINE_DAYS
+        )
 
     subject, body = _build_requirement_checklist_notification(
         application=application,

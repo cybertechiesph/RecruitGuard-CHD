@@ -162,6 +162,25 @@
     </div>
 
 
+    {# ── Upcoming schedule (exam / interview the applicant must attend) ── #}
+    {% if upcoming_schedules %}
+    <div class="rg-ta-action-card rg-ta-action-card--rest" aria-label="Your upcoming schedule">
+        <p class="rg-ta-action-card__title">Your upcoming schedule</p>
+        {% for sched in upcoming_schedules %}
+        <p class="rg-ta-action-card__copy">
+            <strong>{{ sched.kind }}:</strong>
+            {{ sched.scheduled_for|date:"l, F j, Y" }} at {{ sched.scheduled_for|time:"g:i A" }}<br>
+            Location / medium: {{ sched.location }}
+            {% if sched.instructions %}<br>{{ sched.instructions }}{% endif %}
+        </p>
+        {% endfor %}
+        <p class="rg-ta-action-card__copy">
+            Please also check your email at <strong>{{ application.applicant_email }}</strong> for the full details.
+        </p>
+    </div>
+    {% endif %}
+
+
     {# ── "What you need to do" panel ──────────────────────────────── #}
     <div class="rg-ta-action-card
         {% if status_variant == 'returned' %}rg-ta-action-card--needed

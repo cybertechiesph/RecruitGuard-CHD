@@ -1,5 +1,6 @@
 from django.contrib.auth.mixins import UserPassesTestMixin
 from django.contrib.auth.views import redirect_to_login
+from django.conf import settings
 from django.core.exceptions import PermissionDenied
 
 from .models import RecruitmentUser
@@ -35,6 +36,8 @@ def has_role(user, *roles):
 
 def internal_mfa_is_verified(request):
     user = getattr(request, "user", None)
+    if not getattr(settings, "INTERNAL_MFA_ENABLED", True):
+        return is_internal_user(user)
     return bool(
         is_internal_user(user)
         and request.session.get(INTERNAL_MFA_VERIFIED_SESSION_KEY) is True

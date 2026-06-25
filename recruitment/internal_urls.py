@@ -42,6 +42,7 @@ from .views import (
     EvidenceUploadView,
     EvidenceVaultListView,
     ExaminationRecordView,
+    ExamScheduleView,
     ExportApplicationBundleView,
     FinalDecisionView,
     FinalSelectionView,
@@ -145,6 +146,7 @@ urlpatterns = [
     path("applications/<int:pk>/audit/", ApplicationAuditLogView.as_view(), name="application-audit-log"),
     path("applications/<int:pk>/screening/", ScreeningReviewView.as_view(), name="screening-review"),
     path("applications/<int:pk>/exam/", ExaminationRecordView.as_view(), name="exam-review"),
+    path("applications/<int:pk>/exam/schedule/", ExamScheduleView.as_view(), name="exam-schedule"),
     path("applications/<int:pk>/interview/", InterviewSessionView.as_view(), name="interview-session"),
     path("applications/<int:pk>/interview/rating/", InterviewRatingView.as_view(), name="interview-rating"),
     path(
