@@ -5614,18 +5614,14 @@ textarea.form-control {
     font-weight: 700;
     color: #111827;
     line-height: 1.3;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
 }
 
 .rg-cws-header__meta {
     font-size: 0.75rem;
     color: #5f6c78;
     margin-top: 0.15rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
 }
 
 .rg-cws-header__pills {

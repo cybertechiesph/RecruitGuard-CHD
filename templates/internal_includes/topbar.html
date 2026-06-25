@@ -1,7 +1,11 @@
 {% load recruitment_ui %}
 <header class="rg-context-bar" role="banner">
     <nav class="rg-context-bar__breadcrumb" aria-label="Breadcrumb">
-        <a href="{% url 'dashboard' %}" class="rg-breadcrumb-home">Dashboard</a>
+        {% if user.role == "system_admin" %}
+            <a href="{% url 'dashboard' %}" class="rg-breadcrumb-home">Dashboard</a>
+        {% else %}
+            <a href="{% url 'workflow-queue' %}" class="rg-breadcrumb-home">My Queue</a>
+        {% endif %}
         {% block breadcrumb %}{% endblock %}
     </nav>
     <div class="rg-context-bar__right">
