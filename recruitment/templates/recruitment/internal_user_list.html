@@ -67,12 +67,19 @@
                         <td class="text-end">
                             <div class="d-flex justify-content-end gap-2 flex-wrap">
                                 <a href="{% url 'internal-user-update' internal_user.pk %}" class="btn btn-outline-secondary btn-sm">Edit</a>
+                                {% if internal_user.is_active %}
+                                <button type="button"
+                                        class="btn btn-rg-destructive btn-sm"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#{{ internal_user.pk|dom_id:'deactivateModal' }}">
+                                    Deactivate
+                                </button>
+                                {% else %}
                                 <form method="post" action="{% url 'internal-user-toggle-active' internal_user.pk %}">
                                     {% csrf_token %}
-                                    <button type="submit" class="btn btn-outline-dark btn-sm">
-                                        {% if internal_user.is_active %}Deactivate{% else %}Activate{% endif %}
-                                    </button>
+                                    <button type="submit" class="btn btn-outline-secondary btn-sm">Activate</button>
                                 </form>
+                                {% endif %}
                             </div>
                         </td>
                     </tr>
@@ -87,4 +94,11 @@
         </table>
     </div>
 </div>
+{% for internal_user in internal_users %}
+{% if internal_user.is_active %}
+<form id="{{ internal_user.pk|dom_id:'deactivateForm' }}" method="post"
+      action="{% url 'internal-user-toggle-active' internal_user.pk %}">{% csrf_token %}</form>
+{% include "internal_includes/modal_confirm.html" with modal_id=internal_user.pk|dom_id:"deactivateModal" variant="destructive" title="Deactivate this account?" body="The user will no longer be able to log in to the internal portal. You can re-activate the account at any time." confirm_label="Deactivate" form_id=internal_user.pk|dom_id:"deactivateForm" %}
+{% endif %}
+{% endfor %}
 {% endblock %}
