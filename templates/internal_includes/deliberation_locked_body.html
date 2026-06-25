@@ -58,7 +58,7 @@
             </div>
 
             <div class="rg-exam-locked-field">
-                <div class="rg-exam-locked-field__label">Deliberated At</div>
+                <div class="rg-exam-locked-field__label">Deliberated at</div>
                 <div class="rg-exam-locked-field__value">
                     {% if current_deliberation_record.deliberated_at %}
                         {{ current_deliberation_record.deliberated_at|date:"l, F j, Y" }}
@@ -71,7 +71,7 @@
 
             {% if application.branch == "plantilla" and current_deliberation_record.ranking_position %}
             <div class="rg-exam-locked-field">
-                <div class="rg-exam-locked-field__label">Ranking Position</div>
+                <div class="rg-exam-locked-field__label">Ranking position</div>
                 <div class="rg-exam-locked-field__value">
                     <strong style="font-size:1.15rem;">
                         #{{ current_deliberation_record.ranking_position }}
@@ -88,7 +88,7 @@
             {% if application.branch == "plantilla" %}
             {% if current_deliberation_record.comparative_assessment_report %}
             <div class="rg-exam-locked-field">
-                <div class="rg-exam-locked-field__label">CAR Draft Reviewed</div>
+                <div class="rg-exam-locked-field__label">CAR draft reviewed</div>
                 <div class="rg-exam-locked-field__value">
                     Version {{ current_deliberation_record.comparative_assessment_report.version_number }}
                 </div>
@@ -96,7 +96,7 @@
             {% endif %}
 
             <div class="rg-exam-locked-field">
-                <div class="rg-exam-locked-field__label">HRMPSB Recommendation</div>
+                <div class="rg-exam-locked-field__label">HRMPSB recommendation</div>
                 <div class="rg-exam-locked-field__value">
                     {% if current_deliberation_record.recommendation %}
                         {{ current_deliberation_record.recommendation }}
@@ -107,7 +107,7 @@
             </div>
 
             <div class="rg-exam-locked-field">
-                <div class="rg-exam-locked-field__label">Quorum / Attendance</div>
+                <div class="rg-exam-locked-field__label">Quorum / attendance</div>
                 <div class="rg-exam-locked-field__value">
                     {{ current_deliberation_record.get_quorum_status_display|default:"Not recorded" }}
                     {% if current_deliberation_record.attendance_notes %}
@@ -120,7 +120,7 @@
             {% endif %}
 
             <div class="rg-exam-locked-field">
-                <div class="rg-exam-locked-field__label">Deliberation Minutes</div>
+                <div class="rg-exam-locked-field__label">Deliberation minutes</div>
                 <div class="rg-exam-locked-field__value">
                     {% if current_deliberation_record.deliberation_minutes %}
                         {{ current_deliberation_record.deliberation_minutes }}
@@ -131,7 +131,7 @@
             </div>
 
             <div class="rg-exam-locked-field">
-                <div class="rg-exam-locked-field__label">Decision Support Summary</div>
+                <div class="rg-exam-locked-field__label">Decision support summary</div>
                 <div class="rg-exam-locked-field__value">
                     {% if current_deliberation_record.decision_support_summary %}
                         {{ current_deliberation_record.decision_support_summary }}

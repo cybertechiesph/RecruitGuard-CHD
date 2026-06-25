@@ -12,13 +12,13 @@
     <div class="rg-dec-locked-frame__body">
         <div class="rg-pkt-rows">
             <div class="rg-pkt-row">
-                <span class="rg-pkt-row__label">Selected Appointee</span>
+                <span class="rg-pkt-row__label">Selected appointee</span>
                 <span class="rg-pkt-row__value">
                     <strong>{{ selection.selected_application.applicant_display_name }}</strong>
                 </span>
             </div>
             <div class="rg-pkt-row">
-                <span class="rg-pkt-row__label">Selected Rank</span>
+                <span class="rg-pkt-row__label">Selected rank</span>
                 <span class="rg-pkt-row__value">#{{ selection.selected_item.rank_order }}</span>
             </div>
             <div class="rg-pkt-row">
@@ -26,15 +26,15 @@
                 <span class="rg-pkt-row__value">{{ selection.recruitment_entry.title }}</span>
             </div>
             <div class="rg-pkt-row">
-                <span class="rg-pkt-row__label">Entry Code</span>
+                <span class="rg-pkt-row__label">Entry code</span>
                 <span class="rg-pkt-row__value">{{ selection.recruitment_entry.job_code }}</span>
             </div>
             <div class="rg-pkt-row">
-                <span class="rg-pkt-row__label">CAR Version</span>
+                <span class="rg-pkt-row__label">CAR version</span>
                 <span class="rg-pkt-row__value">v{{ selection.comparative_assessment_report.version_number }}</span>
             </div>
             <div class="rg-pkt-row">
-                <span class="rg-pkt-row__label">Selection Basis</span>
+                <span class="rg-pkt-row__label">Selection basis</span>
                 <span class="rg-pkt-row__value">
                     {% if selection.is_deep_selection %}
                         Deep selection
@@ -48,7 +48,7 @@
                 <span class="rg-pkt-row__value">{{ selection.decided_at|date:"N j, Y, g:i a" }}</span>
             </div>
             <div class="rg-pkt-row">
-                <span class="rg-pkt-row__label">Decided By</span>
+                <span class="rg-pkt-row__label">Decided by</span>
                 <span class="rg-pkt-row__value">
                     {{ selection.decided_by }}
                     {% if selection.decided_by_role %}

@@ -45,7 +45,7 @@
                 </span>
             </div>
             <div class="rg-pkt-row">
-                <span class="rg-pkt-row__label">Decided By</span>
+                <span class="rg-pkt-row__label">Decided by</span>
                 <span class="rg-pkt-row__value">
                     {{ dec.decided_by }}
                     {% if dec.decided_by_role %}
@@ -120,15 +120,15 @@
                     <span class="rg-pkt-row__value">{{ sctx.recruitment_entry_title }}</span>
                 </div>
                 <div class="rg-pkt-row">
-                    <span class="rg-pkt-row__label">Item Code</span>
+                    <span class="rg-pkt-row__label">Item code</span>
                     <span class="rg-pkt-row__value">{{ sctx.recruitment_entry_code }}</span>
                 </div>
                 <div class="rg-pkt-row">
-                    <span class="rg-pkt-row__label">Branch / Type</span>
+                    <span class="rg-pkt-row__label">Branch / type</span>
                     <span class="rg-pkt-row__value">{{ sctx.branch_label }}</span>
                 </div>
                 <div class="rg-pkt-row">
-                    <span class="rg-pkt-row__label">Salary Grade</span>
+                    <span class="rg-pkt-row__label">Salary grade</span>
                     <span class="rg-pkt-row__value">SG-{{ sctx.level }}</span>
                 </div>
             </div>
@@ -138,25 +138,25 @@
         {% if ssum %}
             <div class="rg-pkt-rows mt-3 pt-3" style="border-top:1px solid #e5e7eb;">
                 <div class="rg-pkt-row">
-                    <span class="rg-pkt-row__label">Screening Records</span>
+                    <span class="rg-pkt-row__label">Screening records</span>
                     <span class="rg-pkt-row__value">
                         {{ ssum.finalized_screening_count|default:"0" }} finalized
                     </span>
                 </div>
                 <div class="rg-pkt-row">
-                    <span class="rg-pkt-row__label">Exam Records</span>
+                    <span class="rg-pkt-row__label">Exam records</span>
                     <span class="rg-pkt-row__value">
                         {{ ssum.finalized_exam_count|default:"0" }} finalized
                     </span>
                 </div>
                 <div class="rg-pkt-row">
-                    <span class="rg-pkt-row__label">Interview Sessions</span>
+                    <span class="rg-pkt-row__label">Interview sessions</span>
                     <span class="rg-pkt-row__value">
                         {{ ssum.finalized_interview_count|default:"0" }} finalized
                     </span>
                 </div>
                 <div class="rg-pkt-row">
-                    <span class="rg-pkt-row__label">Deliberation Record</span>
+                    <span class="rg-pkt-row__label">Deliberation record</span>
                     <span class="rg-pkt-row__value">
                         {% if ssum.has_deliberation_record %}
                             <span class="text-success fw-semibold">
@@ -180,7 +180,7 @@
                     </div>
                 {% endif %}
                 <div class="rg-pkt-row">
-                    <span class="rg-pkt-row__label">Evidence Items</span>
+                    <span class="rg-pkt-row__label">Evidence items</span>
                     <span class="rg-pkt-row__value">
                         {{ ssum.evidence_reference_count|default:"0" }}
                     </span>

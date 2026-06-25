@@ -38,7 +38,7 @@
     </div>
 
     <div class="flex-1">
-        <div class="rg-scr-elig-bar__label">Finalized Exam Status</div>
+        <div class="rg-scr-elig-bar__label">Finalized exam status</div>
         <div class="rg-scr-elig-bar__verdict">
             {{ current_exam_record.get_exam_status_display }}
         </div>
@@ -84,7 +84,7 @@
             </div>
 
             <div class="rg-exam-locked-field">
-                <div class="rg-exam-locked-field__label">Exam Type</div>
+                <div class="rg-exam-locked-field__label">Exam type</div>
                 <div class="rg-exam-locked-field__value">
                     {% if current_exam_record.exam_type %}
                         {{ current_exam_record.get_exam_type_display }}
@@ -95,7 +95,7 @@
             </div>
 
             <div class="rg-exam-locked-field">
-                <div class="rg-exam-locked-field__label">Exam Status</div>
+                <div class="rg-exam-locked-field__label">Exam status</div>
                 <div class="rg-exam-locked-field__value">
                     <span class="rg-pill rg-pill--{{ current_exam_record.exam_status|status_theme }} rg-pill--sm">
                         {{ current_exam_record.get_exam_status_display }}
@@ -104,7 +104,7 @@
             </div>
 
             <div class="rg-exam-locked-field">
-                <div class="rg-exam-locked-field__label">Exam Date</div>
+                <div class="rg-exam-locked-field__label">Exam date</div>
                 <div class="rg-exam-locked-field__value">
                     {% if current_exam_record.exam_date %}
                         {{ current_exam_record.exam_date|date:"M d, Y" }}
@@ -115,7 +115,7 @@
             </div>
 
             <div class="rg-exam-locked-field">
-                <div class="rg-exam-locked-field__label">Administered By</div>
+                <div class="rg-exam-locked-field__label">Administered by</div>
                 <div class="rg-exam-locked-field__value">
                     {% if current_exam_record.administered_by %}
                         {{ current_exam_record.get_administered_by_display }}
@@ -171,7 +171,7 @@
             </div>
 
             <div class="rg-exam-locked-field">
-                <div class="rg-exam-locked-field__label">Overall Score</div>
+                <div class="rg-exam-locked-field__label">Overall score</div>
                 <div class="rg-exam-locked-field__value">
                     {% if current_exam_record.exam_score is not None %}
                         {{ current_exam_record.exam_score }}
@@ -182,7 +182,7 @@
             </div>
 
             <div class="rg-exam-locked-field">
-                <div class="rg-exam-locked-field__label">Overall Result</div>
+                <div class="rg-exam-locked-field__label">Overall result</div>
                 <div class="rg-exam-locked-field__value">
                     {% if current_exam_record.exam_result %}
                         {{ current_exam_record.get_exam_result_display }}
@@ -194,7 +194,7 @@
 
             {% if current_exam_record.valid_from or current_exam_record.valid_until %}
             <div class="rg-exam-locked-field">
-                <div class="rg-exam-locked-field__label">Validity Period</div>
+                <div class="rg-exam-locked-field__label">Validity period</div>
                 <div class="rg-exam-locked-field__value">
                     {% if current_exam_record.valid_from %}
                         {{ current_exam_record.valid_from|date:"M d, Y" }}
@@ -222,7 +222,7 @@
             </div>
 
             <div class="rg-exam-locked-field">
-                <div class="rg-exam-locked-field__label">Exam Notes</div>
+                <div class="rg-exam-locked-field__label">Exam notes</div>
                 <div class="rg-exam-locked-field__value">
                     {% if current_exam_record.exam_notes %}
                         {{ current_exam_record.exam_notes }}
@@ -242,7 +242,7 @@
             </div>
 
             <div class="rg-exam-locked-field">
-                <div class="rg-exam-locked-field__label">Evidence File</div>
+                <div class="rg-exam-locked-field__label">Evidence file</div>
                 <div class="rg-exam-locked-field__value">
                     {% if current_exam_record.evidence_item %}
                         {{ current_exam_record.evidence_item.label }}
