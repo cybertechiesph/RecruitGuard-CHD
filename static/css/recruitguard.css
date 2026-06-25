@@ -2143,6 +2143,45 @@ textarea.form-control {
     border-radius: 2px;
 }
 
+/* A3 — Read-only disclosure for Case History / Evidence in the case shell.
+   These sections were rendered but permanently hidden behind a dead tab switcher
+   (now removed). They are reachable for every role via a collapsible summary,
+   collapsed by default so the main screen still shows only the current step. */
+.internal-portal-body .rg-cws-disclosure {
+    margin-top: 1rem;
+    border: 1px solid #d8dee5;
+    border-radius: 0.5rem;
+    background: #fff;
+}
+.internal-portal-body .rg-cws-disclosure > summary {
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+.internal-portal-body .rg-cws-disclosure > summary::-webkit-details-marker {
+    display: none;
+}
+.internal-portal-body .rg-cws-disclosure > summary::before {
+    content: "";
+    width: 0;
+    height: 0;
+    border-left: 5px solid currentColor;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    transition: transform 0.15s ease;
+}
+.internal-portal-body .rg-cws-disclosure[open] > summary::before {
+    transform: rotate(90deg);
+}
+.internal-portal-body .rg-cws-disclosure > summary + * {
+    margin: 0 1rem 1rem;
+}
+
 .internal-portal-body .btn-rg-primary {
     background: var(--rg-primary);
     border-color: var(--rg-primary);

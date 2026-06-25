@@ -332,8 +332,8 @@
 
             
             {% if request.user.role == "system_admin" %}
-            <div class="rg-cws-stage-section" id="cws-evidence" style="display:none;">
-                {% include "internal_includes/stage_titlebar.html" with title="Secured Files" %}
+            <details class="rg-cws-disclosure" id="cws-evidence">
+                <summary class="rg-cws-disclosure__summary">Secured files (evidence)</summary>
 
                 <div class="rg-icard">
                     <div class="rg-icard__header">
@@ -409,12 +409,12 @@
                         </form>
                     </div>
                 {% endif %}
-            </div>
+            </details>
             {% endif %}
 
             
-            <div class="rg-cws-stage-section" id="cws-timeline" style="display:none;">
-                {% include "internal_includes/stage_titlebar.html" with title="Case History" %}
+            <details class="rg-cws-disclosure" id="cws-timeline">
+                <summary class="rg-cws-disclosure__summary">Case history</summary>
 
                 <div class="rg-icard">
                     <div class="rg-icard__header">
@@ -472,7 +472,7 @@
                         {% include "internal_includes/state_empty.html" with title="No case updates yet" copy="Case events and step changes will appear here." %}
                     {% endif %}
                 </div>
-            </div>
+            </details>
 
         </div>
         
@@ -486,25 +486,4 @@
     </div>
 </div>
 
-<script>
-(function () {
-    "use strict";
-    var tabs = document.querySelectorAll(".js-cws-tab");
-    var sections = document.querySelectorAll(".rg-cws-stage-section");
-
-    tabs.forEach(function (tab) {
-        tab.addEventListener("click", function (e) {
-            e.preventDefault();
-            /* Deactivate all tabs */
-            tabs.forEach(function (t) { t.classList.remove("is-active"); });
-            tab.classList.add("is-active");
-            /* Hide all sections */
-            sections.forEach(function (s) { s.style.display = "none"; });
-            /* Show target section */
-            var target = document.getElementById(tab.dataset.section);
-            if (target) { target.style.display = ""; }
-        });
-    });
-})();
-</script>
 {% endblock %}
