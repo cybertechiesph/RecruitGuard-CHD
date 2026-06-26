@@ -385,6 +385,7 @@ class PositionPosting(TimestampedModel):
     }
     ENTRY_CODE_FORMAT_LABEL = "RG-[BRANCH]-[YEAR]-[4 digit sequence]"
     ENTRY_CODE_GENERATION_RETRIES = 5
+    PLANTILLA_PUBLICATION_PERIOD_DAYS = 14
     LIVE_METADATA_LOCKED_FIELDS = {
         "position_reference": (
             "position_reference_id",
@@ -471,6 +472,22 @@ class PositionPosting(TimestampedModel):
         reference = getattr(self, "position_reference", None)
         salary_grade = getattr(reference, "salary_grade", None)
         return f"SG {salary_grade}" if salary_grade else ""
+
+    @classmethod
+    def calculate_plantilla_closing_date(cls, start_date):
+        if not start_date:
+            return None
+        return start_date + timedelta(days=cls.PLANTILLA_PUBLICATION_PERIOD_DAYS - 1)
+
+    @property
+    def plantilla_publication_start_date(self):
+        return self.publication_date or self.opening_date
+
+    @property
+    def expected_plantilla_closing_date(self):
+        if self.branch != self.Branch.PLANTILLA:
+            return None
+        return self.calculate_plantilla_closing_date(self.plantilla_publication_start_date)
 
     def apply_position_reference_metadata(self):
         if not self.position_reference_id:
@@ -580,6 +597,18 @@ class PositionPosting(TimestampedModel):
                 errors["intake_mode"] = "Plantilla entries must use a fixed validity period."
             if not self.closing_date:
                 errors["closing_date"] = "Plantilla entries require a closing date."
+            else:
+                expected_closing_date = self.expected_plantilla_closing_date
+                if (
+                    expected_closing_date
+                    and self.closing_date != expected_closing_date
+                    and "closing_date" not in errors
+                ):
+                    errors["closing_date"] = (
+                        "Plantilla publication period is 14 calendar days. "
+                        f"Set the closing date to {expected_closing_date:%Y-%m-%d} "
+                        "based on the publication date, or opening date if no publication date is recorded."
+                    )
         elif self.branch == self.Branch.COS:
             if self.intake_mode == self.IntakeMode.FIXED_PERIOD:
                 errors["intake_mode"] = "COS entries must use opening-based, continuous, or pooling intake."

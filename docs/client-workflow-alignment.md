@@ -74,7 +74,7 @@ System interpretation:
 ## Plantilla / Permanent Target Flow
 
 1. Recruitment entry is created from the controlled Position Reference catalog.
-2. Vacancy publication/opening data and intake deadline are recorded.
+2. Vacancy publication/opening data and the 14-calendar-day intake deadline are recorded.
 3. Applicants submit through the applicant portal with OTP verification.
 4. A valid submission creates a recruitment case.
 5. Level-aware routing applies:

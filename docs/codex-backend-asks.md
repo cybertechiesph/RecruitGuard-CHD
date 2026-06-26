@@ -350,6 +350,7 @@ data — not empty/default state. Concretely:
 | RG-COS-test-decision | COS | hrm_chief_review | Screening finalized + (optional) exam record |
 | RG-PLT-test-final-selection | Plantilla | appointing_authority_review | Screening + exam + interview ratings (≥1 panel rating) + finalized deliberation + finalized CAR with at least 6 ranked items, and no final selection yet |
 | RG-PLT-test-aa-decision | Plantilla | appointing_authority_review | Finalized CAR with ranked items and no final selection yet; kept as a smaller Appointing Authority selection case |
+| RG-PLT-test-aa-return | Plantilla | appointing_authority_review | Finalized CAR with ranked items and no final selection yet; kept as a separate Appointing Authority CAR return/reassessment case |
 | RG-PLT-test-completion | Plantilla | completion | Plantilla final selection recorded + completion record initialized + at least one saved completion requirement and one blank slot |
 
 If a management command makes sense, a `seed_e2e_test_cases` would also

@@ -52,6 +52,7 @@ PRIMARY_REFERENCES = {
     "cos_decision": "RG-COS-test-decision",
     "final_selection": "RG-PLT-test-final-selection",
     "aa_decision": "RG-PLT-test-aa-decision",
+    "aa_return": "RG-PLT-test-aa-return",
     "completion": "RG-PLT-test-completion",
 }
 
@@ -142,6 +143,10 @@ class Command(BaseCommand):
                 "Appointing Authority decision": self._seed_aa_decision_case(
                     users,
                     applicants[:2],
+                ),
+                "Appointing Authority CAR return": self._seed_aa_return_case(
+                    users,
+                    applicants[2:4],
                 ),
                 "Completion wizard": self._seed_completion_case(users, applicants[2:4]),
             }
@@ -257,7 +262,7 @@ class Command(BaseCommand):
             status=PositionPosting.EntryStatus.ACTIVE,
             opening_date=timezone.localdate(),
             closing_date=(
-                timezone.localdate() + timedelta(days=30)
+                PositionPosting.calculate_plantilla_closing_date(timezone.localdate())
                 if branch == PositionPosting.Branch.PLANTILLA
                 else None
             ),
@@ -715,6 +720,16 @@ class Command(BaseCommand):
             users=users,
             applicants=applicants,
             code=PRIMARY_REFERENCES["aa_decision"],
+            candidate_count=2,
+            finalize_car=True,
+        )
+        return applications[0]
+
+    def _seed_aa_return_case(self, users, applicants):
+        applications, _report = self._prepare_plantilla_car_group(
+            users=users,
+            applicants=applicants,
+            code=PRIMARY_REFERENCES["aa_return"],
             candidate_count=2,
             finalize_car=True,
         )

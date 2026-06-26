@@ -205,7 +205,7 @@ class BaseRecruitmentTestCase(TestCase):
             session.save()
 
     def level1_closing_date(self):
-        return timezone.localdate() + timedelta(days=15)
+        return PositionPosting.calculate_plantilla_closing_date(timezone.localdate())
 
     def entry_opening_date(self):
         return timezone.localdate()
@@ -2077,6 +2077,42 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         with self.assertRaises(ValidationError):
             entry.full_clean()
 
+    def test_plantilla_entry_uses_fourteen_calendar_day_publication_period(self):
+        publication_date = date(2026, 6, 1)
+        expected_closing_date = date(2026, 6, 14)
+        entry = PositionPosting(
+            position_reference=self.admin_aide_position,
+            branch=PositionPosting.Branch.PLANTILLA,
+            level=PositionPosting.Level.LEVEL_1,
+            intake_mode=PositionPosting.IntakeMode.FIXED_PERIOD,
+            status=PositionPosting.EntryStatus.DRAFT,
+            publication_date=publication_date,
+            opening_date=publication_date,
+            closing_date=expected_closing_date,
+        )
+
+        entry.full_clean()
+
+        self.assertEqual(entry.expected_plantilla_closing_date, expected_closing_date)
+
+    def test_plantilla_entry_rejects_longer_publication_period(self):
+        publication_date = date(2026, 6, 1)
+        entry = PositionPosting(
+            position_reference=self.admin_aide_position,
+            branch=PositionPosting.Branch.PLANTILLA,
+            level=PositionPosting.Level.LEVEL_1,
+            intake_mode=PositionPosting.IntakeMode.FIXED_PERIOD,
+            status=PositionPosting.EntryStatus.DRAFT,
+            publication_date=publication_date,
+            opening_date=publication_date,
+            closing_date=publication_date + timedelta(days=14),
+        )
+
+        with self.assertRaises(ValidationError) as exc:
+            entry.full_clean()
+
+        self.assertIn("14 calendar days", exc.exception.message_dict["closing_date"][0])
+
     def test_cos_pooling_entry_cannot_set_closing_date(self):
         entry = PositionPosting(
             position_reference=self.project_assistant_position,
@@ -2249,6 +2285,59 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
             AuditLog.objects.filter(
                 action=AuditLog.Action.RECRUITMENT_ENTRY_CREATED,
                 metadata__entry_code=created_entry.job_code,
+            ).exists()
+        )
+
+    def test_entry_manager_can_create_plantilla_entry_with_auto_closing_date(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        opening_date = self.entry_opening_date()
+        response = client.post(
+            reverse("recruitment-entry-create"),
+            {
+                "position_reference": self.admin_aide_position.pk,
+                "branch": PositionPosting.Branch.PLANTILLA,
+                "intake_mode": PositionPosting.IntakeMode.FIXED_PERIOD,
+                "status": PositionPosting.EntryStatus.ACTIVE,
+                "publication_date": "",
+                "opening_date": opening_date.isoformat(),
+                "closing_date": "",
+                "qualification_reference": "Fourteen-day Plantilla publication window.",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        created_entry = PositionPosting.objects.get(
+            qualification_reference="Fourteen-day Plantilla publication window."
+        )
+        self.assertEqual(
+            created_entry.closing_date,
+            PositionPosting.calculate_plantilla_closing_date(opening_date),
+        )
+
+    def test_entry_manager_cannot_extend_plantilla_publication_period(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        opening_date = self.entry_opening_date()
+        response = client.post(
+            reverse("recruitment-entry-create"),
+            {
+                "position_reference": self.admin_aide_position.pk,
+                "branch": PositionPosting.Branch.PLANTILLA,
+                "intake_mode": PositionPosting.IntakeMode.FIXED_PERIOD,
+                "status": PositionPosting.EntryStatus.ACTIVE,
+                "publication_date": "",
+                "opening_date": opening_date.isoformat(),
+                "closing_date": (opening_date + timedelta(days=14)).isoformat(),
+                "qualification_reference": "Invalid extended Plantilla publication window.",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Plantilla publication period is 14 calendar days.")
+        self.assertFalse(
+            PositionPosting.objects.filter(
+                qualification_reference="Invalid extended Plantilla publication window."
             ).exists()
         )
 
@@ -2859,6 +2948,46 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertEqual(detail_response.status_code, 200)
         self.assertFalse(detail_response.context["can_apply"])
         self.assertContains(detail_response, "Applications are not currently open for this position")
+
+        intake_response = self.client.get(
+            reverse("applicant-intake", kwargs={"pk": self.level1_position.pk})
+        )
+        self.assertEqual(intake_response.status_code, 404)
+
+    def test_plantilla_fourteenth_publication_day_still_accepts_intake(self):
+        publication_date = timezone.localdate() - timedelta(days=13)
+        self.level1_position.publication_date = publication_date
+        self.level1_position.opening_date = publication_date
+        self.level1_position.closing_date = PositionPosting.calculate_plantilla_closing_date(
+            publication_date
+        )
+        self.level1_position.save(
+            update_fields=["publication_date", "opening_date", "closing_date", "updated_at"]
+        )
+
+        self.level1_position.refresh_from_db()
+        self.assertEqual(self.level1_position.closing_date, timezone.localdate())
+        self.assertTrue(self.level1_position.is_open_for_intake)
+
+        intake_response = self.client.get(
+            reverse("applicant-intake", kwargs={"pk": self.level1_position.pk})
+        )
+        self.assertEqual(intake_response.status_code, 200)
+
+    def test_plantilla_fifteenth_publication_day_blocks_intake(self):
+        publication_date = timezone.localdate() - timedelta(days=14)
+        self.level1_position.publication_date = publication_date
+        self.level1_position.opening_date = publication_date
+        self.level1_position.closing_date = PositionPosting.calculate_plantilla_closing_date(
+            publication_date
+        )
+        self.level1_position.save(
+            update_fields=["publication_date", "opening_date", "closing_date", "updated_at"]
+        )
+
+        self.level1_position.refresh_from_db()
+        self.assertEqual(self.level1_position.closing_date, timezone.localdate() - timedelta(days=1))
+        self.assertFalse(self.level1_position.is_open_for_intake)
 
         intake_response = self.client.get(
             reverse("applicant-intake", kwargs={"pk": self.level1_position.pk})
@@ -9781,6 +9910,14 @@ class E2ESeedCommandTests(BaseRecruitmentTestCase):
         aa_decision = RecruitmentApplication.objects.get(reference_number="RG-PLT-test-aa-decision")
         self.assertEqual(aa_decision.case.current_stage, RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW)
         self.assertEqual(get_current_workflow_section(aa_decision), "decision")
+        self.assertIsNotNone(get_latest_finalized_comparative_assessment_report(aa_decision))
+        self.assertFalse(FinalSelection.objects.filter(recruitment_entry=aa_decision.position).exists())
+
+        aa_return = RecruitmentApplication.objects.get(reference_number="RG-PLT-test-aa-return")
+        self.assertEqual(aa_return.case.current_stage, RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW)
+        self.assertEqual(get_current_workflow_section(aa_return), "decision")
+        self.assertIsNotNone(get_latest_finalized_comparative_assessment_report(aa_return))
+        self.assertFalse(FinalSelection.objects.filter(recruitment_entry=aa_return.position).exists())
 
         completion = RecruitmentApplication.objects.get(reference_number="RG-PLT-test-completion")
         self.assertEqual(completion.case.current_stage, RecruitmentCase.Stage.COMPLETION)

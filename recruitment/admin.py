@@ -194,6 +194,7 @@ class PositionPostingAdmin(admin.ModelAdmin):
         "level",
         "position_reference",
         "status",
+        "publication_date",
         "opening_date",
         "closing_date",
     )

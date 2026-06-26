@@ -2204,6 +2204,16 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
             }
         )
         self.fields["branch"].label = "Engagement Type"
+        self.fields["publication_date"].help_text = (
+            "For Plantilla, this starts the 14-calendar-day publication period when recorded."
+        )
+        self.fields["opening_date"].help_text = (
+            "Used as the publication start when no separate publication date is recorded."
+        )
+        self.fields["closing_date"].help_text = (
+            "For Plantilla, applications are accepted through the 14th calendar day; "
+            "leave blank to auto-fill."
+        )
         self.fields["qualification_reference"].label = "Entry Notes / Qualification Reference"
         self.selected_position_reference = self._resolve_selected_position_reference()
         self._apply_bootstrap()
@@ -2226,6 +2236,8 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
         position_reference = cleaned_data.get("position_reference")
         branch = cleaned_data.get("branch")
         intake_mode = cleaned_data.get("intake_mode")
+        publication_date = cleaned_data.get("publication_date")
+        opening_date = cleaned_data.get("opening_date")
         closing_date = cleaned_data.get("closing_date")
         submitted_job_code = (self.data.get(self.add_prefix("job_code")) or "").strip().upper()
         existing_job_code = (self.instance.job_code or "").strip().upper()
@@ -2255,6 +2267,21 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
 
         if branch == PositionPosting.Branch.PLANTILLA and intake_mode != PositionPosting.IntakeMode.FIXED_PERIOD:
             self.add_error("intake_mode", "Plantilla entries must use the fixed period intake mode.")
+
+        if branch == PositionPosting.Branch.PLANTILLA:
+            expected_closing_date = PositionPosting.calculate_plantilla_closing_date(
+                publication_date or opening_date
+            )
+            if expected_closing_date:
+                if not closing_date:
+                    cleaned_data["closing_date"] = expected_closing_date
+                    self.instance.closing_date = expected_closing_date
+                elif closing_date != expected_closing_date:
+                    self.add_error(
+                        "closing_date",
+                        "Plantilla publication period is 14 calendar days. "
+                        f"Use {expected_closing_date:%Y-%m-%d} as the closing date.",
+                    )
 
         if branch == PositionPosting.Branch.COS and intake_mode == PositionPosting.IntakeMode.FIXED_PERIOD:
             self.add_error(

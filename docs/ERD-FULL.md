@@ -124,6 +124,7 @@ Possible values:
 - engagement_type: Plantilla, COS
 - entry_mode: Published Vacancy, COS Opening, COS Pooling
 - intake_mode: Fixed Window, Continuous, Pooling
+- Plantilla publication_end_date is the inclusive 14th calendar day from publication_start_date.
 
 ### Relationships
 - One RecruitmentEntry belongs to one PositionReference
