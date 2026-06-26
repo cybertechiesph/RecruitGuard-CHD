@@ -8,6 +8,11 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 
+from .email_branding import (
+    REPORTING_INSTRUCTIONS,
+    email_branding_context,
+    email_footer_text_lines,
+)
 from .models import (
     AuditLog,
     Notification,
@@ -19,6 +24,42 @@ from .models import (
 
 
 logger = logging.getLogger(__name__)
+
+# Each notification type maps to its branded HTML template (extends email/base.html).
+# Audience (below) drives both the HTML footer and the plain-text footer: applicant-facing
+# emails carry the HRM Unit contact + data-privacy notice; internal staff emails carry only
+# the office identity + do-not-reply line.
+NOTIFICATION_EMAIL_TEMPLATES = {
+    NotificationLog.NotificationType.SUBMISSION_ACKNOWLEDGMENT: "email/application_received.html",
+    NotificationLog.NotificationType.SELECTED_APPLICANT: "email/selected_applicant.html",
+    NotificationLog.NotificationType.NON_SELECTED_APPLICANT: "email/non_selected_applicant.html",
+    NotificationLog.NotificationType.DOCUMENT_RESUBMISSION_REQUEST: "email/document_resubmission_request.html",
+    NotificationLog.NotificationType.APPLICATION_RETURNED_TO_APPLICANT: "email/application_returned.html",
+    NotificationLog.NotificationType.INTERVIEW_SESSION_SCHEDULED: "email/interview_scheduled_internal.html",
+    NotificationLog.NotificationType.EXAM_INVITATION: "email/exam_invitation.html",
+    NotificationLog.NotificationType.APPLICANT_INTERVIEW_NOTICE: "email/applicant_interview_notice.html",
+    NotificationLog.NotificationType.REQUIREMENT_CHECKLIST: "email/requirement_checklist.html",
+    NotificationLog.NotificationType.REMINDER: "email/reminder.html",
+}
+
+# Internal staff recipients (interview panel raters); every other type is applicant-facing.
+INTERNAL_AUDIENCE_NOTIFICATION_TYPES = {
+    NotificationLog.NotificationType.INTERVIEW_SESSION_SCHEDULED,
+}
+
+
+def _email_audience_for(notification_type):
+    if notification_type in INTERNAL_AUDIENCE_NOTIFICATION_TYPES:
+        return "internal"
+    return "applicant"
+
+
+def _with_email_footer(body, audience):
+    """Append the canonical institutional footer to a plain-text email body."""
+    footer_lines = email_footer_text_lines(audience)
+    if not footer_lines:
+        return body
+    return body.rstrip() + "\n\n" + "\n".join(footer_lines)
 
 NOTIFICATION_MANAGER_ROLES = {
     RecruitmentUser.Role.SECRETARIAT,
@@ -300,7 +341,6 @@ def _build_application_returned_to_applicant_notification(application, workflow_
         [
             "",
             "Please check your application status and follow the instructions from the recruitment office.",
-            "This notice was sent through RecruitGuard-CHD.",
         ]
     )
     return (
@@ -368,8 +408,6 @@ def _build_document_resubmission_fallback_body(
             ),
             "",
             f"Check your application status anytime: {build_applicant_status_url(application)}",
-            "",
-            "This notice was sent through RecruitGuard-CHD.",
         ]
     )
     return "\n".join(lines)
@@ -444,7 +482,6 @@ def _build_requirement_checklist_notification(
             "",
             f"Application ID: {application.reference_number}",
             f"Check your application status anytime: {build_applicant_status_url(application)}",
-            "This requirements checklist was sent through RecruitGuard-CHD.",
         ]
     )
     return (
@@ -464,7 +501,6 @@ def _build_reminder_notification(application, reminder_subject, reminder_message
     if deadline:
         lines.append(f"Reminder deadline: {_format_deadline(deadline)}")
     _append_status_link(lines, application)
-    lines.extend(["", "This reminder was sent through RecruitGuard-CHD."])
     return reminder_subject.strip(), "\n".join(lines)
 
 
@@ -496,33 +532,35 @@ def _mark_notification_failed(notification, reason):
 
 
 def _render_notification_html(notification):
-    if (
-        notification.notification_type
-        != NotificationLog.NotificationType.SUBMISSION_ACKNOWLEDGMENT
-    ):
+    template_name = NOTIFICATION_EMAIL_TEMPLATES.get(notification.notification_type)
+    if not template_name:
         return ""
 
     application = notification.application
+    metadata = notification.metadata or {}
+    audience = _email_audience_for(notification.notification_type)
+    context = {
+        "application": application,
+        "recipient_name": notification.recipient_name,
+        "status_link": (
+            metadata.get("status_link") or build_applicant_status_url(application)
+        ),
+        "meta": metadata,
+        "reporting_instructions": REPORTING_INSTRUCTIONS,
+        **email_branding_context(audience),
+    }
     try:
-        return render_to_string(
-            "email/application_received.html",
-            {
-                "application": application,
-                "status_link": (
-                    notification.metadata.get("status_link")
-                    or build_applicant_status_url(application)
-                ),
-            },
-        ).strip()
+        return render_to_string(template_name, context).strip()
     except Exception:
-        # The HTML body is only a richer alternative to the plain-text message
-        # that is already set as the email body. If the template is missing or
-        # raises while rendering, degrade gracefully to text-only delivery
-        # rather than failing the whole acknowledgment send.
+        # The HTML body is only a richer alternative to the plain-text message that is
+        # already set as the email body. If a template is missing or raises while
+        # rendering, degrade gracefully to text-only delivery rather than failing the
+        # send (which, for workflow-triggered emails, runs inside the atomic action).
         logger.exception(
-            "Failed to render HTML email for submission acknowledgment "
-            "notification %s; falling back to plain-text body.",
+            "Failed to render HTML email for notification %s (%s); falling back to "
+            "plain-text body.",
             notification.id,
+            notification.notification_type,
         )
         return ""
 
@@ -590,6 +628,7 @@ def queue_notification(
     recipient_email=None,
 ):
     resolved_recipient_email = (recipient_email or _recipient_email(application) or "").strip().lower()
+    body_with_footer = _with_email_footer(body, _email_audience_for(notification_type))
     notification = NotificationLog.objects.create(
         application=application,
         recruitment_case=getattr(application, "case", None),
@@ -602,7 +641,7 @@ def queue_notification(
         recipient_name=recipient_name or _recipient_name(application),
         recipient_email=resolved_recipient_email or "missing-email@invalid.local",
         subject=subject,
-        body=body,
+        body=body_with_footer,
         metadata=metadata or {},
     )
 
@@ -645,6 +684,7 @@ def queue_selected_applicant_notification(application, actor=None):
             "reference_number": application.reference_number,
             "status": application.status,
             "branch": application.branch,
+            "completion_label": _completion_label(application),
             "status_link": build_applicant_status_url(application),
         },
     )
@@ -722,7 +762,11 @@ def queue_interview_session_scheduled_notifications(
                     "branch": application.branch,
                     "interview_session_id": interview_session.id,
                     "scheduled_for": interview_session.scheduled_for.isoformat(),
+                    "schedule_display": _format_schedule(interview_session.scheduled_for),
                     "location": interview_session.location,
+                    "session_notes": (interview_session.session_notes or "").strip(),
+                    "applicant_name": application.applicant_display_name,
+                    "position_title": application.position.title,
                     "recipient_user_id": recipient.id,
                     "recipient_role": recipient.role,
                 },
@@ -745,13 +789,14 @@ def _build_exam_invitation_notification(application, exam_schedule):
     ]
     if exam_schedule.instructions:
         lines.extend(["", "Instructions:", exam_schedule.instructions.strip()])
+    lines.append("")
+    lines.append("Reporting instructions:")
+    lines.extend(f"- {item}" for item in REPORTING_INSTRUCTIONS)
     lines.extend(
         [
             "",
             f"Application ID: {application.reference_number}",
             f"Check your application status anytime: {build_applicant_status_url(application)}",
-            "",
-            "This exam invitation was sent through RecruitGuard-CHD.",
         ]
     )
     return (
@@ -775,7 +820,9 @@ def queue_exam_invitation_notification(application, exam_schedule, actor=None):
             "exam_schedule_id": exam_schedule.id,
             "review_stage": exam_schedule.review_stage,
             "scheduled_for": exam_schedule.scheduled_for.isoformat(),
+            "schedule_display": _format_schedule(exam_schedule.scheduled_for),
             "venue": exam_schedule.venue,
+            "instructions": (exam_schedule.instructions or "").strip(),
             "status_link": build_applicant_status_url(application),
         },
     )
@@ -793,13 +840,14 @@ def _build_applicant_interview_notice_notification(application, interview_sessio
         f"Schedule: {_format_schedule(interview_session.scheduled_for)}",
         f"Location / medium: {interview_session.location}",
     ]
+    lines.append("")
+    lines.append("Reporting instructions:")
+    lines.extend(f"- {item}" for item in REPORTING_INSTRUCTIONS)
     lines.extend(
         [
             "",
             f"Application ID: {application.reference_number}",
             f"Check your application status anytime: {build_applicant_status_url(application)}",
-            "",
-            "This interview notice was sent through RecruitGuard-CHD.",
         ]
     )
     return (
@@ -823,6 +871,7 @@ def queue_applicant_interview_notice_notification(application, interview_session
             "interview_session_id": interview_session.id,
             "review_stage": interview_session.review_stage,
             "scheduled_for": interview_session.scheduled_for.isoformat(),
+            "schedule_display": _format_schedule(interview_session.scheduled_for),
             "location": interview_session.location,
             "status_link": build_applicant_status_url(application),
         },
@@ -855,6 +904,7 @@ def queue_document_resubmission_request_notification(
             "status": application.status,
             "branch": application.branch,
             "document_keys": [item["document_key"] for item in requested_documents],
+            "requested_documents": requested_documents,
             "screening_document_review_ids": [review.id for review in document_reviews],
             "workflow_remarks": (workflow_remarks or "").strip(),
             "status_link": build_applicant_status_url(application),
@@ -903,6 +953,10 @@ def send_requirement_checklist_notification(
         body=body,
         metadata={
             "deadline": deadline.isoformat() if deadline else "",
+            "deadline_display": _format_deadline(deadline),
+            "checklist_items": checklist_items.strip(),
+            "additional_message": (additional_message or "").strip(),
+            "completion_label": _completion_label(application),
             "status_link": build_applicant_status_url(application),
         },
     )
@@ -943,6 +997,8 @@ def send_reminder_notification(
         body=body,
         metadata={
             "deadline": deadline.isoformat() if deadline else "",
+            "deadline_display": _format_deadline(deadline),
+            "reminder_message": reminder_message.strip(),
             "status_link": build_applicant_status_url(application),
         },
     )

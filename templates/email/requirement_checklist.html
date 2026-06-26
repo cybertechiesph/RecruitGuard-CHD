@@ -1,0 +1,39 @@
+{% extends "email/base.html" %}
+{% block title %}RecruitGuard-CHD Requirement Checklist{% endblock %}
+{% block preheader %}Complete the requirements for {{ application.position.title }}.{% endblock %}
+{% block body %}
+    <h1 style="margin:0; color:#111827; font-size:21px; line-height:1.3; font-weight:700;">Requirement Checklist</h1>
+    <p style="margin:10px 0 0; color:#5f6c78; font-size:14px; line-height:1.65;">
+        Dear {{ application.applicant_display_name }}, you have been selected for {{ application.position.title }}. Please complete the following {{ meta.completion_label|lower }} requirements.
+    </p>
+
+    {% if meta.checklist_items %}
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:16px; background:#f8fafc; border:1px solid #d7dde3; border-radius:8px;">
+        <tr><td style="padding:14px 16px 6px; color:#5f6c78; font-size:12px; line-height:1.4; font-weight:700; text-transform:uppercase; letter-spacing:0.08em;">Requirements</td></tr>
+        <tr><td style="padding:0 16px 14px; color:#374151; font-size:14px; line-height:1.7;">{{ meta.checklist_items|linebreaksbr }}</td></tr>
+    </table>
+    {% endif %}
+
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:14px; background:#f8fafc; border:1px solid #d7dde3; border-radius:8px;">
+        <tr><td style="padding:0 16px;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                {% if meta.deadline_display %}
+                <tr>
+                    <td style="padding:12px 0 8px; border-bottom:1px solid #e5e9ed; color:#6b7280; font-size:13px; line-height:1.5;">Submission deadline</td>
+                    <td align="right" style="padding:12px 0 8px; border-bottom:1px solid #e5e9ed; color:#b3500a; font-size:13px; line-height:1.5; font-weight:700;">{{ meta.deadline_display }}</td>
+                </tr>
+                {% endif %}
+                <tr>
+                    <td style="padding:8px 0 12px; color:#6b7280; font-size:13px; line-height:1.5;">Application ID</td>
+                    <td align="right" style="padding:8px 0 12px; color:#1e5c2d; font-size:13px; line-height:1.5; font-weight:700;">{{ application.reference_number }}</td>
+                </tr>
+            </table>
+        </td></tr>
+    </table>
+
+    {% if meta.additional_message %}
+    <p style="margin:16px 0 0; color:#374151; font-size:14px; line-height:1.65;">{{ meta.additional_message|linebreaksbr }}</p>
+    {% endif %}
+
+    {% include "email/_button.html" with button_url=status_link button_label="Check application status" %}
+{% endblock %}

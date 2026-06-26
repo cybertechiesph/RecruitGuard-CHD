@@ -18,5 +18,3 @@ Additional note from the recruitment team:
 Please follow the instructions from the recruitment team and keep your Application ID for status checking.
 
 Check your application status anytime: {{ status_link }}
-
-This notice was sent through RecruitGuard-CHD.

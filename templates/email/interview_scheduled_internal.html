@@ -1,0 +1,47 @@
+{% extends "email/base.html" %}
+{% block title %}RecruitGuard-CHD Interview Panel Assignment{% endblock %}
+{% block preheader %}Interview panel assignment for {{ meta.applicant_name }} ({{ meta.position_title }}).{% endblock %}
+{% block body %}
+    <h1 style="margin:0; color:#111827; font-size:21px; line-height:1.3; font-weight:700;">Interview Panel Assignment</h1>
+    <p style="margin:10px 0 0; color:#5f6c78; font-size:14px; line-height:1.65;">
+        Dear {{ recipient_name }}, an interview session has been scheduled and is ready for panel rating. You are requested to review the case and submit your interview rating.
+    </p>
+
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:16px; background:#f8fafc; border:1px solid #d7dde3; border-radius:8px;">
+        <tr><td style="padding:14px 16px 6px; color:#5f6c78; font-size:12px; line-height:1.4; font-weight:700; text-transform:uppercase; letter-spacing:0.08em;">Interview details</td></tr>
+        <tr><td style="padding:0 16px 14px;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                    <td style="padding:8px 0; border-bottom:1px solid #e5e9ed; color:#6b7280; font-size:13px; line-height:1.5;">Applicant</td>
+                    <td align="right" style="padding:8px 0; border-bottom:1px solid #e5e9ed; color:#374151; font-size:13px; line-height:1.5; font-weight:600;">{{ meta.applicant_name|default:application.applicant_display_name }}</td>
+                </tr>
+                <tr>
+                    <td style="padding:8px 0; border-bottom:1px solid #e5e9ed; color:#6b7280; font-size:13px; line-height:1.5;">Position</td>
+                    <td align="right" style="padding:8px 0; border-bottom:1px solid #e5e9ed; color:#374151; font-size:13px; line-height:1.5; font-weight:600;">{{ meta.position_title|default:application.position.title }}</td>
+                </tr>
+                <tr>
+                    <td style="padding:8px 0; border-bottom:1px solid #e5e9ed; color:#6b7280; font-size:13px; line-height:1.5;">Application ID</td>
+                    <td align="right" style="padding:8px 0; border-bottom:1px solid #e5e9ed; color:#1e5c2d; font-size:13px; line-height:1.5; font-weight:700;">{{ application.reference_number }}</td>
+                </tr>
+                <tr>
+                    <td style="padding:8px 0; border-bottom:1px solid #e5e9ed; color:#6b7280; font-size:13px; line-height:1.5;">Schedule</td>
+                    <td align="right" style="padding:8px 0; border-bottom:1px solid #e5e9ed; color:#374151; font-size:13px; line-height:1.5; font-weight:600;">{{ meta.schedule_display|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <td style="padding:8px 0; color:#6b7280; font-size:13px; line-height:1.5;">Location / medium</td>
+                    <td align="right" style="padding:8px 0; color:#374151; font-size:13px; line-height:1.5; font-weight:600;">{{ meta.location|default:"—" }}</td>
+                </tr>
+            </table>
+        </td></tr>
+    </table>
+
+    {% if meta.session_notes %}
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:14px; background:#f1f5f9; border:1px solid #d7dde3; border-radius:8px;">
+        <tr><td style="padding:14px 16px; color:#374151; font-size:13px; line-height:1.6;">
+            <strong>Session notes</strong><br>{{ meta.session_notes|linebreaksbr }}
+        </td></tr>
+    </table>
+    {% endif %}
+
+    {% if portal_url %}{% include "email/_button.html" with button_url=portal_url button_label="Open RecruitGuard-CHD" %}{% endif %}
+{% endblock %}

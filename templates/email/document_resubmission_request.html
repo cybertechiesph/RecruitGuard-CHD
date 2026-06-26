@@ -1,0 +1,47 @@
+{% extends "email/base.html" %}
+{% block title %}RecruitGuard-CHD Document Resubmission{% endblock %}
+{% block preheader %}Action needed: document resubmission for {{ application.position.title }}.{% endblock %}
+{% block body %}
+    <h1 style="margin:0; color:#111827; font-size:21px; line-height:1.3; font-weight:700;">Document Resubmission Needed</h1>
+    <p style="margin:10px 0 0; color:#5f6c78; font-size:14px; line-height:1.65;">
+        Dear {{ application.applicant_display_name }}, your application for {{ application.position.title }} needs corrected or updated document submission.
+    </p>
+
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:16px; background:#f8fafc; border:1px solid #d7dde3; border-radius:8px;">
+        <tr><td style="padding:14px 16px 6px; color:#5f6c78; font-size:12px; line-height:1.4; font-weight:700; text-transform:uppercase; letter-spacing:0.08em;">Application</td></tr>
+        <tr><td style="padding:0 16px 14px;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                    <td style="padding:8px 0; color:#6b7280; font-size:13px; line-height:1.5;">Application ID</td>
+                    <td align="right" style="padding:8px 0; color:#1e5c2d; font-size:13px; line-height:1.5; font-weight:700;">{{ application.reference_label }}</td>
+                </tr>
+            </table>
+        </td></tr>
+    </table>
+
+    <p style="margin:16px 0 6px; color:#374151; font-size:13px; line-height:1.5; font-weight:700; text-transform:uppercase; letter-spacing:0.06em;">
+        Document{{ meta.requested_documents|length|pluralize }} to resubmit
+    </p>
+    {% for document in meta.requested_documents %}
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:8px; background:#ffffff; border:1px solid #e5e9ed; border-radius:8px;">
+        <tr><td style="padding:12px 14px;">
+            <div style="color:#111827; font-size:14px; line-height:1.5; font-weight:700;">{{ document.requirement_title }}</div>
+            {% if document.remarks %}<div style="margin-top:4px; color:#5f6c78; font-size:13px; line-height:1.55;">Instruction: {{ document.remarks }}</div>{% endif %}
+        </td></tr>
+    </table>
+    {% endfor %}
+
+    {% if meta.workflow_remarks %}
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:10px; background:#fff8e6; border:1px solid #ffdf88; border-radius:8px;">
+        <tr><td style="padding:14px 16px; color:#6b4d06; font-size:13px; line-height:1.6;">
+            <strong>Additional note from the recruitment team</strong><br>{{ meta.workflow_remarks|linebreaksbr }}
+        </td></tr>
+    </table>
+    {% endif %}
+
+    <p style="margin:16px 0 0; color:#374151; font-size:14px; line-height:1.65;">
+        Please follow the instructions above and keep your Application ID for status checking.
+    </p>
+
+    {% include "email/_button.html" with button_url=status_link button_label="Check application status" %}
+{% endblock %}

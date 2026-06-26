@@ -1,14 +1,14 @@
 {% extends "email/base.html" %}
-{% block title %}RecruitGuard-CHD Application Received{% endblock %}
-{% block preheader %}Your application for {{ application.position.title }} has been received. Application ID: {{ application.reference_number }}.{% endblock %}
+{% block title %}RecruitGuard-CHD Application Result{% endblock %}
+{% block preheader %}You have been selected for {{ application.position.title }}.{% endblock %}
 {% block body %}
-    <h1 style="margin:0; color:#111827; font-size:21px; line-height:1.3; font-weight:700;">Application Received</h1>
+    <h1 style="margin:0; color:#111827; font-size:21px; line-height:1.3; font-weight:700;">Application Result &mdash; Selected</h1>
     <p style="margin:10px 0 0; color:#5f6c78; font-size:14px; line-height:1.65;">
-        Dear {{ application.applicant_display_name }}, your application has been received by RecruitGuard-CHD and is recorded for review by the Human Resource Management Unit.
+        Dear {{ application.applicant_display_name }}, you have been selected for {{ application.position.title }} under {{ application.position.get_branch_display }} recruitment.
     </p>
 
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:16px; background:#f8fafc; border:1px solid #d7dde3; border-radius:8px;">
-        <tr><td style="padding:14px 16px 6px; color:#5f6c78; font-size:12px; line-height:1.4; font-weight:700; text-transform:uppercase; letter-spacing:0.08em;">Application details</td></tr>
+        <tr><td style="padding:14px 16px 6px; color:#5f6c78; font-size:12px; line-height:1.4; font-weight:700; text-transform:uppercase; letter-spacing:0.08em;">Result details</td></tr>
         <tr><td style="padding:0 16px 14px;">
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                 <tr>
@@ -24,18 +24,16 @@
                     <td align="right" style="padding:8px 0; border-bottom:1px solid #e5e9ed; color:#374151; font-size:13px; line-height:1.5; font-weight:600;">{{ application.position.get_branch_display }}</td>
                 </tr>
                 <tr>
-                    <td style="padding:8px 0; color:#6b7280; font-size:13px; line-height:1.5;">Current status</td>
-                    <td align="right" style="padding:8px 0; color:#374151; font-size:13px; line-height:1.5; font-weight:600;">{{ application.get_status_display }}</td>
+                    <td style="padding:8px 0; color:#6b7280; font-size:13px; line-height:1.5;">Next step</td>
+                    <td align="right" style="padding:8px 0; color:#374151; font-size:13px; line-height:1.5; font-weight:600;">{{ meta.completion_label }}</td>
                 </tr>
             </table>
         </td></tr>
     </table>
 
-    {% include "email/_button.html" with button_url=status_link button_label="Check application status" %}
+    <p style="margin:16px 0 0; color:#374151; font-size:14px; line-height:1.65;">
+        Please wait for the requirement checklist or any additional instructions from the Human Resource Management Unit.
+    </p>
 
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:14px; background:#fff8e6; border:1px solid #ffdf88; border-radius:8px;">
-        <tr><td style="padding:14px 16px; color:#6b4d06; font-size:13px; line-height:1.6;">
-            <strong>Keep your Application ID.</strong> You will need it when checking your application through the public status page.
-        </td></tr>
-    </table>
+    {% include "email/_button.html" with button_url=status_link button_label="Check application status" %}
 {% endblock %}

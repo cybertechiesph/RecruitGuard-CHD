@@ -747,7 +747,7 @@ class FoundationSmokeTests(TestCase):
         html_body, mime_type = mail.outbox[-1].alternatives[0]
         self.assertEqual(mime_type, "text/html")
         self.assertIn("Internal Verification Code", html_body)
-        self.assertIn("DOH-CHD CALABARZON", html_body)
+        self.assertIn("DOH–CHD CALABARZON", html_body)
         self.assertIn(otp_code, html_body)
 
         response = self.client.post(
@@ -7146,7 +7146,7 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         html_body, mime_type = mail.outbox[0].alternatives[0]
         self.assertEqual(mime_type, "text/html")
         self.assertIn("Application Received", html_body)
-        self.assertIn("DOH-CHD CALABARZON", html_body)
+        self.assertIn("DOH–CHD CALABARZON", html_body)
         self.assertIn(application.reference_number, html_body)
         self.assertIn(application.position.title, html_body)
         self.assertIn(status_link, html_body)
