@@ -1,0 +1,13 @@
+{% comment %}Standard applicant reporting instructions. Uses `reporting_instructions` from context.{% endcomment %}<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:14px; background:#eef5ff; border:1px solid #cfe0f5; border-radius:8px;">
+    <tr><td style="padding:14px 16px; color:#1f3a5f; font-size:13px; line-height:1.65;">
+        <strong>Reporting instructions</strong>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:6px;">
+            {% for item in reporting_instructions %}
+            <tr>
+                <td valign="top" style="padding:2px 8px 2px 0; color:#1f3a5f; font-size:13px; line-height:1.6;">&bull;</td>
+                <td style="padding:2px 0; color:#1f3a5f; font-size:13px; line-height:1.6;">{{ item }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </td></tr>
+</table>

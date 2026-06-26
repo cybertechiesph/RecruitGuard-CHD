@@ -1,0 +1,105 @@
+{% comment %}
+Shared branded layout for ALL RecruitGuard-CHD emails (DOH–CHD CALABARZON).
+
+Child templates extend this and fill:
+  {% block title %}      — <title> text
+  {% block preheader %}  — hidden inbox-preview text
+  {% block body %}       — the main content cell (headline, intro, detail panel, CTA, callout)
+
+The header (seal + wordmark) and the footer (HRM Unit contact, data-privacy notice,
+do-not-reply line) are rendered here and driven by `email_branding_context(audience)`,
+so every email stays consistent and the official contact details live in one place.
+
+Email-client constraints: table-based layout, inline CSS only, ~560px width, no external
+CSS/JS, absolute image URL. If `logo_url` is empty the header degrades to a text logotype.
+{% endcomment %}<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light only">
+    <meta name="supported-color-schemes" content="light only">
+    <title>{% block title %}RecruitGuard-CHD{% endblock %}</title>
+</head>
+<body style="margin:0; padding:0; background:#f4f6fa; color:#1f2933; font-family:Arial, Helvetica, sans-serif;">
+    <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:transparent;">{% block preheader %}{% endblock %}</div>
+
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f6fa; margin:0; padding:28px 12px;">
+        <tr>
+            <td align="center">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px; background:#ffffff; border:1px solid #d7dde3; border-radius:12px; overflow:hidden;">
+
+                    {# ── Header band: seal + agency wordmark ── #}
+                    <tr>
+                        <td style="background:#1e5c2d; padding:18px 24px; border-bottom:4px solid #fdb813;">
+                            <table role="presentation" cellspacing="0" cellpadding="0">
+                                <tr>
+                                    {% if logo_url %}
+                                    <td style="vertical-align:middle; padding-right:14px;">
+                                        <img src="{{ logo_url }}" width="46" height="46" alt="DOH–CHD CALABARZON seal" style="display:block; border:0; outline:none; width:46px; height:46px;">
+                                    </td>
+                                    {% endif %}
+                                    <td style="vertical-align:middle;">
+                                        <div style="font-size:12px; line-height:1.4; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#fdb813;">
+                                            DOH–CHD CALABARZON
+                                        </div>
+                                        <div style="font-size:22px; line-height:1.25; font-weight:700; color:#ffffff; margin-top:2px;">
+                                            RecruitGuard-CHD
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    {# ── Main content ── #}
+                    <tr>
+                        <td style="padding:26px 28px 8px;">
+                            {% block body %}{% endblock %}
+                        </td>
+                    </tr>
+
+                    {# ── Footer: contact (applicant only) + data-privacy (applicant only) + do-not-reply (all) ── #}
+                    {% if email_audience == "internal" %}
+                    <tr>
+                        <td style="padding:18px 28px 6px; background:#f8fafc; border-top:1px solid #edf0f3;">
+                            <div style="color:#374151; font-size:13px; line-height:1.6;">
+                                <strong>{{ office_name }}</strong>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td style="padding:18px 28px 4px; background:#f8fafc; border-top:1px solid #edf0f3;">
+                            <div style="font-size:11px; line-height:1.4; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:#8a96a3;">
+                                For inquiries
+                            </div>
+                            <div style="margin-top:6px; color:#374151; font-size:13px; line-height:1.65;">
+                                <strong>{{ contact_unit }}</strong><br>
+                                Tel: {{ contact_phone }} &nbsp;&middot;&nbsp; Email:
+                                <a href="mailto:{{ contact_email }}" style="color:#1e5c2d; text-decoration:none;">{{ contact_email }}</a><br>
+                                {{ office_name }}, {{ office_address }}
+                                {% if portal_url %}<br>Portal: <a href="{{ portal_url }}" style="color:#1e5c2d; text-decoration:none;">{{ portal_url }}</a>{% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% if data_privacy_notice %}
+                    <tr>
+                        <td style="padding:10px 28px 4px; background:#f8fafc;">
+                            <div style="color:#7b8794; font-size:11px; line-height:1.6;">{{ data_privacy_notice }}</div>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% endif %}
+                    <tr>
+                        <td style="padding:8px 28px 20px; background:#f8fafc;">
+                            <div style="color:#9aa4af; font-size:11px; line-height:1.6;">{{ do_not_reply_notice }}</div>
+                        </td>
+                    </tr>
+
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

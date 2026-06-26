@@ -165,6 +165,13 @@ DEFAULT_FROM_EMAIL = os.getenv(
     "DEFAULT_FROM_EMAIL",
     EMAIL_HOST_USER or "noreply@recruitguard.local",
 )
+# Absolute origin used to build asset URLs (e.g. the agency seal) inside HTML emails.
+# Email clients cannot resolve relative {% static %} paths, so the logo must be an
+# absolute URL. Defaults to the applicant portal base URL (the deployed domain);
+# when neither is set (local/dev), email templates fall back to a text logotype.
+EMAIL_ASSET_BASE_URL = (
+    os.getenv("EMAIL_ASSET_BASE_URL") or APPLICANT_PORTAL_BASE_URL or ""
+).strip().rstrip("/")
 APPLICATION_OTP_VALIDITY_MINUTES = env_int("APPLICATION_OTP_VALIDITY_MINUTES", 10)
 APPLICATION_OTP_RESEND_COOLDOWN_SECONDS = env_int("APPLICATION_OTP_RESEND_COOLDOWN_SECONDS", 60)
 APPLICATION_OTP_MAX_ATTEMPTS = env_int("APPLICATION_OTP_MAX_ATTEMPTS", 5)
