@@ -27,6 +27,7 @@ from django.utils.text import slugify
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
+from .email_branding import email_branding_context
 from .models import (
     AuditLog,
     ComparativeAssessmentReport,
@@ -730,6 +731,7 @@ def _send_internal_mfa_email(challenge, otp_code):
                 "challenge": challenge,
                 "otp_code": otp_code,
                 "otp_validity_minutes": settings.INTERNAL_MFA_OTP_VALIDITY_MINUTES,
+                **email_branding_context("internal"),
             },
         )
     except Exception:
@@ -5453,6 +5455,7 @@ def _deliver_application_otp(application, otp_code, *, actor=None, otp_expires_a
                 "otp_code": otp_code,
                 "otp_expires_at": otp_expires_at,
                 "otp_validity_minutes": settings.APPLICATION_OTP_VALIDITY_MINUTES,
+                **email_branding_context("applicant"),
             },
         )
     except Exception:
