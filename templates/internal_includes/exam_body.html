@@ -208,16 +208,11 @@ reviewer can see the disposition at a glance without scrolling to step 2.
                     {% endfor %}
                 </div>
                 <div class="rg-field">
-                    <label class="form-label" for="{{ exam_form.exam_score.id_for_label }}">
-                        {{ exam_form.exam_score.label }}
-                    </label>
-                    {{ exam_form.exam_score }}
-                    {% if exam_form.exam_score.help_text %}
-                        <div class="form-text">{{ exam_form.exam_score.help_text }}</div>
-                    {% endif %}
-                    {% for error in exam_form.exam_score.errors %}
-                        <div class="invalid-feedback d-block">{{ error }}</div>
-                    {% endfor %}
+                    <label class="form-label">Overall Score (auto-computed)</label>
+                    <div class="form-control rg-fixed-value" id="exam-overall-display" aria-live="polite">&mdash;</div>
+                    <div class="form-text">
+                        General Ability &times;60% + Technical &times;40%. Computed automatically; not editable.
+                    </div>
                 </div>
                 <div class="rg-field">
                     <label class="form-label">System result</label>
@@ -433,10 +428,10 @@ reviewer can see the disposition at a glance without scrolling to step 2.
     var statusEl = document.getElementById("id_exam_status");
     var notesEl = document.getElementById("id_exam_notes");
 
-    var scoreInput = document.getElementById("id_exam_score");
     var technicalScoreInput = document.getElementById("id_technical_score");
     var generalScoreInput = document.getElementById("id_general_score");
-    var scoreInputs = [scoreInput, technicalScoreInput, generalScoreInput].filter(Boolean);
+    var overallDisplay = document.getElementById("exam-overall-display");
+    var scoreInputs = [technicalScoreInput, generalScoreInput].filter(Boolean);
     var scoreWarning = document.getElementById("exam-score-warning");
 
     var condCompleted = document.getElementById("exam-cond-completed");
@@ -549,8 +544,28 @@ reviewer can see the disposition at a glance without scrolling to step 2.
         });
         if (scoreWarning) scoreWarning.hidden = !anyBad;
     }
+    /* Live overall: General Ability x0.60 + Technical x0.40 (computed, read-only). */
+    function syncOverall() {
+        if (!overallDisplay) return;
+        var examType = valOf("exam_type");
+        var t = parseFloat((technicalScoreInput && technicalScoreInput.value || "").trim());
+        var g = parseFloat((generalScoreInput && generalScoreInput.value || "").trim());
+        var inRange = function (n) { return !isNaN(n) && n >= 0 && n <= 100; };
+        var overall = null;
+        if (examType === "end_user_assessment") {
+            if (inRange(g)) overall = g;
+        } else if (inRange(t) && inRange(g)) {
+            overall = t * 0.4 + g * 0.6;
+        }
+        overallDisplay.textContent = overall === null
+            ? "—"
+            : (Math.round(overall * 100) / 100).toFixed(2);
+    }
     scoreInputs.forEach(function (input) {
-        input.addEventListener("input", syncScoreWarning);
+        input.addEventListener("input", function () {
+            syncScoreWarning();
+            syncOverall();
+        });
     });
 
     /* ── Per-step validation ──────────────────────────────── */
@@ -651,6 +666,7 @@ reviewer can see the disposition at a glance without scrolling to step 2.
         syncStatusBar();
         syncConditionalGroups();
         syncScoreWarning();
+        syncOverall();
     }
 
     if (nextBtn) {
@@ -700,7 +716,8 @@ reviewer can see the disposition at a glance without scrolling to step 2.
             if (typeEl) typeEl.textContent = valOf("exam_type") || "—";
             if (statusEl2) statusEl2.textContent = (STATUS_CONFIG[valOf("exam_status")] || {}).label || "—";
             if (dateEl) dateEl.textContent = valOf("exam_date") || "—";
-            var score = valOf("exam_score");
+            var score = overallDisplay ? overallDisplay.textContent.trim() : "";
+            if (score === "—") score = "";
             if (resultRow && resultEl) {
                 if (score) {
                     resultEl.textContent = score + " / 100";

@@ -402,9 +402,9 @@ class BaseRecruitmentTestCase(TestCase):
         exam_status=ExamRecord.ExamStatus.COMPLETED,
         exam_score="88.50",
         exam_result="",
-        technical_score="87.00",
+        technical_score=None,
         technical_result="",
-        general_score="90.00",
+        general_score=None,
         general_result="",
         exam_date=None,
         administered_by=ExamRecord.AdministeredBy.HRMS,
@@ -413,6 +413,12 @@ class BaseRecruitmentTestCase(TestCase):
         exam_notes="Formal examination output recorded.",
     ):
         exam_date = exam_date or timezone.localdate()
+        # The overall is computed (Gen x0.60 + Tech x0.40); default each component to
+        # the requested overall so the computed result equals exam_score.
+        if technical_score is None:
+            technical_score = exam_score
+        if general_score is None:
+            general_score = exam_score
         save_exam_schedule(
             application=application,
             actor=actor,
@@ -5475,7 +5481,6 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         payload = {
             "exam_type": ExamRecord.ExamType.TECHNICAL_PRACTICAL,
             "exam_status": ExamRecord.ExamStatus.COMPLETED,
-            "exam_score": "86.75",
             "exam_result": "",
             "technical_score": "84.50",
             "technical_result": "",
@@ -5548,7 +5553,6 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         application = self.make_application(self.level1_position)
         form = ExamRecordForm(
             data=self.exam_payload(
-                exam_score="101",
                 technical_score="-1",
                 general_score="125",
             ),
@@ -5556,7 +5560,6 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         )
 
         self.assertFalse(form.is_valid())
-        self.assertIn(ExamRecordForm.SCORE_RANGE_MESSAGE, form.errors["exam_score"])
         self.assertIn(ExamRecordForm.SCORE_RANGE_MESSAGE, form.errors["technical_score"])
         self.assertIn(ExamRecordForm.SCORE_RANGE_MESSAGE, form.errors["general_score"])
 
@@ -5619,7 +5622,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         )
         exam_record.refresh_from_db()
         self.assertTrue(exam_record.is_finalized)
-        self.assertEqual(str(exam_record.exam_score), "90.00")
+        self.assertEqual(str(exam_record.exam_score), "90.40")
         self.assertEqual(str(exam_record.technical_score), "88.00")
         self.assertEqual(str(exam_record.general_score), "92.00")
         self.assertEqual(exam_record.exam_date, timezone.localdate())
@@ -5665,7 +5668,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         )
 
         self.assertTrue(exam_record.is_finalized)
-        self.assertIsNone(exam_record.exam_score)
+        self.assertEqual(str(exam_record.exam_score), "85.60")
         self.assertEqual(str(exam_record.effective_score), "85.60")
 
     def test_exam_record_can_attach_optional_evidence(self):
@@ -5908,7 +5911,6 @@ class ExamRecordTests(BaseRecruitmentTestCase):
             reverse("exam-review", kwargs={"pk": application.pk}),
             {
                 **self.exam_payload(
-                    exam_score="101",
                     technical_score="120",
                     general_score="-1",
                 ),
@@ -5919,7 +5921,6 @@ class ExamRecordTests(BaseRecruitmentTestCase):
 
         self.assertEqual(response.status_code, 200)
         message_text = " ".join(message.message for message in get_messages(response.wsgi_request))
-        self.assertIn("Overall / Single Exam Score", message_text)
         self.assertIn("Technical Score", message_text)
         self.assertIn("General Ability Score", message_text)
         self.assertIn(ExamRecordForm.SCORE_RANGE_MESSAGE, message_text)
@@ -5992,7 +5993,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         response = client.post(
             reverse("exam-review", kwargs={"pk": application.pk}),
             {
-                **self.exam_payload(exam_score="101"),
+                **self.exam_payload(technical_score="101"),
                 "operation": "save",
             },
             HTTP_X_REQUESTED_WITH="RG-Autosave",
@@ -6013,7 +6014,6 @@ class ExamRecordTests(BaseRecruitmentTestCase):
             reverse("exam-review", kwargs={"pk": application.pk}),
             {
                 **self.exam_payload(
-                    exam_score="",
                     technical_score="",
                     general_score="",
                 ),

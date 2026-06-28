@@ -1563,8 +1563,8 @@ class ExamRecord(TimestampedModel):
     @property
     def component_weight_display(self):
         if self.exam_type == self.ExamType.TECHNICAL_PRACTICAL:
-            return "General Ability 60%, Technical 40% when no official overall score is encoded."
-        return "End-user assessment score is used when applicable."
+            return "Overall is computed automatically: General Ability 60% + Technical 40%."
+        return "End-user assessment score is used as the overall."
 
     def calculate_policy_score(self):
         if self.exam_type == self.ExamType.END_USER_ASSESSMENT:
@@ -1598,9 +1598,6 @@ class ExamRecord(TimestampedModel):
         if self.exam_status != self.ExamStatus.COMPLETED:
             return
 
-        if self.exam_type == self.ExamType.END_USER_ASSESSMENT:
-            self.exam_score = self.general_score
-
         self.technical_result = (
             self.ComponentResult.RECORDED
             if self.technical_score is not None
@@ -1611,13 +1608,17 @@ class ExamRecord(TimestampedModel):
             if self.general_score is not None
             else self.ComponentResult.NOT_APPLICABLE
         )
+        # The overall score is always computed from the components
+        # (General Ability x0.60 + Technical x0.40). It is never entered or
+        # overwritten by hand, so the CAR can trust it as the authoritative value.
+        self.exam_score = self.calculate_policy_score()
         has_required_scores = all(
             getattr(self, field_name) is not None
             for field_name in self.required_score_fields
         )
         self.exam_result = (
             self.OverallResult.FOR_EVALUATION
-            if has_required_scores or self.exam_score is not None
+            if has_required_scores
             else self.OverallResult.INCOMPLETE
         )
 

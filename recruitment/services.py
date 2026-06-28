@@ -3844,7 +3844,8 @@ def save_exam_record(
     exam_record.recorded_by = actor
     exam_record.exam_type = cleaned_data.get("exam_type", "") or ""
     exam_record.exam_status = exam_status
-    exam_record.exam_score = _optional_decimal(cleaned_data.get("exam_score"))
+    # The overall exam score is computed from the components in
+    # ExamRecord.apply_policy_outputs(); it is never taken from form input.
     exam_record.exam_result = cleaned_data.get("exam_result", "")
     exam_record.technical_score = _optional_decimal(cleaned_data.get("technical_score"))
     exam_record.technical_result = cleaned_data.get("technical_result", "")

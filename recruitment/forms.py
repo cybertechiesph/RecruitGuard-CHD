@@ -1563,7 +1563,7 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
 
 class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.ModelForm):
     SCORE_RANGE_MESSAGE = "Enter a score from 0 to 100."
-    SCORE_FIELD_NAMES = ("exam_score", "technical_score", "general_score")
+    SCORE_FIELD_NAMES = ("technical_score", "general_score")
 
     evidence_file = forms.FileField(
         label="Optional Supporting File",
@@ -1576,7 +1576,6 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
         fields = [
             "exam_type",
             "exam_status",
-            "exam_score",
             "exam_result",
             "technical_score",
             "technical_result",
@@ -1590,7 +1589,6 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
             "evidence_file",
         ]
         widgets = {
-            "exam_score": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
             "technical_score": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
             "general_score": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
             "exam_result": forms.HiddenInput(),
@@ -1614,7 +1612,6 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
         self.administered_by_fixed_label = ""
         self.fields["exam_type"].label = "Exam Type"
         self.fields["exam_status"].label = "Exam Status"
-        self.fields["exam_score"].label = "Overall / Single Exam Score"
         self.fields["exam_result"].label = "Overall Result"
         self.fields["technical_score"].label = "Technical Score"
         self.fields["technical_result"].label = "Technical Result"
@@ -1635,7 +1632,6 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
         self.fields["administered_by"].required = False
         self.fields["valid_from"].required = False
         self.fields["valid_until"].required = False
-        self.fields["exam_score"].required = False
         self.fields["exam_type"].choices = self._exam_type_choices()
         self.fields["administered_by"].choices = self._administered_by_choices()
         for field_name in self.SCORE_FIELD_NAMES:
@@ -1649,9 +1645,6 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
             )
         self.fields["exam_type"].help_text = "Set by the recruitment branch and hiring-process rules."
         self.fields["administered_by"].help_text = "Office responsible under the CHD hiring process."
-        self.fields["exam_score"].help_text = (
-            "Use only when an official overall score is available. Otherwise, policy component weights are used where confirmed."
-        )
         if self.application:
             self.fields["technical_score"].label = "Technical Score"
             self.fields["general_score"].label = "General Ability Score"
