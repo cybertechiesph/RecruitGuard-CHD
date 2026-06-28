@@ -151,7 +151,7 @@ EXAM_FIELD_LABELS = {
     "exam_status": "Exam Status",
     "exam_score": "Overall / Single Exam Score",
     "technical_score": "Technical Score",
-    "practical_score": "Practical Score",
+    "general_score": "General Ability Score",
     "exam_date": "Exam Date",
     "administered_by": "Administered By",
     "valid_from": "Validity Start",

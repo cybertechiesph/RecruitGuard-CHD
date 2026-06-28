@@ -287,8 +287,8 @@ Stores exam-related records where applicable.
 - score
 - technical_score
 - technical_result
-- practical_score
-- practical_result
+- general_score
+- general_result
 - exam_date
 - administered_by
 - validity_end_date

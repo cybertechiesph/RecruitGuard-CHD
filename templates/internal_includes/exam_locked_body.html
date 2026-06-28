@@ -153,16 +153,16 @@
             </div>
 
             <div class="rg-exam-locked-field">
-                <div class="rg-exam-locked-field__label">{{ current_exam_record.practical_component_label }} Component</div>
+                <div class="rg-exam-locked-field__label">{{ current_exam_record.general_component_label }} Component</div>
                 <div class="rg-exam-locked-field__value">
-                    {% if current_exam_record.practical_score is not None or current_exam_record.practical_result %}
-                        {% if current_exam_record.practical_score is not None %}
-                            {{ current_exam_record.practical_score }}
+                    {% if current_exam_record.general_score is not None or current_exam_record.general_result %}
+                        {% if current_exam_record.general_score is not None %}
+                            {{ current_exam_record.general_score }}
                         {% else %}
                             <span style="color:#9aa4af;">No score</span>
                         {% endif %}
-                        {% if current_exam_record.practical_result %}
-                            &mdash; {{ current_exam_record.get_practical_result_display }}
+                        {% if current_exam_record.general_result %}
+                            &mdash; {{ current_exam_record.get_general_result_display }}
                         {% endif %}
                     {% else %}
                         <span style="color:#9aa4af;font-style:italic;">Not recorded</span>

@@ -404,8 +404,8 @@ class BaseRecruitmentTestCase(TestCase):
         exam_result="",
         technical_score="87.00",
         technical_result="",
-        practical_score="90.00",
-        practical_result="",
+        general_score="90.00",
+        general_result="",
         exam_date=None,
         administered_by=ExamRecord.AdministeredBy.HRMS,
         valid_from=None,
@@ -432,8 +432,8 @@ class BaseRecruitmentTestCase(TestCase):
                 "exam_result": exam_result,
                 "technical_score": technical_score,
                 "technical_result": technical_result,
-                "practical_score": practical_score,
-                "practical_result": practical_result,
+                "general_score": general_score,
+                "general_result": general_result,
                 "exam_date": exam_date,
                 "administered_by": administered_by,
                 "valid_from": valid_from,
@@ -5479,8 +5479,8 @@ class ExamRecordTests(BaseRecruitmentTestCase):
             "exam_result": "",
             "technical_score": "84.50",
             "technical_result": "",
-            "practical_score": "89.00",
-            "practical_result": "",
+            "general_score": "89.00",
+            "general_result": "",
             "exam_date": timezone.localdate().isoformat(),
             "administered_by": ExamRecord.AdministeredBy.HRMS,
             "valid_from": timezone.localdate().isoformat(),
@@ -5550,7 +5550,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
             data=self.exam_payload(
                 exam_score="101",
                 technical_score="-1",
-                practical_score="125",
+                general_score="125",
             ),
             application=application,
         )
@@ -5558,7 +5558,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         self.assertFalse(form.is_valid())
         self.assertIn(ExamRecordForm.SCORE_RANGE_MESSAGE, form.errors["exam_score"])
         self.assertIn(ExamRecordForm.SCORE_RANGE_MESSAGE, form.errors["technical_score"])
-        self.assertIn(ExamRecordForm.SCORE_RANGE_MESSAGE, form.errors["practical_score"])
+        self.assertIn(ExamRecordForm.SCORE_RANGE_MESSAGE, form.errors["general_score"])
 
     def test_current_handler_can_create_update_and_finalize_exam_record(self):
         application = self.make_application(self.level1_position)
@@ -5577,8 +5577,8 @@ class ExamRecordTests(BaseRecruitmentTestCase):
                 "exam_result": "",
                 "technical_score": "80.00",
                 "technical_result": "",
-                "practical_score": "85.00",
-                "practical_result": "",
+                "general_score": "85.00",
+                "general_result": "",
                 "exam_date": timezone.localdate(),
                 "administered_by": ExamRecord.AdministeredBy.HRMS,
                 "valid_from": timezone.localdate(),
@@ -5607,8 +5607,8 @@ class ExamRecordTests(BaseRecruitmentTestCase):
                 "exam_result": "",
                 "technical_score": "88.00",
                 "technical_result": "",
-                "practical_score": "92.00",
-                "practical_result": "",
+                "general_score": "92.00",
+                "general_result": "",
                 "exam_date": timezone.localdate(),
                 "administered_by": ExamRecord.AdministeredBy.HRMS,
                 "valid_from": timezone.localdate(),
@@ -5621,12 +5621,12 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         self.assertTrue(exam_record.is_finalized)
         self.assertEqual(str(exam_record.exam_score), "90.00")
         self.assertEqual(str(exam_record.technical_score), "88.00")
-        self.assertEqual(str(exam_record.practical_score), "92.00")
+        self.assertEqual(str(exam_record.general_score), "92.00")
         self.assertEqual(exam_record.exam_date, timezone.localdate())
         self.assertEqual(exam_record.administered_by, ExamRecord.AdministeredBy.HRMS)
         self.assertEqual(
             exam_record.component_summary,
-            "Technical: 88.00 (Recorded for evaluation); Practical: 92.00 (Recorded for evaluation)",
+            "Technical: 88.00 (Recorded for evaluation); General Ability: 92.00 (Recorded for evaluation)",
         )
         self.assertEqual(exam_record.finalized_by, self.secretariat)
         self.assertTrue(
@@ -5653,8 +5653,8 @@ class ExamRecordTests(BaseRecruitmentTestCase):
                 "exam_result": "",
                 "technical_score": "82.00",
                 "technical_result": "",
-                "practical_score": "88.00",
-                "practical_result": "",
+                "general_score": "88.00",
+                "general_result": "",
                 "exam_date": timezone.localdate(),
                 "administered_by": ExamRecord.AdministeredBy.HRMS,
                 "valid_from": None,
@@ -5685,8 +5685,8 @@ class ExamRecordTests(BaseRecruitmentTestCase):
                 "exam_result": "",
                 "technical_score": "90.00",
                 "technical_result": "",
-                "practical_score": "92.00",
-                "practical_result": "",
+                "general_score": "92.00",
+                "general_result": "",
                 "exam_date": timezone.localdate(),
                 "administered_by": ExamRecord.AdministeredBy.HRMS,
                 "valid_from": timezone.localdate(),
@@ -5735,8 +5735,8 @@ class ExamRecordTests(BaseRecruitmentTestCase):
                     "exam_result": "",
                     "technical_score": "90.00",
                     "technical_result": "",
-                    "practical_score": "92.00",
-                    "practical_result": "",
+                    "general_score": "92.00",
+                    "general_result": "",
                     "exam_date": timezone.localdate(),
                     "administered_by": ExamRecord.AdministeredBy.HRMS,
                     "valid_from": timezone.localdate(),
@@ -5812,8 +5812,8 @@ class ExamRecordTests(BaseRecruitmentTestCase):
                 "exam_result": "",
                 "technical_score": None,
                 "technical_result": "",
-                "practical_score": None,
-                "practical_result": "",
+                "general_score": None,
+                "general_result": "",
                 "exam_date": None,
                 "administered_by": "",
                 "valid_from": None,
@@ -5846,8 +5846,8 @@ class ExamRecordTests(BaseRecruitmentTestCase):
                     "exam_result": "",
                     "technical_score": None,
                     "technical_result": "",
-                    "practical_score": None,
-                    "practical_result": "",
+                    "general_score": None,
+                    "general_result": "",
                     "exam_date": timezone.localdate(),
                     "administered_by": ExamRecord.AdministeredBy.HRMS,
                     "valid_from": None,
@@ -5910,7 +5910,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
                 **self.exam_payload(
                     exam_score="101",
                     technical_score="120",
-                    practical_score="-1",
+                    general_score="-1",
                 ),
                 "operation": "finalize",
             },
@@ -5921,7 +5921,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         message_text = " ".join(message.message for message in get_messages(response.wsgi_request))
         self.assertIn("Overall / Single Exam Score", message_text)
         self.assertIn("Technical Score", message_text)
-        self.assertIn("Practical Score", message_text)
+        self.assertIn("General Ability Score", message_text)
         self.assertIn(ExamRecordForm.SCORE_RANGE_MESSAGE, message_text)
         self.assertNotIn("{'exam_score'", message_text)
         self.assertFalse(ExamRecord.objects.filter(application=application).exists())
@@ -5943,8 +5943,8 @@ class ExamRecordTests(BaseRecruitmentTestCase):
                 "exam_result": "",
                 "technical_score": "",
                 "technical_result": "",
-                "practical_score": "",
-                "practical_result": "",
+                "general_score": "",
+                "general_result": "",
                 "exam_date": "",
                 "administered_by": ExamRecord.AdministeredBy.HRMS,
                 "valid_from": "",
@@ -5965,7 +5965,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         self.assertFalse(exam_record.is_finalized)
         self.assertEqual(exam_record.exam_status, ExamRecord.ExamStatus.COMPLETED)
         self.assertIsNone(exam_record.technical_score)
-        self.assertIsNone(exam_record.practical_score)
+        self.assertIsNone(exam_record.general_score)
         self.assertEqual(exam_record.exam_result, ExamRecord.OverallResult.INCOMPLETE)
         self.assertIsNone(exam_record.evidence_item)
         self.assertFalse(
@@ -6015,7 +6015,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
                 **self.exam_payload(
                     exam_score="",
                     technical_score="",
-                    practical_score="",
+                    general_score="",
                 ),
                 "operation": "finalize",
             },
@@ -6053,7 +6053,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         self.assertEqual(exam_record.exam_status, ExamRecord.ExamStatus.WAIVED)
         self.assertIsNone(exam_record.exam_score)
         self.assertIsNone(exam_record.technical_score)
-        self.assertIsNone(exam_record.practical_score)
+        self.assertIsNone(exam_record.general_score)
         self.assertIsNone(exam_record.valid_from)
         self.assertIsNone(exam_record.valid_until)
 
@@ -9118,7 +9118,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             self.secretariat,
             exam_score="90.00",
             technical_score="90.00",
-            practical_score="90.00",
+            general_score="90.00",
         )
         primary_application.refresh_from_db()
         self.finalize_screening_for_current_stage(
@@ -9133,7 +9133,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             self.secretariat,
             exam_score="80.00",
             technical_score="80.00",
-            practical_score="80.00",
+            general_score="80.00",
         )
         secondary_application.refresh_from_db()
 
@@ -9403,7 +9403,7 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
                 self.secretariat,
                 exam_score=score,
                 technical_score=score,
-                practical_score=score,
+                general_score=score,
             )
             application.refresh_from_db()
 

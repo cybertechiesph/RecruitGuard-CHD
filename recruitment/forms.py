@@ -1563,7 +1563,7 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
 
 class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.ModelForm):
     SCORE_RANGE_MESSAGE = "Enter a score from 0 to 100."
-    SCORE_FIELD_NAMES = ("exam_score", "technical_score", "practical_score")
+    SCORE_FIELD_NAMES = ("exam_score", "technical_score", "general_score")
 
     evidence_file = forms.FileField(
         label="Optional Supporting File",
@@ -1580,8 +1580,8 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
             "exam_result",
             "technical_score",
             "technical_result",
-            "practical_score",
-            "practical_result",
+            "general_score",
+            "general_result",
             "exam_date",
             "administered_by",
             "valid_from",
@@ -1592,10 +1592,10 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
         widgets = {
             "exam_score": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
             "technical_score": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
-            "practical_score": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
+            "general_score": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
             "exam_result": forms.HiddenInput(),
             "technical_result": forms.HiddenInput(),
-            "practical_result": forms.HiddenInput(),
+            "general_result": forms.HiddenInput(),
             "exam_date": forms.DateInput(attrs={"type": "date"}),
             "valid_from": forms.DateInput(attrs={"type": "date"}),
             "valid_until": forms.DateInput(attrs={"type": "date"}),
@@ -1606,8 +1606,8 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
         self.application = kwargs.pop("application", None)
         self.draft = kwargs.pop("draft", False)
         super().__init__(*args, **kwargs)
-        self.component_section_label = "Technical and Practical Components"
-        self.component_weight_display = "Technical and practical scores are recorded separately."
+        self.component_section_label = "General Ability and Technical Components"
+        self.component_weight_display = "General Ability (60%) and Technical (40%) scores are recorded separately."
         self.exam_type_is_fixed = False
         self.exam_type_fixed_label = ""
         self.administered_by_is_fixed = False
@@ -1618,8 +1618,8 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
         self.fields["exam_result"].label = "Overall Result"
         self.fields["technical_score"].label = "Technical Score"
         self.fields["technical_result"].label = "Technical Result"
-        self.fields["practical_score"].label = "Practical Score"
-        self.fields["practical_result"].label = "Practical Result"
+        self.fields["general_score"].label = "General Ability Score"
+        self.fields["general_result"].label = "General Ability Result"
         self.fields["exam_date"].label = "Exam Date"
         self.fields["administered_by"].label = "Administered By"
         self.fields["valid_from"].label = "Validity Start"
@@ -1629,8 +1629,8 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
         self.fields["exam_result"].required = False
         self.fields["technical_score"].required = False
         self.fields["technical_result"].required = False
-        self.fields["practical_score"].required = False
-        self.fields["practical_result"].required = False
+        self.fields["general_score"].required = False
+        self.fields["general_result"].required = False
         self.fields["exam_date"].required = False
         self.fields["administered_by"].required = False
         self.fields["valid_from"].required = False
@@ -1654,7 +1654,7 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
         )
         if self.application:
             self.fields["technical_score"].label = "Technical Score"
-            self.fields["practical_score"].label = "Practical Score"
+            self.fields["general_score"].label = "General Ability Score"
             if self.application.branch == PositionPosting.Branch.COS:
                 self.component_section_label = "COS Examination Components"
         self._apply_fixed_choice_display(
@@ -1718,9 +1718,9 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
 
     def _required_score_fields_for_type(self, exam_type):
         if exam_type == ExamRecord.ExamType.TECHNICAL_PRACTICAL:
-            return ("technical_score", "practical_score")
+            return ("technical_score", "general_score")
         if exam_type == ExamRecord.ExamType.END_USER_ASSESSMENT:
-            return ("practical_score",)
+            return ("general_score",)
         return ()
 
     def clean(self):

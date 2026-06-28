@@ -185,7 +185,7 @@ reviewer can see the disposition at a glance without scrolling to step 2.
             </div>
 
             {{ exam_form.technical_result }}
-            {{ exam_form.practical_result }}
+            {{ exam_form.general_result }}
             {{ exam_form.exam_result }}
 
             <div class="rg-exam-score-grid">
@@ -199,11 +199,11 @@ reviewer can see the disposition at a glance without scrolling to step 2.
                     {% endfor %}
                 </div>
                 <div class="rg-field">
-                    <label class="form-label" for="{{ exam_form.practical_score.id_for_label }}">
-                        {{ exam_form.practical_score.label }}
+                    <label class="form-label" for="{{ exam_form.general_score.id_for_label }}">
+                        {{ exam_form.general_score.label }}
                     </label>
-                    {{ exam_form.practical_score }}
-                    {% for error in exam_form.practical_score.errors %}
+                    {{ exam_form.general_score }}
+                    {% for error in exam_form.general_score.errors %}
                         <div class="invalid-feedback d-block">{{ error }}</div>
                     {% endfor %}
                 </div>
@@ -233,7 +233,7 @@ reviewer can see the disposition at a glance without scrolling to step 2.
                     {% for error in exam_form.technical_result.errors %}
                         <div class="invalid-feedback d-block">{{ error }}</div>
                     {% endfor %}
-                    {% for error in exam_form.practical_result.errors %}
+                    {% for error in exam_form.general_result.errors %}
                         <div class="invalid-feedback d-block">{{ error }}</div>
                     {% endfor %}
                 </div>
@@ -435,8 +435,8 @@ reviewer can see the disposition at a glance without scrolling to step 2.
 
     var scoreInput = document.getElementById("id_exam_score");
     var technicalScoreInput = document.getElementById("id_technical_score");
-    var practicalScoreInput = document.getElementById("id_practical_score");
-    var scoreInputs = [scoreInput, technicalScoreInput, practicalScoreInput].filter(Boolean);
+    var generalScoreInput = document.getElementById("id_general_score");
+    var scoreInputs = [scoreInput, technicalScoreInput, generalScoreInput].filter(Boolean);
     var scoreWarning = document.getElementById("exam-score-warning");
 
     var condCompleted = document.getElementById("exam-cond-completed");
@@ -582,13 +582,13 @@ reviewer can see the disposition at a glance without scrolling to step 2.
                 }
             });
             // Required scores by exam type — mirrors forms.py
-            // _required_score_fields_for_type(): Technical/Practical needs both
-            // technical + practical; End-user needs practical.
+            // _required_score_fields_for_type(): the General+Technical exam needs
+            // both technical + general ability; End-user needs the single score.
             var examType = valOf("exam_type");
             var requiredScoreInputs = examType === "technical_practical"
-                ? [technicalScoreInput, practicalScoreInput]
+                ? [technicalScoreInput, generalScoreInput]
                 : examType === "end_user_assessment"
-                    ? [practicalScoreInput]
+                    ? [generalScoreInput]
                     : [];
             requiredScoreInputs.forEach(function (input) {
                 if (input && (input.value || "").trim() === "") {

@@ -1338,7 +1338,7 @@ class ScreeningDocumentReview(TimestampedModel):
 
 class ExamRecord(TimestampedModel):
     class ExamType(models.TextChoices):
-        TECHNICAL_PRACTICAL = "technical_practical", "Technical and Practical Examination"
+        TECHNICAL_PRACTICAL = "technical_practical", "Examination (General and Technical)"
         END_USER_ASSESSMENT = "end_user_assessment", "End-user Examination"
 
     class ExamStatus(models.TextChoices):
@@ -1408,13 +1408,13 @@ class ExamRecord(TimestampedModel):
         choices=ComponentResult.choices,
         blank=True,
     )
-    practical_score = models.DecimalField(
+    general_score = models.DecimalField(
         max_digits=6,
         decimal_places=2,
         blank=True,
         null=True,
     )
-    practical_result = models.CharField(
+    general_result = models.CharField(
         max_length=40,
         choices=ComponentResult.choices,
         blank=True,
@@ -1495,7 +1495,7 @@ class ExamRecord(TimestampedModel):
         score_fields = {
             "exam_score": self.exam_score,
             "technical_score": self.technical_score,
-            "practical_score": self.practical_score,
+            "general_score": self.general_score,
         }
         for field_name, value in score_fields.items():
             if value is not None and (value < 0 or value > 100):
@@ -1547,9 +1547,9 @@ class ExamRecord(TimestampedModel):
     @property
     def required_score_fields(self):
         if self.exam_type == self.ExamType.TECHNICAL_PRACTICAL:
-            return ("technical_score", "practical_score")
+            return ("technical_score", "general_score")
         if self.exam_type == self.ExamType.END_USER_ASSESSMENT:
-            return ("practical_score",)
+            return ("general_score",)
         return ()
 
     @property
@@ -1557,24 +1557,24 @@ class ExamRecord(TimestampedModel):
         return "Technical"
 
     @property
-    def practical_component_label(self):
-        return "Practical"
+    def general_component_label(self):
+        return "General Ability"
 
     @property
     def component_weight_display(self):
         if self.exam_type == self.ExamType.TECHNICAL_PRACTICAL:
-            return "Technical score 40%, practical score 60% when no official overall score is encoded."
-        return "Practical or end-user assessment score is used when applicable."
+            return "General Ability 60%, Technical 40% when no official overall score is encoded."
+        return "End-user assessment score is used when applicable."
 
     def calculate_policy_score(self):
         if self.exam_type == self.ExamType.END_USER_ASSESSMENT:
-            return self.practical_score
+            return self.general_score
         if (
             self.exam_type == self.ExamType.TECHNICAL_PRACTICAL
             and self.technical_score is not None
-            and self.practical_score is not None
+            and self.general_score is not None
         ):
-            score = (self.technical_score * Decimal("0.40")) + (self.practical_score * Decimal("0.60"))
+            score = (self.technical_score * Decimal("0.40")) + (self.general_score * Decimal("0.60"))
             return score.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         return self.exam_score
 
@@ -1582,33 +1582,33 @@ class ExamRecord(TimestampedModel):
         if self.exam_status == self.ExamStatus.WAIVED:
             self.exam_score = None
             self.technical_score = None
-            self.practical_score = None
+            self.general_score = None
             self.technical_result = ""
-            self.practical_result = ""
+            self.general_result = ""
             self.exam_result = self.OverallResult.WAIVED
             return
         if self.exam_status == self.ExamStatus.ABSENT:
             self.exam_score = None
             self.technical_score = None
-            self.practical_score = None
+            self.general_score = None
             self.technical_result = ""
-            self.practical_result = ""
+            self.general_result = ""
             self.exam_result = self.OverallResult.ABSENT
             return
         if self.exam_status != self.ExamStatus.COMPLETED:
             return
 
         if self.exam_type == self.ExamType.END_USER_ASSESSMENT:
-            self.exam_score = self.practical_score
+            self.exam_score = self.general_score
 
         self.technical_result = (
             self.ComponentResult.RECORDED
             if self.technical_score is not None
             else self.ComponentResult.NOT_APPLICABLE
         )
-        self.practical_result = (
+        self.general_result = (
             self.ComponentResult.RECORDED
-            if self.practical_score is not None
+            if self.general_score is not None
             else self.ComponentResult.NOT_APPLICABLE
         )
         has_required_scores = all(
@@ -1637,12 +1637,12 @@ class ExamRecord(TimestampedModel):
             if self.technical_result:
                 label = f"{label} ({self.get_technical_result_display()})"
             parts.append(label)
-        if self.practical_score is not None or self.practical_result:
-            label = self.practical_component_label
-            if self.practical_score is not None:
-                label = f"{label}: {self.practical_score}"
-            if self.practical_result:
-                label = f"{label} ({self.get_practical_result_display()})"
+        if self.general_score is not None or self.general_result:
+            label = self.general_component_label
+            if self.general_score is not None:
+                label = f"{label}: {self.general_score}"
+            if self.general_result:
+                label = f"{label} ({self.get_general_result_display()})"
             parts.append(label)
         return "; ".join(parts)
 

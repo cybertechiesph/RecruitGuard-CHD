@@ -2713,8 +2713,8 @@ def _deliberation_snapshot_for_exam(exam_record):
         "exam_result": exam_record.exam_result,
         "technical_score": _decimal_string(exam_record.technical_score),
         "technical_result": exam_record.technical_result,
-        "practical_score": _decimal_string(exam_record.practical_score),
-        "practical_result": exam_record.practical_result,
+        "general_score": _decimal_string(exam_record.general_score),
+        "general_result": exam_record.general_result,
         "component_summary": exam_record.component_summary,
         "exam_date": exam_record.exam_date.isoformat() if exam_record.exam_date else "",
         "administered_by": exam_record.administered_by,
@@ -3093,8 +3093,8 @@ def _decision_packet_exam_record(record):
         "exam_result": record.exam_result,
         "technical_score": _decimal_string(record.technical_score),
         "technical_result": record.technical_result,
-        "practical_score": _decimal_string(record.practical_score),
-        "practical_result": record.practical_result,
+        "general_score": _decimal_string(record.general_score),
+        "general_result": record.general_result,
         "component_summary": record.component_summary,
         "exam_date": record.exam_date.isoformat() if record.exam_date else "",
         "administered_by": record.administered_by,
@@ -3848,8 +3848,8 @@ def save_exam_record(
     exam_record.exam_result = cleaned_data.get("exam_result", "")
     exam_record.technical_score = _optional_decimal(cleaned_data.get("technical_score"))
     exam_record.technical_result = cleaned_data.get("technical_result", "")
-    exam_record.practical_score = _optional_decimal(cleaned_data.get("practical_score"))
-    exam_record.practical_result = cleaned_data.get("practical_result", "")
+    exam_record.general_score = _optional_decimal(cleaned_data.get("general_score"))
+    exam_record.general_result = cleaned_data.get("general_result", "")
     exam_record.exam_date = cleaned_data.get("exam_date")
     exam_record.administered_by = cleaned_data.get("administered_by", "")
     exam_record.valid_from = cleaned_data.get("valid_from")
@@ -3858,7 +3858,7 @@ def save_exam_record(
     if exam_status in {ExamRecord.ExamStatus.WAIVED, ExamRecord.ExamStatus.ABSENT}:
         exam_record.exam_score = None
         exam_record.technical_score = None
-        exam_record.practical_score = None
+        exam_record.general_score = None
         exam_record.valid_from = None
         exam_record.valid_until = None
     exam_record.is_finalized = finalize
@@ -3917,8 +3917,8 @@ def save_exam_record(
                 "exam_result": exam_record.exam_result,
                 "technical_score": _decimal_string(exam_record.technical_score),
                 "technical_result": exam_record.technical_result,
-                "practical_score": _decimal_string(exam_record.practical_score),
-                "practical_result": exam_record.practical_result,
+                "general_score": _decimal_string(exam_record.general_score),
+                "general_result": exam_record.general_result,
                 "exam_date": exam_record.exam_date.isoformat() if exam_record.exam_date else "",
                 "administered_by": exam_record.administered_by,
                 "valid_from": exam_record.valid_from.isoformat() if exam_record.valid_from else "",
