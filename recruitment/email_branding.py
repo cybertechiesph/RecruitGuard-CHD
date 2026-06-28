@@ -43,8 +43,9 @@ DO_NOT_REPLY_INTERNAL = (
 REPORTING_INSTRUCTIONS = (
     "Bring at least one (1) valid government-issued identification card.",
     "Report at least fifteen (15) minutes before your scheduled time.",
-    "If you are unable to attend on the scheduled date, coordinate immediately with the "
-    "Human Resource Management Unit using the details below.",
+    "If you are unable to attend on the scheduled date, submit a written letter of intent "
+    "to reschedule to the Human Resource Management Unit (details below) before your "
+    "scheduled date.",
 )
 
 
