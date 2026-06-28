@@ -2151,6 +2151,7 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
         fields = [
             "position_reference",
             "job_code",
+            "item_number",
             "branch",
             "intake_mode",
             "status",
@@ -2196,6 +2197,12 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
                 "placeholder": "Will be generated automatically after first save",
             }
         )
+        self.fields["item_number"].label = "Plantilla Item Number"
+        self.fields["item_number"].required = False
+        self.fields["item_number"].help_text = (
+            "Required for Plantilla — the official plantilla item number for this vacancy. "
+            "Leave blank for COS (item numbers apply to Plantilla items only)."
+        )
         self.fields["branch"].label = "Engagement Type"
         self.fields["publication_date"].help_text = (
             "For Plantilla, this starts the 14-calendar-day publication period when recorded."
@@ -2240,6 +2247,12 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
                 "job_code",
                 "Entry Code is generated automatically for tracking and cannot be edited.",
             )
+
+        item_number = (cleaned_data.get("item_number") or "").strip()
+        if branch == PositionPosting.Branch.PLANTILLA and not item_number:
+            self.add_error("item_number", "Enter the plantilla item number for this vacancy.")
+        elif branch == PositionPosting.Branch.COS:
+            cleaned_data["item_number"] = ""
 
         if position_reference is None:
             self.add_error("position_reference", "Select a position reference before creating the recruitment entry.")

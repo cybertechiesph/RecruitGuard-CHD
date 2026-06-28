@@ -254,6 +254,9 @@ class Command(BaseCommand):
             position_reference=reference,
             branch=branch,
             level=level,
+            item_number=(
+                f"ITEM-{code}" if branch == PositionPosting.Branch.PLANTILLA else ""
+            ),
             intake_mode=(
                 PositionPosting.IntakeMode.FIXED_PERIOD
                 if branch == PositionPosting.Branch.PLANTILLA

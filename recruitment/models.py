@@ -417,6 +417,7 @@ class PositionPosting(TimestampedModel):
         null=True,
     )
     job_code = models.CharField(max_length=30, unique=True, blank=True)
+    item_number = models.CharField(max_length=100, blank=True)
     title = models.CharField(max_length=255, blank=True)
     branch = models.CharField(max_length=20, choices=Branch.choices)
     level = models.PositiveSmallIntegerField(choices=Level.choices)
@@ -592,7 +593,11 @@ class PositionPosting(TimestampedModel):
         if self.closing_date and self.closing_date < self.opening_date:
             errors["closing_date"] = "Closing date cannot be earlier than opening date."
 
+        self.item_number = (self.item_number or "").strip()
+
         if self.branch == self.Branch.PLANTILLA:
+            if not self.item_number:
+                errors["item_number"] = "Plantilla entries require the plantilla item number."
             if self.intake_mode != self.IntakeMode.FIXED_PERIOD:
                 errors["intake_mode"] = "Plantilla entries must use a fixed validity period."
             if not self.closing_date:
@@ -610,6 +615,7 @@ class PositionPosting(TimestampedModel):
                         "based on the publication date, or opening date if no publication date is recorded."
                     )
         elif self.branch == self.Branch.COS:
+            self.item_number = ""
             if self.intake_mode == self.IntakeMode.FIXED_PERIOD:
                 errors["intake_mode"] = "COS entries must use opening-based, continuous, or pooling intake."
             if (
