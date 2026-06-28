@@ -57,6 +57,8 @@ from .models import (
     InternalLoginAttempt,
     InternalMFAChallenge,
     InternalPasswordHistory,
+    CompetencyDefinition,
+    CompetencyRatingTemplate,
     InterviewRating,
     Notification,
     NotificationLog,
@@ -98,6 +100,8 @@ from .services import (
     save_deliberation_record,
     save_exam_record,
     save_exam_schedule,
+    create_competency_rating_template,
+    get_competency_rating_template,
     save_interview_rating,
     save_interview_session,
     save_screening_review,
@@ -8587,6 +8591,29 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
                 artifact_type="interview_fallback_rating_sheet",
             ).exists()
         )
+
+
+class CompetencyRatingSheetTests(BaseRecruitmentTestCase):
+    def test_create_seeds_standard_core_and_org_competencies(self):
+        template = create_competency_rating_template(self.level1_position, self.secretariat)
+        self.assertEqual(template.status, CompetencyRatingTemplate.Status.DRAFT)
+        self.assertEqual(template.scale_min, 1)
+        self.assertEqual(template.scale_max, 4)
+        self.assertEqual(template.created_by, self.secretariat)
+        self.assertEqual(template.created_by_role, RecruitmentUser.Role.SECRETARIAT)
+        groups = list(template.competencies.values_list("group", flat=True))
+        self.assertEqual(groups.count(CompetencyDefinition.Group.CORE), 3)
+        self.assertEqual(groups.count(CompetencyDefinition.Group.ORGANIZATIONAL), 3)
+        self.assertEqual(groups.count(CompetencyDefinition.Group.TECHNICAL), 0)
+        self.assertEqual(template.competencies.count(), 6)
+
+    def test_create_is_one_per_vacancy(self):
+        create_competency_rating_template(self.level1_position, self.secretariat)
+        self.assertEqual(
+            get_competency_rating_template(self.level1_position).competencies.count(), 6
+        )
+        with self.assertRaises(ValueError):
+            create_competency_rating_template(self.level1_position, self.secretariat)
 
 
 class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):

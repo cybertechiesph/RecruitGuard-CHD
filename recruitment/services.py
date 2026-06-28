@@ -32,6 +32,8 @@ from .models import (
     AuditLog,
     ComparativeAssessmentReport,
     ComparativeAssessmentReportItem,
+    CompetencyDefinition,
+    CompetencyRatingTemplate,
     CompletionRecord,
     CompletionRequirement,
     DeliberationRecord,
@@ -4131,6 +4133,51 @@ def save_interview_rating(application, actor, cleaned_data):
         },
     )
     return interview_rating
+
+
+# Standard CSC competencies seeded into every new interview rating sheet. The
+# Technical group is left for the Secretariat to fill in per position.
+STANDARD_INTERVIEW_COMPETENCIES = (
+    (CompetencyDefinition.Group.CORE, "Exemplifying Integrity"),
+    (CompetencyDefinition.Group.CORE, "Professionalism"),
+    (CompetencyDefinition.Group.CORE, "Service Excellence"),
+    (CompetencyDefinition.Group.ORGANIZATIONAL, "Effective Communication"),
+    (CompetencyDefinition.Group.ORGANIZATIONAL, "Effective Interpersonal Relations"),
+    (CompetencyDefinition.Group.ORGANIZATIONAL, "Organizational Awareness and Commitment"),
+)
+
+
+def get_competency_rating_template(entry):
+    return CompetencyRatingTemplate.objects.filter(recruitment_entry=entry).first()
+
+
+@transaction.atomic
+def create_competency_rating_template(entry, actor, scale_min=1, scale_max=4):
+    """Create the per-vacancy interview rating sheet, seeded with the standard Core
+    and Organizational competencies. The Secretariat then adds the Technical ones."""
+    if CompetencyRatingTemplate.objects.filter(recruitment_entry=entry).exists():
+        raise ValueError("This vacancy already has an interview rating sheet.")
+    template = CompetencyRatingTemplate(
+        recruitment_entry=entry,
+        created_by=actor,
+        scale_min=scale_min,
+        scale_max=scale_max,
+    )
+    template.full_clean()
+    template.save()
+    CompetencyDefinition.objects.bulk_create(
+        [
+            CompetencyDefinition(
+                template=template,
+                group=group,
+                name=name,
+                weight=Decimal("1.00"),
+                order=order,
+            )
+            for order, (group, name) in enumerate(STANDARD_INTERVIEW_COMPETENCIES, start=1)
+        ]
+    )
+    return template
 
 
 @transaction.atomic

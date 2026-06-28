@@ -1991,6 +1991,108 @@ class InterviewRating(TimestampedModel):
         return f"{self.application.reference_label} rating by {self.rated_by}"
 
 
+class CompetencyRatingTemplate(TimestampedModel):
+    """Per-vacancy interview rating sheet the Secretariat composes at the interview
+    stage. Holds the scale and the competencies (Core / Organizational / Technical)
+    that the HRMPSB members then score online; results normalize to the 0-100 the CAR
+    consumes."""
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        PUBLISHED = "published", "Published"
+        LOCKED = "locked", "Locked"
+
+    recruitment_entry = models.OneToOneField(
+        PositionPosting,
+        on_delete=models.CASCADE,
+        related_name="competency_rating_template",
+    )
+    created_by = models.ForeignKey(
+        RecruitmentUser,
+        on_delete=models.PROTECT,
+        related_name="created_competency_rating_templates",
+    )
+    created_by_role = models.CharField(max_length=40, blank=True)
+    scale_min = models.PositiveSmallIntegerField(default=1)
+    scale_max = models.PositiveSmallIntegerField(default=4)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    instructions = models.TextField(blank=True)
+    published_at = models.DateTimeField(blank=True, null=True)
+    locked_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def clean(self):
+        errors = {}
+        if self.created_by_id and self.created_by.role not in {
+            RecruitmentUser.Role.SECRETARIAT,
+            RecruitmentUser.Role.HRM_CHIEF,
+        }:
+            errors["created_by"] = (
+                "Only the Secretariat or HRM Chief may compose the interview rating sheet."
+            )
+        if self.scale_min < 0:
+            errors["scale_min"] = "The scale minimum cannot be negative."
+        if self.scale_max <= self.scale_min:
+            errors["scale_max"] = "The scale maximum must be greater than the minimum."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        if self.created_by_id:
+            self.created_by_role = self.created_by.role
+        super().save(*args, **kwargs)
+
+    @property
+    def is_locked(self):
+        return self.status == self.Status.LOCKED
+
+    @property
+    def is_editable(self):
+        return self.status != self.Status.LOCKED
+
+    @property
+    def scale_points(self):
+        return list(range(self.scale_min, self.scale_max + 1))
+
+    def __str__(self):
+        return f"Interview rating sheet for {self.recruitment_entry.job_code}"
+
+
+class CompetencyDefinition(TimestampedModel):
+    class Group(models.TextChoices):
+        CORE = "core", "Core"
+        ORGANIZATIONAL = "organizational", "Organizational"
+        TECHNICAL = "technical", "Technical"
+
+    template = models.ForeignKey(
+        CompetencyRatingTemplate,
+        on_delete=models.CASCADE,
+        related_name="competencies",
+    )
+    group = models.CharField(max_length=20, choices=Group.choices)
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    weight = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("1.00"))
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "id"]
+
+    def clean(self):
+        errors = {}
+        if not (self.name or "").strip():
+            errors["name"] = "Give the competency a name."
+        if self.weight is None or self.weight <= 0:
+            errors["weight"] = "Competency weight must be greater than zero."
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return f"{self.get_group_display()}: {self.name}"
+
+
 class DeliberationRecord(TimestampedModel):
     class QuorumStatus(models.TextChoices):
         NOT_RECORDED = "not_recorded", "Not Recorded"
