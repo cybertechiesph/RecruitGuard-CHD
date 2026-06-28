@@ -125,7 +125,7 @@
         <div>
             <h3 class="rg-icard__title">Rating submissions</h3>
             <p class="rg-icard__subtitle">
-                Individual scores stay private until Deliberation / CAR opens.
+                Each panel member's submitted score is shown below.
             </p>
         </div>
         {% if current_interview_ratings %}
@@ -152,7 +152,7 @@
                         {% endif %}
                     </div>
                 </div>
-                <span class="rg-int-monitor-item__tag">Submitted</span>
+                <span class="rg-int-monitor-item__tag" title="Submitted interview rating">{{ rating.rating_score }}</span>
             </li>
             {% endfor %}
         </ul>
@@ -252,6 +252,12 @@
         <button type="button" class="btn btn-outline-secondary btn-sm" id="int-save-session-btn">
             Save session
         </button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="int-notify-applicant-btn">
+            Notify applicant
+        </button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="int-notify-panel-btn">
+            Notify HRMPSB panel
+        </button>
         <button type="button" class="btn-rg-finalize" id="int-finalize-session-btn">
             Finalize session
         </button>
@@ -321,6 +327,8 @@
         var dateInput = document.getElementById("id_scheduled_for");
         var locInput = document.getElementById("id_location");
         var saveBtn = document.getElementById("int-save-session-btn");
+        var notifyApplicantBtn = document.getElementById("int-notify-applicant-btn");
+        var notifyPanelBtn = document.getElementById("int-notify-panel-btn");
         var finBtn = document.getElementById("int-finalize-session-btn");
         var errorBox = document.getElementById("int-session-error");
         var modalEl = document.getElementById("modal-int-finalize-session");
@@ -395,6 +403,20 @@
             saveBtn.addEventListener("click", function () {
                 if (!validateForSave()) return;
                 if (opField) opField.value = "save";
+                form.submit();
+            });
+        }
+        if (notifyApplicantBtn) {
+            notifyApplicantBtn.addEventListener("click", function () {
+                if (!validateForSave()) return;
+                if (opField) opField.value = "notify_applicant";
+                form.submit();
+            });
+        }
+        if (notifyPanelBtn) {
+            notifyPanelBtn.addEventListener("click", function () {
+                if (!validateForSave()) return;
+                if (opField) opField.value = "notify_panel";
                 form.submit();
             });
         }

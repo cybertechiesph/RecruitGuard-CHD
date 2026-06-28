@@ -8168,7 +8168,7 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
         self.assertEqual(interview_rating.rated_by, self.hrmpsb)
         self.assertEqual(interview_rating.encoded_by, self.hrmpsb)
 
-    def test_interview_schedule_notifies_hrmpsb_panel_members_on_create_and_material_update(self):
+    def test_interview_notify_buttons_send_panel_and_applicant_notices(self):
         application = self.make_application(self.level1_position)
         self.move_application_to_hrmpsb_review(application)
         second_hrmpsb = User.objects.create_user(
@@ -8180,6 +8180,7 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
         scheduled_for = timezone.now() + timedelta(days=2)
         mail.outbox.clear()
 
+        # A plain save is silent — no notifications are sent.
         with self.captureOnCommitCallbacks(execute=True):
             interview_session = save_interview_session(
                 application=application,
@@ -8191,44 +8192,74 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
                 ),
                 finalize=False,
             )
-
-        notifications = NotificationLog.objects.filter(
-            application=application,
-            notification_type=NotificationLog.NotificationType.INTERVIEW_SESSION_SCHEDULED,
+        self.assertEqual(
+            NotificationLog.objects.filter(
+                application=application,
+                notification_type=NotificationLog.NotificationType.INTERVIEW_SESSION_SCHEDULED,
+            ).count(),
+            0,
         )
-        in_app_notifications = Notification.objects.filter(
-            application=application,
-            kind=Notification.Kind.INTERVIEW_SCHEDULED,
-        )
-        self.assertEqual(notifications.count(), 2)
-        self.assertEqual(in_app_notifications.count(), 2)
-        # 2 HRMPSB panel emails + 1 applicant interview notice
-        self.assertEqual(len(mail.outbox), 3)
         self.assertEqual(
             NotificationLog.objects.filter(
                 application=application,
                 notification_type=NotificationLog.NotificationType.APPLICANT_INTERVIEW_NOTICE,
             ).count(),
-            1,
+            0,
         )
         self.assertEqual(
-            {notification.recipient_email for notification in notifications},
+            Notification.objects.filter(
+                application=application,
+                kind=Notification.Kind.INTERVIEW_SCHEDULED,
+            ).count(),
+            0,
+        )
+        self.assertEqual(len(mail.outbox), 0)
+
+        # "Notify HRMPSB panel" emails the panel + posts in-app; the applicant is untouched.
+        with self.captureOnCommitCallbacks(execute=True):
+            save_interview_session(
+                application=application,
+                actor=self.secretariat,
+                cleaned_data=self.session_payload(
+                    scheduled_for=scheduled_for,
+                    location="Panel Room 1",
+                    session_notes="Panel interview schedule.",
+                ),
+                finalize=False,
+                notify_panel=True,
+            )
+        panel_notifications = NotificationLog.objects.filter(
+            application=application,
+            notification_type=NotificationLog.NotificationType.INTERVIEW_SESSION_SCHEDULED,
+        )
+        self.assertEqual(panel_notifications.count(), 2)
+        self.assertEqual(
+            {notification.recipient_email for notification in panel_notifications},
             {"hrmpsb@example.com", second_hrmpsb.email},
         )
         self.assertEqual(
-            {notification.recipient for notification in in_app_notifications},
-            {self.hrmpsb, second_hrmpsb},
+            Notification.objects.filter(
+                application=application,
+                kind=Notification.Kind.INTERVIEW_SCHEDULED,
+            ).count(),
+            2,
         )
         self.assertTrue(
             all(
                 notification.metadata["interview_session_id"] == interview_session.id
-                for notification in notifications
+                for notification in panel_notifications
             )
         )
-        self.assertIn(application.applicant_display_name, mail.outbox[0].body)
-        self.assertIn(application.position.title, mail.outbox[0].body)
-        self.assertIn("Panel Room 1", mail.outbox[0].body)
+        self.assertEqual(
+            NotificationLog.objects.filter(
+                application=application,
+                notification_type=NotificationLog.NotificationType.APPLICANT_INTERVIEW_NOTICE,
+            ).count(),
+            0,
+        )
+        self.assertEqual(len(mail.outbox), 2)
 
+        # "Notify applicant" emails only the applicant; panel notices are unchanged.
         mail.outbox.clear()
         with self.captureOnCommitCallbacks(execute=True):
             save_interview_session(
@@ -8237,62 +8268,23 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
                 cleaned_data=self.session_payload(
                     scheduled_for=scheduled_for,
                     location="Panel Room 1",
-                    session_notes="Only notes changed.",
+                    session_notes="Panel interview schedule.",
                 ),
                 finalize=False,
+                notify_applicant=True,
             )
-
-        self.assertEqual(
-            NotificationLog.objects.filter(
-                application=application,
-                notification_type=NotificationLog.NotificationType.INTERVIEW_SESSION_SCHEDULED,
-            ).count(),
-            2,
-        )
-        self.assertEqual(
-            Notification.objects.filter(
-                application=application,
-                kind=Notification.Kind.INTERVIEW_SCHEDULED,
-            ).count(),
-            2,
-        )
-        self.assertEqual(len(mail.outbox), 0)
-
-        with self.captureOnCommitCallbacks(execute=True):
-            save_interview_session(
-                application=application,
-                actor=self.secretariat,
-                cleaned_data=self.session_payload(
-                    scheduled_for=scheduled_for,
-                    location="Panel Room 2",
-                    session_notes="Location changed.",
-                ),
-                finalize=False,
-            )
-
-        self.assertEqual(
-            NotificationLog.objects.filter(
-                application=application,
-                notification_type=NotificationLog.NotificationType.INTERVIEW_SESSION_SCHEDULED,
-            ).count(),
-            4,
-        )
-        self.assertEqual(
-            Notification.objects.filter(
-                application=application,
-                kind=Notification.Kind.INTERVIEW_SCHEDULED,
-            ).count(),
-            4,
-        )
-        # 2 panel emails + 1 applicant interview notice on the material update
-        self.assertEqual(len(mail.outbox), 3)
         self.assertEqual(
             NotificationLog.objects.filter(
                 application=application,
                 notification_type=NotificationLog.NotificationType.APPLICANT_INTERVIEW_NOTICE,
             ).count(),
-            2,
+            1,
         )
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(application.applicant_display_name, mail.outbox[0].body)
+        self.assertIn(application.position.title, mail.outbox[0].body)
+        self.assertIn("Panel Room 1", mail.outbox[0].body)
+        self.assertEqual(panel_notifications.count(), 2)
 
     def test_interview_finalize_notifies_panel_members_without_ratings(self):
         application = self.make_application(self.level1_position)

@@ -1150,6 +1150,8 @@ class InterviewSessionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
 
         operation = request.POST.get("operation", "save")
         is_autosave = _is_autosave_request(request) and operation != "finalize"
+        notify_applicant = operation == "notify_applicant"
+        notify_panel = operation == "notify_panel"
         form = InterviewSessionForm(
             request.POST,
             instance=get_interview_session(application),
@@ -1161,6 +1163,8 @@ class InterviewSessionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
                     actor=request.user,
                     cleaned_data=form.cleaned_data,
                     finalize=operation == "finalize",
+                    notify_applicant=notify_applicant,
+                    notify_panel=notify_panel,
                 )
             except (ValueError, ValidationError) as exc:
                 if is_autosave:
@@ -1171,6 +1175,14 @@ class InterviewSessionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
                     return _autosave_response()
                 if interview_session.is_finalized:
                     messages.success(request, "Interview session finalized and locked.")
+                elif notify_applicant:
+                    messages.success(
+                        request, "Interview schedule saved and the applicant was notified."
+                    )
+                elif notify_panel:
+                    messages.success(
+                        request, "Interview schedule saved and the HRMPSB panel was notified."
+                    )
                 else:
                     messages.success(request, "Interview schedule saved.")
         else:

@@ -3935,7 +3935,9 @@ def save_exam_record(
 
 
 @transaction.atomic
-def save_interview_session(application, actor, cleaned_data, finalize=False):
+def save_interview_session(
+    application, actor, cleaned_data, finalize=False, notify_applicant=False, notify_panel=False
+):
     if not hasattr(application, "case"):
         raise ValueError("A case must exist before interview scheduling can be recorded.")
     review_stage = application.case.current_stage
@@ -3953,7 +3955,6 @@ def save_interview_session(application, actor, cleaned_data, finalize=False):
 
     created = interview_session is None
     previous_scheduled_for = interview_session.scheduled_for if interview_session else None
-    previous_location = interview_session.location if interview_session else ""
     if interview_session is None:
         interview_session = InterviewSession(
             application=application,
@@ -3981,16 +3982,6 @@ def save_interview_session(application, actor, cleaned_data, finalize=False):
     interview_session.scheduled_for = scheduled_for
     interview_session.location = cleaned_data["location"]
     interview_session.session_notes = cleaned_data["session_notes"]
-    should_notify_panel = (
-        not finalize
-        and _interview_schedule_change_requires_notification(
-            created=created,
-            previous_scheduled_for=previous_scheduled_for,
-            previous_location=previous_location,
-            new_scheduled_for=interview_session.scheduled_for,
-            new_location=interview_session.location,
-        )
-    )
 
     existing_rating_count = interview_session.ratings.count() if interview_session.pk else 0
     fallback_count = get_interview_fallback_evidence(application, stage=review_stage).count()
@@ -4003,7 +3994,7 @@ def save_interview_session(application, actor, cleaned_data, finalize=False):
         )
     schedule_notification_recipients = (
         get_interview_schedule_notification_recipients(application)
-        if should_notify_panel
+        if notify_panel
         else []
     )
     unsubmitted_panel_recipients = []
@@ -4053,7 +4044,9 @@ def save_interview_session(application, actor, cleaned_data, finalize=False):
             "is_finalized": interview_session.is_finalized,
         },
     )
-    if should_notify_panel:
+    # Notifications are sent only on the explicit "Notify" operations, never on a
+    # plain save. Each notify button saves the current schedule first, then sends.
+    if notify_panel:
         queue_interview_session_scheduled_notifications(
             application,
             interview_session,
@@ -4065,8 +4058,7 @@ def save_interview_session(application, actor, cleaned_data, finalize=False):
             interview_session,
             schedule_notification_recipients,
         )
-        # Notify the applicant of their own interview details. Previously only the
-        # HRMPSB panel was emailed; the applicant had no system-issued notice.
+    if notify_applicant:
         queue_applicant_interview_notice_notification(
             application,
             interview_session,
