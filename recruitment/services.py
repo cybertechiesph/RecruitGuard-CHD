@@ -4181,6 +4181,42 @@ def create_competency_rating_template(entry, actor, scale_min=1, scale_max=4):
 
 
 @transaction.atomic
+def save_competency_rating_sheet(template, template_form, formset, publish=False):
+    """Persist the Secretariat's edits to the rating sheet: scale + instructions plus
+    the competency rows (named rows are saved, blank/removed rows are dropped). When
+    ``publish`` is set the sheet is opened to the HRMPSB panel."""
+    if template.is_locked:
+        raise ValueError("This rating sheet is locked because scoring has started.")
+
+    template = template_form.save(commit=False)
+    order = 0
+    for form in formset.forms:
+        cleaned = getattr(form, "cleaned_data", None) or {}
+        name = (cleaned.get("name") or "").strip()
+        if cleaned.get("DELETE") or not name:
+            if form.instance.pk:
+                form.instance.delete()
+            continue
+        order += 1
+        competency = form.instance
+        competency.template = template
+        competency.group = cleaned["group"]
+        competency.name = name
+        competency.weight = cleaned["weight"]
+        competency.order = order
+        competency.full_clean()
+        competency.save()
+
+    if publish:
+        template.status = CompetencyRatingTemplate.Status.PUBLISHED
+        if not template.published_at:
+            template.published_at = timezone.now()
+    template.full_clean()
+    template.save()
+    return template
+
+
+@transaction.atomic
 def upload_interview_fallback_rating(application, actor, uploaded_file, remarks):
     if not hasattr(application, "case"):
         raise ValueError("A case must exist before fallback interview ratings can be uploaded.")

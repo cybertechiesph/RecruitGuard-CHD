@@ -26,6 +26,8 @@ from .forms import (
     FinalSelectionForm,
     InterviewFallbackUploadForm,
     InterviewRatingForm,
+    CompetencyDefinitionFormSet,
+    CompetencyRatingTemplateForm,
     InterviewSessionForm,
     ReminderNotificationForm,
     RequirementChecklistNotificationForm,
@@ -133,6 +135,9 @@ from .services import (
     user_can_export_application,
     user_can_manage_exam,
     user_can_manage_interview_rating,
+    create_competency_rating_template,
+    get_competency_rating_template,
+    save_competency_rating_sheet,
     user_can_manage_interview_session,
     user_can_manage_screening,
     user_can_process_application,
@@ -1196,6 +1201,92 @@ class InterviewSessionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
                 ),
             )
         return redirect("application-detail", pk=pk)
+
+
+class InterviewRatingSheetView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
+    template_name = "recruitment/interview_rating_sheet.html"
+
+    def _load_application(self, request, pk):
+        application = get_object_or_404(RecruitmentApplication, pk=pk)
+        if not user_can_manage_interview_session(request.user, application):
+            raise PermissionDenied
+        return application
+
+    def _context(self, application, template, template_form=None, formset=None):
+        return {
+            "application": application,
+            "entry": application.position,
+            "rating_sheet": template,
+            "template_form": template_form,
+            "competency_formset": formset,
+        }
+
+    def get(self, request, pk):
+        application = self._load_application(request, pk)
+        template = get_competency_rating_template(application.position)
+        template_form = formset = None
+        if template:
+            template_form = CompetencyRatingTemplateForm(instance=template)
+            formset = CompetencyDefinitionFormSet(instance=template)
+        return render(
+            request,
+            self.template_name,
+            self._context(application, template, template_form, formset),
+        )
+
+    def post(self, request, pk):
+        application = self._load_application(request, pk)
+        entry = application.position
+        template = get_competency_rating_template(entry)
+        operation = request.POST.get("operation", "save")
+
+        if operation == "create":
+            if template:
+                messages.info(request, "This vacancy already has an interview rating sheet.")
+            else:
+                try:
+                    create_competency_rating_template(entry, request.user)
+                    messages.success(
+                        request,
+                        "Rating sheet created from the standard template. "
+                        "Add the Technical competencies below.",
+                    )
+                except (ValueError, ValidationError) as exc:
+                    messages.error(request, str(exc))
+            return redirect("interview-rating-sheet", pk=pk)
+
+        if not template:
+            messages.error(request, "Create the interview rating sheet first.")
+            return redirect("interview-rating-sheet", pk=pk)
+        if template.is_locked:
+            messages.error(request, "This rating sheet is locked because scoring has started.")
+            return redirect("interview-rating-sheet", pk=pk)
+
+        template_form = CompetencyRatingTemplateForm(request.POST, instance=template)
+        formset = CompetencyDefinitionFormSet(request.POST, instance=template)
+        if template_form.is_valid() and formset.is_valid():
+            try:
+                save_competency_rating_sheet(
+                    template, template_form, formset, publish=operation == "publish"
+                )
+            except (ValueError, ValidationError) as exc:
+                messages.error(request, str(exc))
+            else:
+                if operation == "publish":
+                    messages.success(
+                        request,
+                        "Rating sheet saved and made available to the HRMPSB panel.",
+                    )
+                else:
+                    messages.success(request, "Rating sheet saved.")
+                return redirect("interview-rating-sheet", pk=pk)
+        else:
+            messages.error(request, "Fix the highlighted problems on the rating sheet.")
+        return render(
+            request,
+            self.template_name,
+            self._context(application, template, template_form, formset),
+        )
 
 
 class InterviewRatingView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):

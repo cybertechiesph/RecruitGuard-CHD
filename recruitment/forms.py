@@ -27,6 +27,8 @@ from .models import (
     AuditLog,
     ComparativeAssessmentReport,
     ComparativeAssessmentReportItem,
+    CompetencyDefinition,
+    CompetencyRatingTemplate,
     CompletionRecord,
     CompletionRequirement,
     DeliberationRecord,
@@ -1241,6 +1243,90 @@ CompletionRequirementFormSet = inlineformset_factory(
     form=CompletionRequirementForm,
     formset=BaseCompletionRequirementFormSet,
     extra=3,
+    can_delete=True,
+)
+
+
+class CompetencyRatingTemplateForm(BootstrapFormMixin, forms.ModelForm):
+    class Meta:
+        model = CompetencyRatingTemplate
+        fields = ["scale_max", "instructions"]
+        widgets = {
+            "scale_max": forms.NumberInput(attrs={"min": "2", "max": "10"}),
+            "instructions": forms.Textarea(attrs={"rows": 2}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["scale_max"].label = "Score scale (1 to N)"
+        self.fields["scale_max"].help_text = (
+            "Each competency is scored from 1 up to this number. Default is 4."
+        )
+        self.fields["instructions"].label = "Instructions for panel members"
+        self.fields["instructions"].required = False
+        self._apply_bootstrap()
+
+    def clean_scale_max(self):
+        scale_max = self.cleaned_data.get("scale_max")
+        if scale_max is None or scale_max < 2:
+            raise forms.ValidationError("The score scale must go up to at least 2.")
+        if scale_max > 10:
+            raise forms.ValidationError("Keep the score scale at 10 points or fewer.")
+        return scale_max
+
+
+class CompetencyDefinitionForm(BootstrapFormMixin, forms.ModelForm):
+    class Meta:
+        model = CompetencyDefinition
+        fields = ["group", "name", "weight"]
+        widgets = {
+            "weight": forms.NumberInput(attrs={"step": "0.01", "min": "0.01"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # All fields optional at the field level so a blank "add" row is simply
+        # ignored; the formset validates the rows that actually carry a name.
+        self.fields["group"].required = False
+        self.fields["group"].choices = [("", "Select group")] + list(
+            CompetencyDefinition.Group.choices
+        )
+        self.fields["group"].label = "Group"
+        self.fields["name"].label = "Competency"
+        self.fields["name"].required = False
+        self.fields["weight"].label = "Weight"
+        self.fields["weight"].required = False
+        self._apply_bootstrap()
+
+
+class BaseCompetencyDefinitionFormSet(BaseInlineFormSet):
+    def clean(self):
+        super().clean()
+        active = 0
+        for form in self.forms:
+            if not hasattr(form, "cleaned_data") or not form.cleaned_data:
+                continue
+            if form.cleaned_data.get("DELETE"):
+                continue
+            name = (form.cleaned_data.get("name") or "").strip()
+            if not name:
+                continue
+            active += 1
+            if not form.cleaned_data.get("group"):
+                form.add_error("group", "Pick a group for this competency.")
+            weight = form.cleaned_data.get("weight")
+            if weight is None or weight <= 0:
+                form.add_error("weight", "Weight must be greater than zero.")
+        if active == 0:
+            raise forms.ValidationError("Keep at least one competency on the rating sheet.")
+
+
+CompetencyDefinitionFormSet = inlineformset_factory(
+    CompetencyRatingTemplate,
+    CompetencyDefinition,
+    form=CompetencyDefinitionForm,
+    formset=BaseCompetencyDefinitionFormSet,
+    extra=0,
     can_delete=True,
 )
 

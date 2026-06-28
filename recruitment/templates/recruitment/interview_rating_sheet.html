@@ -1,0 +1,122 @@
+{% extends "internal_base.html" %}
+{% load recruitment_ui %}
+
+{% block content %}
+<div class="rg-page-header">
+    <div>
+        <p class="rg-eyebrow">Interview Stage</p>
+        <h1 class="rg-page-title">Interview Rating Sheet</h1>
+        <p class="rg-page-copy">{{ entry.title }} &middot; {{ entry.job_code }}</p>
+    </div>
+    <div class="rg-page-actions">
+        <a href="{% url 'application-detail' application.pk %}" class="btn btn-outline-secondary">Back to case</a>
+    </div>
+</div>
+
+{% if not rating_sheet %}
+<div class="card p-4">
+    <h2 class="h5 mb-2">No rating sheet yet</h2>
+    <p class="rg-note mb-3">
+        Create the interview rating sheet for this vacancy. It starts with the standard
+        Core and Organizational competencies; you then add the Technical ones for this
+        position. The HRMPSB panel scores candidates on this sheet.
+    </p>
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="operation" value="create">
+        <button type="submit" class="btn btn-rg-primary">Create rating sheet</button>
+    </form>
+</div>
+{% else %}
+
+{% if rating_sheet.is_locked %}
+    <div class="alert alert-warning">This rating sheet is locked because scoring has started, so it can no longer be edited.</div>
+{% elif rating_sheet.status == 'published' %}
+    <div class="alert alert-success">This rating sheet is available to the HRMPSB panel. You can still edit it until scoring starts.</div>
+{% else %}
+    <div class="alert alert-info">Draft &mdash; not yet visible to the panel. Add the Technical competencies and weights, then make it available.</div>
+{% endif %}
+
+<form method="post" id="rating-sheet-form" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="operation" id="rating-sheet-op" value="save">
+
+    <div class="card p-4 mb-3">
+        <h2 class="h6 mb-3">Scale &amp; instructions</h2>
+        <div class="row g-3">
+            <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=template_form.scale_max %}</div>
+            <div class="col-md-8">{% include "recruitment/includes/form_field.html" with field=template_form.instructions %}</div>
+        </div>
+    </div>
+
+    <div class="card p-4">
+        <h2 class="h6 mb-1">Competencies</h2>
+        <p class="rg-note mb-3">
+            Each competency is scored from 1 to {{ rating_sheet.scale_max }}. Weights are
+            relative &mdash; they don't need to add up to any total.
+        </p>
+        {{ competency_formset.management_form }}
+        {% if competency_formset.non_form_errors %}
+            <div class="alert alert-danger">{{ competency_formset.non_form_errors }}</div>
+        {% endif %}
+
+        <div id="competency-rows">
+            {% for form in competency_formset %}
+            <div class="rg-competency-row row g-2 align-items-start mb-2">
+                {{ form.id }}
+                <div class="col-md-3">{% include "recruitment/includes/form_field.html" with field=form.group %}</div>
+                <div class="col-md-5">{% include "recruitment/includes/form_field.html" with field=form.name %}</div>
+                <div class="col-md-2">{% include "recruitment/includes/form_field.html" with field=form.weight %}</div>
+                <div class="col-md-2">
+                    <label class="form-label d-block">Remove</label>
+                    {{ form.DELETE }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <template id="competency-empty-row">
+            <div class="rg-competency-row row g-2 align-items-start mb-2">
+                <div class="col-md-3">{{ competency_formset.empty_form.group }}</div>
+                <div class="col-md-5">{{ competency_formset.empty_form.name }}</div>
+                <div class="col-md-2">{{ competency_formset.empty_form.weight }}</div>
+                <div class="col-md-2"></div>
+            </div>
+        </template>
+
+        <button type="button" class="btn btn-outline-secondary btn-sm mt-2" id="add-competency-btn">
+            + Add competency
+        </button>
+    </div>
+
+    <div class="rg-form-actions mt-3 d-flex gap-2">
+        <button type="submit" class="btn btn-outline-secondary"
+                onclick="document.getElementById('rating-sheet-op').value='save';">
+            Save draft
+        </button>
+        <button type="submit" class="btn btn-rg-primary"
+                onclick="document.getElementById('rating-sheet-op').value='publish';">
+            Save &amp; make available to panel
+        </button>
+    </div>
+</form>
+
+<script>
+(function () {
+    var addBtn = document.getElementById("add-competency-btn");
+    if (!addBtn) return;
+    var rows = document.getElementById("competency-rows");
+    var tpl = document.getElementById("competency-empty-row");
+    var totalForms = document.getElementById("id_{{ competency_formset.prefix }}-TOTAL_FORMS");
+    addBtn.addEventListener("click", function () {
+        var idx = parseInt(totalForms.value, 10);
+        var html = tpl.innerHTML.replace(/__prefix__/g, idx);
+        var wrap = document.createElement("div");
+        wrap.innerHTML = html.trim();
+        rows.appendChild(wrap.firstElementChild);
+        totalForms.value = idx + 1;
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}

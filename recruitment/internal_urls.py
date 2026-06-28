@@ -47,6 +47,7 @@ from .views import (
     FinalDecisionView,
     FinalSelectionView,
     InterviewFallbackUploadView,
+    InterviewRatingSheetView,
     InterviewRatingView,
     InterviewSessionView,
     NotificationListView,
@@ -149,6 +150,11 @@ urlpatterns = [
     path("applications/<int:pk>/exam/schedule/", ExamScheduleView.as_view(), name="exam-schedule"),
     path("applications/<int:pk>/interview/", InterviewSessionView.as_view(), name="interview-session"),
     path("applications/<int:pk>/interview/rating/", InterviewRatingView.as_view(), name="interview-rating"),
+    path(
+        "applications/<int:pk>/interview/rating-sheet/",
+        InterviewRatingSheetView.as_view(),
+        name="interview-rating-sheet",
+    ),
     path(
         "applications/<int:pk>/interview/fallback/",
         InterviewFallbackUploadView.as_view(),

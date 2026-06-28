@@ -8615,6 +8615,50 @@ class CompetencyRatingSheetTests(BaseRecruitmentTestCase):
         with self.assertRaises(ValueError):
             create_competency_rating_template(self.level1_position, self.secretariat)
 
+    def test_builder_create_then_add_technical_and_publish_via_view(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        url = reverse("interview-rating-sheet", kwargs={"pk": application.pk})
+
+        create_response = client.post(url, {"operation": "create"})
+        self.assertEqual(create_response.status_code, 302)
+        template = get_competency_rating_template(self.level1_position)
+        self.assertEqual(template.competencies.count(), 6)
+        self.assertEqual(template.status, CompetencyRatingTemplate.Status.DRAFT)
+
+        existing = list(template.competencies.order_by("order"))
+        data = {
+            "operation": "publish",
+            "scale_max": "4",
+            "instructions": "Score each competency.",
+            "competencies-TOTAL_FORMS": str(len(existing) + 1),
+            "competencies-INITIAL_FORMS": str(len(existing)),
+            "competencies-MIN_NUM_FORMS": "0",
+            "competencies-MAX_NUM_FORMS": "1000",
+        }
+        for index, competency in enumerate(existing):
+            data[f"competencies-{index}-id"] = str(competency.id)
+            data[f"competencies-{index}-group"] = competency.group
+            data[f"competencies-{index}-name"] = competency.name
+            data[f"competencies-{index}-weight"] = "1.00"
+        new_index = len(existing)
+        data[f"competencies-{new_index}-id"] = ""
+        data[f"competencies-{new_index}-group"] = CompetencyDefinition.Group.TECHNICAL
+        data[f"competencies-{new_index}-name"] = "Data Recording and Reporting"
+        data[f"competencies-{new_index}-weight"] = "2.00"
+
+        publish_response = client.post(url, data)
+        self.assertEqual(publish_response.status_code, 302)
+        template.refresh_from_db()
+        self.assertEqual(template.status, CompetencyRatingTemplate.Status.PUBLISHED)
+        self.assertIsNotNone(template.published_at)
+        self.assertEqual(template.competencies.count(), 7)
+        technical = template.competencies.get(group=CompetencyDefinition.Group.TECHNICAL)
+        self.assertEqual(technical.name, "Data Recording and Reporting")
+        self.assertEqual(str(technical.weight), "2.00")
+
 
 class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
     def session_payload(self, **overrides):
