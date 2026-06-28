@@ -38,7 +38,6 @@
                             <p class="rg-form-section__copy mb-2">
                                 {% if position.position_reference.class_id %}Class ID {{ position.position_reference.class_id }}{% else %}Class ID pending{% endif %}
                                 {% if position.position_reference.salary_grade %} | SG {{ position.position_reference.salary_grade }}{% endif %}
-                                {% if position.position_reference.occupational_group %} | {{ position.position_reference.occupational_group }}{% endif %}
                             </p>
                             {% if position.position_reference.qualification_summary %}
                                 <div class="rg-note mb-2">{{ position.position_reference.qualification_summary|linebreaksbr }}</div>

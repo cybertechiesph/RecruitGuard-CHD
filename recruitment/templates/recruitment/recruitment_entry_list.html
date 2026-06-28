@@ -79,11 +79,6 @@
                                             <span class="rg-imeta__sep"></span>SG {{ entry.position_reference.salary_grade }}
                                         {% endif %}
                                     </div>
-                                    {% if entry.position_reference.reference_status != "VERIFIED_REFERENCE" %}
-                                        <div class="rg-imeta mt-1" style="color:#c87a00;">
-                                            {{ entry.position_reference.get_reference_status_display }}
-                                        </div>
-                                    {% endif %}
                                 {% else %}
                                     <span class="rg-imeta">No linked position reference</span>
                                 {% endif %}

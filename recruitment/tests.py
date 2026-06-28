@@ -2585,7 +2585,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         self.assertContains(response, "Select a valid choice. That choice is not one of the available choices.")
         self.assertEqual(PositionPosting.objects.count(), initial_count)
 
-    def test_incomplete_position_reference_warns_and_does_not_invent_routing_metadata(self):
+    def test_incomplete_position_reference_does_not_invent_routing_metadata(self):
         incomplete_reference = PositionReference.objects.create(
             position_title="Incomplete Reference",
             reference_status=PositionReference.ReferenceStatus.INCOMPLETE_REFERENCE,
@@ -2612,7 +2612,6 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Position reference details are incomplete")
         self.assertContains(
             response,
             "This position reference is missing the level classification needed for assignment.",
