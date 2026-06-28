@@ -81,7 +81,7 @@
        aria-label="View details for {{ entry.title }}">
         <div class="rg-pub-job-card__inner">
             <div class="rg-pub-job-card__body">
-                <p class="rg-pub-job-card__ref">{{ entry.job_code }}</p>
+                {% if entry.item_number %}<p class="rg-pub-job-card__ref">Item No. {{ entry.item_number }}</p>{% endif %}
                 <h3 class="rg-pub-job-card__title">{{ entry.title }}</h3>
                 <div class="rg-pub-job-card__chips">
                     <span class="rg-pub-chip rg-pub-chip--plantilla">Permanent</span>
@@ -117,7 +117,7 @@
        aria-label="View details for {{ entry.title }}">
         <div class="rg-pub-job-card__inner">
             <div class="rg-pub-job-card__body">
-                <p class="rg-pub-job-card__ref">{{ entry.job_code }}</p>
+                {% if entry.item_number %}<p class="rg-pub-job-card__ref">Item No. {{ entry.item_number }}</p>{% endif %}
                 <h3 class="rg-pub-job-card__title">{{ entry.title }}</h3>
                 <div class="rg-pub-job-card__chips">
                     <span class="rg-pub-chip rg-pub-chip--cos">Contract of Service</span>

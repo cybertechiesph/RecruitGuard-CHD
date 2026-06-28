@@ -29,8 +29,8 @@
             {% if entry.official_office_label %}
                 <span class="rg-pub-badge">{{ entry.official_office_label }}</span>
             {% endif %}
-            {% if entry.job_code %}
-                <span class="rg-pub-badge" title="Item/Entry Code">Code: {{ entry.job_code }}</span>
+            {% if entry.item_number %}
+                <span class="rg-pub-badge" title="Plantilla Item Number">Item No.: {{ entry.item_number }}</span>
             {% endif %}
         </div>
 
@@ -74,14 +74,6 @@
             <div class="col-md-4">
                 <p class="rg-pub-section__copy mb-1"><strong>Class ID</strong></p>
                 <p class="rg-pub-section__copy mb-0">{{ entry.position_reference.class_id|default:"Not recorded" }}</p>
-            </div>
-            <div class="col-md-6">
-                <p class="rg-pub-section__copy mb-1"><strong>Occupational Service</strong></p>
-                <p class="rg-pub-section__copy mb-0">{{ entry.position_reference.occupational_service|default:"Not recorded" }}</p>
-            </div>
-            <div class="col-md-6">
-                <p class="rg-pub-section__copy mb-1"><strong>Occupational Group</strong></p>
-                <p class="rg-pub-section__copy mb-0">{{ entry.position_reference.occupational_group|default:"Not recorded" }}</p>
             </div>
         </div>
     </div>

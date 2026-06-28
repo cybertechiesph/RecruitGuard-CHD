@@ -37,7 +37,7 @@
                             {% if selected_position_reference %}{{ selected_position_reference.get_selection_warning }}{% endif %}
                         </div>
                         <div id="position-reference-empty"{% if selected_position_reference %} class="d-none"{% endif %}>
-                            <p class="text-muted mb-0">Select a position to review its title, salary grade, level, class ID, OS code, occupational service, and occupational group.</p>
+                            <p class="text-muted mb-0">Select a position to review its title, salary grade, level, and class ID.</p>
                         </div>
                         <div id="position-reference-metadata"{% if not selected_position_reference %} class="d-none"{% endif %}>
                             <div class="row g-3">
@@ -49,10 +49,6 @@
                                     <div class="small text-muted">Salary Grade</div>
                                     <div id="review-salary-grade">{{ selected_position_reference.salary_grade|default:"Not recorded" }}</div>
                                 </div>
-                                <div class="col-md-3">
-                                    <div class="small text-muted">Reference Status</div>
-                                    <div id="review-reference-status">{{ selected_position_reference.get_reference_status_display|default:"" }}</div>
-                                </div>
                                 <div class="col-md-4">
                                     <div class="small text-muted">Level Classification</div>
                                     <div id="review-level-classification">{{ selected_position_reference.get_level_classification_display|default:"Not recorded" }}</div>
@@ -60,18 +56,6 @@
                                 <div class="col-md-4">
                                     <div class="small text-muted">Class ID</div>
                                     <div id="review-class-id">{{ selected_position_reference.class_id|default:"Not recorded" }}</div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="small text-muted">OS Code</div>
-                                    <div id="review-os-code">{{ selected_position_reference.os_code|default:"Not recorded" }}</div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="small text-muted">Occupational Service</div>
-                                    <div id="review-occupational-service">{{ selected_position_reference.occupational_service|default:"Not recorded" }}</div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="small text-muted">Occupational Group</div>
-                                    <div id="review-occupational-group">{{ selected_position_reference.occupational_group|default:"Not recorded" }}</div>
                                 </div>
                             </div>
                         </div>
@@ -122,11 +106,7 @@
         'review-position-title': 'positionTitle',
         'review-salary-grade': 'salaryGrade',
         'review-level-classification': 'levelClassification',
-        'review-class-id': 'classId',
-        'review-os-code': 'osCode',
-        'review-occupational-service': 'occupationalService',
-        'review-occupational-group': 'occupationalGroup',
-        'review-reference-status': 'referenceStatusLabel'
+        'review-class-id': 'classId'
     };
 
     function readSelectedReference() {
@@ -139,11 +119,7 @@
             salaryGrade: option.dataset.salaryGrade ? 'SG ' + option.dataset.salaryGrade : 'Not recorded',
             levelClassification: option.dataset.levelClassification || 'Not recorded',
             classId: option.dataset.classId || 'Not recorded',
-            osCode: option.dataset.osCode || 'Not recorded',
-            occupationalService: option.dataset.occupationalService || 'Not recorded',
-            occupationalGroup: option.dataset.occupationalGroup || 'Not recorded',
             referenceStatus: option.dataset.referenceStatus || '',
-            referenceStatusLabel: option.dataset.referenceStatusLabel || '',
             referenceWarning: option.dataset.referenceWarning || ''
         };
     }
