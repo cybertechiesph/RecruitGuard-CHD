@@ -602,18 +602,9 @@ class PositionPosting(TimestampedModel):
                 errors["intake_mode"] = "Plantilla entries must use a fixed validity period."
             if not self.closing_date:
                 errors["closing_date"] = "Plantilla entries require a closing date."
-            else:
-                expected_closing_date = self.expected_plantilla_closing_date
-                if (
-                    expected_closing_date
-                    and self.closing_date != expected_closing_date
-                    and "closing_date" not in errors
-                ):
-                    errors["closing_date"] = (
-                        "Plantilla publication period is 14 calendar days. "
-                        f"Set the closing date to {expected_closing_date:%Y-%m-%d} "
-                        "based on the publication date, or opening date if no publication date is recorded."
-                    )
+            # The 14-day window is a suggested default (auto-filled on the form when
+            # the closing date is left blank), not a hard cap. Any closing date on or
+            # after the opening date is accepted.
         elif self.branch == self.Branch.COS:
             self.item_number = ""
             if self.intake_mode == self.IntakeMode.FIXED_PERIOD:

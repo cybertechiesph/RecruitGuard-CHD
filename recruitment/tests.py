@@ -2104,7 +2104,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
 
         self.assertEqual(entry.expected_plantilla_closing_date, expected_closing_date)
 
-    def test_plantilla_entry_rejects_longer_publication_period(self):
+    def test_plantilla_entry_allows_custom_publication_period(self):
         publication_date = date(2026, 6, 1)
         entry = PositionPosting(
             position_reference=self.admin_aide_position,
@@ -2112,15 +2112,16 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
             level=PositionPosting.Level.LEVEL_1,
             intake_mode=PositionPosting.IntakeMode.FIXED_PERIOD,
             status=PositionPosting.EntryStatus.DRAFT,
+            item_number="OSEC-DOH-AA6-1-2026",
             publication_date=publication_date,
             opening_date=publication_date,
-            closing_date=publication_date + timedelta(days=14),
+            closing_date=publication_date + timedelta(days=30),
         )
 
-        with self.assertRaises(ValidationError) as exc:
-            entry.full_clean()
+        # The 14-day window is a default, not a cap; a longer period is accepted.
+        entry.full_clean()
 
-        self.assertIn("14 calendar days", exc.exception.message_dict["closing_date"][0])
+        self.assertEqual(entry.closing_date, publication_date + timedelta(days=30))
 
     def test_cos_pooling_entry_cannot_set_closing_date(self):
         entry = PositionPosting(
@@ -2325,31 +2326,31 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
             PositionPosting.calculate_plantilla_closing_date(opening_date),
         )
 
-    def test_entry_manager_cannot_extend_plantilla_publication_period(self):
+    def test_entry_manager_can_set_custom_plantilla_publication_period(self):
         client = Client()
         self.force_login_with_mfa(client, self.secretariat)
         opening_date = self.entry_opening_date()
+        closing_date = opening_date + timedelta(days=30)
         response = client.post(
             reverse("recruitment-entry-create"),
             {
                 "position_reference": self.admin_aide_position.pk,
                 "branch": PositionPosting.Branch.PLANTILLA,
+                "item_number": "OSEC-DOH-AA6-1-2026",
                 "intake_mode": PositionPosting.IntakeMode.FIXED_PERIOD,
                 "status": PositionPosting.EntryStatus.ACTIVE,
                 "publication_date": "",
                 "opening_date": opening_date.isoformat(),
-                "closing_date": (opening_date + timedelta(days=14)).isoformat(),
-                "qualification_reference": "Invalid extended Plantilla publication window.",
+                "closing_date": closing_date.isoformat(),
+                "qualification_reference": "Custom Plantilla publication window.",
             },
         )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Plantilla publication period is 14 calendar days.")
-        self.assertFalse(
-            PositionPosting.objects.filter(
-                qualification_reference="Invalid extended Plantilla publication window."
-            ).exists()
+        self.assertEqual(response.status_code, 302)
+        created_entry = PositionPosting.objects.get(
+            qualification_reference="Custom Plantilla publication window."
         )
+        self.assertEqual(created_entry.closing_date, closing_date)
 
     def test_generated_entry_code_is_preserved_on_edit(self):
         entry = PositionPosting.objects.create(

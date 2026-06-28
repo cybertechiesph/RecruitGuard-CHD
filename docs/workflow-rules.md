@@ -17,7 +17,7 @@ and COS responsibilities should be implemented.
 
 ## Plantilla Branch
 - Stricter policy-aware workflow
-- Uses formal vacancy/publication handling with a 14-calendar-day publication/intake period
+- Uses formal vacancy/publication handling with a default 14-calendar-day (editable) publication/intake period
 - May include screening, examination, interview, deliberation, CAR, decision, and completion tracking where applicable
 
 ## COS Branch

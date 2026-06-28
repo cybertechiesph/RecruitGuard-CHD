@@ -157,7 +157,7 @@ vi. Position title, level classification, and other linked official metadata use
 
 ### b. Publication, Opening, and Intake Status
 i. System shall record publication or opening data for each recruitment entry.  
-ii. Plantilla entries shall use a fixed 14-calendar-day publication/intake period based on the recorded publication date, or the opening date when no separate publication date is recorded.
+ii. Plantilla entries shall default to a 14-calendar-day publication/intake period based on the recorded publication date, or the opening date when no separate publication date is recorded; the closing date is editable per vacancy.
 iii. COS entries shall support continuous, active, or pooling-based intake while the entry remains active.  
 iv. System shall allow authorized users to activate, suspend, update, and close recruitment entries.  
 
