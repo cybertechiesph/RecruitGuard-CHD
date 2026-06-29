@@ -6493,7 +6493,7 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
             ).exists()
         )
 
-    def test_system_admin_inline_request_still_downloads_as_attachment(self):
+    def test_system_admin_can_view_pdf_evidence_inline(self):
         application = self.make_application(self.level1_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
@@ -6503,6 +6503,45 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
             artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
             document_key=requirement_code,
         )
+        self.assertEqual(evidence.content_type, "application/pdf")
+
+        client = Client()
+        self.force_login_with_mfa(client, self.sysadmin)
+        response = client.get(
+            reverse(
+                "evidence-download",
+                kwargs={"pk": application.pk, "evidence_pk": evidence.pk},
+            ),
+            {"disposition": "inline"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response["Content-Disposition"],
+            f'inline; filename="{evidence.original_filename}"',
+        )
+        self.assertEqual(response["X-Content-Type-Options"], "nosniff")
+        self.assertIn("script-src 'none'", response["Content-Security-Policy"])
+        self.assertTrue(
+            AuditLog.objects.filter(
+                application=application,
+                action=AuditLog.Action.EVIDENCE_DOWNLOADED,
+                metadata__evidence_id=evidence.id,
+            ).exists()
+        )
+
+    def test_inline_request_forced_to_attachment_for_disallowed_content_type(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        requirement_code = get_required_applicant_document_requirements()[0].code
+        evidence = EvidenceVaultItem.objects.get(
+            application=application,
+            artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
+            document_key=requirement_code,
+        )
+        evidence.content_type = "application/octet-stream"
+        evidence.save(update_fields=["content_type"])
 
         client = Client()
         self.force_login_with_mfa(client, self.sysadmin)
@@ -6520,6 +6559,39 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
             f'attachment; filename="{evidence.original_filename}"',
         )
         self.assertEqual(response["X-Content-Type-Options"], "nosniff")
+        # The attachment response keeps the global CSP; it must not pick up the
+        # hardened inline policy that disables scripts entirely.
+        self.assertNotIn("script-src 'none'", response["Content-Security-Policy"])
+
+    def test_inline_view_request_still_enforces_permission(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        requirement_code = get_required_applicant_document_requirements()[0].code
+        evidence = EvidenceVaultItem.objects.get(
+            application=application,
+            artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
+            document_key=requirement_code,
+        )
+
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        response = client.get(
+            reverse(
+                "evidence-download",
+                kwargs={"pk": application.pk, "evidence_pk": evidence.pk},
+            ),
+            {"disposition": "inline"},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(
+            AuditLog.objects.filter(
+                application=application,
+                action=AuditLog.Action.EVIDENCE_ACCESS_DENIED,
+                metadata__evidence_id=evidence.id,
+            ).exists()
+        )
 
     def test_application_detail_hides_evidence_vault_and_audit_links_for_non_admin_users(self):
         application = self.make_application(self.level1_position)
@@ -6544,7 +6616,9 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, evidence.label)
         self.assertContains(response, evidence.original_filename)
-        self.assertNotContains(response, f"{evidence_url}?disposition=inline")
+        # Reviewers get an inline "View" link for viewable documents alongside
+        # the download link, but the Evidence Vault and audit links stay hidden.
+        self.assertContains(response, f"{evidence_url}?disposition=inline")
         self.assertContains(response, evidence_url)
         self.assertNotContains(response, audit_url)
         self.assertContains(response, "Download")

@@ -793,13 +793,26 @@ class EvidenceDownloadView(LoginRequiredMixin, InternalUserRequiredMixin, View):
             content,
             content_type=evidence.content_type or "application/octet-stream",
         )
-        # Evidence is always downloaded as an attachment to prevent uploaded
-        # active content from executing in the RecruitGuard origin.
-        disposition = "attachment"
+        # Inline viewing is only honoured for a safe allowlist of static media
+        # types (images and PDF). Every other type stays an attachment so an
+        # uploaded file cannot execute active content in the RecruitGuard origin.
+        serve_inline = (
+            request.GET.get("disposition") == "inline" and evidence.is_inline_viewable
+        )
+        disposition = "inline" if serve_inline else "attachment"
         response["Content-Disposition"] = (
             f'{disposition}; filename="{evidence.original_filename}"'
         )
         response["X-Content-Type-Options"] = "nosniff"
+        if serve_inline:
+            # Defense in depth: tighten the global policy so the inline file
+            # cannot run scripts, submit forms, or be framed even if a file
+            # slipped past the allowlist. Same-origin loads stay allowed so the
+            # browser can still render the image/PDF.
+            response["Content-Security-Policy"] = (
+                "default-src 'self'; script-src 'none'; object-src 'none'; "
+                "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+            )
         return response
 
 

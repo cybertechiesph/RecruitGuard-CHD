@@ -915,6 +915,13 @@ body.applicant-portal-body {
     color: var(--rg-brand-danger);
 }
 
+/* View / download icon group for a document row */
+.rg-scr-doc-actions {
+    display: inline-flex;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
 /* Eye-icon button for document row */
 .rg-scr-doc-view {
     display: inline-flex;

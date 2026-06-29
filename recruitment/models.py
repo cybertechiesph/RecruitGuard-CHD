@@ -3201,6 +3201,21 @@ class CompletionRequirement(TimestampedModel):
         return f"{self.item_label} ({self.get_status_display()})"
 
 
+# Media types that are safe to serve with Content-Disposition: inline. Only
+# static images and PDFs are allowed so an uploaded file cannot execute active
+# content (HTML/SVG/scripts) in the RecruitGuard origin. Everything else stays
+# download-only.
+INLINE_VIEWABLE_CONTENT_TYPES = frozenset(
+    {
+        "image/png",
+        "image/jpeg",
+        "image/gif",
+        "image/webp",
+        "application/pdf",
+    }
+)
+
+
 class EvidenceVaultItem(TimestampedModel):
     class OwnerScope(models.TextChoices):
         APPLICATION = "application", "Application"
@@ -3408,6 +3423,17 @@ class EvidenceVaultItem(TimestampedModel):
         if self.recruitment_case_id:
             return self.recruitment_case.application.position
         return None
+
+    @property
+    def is_inline_viewable(self):
+        """Whether this file may be served with Content-Disposition: inline.
+
+        Only the safe allowlist of static media types (images and PDF) may be
+        viewed inline; everything else is download-only so an uploaded file
+        cannot execute active content in the RecruitGuard origin.
+        """
+        normalized = (self.content_type or "").split(";", 1)[0].strip().lower()
+        return normalized in INLINE_VIEWABLE_CONTENT_TYPES
 
     def __str__(self):
         owner = self.owning_application

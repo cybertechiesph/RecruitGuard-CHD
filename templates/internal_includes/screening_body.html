@@ -49,7 +49,7 @@
                         <th scope="col">Requirement</th>
                         <th scope="col">File</th>
                         <th scope="col">Status</th>
-                        <th scope="col" class="rg-scr-doc-table__action-head">Download</th>
+                        <th scope="col" class="rg-scr-doc-table__action-head">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -110,16 +110,30 @@
                         </td>
                         <td class="rg-scr-doc-table__actions">
                             {% if item.evidence %}
-                                <a href="{% url 'evidence-download' application.pk item.evidence.pk %}"
-                                   class="rg-scr-doc-view"
-                                   title="Download {{ item.requirement.title }}"
-                                   aria-label="Download {{ item.requirement.title }}">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                                        <polyline points="7 10 12 15 17 10"/>
-                                        <line x1="12" y1="15" x2="12" y2="3"/>
-                                    </svg>
-                                </a>
+                                <div class="rg-scr-doc-actions">
+                                    {% if item.evidence.is_inline_viewable %}
+                                        <a href="{% url 'evidence-download' application.pk item.evidence.pk %}?disposition=inline"
+                                           class="rg-scr-doc-view"
+                                           target="_blank" rel="noopener"
+                                           title="View {{ item.requirement.title }} in a new tab"
+                                           aria-label="View {{ item.requirement.title }} in a new tab">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/>
+                                                <circle cx="12" cy="12" r="3"/>
+                                            </svg>
+                                        </a>
+                                    {% endif %}
+                                    <a href="{% url 'evidence-download' application.pk item.evidence.pk %}"
+                                       class="rg-scr-doc-view"
+                                       title="Download {{ item.requirement.title }}"
+                                       aria-label="Download {{ item.requirement.title }}">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                            <polyline points="7 10 12 15 17 10"/>
+                                            <line x1="12" y1="15" x2="12" y2="3"/>
+                                        </svg>
+                                    </a>
+                                </div>
                             {% else %}
                                 <span class="rg-scr-doc-meta">&mdash;</span>
                             {% endif %}
