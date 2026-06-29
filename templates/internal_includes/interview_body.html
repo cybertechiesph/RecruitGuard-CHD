@@ -18,7 +18,7 @@ need to do" (no cross-role clutter).
 
 {% if interview_session_form or interview_session_locked %}
     {% include "internal_includes/interview_session_manager.html" %}
-{% elif interview_rating_form or interview_rating_locked or interview_rating_requires_session %}
+{% elif interview_rating_form or interview_rating_locked or interview_rating_requires_session or interview_rating_requires_sheet %}
     {% include "internal_includes/interview_rater.html" %}
 {% else %}
     {% include "internal_includes/interview_previous_step.html" %}

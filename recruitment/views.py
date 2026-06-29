@@ -139,6 +139,7 @@ from .services import (
     user_can_manage_interview_rating,
     create_competency_rating_template,
     get_competency_rating_template,
+    get_published_competency_rating_template,
     save_competency_rating_sheet,
     get_assessment_weight_config,
     update_assessment_weights,
@@ -530,11 +531,17 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
             elif interview_session.is_finalized:
                 context["interview_rating_locked"] = True
             else:
-                context["interview_rating_form"] = InterviewRatingForm(
-                    instance=context["current_user_interview_rating"],
-                    application=application,
-                    actor=user,
-                )
+                rating_template = get_published_competency_rating_template(application.position)
+                if rating_template is None:
+                    context["interview_rating_requires_sheet"] = True
+                else:
+                    context["interview_rating_template"] = rating_template
+                    context["interview_rating_form"] = InterviewRatingForm(
+                        instance=context["current_user_interview_rating"],
+                        application=application,
+                        actor=user,
+                        template=rating_template,
+                    )
         if user_can_upload_interview_fallback(user, application):
             interview_session = context["current_interview_session"]
             if not interview_session:
@@ -1323,7 +1330,20 @@ class InterviewRatingView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, Vi
         if not user_can_manage_interview_rating(request.user, application):
             raise PermissionDenied
 
-        form = InterviewRatingForm(request.POST, application=application, actor=request.user)
+        rating_template = get_published_competency_rating_template(application.position)
+        if rating_template is None:
+            messages.error(
+                request,
+                "Publish the interview rating sheet for this vacancy before recording ratings.",
+            )
+            return redirect("application-detail", pk=pk)
+
+        form = InterviewRatingForm(
+            request.POST,
+            application=application,
+            actor=request.user,
+            template=rating_template,
+        )
         if form.is_valid():
             try:
                 save_interview_rating(

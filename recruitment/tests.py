@@ -61,6 +61,7 @@ from .models import (
     InternalPasswordHistory,
     CompetencyDefinition,
     CompetencyRatingTemplate,
+    CompetencyScore,
     InterviewRating,
     Notification,
     NotificationLog,
@@ -104,6 +105,8 @@ from .services import (
     save_exam_schedule,
     create_competency_rating_template,
     get_competency_rating_template,
+    get_published_competency_rating_template,
+    compute_competency_rating_score,
     save_interview_rating,
     save_interview_session,
     save_screening_review,
@@ -457,6 +460,44 @@ class BaseRecruitmentTestCase(TestCase):
             finalize=True,
         )
 
+    def publish_competency_rating_sheet(self, entry, actor=None, scale_max=4):
+        """Ensure the vacancy has a published competency rating sheet (standard
+        Core + Organizational competencies) the panel can score against."""
+        actor = actor or self.secretariat
+        template = get_competency_rating_template(entry)
+        if template is None:
+            template = create_competency_rating_template(entry, actor, scale_max=scale_max)
+        if template.status != CompetencyRatingTemplate.Status.PUBLISHED:
+            template.status = CompetencyRatingTemplate.Status.PUBLISHED
+            if not template.published_at:
+                template.published_at = timezone.now()
+            template.save(update_fields=["status", "published_at", "updated_at"])
+        return template
+
+    def competency_rating_cleaned_data(self, application, level=3, *, actor=None, **overrides):
+        """cleaned_data for save_interview_rating: publishes a sheet for the vacancy
+        and scores every competency at ``level`` (uniform). On a 1-4 scale a level
+        of 4->100, 3->75, 2->50, 1->25 after normalization."""
+        template = self.publish_competency_rating_sheet(application.position, actor=actor)
+        payload = {
+            "competency_scores": {
+                competency: level for competency in template.competencies.all()
+            },
+            "rating_notes": "Interview responses addressed the major competency areas.",
+            "justification": "",
+        }
+        payload.update(overrides)
+        return payload
+
+    @staticmethod
+    def _score_to_competency_level(rating_score, scale_max=4):
+        """Map a legacy 0-100 rating to a uniform competency level (1..scale_max)."""
+        try:
+            value = float(rating_score)
+        except (TypeError, ValueError):
+            return 3
+        return max(1, min(scale_max, int(round(value / 100 * scale_max))))
+
     def finalize_interview_for_current_stage(
         self,
         application,
@@ -464,10 +505,17 @@ class BaseRecruitmentTestCase(TestCase):
         scheduled_for=None,
         location="Conference Room A",
         session_notes="Structured interview output preserved.",
-        rating_score="89.50",
+        level=None,
+        rating_score=None,
         rating_notes="Interview responses addressed the competency requirements.",
-        justification="",
+        justification="Consistent competency performance recorded by the panel.",
     ):
+        if level is None:
+            level = (
+                self._score_to_competency_level(rating_score)
+                if rating_score is not None
+                else 3
+            )
         scheduled_for = scheduled_for or (timezone.now() + timedelta(days=1))
         session_actor = actor
         if (
@@ -489,11 +537,14 @@ class BaseRecruitmentTestCase(TestCase):
             },
             finalize=False,
         )
+        template = self.publish_competency_rating_sheet(application.position)
         save_interview_rating(
             application=application,
             actor=actor,
             cleaned_data={
-                "rating_score": rating_score,
+                "competency_scores": {
+                    competency: level for competency in template.competencies.all()
+                },
                 "rating_notes": rating_notes,
                 "justification": justification,
             },
@@ -8198,9 +8249,12 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
         payload.update(overrides)
         return payload
 
-    def rating_payload(self, **overrides):
+    def rating_payload(self, application, level=3, **overrides):
+        template = self.publish_competency_rating_sheet(application.position)
         payload = {
-            "rating_score": "89.50",
+            "competency_scores": {
+                competency: level for competency in template.competencies.all()
+            },
             "rating_notes": "Interview responses addressed the major competency areas.",
             "justification": "",
         }
@@ -8236,7 +8290,7 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
         interview_rating = save_interview_rating(
             application=application,
             actor=self.hrmpsb,
-            cleaned_data=self.rating_payload(rating_score="91.00"),
+            cleaned_data=self.rating_payload(application, level=3),
         )
         interview_session = save_interview_session(
             application=application,
@@ -8394,7 +8448,7 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
         save_interview_rating(
             application=application,
             actor=self.hrmpsb,
-            cleaned_data=self.rating_payload(rating_score="88.00"),
+            cleaned_data=self.rating_payload(application, level=3),
         )
 
         save_interview_session(
@@ -8482,7 +8536,7 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
             application=application,
             actor=self.secretariat,
             cleaned_data={
-                **self.rating_payload(rating_score="88.00"),
+                **self.rating_payload(application, level=3),
                 "rated_by": self.hrmpsb,
             },
         )
@@ -8537,7 +8591,7 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
             save_interview_rating(
                 application=application,
                 actor=self.hrmpsb,
-                cleaned_data=self.rating_payload(rating_score="99.00", justification=""),
+                cleaned_data=self.rating_payload(application, level=4, justification=""),
             )
         self.assertIn(
             "Provide a justification when the interview rating is below 75 or above 98.",
@@ -8548,13 +8602,15 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
             application=application,
             actor=self.hrmpsb,
             cleaned_data=self.rating_payload(
-                rating_score="99.00",
+                application,
+                level=4,
                 justification="Exceptional technical and behavioral competency responses.",
             ),
         )
 
         self.assertIsInstance(interview_rating, InterviewRating)
-        self.assertEqual(str(interview_rating.rating_score), "99.00")
+        # All competencies at the top of a 1-4 scale normalize to 100.
+        self.assertEqual(str(interview_rating.rating_score), "100.00")
 
     def test_hrm_chief_can_record_direct_interview_rating_for_cos_case(self):
         application = self.make_application(self.cos_position)
@@ -8571,7 +8627,7 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
         interview_rating = save_interview_rating(
             application=application,
             actor=self.hrm_chief,
-            cleaned_data=self.rating_payload(rating_score="91.25"),
+            cleaned_data=self.rating_payload(application, level=3),
         )
         interview_session = save_interview_session(
             application=application,
@@ -8585,7 +8641,8 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
 
         self.assertTrue(interview_session.is_finalized)
         self.assertEqual(interview_rating.rated_by, self.hrm_chief)
-        self.assertEqual(str(interview_rating.rating_score), "91.25")
+        # Every competency scored at 3 on a 1-4 scale normalizes to 75.
+        self.assertEqual(str(interview_rating.rating_score), "75.00")
         self.assertTrue(
             AuditLog.objects.filter(
                 application=application,
@@ -8608,7 +8665,7 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
         save_interview_rating(
             application=application,
             actor=self.hrm_chief,
-            cleaned_data=self.rating_payload(),
+            cleaned_data=self.rating_payload(application),
         )
         interview_session = save_interview_session(
             application=application,
@@ -8624,7 +8681,7 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
             save_interview_rating(
                 application=application,
                 actor=self.hrm_chief,
-                cleaned_data=self.rating_payload(rating_score="90.00"),
+                cleaned_data=self.rating_payload(application, level=3),
             )
         with self.assertRaisesMessage(
             ValueError,
@@ -8742,6 +8799,151 @@ class CompetencyRatingSheetTests(BaseRecruitmentTestCase):
         self.assertEqual(str(technical.weight), "2.00")
 
 
+class InterviewCompetencyScoringTests(BaseRecruitmentTestCase):
+    def _setup_interview(self, application=None):
+        application = application or self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        save_interview_session(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data={
+                "scheduled_for": timezone.now() + timedelta(days=1),
+                "location": "Panel Room",
+                "session_notes": "Scheduled.",
+            },
+            finalize=False,
+        )
+        return application
+
+    def test_normalizes_each_score_over_the_scale_max(self):
+        template = self.publish_competency_rating_sheet(self.level1_position)
+        comps = list(template.competencies.all())
+        self.assertEqual(
+            compute_competency_rating_score(template, {c: 3 for c in comps}),
+            Decimal("75.00"),
+        )
+        self.assertEqual(
+            compute_competency_rating_score(template, {c: 4 for c in comps}),
+            Decimal("100.00"),
+        )
+        self.assertEqual(
+            compute_competency_rating_score(template, {c: 1 for c in comps}),
+            Decimal("25.00"),
+        )
+
+    def test_weighted_competencies_normalize_proportionally(self):
+        template = self.publish_competency_rating_sheet(self.level1_position)
+        comps = list(template.competencies.all())
+        comps[0].weight = Decimal("5.00")
+        comps[0].save(update_fields=["weight", "updated_at"])
+        scores = {comps[0]: 4}
+        for competency in comps[1:]:
+            scores[competency] = 2
+        # (5*100 + 5*50) / 10 = 75.00 — the heavy competency pulls the average up.
+        self.assertEqual(compute_competency_rating_score(template, scores), Decimal("75.00"))
+
+    def test_draft_sheet_is_not_available_to_raters(self):
+        create_competency_rating_template(self.level1_position, self.secretariat)
+        self.assertIsNone(get_published_competency_rating_template(self.level1_position))
+
+    def test_rating_requires_a_published_sheet(self):
+        application = self._setup_interview()
+        with self.assertRaisesMessage(
+            ValueError,
+            "Publish the interview rating sheet",
+        ):
+            save_interview_rating(
+                application=application,
+                actor=self.hrmpsb,
+                cleaned_data={"competency_scores": {}, "rating_notes": "", "justification": ""},
+            )
+
+    def test_first_score_locks_template_and_persists_scores(self):
+        application = self._setup_interview()
+        template = self.publish_competency_rating_sheet(self.level1_position)
+        comps = list(template.competencies.all())
+        rating = save_interview_rating(
+            application=application,
+            actor=self.hrmpsb,
+            cleaned_data={
+                "competency_scores": {c: 3 for c in comps},
+                "rating_notes": "Recorded.",
+                "justification": "",
+            },
+        )
+        template.refresh_from_db()
+        self.assertEqual(template.status, CompetencyRatingTemplate.Status.LOCKED)
+        self.assertIsNotNone(template.locked_at)
+        self.assertEqual(str(rating.rating_score), "75.00")
+        self.assertEqual(rating.competency_scores.count(), len(comps))
+
+    def test_revision_replaces_scores_and_recomputes(self):
+        application = self._setup_interview()
+        template = self.publish_competency_rating_sheet(self.level1_position)
+        comps = list(template.competencies.all())
+        save_interview_rating(
+            application=application,
+            actor=self.hrmpsb,
+            cleaned_data={
+                "competency_scores": {c: 3 for c in comps},
+                "rating_notes": "",
+                "justification": "",
+            },
+        )
+        rating = save_interview_rating(
+            application=application,
+            actor=self.hrmpsb,
+            cleaned_data={
+                "competency_scores": {c: 4 for c in comps},
+                "rating_notes": "",
+                "justification": "Top marks across the sheet.",
+            },
+        )
+        self.assertEqual(str(rating.rating_score), "100.00")
+        self.assertEqual(rating.competency_scores.count(), len(comps))
+        self.assertTrue(all(score.score == 4 for score in rating.competency_scores.all()))
+        self.assertEqual(CompetencyScore.objects.filter(interview_rating=rating).count(), len(comps))
+
+    def test_missing_competency_score_is_rejected(self):
+        application = self._setup_interview()
+        template = self.publish_competency_rating_sheet(self.level1_position)
+        comps = list(template.competencies.all())
+        partial = {c: 3 for c in comps[:-1]}
+        with self.assertRaisesMessage(ValueError, "Score every competency"):
+            save_interview_rating(
+                application=application,
+                actor=self.hrmpsb,
+                cleaned_data={
+                    "competency_scores": partial,
+                    "rating_notes": "",
+                    "justification": "",
+                },
+            )
+
+    def test_rating_view_posts_the_competency_grid(self):
+        application = self._setup_interview()
+        template = self.publish_competency_rating_sheet(self.level1_position)
+        client = Client()
+        self.force_login_with_mfa(client, self.hrmpsb)
+        data = {
+            "rated_by": self.hrmpsb.pk,
+            "rating_notes": "Submitted via the scoring grid.",
+            "justification": "",
+        }
+        for competency in template.competencies.all():
+            data[f"score_{competency.id}"] = "3"
+        response = client.post(
+            reverse("interview-rating", kwargs={"pk": application.pk}),
+            data,
+        )
+        self.assertEqual(response.status_code, 302)
+        rating = InterviewRating.objects.get(application=application, rated_by=self.hrmpsb)
+        self.assertEqual(str(rating.rating_score), "75.00")
+        self.assertEqual(rating.competency_scores.count(), template.competencies.count())
+        template.refresh_from_db()
+        self.assertEqual(template.status, CompetencyRatingTemplate.Status.LOCKED)
+
+
 class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
     def session_payload(self, **overrides):
         payload = {
@@ -8766,9 +8968,12 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         payload.update(overrides)
         return payload
 
-    def rating_payload(self, **overrides):
+    def rating_payload(self, application, level=3, **overrides):
+        template = self.publish_competency_rating_sheet(application.position)
         payload = {
-            "rating_score": "92.00",
+            "competency_scores": {
+                competency: level for competency in template.competencies.all()
+            },
             "rating_notes": "Interview performance supports the recommendation.",
             "justification": "",
         }
@@ -8789,7 +8994,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         save_interview_rating(
             application=application,
             actor=self.hrm_chief,
-            cleaned_data=self.rating_payload(),
+            cleaned_data=self.rating_payload(application),
         )
         save_interview_session(
             application=application,
@@ -8812,7 +9017,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         )
         self.assertEqual(
             deliberation_record.consolidated_snapshot["summary"]["latest_interview_average"],
-            "92.00",
+            "75.00",
         )
 
     def test_user_full_name_falls_back_to_username_for_display(self):
@@ -8875,7 +9080,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         self.assertFalse(draft_report.is_finalized)
         self.assertEqual(draft_report.version_number, 1)
         self.assertIsNone(draft_item.deliberation_record)
-        self.assertEqual(str(draft_item.interview_average_score), "91.25")
+        self.assertEqual(str(draft_item.interview_average_score), "100.00")
         self.assertEqual(draft_item.rank_order, 1)
 
         deliberation_record = save_deliberation_record(
@@ -9159,7 +9364,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         self.assertEqual(item.qualification_outcome, ScreeningRecord.QualificationOutcome.QUALIFIED)
         self.assertEqual(item.exam_status, ExamRecord.ExamStatus.COMPLETED)
         self.assertEqual(str(item.exam_score), "88.50")
-        self.assertEqual(str(item.interview_average_score), "91.25")
+        self.assertEqual(str(item.interview_average_score), "100.00")
         self.assertEqual(item.recommendation, "HRMPSB recommends this ranking based on the CAR draft.")
         self.assertEqual(item.decision_support_summary, "HRMPSB recommendation summary for the CAR.")
         self.assertEqual(
@@ -9314,12 +9519,14 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
 
         self.assertEqual(primary_item.rank_order, 2)
         self.assertEqual(primary_item.preliminary_rank_order, 1)
-        self.assertEqual(str(primary_item.assessment_score), "90.00")
+        # interview 90->level 4->100: 90*0.20 + 90*0.40 + 100*0.40 = 94.00
+        self.assertEqual(str(primary_item.assessment_score), "94.00")
         self.assertEqual(str(primary_item.document_review_score), "90.00")
         self.assertIn("office-fit concerns", primary_item.ranking_notes)
         self.assertEqual(secondary_item.rank_order, 1)
         self.assertEqual(secondary_item.preliminary_rank_order, 2)
-        self.assertEqual(str(secondary_item.assessment_score), "80.00")
+        # interview 80->level 3->75: 80*0.20 + 80*0.40 + 75*0.40 = 78.00
+        self.assertEqual(str(secondary_item.assessment_score), "78.00")
         self.assertIn("rank adjustment", secondary_item.ranking_notes)
         self.assertEqual(
             report.consolidated_snapshot["assessment_weight_display"],

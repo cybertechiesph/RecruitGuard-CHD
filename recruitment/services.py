@@ -35,6 +35,7 @@ from .models import (
     ComparativeAssessmentReportItem,
     CompetencyDefinition,
     CompetencyRatingTemplate,
+    CompetencyScore,
     CompletionRecord,
     CompletionRequirement,
     DeliberationRecord,
@@ -4108,6 +4109,77 @@ def save_interview_session(
 
 
 @transaction.atomic
+def get_published_competency_rating_template(entry):
+    """Return the rating sheet the HRMPSB panel scores on — only once it has been
+    made available (published) or scoring has started (locked). A draft sheet is
+    not yet visible to raters."""
+    return CompetencyRatingTemplate.objects.filter(
+        recruitment_entry=entry,
+        status__in=[
+            CompetencyRatingTemplate.Status.PUBLISHED,
+            CompetencyRatingTemplate.Status.LOCKED,
+        ],
+    ).first()
+
+
+def lock_competency_rating_template(template):
+    """Lock the sheet once the first score is in, so its competencies/weights can no
+    longer be re-shaped under ratings that already exist."""
+    if template.status != CompetencyRatingTemplate.Status.LOCKED:
+        template.status = CompetencyRatingTemplate.Status.LOCKED
+        if not template.locked_at:
+            template.locked_at = timezone.now()
+        template.save(update_fields=["status", "locked_at", "updated_at"])
+
+
+def _coerce_competency_scores(template, raw_scores):
+    """Validate that every competency on the sheet has an in-range score and return
+    an ordered ``{competency: int}`` mapping. ``raw_scores`` may be keyed by either
+    the competency instance or its id."""
+    by_id = {}
+    for key, value in (raw_scores or {}).items():
+        competency_id = getattr(key, "pk", key)
+        by_id[competency_id] = value
+
+    scores = {}
+    for competency in template.competencies.all():
+        if competency.id not in by_id or by_id[competency.id] in (None, ""):
+            raise ValueError(f"Score every competency before saving (missing: {competency.name}).")
+        try:
+            score = int(by_id[competency.id])
+        except (TypeError, ValueError):
+            raise ValueError(f"Enter a whole-number score for {competency.name}.")
+        if score < template.scale_min or score > template.scale_max:
+            raise ValueError(
+                f"Scores must be between {template.scale_min} and {template.scale_max} "
+                f"(check {competency.name})."
+            )
+        scores[competency] = score
+    return scores
+
+
+def compute_competency_rating_score(template, scores_by_competency):
+    """Normalize the raw per-competency scores to the 0-100 the CAR consumes.
+
+    Each competency is scored out of the scale maximum (score / scale_max), so a
+    top mark is 100% and a mark of 1 on a 1-4 scale is 25%. Competencies are then
+    combined by their relative weights. Returns a Decimal quantized to 0.01.
+    """
+    total_weight = Decimal("0")
+    weighted_total = Decimal("0")
+    scale_max = Decimal(str(template.scale_max))
+    for competency, score in scores_by_competency.items():
+        weight = competency.weight or Decimal("0")
+        component_percent = (Decimal(str(score)) / scale_max) * Decimal("100")
+        weighted_total += weight * component_percent
+        total_weight += weight
+    if total_weight <= 0:
+        return Decimal("0.00")
+    return (weighted_total / total_weight).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+
+
 def save_interview_rating(application, actor, cleaned_data):
     if not hasattr(application, "case"):
         raise ValueError("A case must exist before interview ratings can be recorded.")
@@ -4122,6 +4194,16 @@ def save_interview_rating(application, actor, cleaned_data):
         )
     if not interview_session:
         raise ValueError("Schedule the interview session before recording interview ratings.")
+
+    template = get_published_competency_rating_template(application.position)
+    if template is None:
+        raise ValueError(
+            "Publish the interview rating sheet for this vacancy before recording interview ratings."
+        )
+
+    competency_scores = cleaned_data.get("competency_scores") or {}
+    scores_by_competency = _coerce_competency_scores(template, competency_scores)
+    rating_value = compute_competency_rating_score(template, scores_by_competency)
 
     rated_by = cleaned_data.get("rated_by") or actor
     interview_rating = interview_session.ratings.filter(rated_by=rated_by).first()
@@ -4140,11 +4222,27 @@ def save_interview_rating(application, actor, cleaned_data):
 
     interview_rating.rated_by = rated_by
     interview_rating.encoded_by = actor
-    interview_rating.rating_score = cleaned_data["rating_score"]
-    interview_rating.rating_notes = cleaned_data["rating_notes"]
-    interview_rating.justification = cleaned_data["justification"]
+    interview_rating.rating_score = rating_value
+    interview_rating.rating_notes = cleaned_data.get("rating_notes", "")
+    interview_rating.justification = cleaned_data.get("justification", "")
     interview_rating.full_clean()
     interview_rating.save()
+
+    # Persist the per-competency scores (replace any prior set on revision).
+    interview_rating.competency_scores.all().delete()
+    CompetencyScore.objects.bulk_create(
+        [
+            CompetencyScore(
+                interview_rating=interview_rating,
+                competency=competency,
+                score=score,
+            )
+            for competency, score in scores_by_competency.items()
+        ]
+    )
+
+    # First submitted score locks the template so it can no longer be re-shaped.
+    lock_competency_rating_template(template)
 
     record_audit_event(
         application=application,
@@ -4162,6 +4260,10 @@ def save_interview_rating(application, actor, cleaned_data):
             "encoded_by_role": actor.role,
             "encoded_on_behalf": actor.id != rated_by.id,
             "rating_score": str(interview_rating.rating_score),
+            "competency_scores": {
+                competency.name: score
+                for competency, score in scores_by_competency.items()
+            },
             "has_justification": bool(interview_rating.justification),
         },
     )

@@ -52,6 +52,7 @@ from .models import (
 from .notification_services import REQUIREMENT_CHECKLIST_DEFAULT_DEADLINE_DAYS
 from .requirements import PERFORMANCE_RATING, get_applicant_document_requirements
 from .services import (
+    compute_competency_rating_score,
     get_available_actions,
     get_case_handoff_options,
     get_current_applicant_document_map,
@@ -1974,27 +1975,28 @@ class InterviewSessionForm(DeferredModelValidationMixin, BootstrapFormMixin, for
 class InterviewRatingForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.ModelForm):
     class Meta:
         model = InterviewRating
+        # rating_score is no longer hand-entered — it is computed from the
+        # per-competency scores below.
         fields = [
             "rated_by",
-            "rating_score",
             "rating_notes",
             "justification",
         ]
         widgets = {
             "rated_by": forms.Select(),
-            "rating_score": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
             "rating_notes": forms.Textarea(attrs={"rows": 3}),
             "justification": forms.Textarea(attrs={"rows": 3}),
         }
 
-    def __init__(self, *args, application=None, actor=None, **kwargs):
+    def __init__(self, *args, application=None, actor=None, template=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.application = application
         self.actor = actor
+        self.template = template
+        self.competencies = list(template.competencies.all()) if template else []
         self.is_support_encoding = self._is_support_encoding()
         self.fields["rated_by"].label = "Actual HRMPSB Rater"
         self.fields["rated_by"].queryset = self._rater_queryset()
-        self.fields["rating_score"].label = "Interview Rating Score"
         self.fields["rating_notes"].label = "Rating Notes"
         self.fields["justification"].label = "Justification"
         self.fields["rating_notes"].required = False
@@ -2009,7 +2011,51 @@ class InterviewRatingForm(DeferredModelValidationMixin, BootstrapFormMixin, form
             self.fields["rated_by"].widget = forms.HiddenInput()
             if self.actor is not None:
                 self.fields["rated_by"].initial = self.actor.pk
+        self._build_competency_fields()
         self._apply_bootstrap()
+
+    @staticmethod
+    def score_field_name(competency):
+        return f"score_{competency.id}"
+
+    def _build_competency_fields(self):
+        existing = {}
+        if self.instance and self.instance.pk:
+            existing = {
+                score.competency_id: score.score
+                for score in self.instance.competency_scores.all()
+            }
+        for competency in self.competencies:
+            field = forms.IntegerField(
+                label=competency.name,
+                min_value=self.template.scale_min,
+                max_value=self.template.scale_max,
+                widget=forms.NumberInput(
+                    attrs={
+                        "min": self.template.scale_min,
+                        "max": self.template.scale_max,
+                        "step": "1",
+                        "class": "rg-competency-score-input",
+                        "data-weight": str(competency.weight),
+                    }
+                ),
+            )
+            field.initial = existing.get(competency.id)
+            self.fields[self.score_field_name(competency)] = field
+
+    def grouped_competency_fields(self):
+        """Yield ``(group_label, [bound_field, ...])`` so the template can render the
+        score grid under its Core / Organizational / Technical headings."""
+        groups = []
+        for group_value, group_label in CompetencyDefinition.Group.choices:
+            bound = [
+                self[self.score_field_name(competency)]
+                for competency in self.competencies
+                if competency.group == group_value
+            ]
+            if bound:
+                groups.append((group_label, bound))
+        return groups
 
     def _is_support_encoding(self):
         if self.application is None or self.actor is None:
@@ -2046,6 +2092,32 @@ class InterviewRatingForm(DeferredModelValidationMixin, BootstrapFormMixin, form
                 raise forms.ValidationError("The actual rater must be an HRMPSB member.")
             return rated_by
         return self.actor or rated_by
+
+    def clean(self):
+        cleaned = super().clean()
+        if not self.template:
+            return cleaned
+        scores = {}
+        for competency in self.competencies:
+            value = cleaned.get(self.score_field_name(competency))
+            if value is None:
+                # The per-field IntegerField already flags the missing/out-of-range
+                # value; just don't compute a partial score.
+                continue
+            scores[competency] = value
+        cleaned["competency_scores"] = scores
+        if len(scores) == len(self.competencies) and self.competencies:
+            rating_value = compute_competency_rating_score(self.template, scores)
+            cleaned["computed_rating_score"] = rating_value
+            justification = (cleaned.get("justification") or "").strip()
+            if (
+                rating_value < Decimal("75") or rating_value > Decimal("98")
+            ) and not justification:
+                self.add_error(
+                    "justification",
+                    "Provide a justification when the computed rating is below 75 or above 98.",
+                )
+        return cleaned
 
 
 class InterviewFallbackUploadForm(BootstrapFormMixin, forms.Form):

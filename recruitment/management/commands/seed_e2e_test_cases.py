@@ -12,6 +12,7 @@ from django.utils import timezone
 from recruitment.models import (
     ComparativeAssessmentReport,
     ComparativeAssessmentReportItem,
+    CompetencyRatingTemplate,
     CompletionRecord,
     CompletionRequirement,
     DeliberationRecord,
@@ -28,8 +29,11 @@ from recruitment.models import (
 )
 from recruitment.requirements import get_required_applicant_document_requirements
 from recruitment.services import (
+    create_competency_rating_template,
     generate_comparative_assessment_report,
+    get_competency_rating_template,
     get_current_workflow_section,
+    get_published_competency_rating_template,
     record_final_selection,
     save_deliberation_record,
     save_exam_record,
@@ -420,7 +424,34 @@ class Command(BaseCommand):
             finalize=True,
         )
 
-    def _finalize_interview(self, application, *, session_actor, rating_actor, score="88.00"):
+    @staticmethod
+    def _competency_level(score, scale_max):
+        """Accept either a competency level (1..scale_max) or a 0-100 score and
+        return an in-range competency level for the seeded ratings."""
+        try:
+            value = float(score)
+        except (TypeError, ValueError):
+            value = scale_max
+        if value > scale_max:
+            value = value / 100 * scale_max
+        return max(1, min(scale_max, int(round(value))))
+
+    def _ensure_published_rating_sheet(self, application, actor):
+        """Make sure the vacancy has a published competency rating sheet so the
+        HRMPSB rating below can be scored against it."""
+        entry = application.position
+        template = get_published_competency_rating_template(entry)
+        if template is not None:
+            return template
+        template = get_competency_rating_template(entry)
+        if template is None:
+            template = create_competency_rating_template(entry, actor)
+        template.status = CompetencyRatingTemplate.Status.PUBLISHED
+        template.published_at = timezone.now()
+        template.save(update_fields=["status", "published_at", "updated_at"])
+        return template
+
+    def _finalize_interview(self, application, *, session_actor, rating_actor, score=3):
         scheduled_for = timezone.now() + timedelta(days=2)
         save_interview_session(
             application=application,
@@ -432,13 +463,18 @@ class Command(BaseCommand):
             },
             finalize=False,
         )
+        template = self._ensure_published_rating_sheet(application, session_actor)
+        level = self._competency_level(score, template.scale_max)
+        competency_scores = {
+            competency: level for competency in template.competencies.all()
+        }
         save_interview_rating(
             application=application,
             actor=rating_actor,
             cleaned_data={
-                "rating_score": score,
+                "competency_scores": competency_scores,
                 "rating_notes": "E2E interview rating recorded.",
-                "justification": "",
+                "justification": "Consistent competency performance across the panel sheet.",
             },
         )
         return save_interview_session(

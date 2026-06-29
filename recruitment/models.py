@@ -2188,6 +2188,47 @@ class CompetencyDefinition(TimestampedModel):
         return f"{self.get_group_display()}: {self.name}"
 
 
+class CompetencyScore(TimestampedModel):
+    """One HRMPSB rater's raw score for a single competency on the published rating
+    sheet. The rater's overall ``InterviewRating.rating_score`` is *computed* from
+    these (weighted, normalized to 0-100) — it is never hand-entered."""
+
+    interview_rating = models.ForeignKey(
+        InterviewRating,
+        on_delete=models.CASCADE,
+        related_name="competency_scores",
+    )
+    competency = models.ForeignKey(
+        CompetencyDefinition,
+        on_delete=models.CASCADE,
+        related_name="scores",
+    )
+    score = models.PositiveSmallIntegerField()
+
+    class Meta:
+        ordering = ["competency__order", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["interview_rating", "competency"],
+                name="unique_competency_score_per_rating",
+            )
+        ]
+
+    def clean(self):
+        errors = {}
+        template = self.competency.template if self.competency_id else None
+        if template is not None and self.score is not None:
+            if self.score < template.scale_min or self.score > template.scale_max:
+                errors["score"] = (
+                    f"Score must be between {template.scale_min} and {template.scale_max}."
+                )
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return f"{self.competency.name}: {self.score}"
+
+
 class DeliberationRecord(TimestampedModel):
     class QuorumStatus(models.TextChoices):
         NOT_RECORDED = "not_recorded", "Not Recorded"

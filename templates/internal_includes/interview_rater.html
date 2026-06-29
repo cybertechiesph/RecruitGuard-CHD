@@ -59,6 +59,23 @@
     </div>
 </div>
 
+{% elif interview_rating_requires_sheet %}
+<div class="rg-icard rg-int-banner rg-int-banner--info">
+    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+        <circle cx="10" cy="10" r="8.5"/>
+        <path d="M10 6v4.5" stroke-linecap="round"/>
+        <circle cx="10" cy="13" r="0.8" fill="currentColor"/>
+    </svg>
+    <div>
+        <div class="rg-int-banner__title">Rating sheet not ready yet</div>
+        <p>
+            The Secretariat needs to compose and publish the competency rating sheet for
+            this vacancy before the panel can score. Once it is published, the scoring grid
+            appears here.
+        </p>
+    </div>
+</div>
+
 {% elif interview_rating_locked %}
 <div class="rg-icard">
     <div class="rg-icard__header">
@@ -132,7 +149,8 @@
                 {% elif current_user_interview_rating %}
                     Your rating is on record. You can revise it until the session is finalized.
                 {% else %}
-                    Give a score from 0 to 100. Add a justification when the score is below 75 or above 98.
+                    Score each competency on the panel sheet. The overall rating is computed
+                    automatically. Add a justification when it lands below 75 or above 98.
                 {% endif %}
             </p>
         </div>
@@ -186,21 +204,39 @@
             {{ interview_rating_form.rated_by }}
         {% endif %}
 
-        <div class="rg-int-score">
-            <div class="rg-int-score__field">
-                <label class="form-label" for="{{ interview_rating_form.rating_score.id_for_label }}">
-                    {{ interview_rating_form.rating_score.label }}
-                    <span class="text-danger" aria-hidden="true">*</span>
-                    <span class="rg-int-score__range">0 to 100</span>
-                </label>
-                {{ interview_rating_form.rating_score }}
-                {% for error in interview_rating_form.rating_score.errors %}
-                    <div class="invalid-feedback d-block">{{ error }}</div>
-                {% endfor %}
+        <div class="rg-int-score-wrap">
+            <div class="rg-int-score-field">
+                <div class="rg-int-competency-grid"
+                     id="int-competency-grid"
+                     data-scale-max="{{ interview_rating_template.scale_max }}">
+                    {% for group_label, fields in interview_rating_form.grouped_competency_fields %}
+                    <div class="rg-int-competency-group">
+                        <div class="rg-int-competency-group__head">{{ group_label }}</div>
+                        {% for field in fields %}
+                        <div class="rg-int-competency-row">
+                            <label class="rg-int-competency-row__label" for="{{ field.id_for_label }}">
+                                {{ field.label }}
+                            </label>
+                            <div class="rg-int-competency-row__input">
+                                {{ field }}
+                                {% for error in field.errors %}
+                                    <div class="invalid-feedback d-block">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                    <p class="rg-int-competency-scale-note">
+                        Score each competency from 1 (lowest) to
+                        {{ interview_rating_template.scale_max }} (highest).
+                        The overall rating below is computed from these.
+                    </p>
+                </div>
             </div>
-            <div class="rg-int-score__dial" id="int-score-dial">
-                <div class="rg-int-score__val" id="int-score-val">—</div>
-                <div class="rg-int-score__label" id="int-score-dial-label">score</div>
+            <div class="rg-int-score-dial" id="int-score-dial">
+                <div class="rg-int-score-val" id="int-score-val">—</div>
+                <div class="rg-int-score-dial-label" id="int-score-dial-label">computed</div>
             </div>
         </div>
 
@@ -328,7 +364,11 @@
     var form = document.getElementById("int-rating-form");
     if (!form) return;
 
-    var scoreInput = document.getElementById("id_rating_score");
+    var grid = document.getElementById("int-competency-grid");
+    var scoreInputs = grid
+        ? Array.prototype.slice.call(grid.querySelectorAll(".rg-competency-score-input"))
+        : [];
+    var scaleMax = grid ? parseFloat(grid.getAttribute("data-scale-max")) : NaN;
     var justInput = document.getElementById("id_justification");
     var ratedByInput = form.querySelector("[name='rated_by']");
     var isEncoding = {% if interview_rating_is_support_encoding %}true{% else %}false{% endif %};
@@ -347,18 +387,38 @@
     var reviseToggle = document.getElementById("int-revise-toggle");
     var submittedCard = document.getElementById("int-submitted-card");
 
-    function scoreNum() {
-        if (!scoreInput) return NaN;
-        var raw = (scoreInput.value || "").trim();
-        if (!raw) return NaN;
-        return parseFloat(raw);
+    // Mirror the server-side "score / scale_max" weighted normalization so the rater
+    // sees the same computed 0-100 the system will store.
+    function computeScore() {
+        if (!scoreInputs.length || isNaN(scaleMax) || scaleMax <= 0) return NaN;
+        var weightedTotal = 0;
+        var totalWeight = 0;
+        for (var i = 0; i < scoreInputs.length; i++) {
+            var input = scoreInputs[i];
+            var raw = (input.value || "").trim();
+            if (raw === "") return NaN;
+            var s = parseFloat(raw);
+            if (isNaN(s)) return NaN;
+            var w = parseFloat(input.getAttribute("data-weight"));
+            if (isNaN(w)) w = 1;
+            weightedTotal += w * (s / scaleMax) * 100;
+            totalWeight += w;
+        }
+        if (totalWeight <= 0) return NaN;
+        return weightedTotal / totalWeight;
+    }
+    function scoreInRange(s) {
+        return !isNaN(s) && s >= 1 && s <= scaleMax;
     }
     function needsJustification(n) {
         return !isNaN(n) && (n < 75 || n > 98);
     }
+    function formatScore(n) {
+        return (Math.round(n * 100) / 100).toFixed(2);
+    }
     function updateDial() {
         if (!dial) return;
-        var n = scoreNum();
+        var n = computeScore();
         ["is-passing", "is-marginal"].forEach(function (c) {
             dial.classList.remove(c);
             if (dialVal) dialVal.classList.remove(c);
@@ -368,15 +428,14 @@
             if (dialVal) dialVal.textContent = "—";
             return;
         }
-        if (dialVal) dialVal.textContent = String(scoreInput.value).trim();
+        if (dialVal) dialVal.textContent = formatScore(n);
         var cls = n >= 75 ? "is-passing" : "is-marginal";
         dial.classList.add(cls);
         if (dialVal) dialVal.classList.add(cls);
         if (dialLabel) dialLabel.classList.add(cls);
     }
     function updateThreshold() {
-        var n = scoreNum();
-        var needs = needsJustification(n);
+        var needs = needsJustification(computeScore());
         if (threshold) threshold.hidden = !needs;
         if (justGroup) justGroup.hidden = !needs;
     }
@@ -403,20 +462,22 @@
                 p.push({ field: ratedByInput, msg: "Choose which HRMPSB member submitted this rating." });
             }
         }
-        if (scoreInput) {
-            var raw = (scoreInput.value || "").trim();
+        for (var i = 0; i < scoreInputs.length; i++) {
+            var input = scoreInputs[i];
+            var raw = (input.value || "").trim();
             if (raw === "") {
-                p.push({ field: scoreInput, msg: "Enter a score from 0 to 100." });
-            } else {
-                var n = parseFloat(raw);
-                if (isNaN(n) || n < 0 || n > 100) {
-                    p.push({ field: scoreInput, msg: "Score must be a number between 0 and 100." });
-                } else if (needsJustification(n)) {
-                    // Justification can only be judged once the score is valid.
-                    var j = justInput && (justInput.value || "").trim();
-                    if (!j) {
-                        p.push({ field: justInput, msg: "Add a justification — required for scores below 75 or above 98." });
-                    }
+                p.push({ field: input, msg: "Score every competency before saving." });
+            } else if (!scoreInRange(parseFloat(raw))) {
+                p.push({ field: input, msg: "Each score must be between 1 and " + scaleMax + "." });
+            }
+        }
+        if (!p.length) {
+            // Justification only judged once every competency carries a valid score.
+            var n = computeScore();
+            if (needsJustification(n)) {
+                var j = justInput && (justInput.value || "").trim();
+                if (!j) {
+                    p.push({ field: justInput, msg: "Add a justification — required when the computed rating is below 75 or above 98." });
                 }
             }
         }
@@ -433,20 +494,19 @@
     function openModal() {
         if (!modalEl || !window.bootstrap) return;
         if (modalScoreEl) {
-            modalScoreEl.textContent = (scoreInput && scoreInput.value)
-                ? scoreInput.value + " / 100"
-                : "—";
+            var n = computeScore();
+            modalScoreEl.textContent = isNaN(n) ? "—" : formatScore(n) + " / 100";
         }
         bootstrap.Modal.getOrCreateInstance(modalEl).show();
     }
 
-    if (scoreInput) {
-        scoreInput.addEventListener("input", function () {
+    scoreInputs.forEach(function (input) {
+        input.addEventListener("input", function () {
             updateDial();
             updateThreshold();
             clearError();
         });
-    }
+    });
     if (justInput) justInput.addEventListener("input", clearError);
     if (ratedByInput) ratedByInput.addEventListener("change", clearError);
 
@@ -464,7 +524,7 @@
         reviseToggle.addEventListener("click", function () {
             submittedCard.hidden = true;
             form.hidden = false;
-            if (scoreInput) try { scoreInput.focus(); } catch (e) {}
+            if (scoreInputs.length) try { scoreInputs[0].focus(); } catch (e) {}
         });
     }
 
