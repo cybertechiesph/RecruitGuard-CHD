@@ -1335,10 +1335,21 @@ CompetencyDefinitionFormSet = inlineformset_factory(
 
 
 class AssessmentWeightConfigForm(BootstrapFormMixin, forms.ModelForm):
+    _PERCENT_WIDGET = forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"})
+
     class Meta:
         model = AssessmentWeightConfig
-        fields = ["exam_general_weight", "exam_technical_weight"]
+        fields = [
+            "ete_weight",
+            "exam_weight",
+            "interview_weight",
+            "exam_general_weight",
+            "exam_technical_weight",
+        ]
         widgets = {
+            "ete_weight": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
+            "exam_weight": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
+            "interview_weight": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
             "exam_general_weight": forms.NumberInput(
                 attrs={"step": "0.01", "min": "0", "max": "100"}
             ),
@@ -1349,6 +1360,16 @@ class AssessmentWeightConfigForm(BootstrapFormMixin, forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["ete_weight"].label = "ETE weight (%)"
+        self.fields["ete_weight"].help_text = (
+            "Share of the overall CAR score from Education, Training, and Experience."
+        )
+        self.fields["exam_weight"].label = "Examination weight (%)"
+        self.fields["exam_weight"].help_text = "Share of the overall CAR score from the exam."
+        self.fields["interview_weight"].label = "Interview weight (%)"
+        self.fields["interview_weight"].help_text = (
+            "Share of the overall CAR score from the interview."
+        )
         self.fields["exam_general_weight"].label = "General Ability weight (%)"
         self.fields["exam_general_weight"].help_text = (
             "Share of the exam score that comes from the General Ability component."
@@ -1361,6 +1382,13 @@ class AssessmentWeightConfigForm(BootstrapFormMixin, forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
+        ete = cleaned.get("ete_weight")
+        exam = cleaned.get("exam_weight")
+        interview = cleaned.get("interview_weight")
+        if None not in (ete, exam, interview) and ete + exam + interview != Decimal("100"):
+            raise forms.ValidationError(
+                "The ETE, Examination, and Interview weights must add up to 100%."
+            )
         general = cleaned.get("exam_general_weight")
         technical = cleaned.get("exam_technical_weight")
         if general is not None and technical is not None:

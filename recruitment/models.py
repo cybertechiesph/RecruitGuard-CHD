@@ -1366,6 +1366,21 @@ class AssessmentWeightConfig(TimestampedModel):
         decimal_places=2,
         default=Decimal("40.00"),
     )
+    ete_weight = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("40.00"),
+    )
+    exam_weight = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("20.00"),
+    )
+    interview_weight = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("40.00"),
+    )
     updated_by = models.ForeignKey(
         RecruitmentUser,
         on_delete=models.SET_NULL,
@@ -1380,15 +1395,26 @@ class AssessmentWeightConfig(TimestampedModel):
 
     def clean(self):
         errors = {}
-        for field in ("exam_general_weight", "exam_technical_weight"):
+        all_fields = (
+            "exam_general_weight",
+            "exam_technical_weight",
+            "ete_weight",
+            "exam_weight",
+            "interview_weight",
+        )
+        for field in all_fields:
             value = getattr(self, field)
             if value is None or value < 0 or value > 100:
                 errors[field] = "Enter a percentage between 0 and 100."
-        if not errors:
-            total = self.exam_general_weight + self.exam_technical_weight
-            if total != Decimal("100"):
+        if not any(f in errors for f in ("exam_general_weight", "exam_technical_weight")):
+            if self.exam_general_weight + self.exam_technical_weight != Decimal("100"):
                 errors["exam_general_weight"] = (
                     "General Ability and Technical weights must add up to 100%."
+                )
+        if not any(f in errors for f in ("ete_weight", "exam_weight", "interview_weight")):
+            if self.ete_weight + self.exam_weight + self.interview_weight != Decimal("100"):
+                errors["ete_weight"] = (
+                    "ETE, Examination, and Interview weights must add up to 100%."
                 )
         if errors:
             raise ValidationError(errors)
@@ -1413,6 +1439,18 @@ class AssessmentWeightConfig(TimestampedModel):
     @property
     def exam_technical_fraction(self):
         return (self.exam_technical_weight or Decimal("0")) / Decimal("100")
+
+    @property
+    def ete_fraction(self):
+        return (self.ete_weight or Decimal("0")) / Decimal("100")
+
+    @property
+    def exam_component_fraction(self):
+        return (self.exam_weight or Decimal("0")) / Decimal("100")
+
+    @property
+    def interview_fraction(self):
+        return (self.interview_weight or Decimal("0")) / Decimal("100")
 
     def __str__(self):
         return "Assessment weight configuration"

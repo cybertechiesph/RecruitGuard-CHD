@@ -6144,9 +6144,20 @@ class AssessmentWeightConfigTests(BaseRecruitmentTestCase):
         self.assertEqual(config.pk, AssessmentWeightConfig.SINGLETON_PK)
         self.assertEqual(config.exam_general_weight, Decimal("60.00"))
         self.assertEqual(config.exam_technical_weight, Decimal("40.00"))
+        self.assertEqual(config.ete_weight, Decimal("40.00"))
+        self.assertEqual(config.exam_weight, Decimal("20.00"))
+        self.assertEqual(config.interview_weight, Decimal("40.00"))
         # Loading again reuses the one shared row rather than creating another.
         AssessmentWeightConfig.load()
         self.assertEqual(AssessmentWeightConfig.objects.count(), 1)
+
+    def test_car_component_weights_must_sum_to_100(self):
+        config = AssessmentWeightConfig.load()
+        config.ete_weight = Decimal("50.00")
+        config.exam_weight = Decimal("30.00")
+        config.interview_weight = Decimal("30.00")
+        with self.assertRaises(ValidationError):
+            config.full_clean()
 
     def test_exam_score_uses_configured_default_weights(self):
         record = ExamRecord(
@@ -6190,7 +6201,13 @@ class AssessmentWeightConfigTests(BaseRecruitmentTestCase):
 
         response = client.post(
             reverse("assessment-weights"),
-            {"exam_general_weight": "55", "exam_technical_weight": "45"},
+            {
+                "ete_weight": "40",
+                "exam_weight": "20",
+                "interview_weight": "40",
+                "exam_general_weight": "55",
+                "exam_technical_weight": "45",
+            },
         )
         self.assertEqual(response.status_code, 302)
         config = AssessmentWeightConfig.load()
@@ -9331,7 +9348,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         self.assertEqual(str(secondary_item.assessment_score), "78.00")
         self.assertEqual(
             report.consolidated_snapshot["assessment_weight_display"],
-            "Document review 20%, exam 40%, interview 40%.",
+            "Document review 40%, exam 20%, interview 40%.",
         )
 
     def test_plantilla_recommendation_requires_finalized_car(self):

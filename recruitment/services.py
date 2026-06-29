@@ -44,6 +44,7 @@ from .models import (
     EvidenceVaultItem,
     FinalDecision,
     FinalSelection,
+    format_weight_percentage,
     InternalEmailChangeRequest,
     InternalLoginAttempt,
     InternalMFAChallenge,
@@ -151,18 +152,6 @@ PLANTILLA_CAR_PREPARATION_ROLES_BY_LEVEL = {
     PositionPosting.Level.LEVEL_2: {RecruitmentUser.Role.HRM_CHIEF},
 }
 CAR_LABEL = "Comparative Assessment Report"
-PLANTILLA_ASSESSMENT_WEIGHTS_BY_LEVEL = {
-    PositionPosting.Level.LEVEL_1: {
-        "document_review": Decimal("0.20"),
-        "exam": Decimal("0.40"),
-        "interview": Decimal("0.40"),
-    },
-    PositionPosting.Level.LEVEL_2: {
-        "document_review": Decimal("0.40"),
-        "exam": Decimal("0.20"),
-        "interview": Decimal("0.40"),
-    },
-}
 PLANTILLA_POOL_NOT_FINAL_MESSAGE = (
     "Plantilla deliberation and CAR generation are available only after the vacancy "
     "is closed or its closing date has passed."
@@ -236,10 +225,17 @@ def update_assessment_weights(actor, config_form):
     exam sub-weights add up to 100%."""
     config = config_form.save(commit=False)
     before = AssessmentWeightConfig.load()
-    previous = {
-        "exam_general_weight": str(before.exam_general_weight),
-        "exam_technical_weight": str(before.exam_technical_weight),
-    }
+
+    def _snapshot(record):
+        return {
+            "ete_weight": str(record.ete_weight),
+            "exam_weight": str(record.exam_weight),
+            "interview_weight": str(record.interview_weight),
+            "exam_general_weight": str(record.exam_general_weight),
+            "exam_technical_weight": str(record.exam_technical_weight),
+        }
+
+    previous = _snapshot(before)
     config.updated_by = actor
     config.full_clean()
     config.save()
@@ -247,11 +243,7 @@ def update_assessment_weights(actor, config_form):
         actor=actor,
         action=AuditLog.Action.ASSESSMENT_WEIGHTS_UPDATED,
         description="Updated assessment weight configuration.",
-        metadata={
-            "previous": previous,
-            "exam_general_weight": str(config.exam_general_weight),
-            "exam_technical_weight": str(config.exam_technical_weight),
-        },
+        metadata={"previous": previous, **_snapshot(config)},
     )
     return config
 
@@ -2677,27 +2669,25 @@ def _quantize_score(value):
 
 
 def _calculate_preliminary_assessment_score(level, document_review_score, exam_score, interview_score):
+    # ``level`` is retained for call-site compatibility; the component weights are now
+    # one global, editable set (AssessmentWeightConfig), not split by level.
     if any(value in (None, "") for value in (document_review_score, exam_score, interview_score)):
         return None
-    weights = PLANTILLA_ASSESSMENT_WEIGHTS_BY_LEVEL.get(level)
-    if not weights:
-        return None
+    config = AssessmentWeightConfig.load()
     total = (
-        (Decimal(str(document_review_score)) * weights["document_review"])
-        + (Decimal(str(exam_score)) * weights["exam"])
-        + (Decimal(str(interview_score)) * weights["interview"])
+        (Decimal(str(document_review_score)) * config.ete_fraction)
+        + (Decimal(str(exam_score)) * config.exam_component_fraction)
+        + (Decimal(str(interview_score)) * config.interview_fraction)
     )
     return _quantize_score(total)
 
 
 def _assessment_weight_display(level):
-    weights = PLANTILLA_ASSESSMENT_WEIGHTS_BY_LEVEL.get(level)
-    if not weights:
-        return ""
+    config = AssessmentWeightConfig.load()
     return (
-        f"Document review {int(weights['document_review'] * 100)}%, "
-        f"exam {int(weights['exam'] * 100)}%, "
-        f"interview {int(weights['interview'] * 100)}%."
+        f"Document review {format_weight_percentage(config.ete_weight)}%, "
+        f"exam {format_weight_percentage(config.exam_weight)}%, "
+        f"interview {format_weight_percentage(config.interview_weight)}%."
     )
 
 
