@@ -629,6 +629,70 @@
         return problem;
     }
 
+    /* ── File readability check ──────────────────────────────────
+       Size/type metadata can look fine while the bytes are unreachable:
+       the file was moved, renamed, or deleted after it was picked, or it's
+       an "online-only" OneDrive / Google Drive item that isn't downloaded
+       to this device. The browser only discovers this when it READS the
+       file — otherwise that happens silently during submit and the upload
+       just fails. We read a slice ourselves and show a plain message.
+       These strings are client-only: an unreadable file never reaches the
+       server, so there is no server copy to keep in sync (cf. UP-1). */
+    var READ_ERROR_NOT_FOUND =
+        "We couldn't find this file anymore. It may have been moved, renamed, or deleted since you picked it. Please select it again.";
+    var READ_ERROR_UNREADABLE =
+        "We couldn't open this file. If it's kept online (OneDrive or Google Drive), download it to this device first, then select it again.";
+
+    function setUnreadable(input, msg) {
+        input.dataset.fileUnreadable = "1";
+        input.dataset.fileUnreadableMsg = msg;
+    }
+    function clearUnreadable(input) {
+        delete input.dataset.fileUnreadable;
+        delete input.dataset.fileUnreadableMsg;
+    }
+    function checkFileReadable(file) {
+        // Resolves {ok:true} or {ok:false,msg}. Reads only a slice — a
+        // moved/deleted/online-only file fails on the very first read.
+        return new Promise(function (resolve) {
+            if (!file) { resolve({ ok: true }); return; }
+            var blob = file.slice(0, Math.min(file.size || 0, 65536));
+            function fail(err) {
+                var notFound = err && err.name === "NotFoundError";
+                resolve({ ok: false, msg: notFound ? READ_ERROR_NOT_FOUND : READ_ERROR_UNREADABLE });
+            }
+            if (typeof blob.arrayBuffer === "function") {
+                blob.arrayBuffer().then(function () { resolve({ ok: true }); }, fail);
+                return;
+            }
+            var reader = new FileReader();
+            reader.onload = function () { resolve({ ok: true }); };
+            reader.onerror = function () { fail(reader.error); };
+            try { reader.readAsArrayBuffer(blob); }
+            catch (err) { fail(err); }
+        });
+    }
+    function runReadabilityCheck(input) {
+        // Live feedback on selection. The authoritative gate is at submit
+        // (verifyReadabilityThenSubmit), since a file can vanish later.
+        var file = input.files && input.files.length ? input.files[0] : null;
+        if (!file) { clearUnreadable(input); return; }
+        checkFileReadable(file).then(function (result) {
+            // Drop a stale result if the applicant changed the file meanwhile.
+            var current = input.files && input.files.length ? input.files[0] : null;
+            if (current !== file) return;
+            if (result.ok) {
+                if (input.dataset.fileUnreadable) {
+                    clearUnreadable(input);
+                    validateSelectedFileInput(input);
+                }
+                return;
+            }
+            setUnreadable(input, result.msg);
+            renderInlineError(input, result.msg, input.name || input.id || 0);
+        });
+    }
+
     function informationProblems() {
         var p = [];
         ["first_name", "last_name"].forEach(function (n) {
@@ -696,6 +760,13 @@
                 p.push({ field: fileInput, msg: selectedFileError });
                 return;
             }
+            if (selectedFile && fileInput.dataset.fileUnreadable === "1") {
+                p.push({
+                    field: fileInput,
+                    msg: fileInput.dataset.fileUnreadableMsg || READ_ERROR_UNREADABLE
+                });
+                return;
+            }
             if (selectedFile) {
                 duplicateCandidates.push({
                     key: [
@@ -748,11 +819,14 @@
         var slot = input.closest("[data-intake-slot]");
         var clearButton = slot && slot.querySelector("[data-file-clear]");
         input.addEventListener("change", function () {
-            validateSelectedFileInput(input);
+            var problem = validateSelectedFileInput(input);
+            clearUnreadable(input);
+            if (!problem) runReadabilityCheck(input);
         });
         if (clearButton) {
             clearButton.addEventListener("click", function () {
                 input.value = "";
+                clearUnreadable(input);
                 clearClientErrorForField(input);
                 updateFileSelection(slot, input, null, "");
                 input.focus();
@@ -912,6 +986,53 @@
         rail[name].addEventListener("click", function () { goToStep(name); });
     });
 
+    /* ── Final readability gate ──────────────────────────────────
+       Metadata can pass while the bytes are gone (file moved/deleted/
+       online-only since selection). The browser only finds out when it
+       reads the file for the POST — which would otherwise fail silently.
+       So re-read every selected file here and block submit with a plain
+       message if any can't be read. */
+    function selectedFileInputsForSubmit() {
+        var inputs = [];
+        document.querySelectorAll("[data-intake-slot]").forEach(function (slot) {
+            if (slot.hidden) return;
+            var input = form.elements[slot.dataset.slotName];
+            if (input && !input.disabled && input.files && input.files.length) {
+                inputs.push(input);
+            }
+        });
+        return inputs;
+    }
+    var submitBtnLabel = submitBtn ? submitBtn.textContent : "";
+    function verifyReadabilityThenSubmit() {
+        var inputs = selectedFileInputsForSubmit();
+        if (!inputs.length) { form.submit(); return; }
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Checking your files…"; }
+        Promise.all(inputs.map(function (input) {
+            return checkFileReadable(input.files[0]).then(function (result) {
+                return { input: input, result: result };
+            });
+        })).then(function (checks) {
+            var problems = [];
+            checks.forEach(function (item) {
+                if (item.result.ok) {
+                    clearUnreadable(item.input);
+                } else {
+                    setUnreadable(item.input, item.result.msg);
+                    problems.push({ field: item.input, msg: item.result.msg });
+                }
+            });
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = submitBtnLabel; }
+            if (problems.length) {
+                currentStep = "documents";
+                renderStep();
+                showErrors(problems);
+                return;
+            }
+            form.submit();
+        });
+    }
+
     // Form submit: validate the review step (steps 1 & 2 already gated)
     form.addEventListener("submit", function (e) {
         for (var i = 0; i < STEPS.length; i++) {
@@ -924,8 +1045,10 @@
                 return;
             }
         }
-        // Clear any visible error before native submit proceeds
-        clearError();
+        // All sync checks pass — confirm the files are still readable before
+        // the native POST goes out (form.submit() bypasses this listener).
+        e.preventDefault();
+        verifyReadabilityThenSubmit();
     });
 
     // Clear the action-bar error when the user resumes editing
