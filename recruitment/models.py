@@ -2423,6 +2423,37 @@ class DeliberationRecord(TimestampedModel):
         return f"{self.application.reference_label} {self.review_stage} deliberation"
 
 
+class ApplicationETERating(TimestampedModel):
+    """The Secretariat's manual Education/Training/Experience rating for a candidate,
+    entered at the CAR stage. Stored per application so it survives CAR draft
+    regenerations; the CAR's ETE component uses it when present."""
+
+    application = models.OneToOneField(
+        RecruitmentApplication,
+        on_delete=models.CASCADE,
+        related_name="ete_rating",
+    )
+    rating = models.DecimalField(max_digits=6, decimal_places=2)
+    recorded_by = models.ForeignKey(
+        RecruitmentUser,
+        on_delete=models.PROTECT,
+        related_name="recorded_ete_ratings",
+    )
+    recorded_by_role = models.CharField(max_length=40, blank=True)
+
+    def clean(self):
+        if self.rating is None or self.rating < 0 or self.rating > 100:
+            raise ValidationError({"rating": "ETE rating must be between 0 and 100."})
+
+    def save(self, *args, **kwargs):
+        if self.recorded_by_id:
+            self.recorded_by_role = self.recorded_by.role
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.application.reference_label} ETE {self.rating}"
+
+
 class ComparativeAssessmentReport(TimestampedModel):
     recruitment_entry = models.ForeignKey(
         PositionPosting,
@@ -2601,6 +2632,7 @@ class ComparativeAssessmentReportItem(TimestampedModel):
     rank_order = models.PositiveIntegerField()
     qualification_outcome = models.CharField(max_length=40, blank=True)
     document_review_score = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True)
+    ete_rating = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True)
     exam_status = models.CharField(max_length=20, blank=True)
     exam_score = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True)
     interview_average_score = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True)

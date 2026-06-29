@@ -107,6 +107,7 @@ from .services import (
     get_competency_rating_template,
     get_published_competency_rating_template,
     compute_competency_rating_score,
+    set_application_ete_rating,
     save_interview_rating,
     save_interview_session,
     save_screening_review,
@@ -9350,6 +9351,32 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             report.consolidated_snapshot["assessment_weight_display"],
             "Document review 40%, exam 20%, interview 40%.",
         )
+
+    def test_car_uses_manual_ete_rating_when_set(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb)
+        # Finalizes the applicant pool and stages an initial CAR draft.
+        self.finalize_deliberation_for_current_stage(application, self.hrmpsb, ranking_position=1)
+        application.refresh_from_db()
+        set_application_ete_rating(application, self.secretariat, Decimal("60"))
+
+        draft = generate_comparative_assessment_report(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data={"summary_notes": "Draft with a manual ETE rating."},
+            finalize=False,
+        )
+        item = draft.items.get(recruitment_case=application.case)
+
+        self.assertEqual(item.ete_rating, Decimal("60.00"))
+        # Overall uses the manual ETE (40%) instead of the screening score.
+        expected = (
+            Decimal("60") * Decimal("0.40")
+            + item.exam_score * Decimal("0.20")
+            + item.interview_average_score * Decimal("0.40")
+        ).quantize(Decimal("0.01"))
+        self.assertEqual(item.assessment_score, expected)
 
     def test_plantilla_recommendation_requires_finalized_car(self):
         application = self.make_application(self.level1_position)

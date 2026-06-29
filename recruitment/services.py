@@ -29,6 +29,7 @@ from reportlab.pdfgen import canvas
 
 from .email_branding import email_branding_context
 from .models import (
+    ApplicationETERating,
     AssessmentWeightConfig,
     AuditLog,
     ComparativeAssessmentReport,
@@ -4541,6 +4542,24 @@ def save_deliberation_record(
     return deliberation_record
 
 
+def get_application_ete_rating(application):
+    return getattr(application, "ete_rating", None)
+
+
+def set_application_ete_rating(application, actor, rating):
+    """Persist the Secretariat's manual ETE rating for a candidate. The CAR's ETE
+    (40%) component uses this value once it is set; until then the CAR falls back to
+    the screening score."""
+    record = getattr(application, "ete_rating", None)
+    if record is None:
+        record = ApplicationETERating(application=application)
+    record.rating = rating
+    record.recorded_by = actor
+    record.full_clean()
+    record.save()
+    return record
+
+
 def _car_candidate_rows(recruitment_entry, review_stage, required_draft=None):
     # The finalized CAR is computed directly from each active candidate's finalized
     # screening/exam/interview outputs and ranked by the assessment score. There is no
@@ -4588,9 +4607,14 @@ def _car_draft_candidate_rows(recruitment_entry, review_stage):
         document_review_score = summary.get("latest_document_review_score", "")
         exam_score = summary.get("latest_exam_score", "")
         interview_average_score = summary.get("latest_interview_average", "")
+        # The CAR's ETE (40%) component uses the Secretariat's manual ETE rating when
+        # one has been entered; until then it falls back to the screening score.
+        manual_ete = getattr(candidate_application, "ete_rating", None)
+        ete_rating = str(manual_ete.rating) if manual_ete else ""
+        ete_component = ete_rating or document_review_score
         assessment_score = _calculate_preliminary_assessment_score(
             candidate_application.level,
-            document_review_score,
+            ete_component,
             exam_score,
             interview_average_score,
         )
@@ -4603,6 +4627,7 @@ def _car_draft_candidate_rows(recruitment_entry, review_stage):
                 "preliminary_rank_order": None,
                 "qualification_outcome": summary.get("latest_qualification_outcome", ""),
                 "document_review_score": document_review_score,
+                "ete_rating": ete_rating,
                 "finalized_document_review_count": summary.get("finalized_screening_count", 0),
                 "exam_status": summary.get("latest_exam_status", ""),
                 "exam_score": exam_score,
@@ -4876,6 +4901,7 @@ def generate_comparative_assessment_report(application, actor, cleaned_data, fin
             document_review_score=(
                 Decimal(row["document_review_score"]) if row["document_review_score"] else None
             ),
+            ete_rating=Decimal(row["ete_rating"]) if row["ete_rating"] else None,
             exam_status=row["exam_status"],
             exam_score=Decimal(row["exam_score"]) if row["exam_score"] else None,
             interview_average_score=(
