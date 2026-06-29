@@ -1333,6 +1333,91 @@ class ScreeningDocumentReview(TimestampedModel):
         return f"{self.screening_record} - {self.requirement_title}: {self.get_status_display()}"
 
 
+def format_weight_percentage(value):
+    """Render a stored weight as a clean percentage label: 60.00 -> "60",
+    62.50 -> "62.5". Keeps the UI free of trailing-zero noise."""
+    try:
+        normalized = Decimal(value or 0).normalize()
+    except (InvalidOperation, TypeError):
+        return "0"
+    # normalize() can yield exponent form (e.g. 6E+1); expand it back out.
+    return f"{normalized:f}"
+
+
+class AssessmentWeightConfig(TimestampedModel):
+    """Global, editable weighting applied across assessments.
+
+    A single shared row holds the percentages the recruitment team tunes for the
+    whole system, so the exam General/Technical split is *configuration* rather than
+    numbers hardcoded in the program. Defaults match the client's exam form
+    (General Ability 60% + Technical 40%). The CAR component weights (ETE/Exam/
+    Interview) join this row when the CAR computation is rebuilt.
+    """
+
+    SINGLETON_PK = 1
+
+    exam_general_weight = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("60.00"),
+    )
+    exam_technical_weight = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("40.00"),
+    )
+    updated_by = models.ForeignKey(
+        RecruitmentUser,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        blank=True,
+        null=True,
+    )
+
+    class Meta:
+        verbose_name = "Assessment weight configuration"
+        verbose_name_plural = "Assessment weight configuration"
+
+    def clean(self):
+        errors = {}
+        for field in ("exam_general_weight", "exam_technical_weight"):
+            value = getattr(self, field)
+            if value is None or value < 0 or value > 100:
+                errors[field] = "Enter a percentage between 0 and 100."
+        if not errors:
+            total = self.exam_general_weight + self.exam_technical_weight
+            if total != Decimal("100"):
+                errors["exam_general_weight"] = (
+                    "General Ability and Technical weights must add up to 100%."
+                )
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        # Enforce the singleton: there is only ever one shared configuration row.
+        self.pk = self.SINGLETON_PK
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls):
+        config = cls.objects.filter(pk=cls.SINGLETON_PK).first()
+        if config is None:
+            config = cls(pk=cls.SINGLETON_PK)
+            config.save()
+        return config
+
+    @property
+    def exam_general_fraction(self):
+        return (self.exam_general_weight or Decimal("0")) / Decimal("100")
+
+    @property
+    def exam_technical_fraction(self):
+        return (self.exam_technical_weight or Decimal("0")) / Decimal("100")
+
+    def __str__(self):
+        return "Assessment weight configuration"
+
+
 class ExamRecord(TimestampedModel):
     class ExamType(models.TextChoices):
         TECHNICAL_PRACTICAL = "technical_practical", "Examination (General and Technical)"
@@ -1560,7 +1645,12 @@ class ExamRecord(TimestampedModel):
     @property
     def component_weight_display(self):
         if self.exam_type == self.ExamType.TECHNICAL_PRACTICAL:
-            return "Overall is computed automatically: General Ability 60% + Technical 40%."
+            config = AssessmentWeightConfig.load()
+            return (
+                "Overall is computed automatically: "
+                f"General Ability {format_weight_percentage(config.exam_general_weight)}% + "
+                f"Technical {format_weight_percentage(config.exam_technical_weight)}%."
+            )
         return "End-user assessment score is used as the overall."
 
     def calculate_policy_score(self):
@@ -1571,7 +1661,11 @@ class ExamRecord(TimestampedModel):
             and self.technical_score is not None
             and self.general_score is not None
         ):
-            score = (self.technical_score * Decimal("0.40")) + (self.general_score * Decimal("0.60"))
+            config = AssessmentWeightConfig.load()
+            score = (
+                (self.technical_score * config.exam_technical_fraction)
+                + (self.general_score * config.exam_general_fraction)
+            )
             return score.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         return self.exam_score
 
@@ -1605,9 +1699,10 @@ class ExamRecord(TimestampedModel):
             if self.general_score is not None
             else self.ComponentResult.NOT_APPLICABLE
         )
-        # The overall score is always computed from the components
-        # (General Ability x0.60 + Technical x0.40). It is never entered or
-        # overwritten by hand, so the CAR can trust it as the authoritative value.
+        # The overall score is always computed from the components using the
+        # configurable General/Technical weights (AssessmentWeightConfig). It is
+        # never entered or overwritten by hand, so the CAR can trust it as the
+        # authoritative value.
         self.exam_score = self.calculate_policy_score()
         has_required_scores = all(
             getattr(self, field_name) is not None
@@ -3238,6 +3333,7 @@ class AuditLog(TimestampedModel):
         INTERNAL_ACCOUNT_ACTIVATED = "internal_account_activated", "Internal Account Activated"
         INTERNAL_ACCOUNT_DEACTIVATED = "internal_account_deactivated", "Internal Account Deactivated"
         INTERNAL_ROLE_CHANGED = "internal_role_changed", "Internal Role Changed"
+        ASSESSMENT_WEIGHTS_UPDATED = "assessment_weights_updated", "Assessment Weights Updated"
         POSITION_CREATED = "position_created", "Position Created"
         POSITION_UPDATED = "position_updated", "Position Updated"
         RECRUITMENT_ENTRY_CREATED = "recruitment_entry_created", "Recruitment Entry Created"

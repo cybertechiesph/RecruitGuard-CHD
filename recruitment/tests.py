@@ -5,6 +5,7 @@ import re
 import urllib.parse
 import uuid
 import zipfile
+from decimal import Decimal
 from datetime import date, timedelta
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -43,6 +44,7 @@ from .forms import (
     WorkflowActionForm,
 )
 from .models import (
+    AssessmentWeightConfig,
     AuditLog,
     ComparativeAssessmentReport,
     ComparativeAssessmentReportItem,
@@ -6080,6 +6082,86 @@ class ExamRecordTests(BaseRecruitmentTestCase):
             {**self.exam_payload(), "operation": "save"},
         )
         self.assertEqual(response.status_code, 403)
+
+
+class AssessmentWeightConfigTests(BaseRecruitmentTestCase):
+    def test_load_returns_singleton_with_defaults(self):
+        config = AssessmentWeightConfig.load()
+        self.assertEqual(config.pk, AssessmentWeightConfig.SINGLETON_PK)
+        self.assertEqual(config.exam_general_weight, Decimal("60.00"))
+        self.assertEqual(config.exam_technical_weight, Decimal("40.00"))
+        # Loading again reuses the one shared row rather than creating another.
+        AssessmentWeightConfig.load()
+        self.assertEqual(AssessmentWeightConfig.objects.count(), 1)
+
+    def test_exam_score_uses_configured_default_weights(self):
+        record = ExamRecord(
+            exam_type=ExamRecord.ExamType.TECHNICAL_PRACTICAL,
+            general_score=Decimal("90"),
+            technical_score=Decimal("80"),
+        )
+        # 90 * 0.60 + 80 * 0.40 = 86
+        self.assertEqual(record.calculate_policy_score(), Decimal("86.00"))
+
+    def test_exam_score_follows_reconfigured_weights(self):
+        config = AssessmentWeightConfig.load()
+        config.exam_general_weight = Decimal("50.00")
+        config.exam_technical_weight = Decimal("50.00")
+        config.save()
+        record = ExamRecord(
+            exam_type=ExamRecord.ExamType.TECHNICAL_PRACTICAL,
+            general_score=Decimal("90"),
+            technical_score=Decimal("80"),
+        )
+        # 90 * 0.50 + 80 * 0.50 = 85 — the formula now tracks the saved config.
+        self.assertEqual(record.calculate_policy_score(), Decimal("85.00"))
+
+    def test_weights_must_sum_to_100(self):
+        config = AssessmentWeightConfig.load()
+        config.exam_general_weight = Decimal("70.00")
+        config.exam_technical_weight = Decimal("40.00")
+        with self.assertRaises(ValidationError):
+            config.full_clean()
+
+    def test_settings_page_requires_entry_manager_role(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.hrmpsb)
+        response = client.get(reverse("assessment-weights"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_secretariat_can_view_and_update_weights(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        self.assertEqual(client.get(reverse("assessment-weights")).status_code, 200)
+
+        response = client.post(
+            reverse("assessment-weights"),
+            {"exam_general_weight": "55", "exam_technical_weight": "45"},
+        )
+        self.assertEqual(response.status_code, 302)
+        config = AssessmentWeightConfig.load()
+        self.assertEqual(config.exam_general_weight, Decimal("55.00"))
+        self.assertEqual(config.exam_technical_weight, Decimal("45.00"))
+        self.assertEqual(config.updated_by_id, self.secretariat.id)
+        self.assertTrue(
+            AuditLog.objects.filter(
+                action=AuditLog.Action.ASSESSMENT_WEIGHTS_UPDATED,
+                actor=self.secretariat,
+            ).exists()
+        )
+
+    def test_view_rejects_weights_that_do_not_sum_to_100(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("assessment-weights"),
+            {"exam_general_weight": "70", "exam_technical_weight": "40"},
+        )
+        self.assertEqual(response.status_code, 200)
+        config = AssessmentWeightConfig.load()
+        # Rejected — the stored config stays at the defaults.
+        self.assertEqual(config.exam_general_weight, Decimal("60.00"))
+        self.assertEqual(config.exam_technical_weight, Decimal("40.00"))
 
 
 class ApplicantUploadValidationTests(TestCase):

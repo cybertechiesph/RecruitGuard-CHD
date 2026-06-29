@@ -1,6 +1,7 @@
 import re
 import unicodedata
 from datetime import timedelta
+from decimal import Decimal
 
 from django import forms
 from django.conf import settings
@@ -24,6 +25,7 @@ from .captcha import (
     validate_captcha_answer,
 )
 from .models import (
+    AssessmentWeightConfig,
     AuditLog,
     ComparativeAssessmentReport,
     ComparativeAssessmentReportItem,
@@ -1329,6 +1331,43 @@ CompetencyDefinitionFormSet = inlineformset_factory(
     extra=0,
     can_delete=True,
 )
+
+
+class AssessmentWeightConfigForm(BootstrapFormMixin, forms.ModelForm):
+    class Meta:
+        model = AssessmentWeightConfig
+        fields = ["exam_general_weight", "exam_technical_weight"]
+        widgets = {
+            "exam_general_weight": forms.NumberInput(
+                attrs={"step": "0.01", "min": "0", "max": "100"}
+            ),
+            "exam_technical_weight": forms.NumberInput(
+                attrs={"step": "0.01", "min": "0", "max": "100"}
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["exam_general_weight"].label = "General Ability weight (%)"
+        self.fields["exam_general_weight"].help_text = (
+            "Share of the exam score that comes from the General Ability component."
+        )
+        self.fields["exam_technical_weight"].label = "Technical weight (%)"
+        self.fields["exam_technical_weight"].help_text = (
+            "Share of the exam score that comes from the Technical component."
+        )
+        self._apply_bootstrap()
+
+    def clean(self):
+        cleaned = super().clean()
+        general = cleaned.get("exam_general_weight")
+        technical = cleaned.get("exam_technical_weight")
+        if general is not None and technical is not None:
+            if general + technical != Decimal("100"):
+                raise forms.ValidationError(
+                    "The General Ability and Technical weights must add up to 100%."
+                )
+        return cleaned
 
 
 class CaseClosureForm(BootstrapFormMixin, forms.Form):

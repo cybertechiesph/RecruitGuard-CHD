@@ -29,6 +29,7 @@ from reportlab.pdfgen import canvas
 
 from .email_branding import email_branding_context
 from .models import (
+    AssessmentWeightConfig,
     AuditLog,
     ComparativeAssessmentReport,
     ComparativeAssessmentReportItem,
@@ -219,6 +220,38 @@ def record_system_audit_event(actor, action, description, metadata=None):
         description=description,
         metadata=metadata,
     )
+
+
+def get_assessment_weight_config():
+    """Return the single shared assessment-weight configuration row."""
+    return AssessmentWeightConfig.load()
+
+
+@transaction.atomic
+def update_assessment_weights(actor, config_form):
+    """Persist the recruitment team's edits to the global assessment weights and
+    record a system-level audit entry. The form has already validated that the
+    exam sub-weights add up to 100%."""
+    config = config_form.save(commit=False)
+    before = AssessmentWeightConfig.load()
+    previous = {
+        "exam_general_weight": str(before.exam_general_weight),
+        "exam_technical_weight": str(before.exam_technical_weight),
+    }
+    config.updated_by = actor
+    config.full_clean()
+    config.save()
+    record_system_audit_event(
+        actor=actor,
+        action=AuditLog.Action.ASSESSMENT_WEIGHTS_UPDATED,
+        description="Updated assessment weight configuration.",
+        metadata={
+            "previous": previous,
+            "exam_general_weight": str(config.exam_general_weight),
+            "exam_technical_weight": str(config.exam_technical_weight),
+        },
+    )
+    return config
 
 
 def _request_ip_address(request):
