@@ -189,9 +189,9 @@
             {% endif %}
 
             
-            {% if current_detail_tab.key == "deliberation" %}
-            <div class="rg-cws-stage-section" id="cws-deliberation">
-                {% include "internal_includes/stage_titlebar.html" with title="Deliberation / CAR" locked=deliberation_locked %}
+            {% if current_detail_tab.key == "deliberation" or current_detail_tab.key == "car" %}
+            <div class="rg-cws-stage-section" id="cws-{{ current_detail_tab.key }}">
+                {% include "internal_includes/stage_titlebar.html" with title=current_detail_tab.label locked=deliberation_locked %}
 
                 {% if deliberation_requires_vacancy_closure %}
 

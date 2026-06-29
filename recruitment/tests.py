@@ -637,6 +637,9 @@ class BaseRecruitmentTestCase(TestCase):
                     cleaned_data={"summary_notes": "Draft CAR prepared for HRMPSB deliberation."},
                     finalize=False,
                 )
+            # Plantilla no longer records an in-system deliberation — the CAR is the
+            # gate now. Leave the draft staged and return without a deliberation record.
+            return None
         return save_deliberation_record(
             application=application,
             actor=actor,
@@ -9023,47 +9026,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
     def test_user_full_name_falls_back_to_username_for_display(self):
         self.assertEqual(self.applicant.get_full_name(), self.applicant.username)
 
-    def test_plantilla_deliberation_requires_finalized_applicant_pool(self):
-        application = self.make_application(self.level1_position)
-        self.move_application_to_hrmpsb_review(application)
-        self.finalize_interview_for_current_stage(application, self.hrmpsb)
-
-        with self.assertRaisesMessage(
-            ValueError,
-            "Plantilla deliberation and CAR generation are available only after the vacancy is closed",
-        ):
-            save_deliberation_record(
-                application=application,
-                actor=self.hrmpsb,
-                cleaned_data=self.deliberation_payload(),
-                finalize=True,
-            )
-
-        update_recruitment_entry_status(
-            self.level1_position,
-            self.secretariat,
-            PositionPosting.EntryStatus.CLOSED,
-        )
-        application.position.refresh_from_db()
-
-        generate_comparative_assessment_report(
-            application=application,
-            actor=self.secretariat,
-            cleaned_data={"summary_notes": "Draft CAR prepared after applicant pool finalization."},
-            finalize=False,
-        )
-        deliberation_record = save_deliberation_record(
-            application=application,
-            actor=self.hrmpsb,
-            cleaned_data=self.deliberation_payload(),
-            finalize=True,
-        )
-
-        self.assertTrue(deliberation_record.is_finalized)
-        self.level1_position.refresh_from_db()
-        self.assertTrue(self.level1_position.applicant_pool_is_finalized)
-
-    def test_hrms_prepares_car_draft_before_hrmpsb_deliberation(self):
+    def test_hrms_prepares_car_draft_from_finalized_pool(self):
         application = self.make_application(self.level1_position)
         self.move_application_to_hrmpsb_review(application)
         self.finalize_interview_for_current_stage(application, self.hrmpsb, rating_score="91.25")
@@ -9082,17 +9045,6 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         self.assertIsNone(draft_item.deliberation_record)
         self.assertEqual(str(draft_item.interview_average_score), "100.00")
         self.assertEqual(draft_item.rank_order, 1)
-
-        deliberation_record = save_deliberation_record(
-            application=application,
-            actor=self.hrmpsb,
-            cleaned_data=self.deliberation_payload(),
-            finalize=True,
-        )
-        self.assertEqual(deliberation_record.comparative_assessment_report, draft_report)
-        self.assertEqual(deliberation_record.quorum_status, DeliberationRecord.QuorumStatus.MET)
-        self.assertTrue(deliberation_record.recommendation)
-        self.assertTrue(deliberation_record.attendance_notes)
 
     def test_car_autosave_does_not_generate_report_versions_or_files(self):
         application = self.make_application(self.level1_position)
@@ -9165,150 +9117,6 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             1,
         )
 
-    def test_deliberation_autosave_accepts_partial_draft(self):
-        application = self.make_application(self.level1_position)
-        self.move_application_to_hrmpsb_review(application)
-        self.finalize_interview_for_current_stage(application, self.hrmpsb, rating_score="91.25")
-        self.finalize_applicant_pool_for_test(application.position)
-        generate_comparative_assessment_report(
-            application=application,
-            actor=self.secretariat,
-            cleaned_data={"summary_notes": "Draft CAR prepared for partial deliberation."},
-            finalize=False,
-        )
-
-        client = Client()
-        self.force_login_with_mfa(client, self.hrmpsb)
-        response = client.post(
-            reverse("deliberation-record", kwargs={"pk": application.pk}),
-            {
-                "operation": "save",
-                "deliberation_minutes": "Partial notes captured by autosave.",
-                "decision_support_summary": "",
-                "recommendation": "",
-                "quorum_status": "",
-                "attendance_notes": "",
-                "ranking_position": "",
-                "ranking_notes": "",
-            },
-            HTTP_X_REQUESTED_WITH="RG-Autosave",
-        )
-
-        self.assertEqual(response.status_code, 204)
-        deliberation_record = DeliberationRecord.objects.get(application=application)
-        self.assertFalse(deliberation_record.is_finalized)
-        self.assertEqual(deliberation_record.deliberation_minutes, "Partial notes captured by autosave.")
-        self.assertEqual(deliberation_record.decision_support_summary, "")
-        self.assertEqual(deliberation_record.quorum_status, DeliberationRecord.QuorumStatus.NOT_RECORDED)
-
-        response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
-        self.assertContains(response, "Finalize deliberation to unlock the CAR")
-        self.assertTrue(response.context["car_requires_finalized_deliberation"])
-
-    def test_slice_e_context_exposes_car_readiness_flags(self):
-        application = self.make_application(self.level1_position)
-        self.move_application_to_hrmpsb_review(application)
-        self.finalize_interview_for_current_stage(application, self.hrmpsb, rating_score="91.25")
-        self.finalize_applicant_pool_for_test(application.position)
-        generate_comparative_assessment_report(
-            application=application,
-            actor=self.secretariat,
-            cleaned_data={"summary_notes": "Draft CAR prepared for HRMPSB review."},
-            finalize=False,
-        )
-
-        client = Client()
-        self.force_login_with_mfa(client, self.hrmpsb)
-        response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "CAR is the next step")
-        self.assertTrue(response.context["car_requires_deliberation"])
-        self.assertFalse(response.context["car_readiness"]["can_finalize"])
-        self.assertIn(
-            "Finalize at least one Plantilla deliberation record",
-            response.context["car_readiness"]["finalize_block_message"],
-        )
-
-    def test_locked_deliberation_uses_slice_e_wrapper(self):
-        application = self.make_application(self.level1_position)
-        self.move_application_to_hrmpsb_review(application)
-        self.finalize_interview_for_current_stage(application, self.hrmpsb, rating_score="91.25")
-        self.finalize_applicant_pool_for_test(application.position)
-        generate_comparative_assessment_report(
-            application=application,
-            actor=self.secretariat,
-            cleaned_data={"summary_notes": "Draft CAR prepared for HRMPSB review."},
-            finalize=False,
-        )
-        save_deliberation_record(
-            application=application,
-            actor=self.hrmpsb,
-            cleaned_data=self.deliberation_payload(),
-            finalize=True,
-        )
-
-        client = Client()
-        self.force_login_with_mfa(client, self.hrmpsb)
-        response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context["current_detail_tab"]["key"], "deliberation")
-        self.assertContains(response, "rg-del-locked")
-        self.assertContains(response, "Deliberation record")
-        self.assertContains(response, "Panel reviewed the finalized applicant pool.")
-        self.assertContains(response, "Quorum and attendance were recorded.")
-        self.assertContains(response, "Ranking basis recorded.")
-        self.assertNotContains(response, "rg-cws-locked-frame")
-
-    def test_plantilla_deliberation_requires_car_draft_after_pool_finalized(self):
-        application = self.make_application(self.level1_position)
-        self.move_application_to_hrmpsb_review(application)
-        self.finalize_interview_for_current_stage(application, self.hrmpsb)
-        self.finalize_applicant_pool_for_test(application.position)
-
-        with self.assertRaisesMessage(
-            ValueError,
-            "Prepare the CAR draft before recording HRMPSB deliberation.",
-        ):
-            save_deliberation_record(
-                application=application,
-                actor=self.hrmpsb,
-                cleaned_data=self.deliberation_payload(),
-                finalize=True,
-            )
-
-    def test_final_car_requires_hrmpsb_endorsement_against_latest_draft(self):
-        application = self.make_application(self.level1_position)
-        self.move_application_to_hrmpsb_review(application)
-        self.finalize_interview_for_current_stage(application, self.hrmpsb)
-        self.finalize_applicant_pool_for_test(application.position)
-
-        generate_comparative_assessment_report(
-            application=application,
-            actor=self.secretariat,
-            cleaned_data={"summary_notes": "Original draft CAR."},
-            finalize=False,
-        )
-        self.finalize_deliberation_for_current_stage(application, self.hrmpsb, ranking_position=1)
-        generate_comparative_assessment_report(
-            application=application,
-            actor=self.secretariat,
-            cleaned_data={"summary_notes": "Updated draft after endorsement."},
-            finalize=False,
-        )
-
-        with self.assertRaisesMessage(
-            ValueError,
-            "Finalize HRMPSB deliberation against the latest CAR draft before finalizing the CAR.",
-        ):
-            generate_comparative_assessment_report(
-                application=application,
-                actor=self.secretariat,
-                cleaned_data={"summary_notes": "Attempted final CAR from stale endorsement."},
-                finalize=True,
-            )
-
     def test_car_generation_requires_finalized_applicant_pool(self):
         application = self.make_application(self.level1_position)
         self.move_application_to_hrmpsb_review(application)
@@ -9365,12 +9173,6 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         self.assertEqual(item.exam_status, ExamRecord.ExamStatus.COMPLETED)
         self.assertEqual(str(item.exam_score), "88.50")
         self.assertEqual(str(item.interview_average_score), "100.00")
-        self.assertEqual(item.recommendation, "HRMPSB recommends this ranking based on the CAR draft.")
-        self.assertEqual(item.decision_support_summary, "HRMPSB recommendation summary for the CAR.")
-        self.assertEqual(
-            report.consolidated_snapshot["ranked_candidates"][0]["decision_support_summary"],
-            "HRMPSB recommendation summary for the CAR.",
-        )
         self.assertEqual(
             report.consolidated_snapshot["ranked_candidates"][0]["document_review_outcome"],
             ScreeningRecord.QualificationOutcome.QUALIFIED,
@@ -9517,43 +9319,37 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         primary_item = report.items.get(recruitment_case=primary_application.case)
         secondary_item = report.items.get(recruitment_case=secondary_application.case)
 
-        self.assertEqual(primary_item.rank_order, 2)
+        # Ranking is purely computed now (no HRMPSB override) — higher score ranks first.
+        self.assertEqual(primary_item.rank_order, 1)
         self.assertEqual(primary_item.preliminary_rank_order, 1)
         # interview 90->level 4->100: 90*0.20 + 90*0.40 + 100*0.40 = 94.00
         self.assertEqual(str(primary_item.assessment_score), "94.00")
         self.assertEqual(str(primary_item.document_review_score), "90.00")
-        self.assertIn("office-fit concerns", primary_item.ranking_notes)
-        self.assertEqual(secondary_item.rank_order, 1)
+        self.assertEqual(secondary_item.rank_order, 2)
         self.assertEqual(secondary_item.preliminary_rank_order, 2)
         # interview 80->level 3->75: 80*0.20 + 80*0.40 + 75*0.40 = 78.00
         self.assertEqual(str(secondary_item.assessment_score), "78.00")
-        self.assertIn("rank adjustment", secondary_item.ranking_notes)
         self.assertEqual(
             report.consolidated_snapshot["assessment_weight_display"],
             "Document review 20%, exam 40%, interview 40%.",
         )
 
-    def test_plantilla_recommendation_requires_deliberation_and_car(self):
+    def test_plantilla_recommendation_requires_finalized_car(self):
         application = self.make_application(self.level1_position)
         self.move_application_to_hrmpsb_review(application)
         self.finalize_interview_for_current_stage(application, self.hrmpsb)
         self.finalize_applicant_pool_for_test(self.level1_position)
         application.position.refresh_from_db()
 
-        with self.assertRaisesMessage(
-            ValueError,
-            "Finalize the deliberation record before recommending this Plantilla application.",
-        ):
-            process_workflow_action(application, self.hrmpsb, "recommend", "Attempted without deliberation.")
-
-        self.finalize_deliberation_for_current_stage(application, self.hrmpsb, ranking_position=1)
-
+        # Plantilla has no in-system deliberation anymore — the finalized CAR is the gate.
         with self.assertRaisesMessage(
             ValueError,
             "Finalize the Comparative Assessment Report before recommending this Plantilla application.",
         ):
             process_workflow_action(application, self.hrmpsb, "recommend", "Attempted without CAR.")
 
+        # Stages the CAR draft, then finalizing it clears the gate.
+        self.finalize_deliberation_for_current_stage(application, self.hrmpsb, ranking_position=1)
         report = self.finalize_car_for_current_stage(application, self.hrmpsb)
         self.assertEqual(ComparativeAssessmentReportItem.objects.filter(report=report).count(), 1)
 
@@ -9990,15 +9786,9 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         for application in applications:
             application.refresh_from_db()
             application.case.refresh_from_db()
-            deliberation_record = DeliberationRecord.objects.get(
-                application=application,
-                review_stage=RecruitmentCase.Stage.HRMPSB_REVIEW,
-            )
             self.assertEqual(application.status, RecruitmentApplication.Status.HRMPSB_REVIEW)
             self.assertEqual(application.current_handler_role, RecruitmentUser.Role.HRMPSB_MEMBER)
             self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.HRMPSB_REVIEW)
-            self.assertFalse(deliberation_record.is_finalized)
-            self.assertIsNone(deliberation_record.finalized_by)
             self.assertTrue(
                 AuditLog.objects.filter(
                     application=application,
@@ -10153,7 +9943,7 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         self.assertNotContains(response, "Review the submission packet")
 
         packet = build_submission_packet(application)
-        self.assertTrue(packet["summary"]["has_deliberation_record"])
+        self.assertTrue(packet["summary"]["has_comparative_assessment_report"])
 
     def test_cos_application_detail_exposes_decision_wizard(self):
         application = self.make_application(self.cos_position)
@@ -10238,7 +10028,7 @@ class E2ESeedCommandTests(BaseRecruitmentTestCase):
             deliberation.case.current_stage,
             RecruitmentCase.Stage.HRMPSB_REVIEW,
         )
-        self.assertEqual(get_current_workflow_section(deliberation), "deliberation")
+        self.assertEqual(get_current_workflow_section(deliberation), "car")
         self.assertTrue(
             deliberation.interview_sessions.filter(is_finalized=True).exists()
         )

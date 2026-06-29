@@ -2603,8 +2603,6 @@ class ComparativeAssessmentReportItem(TimestampedModel):
             errors["deliberation_record"] = (
                 "CAR items must stay linked to the same recruitment case as the deliberation record."
             )
-        if self.report_id and self.report.is_finalized and not self.deliberation_record_id:
-            errors["deliberation_record"] = "Finalized CAR items must reference the endorsed HRMPSB deliberation."
         if self.rank_order < 1:
             errors["rank_order"] = "CAR rank order must be a positive whole number."
         if self.preliminary_rank_order is not None and self.preliminary_rank_order < 1:

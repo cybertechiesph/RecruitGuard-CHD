@@ -182,6 +182,7 @@ WORKFLOW_SECTION_LABELS = {
     "exam": "Exam",
     "interview": "Interview",
     "deliberation": "Deliberation",
+    "car": "Comparative Assessment",
     "decision": "Decision",
     "completion": "Completion",
     "actions": "Actions",
@@ -1273,7 +1274,7 @@ def user_can_prepare_plantilla_car(user, application):
         or application.status != RecruitmentApplication.Status.HRMPSB_REVIEW
         or case.current_stage != CAR_REVIEW_STAGE
         or case.case_status != RecruitmentCase.CaseStatus.ACTIVE
-        or get_current_workflow_section(application) != "deliberation"
+        or get_current_workflow_section(application) != "car"
     ):
         return False
     return user.role in PLANTILLA_CAR_PREPARATION_ROLES_BY_LEVEL.get(application.level, set())
@@ -2374,7 +2375,7 @@ def _workflow_detail_sequence(application):
             return ["screening", "exam", "interview", "deliberation", "decision"]
         return ["screening", "exam", "actions"]
     if current_stage == RecruitmentCase.Stage.HRMPSB_REVIEW:
-        return ["interview", "deliberation", "actions"]
+        return ["interview", "car", "actions"]
     if current_stage == RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW:
         return ["decision"]
     if current_stage in {
@@ -2396,14 +2397,9 @@ def _workflow_section_is_complete(application, section_key):
     if section_key == "interview":
         return interview_is_finalized_for_current_stage(application)
     if section_key == "deliberation":
-        if not deliberation_is_finalized_for_current_stage(application):
-            return False
-        if (
-            application.branch == PositionPosting.Branch.PLANTILLA
-            and get_current_review_stage(application) == RecruitmentCase.Stage.HRMPSB_REVIEW
-        ):
-            return car_is_finalized_for_current_stage(application)
-        return True
+        return deliberation_is_finalized_for_current_stage(application)
+    if section_key == "car":
+        return car_is_finalized_for_current_stage(application)
     if section_key == "actions":
         return False
     return True
@@ -2460,26 +2456,15 @@ def _workflow_progress_block_message(application, section_key=None):
         return "Finalize the examination record before proceeding to the next workflow task."
     if section_key == "interview":
         return "Finalize the interview task before proceeding to the next workflow task."
-    if section_key == "deliberation":
+    if section_key == "car":
         if (
             application_requires_finalized_applicant_pool(application)
             and not application_has_finalized_applicant_pool(application)
         ):
             return get_applicant_pool_finalization_block_message(application)
-        if (
-            application.branch == PositionPosting.Branch.COS
-            and get_current_review_stage(application) == RecruitmentCase.Stage.HRM_CHIEF_REVIEW
-        ):
-            return "Finalize the deliberation record before endorsing this COS application."
-        if (
-            application.branch == PositionPosting.Branch.PLANTILLA
-            and get_current_review_stage(application) == RecruitmentCase.Stage.HRMPSB_REVIEW
-        ):
-            if not deliberation_is_finalized_for_current_stage(application):
-                return "Finalize the deliberation record before recommending this Plantilla application."
-            if not car_is_finalized_for_current_stage(application):
-                return "Finalize the Comparative Assessment Report before recommending this Plantilla application."
-        return "Finalize the deliberation record before proceeding to the next workflow task."
+        return "Finalize the Comparative Assessment Report before recommending this Plantilla application."
+    if section_key == "deliberation":
+        return "Finalize the deliberation record before endorsing this COS application."
     return "Complete the current workflow task before proceeding."
 
 
@@ -2991,7 +2976,7 @@ def user_can_manage_comparative_assessment_report(user, application):
         return False
     if current_stage != CAR_REVIEW_STAGE:
         return False
-    if get_current_workflow_section(application) != "deliberation":
+    if get_current_workflow_section(application) != "car":
         return False
     return user_can_prepare_plantilla_car(user, application)
 
@@ -3389,7 +3374,7 @@ def build_submission_packet(application):
         missing_components.append("Finalized examination record")
     if not interview_sessions:
         missing_components.append("Finalized interview session")
-    if not deliberation_record:
+    if application.branch == PositionPosting.Branch.COS and not deliberation_record:
         missing_components.append("Finalized deliberation record")
     if application.branch == PositionPosting.Branch.PLANTILLA and not comparative_assessment_report:
         missing_components.append("Finalized Comparative Assessment Report")
@@ -4567,98 +4552,13 @@ def save_deliberation_record(
 
 
 def _car_candidate_rows(recruitment_entry, review_stage, required_draft=None):
-    rows = []
-    deliberation_records = list(_finalized_deliberation_queryset_for_entry(recruitment_entry, review_stage))
-    if not deliberation_records:
-        raise ValueError(
-            "Finalize at least one Plantilla deliberation record before generating the Comparative Assessment Report."
-        )
-    deliberated_case_ids = {record.recruitment_case_id for record in deliberation_records}
-    pending_cases = (
-        RecruitmentCase.objects.select_related("application")
-        .filter(
-            application__position=recruitment_entry,
-            application__branch=PositionPosting.Branch.PLANTILLA,
-            application__status=RecruitmentApplication.Status.HRMPSB_REVIEW,
-            current_stage=review_stage,
-            case_status=RecruitmentCase.CaseStatus.ACTIVE,
-            is_stage_locked=False,
-        )
-        .exclude(id__in=deliberated_case_ids)
-    )
-    if pending_cases.exists():
-        pending_references = "; ".join(
-            case.application.reference_label for case in pending_cases.order_by("application__reference_number", "id")
-        )
-        raise ValueError(
-            "Finalize deliberation records for all active applicants in this vacancy before generating the CAR. "
-            f"Pending: {pending_references}."
-        )
-    if any(record.ranking_position is None for record in deliberation_records):
-        raise ValueError(
-            "All finalized Plantilla deliberation records for this recruitment entry must include a ranking position before CAR generation."
-        )
-    rank_positions = [record.ranking_position for record in deliberation_records]
-    if len(rank_positions) != len(set(rank_positions)):
-        raise ValueError(
-            "Comparative Assessment Report generation requires unique ranking positions within the same recruitment entry."
-        )
-    if required_draft is not None:
-        missing_draft_references = [
-            record.application.reference_label
-            for record in deliberation_records
-            if record.comparative_assessment_report_id != required_draft.id
-        ]
-        if missing_draft_references:
-            pending_references = "; ".join(missing_draft_references)
-            raise ValueError(
-                "Finalize HRMPSB deliberation against the latest CAR draft before finalizing the CAR. "
-                f"Pending: {pending_references}."
-            )
-
-    for record in deliberation_records:
-        summary = record.consolidated_snapshot.get("summary", {})
-        document_review_score = summary.get("latest_document_review_score", "")
-        exam_score = summary.get("latest_exam_score", "")
-        interview_average_score = summary.get("latest_interview_average", "")
-        assessment_score = _calculate_preliminary_assessment_score(
-            record.level,
-            document_review_score,
-            exam_score,
-            interview_average_score,
-        )
-        rows.append(
-            {
-                "application": record.application,
-                "recruitment_case": record.recruitment_case,
-                "deliberation_record": record,
-                "rank_order": record.ranking_position,
-                "preliminary_rank_order": None,
-                "qualification_outcome": summary.get("latest_qualification_outcome", ""),
-                "document_review_score": document_review_score,
-                "finalized_document_review_count": summary.get("finalized_screening_count", 0),
-                "exam_status": summary.get("latest_exam_status", ""),
-                "exam_score": exam_score,
-                "exam_components": summary.get("latest_exam_components", ""),
-                "finalized_exam_count": summary.get("finalized_exam_count", 0),
-                "interview_average_score": interview_average_score,
-                "finalized_interview_count": summary.get("finalized_interview_count", 0),
-                "assessment_score": assessment_score,
-                "recommendation": record.recommendation,
-                "decision_support_summary": record.decision_support_summary,
-                "ranking_notes": record.ranking_notes,
-            }
-        )
-    scored_rows = sorted(
-        [row for row in rows if row["assessment_score"] is not None],
-        key=lambda row: (
-            -row["assessment_score"],
-            row["application"].reference_number or row["application"].reference_label,
-        ),
-    )
-    for index, row in enumerate(scored_rows, start=1):
-        row["preliminary_rank_order"] = index
-    return sorted(rows, key=lambda row: (row["rank_order"], row["application"].reference_number or ""))
+    # The finalized CAR is computed directly from each active candidate's finalized
+    # screening/exam/interview outputs and ranked by the assessment score. There is no
+    # separate HRMPSB deliberation/ranking step for Plantilla anymore, so the final
+    # rows are the same computed-and-ranked rows as the draft. ``required_draft`` is
+    # accepted for call-site compatibility; the draft's existence is enforced by the
+    # caller before finalizing.
+    return _car_draft_candidate_rows(recruitment_entry, review_stage)
 
 
 def _active_plantilla_cases_for_entry(recruitment_entry, review_stage):
@@ -6439,9 +6339,6 @@ def process_workflow_action(application, actor, action, remarks):
         and application.case.current_stage == RecruitmentCase.Stage.HRMPSB_REVIEW
         and action == "recommend"
     ):
-        deliberation_record = get_deliberation_record(application, stage=application.case.current_stage)
-        if not deliberation_record or not deliberation_record.is_finalized:
-            raise ValueError("Finalize the deliberation record before recommending this Plantilla case.")
         comparative_assessment_report = get_comparative_assessment_report(
             application,
             stage=application.case.current_stage,

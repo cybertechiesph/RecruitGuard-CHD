@@ -571,8 +571,6 @@ class Command(BaseCommand):
             cleaned_data={"summary_notes": f"E2E CAR draft for {code}."},
             finalize=False,
         )
-        for index, application in enumerate(applications, start=1):
-            self._finalize_deliberation(application, users["hrmpsb"], rank=index)
         if finalize_car:
             report = generate_comparative_assessment_report(
                 application=applications[0],
