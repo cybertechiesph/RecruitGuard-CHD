@@ -9407,6 +9407,27 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         item = draft.items.get(recruitment_case=application.case)
         self.assertEqual(item.ete_rating, Decimal("65.00"))
 
+    def test_car_finalize_records_quorum_attestation(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb)
+        self.finalize_deliberation_for_current_stage(application, self.hrmpsb, ranking_position=1)
+
+        report = generate_comparative_assessment_report(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data={
+                "summary_notes": "Finalized CAR.",
+                "quorum_met": True,
+                "members_present": 5,
+            },
+            finalize=True,
+        )
+
+        self.assertTrue(report.is_finalized)
+        self.assertIs(report.quorum_met, True)
+        self.assertEqual(report.members_present, 5)
+
     def test_plantilla_recommendation_requires_finalized_car(self):
         application = self.make_application(self.level1_position)
         self.move_application_to_hrmpsb_review(application)

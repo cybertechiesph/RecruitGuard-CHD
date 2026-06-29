@@ -2469,6 +2469,8 @@ class ComparativeAssessmentReport(TimestampedModel):
     )
     generated_by_role = models.CharField(max_length=40, blank=True)
     summary_notes = models.TextField(blank=True)
+    quorum_met = models.BooleanField(blank=True, null=True)
+    members_present = models.PositiveSmallIntegerField(blank=True, null=True)
     consolidated_snapshot = models.JSONField(default=dict, blank=True)
     version_number = models.PositiveIntegerField(default=1)
     evidence_item = models.ForeignKey(

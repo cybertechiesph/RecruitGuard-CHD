@@ -200,9 +200,21 @@ HRM Chief on COS). Two states:
                 <p class="mb-2">
                     Once finalized, this CAR locks in. It can't be changed without an authorized reopen, and the case moves to Final Selection / Decision.
                 </p>
-                <p class="mb-0">
-                    Make sure the candidate rankings and the HRMPSB recommendation are correct before continuing.
+                <p class="mb-2">
+                    Make sure the candidate rankings are correct before continuing.
                 </p>
+                <div class="rg-car-quorum">
+                    <label class="form-label" for="car-quorum-met">Quorum met during deliberation?</label>
+                    <select id="car-quorum-met" name="quorum_met" form="car-form" class="form-select form-select-sm" style="max-width:140px;">
+                        <option value="">—</option>
+                        <option value="yes">Yes</option>
+                        <option value="no">No</option>
+                    </select>
+                    <label class="form-label mt-2" for="car-members-present">HRMPSB members present</label>
+                    <input type="number" id="car-members-present" name="members_present" form="car-form"
+                           class="form-control form-control-sm" min="0" max="20" step="1" style="max-width:140px;">
+                    <div class="form-text">Recorded with the finalized report (the board's deliberation itself is held on paper).</div>
+                </div>
             </div>
             <div class="modal-footer" style="border-top:1px solid #e2e8f0; padding:0.875rem 1.25rem; display:flex; justify-content:flex-end; gap:0.625rem;">
                 <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">
@@ -370,6 +382,16 @@ HRM Chief on COS). Two states:
             </li>
             {% endfor %}
         </ul>
+    {% endif %}
+
+    {% if current_comparative_assessment_report.quorum_met is not None or current_comparative_assessment_report.members_present is not None %}
+        <p class="rg-del-car__summary-notes">
+            <strong>Quorum:</strong>
+            {% if current_comparative_assessment_report.quorum_met %}Met{% elif current_comparative_assessment_report.quorum_met is False %}Not met{% else %}Not recorded{% endif %}
+            {% if current_comparative_assessment_report.members_present is not None %}
+                &middot; {{ current_comparative_assessment_report.members_present }} member{{ current_comparative_assessment_report.members_present|pluralize }} present
+            {% endif %}
+        </p>
     {% endif %}
 
     {% if current_comparative_assessment_report.summary_notes %}

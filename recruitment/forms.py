@@ -2235,20 +2235,38 @@ class DeliberationRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, f
 
 
 class ComparativeAssessmentReportForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.ModelForm):
+    quorum_met = forms.ChoiceField(
+        choices=[("", "—"), ("yes", "Yes"), ("no", "No")],
+        required=False,
+    )
+
     class Meta:
         model = ComparativeAssessmentReport
         fields = [
             "summary_notes",
+            "members_present",
         ]
         widgets = {
             "summary_notes": forms.Textarea(attrs={"rows": 4}),
+            "members_present": forms.NumberInput(attrs={"min": "0", "max": "20", "step": "1"}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["summary_notes"].label = "CAR Summary Notes"
         self.fields["summary_notes"].required = False
+        self.fields["members_present"].label = "HRMPSB members present"
+        self.fields["members_present"].required = False
+        self.fields["quorum_met"].label = "Quorum met"
         self._apply_bootstrap()
+
+    def clean_quorum_met(self):
+        value = self.cleaned_data.get("quorum_met")
+        if value == "yes":
+            return True
+        if value == "no":
+            return False
+        return None
 
 
 class FinalDecisionForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.ModelForm):

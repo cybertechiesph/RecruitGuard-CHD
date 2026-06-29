@@ -4915,6 +4915,8 @@ def generate_comparative_assessment_report(application, actor, cleaned_data, fin
     if finalize:
         report.finalized_by = actor
         report.finalized_at = timezone.now()
+        report.quorum_met = cleaned_data.get("quorum_met")
+        report.members_present = cleaned_data.get("members_present")
     report.full_clean()
     report.save()
 
