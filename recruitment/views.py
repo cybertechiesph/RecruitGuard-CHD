@@ -67,6 +67,7 @@ from .permissions import (
 from .services import (
     application_has_finalized_applicant_pool,
     application_requires_finalized_applicant_pool,
+    apply_car_ete_ratings,
     autosave_comparative_assessment_report_notes,
     build_submission_packet,
     build_export_bundle,
@@ -1463,6 +1464,9 @@ class ComparativeAssessmentReportView(LoginRequiredMixin, WorkflowProcessorRequi
                         cleaned_data=form.cleaned_data,
                     )
                 else:
+                    # Persist any per-candidate ETE ratings typed on the draft, then
+                    # regenerate so the ranking reflects them.
+                    apply_car_ete_ratings(application, request.user, request.POST)
                     report = generate_comparative_assessment_report(
                         application=application,
                         actor=request.user,
@@ -1479,7 +1483,7 @@ class ComparativeAssessmentReportView(LoginRequiredMixin, WorkflowProcessorRequi
                 if report.is_finalized:
                     messages.success(request, "Comparative Assessment Report finalized and locked.")
                 else:
-                    messages.success(request, "CAR draft prepared for HRMPSB deliberation.")
+                    messages.success(request, "CAR draft prepared with the current ratings.")
         else:
             if is_autosave:
                 return _autosave_response(False)

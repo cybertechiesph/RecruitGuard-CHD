@@ -6543,6 +6543,38 @@ textarea.form-control {
 .rg-int-score-val.is-marginal  { color: #92400e; }
 .rg-int-score-dial-label.is-marginal { color: #d97706; }
 
+/* CAR per-candidate ETE entry grid */
+.rg-car-ete-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+}
+.rg-car-ete-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.3rem 0.6rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.4rem;
+}
+.rg-car-ete-row__name {
+    font-size: 0.85rem;
+    color: #334155;
+    min-width: 0;
+}
+.rg-car-ete-input {
+    width: 88px;
+    text-align: center;
+    padding: 0.3rem 0.4rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.4rem;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
 /* Competency scoring grid */
 .rg-int-competency-group { margin-bottom: 0.85rem; }
 .rg-int-competency-group:last-of-type { margin-bottom: 0.25rem; }

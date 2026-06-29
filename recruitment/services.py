@@ -4560,6 +4560,34 @@ def set_application_ete_rating(application, actor, rating):
     return record
 
 
+@transaction.atomic
+def apply_car_ete_ratings(application, actor, posted):
+    """Persist per-candidate ETE ratings posted from the CAR draft screen. Inputs are
+    named ``ete_<recruitment_case_id>``. Blank or out-of-range values are skipped."""
+    if not user_can_manage_comparative_assessment_report(actor, application):
+        return
+    for key in list(posted.keys()):
+        if not key.startswith("ete_"):
+            continue
+        raw = (posted.get(key) or "").strip()
+        if raw == "":
+            continue
+        try:
+            case_id = int(key[len("ete_"):])
+            rating = Decimal(raw)
+        except (ValueError, ArithmeticError):
+            continue
+        if rating < 0 or rating > 100:
+            continue
+        case = (
+            RecruitmentCase.objects.select_related("application")
+            .filter(pk=case_id, application__position=application.position)
+            .first()
+        )
+        if case:
+            set_application_ete_rating(case.application, actor, rating)
+
+
 def _car_candidate_rows(recruitment_entry, review_stage, required_draft=None):
     # The finalized CAR is computed directly from each active candidate's finalized
     # screening/exam/interview outputs and ranked by the assessment score. There is no

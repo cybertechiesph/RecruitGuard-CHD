@@ -12,8 +12,8 @@ HRM Chief on COS). Two states:
         <div>
             <h3 class="rg-icard__title">Comparative Assessment Report</h3>
             <p class="rg-icard__subtitle">
-                Prepare the CAR draft from the finalized screening, exam, and interview outputs.
-                Finalize only after HRMPSB endorses its recommendation.
+                Enter each candidate's ETE rating, prepare the draft from the finalized exam
+                and interview outputs, then finalize the ranked report.
             </p>
         </div>
         {% if current_comparative_assessment_report %}
@@ -120,6 +120,29 @@ HRM Chief on COS). Two states:
         {% csrf_token %}
         <input type="hidden" name="operation" id="car-op-field" value="save">
 
+        {% if current_comparative_assessment_report_items %}
+        <div class="rg-field">
+            <label class="form-label">ETE ratings (Education, Training, Experience)</label>
+            <div class="form-text">
+                Enter each candidate's ETE rating (0&ndash;100). Press
+                <strong>Update draft CAR</strong> to recompute the overall score and ranking.
+            </div>
+            <div class="rg-car-ete-grid">
+                {% for item in current_comparative_assessment_report_items %}
+                <div class="rg-car-ete-row">
+                    <span class="rg-car-ete-row__name">{{ item.applicant_display_name }}</span>
+                    <input type="number"
+                           class="rg-car-ete-input"
+                           name="ete_{{ item.recruitment_case_id }}"
+                           value="{{ item.ete_rating|default_if_none:'' }}"
+                           min="0" max="100" step="0.01"
+                           aria-label="ETE rating for {{ item.applicant_display_name }}">
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
         <div class="rg-field">
             <label class="form-label" for="{{ car_form.summary_notes.id_for_label }}">
                 {{ car_form.summary_notes.label }}
@@ -135,16 +158,6 @@ HRM Chief on COS). Two states:
 
     <div class="rg-del-car__footer">
         <div class="rg-del-car__readiness">
-            <div class="rg-del-car__readiness-item {% if current_deliberation_record and current_deliberation_record.is_finalized %}is-met{% endif %}">
-                <span class="rg-del-car__readiness-icon" aria-hidden="true">
-                    {% if current_deliberation_record and current_deliberation_record.is_finalized %}✓{% endif %}
-                </span>
-                {% if current_deliberation_record and current_deliberation_record.is_finalized %}
-                    HRMPSB endorsement finalized
-                {% else %}
-                    HRMPSB endorsement pending
-                {% endif %}
-            </div>
             <div class="rg-del-car__readiness-item {% if current_comparative_assessment_report_items %}is-met{% endif %}">
                 <span class="rg-del-car__readiness-icon" aria-hidden="true">
                     {% if current_comparative_assessment_report_items %}✓{% endif %}
@@ -216,7 +229,6 @@ HRM Chief on COS). Two states:
     var confirmBtn = document.getElementById("modal-car-finalize-confirm");
     var modalEl = document.getElementById("modal-car-finalize");
 
-    var deliberationFinalized = {% if current_deliberation_record and current_deliberation_record.is_finalized %}true{% else %}false{% endif %};
     var hasRankings = {% if current_comparative_assessment_report_items %}true{% else %}false{% endif %};
 
     function showError(msg) {
@@ -236,10 +248,6 @@ HRM Chief on COS). Two states:
     /* Finalize — gated by deliberation finalized + rankings present */
     if (finBtn) {
         finBtn.addEventListener("click", function () {
-            if (!deliberationFinalized) {
-                showError("Finalize the HRMPSB deliberation record first — the CAR needs that endorsement.");
-                return;
-            }
             if (!hasRankings) {
                 showError("Generate the candidate rankings first — use “Prepare draft CAR”.");
                 return;

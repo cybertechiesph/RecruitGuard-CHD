@@ -9378,6 +9378,35 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         ).quantize(Decimal("0.01"))
         self.assertEqual(item.assessment_score, expected)
 
+    def test_car_view_saves_posted_ete_ratings(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb)
+        self.finalize_deliberation_for_current_stage(application, self.hrmpsb, ranking_position=1)
+        application.refresh_from_db()
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("comparative-assessment-report", kwargs={"pk": application.pk}),
+            {
+                "operation": "save",
+                "summary_notes": "Draft with ETE entered on screen.",
+                f"ete_{application.case.id}": "65",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        application.refresh_from_db()
+        self.assertEqual(application.ete_rating.rating, Decimal("65.00"))
+        draft = (
+            ComparativeAssessmentReport.objects.filter(recruitment_entry=application.position)
+            .order_by("-version_number")
+            .first()
+        )
+        item = draft.items.get(recruitment_case=application.case)
+        self.assertEqual(item.ete_rating, Decimal("65.00"))
+
     def test_plantilla_recommendation_requires_finalized_car(self):
         application = self.make_application(self.level1_position)
         self.move_application_to_hrmpsb_review(application)
