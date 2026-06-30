@@ -126,6 +126,7 @@ from .services import (
     save_interview_session,
     save_screening_review,
     submit_application,
+    submit_document_resubmission,
     update_recruitment_entry_status,
     upload_interview_fallback_rating,
     upload_evidence_item,
@@ -7930,6 +7931,94 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         )
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("Please resubmit on or before", mail.outbox[0].body)
+
+    def test_otp_can_be_issued_for_awaiting_resubmission_application(self):
+        application = self.make_submitted_application()
+        first_requirement = get_applicant_document_requirements(application.branch)[0]
+        self._finalize_screening_with_flagged_document(application, first_requirement)
+        with self.captureOnCommitCallbacks(execute=True):
+            process_workflow_action(
+                application, self.secretariat, "return_to_applicant", "Please resubmit."
+            )
+        application.refresh_from_db()
+        # The applicant can now obtain + verify an OTP even though the application is submitted.
+        otp_code = issue_application_otp(application, actor=application.applicant)
+        verify_application_otp(application, otp_code, actor=application.applicant)
+        application.refresh_from_db()
+        self.assertTrue(application.otp_is_currently_valid)
+
+    def test_submit_document_resubmission_returns_case_to_reviewer(self):
+        application = self.make_submitted_application()
+        first_requirement = get_applicant_document_requirements(application.branch)[0]
+        self._finalize_screening_with_flagged_document(application, first_requirement)
+        with self.captureOnCommitCallbacks(execute=True):
+            process_workflow_action(
+                application, self.secretariat, "return_to_applicant", "Please resubmit."
+            )
+        application.refresh_from_db()
+        otp_code = issue_application_otp(application, actor=application.applicant)
+        verify_application_otp(application, otp_code, actor=application.applicant)
+        application.refresh_from_db()
+        Notification.objects.filter(application=application).delete()
+
+        uploaded_files = {
+            first_requirement.code: self.build_valid_applicant_document_upload(
+                first_requirement.code, content_prefix="resubmitted"
+            )
+        }
+        submit_document_resubmission(application, self.applicant, uploaded_files)
+
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+        # Case returns to the reviewing role as ACTIVE for re-review.
+        self.assertEqual(application.case.case_status, RecruitmentCase.CaseStatus.ACTIVE)
+        self.assertEqual(application.case.current_handler_role, RecruitmentUser.Role.SECRETARIAT)
+        self.assertEqual(application.current_handler_role, RecruitmentUser.Role.SECRETARIAT)
+        self.assertEqual(application.status, RecruitmentApplication.Status.SECRETARIAT_REVIEW)
+        # The flagged screening record reopened and the flagged row is back to NOT_REVIEWED.
+        screening_record = ScreeningRecord.objects.get(
+            application=application,
+            review_stage=RecruitmentCase.Stage.SECRETARIAT_REVIEW,
+        )
+        self.assertFalse(screening_record.is_finalized)
+        flagged_row = screening_record.document_reviews.get(document_key=first_requirement.code)
+        self.assertEqual(
+            flagged_row.status, ScreeningDocumentReview.ReviewStatus.NOT_REVIEWED
+        )
+        # The re-upload landed on the applicant-intake chain as a new current version.
+        intake_versions = EvidenceVaultItem.objects.filter(
+            application=application,
+            document_key=first_requirement.code,
+            stage=EvidenceVaultItem.Stage.APPLICANT_INTAKE,
+        )
+        self.assertTrue(intake_versions.filter(is_current_version=True).exists())
+        self.assertGreaterEqual(intake_versions.count(), 2)
+        # The reviewer is notified of the resubmission.
+        self.assertTrue(
+            Notification.objects.filter(
+                application=application,
+                recipient=self.secretariat,
+                kind=Notification.Kind.RESUBMISSION_RECEIVED,
+            ).exists()
+        )
+
+    def test_submit_document_resubmission_requires_a_valid_otp(self):
+        application = self.make_submitted_application()
+        first_requirement = get_applicant_document_requirements(application.branch)[0]
+        self._finalize_screening_with_flagged_document(application, first_requirement)
+        with self.captureOnCommitCallbacks(execute=True):
+            process_workflow_action(
+                application, self.secretariat, "return_to_applicant", "Please resubmit."
+            )
+        application.refresh_from_db()
+        uploaded_files = {
+            first_requirement.code: self.build_valid_applicant_document_upload(
+                first_requirement.code
+            )
+        }
+        # No OTP verified -> refused.
+        with self.assertRaises(ValueError):
+            submit_document_resubmission(application, self.applicant, uploaded_files)
 
     def test_return_to_applicant_falls_back_to_text_when_resubmission_template_fails(self):
         application = self.make_submitted_application()

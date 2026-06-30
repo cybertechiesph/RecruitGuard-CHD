@@ -5632,8 +5632,11 @@ def _deliver_application_otp(application, otp_code, *, actor=None, otp_expires_a
 
 
 def issue_application_otp(application, actor=None, *, defer_delivery=True, enforce_cooldown=False):
-    if application.status != RecruitmentApplication.Status.DRAFT:
-        raise ValueError("A verification code can only be issued while the application is still in draft.")
+    if not application.is_editable_by_applicant:
+        raise ValueError(
+            "A verification code can only be issued while the application is in draft or "
+            "awaiting the applicant's resubmission."
+        )
     if enforce_cooldown and application.otp_requested_at:
         elapsed = timezone.now() - application.otp_requested_at
         cooldown_seconds = settings.APPLICATION_OTP_RESEND_COOLDOWN_SECONDS
@@ -5707,7 +5710,7 @@ def verify_application_otp(application, otp_code, actor=None):
     application = RecruitmentApplication.objects.get(pk=application.pk)
     actor = actor or application.applicant
     locked_error = "Too many invalid verification attempts. Request a new code before final submission."
-    if application.status != RecruitmentApplication.Status.DRAFT:
+    if not application.is_editable_by_applicant:
         raise ValueError("Email verification is only available before final submission.")
     if not application.otp_hash or not application.otp_expires_at:
         _record_application_otp_failure(application, actor, reason="missing_code")
@@ -5931,6 +5934,7 @@ def upload_evidence_item(
     document_key="",
     artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
     artifact_type="",
+    stage=None,
 ):
     if not user_can_upload_evidence(actor, application):
         raise ValueError("You cannot upload files for this application.")
@@ -5942,7 +5946,11 @@ def upload_evidence_item(
     file_size = validated_upload.size_bytes
     sha256_digest = hashlib.sha256(raw_bytes).hexdigest()
     nonce, ciphertext = encrypt_evidence_bytes(raw_bytes)
-    stage = _evidence_stage_for_application(application)
+    # ``stage`` is overridable so a scoped document resubmission keeps re-uploads on the
+    # applicant-intake version chain even though the case is parked at a review stage.
+    # Without this, _evidence_stage_for_application would stamp them with the review stage,
+    # starting a new chain and hiding them from the applicant-document map.
+    stage = stage or _evidence_stage_for_application(application)
     document_key = document_key or EvidenceVaultItem.build_document_key(label)
     owner_kwargs = _evidence_owner_filters(
         application=application if artifact_scope == EvidenceVaultItem.OwnerScope.APPLICATION else None,
@@ -6361,11 +6369,28 @@ def request_document_resubmission(application, actor, remarks):
 
     # Application is applicant-editable (RETURNED_TO_APPLICANT) so the scoped re-upload + OTP
     # work, but it KEEPS the reviewing role as handler so it stays in that role's queue.
+    # Invalidate any leftover OTP (e.g. from the original submission) so the applicant must
+    # verify a fresh code before resubmitting.
     application.status = RecruitmentApplication.Status.RETURNED_TO_APPLICANT
     application.current_handler_role = reviewing_role
     application.closed_at = None
+    application.otp_hash = ""
+    application.otp_requested_at = None
+    application.otp_expires_at = None
+    application.otp_verified_at = None
+    application.otp_attempt_count = 0
     application.save(
-        update_fields=["status", "current_handler_role", "closed_at", "updated_at"]
+        update_fields=[
+            "status",
+            "current_handler_role",
+            "closed_at",
+            "otp_hash",
+            "otp_requested_at",
+            "otp_expires_at",
+            "otp_verified_at",
+            "otp_attempt_count",
+            "updated_at",
+        ]
     )
 
     record_audit_event(
@@ -6391,6 +6416,92 @@ def request_document_resubmission(application, actor, remarks):
         resubmission_deadline=deadline,
     )
     return case
+
+
+@transaction.atomic
+def submit_document_resubmission(application, actor, uploaded_files):
+    """Applicant re-uploads the flagged documents from Track Application. Re-uploads land on the
+    applicant-intake version chain (so they replace the originals and stay in the document map),
+    the flagged screening rows reopen for re-review while already-Meets rows stay accepted, and
+    the case returns to the reviewing role as ACTIVE. This bypasses the full submit_application
+    gauntlet (intake-open, full checklist, cross-slot duplicate-digest) because it is a scoped
+    fix of specific flagged documents, not a fresh submission.
+
+    ``uploaded_files`` is a ``{document_code: UploadedFile}`` mapping for the flagged documents.
+    """
+    if application.applicant_id != getattr(actor, "id", None):
+        raise ValueError("Only the applicant may resubmit documents for this application.")
+    case = getattr(application, "case", None)
+    if case is None or case.case_status != RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION:
+        raise ValueError("This application is not awaiting a document resubmission.")
+    review_stage = case.current_stage
+    screening_record, flagged = _flagged_resubmission_reviews(application, stage=review_stage)
+    if not flagged:
+        raise ValueError("There are no documents awaiting resubmission.")
+    if screening_record.resubmission_is_overdue:
+        raise ValueError("The resubmission deadline has passed; please contact the recruitment team.")
+    if not application.otp_is_currently_valid:
+        raise ValueError("Verify your email with a fresh code before resubmitting your documents.")
+
+    requirements = {req.code: req for req in get_applicant_document_requirements(application)}
+    flagged_codes = [row.document_key for row in flagged]
+    if any(not uploaded_files.get(code) for code in flagged_codes):
+        raise ValueError("Upload a file for each flagged document before resubmitting.")
+
+    for code in flagged_codes:
+        requirement = requirements.get(code)
+        upload_evidence_item(
+            application=application,
+            actor=actor,
+            label=requirement.title if requirement else code,
+            uploaded_file=uploaded_files[code],
+            document_key=code,
+            artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
+            artifact_type=ARTIFACT_TYPE_APPLICANT_DOCUMENT,
+            stage=EvidenceVaultItem.Stage.APPLICANT_INTAKE,
+        )
+
+    # Reopen the finalized screening record and reset ONLY the flagged rows for re-review;
+    # already-Meets rows stay accepted. Clearing is_finalized first lifts the per-row freeze.
+    if screening_record.is_finalized:
+        screening_record.is_finalized = False
+        screening_record.finalized_by = None
+        screening_record.finalized_at = None
+    screening_record.resubmission_requested_at = None
+    screening_record.resubmission_deadline = None
+    screening_record.full_clean()
+    screening_record.save()
+    for row in flagged:
+        row.status = ScreeningDocumentReview.ReviewStatus.NOT_REVIEWED
+        row.full_clean()
+        row.save(update_fields=["status", "updated_at"])
+
+    # Return the case to the reviewing role for re-review and restart its stage clock.
+    reviewing_role = case.current_handler_role
+    case.case_status = RecruitmentCase.CaseStatus.ACTIVE
+    case.stage_entered_at = timezone.now()
+    case.reopened_at = timezone.now()
+    case.save(
+        update_fields=["case_status", "stage_entered_at", "reopened_at", "updated_at"]
+    )
+    application.status = _application_status_from_stage(review_stage)
+    application.current_handler_role = reviewing_role
+    application.save(update_fields=["status", "current_handler_role", "updated_at"])
+
+    record_audit_event(
+        application=application,
+        actor=actor,
+        action=AuditLog.Action.APPLICATION_SUBMITTED,
+        description="Applicant resubmitted flagged documents for re-review.",
+        metadata={
+            "resubmitted_document_keys": flagged_codes,
+            "review_stage": review_stage,
+        },
+    )
+    _emit_resubmission_received_notification(
+        application, actor, reviewing_role, document_count=len(flagged_codes)
+    )
+    return application
 
 
 @transaction.atomic
