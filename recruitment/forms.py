@@ -38,6 +38,7 @@ from .models import (
     ExamSchedule,
     EvidenceVaultItem,
     FinalDecision,
+    format_weight_percentage,
     InterviewRating,
     InterviewSession,
     InternalPasswordHistory,
@@ -1763,7 +1764,18 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
         self.draft = kwargs.pop("draft", False)
         super().__init__(*args, **kwargs)
         self.component_section_label = "General Ability and Technical Components"
-        self.component_weight_display = "General Ability (60%) and Technical (40%) scores are recorded separately."
+        # Per-vacancy exam weights drive both the help copy and the live overall preview.
+        # Defaults (60/40) apply when there is no application or no weights row yet.
+        self.exam_general_weight_label = "60"
+        self.exam_technical_weight_label = "40"
+        if self.application and self.application.branch == PositionPosting.Branch.PLANTILLA:
+            exam_weights = self.application.position.assessment_weights_or_default
+            self.exam_general_weight_label = format_weight_percentage(exam_weights.exam_general_weight)
+            self.exam_technical_weight_label = format_weight_percentage(exam_weights.exam_technical_weight)
+        self.component_weight_display = (
+            f"General Ability ({self.exam_general_weight_label}%) and "
+            f"Technical ({self.exam_technical_weight_label}%) scores are recorded separately."
+        )
         self.exam_type_is_fixed = False
         self.exam_type_fixed_label = ""
         self.administered_by_is_fixed = False

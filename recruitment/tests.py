@@ -6184,19 +6184,6 @@ class AssessmentWeightConfigTests(BaseRecruitmentTestCase):
         # 90 * 0.60 + 80 * 0.40 = 86
         self.assertEqual(record.calculate_policy_score(), Decimal("86.00"))
 
-    def test_exam_score_follows_reconfigured_weights(self):
-        config = AssessmentWeightConfig.load()
-        config.exam_general_weight = Decimal("50.00")
-        config.exam_technical_weight = Decimal("50.00")
-        config.save()
-        record = ExamRecord(
-            exam_type=ExamRecord.ExamType.TECHNICAL_PRACTICAL,
-            general_score=Decimal("90"),
-            technical_score=Decimal("80"),
-        )
-        # 90 * 0.50 + 80 * 0.50 = 85 — the formula now tracks the saved config.
-        self.assertEqual(record.calculate_policy_score(), Decimal("85.00"))
-
     def test_weights_must_sum_to_100(self):
         config = AssessmentWeightConfig.load()
         config.exam_general_weight = Decimal("70.00")
@@ -6331,6 +6318,33 @@ class VacancyAssessmentWeightsTests(BaseRecruitmentTestCase):
         self.assertFalse(
             VacancyAssessmentWeights.objects.filter(recruitment_entry=entry).exists()
         )
+
+    def test_exam_score_uses_per_vacancy_default_weights(self):
+        application = self.make_application(self.level1_position)
+        record = ExamRecord(
+            application=application,
+            exam_type=ExamRecord.ExamType.TECHNICAL_PRACTICAL,
+            general_score=Decimal("90"),
+            technical_score=Decimal("80"),
+        )
+        # 90 * 0.60 + 80 * 0.40 = 86 with the seeded defaults.
+        self.assertEqual(record.calculate_policy_score(), Decimal("86.00"))
+
+    def test_exam_score_follows_per_vacancy_weights(self):
+        weights = get_or_create_vacancy_assessment_weights(self.level1_position)
+        weights.exam_general_weight = Decimal("50.00")
+        weights.exam_technical_weight = Decimal("50.00")
+        weights.full_clean()
+        weights.save()
+        application = self.make_application(self.level1_position)
+        record = ExamRecord(
+            application=application,
+            exam_type=ExamRecord.ExamType.TECHNICAL_PRACTICAL,
+            general_score=Decimal("90"),
+            technical_score=Decimal("80"),
+        )
+        # 90 * 0.50 + 80 * 0.50 = 85 — the formula tracks this vacancy's weights.
+        self.assertEqual(record.calculate_policy_score(), Decimal("85.00"))
 
 
 class ApplicantUploadValidationTests(TestCase):

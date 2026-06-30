@@ -2673,26 +2673,26 @@ def _quantize_score(value):
     return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-def _calculate_preliminary_assessment_score(level, document_review_score, exam_score, interview_score):
-    # ``level`` is retained for call-site compatibility; the component weights are now
-    # one global, editable set (AssessmentWeightConfig), not split by level.
+def _calculate_preliminary_assessment_score(posting, document_review_score, exam_score, interview_score):
+    # The CAR component weights are now per-vacancy (VacancyAssessmentWeights), resolved from
+    # the posting; a vacancy without a row falls back to the office defaults (40/20/40).
     if any(value in (None, "") for value in (document_review_score, exam_score, interview_score)):
         return None
-    config = AssessmentWeightConfig.load()
+    weights = posting.assessment_weights_or_default
     total = (
-        (Decimal(str(document_review_score)) * config.ete_fraction)
-        + (Decimal(str(exam_score)) * config.exam_component_fraction)
-        + (Decimal(str(interview_score)) * config.interview_fraction)
+        (Decimal(str(document_review_score)) * weights.ete_fraction)
+        + (Decimal(str(exam_score)) * weights.exam_component_fraction)
+        + (Decimal(str(interview_score)) * weights.interview_fraction)
     )
     return _quantize_score(total)
 
 
-def _assessment_weight_display(level):
-    config = AssessmentWeightConfig.load()
+def _assessment_weight_display(posting):
+    weights = posting.assessment_weights_or_default
     return (
-        f"Document review {format_weight_percentage(config.ete_weight)}%, "
-        f"exam {format_weight_percentage(config.exam_weight)}%, "
-        f"interview {format_weight_percentage(config.interview_weight)}%."
+        f"Document review {format_weight_percentage(weights.ete_weight)}%, "
+        f"exam {format_weight_percentage(weights.exam_weight)}%, "
+        f"interview {format_weight_percentage(weights.interview_weight)}%."
     )
 
 
@@ -2790,12 +2790,12 @@ def build_deliberation_consolidation(application):
             stage=get_current_review_stage(application),
         )
         preliminary_assessment_score = _calculate_preliminary_assessment_score(
-            application.level,
+            application.position,
             latest_document_review_score,
             latest_exam_score,
             latest_interview_average,
         )
-        assessment_weight_display = _assessment_weight_display(application.level)
+        assessment_weight_display = _assessment_weight_display(application.position)
     return {
         "application_reference": application.reference_number or "",
         "entry_code": application.position.job_code,
@@ -4645,7 +4645,7 @@ def _car_draft_candidate_rows(recruitment_entry, review_stage):
         ete_rating = str(manual_ete.rating) if manual_ete else ""
         ete_component = ete_rating or document_review_score
         assessment_score = _calculate_preliminary_assessment_score(
-            candidate_application.level,
+            recruitment_entry,
             ete_component,
             exam_score,
             interview_average_score,
@@ -4855,7 +4855,7 @@ def generate_comparative_assessment_report(application, actor, cleaned_data, fin
         "prepared_by_role": actor.role,
         "entry_code": application.position.job_code,
         "review_stage": review_stage,
-        "assessment_weight_display": _assessment_weight_display(application.level),
+        "assessment_weight_display": _assessment_weight_display(application.position),
         "source_car_draft_id": latest_draft_report.id if finalize and latest_draft_report else "",
         "source_car_draft_version": latest_draft_report.version_number if finalize and latest_draft_report else "",
         "candidate_count": len(candidate_rows),
@@ -7298,7 +7298,7 @@ def _build_comparative_assessment_report_pdf(
         f"Prepared By: {actor}",
         f"Prepared At: {timezone.now():%Y-%m-%d %H:%M}",
         f"Generation Version: {generation_number}",
-        f"Preliminary Ranking Basis: {_assessment_weight_display(application.level) or 'Not available'}",
+        f"Preliminary Ranking Basis: {_assessment_weight_display(application.position) or 'Not available'}",
         "",
         "Ranked Candidates",
     ]

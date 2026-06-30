@@ -209,9 +209,11 @@ reviewer can see the disposition at a glance without scrolling to step 2.
                 </div>
                 <div class="rg-field">
                     <label class="form-label">Overall Score (auto-computed)</label>
-                    <div class="form-control rg-fixed-value" id="exam-overall-display" aria-live="polite">&mdash;</div>
+                    <div class="form-control rg-fixed-value" id="exam-overall-display" aria-live="polite"
+                         data-general-weight="{{ exam_form.exam_general_weight_label }}"
+                         data-technical-weight="{{ exam_form.exam_technical_weight_label }}">&mdash;</div>
                     <div class="form-text">
-                        General Ability &times;60% + Technical &times;40%. Computed automatically; not editable.
+                        General Ability &times;{{ exam_form.exam_general_weight_label }}% + Technical &times;{{ exam_form.exam_technical_weight_label }}%. Computed automatically; not editable.
                     </div>
                 </div>
                 <div class="rg-field">
@@ -544,10 +546,15 @@ reviewer can see the disposition at a glance without scrolling to step 2.
         });
         if (scoreWarning) scoreWarning.hidden = !anyBad;
     }
-    /* Live overall: General Ability x0.60 + Technical x0.40 (computed, read-only). */
+    /* Live overall preview from the per-vacancy weights (General x gen% + Technical x tech%,
+       computed, read-only). The authoritative value is recomputed server-side on save. */
     function syncOverall() {
         if (!overallDisplay) return;
         var examType = valOf("exam_type");
+        var genW = parseFloat(overallDisplay.dataset.generalWeight);
+        var techW = parseFloat(overallDisplay.dataset.technicalWeight);
+        if (isNaN(genW)) genW = 60;
+        if (isNaN(techW)) techW = 40;
         var t = parseFloat((technicalScoreInput && technicalScoreInput.value || "").trim());
         var g = parseFloat((generalScoreInput && generalScoreInput.value || "").trim());
         var inRange = function (n) { return !isNaN(n) && n >= 0 && n <= 100; };
@@ -555,7 +562,7 @@ reviewer can see the disposition at a glance without scrolling to step 2.
         if (examType === "end_user_assessment") {
             if (inRange(g)) overall = g;
         } else if (inRange(t) && inRange(g)) {
-            overall = t * 0.4 + g * 0.6;
+            overall = (t * techW + g * genW) / 100;
         }
         overallDisplay.textContent = overall === null
             ? "—"

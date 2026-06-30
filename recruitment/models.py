@@ -1861,14 +1861,23 @@ class ExamRecord(TimestampedModel):
     def general_component_label(self):
         return "General Ability"
 
+    def _resolve_assessment_weights(self):
+        """Resolve the per-vacancy exam weights from this record's vacancy, falling back to
+        the model defaults (60/40) when there is no linked application yet (e.g. a transient
+        record built only to compute a score)."""
+        posting = getattr(self.application, "position", None) if self.application_id else None
+        if posting is not None:
+            return posting.assessment_weights_or_default
+        return VacancyAssessmentWeights()
+
     @property
     def component_weight_display(self):
         if self.exam_type == self.ExamType.TECHNICAL_PRACTICAL:
-            config = AssessmentWeightConfig.load()
+            weights = self._resolve_assessment_weights()
             return (
                 "Overall is computed automatically: "
-                f"General Ability {format_weight_percentage(config.exam_general_weight)}% + "
-                f"Technical {format_weight_percentage(config.exam_technical_weight)}%."
+                f"General Ability {format_weight_percentage(weights.exam_general_weight)}% + "
+                f"Technical {format_weight_percentage(weights.exam_technical_weight)}%."
             )
         return "End-user assessment score is used as the overall."
 
@@ -1880,10 +1889,10 @@ class ExamRecord(TimestampedModel):
             and self.technical_score is not None
             and self.general_score is not None
         ):
-            config = AssessmentWeightConfig.load()
+            weights = self._resolve_assessment_weights()
             score = (
-                (self.technical_score * config.exam_technical_fraction)
-                + (self.general_score * config.exam_general_fraction)
+                (self.technical_score * weights.exam_technical_fraction)
+                + (self.general_score * weights.exam_general_fraction)
             )
             return score.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         return self.exam_score
@@ -1919,7 +1928,7 @@ class ExamRecord(TimestampedModel):
             else self.ComponentResult.NOT_APPLICABLE
         )
         # The overall score is always computed from the components using the
-        # configurable General/Technical weights (AssessmentWeightConfig). It is
+        # per-vacancy General/Technical weights (VacancyAssessmentWeights). It is
         # never entered or overwritten by hand, so the CAR can trust it as the
         # authoritative value.
         self.exam_score = self.calculate_policy_score()
