@@ -21,6 +21,34 @@ because it's a small read-only card.
 {# ── Shared panel-rating summary at the top ─────────────────── #}
 {% include "internal_includes/deliberation_panel_summary.html" %}
 
+{# ── COS: one per-vacancy deliberation pick, recorded on the console ── #}
+{% if cos_deliberation_section %}
+<div class="rg-icard">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">COS deliberation pick</h3>
+            <p class="rg-icard__subtitle">
+                One deliberation per vacancy: the end-user and HRM Chief identify the chosen
+                applicant off-system; the pick is recorded for the whole pool on the vacancy console.
+            </p>
+        </div>
+    </div>
+    {% if cos_deliberation_pick and cos_deliberation_pick.is_finalized %}
+        <p class="rg-del-car__summary-notes">
+            <strong>Selected:</strong>
+            {{ cos_deliberation_pick.chosen_case.application.applicant_display_name }}
+            {% if cos_deliberation_pick.notes %}&mdash; {{ cos_deliberation_pick.notes }}{% endif %}
+        </p>
+    {% else %}
+        <p class="rg-del-car__summary-notes">
+            Not yet recorded.
+            <a href="{% url 'vacancy-batch-cos-deliberation' application.position_id %}">Open the COS deliberation console</a>
+            to record the chosen applicant for this vacancy.
+        </p>
+    {% endif %}
+</div>
+{% endif %}
+
 {# ── CAR-draft prerequisite banner (deliberation can't start yet) ── #}
 {% if deliberation_requires_car_draft %}
 <div class="rg-icard rg-int-banner rg-int-banner--info">

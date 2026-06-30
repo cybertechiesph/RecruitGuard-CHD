@@ -1,0 +1,91 @@
+{% extends "internal_base.html" %}
+{% load recruitment_ui %}
+
+{% block internal_title %}{{ entry.title }} — COS Deliberation{% endblock %}
+
+{% block breadcrumb %}
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<a class="rg-breadcrumb-link" href="{% url 'vacancy-batches' %}">Vacancy Batches</a>
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<a class="rg-breadcrumb-link" href="{% url 'vacancy-batch-detail' entry.pk %}">{{ entry.job_code }}</a>
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<span class="rg-breadcrumb-current">COS Deliberation</span>
+{% endblock %}
+
+{% block content %}
+<div class="rg-page-header">
+    <div>
+        <h1 class="rg-page-title">COS deliberation — {{ entry.title }}</h1>
+        <div class="rg-imeta mt-1">
+            {{ entry.job_code }}
+            {% if entry.item_number %}<span class="rg-imeta__sep"></span>Item {{ entry.item_number }}{% endif %}
+        </div>
+        <div class="d-flex flex-wrap gap-1 mt-2">
+            <span class="rg-pill rg-pill--{{ entry.branch|branch_theme }} rg-pill--sm">{{ entry.get_branch_display }}</span>
+            <span class="rg-pill rg-pill--{{ entry.level|level_theme }} rg-pill--sm">{{ entry.get_level_display }}</span>
+        </div>
+    </div>
+    <div class="rg-page-actions">
+        <a href="{% url 'vacancy-batch-detail' entry.pk %}" class="btn btn-outline-secondary btn-sm">Back to batch</a>
+    </div>
+</div>
+
+<div class="card p-4 mb-3">
+    <h2 class="h6 mb-1">Record the deliberation pick</h2>
+    <p class="rg-note mb-3">
+        The end-user and HRM Chief deliberate off-system and identify the most qualified applicant.
+        Record the chosen applicant + notes here — the pick is the COS decision (no CAR, no
+        appointing authority). Finalizing moves the whole pool to the decision step.
+    </p>
+
+    {% if pick and pick.is_finalized %}
+        <div class="alert alert-success" role="status">
+            Deliberation pick finalized &mdash;
+            <strong>{{ pick.chosen_case.application.applicant_display_name }}</strong> was selected.
+            {% if pick.notes %}<div class="mt-1">{{ pick.notes }}</div>{% endif %}
+        </div>
+    {% elif can_manage %}
+        <form method="post">
+            {% csrf_token %}
+            <div class="rg-itbl mb-3">
+                <div class="table-responsive">
+                    <table class="table align-middle">
+                        <thead>
+                            <tr>
+                                <th style="width:3rem;"><span class="visually-hidden">Choose</span></th>
+                                <th>Candidate</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for candidate in candidates %}
+                                <tr>
+                                    <td>
+                                        <input type="radio" name="chosen_case" value="{{ candidate.case_id }}"
+                                               {% if pick and pick.chosen_case_id == candidate.case_id %}checked{% endif %}>
+                                    </td>
+                                    <td>
+                                        <div class="fw-bold" style="font-size:0.8rem;">{{ candidate.application.applicant_display_name }}</div>
+                                        <div class="rg-imeta mt-1">{{ candidate.application.reference_label }}</div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="rg-field">
+                <label class="form-label" for="cos-delib-notes">Deliberation notes / remarks</label>
+                <textarea id="cos-delib-notes" name="notes" class="form-control" rows="3">{% if pick %}{{ pick.notes }}{% endif %}</textarea>
+            </div>
+            <div class="rg-form-actions mt-3 d-flex gap-2">
+                <button type="submit" name="operation" value="save" class="btn btn-outline-secondary">Save pick</button>
+                <button type="submit" name="operation" value="finalize" class="btn btn-rg-primary">Finalize deliberation</button>
+            </div>
+        </form>
+    {% else %}
+        <div class="alert alert-info" role="status">
+            The COS deliberation pick is recorded by the HRM Chief once the pool reaches this step.
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

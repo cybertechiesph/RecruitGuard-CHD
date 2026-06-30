@@ -215,6 +215,21 @@ HRM Chief on COS). Two states:
                            class="form-control form-control-sm" min="0" max="20" step="1" style="max-width:140px;">
                     <div class="form-text">Recorded with the finalized report (the board's deliberation itself is held on paper).</div>
                 </div>
+                <div class="rg-car-recommendation mt-3">
+                    <label class="form-label" for="car-recommended-case">Board's recommended applicant <span class="text-danger" aria-hidden="true">*</span></label>
+                    <select id="car-recommended-case" name="recommended_case" form="car-form" class="form-select form-select-sm">
+                        <option value="">— Select the recommended applicant —</option>
+                        {% for item in current_comparative_assessment_report_items %}
+                            <option value="{{ item.recruitment_case_id }}">
+                                #{{ item.rank_order }} — {{ item.application.applicant_display_name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <label class="form-label mt-2" for="car-recommendation-notes">Recommendation notes / remarks</label>
+                    <textarea id="car-recommendation-notes" name="recommendation_notes" form="car-form"
+                              class="form-control form-control-sm" rows="3">{{ car_form.recommendation_notes.value|default_if_none:'' }}</textarea>
+                    <div class="form-text">The board deliberates off-system; record its recommended applicant here on its behalf.</div>
+                </div>
             </div>
             <div class="modal-footer" style="border-top:1px solid #e2e8f0; padding:0.875rem 1.25rem; display:flex; justify-content:flex-end; gap:0.625rem;">
                 <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">
@@ -270,6 +285,12 @@ HRM Chief on COS). Two states:
     }
     if (confirmBtn) {
         confirmBtn.addEventListener("click", function () {
+            var rec = document.getElementById("car-recommended-case");
+            if (rec && !rec.value) {
+                rec.classList.add("is-invalid");
+                if (rec.focus) { try { rec.focus(); } catch (e) {} }
+                return;
+            }
             if (opField) opField.value = "finalize";
             form.submit();
         });
@@ -396,6 +417,71 @@ HRM Chief on COS). Two states:
 
     {% if current_comparative_assessment_report.summary_notes %}
         <p class="rg-del-car__summary-notes">{{ current_comparative_assessment_report.summary_notes }}</p>
+    {% endif %}
+
+    {% if current_comparative_assessment_report.recommended_case_id %}
+        <p class="rg-del-car__summary-notes">
+            <strong>Board's recommended applicant:</strong>
+            {{ current_comparative_assessment_report.recommended_case.application.applicant_display_name }}
+            {% if current_comparative_assessment_report.recommendation_notes %}
+                &mdash; {{ current_comparative_assessment_report.recommendation_notes }}
+            {% endif %}
+        </p>
+    {% endif %}
+</section>
+
+{% elif car_readonly and current_comparative_assessment_report %}
+{# ── Read-only CAR for the HRMPSB board (deliberates off-system) ─ #}
+<section class="rg-icard rg-del-car rg-del-car--locked">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">Comparative Assessment Report</h3>
+            <p class="rg-icard__subtitle">
+                Ranked candidates for the board's review. The HRMPSB deliberates off-system; the
+                secretariat records the board's recommended applicant when finalizing the CAR.
+            </p>
+        </div>
+        <span class="rg-pill rg-pill--info rg-pill--sm">Read-only</span>
+    </div>
+
+    {% if current_comparative_assessment_report_items %}
+        <ul class="rg-del-car-list">
+            {% for item in current_comparative_assessment_report_items %}
+            <li class="rg-del-car-item">
+                <div class="rg-del-rank-badge">#{{ item.rank_order }}</div>
+                <div class="rg-del-car-item__body">
+                    <div class="rg-del-car-item__name">{{ item.applicant_display_name }}</div>
+                    <div class="rg-del-car-item__scores">
+                        {% if item.exam_score %}
+                        <div class="rg-del-car-item__score-cell">
+                            <span class="rg-del-car-item__score-label">Exam</span>
+                            <span class="rg-del-car-item__score-val">{{ item.exam_score }}</span>
+                        </div>
+                        {% endif %}
+                        {% if item.interview_average_score %}
+                        <div class="rg-del-car-item__score-cell">
+                            <span class="rg-del-car-item__score-label">Interview avg</span>
+                            <span class="rg-del-car-item__score-val">{{ item.interview_average_score }}</span>
+                        </div>
+                        {% endif %}
+                        {% if item.assessment_score %}
+                        <div class="rg-del-car-item__score-cell">
+                            <span class="rg-del-car-item__score-label">Overall</span>
+                            <span class="rg-del-car-item__score-val">{{ item.assessment_score }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+    {% if current_comparative_assessment_report.recommended_case_id %}
+        <p class="rg-del-car__summary-notes">
+            <strong>Recorded recommendation:</strong>
+            {{ current_comparative_assessment_report.recommended_case.application.applicant_display_name }}
+        </p>
     {% endif %}
 </section>
 {% endif %}

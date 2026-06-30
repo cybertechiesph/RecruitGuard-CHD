@@ -2335,10 +2335,12 @@ class ComparativeAssessmentReportForm(DeferredModelValidationMixin, BootstrapFor
         fields = [
             "summary_notes",
             "members_present",
+            "recommendation_notes",
         ]
         widgets = {
             "summary_notes": forms.Textarea(attrs={"rows": 4}),
             "members_present": forms.NumberInput(attrs={"min": "0", "max": "20", "step": "1"}),
+            "recommendation_notes": forms.Textarea(attrs={"rows": 3}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -2347,6 +2349,8 @@ class ComparativeAssessmentReportForm(DeferredModelValidationMixin, BootstrapFor
         self.fields["summary_notes"].required = False
         self.fields["members_present"].label = "HRMPSB members present"
         self.fields["members_present"].required = False
+        self.fields["recommendation_notes"].label = "Recommendation Notes / Remarks"
+        self.fields["recommendation_notes"].required = False
         self.fields["quorum_met"].label = "Quorum met"
         self._apply_bootstrap()
 

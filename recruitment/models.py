@@ -2519,6 +2519,74 @@ class DeliberationRecord(TimestampedModel):
         return f"{self.application.reference_label} {self.review_stage} deliberation"
 
 
+class CosVacancyDeliberation(TimestampedModel):
+    """The COS decision: one deliberation per vacancy (spec §6.3). The end-user + HRMO
+    deliberate off-system and the HRM Chief records the chosen applicant + notes here.
+    Replaces the per-application DeliberationRecord for the COS branch — the recorded
+    pick gates the COS decision step for the whole qualified pool."""
+
+    recruitment_entry = models.OneToOneField(
+        PositionPosting,
+        on_delete=models.CASCADE,
+        related_name="cos_vacancy_deliberation",
+    )
+    chosen_case = models.ForeignKey(
+        "RecruitmentCase",
+        on_delete=models.PROTECT,
+        related_name="chosen_in_cos_vacancy_deliberations",
+    )
+    notes = models.TextField(blank=True)
+    recorded_by = models.ForeignKey(
+        RecruitmentUser,
+        on_delete=models.PROTECT,
+        related_name="recorded_cos_vacancy_deliberations",
+    )
+    recorded_by_role = models.CharField(max_length=40, blank=True)
+    is_finalized = models.BooleanField(default=False)
+    finalized_at = models.DateTimeField(blank=True, null=True)
+    finalized_by = models.ForeignKey(
+        RecruitmentUser,
+        on_delete=models.PROTECT,
+        related_name="finalized_cos_vacancy_deliberations",
+        blank=True,
+        null=True,
+    )
+    finalized_by_role = models.CharField(max_length=40, blank=True)
+
+    def clean(self):
+        errors = {}
+        if self.recruitment_entry.branch != PositionPosting.Branch.COS:
+            errors["recruitment_entry"] = "COS deliberation picks are only for COS vacancies."
+        if (
+            self.chosen_case_id
+            and self.recruitment_entry_id
+            and self.chosen_case.application.position_id != self.recruitment_entry_id
+        ):
+            errors["chosen_case"] = "The chosen applicant must be one of this vacancy's candidates."
+        if self.is_finalized and not self.finalized_by_id:
+            errors["finalized_by"] = "Finalized COS deliberation picks must record the finalizing user."
+        if not self.is_finalized and (self.finalized_by_id or self.finalized_at):
+            errors["finalized_at"] = "Draft COS deliberation picks cannot include finalization details."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        if self.recorded_by_id:
+            self.recorded_by_role = self.recorded_by.role
+        if self.finalized_by_id:
+            self.finalized_by_role = self.finalized_by.role
+        elif not self.is_finalized:
+            self.finalized_by_role = ""
+        super().save(*args, **kwargs)
+
+    @property
+    def is_locked(self):
+        return self.is_finalized
+
+    def __str__(self):
+        return f"{self.recruitment_entry.job_code} COS deliberation pick"
+
+
 class ApplicationETERating(TimestampedModel):
     """The Secretariat's manual Education/Training/Experience rating for a candidate,
     entered at the CAR stage. Stored per application so it survives CAR draft
@@ -2567,6 +2635,16 @@ class ComparativeAssessmentReport(TimestampedModel):
     summary_notes = models.TextField(blank=True)
     quorum_met = models.BooleanField(blank=True, null=True)
     members_present = models.PositiveSmallIntegerField(blank=True, null=True)
+    # The HRMPSB board's recommended applicant, recorded on its behalf at CAR finalize
+    # (the board deliberates off-system; the secretariat encodes the pick — spec §5.4).
+    recommended_case = models.ForeignKey(
+        "RecruitmentCase",
+        on_delete=models.PROTECT,
+        related_name="recommended_in_comparative_assessment_reports",
+        blank=True,
+        null=True,
+    )
+    recommendation_notes = models.TextField(blank=True)
     consolidated_snapshot = models.JSONField(default=dict, blank=True)
     version_number = models.PositiveIntegerField(default=1)
     evidence_item = models.ForeignKey(
@@ -2660,6 +2738,18 @@ class ComparativeAssessmentReport(TimestampedModel):
                 errors["evidence_item"] = (
                     "The generated CAR file must stay linked to the same recruitment entry as the report."
                 )
+        if self.is_finalized and not self.recommended_case_id:
+            errors["recommended_case"] = (
+                "Record the HRMPSB board's recommended applicant before finalizing the CAR."
+            )
+        elif (
+            self.recommended_case_id
+            and self.recruitment_entry_id
+            and self.recommended_case.application.position_id != self.recruitment_entry_id
+        ):
+            errors["recommended_case"] = (
+                "The recommended applicant must be one of this vacancy's candidates."
+            )
         if self.is_finalized and not self.finalized_by_id:
             errors["finalized_by"] = (
                 "Finalized Comparative Assessment Reports must record the finalizing user."

@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from recruitment.models import (
     ComparativeAssessmentReport,
+    CosVacancyDeliberation,
     ComparativeAssessmentReportItem,
     CompetencyRatingTemplate,
     CompletionRecord,
@@ -37,6 +38,7 @@ from recruitment.services import (
     get_published_competency_rating_template,
     record_final_selection,
     save_deliberation_record,
+    save_cos_vacancy_deliberation,
     save_exam_record,
     save_exam_schedule,
     save_interview_rating,
@@ -173,6 +175,8 @@ class Command(BaseCommand):
         FinalDecision.objects.filter(recruitment_entry__in=entries).delete()
         ComparativeAssessmentReportItem.objects.filter(report__recruitment_entry__in=entries).delete()
         DeliberationRecord.objects.filter(recruitment_entry__in=entries).delete()
+        # The per-vacancy COS pick PROTECTs its chosen case; clear it before deleting cases.
+        CosVacancyDeliberation.objects.filter(recruitment_entry__in=entries).delete()
         ComparativeAssessmentReport.objects.filter(recruitment_entry__in=entries).delete()
         EvidenceVaultItem.objects.filter(recruitment_entry__in=entries).delete()
         applications.delete()
@@ -590,7 +594,11 @@ class Command(BaseCommand):
             report = generate_comparative_assessment_report(
                 application=applications[0],
                 actor=users["secretariat"],
-                cleaned_data={"summary_notes": f"E2E finalized CAR for {code}."},
+                cleaned_data={
+                    "summary_notes": f"E2E finalized CAR for {code}.",
+                    "recommended_case_id": applications[0].case.id,
+                    "recommendation_notes": "HRMPSB recommends the top-ranked applicant.",
+                },
                 finalize=True,
             )
             for application in applications:
@@ -741,19 +749,12 @@ class Command(BaseCommand):
             rating_actor=users["hrm_chief"],
             score="91.00",
         )
-        save_deliberation_record(
-            application=application,
-            actor=users["hrm_chief"],
-            cleaned_data={
-                "deliberated_at": timezone.now(),
-                "deliberation_minutes": "E2E COS deliberation minutes.",
-                "recommendation": "COS applicant recommended for final decision.",
-                "decision_support_summary": "E2E COS decision-support packet is complete.",
-                "quorum_status": DeliberationRecord.QuorumStatus.MET,
-                "attendance_notes": "HRM Chief completed COS review.",
-                "ranking_position": None,
-                "ranking_notes": "COS ranking not required.",
-            },
+        # COS records one per-vacancy deliberation pick (spec §6.3).
+        save_cos_vacancy_deliberation(
+            application.position,
+            users["hrm_chief"],
+            application.case.id,
+            "E2E COS deliberation: HRM Chief and end-user selected this applicant.",
             finalize=True,
         )
 

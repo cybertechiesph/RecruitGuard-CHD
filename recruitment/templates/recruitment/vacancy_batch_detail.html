@@ -49,6 +49,15 @@
     </div>
 {% endif %}
 
+{% if cos_deliberation_ready %}
+    <div class="alert alert-info" role="status">
+        The COS pool has reached the deliberation &mdash; record the chosen applicant for the vacancy.
+        <div class="mt-2">
+            <a href="{% url 'vacancy-batch-cos-deliberation' entry.pk %}" class="btn btn-rg-primary btn-sm">Open COS deliberation</a>
+        </div>
+    </div>
+{% endif %}
+
 {% if screening_batch %}
     {% if screening_batch.is_ready %}
         <div class="alert alert-success" role="status">

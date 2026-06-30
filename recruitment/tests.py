@@ -111,6 +111,9 @@ from .services import (
     record_system_audit_event,
     remove_applicant_from_batch,
     save_deliberation_record,
+    save_cos_vacancy_deliberation,
+    get_cos_vacancy_deliberation,
+    cos_deliberation_pool,
     save_exam_record,
     save_exam_schedule,
     create_competency_rating_template,
@@ -679,6 +682,16 @@ class BaseRecruitmentTestCase(TestCase):
             # Plantilla no longer records an in-system deliberation — the CAR is the
             # gate now. Leave the draft staged and return without a deliberation record.
             return None
+        if application.branch == PositionPosting.Branch.COS:
+            # COS records one per-vacancy deliberation pick (spec §6.3); the chosen applicant
+            # defaults to this application's own case (always in the pool).
+            return save_cos_vacancy_deliberation(
+                application.position,
+                actor,
+                application.case.id,
+                deliberation_minutes,
+                finalize=True,
+            )
         return save_deliberation_record(
             application=application,
             actor=actor,
@@ -700,6 +713,7 @@ class BaseRecruitmentTestCase(TestCase):
         application,
         actor,
         summary_notes="Comparative ranking sheet generated for Plantilla decision support.",
+        recommended_case=None,
     ):
         car_actor = actor
         if (
@@ -715,7 +729,15 @@ class BaseRecruitmentTestCase(TestCase):
         return generate_comparative_assessment_report(
             application=application,
             actor=car_actor,
-            cleaned_data={"summary_notes": summary_notes},
+            cleaned_data={
+                "summary_notes": summary_notes,
+                # The board's recommended applicant is captured at finalize (defaults to
+                # this application's own case, which is always in the pool).
+                "recommended_case_id": (
+                    recommended_case.id if recommended_case else application.case.id
+                ),
+                "recommendation_notes": "HRMPSB recommends this applicant.",
+            },
             finalize=True,
         )
 
@@ -10150,7 +10172,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         payload.update(overrides)
         return payload
 
-    def test_cos_deliberation_consolidates_finalized_outputs(self):
+    def test_cos_deliberation_pick_records_the_chosen_applicant(self):
         application = self.make_application(self.cos_position)
         self.move_application_to_hrm_chief_review(application)
         self.finalize_screening_for_current_stage(application, self.hrm_chief)
@@ -10172,23 +10194,81 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             cleaned_data=self.session_payload(session_notes="Interview output locked before deliberation."),
             finalize=True,
         )
+        application.refresh_from_db()
+        # The COS pool is at the deliberation section before the pick.
+        self.assertEqual(get_current_workflow_section(application), "deliberation")
 
-        deliberation_record = self.finalize_deliberation_for_current_stage(application, self.hrm_chief)
+        pick = save_cos_vacancy_deliberation(
+            self.cos_position,
+            self.hrm_chief,
+            application.case.id,
+            "End-user and HRM Chief selected this applicant.",
+            finalize=True,
+        )
 
-        self.assertTrue(deliberation_record.is_finalized)
-        self.assertEqual(deliberation_record.review_stage, RecruitmentCase.Stage.HRM_CHIEF_REVIEW)
-        self.assertEqual(
-            deliberation_record.consolidated_snapshot["summary"]["finalized_screening_count"],
-            2,
+        self.assertTrue(pick.is_finalized)
+        self.assertEqual(pick.chosen_case_id, application.case.id)
+        self.assertEqual(pick.recruitment_entry_id, self.cos_position.id)
+        # The finalized pick is one per vacancy and gates the decision section.
+        self.assertEqual(get_cos_vacancy_deliberation(self.cos_position).pk, pick.pk)
+        application.refresh_from_db()
+        self.assertEqual(get_current_workflow_section(application), "decision")
+        # The submission packet now reads the per-vacancy pick.
+        packet = build_submission_packet(application)
+        self.assertTrue(packet["summary"]["has_cos_deliberation_pick"])
+        self.assertNotIn(
+            "Finalized COS deliberation pick", packet["summary"]["missing_components"]
         )
-        self.assertEqual(
-            deliberation_record.consolidated_snapshot["summary"]["finalized_interview_count"],
-            1,
-        )
-        self.assertEqual(
-            deliberation_record.consolidated_snapshot["summary"]["latest_interview_average"],
-            "75.00",
-        )
+
+    def _cos_case_at_deliberation(self):
+        application = self.make_application(self.cos_position)
+        self.move_application_to_hrm_chief_review(application)
+        self.finalize_screening_for_current_stage(application, self.hrm_chief)
+        self.finalize_exam_for_current_stage(application, self.hrm_chief)
+        self.finalize_interview_for_current_stage(application, self.hrm_chief)
+        application.refresh_from_db()
+        return application
+
+    def test_cos_deliberation_pick_requires_the_hrm_chief(self):
+        application = self._cos_case_at_deliberation()
+        with self.assertRaisesMessage(
+            ValueError, "Only the HRM Chief records the COS deliberation pick."
+        ):
+            save_cos_vacancy_deliberation(
+                self.cos_position, self.secretariat, application.case.id, "Attempt.", finalize=True
+            )
+
+    def test_cos_deliberation_pick_rejects_a_candidate_outside_the_pool(self):
+        application = self._cos_case_at_deliberation()
+        with self.assertRaisesMessage(
+            ValueError, "The chosen applicant must be one of this vacancy's candidates."
+        ):
+            save_cos_vacancy_deliberation(
+                self.cos_position, self.hrm_chief, 999999, "Bad pick.", finalize=True
+            )
+        self.assertIsNone(get_cos_vacancy_deliberation(self.cos_position))
+
+    def test_cos_deliberation_view_finalizes_via_post(self):
+        application = self._cos_case_at_deliberation()
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = client.post(
+                reverse("vacancy-batch-cos-deliberation", args=[self.cos_position.pk]),
+                {
+                    "operation": "finalize",
+                    "chosen_case": application.case.id,
+                    "notes": "Chosen via the COS deliberation console.",
+                },
+                follow=True,
+            )
+        self.assertEqual(response.status_code, 200)
+        pick = get_cos_vacancy_deliberation(self.cos_position)
+        self.assertIsNotNone(pick)
+        self.assertTrue(pick.is_finalized)
+        self.assertEqual(pick.chosen_case_id, application.case.id)
+        application.refresh_from_db()
+        self.assertEqual(get_current_workflow_section(application), "decision")
 
     def test_user_full_name_falls_back_to_username_for_display(self):
         self.assertEqual(self.applicant.get_full_name(), self.applicant.username)
@@ -10326,7 +10406,10 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         report = generate_comparative_assessment_report(
             application=application,
             actor=self.secretariat,
-            cleaned_data={"summary_notes": "Prepared by HRMS from finalized HRMPSB records."},
+            cleaned_data={
+                "summary_notes": "Prepared by HRMS from finalized HRMPSB records.",
+                "recommended_case_id": application.case.id,
+            },
             finalize=True,
         )
         item = report.items.get(recruitment_case=application.case)
@@ -10367,7 +10450,10 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         report = generate_comparative_assessment_report(
             application=application,
             actor=self.hrm_chief,
-            cleaned_data={"summary_notes": "Level 2 CAR prepared by HRM Chief."},
+            cleaned_data={
+                "summary_notes": "Level 2 CAR prepared by HRM Chief.",
+                "recommended_case_id": application.case.id,
+            },
             finalize=True,
         )
 
@@ -10482,7 +10568,10 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         report = generate_comparative_assessment_report(
             application=secondary_application,
             actor=self.secretariat,
-            cleaned_data={"summary_notes": "CAR includes advisory preliminary ranking."},
+            cleaned_data={
+                "summary_notes": "CAR includes advisory preliminary ranking.",
+                "recommended_case_id": secondary_application.case.id,
+            },
             finalize=True,
         )
         primary_item = report.items.get(recruitment_case=primary_application.case)
@@ -10571,6 +10660,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
                 "summary_notes": "Finalized CAR.",
                 "quorum_met": True,
                 "members_present": 5,
+                "recommended_case_id": application.case.id,
             },
             finalize=True,
         )
@@ -10578,6 +10668,73 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         self.assertTrue(report.is_finalized)
         self.assertIs(report.quorum_met, True)
         self.assertEqual(report.members_present, 5)
+
+    def test_car_finalize_requires_a_recommended_applicant(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb)
+        self.finalize_deliberation_for_current_stage(application, self.hrmpsb, ranking_position=1)
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "Record the HRMPSB board's recommended applicant before finalizing the CAR.",
+        ):
+            generate_comparative_assessment_report(
+                application=application,
+                actor=self.secretariat,
+                cleaned_data={"summary_notes": "No recommendation provided."},
+                finalize=True,
+            )
+        # No finalized CAR should have been created.
+        self.assertFalse(
+            ComparativeAssessmentReport.objects.filter(
+                recruitment_entry=application.position, is_finalized=True
+            ).exists()
+        )
+
+    def test_car_finalize_records_the_board_recommendation(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb)
+        self.finalize_deliberation_for_current_stage(application, self.hrmpsb, ranking_position=1)
+
+        report = generate_comparative_assessment_report(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data={
+                "summary_notes": "Finalized CAR with recommendation.",
+                "recommended_case_id": application.case.id,
+                "recommendation_notes": "Strongest competency profile in the pool.",
+            },
+            finalize=True,
+        )
+
+        self.assertTrue(report.is_finalized)
+        self.assertEqual(report.recommended_case_id, application.case.id)
+        self.assertEqual(report.recommendation_notes, "Strongest competency profile in the pool.")
+
+    def test_car_finalize_rejects_a_recommendation_outside_the_pool(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb)
+        self.finalize_deliberation_for_current_stage(application, self.hrmpsb, ranking_position=1)
+        # A case from a different vacancy is not a valid recommendation.
+        other = self.make_application(self.level2_position)
+        self.move_application_to_hrmpsb_review(other)
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "The recommended applicant must be one of this vacancy's candidates.",
+        ):
+            generate_comparative_assessment_report(
+                application=application,
+                actor=self.secretariat,
+                cleaned_data={
+                    "summary_notes": "Cross-vacancy recommendation.",
+                    "recommended_case_id": other.case.id,
+                },
+                finalize=True,
+            )
 
     def test_plantilla_recommendation_requires_finalized_car(self):
         application = self.make_application(self.level1_position)
@@ -10670,7 +10827,10 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         finalized_report = generate_comparative_assessment_report(
             application=secondary_application,
             actor=self.secretariat,
-            cleaned_data={"summary_notes": "Final entry-level CAR."},
+            cleaned_data={
+                "summary_notes": "Final entry-level CAR.",
+                "recommended_case_id": secondary_application.case.id,
+            },
             finalize=True,
         )
 
@@ -11064,7 +11224,10 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         new_report = generate_comparative_assessment_report(
             application=applications[0],
             actor=self.secretariat,
-            cleaned_data={"summary_notes": "Final CAR after HRMPSB reassessment."},
+            cleaned_data={
+                "summary_notes": "Final CAR after HRMPSB reassessment.",
+                "recommended_case_id": applications[0].case.id,
+            },
             finalize=True,
         )
         self.assertTrue(new_report.is_finalized)
@@ -11217,7 +11380,7 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         self.assertIn("Finalized screening record", packet["summary"]["missing_components"])
         self.assertIn("Finalized examination record", packet["summary"]["missing_components"])
         self.assertIn("Finalized interview session", packet["summary"]["missing_components"])
-        self.assertIn("Finalized deliberation record", packet["summary"]["missing_components"])
+        self.assertIn("Finalized COS deliberation pick", packet["summary"]["missing_components"])
 
     def test_final_decision_invalid_post_rerenders_bound_wizard_form(self):
         application = self.make_application(self.cos_position)

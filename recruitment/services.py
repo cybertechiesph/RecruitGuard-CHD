@@ -39,6 +39,7 @@ from .models import (
     CompetencyScore,
     CompletionRecord,
     CompletionRequirement,
+    CosVacancyDeliberation,
     DeliberationRecord,
     ExamRecord,
     ExamSchedule,
@@ -2407,6 +2408,10 @@ def interview_is_finalized_for_current_stage(application):
 
 
 def deliberation_is_finalized_for_current_stage(application):
+    if application.branch == PositionPosting.Branch.COS:
+        # COS uses one per-vacancy deliberation pick (spec §6.3), not a per-application record.
+        pick = get_cos_vacancy_deliberation(application.position)
+        return bool(pick and pick.is_finalized)
     deliberation_record = get_deliberation_record(application)
     return bool(deliberation_record and deliberation_record.is_finalized)
 
@@ -2906,6 +2911,98 @@ def get_deliberation_record(application, stage=None):
     ).filter(review_stage=review_stage).first()
 
 
+def get_cos_vacancy_deliberation(posting):
+    """The vacancy's COS deliberation pick (one per COS vacancy), or None."""
+    return (
+        CosVacancyDeliberation.objects.select_related(
+            "chosen_case", "chosen_case__application", "recorded_by", "finalized_by"
+        )
+        .filter(recruitment_entry=posting)
+        .first()
+    )
+
+
+def cos_deliberation_pool(posting):
+    """The COS vacancy's applications at the HRM Chief deliberation section — the qualified
+    pool the per-vacancy pick is chosen from. The pick gates the decision for all of them."""
+    cases = (
+        RecruitmentCase.objects.filter(
+            application__position=posting,
+            current_stage=RecruitmentCase.Stage.HRM_CHIEF_REVIEW,
+            case_status=RecruitmentCase.CaseStatus.ACTIVE,
+            is_stage_locked=False,
+        )
+        .select_related("application", "application__applicant", "application__position")
+        .order_by("application__reference_number", "application_id")
+    )
+    return [
+        case.application
+        for case in cases
+        if get_current_workflow_section(case.application) == "deliberation"
+    ]
+
+
+@transaction.atomic
+def save_cos_vacancy_deliberation(posting, actor, chosen_case_id, notes, *, finalize=False):
+    """Record (and optionally finalize) the one per-vacancy COS deliberation pick — the chosen
+    applicant + notes the end-user and HRM Chief agreed on off-system (spec §6.3). Finalizing
+    completes the deliberation section for the whole COS pool, advancing each to the decision."""
+    if posting.branch != PositionPosting.Branch.COS:
+        raise ValueError("COS deliberation picks are only for COS vacancies.")
+    if actor.role != RecruitmentUser.Role.HRM_CHIEF:
+        raise ValueError("Only the HRM Chief records the COS deliberation pick.")
+    pool = cos_deliberation_pool(posting)
+    if not pool:
+        raise ValueError("No candidates are ready for the COS deliberation in this vacancy.")
+    pool_case_ids = {application.case.id for application in pool}
+    try:
+        chosen_case_id = int(chosen_case_id)
+    except (TypeError, ValueError):
+        raise ValueError("Choose the selected applicant before saving the COS deliberation pick.")
+    if chosen_case_id not in pool_case_ids:
+        raise ValueError("The chosen applicant must be one of this vacancy's candidates.")
+
+    pick = get_cos_vacancy_deliberation(posting)
+    if pick and pick.is_finalized:
+        raise ValueError("The COS deliberation pick is finalized and can no longer be edited.")
+    if pick is None:
+        pick = CosVacancyDeliberation(recruitment_entry=posting)
+    pick.chosen_case_id = chosen_case_id
+    pick.notes = notes or ""
+    pick.recorded_by = actor
+    pick.is_finalized = finalize
+    if finalize:
+        pick.finalized_by = actor
+        pick.finalized_at = timezone.now()
+    else:
+        pick.finalized_by = None
+        pick.finalized_at = None
+    pick.full_clean()
+    pick.save()
+
+    record_audit_event(
+        application=pick.chosen_case.application,
+        actor=actor,
+        action=(
+            AuditLog.Action.DELIBERATION_FINALIZED
+            if finalize
+            else AuditLog.Action.DELIBERATION_RECORDED
+        ),
+        description=(
+            "Finalized the COS vacancy deliberation pick."
+            if finalize
+            else "Saved the COS vacancy deliberation pick."
+        ),
+        metadata={
+            "recruitment_entry_id": posting.id,
+            "chosen_case_id": pick.chosen_case_id,
+            "is_finalized": pick.is_finalized,
+            "pool_size": len(pool),
+        },
+    )
+    return pick
+
+
 def get_deliberation_records(application):
     return application.deliberation_records.select_related(
         "recorded_by",
@@ -2927,6 +3024,10 @@ def get_latest_finalized_deliberation_record(application):
 
 
 def user_can_manage_deliberation(user, application):
+    # COS now uses a single per-vacancy deliberation pick on the console (spec §6.3),
+    # not the per-application deliberation record handled here.
+    if application.branch == PositionPosting.Branch.COS:
+        return False
     current_stage = get_current_review_stage(application)
     expected_stage = DELIBERATION_STAGES_BY_BRANCH.get(application.branch)
     if (
@@ -2937,6 +3038,19 @@ def user_can_manage_deliberation(user, application):
     if user.role not in DELIBERATION_ROLES_BY_BRANCH.get(application.branch, set()):
         return False
     return user_can_process_application(user, application)
+
+
+def user_can_manage_cos_deliberation(user, posting):
+    """Whether the user may record the per-vacancy COS deliberation pick: the HRM Chief,
+    while the vacancy's COS pool is at the HRM Chief deliberation section and not yet locked."""
+    if posting.branch != PositionPosting.Branch.COS:
+        return False
+    if user.role != RecruitmentUser.Role.HRM_CHIEF:
+        return False
+    pick = get_cos_vacancy_deliberation(posting)
+    if pick and pick.is_finalized:
+        return False
+    return bool(cos_deliberation_pool(posting))
 
 
 def get_comparative_assessment_report(application, stage=None, include_returned=False):
@@ -3417,6 +3531,12 @@ def build_submission_packet(application):
         ).prefetch_related("ratings").order_by("created_at")
     )
     deliberation_record = get_latest_finalized_deliberation_record(application)
+    cos_deliberation_pick = (
+        get_cos_vacancy_deliberation(application.position)
+        if application.branch == PositionPosting.Branch.COS
+        else None
+    )
+    has_cos_pick = bool(cos_deliberation_pick and cos_deliberation_pick.is_finalized)
     comparative_assessment_report = get_latest_finalized_comparative_assessment_report(application)
     evidence_items = list(get_evidence_items_for_application_context(application))
 
@@ -3427,8 +3547,8 @@ def build_submission_packet(application):
         missing_components.append("Finalized examination record")
     if not interview_sessions:
         missing_components.append("Finalized interview session")
-    if application.branch == PositionPosting.Branch.COS and not deliberation_record:
-        missing_components.append("Finalized deliberation record")
+    if application.branch == PositionPosting.Branch.COS and not has_cos_pick:
+        missing_components.append("Finalized COS deliberation pick")
     if application.branch == PositionPosting.Branch.PLANTILLA and not comparative_assessment_report:
         missing_components.append("Finalized Comparative Assessment Report")
 
@@ -3472,8 +3592,23 @@ def build_submission_packet(application):
             "finalized_interview_count": len(interview_sessions),
             "evidence_reference_count": len(evidence_items),
             "has_deliberation_record": bool(deliberation_record),
+            "has_cos_deliberation_pick": has_cos_pick,
             "has_comparative_assessment_report": bool(comparative_assessment_report),
         },
+        "cos_deliberation_pick": (
+            {
+                "chosen_applicant": cos_deliberation_pick.chosen_case.application.applicant_display_name,
+                "chosen_case_id": cos_deliberation_pick.chosen_case_id,
+                "notes": cos_deliberation_pick.notes,
+                "finalized_at": (
+                    cos_deliberation_pick.finalized_at.isoformat()
+                    if cos_deliberation_pick.finalized_at
+                    else ""
+                ),
+            }
+            if has_cos_pick
+            else {}
+        ),
         "screening_records": [_decision_packet_screening_record(record) for record in screening_records],
         "exam_records": [_decision_packet_exam_record(record) for record in exam_records],
         "interview_sessions": [
@@ -5124,6 +5259,21 @@ def autosave_comparative_assessment_report_notes(application, actor, cleaned_dat
 
 
 @transaction.atomic
+def _resolve_car_recommended_case_id(raw_case_id, candidate_rows):
+    """Validate the board's recommended applicant is one of the CAR's ranked candidates
+    and return its case id. Raises a clear error when missing or out of pool."""
+    pool_case_ids = {row["recruitment_case"].id for row in candidate_rows}
+    try:
+        case_id = int(raw_case_id)
+    except (TypeError, ValueError):
+        raise ValueError(
+            "Record the HRMPSB board's recommended applicant before finalizing the CAR."
+        )
+    if case_id not in pool_case_ids:
+        raise ValueError("The recommended applicant must be one of this vacancy's candidates.")
+    return case_id
+
+
 def generate_comparative_assessment_report(application, actor, cleaned_data, finalize=False):
     if not hasattr(application, "case"):
         raise ValueError("A case must exist before a Comparative Assessment Report can be generated.")
@@ -5243,6 +5393,10 @@ def generate_comparative_assessment_report(application, actor, cleaned_data, fin
         report.finalized_at = timezone.now()
         report.quorum_met = cleaned_data.get("quorum_met")
         report.members_present = cleaned_data.get("members_present")
+        report.recommended_case_id = _resolve_car_recommended_case_id(
+            cleaned_data.get("recommended_case_id"), candidate_rows
+        )
+        report.recommendation_notes = (cleaned_data.get("recommendation_notes") or "").strip()
     report.full_clean()
     report.save()
 
@@ -5288,6 +5442,7 @@ def generate_comparative_assessment_report(application, actor, cleaned_data, fin
             "evidence_id": evidence.id,
             "is_finalized": report.is_finalized,
             "prepared_by_role": actor.role,
+            "recommended_case_id": report.recommended_case_id,
         },
     )
     if finalize:

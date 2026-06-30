@@ -80,10 +80,15 @@ from .services import (
     get_comparative_assessment_report,
     get_comparative_assessment_report_items_for_report,
     get_comparative_assessment_readiness,
+    get_current_workflow_section,
     get_completion_record,
     get_completion_requirements,
     decrypt_evidence_bytes,
     evidence_belongs_to_application_context,
+    get_cos_vacancy_deliberation,
+    cos_deliberation_pool,
+    save_cos_vacancy_deliberation,
+    user_can_manage_cos_deliberation,
     get_deliberation_record,
     get_deliberation_records,
     get_evidence_context_application_for_user,
@@ -617,12 +622,29 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
                         context["car_requires_deliberation"] = True
                     elif not deliberation_record.is_finalized:
                         context["car_requires_finalized_deliberation"] = True
+        elif (
+            application.branch == PositionPosting.Branch.COS
+            and application.case.current_stage == RecruitmentCase.Stage.HRM_CHIEF_REVIEW
+            and get_current_workflow_section(application) == "deliberation"
+        ):
+            # COS deliberation is one per-vacancy pick recorded on the console (spec §6.3).
+            context["cos_deliberation_section"] = True
+            context["cos_deliberation_pick"] = get_cos_vacancy_deliberation(application.position)
         if not applicant_pool_is_blocked and user_can_manage_comparative_assessment_report(user, application):
             report = context["current_comparative_assessment_report"]
             if report and report.is_finalized:
                 context["car_locked"] = True
             else:
                 context["car_form"] = ComparativeAssessmentReportForm(instance=report)
+        elif (
+            user.role == RecruitmentUser.Role.HRMPSB_MEMBER
+            and application.branch == PositionPosting.Branch.PLANTILLA
+            and application.case.current_stage == RecruitmentCase.Stage.HRMPSB_REVIEW
+            and get_current_workflow_section(application) == "car"
+            and context["current_comparative_assessment_report"]
+        ):
+            # The HRMPSB board gets a read-only ranked CAR to deliberate off-system (spec §5.4).
+            context["car_readonly"] = True
         if user_can_record_final_decision(user, application):
             context["final_decision_form"] = FinalDecisionForm()
         if user_can_record_final_selection(user, application):
@@ -1011,6 +1033,10 @@ class VacancyBatchDetailView(LoginRequiredMixin, WorkflowProcessorRequiredMixin,
             user_can_view_application(self.request.user, application)
             for application in vacancy_interview_pool(entry)
         )
+        context["cos_deliberation_ready"] = entry.branch == PositionPosting.Branch.COS and any(
+            user_can_view_application(self.request.user, application)
+            for application in cos_deliberation_pool(entry)
+        )
         return context
 
 
@@ -1221,6 +1247,68 @@ class VacancyBatchInterviewView(LoginRequiredMixin, WorkflowProcessorRequiredMix
 
         messages.error(request, "This action is not available.")
         return redirect("vacancy-batch-interview", pk=entry.pk)
+
+
+class VacancyBatchCosDeliberationView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
+    """The COS decision: one per-vacancy deliberation pick (spec §6.3). The HRM Chief records
+    the chosen applicant + notes for the whole pool; finalizing it advances the pool to the
+    decision step together."""
+
+    template_name = "recruitment/vacancy_batch_cos_deliberation.html"
+
+    def _scoped_pool(self, request, entry):
+        return [
+            application
+            for application in cos_deliberation_pool(entry)
+            if user_can_view_application(request.user, application)
+        ]
+
+    def _context(self, request, entry, pool):
+        pick = get_cos_vacancy_deliberation(entry)
+        return {
+            "entry": entry,
+            "candidates": [
+                {"application": application, "case_id": application.case.id} for application in pool
+            ],
+            "pick": pick,
+            "can_manage": user_can_manage_cos_deliberation(request.user, entry),
+        }
+
+    def get(self, request, pk):
+        entry = get_object_or_404(PositionPosting, pk=pk)
+        if entry.branch != PositionPosting.Branch.COS:
+            raise Http404("The COS deliberation pick is only for COS vacancies.")
+        pool = self._scoped_pool(request, entry)
+        pick = get_cos_vacancy_deliberation(entry)
+        if not pool and not (pick and pick.is_finalized):
+            raise Http404("No COS deliberation is available for this vacancy.")
+        return render(request, self.template_name, self._context(request, entry, pool))
+
+    def post(self, request, pk):
+        entry = get_object_or_404(PositionPosting, pk=pk)
+        if not user_can_manage_cos_deliberation(request.user, entry):
+            raise PermissionDenied
+        operation = request.POST.get("operation", "")
+        finalize = operation == "finalize"
+        if operation not in {"save", "finalize"}:
+            messages.error(request, "This action is not available.")
+            return redirect("vacancy-batch-cos-deliberation", pk=entry.pk)
+        try:
+            save_cos_vacancy_deliberation(
+                entry,
+                request.user,
+                request.POST.get("chosen_case"),
+                request.POST.get("notes", ""),
+                finalize=finalize,
+            )
+        except (ValueError, ValidationError) as exc:
+            messages.error(request, str(exc))
+            return redirect("vacancy-batch-cos-deliberation", pk=entry.pk)
+        if finalize:
+            messages.success(request, "COS deliberation pick finalized — the pool moved to the decision.")
+            return redirect("vacancy-batches")
+        messages.success(request, "COS deliberation pick saved.")
+        return redirect("vacancy-batch-cos-deliberation", pk=entry.pk)
 
 
 class WorkflowActionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
@@ -1808,6 +1896,9 @@ class ComparativeAssessmentReportView(LoginRequiredMixin, WorkflowProcessorRequi
                     # Persist any per-candidate ETE ratings typed on the draft, then
                     # regenerate so the ranking reflects them.
                     apply_car_ete_ratings(application, request.user, request.POST)
+                    if operation == "finalize":
+                        # The board's recommended applicant is chosen in the finalize modal.
+                        form.cleaned_data["recommended_case_id"] = request.POST.get("recommended_case")
                     report = generate_comparative_assessment_report(
                         application=application,
                         actor=request.user,

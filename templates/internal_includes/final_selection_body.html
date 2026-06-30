@@ -82,7 +82,12 @@ Standards applied:
                         <div class="rg-del-car-item__body">
                             <div class="rg-fs-candidate__header">
                                 <div>
-                                    <div class="rg-del-car-item__name">{{ candidate.applicant_display_name }}</div>
+                                    <div class="rg-del-car-item__name">
+                                        {{ candidate.applicant_display_name }}
+                                        {% if final_selection_report and item.recruitment_case_id == final_selection_report.recommended_case_id %}
+                                            <span class="rg-pill rg-pill--success rg-pill--sm">Board's recommendation</span>
+                                        {% endif %}
+                                    </div>
                                     <div class="rg-fs-candidate__ref">
                                         {{ candidate.reference_number|default:candidate.reference_label }}
                                     </div>
