@@ -147,6 +147,8 @@ from .services import (
     user_can_manage_interview_session,
     user_can_manage_screening,
     user_can_process_application,
+    vacancy_screening_batch_status,
+    vacancy_screening_batch_block_message,
     user_can_record_final_decision,
     user_can_record_final_selection,
     user_can_reopen_case,
@@ -519,6 +521,15 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
                     application=application,
                 )
                 context["exam_schedule_form"] = ExamScheduleForm(instance=exam_schedule)
+        elif (
+            context.get("current_detail_tab", {}).get("key") == "exam"
+            and user.role in {RecruitmentUser.Role.SECRETARIAT, RecruitmentUser.Role.HRM_CHIEF}
+        ):
+            # The case's own screening is done (section is exam) but the vacancy's exam batch is
+            # on hold because a sibling still needs a screening decision (§4.3).
+            batch_block = vacancy_screening_batch_block_message(application.position)
+            if batch_block:
+                context["exam_batch_block_message"] = batch_block
         if user_can_manage_interview_session(user, application):
             interview_session = context["current_interview_session"]
             if interview_session and interview_session.is_finalized:
@@ -972,8 +983,10 @@ class VacancyBatchDetailView(LoginRequiredMixin, WorkflowProcessorRequiredMixin,
         ]
         if not applications:
             raise Http404("No batch is available for this vacancy.")
-        context["entry"] = applications[0].position
+        entry = applications[0].position
+        context["entry"] = entry
         context["applications"] = applications
+        context["screening_batch"] = vacancy_screening_batch_status(entry)
         return context
 
 

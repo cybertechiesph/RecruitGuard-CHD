@@ -6283,10 +6283,15 @@ def get_available_actions(application, user):
         and effective_role in SCREENING_REVIEW_ROLES
         and current_stage in SCREENING_STAGES
     ):
-        return [
+        actions = [
             ("return_to_applicant", "Return to Applicant"),
             ("reject", "Reject Application"),
         ]
+        # An applicant who is awaiting resubmission (typically past the deadline) can be removed
+        # from the batch (disqualified with a reason), which unblocks the batch screening gate.
+        if case and case.case_status == RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION:
+            actions.append(("remove_applicant", "Remove from Batch"))
+        return actions
 
     if (
         current_section == "decision"
@@ -6614,6 +6619,61 @@ def submit_document_resubmission(application, actor, uploaded_files):
 
 
 @transaction.atomic
+def remove_applicant_from_batch(application, actor, reason):
+    """Remove an applicant who is awaiting resubmission from the vacancy's batch — i.e. disqualify
+    them with a recorded reason (§4.3). This is a terminal, audit-kept close (NOT a hard delete):
+    it reuses the rejected/closed case state so the applicant is excluded from the advancing batch,
+    which also unblocks the batch screening gate. Scoped to screening-stage applications that are
+    awaiting resubmission (the deadline-misser case)."""
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValueError("Record a reason before removing the applicant from the batch.")
+    case = getattr(application, "case", None)
+    if case is None or case.current_stage not in SCREENING_STAGES:
+        raise ValueError("Applicants can only be removed from the batch during screening.")
+    if case.case_status != RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION:
+        raise ValueError("Only an applicant awaiting resubmission can be removed from the batch.")
+    if not user_can_process_application(actor, application):
+        raise ValueError("This case is not currently assigned to you.")
+
+    screening_record = get_screening_record(application, stage=case.current_stage)
+    missed_deadline = bool(screening_record and screening_record.resubmission_is_overdue)
+    previous_status = application.status
+    previous_case_status = case.case_status
+
+    # Reuse the terminal rejected/closed transition so queue-exclusion + lock semantics are shared.
+    _sync_case_after_workflow_action(
+        application=application,
+        actor=actor,
+        next_role="",
+        next_status=RecruitmentApplication.Status.REJECTED,
+        remarks=reason,
+    )
+    application.current_handler_role = ""
+    application.status = RecruitmentApplication.Status.REJECTED
+    application.closed_at = timezone.now()
+    application.save(
+        update_fields=["current_handler_role", "status", "closed_at", "updated_at"]
+    )
+    record_audit_event(
+        application=application,
+        actor=actor,
+        action=AuditLog.Action.APPLICANT_DISQUALIFIED,
+        description="Removed the applicant from the batch (disqualified).",
+        metadata={
+            "reason": reason,
+            "missed_resubmission_deadline": missed_deadline,
+            "from_status": previous_status,
+            "to_status": application.status,
+            "from_case_status": previous_case_status,
+            "to_case_status": application.case.case_status,
+        },
+    )
+    queue_non_selected_applicant_notification(application, actor=actor, cut_at_screening=True)
+    return application
+
+
+@transaction.atomic
 def process_workflow_action(application, actor, action, remarks):
     effective_role = get_effective_role_for_action(actor, application)
     if not hasattr(application, "case"):
@@ -6634,6 +6694,8 @@ def process_workflow_action(application, actor, action, remarks):
     # visible in the reviewing role's batch as "awaiting resubmission" rather than being handed
     # off to the applicant and dropped from the workflow (§4.2). A return with no flagged
     # documents keeps the old generic return-to-applicant behavior below.
+    if action == "remove_applicant":
+        return remove_applicant_from_batch(application, actor, remarks)
     if action == "return_to_applicant":
         _screening_record, _flagged = _flagged_resubmission_reviews(
             application, stage=application.case.current_stage

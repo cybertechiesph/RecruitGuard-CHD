@@ -108,6 +108,7 @@ from .services import (
     record_final_decision,
     record_final_selection,
     record_system_audit_event,
+    remove_applicant_from_batch,
     save_deliberation_record,
     save_exam_record,
     save_exam_schedule,
@@ -6489,6 +6490,79 @@ class BatchScreeningGateTests(BaseRecruitmentTestCase):
         self.assertTrue(status.is_ready)
         self.assertEqual(status.pending, 0)
         self.assertEqual(status.qualified, 2)
+        self.assertTrue(user_can_manage_exam(self.secretariat, qualified))
+
+    def _make_awaiting_case(self, application):
+        first_requirement = get_applicant_document_requirements(application.branch)[0]
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        client.post(
+            reverse("screening-review", kwargs={"pk": application.pk}),
+            {
+                "completeness_status": ScreeningRecord.CompletenessStatus.INCOMPLETE,
+                "completeness_notes": "A document needs correcting.",
+                "qualification_outcome": ScreeningRecord.QualificationOutcome.NOT_QUALIFIED,
+                "screening_notes": "Pending resubmission.",
+                **self.screening_document_status_payload(
+                    application,
+                    overrides={
+                        first_requirement.code: (
+                            ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION
+                        ),
+                    },
+                ),
+                f"document_remarks__{first_requirement.code}": "Upload a clearer copy.",
+                "operation": "finalize",
+            },
+            follow=True,
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            process_workflow_action(
+                application, self.secretariat, "return_to_applicant", "Please resubmit."
+            )
+        application.refresh_from_db()
+        return application
+
+    def test_remove_applicant_disqualifies_and_records_reason(self):
+        application = self._submit(self.make_application(self.level1_position), self.applicant)
+        self._make_awaiting_case(application)
+        self.assertEqual(
+            application.case.case_status,
+            RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION,
+        )
+        remove_applicant_from_batch(
+            application, self.secretariat, "Did not resubmit before the deadline."
+        )
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+        self.assertEqual(application.status, RecruitmentApplication.Status.REJECTED)
+        self.assertEqual(application.case.case_status, RecruitmentCase.CaseStatus.REJECTED)
+        self.assertTrue(application.case.is_stage_locked)
+        audit = AuditLog.objects.filter(
+            application=application,
+            action=AuditLog.Action.APPLICANT_DISQUALIFIED,
+        ).first()
+        self.assertIsNotNone(audit)
+        self.assertEqual(audit.metadata["reason"], "Did not resubmit before the deadline.")
+
+    def test_remove_applicant_requires_a_reason(self):
+        application = self._submit(self.make_application(self.level1_position), self.applicant)
+        self._make_awaiting_case(application)
+        with self.assertRaises(ValueError):
+            remove_applicant_from_batch(application, self.secretariat, "   ")
+
+    def test_removing_awaiting_sibling_unblocks_the_batch(self):
+        qualified = self._submit(self.make_application(self.level1_position), self.applicant)
+        self.finalize_screening_for_current_stage(qualified, self.secretariat)
+        sibling = self._extra_submitted_application(self.level1_position, "2")
+        self._make_awaiting_case(sibling)
+        qualified.refresh_from_db()
+        self.assertFalse(vacancy_screening_batch_status(self.level1_position).is_ready)
+        self.assertFalse(user_can_manage_exam(self.secretariat, qualified))
+
+        remove_applicant_from_batch(sibling, self.secretariat, "Missed the resubmission deadline.")
+        qualified.refresh_from_db()
+        self.assertTrue(vacancy_screening_batch_status(self.level1_position).is_ready)
         self.assertTrue(user_can_manage_exam(self.secretariat, qualified))
 
 

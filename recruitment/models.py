@@ -3597,6 +3597,7 @@ class AuditLog(TimestampedModel):
         CAR_FINALIZED = "car_finalized", "Comparative Assessment Report Finalized"
         CAR_RETURNED = "car_returned", "Comparative Assessment Report Returned"
         DECISION_RECORDED = "decision_recorded", "Decision Recorded"
+        APPLICANT_DISQUALIFIED = "applicant_disqualified", "Applicant Disqualified"
         COMPLETION_RECORDED = "completion_recorded", "Completion Recorded"
         CASE_CLOSED = "case_closed", "Case Closed"
         NOTIFICATION_SENT = "notification_sent", "Notification Sent"
@@ -3616,6 +3617,7 @@ class AuditLog(TimestampedModel):
 
     SENSITIVE_ACTIONS = {
         Action.CASE_REOPENED,
+        Action.APPLICANT_DISQUALIFIED,
         Action.EXPORT_GENERATED,
         Action.EXPORT_DENIED,
         Action.EVIDENCE_DOWNLOADED,

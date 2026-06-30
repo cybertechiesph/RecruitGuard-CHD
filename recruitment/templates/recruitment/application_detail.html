@@ -158,11 +158,15 @@
                     {% include "internal_includes/exam_body.html" %}
 
                 {% elif exam_locked and current_exam_record %}
-                    
+
                     {% include "internal_includes/exam_locked_body.html" %}
 
+                {% elif exam_batch_block_message %}
+
+                    {% include "internal_includes/state_empty.html" with title="Exam batch on hold" copy=exam_batch_block_message %}
+
                 {% else %}
-                    
+
                     {% include "internal_includes/state_empty.html" with title="Examination not yet available" copy="This step will open when the case reaches examination." %}
                 {% endif %}
             </div>

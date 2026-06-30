@@ -40,6 +40,22 @@
     in this vacancy's batch awaiting your action.
 </p>
 
+{% if screening_batch %}
+    {% if screening_batch.is_ready %}
+        <div class="alert alert-success" role="status">
+            Screening batch is complete &mdash; every applicant has a decision, so the qualified
+            pool can proceed to the exam together.
+        </div>
+    {% else %}
+        <div class="alert alert-warning" role="status">
+            Screening batch is on hold: <strong>{{ screening_batch.pending }}</strong>
+            applicant{{ screening_batch.pending|pluralize }} still need a screening decision
+            (awaiting resubmission or not yet finalized). Finish screening or remove them from the
+            batch before the exam can start.
+        </div>
+    {% endif %}
+{% endif %}
+
 <div class="rg-itbl rg-itbl--sticky">
     <div class="table-responsive">
         <table class="table align-middle">
