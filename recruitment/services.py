@@ -9,6 +9,7 @@ import smtplib
 import textwrap
 import uuid
 import zipfile
+from collections import namedtuple
 from datetime import timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from io import BytesIO, StringIO
@@ -2310,6 +2311,91 @@ def screening_requires_disposition_for_current_stage(application):
     )
 
 
+VacancyScreeningBatchStatus = namedtuple(
+    "VacancyScreeningBatchStatus",
+    ["total", "qualified", "terminal", "pending", "pending_references", "is_ready"],
+)
+
+
+def _vacancy_screening_stage(posting):
+    """The screening stage a vacancy's applications enter, derived from its level
+    (Level 1 -> Secretariat, Level 2 -> HRM Chief). A vacancy has a single level, so all
+    its submitted applications share one screening stage. Mirrors _route_for_submission."""
+    if posting.level == PositionPosting.Level.LEVEL_1:
+        return RecruitmentCase.Stage.SECRETARIAT_REVIEW
+    return RecruitmentCase.Stage.HRM_CHIEF_REVIEW
+
+
+def vacancy_screening_batch_status(posting):
+    """Classify the screening state of every submitted application in a vacancy so the batch
+    can move to exam only when no application is still pending. Screening is INDIVIDUAL but the
+    qualified pool moves to exam TOGETHER (§4.3): a single pending member (awaiting resubmission,
+    or finalized-but-undecided, or not yet finalized) makes the whole batch wait. Removed
+    (disqualified/rejected) and withdrawn applications are terminal and do NOT block.
+
+    DRAFT applications are excluded, so screening an early submitter before others have submitted
+    does not deadlock the batch."""
+    stage = _vacancy_screening_stage(posting)
+    applications = list(
+        RecruitmentApplication.objects.filter(position=posting)
+        .exclude(status=RecruitmentApplication.Status.DRAFT)
+        .select_related("case")
+        .prefetch_related("screening_records")
+    )
+    qualified = terminal = pending = 0
+    pending_references = []
+    for application in applications:
+        case = getattr(application, "case", None)
+        if application.status in {
+            RecruitmentApplication.Status.REJECTED,
+            RecruitmentApplication.Status.WITHDRAWN,
+        } or (case and case.case_status == RecruitmentCase.CaseStatus.REJECTED):
+            terminal += 1
+            continue
+        if case is None or case.current_stage != stage:
+            # Already advanced past screening (exam/interview/decision/completion) — decided.
+            qualified += 1
+            continue
+        if case.case_status == RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION:
+            pending += 1
+            pending_references.append(application.reference_label)
+            continue
+        record = next(
+            (r for r in application.screening_records.all() if r.review_stage == stage),
+            None,
+        )
+        if (
+            record
+            and record.is_finalized
+            and record.completeness_status == ScreeningRecord.CompletenessStatus.COMPLETE
+            and record.qualification_outcome == ScreeningRecord.QualificationOutcome.QUALIFIED
+        ):
+            qualified += 1
+        else:
+            pending += 1
+            pending_references.append(application.reference_label)
+    return VacancyScreeningBatchStatus(
+        total=len(applications),
+        qualified=qualified,
+        terminal=terminal,
+        pending=pending,
+        pending_references=pending_references,
+        is_ready=(pending == 0),
+    )
+
+
+def vacancy_screening_batch_block_message(posting):
+    status = vacancy_screening_batch_status(posting)
+    if status.is_ready:
+        return ""
+    count = status.pending
+    return (
+        f"The exam batch is on hold: {count} applicant{'' if count == 1 else 's'} in this "
+        "vacancy still need a screening decision (awaiting resubmission or not yet finalized). "
+        "Finish screening or remove them from the batch first."
+    )
+
+
 def exam_is_finalized_for_current_stage(application):
     exam_record = get_exam_record(application)
     return bool(exam_record and exam_record.is_finalized)
@@ -2465,6 +2551,11 @@ def user_can_manage_exam(user, application):
         or current_stage not in EXAM_STAGES
         or get_current_workflow_section(application) != "exam"
     ):
+        return False
+    # Batch screening gate (§4.3): the qualified pool moves to exam together, so exam stays
+    # blocked while any application in the vacancy still has a pending screening decision.
+    # A single-application vacancy auto-satisfies this once its own screening is finalized.
+    if not vacancy_screening_batch_status(application.position).is_ready:
         return False
     return user_can_process_application(user, application)
 

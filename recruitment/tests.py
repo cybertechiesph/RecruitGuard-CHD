@@ -127,6 +127,8 @@ from .services import (
     save_screening_review,
     submit_application,
     submit_document_resubmission,
+    user_can_manage_exam,
+    vacancy_screening_batch_status,
     update_recruitment_entry_status,
     upload_interview_fallback_rating,
     upload_evidence_item,
@@ -6418,6 +6420,78 @@ class VacancyBatchConsoleTests(BaseRecruitmentTestCase):
         self.assertEqual(response.status_code, 403)
 
 
+class BatchScreeningGateTests(BaseRecruitmentTestCase):
+    def _submit(self, application, applicant):
+        self.verify_application_for_submission(application)
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(application, applicant)
+        application.refresh_from_db()
+        return application
+
+    def _extra_submitted_application(self, position, suffix):
+        applicant = User.objects.create_user(
+            username=f"batch-applicant-{suffix}",
+            password="testpass123",
+            email=f"batch.{suffix}@example.com",
+            role=RecruitmentUser.Role.APPLICANT,
+        )
+        application = RecruitmentApplication.objects.create(
+            applicant=applicant,
+            position=position,
+            applicant_first_name=f"Batch{suffix}",
+            applicant_last_name="Applicant",
+            applicant_email=f"batch.{suffix}@example.com",
+            applicant_phone=f"091790000{suffix}",
+            checklist_privacy_consent=True,
+            checklist_documents_complete=True,
+            checklist_information_certified=True,
+            qualification_summary="Additional applicant for batch-gate testing.",
+            cover_letter="Applying for the same vacancy.",
+            performance_rating_applicability=(
+                RecruitmentApplication.PerformanceRatingApplicability.APPLICABLE
+            ),
+        )
+        self.upload_required_applicant_documents(
+            application, applicant, content_prefix=f"batch-{suffix}"
+        )
+        return self._submit(application, applicant)
+
+    def test_single_application_vacancy_allows_exam_after_screening(self):
+        application = self._submit(self.make_application(self.level1_position), self.applicant)
+        self.finalize_screening_for_current_stage(application, self.secretariat)
+        application.refresh_from_db()
+        self.assertTrue(vacancy_screening_batch_status(self.level1_position).is_ready)
+        self.assertTrue(user_can_manage_exam(self.secretariat, application))
+
+    def test_pending_sibling_blocks_exam_for_a_qualified_application(self):
+        qualified = self._submit(self.make_application(self.level1_position), self.applicant)
+        self.finalize_screening_for_current_stage(qualified, self.secretariat)
+        # A second submitted applicant whose screening is not finalized yet is "pending".
+        self._extra_submitted_application(self.level1_position, "1")
+        qualified.refresh_from_db()
+
+        status = vacancy_screening_batch_status(self.level1_position)
+        self.assertFalse(status.is_ready)
+        self.assertEqual(status.pending, 1)
+        self.assertEqual(status.qualified, 1)
+        self.assertFalse(user_can_manage_exam(self.secretariat, qualified))
+        with self.assertRaises(ValueError):
+            self.schedule_exam_for_current_stage(qualified, self.secretariat)
+
+    def test_deciding_the_sibling_unblocks_the_batch(self):
+        qualified = self._submit(self.make_application(self.level1_position), self.applicant)
+        self.finalize_screening_for_current_stage(qualified, self.secretariat)
+        sibling = self._extra_submitted_application(self.level1_position, "1")
+        self.finalize_screening_for_current_stage(sibling, self.secretariat)
+        qualified.refresh_from_db()
+
+        status = vacancy_screening_batch_status(self.level1_position)
+        self.assertTrue(status.is_ready)
+        self.assertEqual(status.pending, 0)
+        self.assertEqual(status.qualified, 2)
+        self.assertTrue(user_can_manage_exam(self.secretariat, qualified))
+
+
 class ApplicantUploadValidationTests(TestCase):
     def assert_upload_error(self, *, filename, content, content_type, message):
         with self.assertRaisesMessage(ValueError, message):
@@ -9721,12 +9795,21 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             submit_application(application, applicant)
             application.refresh_from_db()
 
+        # Finalize the whole vacancy's screening before any exam — the batch screening gate
+        # holds the exam batch until every submitted applicant has a screening decision.
         self.finalize_screening_for_current_stage(
             primary_application,
             self.secretariat,
             education_score="90.00",
             training_score="90.00",
             experience_score="90.00",
+        )
+        self.finalize_screening_for_current_stage(
+            secondary_application,
+            self.secretariat,
+            education_score="80.00",
+            training_score="80.00",
+            experience_score="80.00",
         )
         self.finalize_exam_for_current_stage(
             primary_application,
@@ -9736,13 +9819,6 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             general_score="90.00",
         )
         primary_application.refresh_from_db()
-        self.finalize_screening_for_current_stage(
-            secondary_application,
-            self.secretariat,
-            education_score="80.00",
-            training_score="80.00",
-            experience_score="80.00",
-        )
         self.finalize_exam_for_current_stage(
             secondary_application,
             self.secretariat,
