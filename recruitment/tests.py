@@ -6713,6 +6713,44 @@ class BatchExamTests(BaseRecruitmentTestCase):
                 finalize=True,
             )
 
+    def test_batch_exam_view_renders_for_the_reviewing_role(self):
+        self._two_qualified(self.level1_position)
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(reverse("vacancy-batch-exam", args=[self.level1_position.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Batch exam")
+
+    def test_batch_exam_view_404s_for_a_non_reviewing_role(self):
+        # The HRM Chief does not handle a Level-1 vacancy's screening/exam (FRS scoping).
+        self._two_qualified(self.level1_position)
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        response = client.get(reverse("vacancy-batch-exam", args=[self.level1_position.pk]))
+        self.assertEqual(response.status_code, 404)
+
+    def test_batch_exam_view_finalizes_via_post(self):
+        first, second = self._two_qualified(self.level1_position)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(self.level1_position, self.secretariat, self._schedule_payload())
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = client.post(
+                reverse("vacancy-batch-exam", args=[self.level1_position.pk]),
+                {
+                    "operation": "finalize",
+                    f"general_score_{first.case.id}": "90",
+                    f"technical_score_{first.case.id}": "80",
+                    f"general_score_{second.case.id}": "70",
+                    f"technical_score_{second.case.id}": "60",
+                },
+                follow=True,
+            )
+        self.assertEqual(response.status_code, 200)
+        first.refresh_from_db()
+        self.assertEqual(first.status, RecruitmentApplication.Status.HRMPSB_REVIEW)
+
 
 class ApplicantUploadValidationTests(TestCase):
     def assert_upload_error(self, *, filename, content, content_type, message):

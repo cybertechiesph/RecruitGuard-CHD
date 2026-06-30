@@ -1,0 +1,149 @@
+{% extends "internal_base.html" %}
+{% load recruitment_ui %}
+
+{% block internal_title %}{{ entry.title }} — Batch Exam{% endblock %}
+
+{% block breadcrumb %}
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<a class="rg-breadcrumb-link" href="{% url 'vacancy-batches' %}">Vacancy Batches</a>
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<a class="rg-breadcrumb-link" href="{% url 'vacancy-batch-detail' entry.pk %}">{{ entry.job_code }}</a>
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<span class="rg-breadcrumb-current">Batch Exam</span>
+{% endblock %}
+
+{% block content %}
+<div class="rg-page-header">
+    <div>
+        <h1 class="rg-page-title">Batch exam — {{ entry.title }}</h1>
+        <div class="rg-imeta mt-1">
+            {{ entry.job_code }}
+            {% if entry.item_number %}<span class="rg-imeta__sep"></span>Item {{ entry.item_number }}{% endif %}
+        </div>
+        <div class="d-flex flex-wrap gap-1 mt-2">
+            <span class="rg-pill rg-pill--{{ entry.branch|branch_theme }} rg-pill--sm">{{ entry.get_branch_display }}</span>
+            <span class="rg-pill rg-pill--{{ entry.level|level_theme }} rg-pill--sm">{{ entry.get_level_display }}</span>
+        </div>
+    </div>
+    <div class="rg-page-actions">
+        <a href="{% url 'vacancy-batch-detail' entry.pk %}" class="btn btn-outline-secondary btn-sm">Back to batch</a>
+    </div>
+</div>
+
+{% if not screening_batch.is_ready %}
+    <div class="alert alert-warning" role="status">
+        Screening batch is on hold: <strong>{{ screening_batch.pending }}</strong>
+        applicant{{ screening_batch.pending|pluralize }} still need a screening decision. The exam
+        cannot be scheduled or scored until the whole batch is screened.
+    </div>
+{% endif %}
+
+{% if is_plantilla %}
+<div class="card p-3 mb-3" style="max-width:680px;">
+    <h2 class="h6 mb-1">Exam weights</h2>
+    <p class="rg-note mb-2">
+        Overall = General Ability &times; <strong>{{ weights.exam_general_weight|floatformat:"-2" }}%</strong>
+        + Technical &times; <strong>{{ weights.exam_technical_weight|floatformat:"-2" }}%</strong>,
+        applied to every candidate.
+    </p>
+    {% if weights.is_locked %}
+        <span class="rg-pill rg-pill--neutral rg-pill--sm">Locked (scoring started)</span>
+    {% else %}
+        <a href="{% url 'vacancy-assessment-weights' entry.pk %}" class="btn btn-outline-secondary btn-sm">Edit weights</a>
+    {% endif %}
+</div>
+{% endif %}
+
+{# ── One schedule for the whole batch ─────────────────────────── #}
+<div class="card p-4 mb-3">
+    <h2 class="h6 mb-1">1 — Schedule the exam (applies to every candidate)</h2>
+    <p class="rg-note mb-3">The whole qualified pool sits the exam together. Each applicant is notified.</p>
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="operation" value="save_schedule">
+        <div class="row g-3">
+            <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=schedule_form.scheduled_for %}</div>
+            <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=schedule_form.venue %}</div>
+            <div class="col-md-8">{% include "recruitment/includes/form_field.html" with field=schedule_form.instructions %}</div>
+            <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=schedule_form.notice_delivery %}</div>
+        </div>
+        <div class="rg-form-actions mt-3">
+            <button type="submit" class="btn btn-rg-primary"{% if not screening_batch.is_ready %} disabled{% endif %}>
+                Send schedule to batch
+            </button>
+        </div>
+    </form>
+</div>
+
+{# ── One score grid + one finalize ────────────────────────────── #}
+<div class="card p-4 mb-3">
+    <h2 class="h6 mb-1">2 — Record exam scores</h2>
+    <p class="rg-note mb-3">
+        {% if is_plantilla %}
+            Enter each candidate's General Ability and Technical scores (0–100). The overall is computed from the weights above.
+        {% else %}
+            Enter each candidate's end-user assessment score (0–100), as encoded by the HRMO.
+        {% endif %}
+    </p>
+    <form method="post">
+        {% csrf_token %}
+        <div class="rg-itbl">
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                        <tr>
+                            <th>Candidate</th>
+                            {% if is_plantilla %}
+                                <th>General Ability</th>
+                                <th>Technical</th>
+                            {% else %}
+                                <th>End-user score</th>
+                            {% endif %}
+                            <th>Current</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for candidate in candidates %}
+                            <tr>
+                                <td>
+                                    <div class="fw-bold" style="font-size:0.8rem;">{{ candidate.application.applicant_display_name }}</div>
+                                    <div class="rg-imeta mt-1">{{ candidate.application.reference_label }}</div>
+                                </td>
+                                <td>
+                                    <input type="number" step="0.01" min="0" max="100" class="form-control"
+                                           name="general_score_{{ candidate.case_id }}"
+                                           value="{{ candidate.general_score|default_if_none:'' }}">
+                                </td>
+                                {% if is_plantilla %}
+                                    <td>
+                                        <input type="number" step="0.01" min="0" max="100" class="form-control"
+                                               name="technical_score_{{ candidate.case_id }}"
+                                               value="{{ candidate.technical_score|default_if_none:'' }}">
+                                    </td>
+                                {% endif %}
+                                <td>
+                                    {% if candidate.exam_record and candidate.exam_record.is_finalized %}
+                                        <span class="rg-pill rg-pill--success rg-pill--sm">Finalized: {{ candidate.exam_record.exam_score }}</span>
+                                    {% elif candidate.exam_record.exam_score is not None %}
+                                        <span class="rg-pill rg-pill--info rg-pill--sm">Draft: {{ candidate.exam_record.exam_score }}</span>
+                                    {% else %}
+                                        <span class="rg-imeta">Not recorded</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="rg-form-actions mt-3 d-flex gap-2">
+            <button type="submit" name="operation" value="save_scores" class="btn btn-outline-secondary"{% if not screening_batch.is_ready %} disabled{% endif %}>
+                Save scores
+            </button>
+            <button type="submit" name="operation" value="finalize" class="btn btn-rg-primary"{% if not screening_batch.is_ready %} disabled{% endif %}>
+                Finalize exam batch
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

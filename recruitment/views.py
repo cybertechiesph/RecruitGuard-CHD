@@ -147,6 +147,9 @@ from .services import (
     user_can_manage_interview_session,
     user_can_manage_screening,
     user_can_process_application,
+    vacancy_exam_pool,
+    save_vacancy_exam_schedule,
+    save_vacancy_exam_scores,
     vacancy_screening_batch_status,
     vacancy_screening_batch_block_message,
     user_can_record_final_decision,
@@ -988,6 +991,106 @@ class VacancyBatchDetailView(LoginRequiredMixin, WorkflowProcessorRequiredMixin,
         context["applications"] = applications
         context["screening_batch"] = vacancy_screening_batch_status(entry)
         return context
+
+
+class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
+    """Vacancy-level batch exam: one schedule + one score grid + one finalize over the
+    qualified pool, looping the per-case exam services. FRS-scoped (only the reviewing role for
+    the vacancy sees its pool); the schedule/score actions refuse until the screening batch is
+    ready (Phase-4 gate)."""
+
+    template_name = "recruitment/vacancy_batch_exam.html"
+
+    def _scoped_pool(self, request, entry):
+        return [
+            application
+            for application in vacancy_exam_pool(entry)
+            if user_can_view_application(request.user, application)
+        ]
+
+    def _context(self, request, entry, pool, schedule_form=None):
+        candidates = []
+        for application in pool:
+            exam_record = get_exam_record(application)
+            candidates.append(
+                {
+                    "application": application,
+                    "case_id": application.case.id,
+                    "exam_record": exam_record,
+                    "general_score": exam_record.general_score if exam_record else None,
+                    "technical_score": exam_record.technical_score if exam_record else None,
+                    "schedule": get_exam_schedule(application),
+                }
+            )
+        weights = entry.assessment_weights_or_default
+        return {
+            "entry": entry,
+            "candidates": candidates,
+            "is_plantilla": entry.branch == PositionPosting.Branch.PLANTILLA,
+            "screening_batch": vacancy_screening_batch_status(entry),
+            "weights": weights,
+            "schedule_form": schedule_form or ExamScheduleForm(),
+        }
+
+    def get(self, request, pk):
+        entry = get_object_or_404(PositionPosting, pk=pk)
+        pool = self._scoped_pool(request, entry)
+        if not pool:
+            raise Http404("No candidates are ready for the exam in this vacancy.")
+        return render(request, self.template_name, self._context(request, entry, pool))
+
+    def post(self, request, pk):
+        entry = get_object_or_404(PositionPosting, pk=pk)
+        pool = self._scoped_pool(request, entry)
+        if not pool:
+            raise Http404("No candidates are ready for the exam in this vacancy.")
+        operation = request.POST.get("operation", "")
+
+        if operation == "save_schedule":
+            form = ExamScheduleForm(request.POST)
+            if not form.is_valid():
+                messages.error(
+                    request,
+                    _format_form_errors(form, "Complete the exam schedule fields before saving."),
+                )
+                return render(
+                    request, self.template_name, self._context(request, entry, pool, schedule_form=form)
+                )
+            try:
+                save_vacancy_exam_schedule(entry, request.user, form.cleaned_data)
+            except (ValueError, ValidationError) as exc:
+                messages.error(request, str(exc))
+            else:
+                messages.success(request, "Exam schedule sent to every candidate in the batch.")
+            return redirect("vacancy-batch-exam", pk=entry.pk)
+
+        if operation in {"save_scores", "finalize"}:
+            finalize = operation == "finalize"
+            rows = {}
+            for application in pool:
+                case_id = application.case.id
+                general = (request.POST.get(f"general_score_{case_id}", "") or "").strip()
+                technical = (request.POST.get(f"technical_score_{case_id}", "") or "").strip()
+                row = {}
+                if general:
+                    row["general_score"] = general
+                if technical:
+                    row["technical_score"] = technical
+                if row:
+                    rows[case_id] = row
+            try:
+                save_vacancy_exam_scores(entry, request.user, rows, finalize=finalize)
+            except (ValueError, ValidationError) as exc:
+                messages.error(request, str(exc))
+                return redirect("vacancy-batch-exam", pk=entry.pk)
+            if finalize:
+                messages.success(request, "Exam batch finalized — the pool advanced together.")
+                return redirect("vacancy-batches")
+            messages.success(request, "Exam scores saved.")
+            return redirect("vacancy-batch-exam", pk=entry.pk)
+
+        messages.error(request, "This action is not available.")
+        return redirect("vacancy-batch-exam", pk=entry.pk)
 
 
 class WorkflowActionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
