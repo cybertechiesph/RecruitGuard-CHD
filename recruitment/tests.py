@@ -6969,6 +6969,29 @@ class VacancyBatchInterviewTests(BaseRecruitmentTestCase):
         forbidden = other.get(reverse("vacancy-batch-interview", args=[self.level1_position.pk]))
         self.assertEqual(forbidden.status_code, 404)
 
+    def test_batch_interview_view_finalizes_cos_via_post(self):
+        first, second = self._two_cos_at_interview()
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_interview_schedule(self.cos_position, self.hrm_chief, self._interview_schedule_payload())
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = client.post(
+                reverse("vacancy-batch-interview", args=[self.cos_position.pk]),
+                {
+                    "operation": "finalize",
+                    f"rating_score_{first.case.id}": "88",
+                    f"rating_score_{second.case.id}": "79",
+                },
+                follow=True,
+            )
+        self.assertEqual(response.status_code, 200)
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertTrue(interview_is_finalized_for_current_stage(first))
+        self.assertTrue(interview_is_finalized_for_current_stage(second))
+        self.assertEqual(get_current_workflow_section(first), "deliberation")
+
 
 class ApplicantUploadValidationTests(TestCase):
     def assert_upload_error(self, *, filename, content, content_type, message):
