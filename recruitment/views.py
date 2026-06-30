@@ -927,6 +927,56 @@ class WorkflowQueueView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, List
         return context
 
 
+class VacancyBatchConsoleView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, TemplateView):
+    """Read-only vacancy-grouped view of the user's own queue. Groups the same
+    FRS-scoped applications get_queue_for_user returns (so the Level-1 -> Secretariat /
+    Level-2 -> HRM Chief routing and the support-role/override carve-outs are preserved)
+    by vacancy, with a per-vacancy "awaiting your action" count for triage."""
+
+    template_name = "recruitment/vacancy_batches.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        groups = {}
+        for application in get_queue_for_user(self.request.user):
+            group = groups.setdefault(
+                application.position_id,
+                {"entry": application.position, "applications": []},
+            )
+            group["applications"].append(application)
+        vacancies = sorted(
+            groups.values(),
+            key=lambda g: (g["entry"].get_branch_display(), (g["entry"].title or "").lower()),
+        )
+        for group in vacancies:
+            group["count"] = len(group["applications"])
+        context["vacancies"] = vacancies
+        context["total_applications"] = sum(group["count"] for group in vacancies)
+        return context
+
+
+class VacancyBatchDetailView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, TemplateView):
+    """The applicants of a single vacancy that are in the current user's scoped queue,
+    each linking to the existing per-case detail. 404s when the user has no scoped
+    applications for the vacancy, so a Secretariat never sees a Level-2 batch."""
+
+    template_name = "recruitment/vacancy_batch_detail.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        pk = self.kwargs["pk"]
+        applications = [
+            application
+            for application in get_queue_for_user(self.request.user)
+            if application.position_id == pk
+        ]
+        if not applications:
+            raise Http404("No batch is available for this vacancy.")
+        context["entry"] = applications[0].position
+        context["applications"] = applications
+        return context
+
+
 class WorkflowActionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
     def _should_rerender_bound_action_form(self, form, request):
         action = ""

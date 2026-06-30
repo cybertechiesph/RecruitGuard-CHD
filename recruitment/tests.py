@@ -6358,6 +6358,65 @@ class VacancyAssessmentWeightsTests(BaseRecruitmentTestCase):
         self.assertTrue(weights.is_locked)
 
 
+class VacancyBatchConsoleTests(BaseRecruitmentTestCase):
+    def _submit(self, application):
+        self.verify_application_for_submission(application)
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(application, self.applicant)
+        application.refresh_from_db()
+        return application
+
+    def test_console_groups_secretariat_queue_by_vacancy(self):
+        self._submit(self.make_application(self.level1_position))
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(reverse("vacancy-batches"))
+        self.assertEqual(response.status_code, 200)
+        entry_ids = {v["entry"].id for v in response.context["vacancies"]}
+        self.assertIn(self.level1_position.id, entry_ids)
+
+    def test_console_excludes_level2_vacancy_from_secretariat(self):
+        # A Level-2 application routes to HRM Chief, so it must not appear in the
+        # Secretariat's batch console (FRS Level-2 bar).
+        self._submit(self.make_application(self.level2_position))
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(reverse("vacancy-batches"))
+        entry_ids = {v["entry"].id for v in response.context["vacancies"]}
+        self.assertNotIn(self.level2_position.id, entry_ids)
+
+    def test_console_shows_level2_vacancy_to_hrm_chief(self):
+        self._submit(self.make_application(self.level2_position))
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        response = client.get(reverse("vacancy-batches"))
+        entry_ids = {v["entry"].id for v in response.context["vacancies"]}
+        self.assertIn(self.level2_position.id, entry_ids)
+
+    def test_detail_lists_scoped_applications(self):
+        application = self._submit(self.make_application(self.level1_position))
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(reverse("vacancy-batch-detail", args=[self.level1_position.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(application, list(response.context["applications"]))
+        self.assertContains(response, application.reference_label)
+
+    def test_detail_404s_for_vacancy_without_scoped_apps(self):
+        # The Secretariat has no scoped applications for a Level-2 vacancy.
+        self._submit(self.make_application(self.level2_position))
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(reverse("vacancy-batch-detail", args=[self.level2_position.pk]))
+        self.assertEqual(response.status_code, 404)
+
+    def test_console_requires_workflow_processor_role(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.sysadmin)
+        response = client.get(reverse("vacancy-batches"))
+        self.assertEqual(response.status_code, 403)
+
+
 class ApplicantUploadValidationTests(TestCase):
     def assert_upload_error(self, *, filename, content, content_type, message):
         with self.assertRaisesMessage(ValueError, message):

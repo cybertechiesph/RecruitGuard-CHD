@@ -1,0 +1,85 @@
+{% extends "internal_base.html" %}
+{% load recruitment_ui %}
+
+{% block internal_title %}{{ entry.title }} &mdash; Batch{% endblock %}
+
+{% block breadcrumb %}
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<a class="rg-breadcrumb-link" href="{% url 'vacancy-batches' %}">Vacancy Batches</a>
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<span class="rg-breadcrumb-current">{{ entry.job_code }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="rg-page-header">
+    <div>
+        <h1 class="rg-page-title">{{ entry.title }}</h1>
+        <div class="rg-imeta mt-1">
+            {{ entry.job_code }}
+            {% if entry.item_number %}
+                <span class="rg-imeta__sep"></span>
+                Item {{ entry.item_number }}
+            {% endif %}
+        </div>
+        <div class="d-flex flex-wrap gap-1 mt-2">
+            <span class="rg-pill rg-pill--{{ entry.branch|branch_theme }} rg-pill--sm">
+                {{ entry.get_branch_display }}
+            </span>
+            <span class="rg-pill rg-pill--{{ entry.level|level_theme }} rg-pill--sm">
+                {{ entry.get_level_display }}
+            </span>
+        </div>
+    </div>
+    <div class="rg-page-actions">
+        <a href="{% url 'vacancy-batches' %}" class="btn btn-outline-secondary btn-sm">Back to batches</a>
+    </div>
+</div>
+
+<p class="rg-queue-count" aria-live="polite">
+    <strong>{{ applications|length }}</strong> case{{ applications|length|pluralize }}
+    in this vacancy's batch awaiting your action.
+</p>
+
+<div class="rg-itbl rg-itbl--sticky">
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Case</th>
+                    <th>Needed Step</th>
+                    <th>Last Updated</th>
+                    <th class="col-actions"><span class="visually-hidden">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for application in applications %}
+                    <tr>
+                        <td class="col-ref">
+                            <div class="fw-bold" style="font-family:ui-monospace,SFMono-Regular,'Cascadia Mono',Consolas,Menlo,monospace;font-size:0.78rem;color:#5f6c78;">
+                                {{ application.reference_label }}
+                            </div>
+                            <div class="rg-imeta mt-1">{{ application.applicant_display_name }}</div>
+                        </td>
+                        <td>
+                            {% queue_task_theme application as task_theme %}
+                            {% queue_task_label application as task_label %}
+                            <span class="rg-pill rg-pill--{{ task_theme }} rg-pill--sm">{{ task_label }}</span>
+                            {% include "internal_includes/stage_sla_badge.html" with recruitment_case=application.case variant="sm" %}
+                        </td>
+                        <td>
+                            <div style="font-size:0.8125rem;color:#374151;">{{ application.updated_at|timesince }} ago</div>
+                            <div class="rg-imeta mt-1">{{ application.updated_at|date:"M d, Y" }}</div>
+                        </td>
+                        <td class="col-actions">
+                            <div class="rg-itbl-actions">
+                                <a href="{% url 'application-detail' application.pk %}"
+                                   class="btn btn-outline-secondary btn-sm">Open case</a>
+                            </div>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

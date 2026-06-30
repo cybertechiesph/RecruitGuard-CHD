@@ -1,0 +1,91 @@
+{% extends "internal_base.html" %}
+{% load recruitment_ui %}
+
+{% block internal_title %}Vacancy Batches{% endblock %}
+
+{% block breadcrumb %}
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<span class="rg-breadcrumb-current">Vacancy Batches</span>
+{% endblock %}
+
+{% block content %}
+<div class="rg-page-header">
+    <div>
+        <h1 class="rg-page-title">Vacancy batches</h1>
+        <p class="rg-page-copy">
+            Your queue grouped by vacancy. The office runs recruitment by batch per
+            vacancy &mdash; open a vacancy to see its applicants and act on each case.
+        </p>
+    </div>
+    <div class="rg-page-actions">
+        <a href="{% url 'workflow-queue' %}" class="btn btn-outline-secondary btn-sm">Flat queue</a>
+    </div>
+</div>
+
+{% if not vacancies %}
+    <div class="rg-icard">
+        {% include "internal_includes/state_empty.html" with title="You're all caught up" copy="No vacancy batches need your action right now. New assignments will appear here grouped by vacancy." %}
+    </div>
+{% else %}
+    <p class="rg-queue-count" aria-live="polite">
+        <strong>{{ vacancies|length }}</strong> vacanc{{ vacancies|length|pluralize:"y,ies" }}
+        &middot; <strong>{{ total_applications }}</strong> case{{ total_applications|pluralize }}
+        awaiting your action.
+    </p>
+    <div class="rg-itbl rg-itbl--sticky">
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th>Vacancy</th>
+                        <th>Branch / Level</th>
+                        <th>Awaiting your action</th>
+                        <th class="col-actions"><span class="visually-hidden">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for vacancy in vacancies %}
+                        <tr>
+                            <td>
+                                <div style="font-size:0.8125rem;font-weight:600;color:#111827;">
+                                    {{ vacancy.entry.title }}
+                                </div>
+                                <div class="rg-imeta mt-1">
+                                    {{ vacancy.entry.job_code }}
+                                    {% if vacancy.entry.item_number %}
+                                        <span class="rg-imeta__sep"></span>
+                                        Item {{ vacancy.entry.item_number }}
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                <div class="d-flex flex-wrap gap-1">
+                                    <span class="rg-pill rg-pill--{{ vacancy.entry.branch|branch_theme }} rg-pill--sm">
+                                        {{ vacancy.entry.get_branch_display }}
+                                    </span>
+                                    <span class="rg-pill rg-pill--{{ vacancy.entry.level|level_theme }} rg-pill--sm">
+                                        {{ vacancy.entry.get_level_display }}
+                                    </span>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="rg-pill rg-pill--info rg-pill--sm">
+                                    {{ vacancy.count }} case{{ vacancy.count|pluralize }}
+                                </span>
+                            </td>
+                            <td class="col-actions">
+                                <div class="rg-itbl-actions">
+                                    <a href="{% url 'vacancy-batch-detail' vacancy.entry.pk %}"
+                                       class="btn btn-outline-secondary btn-sm">
+                                        Open batch
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}

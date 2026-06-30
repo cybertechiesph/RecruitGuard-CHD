@@ -41,6 +41,21 @@
             </a>
         {% endif %}
 
+        {% if user.role != "system_admin" %}
+            <a href="{% url 'vacancy-batches' %}"
+               class="rg-sidebar__link {% if url_name == 'vacancy-batches' or url_name == 'vacancy-batch-detail' %}is-active{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="7" height="7"/>
+                    <rect x="14" y="3" width="7" height="7"/>
+                    <rect x="3" y="14" width="7" height="7"/>
+                    <rect x="14" y="14" width="7" height="7"/>
+                </svg>
+                Batches
+            </a>
+        {% endif %}
+
         {% if user.role == "secretariat" or user.role == "hrm_chief" %}
             <a href="{% url 'recruitment-entry-list' %}"
                class="rg-sidebar__link {% if 'entry' in url_name or 'position' in url_name %}is-active{% endif %}">
