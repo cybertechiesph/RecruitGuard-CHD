@@ -10,7 +10,6 @@ from django.views import View
 from django.views.generic import DetailView, ListView, TemplateView
 
 from .forms import (
-    AssessmentWeightConfigForm,
     AuditLogSearchForm,
     CaseHandoffForm,
     CaseClosureForm,
@@ -143,8 +142,6 @@ from .services import (
     get_competency_rating_template,
     get_published_competency_rating_template,
     save_competency_rating_sheet,
-    get_assessment_weight_config,
-    update_assessment_weights,
     get_or_create_vacancy_assessment_weights,
     update_vacancy_assessment_weights,
     user_can_manage_interview_session,
@@ -1315,30 +1312,6 @@ class InterviewRatingSheetView(LoginRequiredMixin, WorkflowProcessorRequiredMixi
             self.template_name,
             self._context(application, template, template_form, formset),
         )
-
-
-class AssessmentWeightConfigView(LoginRequiredMixin, EntryManagerRequiredMixin, View):
-    template_name = "recruitment/assessment_weights.html"
-
-    def get(self, request):
-        config = get_assessment_weight_config()
-        form = AssessmentWeightConfigForm(instance=config)
-        return render(request, self.template_name, {"config": config, "form": form})
-
-    def post(self, request):
-        config = get_assessment_weight_config()
-        form = AssessmentWeightConfigForm(request.POST, instance=config)
-        if form.is_valid():
-            try:
-                update_assessment_weights(request.user, form)
-            except (ValueError, ValidationError) as exc:
-                messages.error(request, str(exc))
-            else:
-                messages.success(request, "Assessment weights updated.")
-                return redirect("assessment-weights")
-        else:
-            messages.error(request, "Fix the highlighted problems before saving.")
-        return render(request, self.template_name, {"config": config, "form": form})
 
 
 class VacancyAssessmentWeightsView(LoginRequiredMixin, EntryManagerRequiredMixin, View):

@@ -25,7 +25,6 @@ from .captcha import (
     validate_captcha_answer,
 )
 from .models import (
-    AssessmentWeightConfig,
     AuditLog,
     ComparativeAssessmentReport,
     ComparativeAssessmentReportItem,
@@ -1338,52 +1337,6 @@ CompetencyDefinitionFormSet = inlineformset_factory(
     extra=0,
     can_delete=True,
 )
-
-
-class AssessmentWeightConfigForm(BootstrapFormMixin, forms.ModelForm):
-    _PERCENT_WIDGET = forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"})
-
-    class Meta:
-        model = AssessmentWeightConfig
-        fields = [
-            "ete_weight",
-            "exam_weight",
-            "interview_weight",
-            "exam_general_weight",
-            "exam_technical_weight",
-        ]
-        widgets = {
-            "ete_weight": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
-            "exam_weight": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
-            "interview_weight": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
-            "exam_general_weight": forms.NumberInput(
-                attrs={"step": "0.01", "min": "0", "max": "100"}
-            ),
-            "exam_technical_weight": forms.NumberInput(
-                attrs={"step": "0.01", "min": "0", "max": "100"}
-            ),
-        }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["ete_weight"].label = "ETE weight (%)"
-        self.fields["ete_weight"].help_text = (
-            "Share of the overall CAR score from Education, Training, and Experience."
-        )
-        self.fields["exam_weight"].label = "Examination weight (%)"
-        self.fields["exam_weight"].help_text = "Share of the overall CAR score from the exam."
-        self.fields["interview_weight"].label = "Interview weight (%)"
-        self.fields["interview_weight"].help_text = (
-            "Share of the overall CAR score from the interview."
-        )
-        self.fields["exam_general_weight"].label = "General Ability weight (%)"
-        self.fields["exam_general_weight"].help_text = (
-            "Share of the exam score that comes from the General Ability component."
-        )
-        self.fields["exam_technical_weight"].label = "Technical weight (%)"
-        self.fields["exam_technical_weight"].help_text = (
-            "Share of the exam score that comes from the Technical component."
-        )
 
 
 class VacancyAssessmentWeightsForm(BootstrapFormMixin, forms.ModelForm):
