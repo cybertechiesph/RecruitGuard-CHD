@@ -4012,6 +4012,116 @@ def save_exam_record(
     return exam_record
 
 
+def vacancy_exam_pool(posting):
+    """The vacancy's exam-ready applications: screening done (current section is 'exam') and the
+    exam not yet finalized, at the vacancy's screening stage. The qualified pool that sits the
+    exam together. Branch-agnostic (Plantilla two-score and COS single end-user score)."""
+    stage = _vacancy_screening_stage(posting)
+    cases = (
+        RecruitmentCase.objects.filter(
+            application__position=posting,
+            current_stage=stage,
+            case_status=RecruitmentCase.CaseStatus.ACTIVE,
+            is_stage_locked=False,
+        )
+        .select_related("application", "application__applicant", "application__position")
+        .order_by("application__reference_number", "application_id")
+    )
+    pool = []
+    for case in cases:
+        application = case.application
+        if (
+            get_current_workflow_section(application) == "exam"
+            and not exam_is_finalized_for_current_stage(application)
+        ):
+            pool.append(application)
+    return pool
+
+
+@transaction.atomic
+def save_vacancy_exam_schedule(posting, actor, cleaned_data):
+    """Apply ONE exam schedule (date/venue/instructions) to every candidate in the vacancy's
+    exam pool and notify each — the batch sits the exam together. Loops the per-case
+    save_exam_schedule so each application keeps its own ExamSchedule + notification."""
+    if not vacancy_screening_batch_status(posting).is_ready:
+        raise ValueError(vacancy_screening_batch_block_message(posting))
+    pool = vacancy_exam_pool(posting)
+    if not pool:
+        raise ValueError("No candidates are ready for the exam in this vacancy.")
+    for application in pool:
+        save_exam_schedule(application=application, actor=actor, cleaned_data=dict(cleaned_data))
+    return pool
+
+
+@transaction.atomic
+def save_vacancy_exam_scores(posting, actor, scores_by_case_id, *, finalize=False):
+    """Record (and optionally finalize) the exam scores for the whole vacancy's pool in one go,
+    looping the per-case save_exam_record. Plantilla candidates take General + Technical (the
+    overall is auto-computed from the per-vacancy weights); COS candidates take a single end-user
+    score. Finalize is all-or-nothing (atomic): every candidate must have the required score(s),
+    and on finalize each case auto-advances together."""
+    if not vacancy_screening_batch_status(posting).is_ready:
+        raise ValueError(vacancy_screening_batch_block_message(posting))
+    pool = vacancy_exam_pool(posting)
+    if not pool:
+        raise ValueError("No candidates are ready for the exam in this vacancy.")
+
+    is_plantilla = posting.branch == PositionPosting.Branch.PLANTILLA
+    exam_type = (
+        ExamRecord.ExamType.TECHNICAL_PRACTICAL
+        if is_plantilla
+        else ExamRecord.ExamType.END_USER_ASSESSMENT
+    )
+    administered_by = (
+        ExamRecord.AdministeredBy.HRMS if is_plantilla else ExamRecord.AdministeredBy.END_USER
+    )
+
+    saved = []
+    for application in pool:
+        row = scores_by_case_id.get(application.case.id) or {}
+        general = row.get("general_score")
+        technical = row.get("technical_score") if is_plantilla else None
+        has_general = general not in (None, "")
+        has_technical = technical not in (None, "")
+        if finalize:
+            if not has_general or (is_plantilla and not has_technical):
+                raise ValueError(
+                    "Enter every candidate's score before finalizing the exam batch "
+                    f"(missing: {application.reference_label})."
+                )
+        elif not has_general and not has_technical:
+            continue  # nothing to record for this candidate yet (draft)
+
+        schedule = get_exam_schedule(application)
+        exam_date = (
+            schedule.scheduled_for.date()
+            if schedule and schedule.scheduled_for
+            else timezone.localdate()
+        )
+        save_exam_record(
+            application=application,
+            actor=actor,
+            cleaned_data={
+                "exam_type": exam_type,
+                "exam_status": ExamRecord.ExamStatus.COMPLETED,
+                "exam_result": "",
+                "technical_score": technical,
+                "technical_result": "",
+                "general_score": general,
+                "general_result": "",
+                "exam_date": exam_date,
+                "administered_by": administered_by,
+                "valid_from": None,
+                "valid_until": None,
+                "exam_notes": "",
+            },
+            finalize=finalize,
+            allow_partial=not finalize,
+        )
+        saved.append(application)
+    return saved
+
+
 @transaction.atomic
 def save_interview_session(
     application, actor, cleaned_data, finalize=False, notify_applicant=False, notify_panel=False

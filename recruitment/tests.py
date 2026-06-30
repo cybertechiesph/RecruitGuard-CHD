@@ -129,6 +129,9 @@ from .services import (
     submit_application,
     submit_document_resubmission,
     user_can_manage_exam,
+    vacancy_exam_pool,
+    save_vacancy_exam_schedule,
+    save_vacancy_exam_scores,
     vacancy_screening_batch_status,
     update_recruitment_entry_status,
     upload_interview_fallback_rating,
@@ -6564,6 +6567,151 @@ class BatchScreeningGateTests(BaseRecruitmentTestCase):
         qualified.refresh_from_db()
         self.assertTrue(vacancy_screening_batch_status(self.level1_position).is_ready)
         self.assertTrue(user_can_manage_exam(self.secretariat, qualified))
+
+
+class BatchExamTests(BaseRecruitmentTestCase):
+    def _submit(self, application, applicant):
+        self.verify_application_for_submission(application)
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(application, applicant)
+        application.refresh_from_db()
+        return application
+
+    def _extra_submitted_application(self, position, suffix):
+        applicant = User.objects.create_user(
+            username=f"exam-applicant-{suffix}",
+            password="testpass123",
+            email=f"exam.{suffix}@example.com",
+            role=RecruitmentUser.Role.APPLICANT,
+        )
+        application = RecruitmentApplication.objects.create(
+            applicant=applicant,
+            position=position,
+            applicant_first_name=f"Exam{suffix}",
+            applicant_last_name="Applicant",
+            applicant_email=f"exam.{suffix}@example.com",
+            applicant_phone=f"091788800{suffix}",
+            checklist_privacy_consent=True,
+            checklist_documents_complete=True,
+            checklist_information_certified=True,
+            qualification_summary="Additional applicant for batch-exam testing.",
+            cover_letter="Applying for the same vacancy.",
+            performance_rating_applicability=(
+                RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
+            ),
+        )
+        self.upload_required_applicant_documents(
+            application, applicant, content_prefix=f"exam-{suffix}"
+        )
+        return self._submit(application, applicant)
+
+    def _two_qualified(self, position):
+        first = self._submit(self.make_application(position), self.applicant)
+        self.finalize_screening_for_current_stage(first, self.secretariat)
+        second = self._extra_submitted_application(position, "x")
+        self.finalize_screening_for_current_stage(second, self.secretariat)
+        first.refresh_from_db()
+        second.refresh_from_db()
+        return first, second
+
+    def _schedule_payload(self):
+        return {
+            "scheduled_for": timezone.now() + timedelta(hours=2),
+            "venue": "CHD CALABARZON Examination Room",
+            "instructions": "Bring a valid government ID.",
+        }
+
+    def test_pool_lists_the_qualified_candidates(self):
+        first, second = self._two_qualified(self.level1_position)
+        pool = vacancy_exam_pool(self.level1_position)
+        self.assertEqual({a.pk for a in pool}, {first.pk, second.pk})
+
+    def test_batch_schedule_applies_to_every_candidate(self):
+        first, second = self._two_qualified(self.level1_position)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(self.level1_position, self.secretariat, self._schedule_payload())
+        for application in (first, second):
+            schedule = application.exam_schedules.first()
+            self.assertIsNotNone(schedule)
+            self.assertIsNotNone(schedule.applicant_notified_at)
+
+    def test_batch_finalize_records_scores_and_advances_the_pool(self):
+        first, second = self._two_qualified(self.level1_position)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(self.level1_position, self.secretariat, self._schedule_payload())
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_scores(
+                self.level1_position,
+                self.secretariat,
+                {
+                    first.case.id: {"general_score": "90", "technical_score": "80"},
+                    second.case.id: {"general_score": "70", "technical_score": "60"},
+                },
+                finalize=True,
+            )
+        first.refresh_from_db()
+        second.refresh_from_db()
+        first_exam = first.exam_records.get(review_stage=RecruitmentCase.Stage.SECRETARIAT_REVIEW)
+        self.assertTrue(first_exam.is_finalized)
+        # 90 * 0.60 + 80 * 0.40 = 86 with the seeded per-vacancy weights.
+        self.assertEqual(first_exam.exam_score, Decimal("86.00"))
+        # Both passers advance together to the HRMPSB stage.
+        self.assertEqual(first.status, RecruitmentApplication.Status.HRMPSB_REVIEW)
+        self.assertEqual(second.status, RecruitmentApplication.Status.HRMPSB_REVIEW)
+        # The vacancy's assessment weights lock once scoring is committed.
+        self.assertTrue(self.level1_position.assessment_weights_or_default.is_locked)
+
+    def test_batch_finalize_requires_every_candidate_scored(self):
+        first, second = self._two_qualified(self.level1_position)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(self.level1_position, self.secretariat, self._schedule_payload())
+        with self.assertRaises(ValueError):
+            save_vacancy_exam_scores(
+                self.level1_position,
+                self.secretariat,
+                {first.case.id: {"general_score": "90", "technical_score": "80"}},
+                finalize=True,
+            )
+        # All-or-nothing: the first candidate's exam was not finalized either.
+        first.refresh_from_db()
+        self.assertFalse(
+            first.exam_records.filter(
+                review_stage=RecruitmentCase.Stage.SECRETARIAT_REVIEW, is_finalized=True
+            ).exists()
+        )
+
+    def test_cos_batch_exam_uses_a_single_end_user_score(self):
+        first, second = self._two_qualified(self.cos_position)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(self.cos_position, self.secretariat, self._schedule_payload())
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_scores(
+                self.cos_position,
+                self.secretariat,
+                {
+                    first.case.id: {"general_score": "82"},
+                    second.case.id: {"general_score": "77"},
+                },
+                finalize=True,
+            )
+        first.refresh_from_db()
+        first_exam = first.exam_records.get(review_stage=RecruitmentCase.Stage.SECRETARIAT_REVIEW)
+        self.assertTrue(first_exam.is_finalized)
+        self.assertEqual(first_exam.exam_type, ExamRecord.ExamType.END_USER_ASSESSMENT)
+        self.assertEqual(first_exam.exam_score, Decimal("82.00"))
+
+    def test_batch_exam_blocked_when_screening_batch_not_ready(self):
+        first = self._submit(self.make_application(self.level1_position), self.applicant)
+        self.finalize_screening_for_current_stage(first, self.secretariat)
+        # A second submitted applicant whose screening is not finalized keeps the batch pending.
+        self._extra_submitted_application(self.level1_position, "y")
+        with self.assertRaises(ValueError):
+            save_vacancy_exam_scores(
+                self.level1_position,
+                self.secretariat,
+                {first.case.id: {"general_score": "90", "technical_score": "80"}},
+                finalize=True,
+            )
 
 
 class ApplicantUploadValidationTests(TestCase):
