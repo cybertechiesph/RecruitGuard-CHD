@@ -1,0 +1,83 @@
+{% extends "applicant_base.html" %}
+{% load recruitment_ui %}
+
+{% block title %}Resubmit documents | RecruitGuard-CHD{% endblock %}
+
+{% block site_header %}
+<header class="rg-topbar rg-public-topbar">
+    <div class="rg-container rg-topbar__inner rg-public-topbar__inner">
+        <a class="rg-brand rg-public-brand" href="{% url 'applicant-portal' %}">
+            <span class="rg-brand-copy">
+                <span class="rg-brand-kicker">Republic of the Philippines</span>
+                <span class="rg-brand-agency">Department of Health &ndash; CHD CALABARZON</span>
+                <span class="rg-brand-title">RecruitGuard-CHD Recruitment Portal</span>
+            </span>
+        </a>
+        <div class="rg-public-topbar__applying">
+            Application<br>
+            <strong>{{ application.position.title }}</strong>
+        </div>
+    </div>
+</header>
+{% endblock %}
+
+{% block content %}
+<div class="rg-pub-wrap" style="max-width:560px; padding-top:1.5rem;">
+    <h1 class="rg-pub-h1">Resubmit your documents</h1>
+    <p class="rg-pub-lead">
+        Application ID: <strong>{{ application.reference_label }}</strong>
+    </p>
+    {% if resubmission_deadline %}
+        <div class="alert alert-warning" role="status">
+            Please resubmit on or before <strong>{{ resubmission_deadline|date:"F d, Y" }}</strong>.
+        </div>
+    {% endif %}
+
+    {% if not otp_verified %}
+        {# Step 1 — verify the applicant by email before allowing re-upload. #}
+        <div class="card p-4 mb-3">
+            <h2 class="h6">Step 1 — Verify your email</h2>
+            <p class="rg-note">
+                We will send a {{ otp_validity_minutes }}-minute verification code to
+                <strong>{{ application.applicant_email }}</strong>.
+            </p>
+            <form method="post" class="mb-2">
+                {% csrf_token %}
+                <button type="submit" name="action" value="request_otp" class="btn btn-rg-primary">
+                    Send verification code
+                </button>
+            </form>
+            <form method="post">
+                {% csrf_token %}
+                {% include "recruitment/includes/form_field.html" with field=otp_form.otp %}
+                <div class="d-flex gap-2 mt-2">
+                    <button type="submit" name="action" value="verify" class="btn btn-rg-primary">Verify code</button>
+                    <button type="submit" name="action" value="resend" class="btn btn-outline-secondary">Resend code</button>
+                </div>
+            </form>
+        </div>
+    {% else %}
+        {# Step 2 — re-upload only the flagged documents. #}
+        <div class="card p-4 mb-3">
+            <h2 class="h6">Step 2 — Re-upload the requested documents</h2>
+            <p class="rg-note">
+                Only the documents the recruitment team flagged are shown below. Your
+                already-accepted documents do not need to be uploaded again.
+            </p>
+            <form method="post" enctype="multipart/form-data" novalidate>
+                {% csrf_token %}
+                {% for field in resubmission_form %}
+                    {% include "recruitment/includes/form_field.html" with field=field %}
+                {% endfor %}
+                <div class="d-flex gap-2 mt-3">
+                    <button type="submit" name="action" value="resubmit" class="btn btn-rg-primary">
+                        Resubmit documents
+                    </button>
+                    <a href="{% url 'applicant-status-link' token=application.public_token %}"
+                       class="btn btn-outline-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

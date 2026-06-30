@@ -188,11 +188,20 @@
         {% else %}rg-ta-action-card--rest{% endif %}">
         <p class="rg-ta-action-card__title">What you need to do</p>
         {% if status_variant == "returned" %}
-            <p class="rg-ta-action-card__copy">
-                Your application was returned. Please check your email at
-                <strong>{{ application.applicant_email }}</strong> for our message
-                about what needs to be fixed or resubmitted.
-            </p>
+            {% if awaiting_resubmission %}
+                <p class="rg-ta-action-card__copy">
+                    Some of your documents need to be resubmitted. Re-upload only the requested
+                    files below &mdash; your already-accepted documents stay as they are.
+                </p>
+                <a href="{% url 'applicant-resubmit' token=application.public_token %}"
+                   class="btn btn-rg-primary">Resubmit documents</a>
+            {% else %}
+                <p class="rg-ta-action-card__copy">
+                    Your application was returned. Please check your email at
+                    <strong>{{ application.applicant_email }}</strong> for our message
+                    about what needs to be fixed or resubmitted.
+                </p>
+            {% endif %}
         {% elif status_variant == "approved" %}
             <p class="rg-ta-action-card__copy">
                 Congratulations. Watch your email at <strong>{{ application.applicant_email }}</strong>

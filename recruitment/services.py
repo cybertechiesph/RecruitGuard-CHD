@@ -6418,6 +6418,24 @@ def request_document_resubmission(application, actor, remarks):
     return case
 
 
+def get_resubmission_request(application):
+    """For an application whose case is awaiting resubmission, return the document requirements
+    the applicant must re-upload (the flagged ones) and the resubmission deadline. Returns
+    ([], None) when the application is not awaiting resubmission."""
+    case = getattr(application, "case", None)
+    if case is None or case.case_status != RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION:
+        return [], None
+    screening_record, flagged = _flagged_resubmission_reviews(application, stage=case.current_stage)
+    flagged_codes = {row.document_key for row in flagged}
+    requirements = [
+        requirement
+        for requirement in get_applicant_document_requirements(application)
+        if requirement.code in flagged_codes
+    ]
+    deadline = screening_record.resubmission_deadline if screening_record else None
+    return requirements, deadline
+
+
 @transaction.atomic
 def submit_document_resubmission(application, actor, uploaded_files):
     """Applicant re-uploads the flagged documents from Track Application. Re-uploads land on the

@@ -10,17 +10,20 @@ from .forms import (
     ApplicantOTPForm,
     ApplicantPortalIntakeForm,
     ApplicantStatusLookupForm,
+    DocumentResubmissionForm,
 )
-from .models import PositionPosting, RecruitmentApplication
+from .models import PositionPosting, RecruitmentApplication, RecruitmentCase
 from .requirements import PERFORMANCE_RATING, get_applicant_document_requirements
 from .services import (
     ApplicationOTPDeliveryError,
     create_public_application_draft,
     get_current_applicant_document_items,
     get_public_recruitment_entries,
+    get_resubmission_request,
     issue_application_otp,
     save_public_application_draft_progress,
     submit_application,
+    submit_document_resubmission,
     verify_application_otp,
 )
 from .upload_validation import MAX_APPLICANT_DOCUMENT_UPLOAD_BYTES
@@ -130,11 +133,16 @@ def _build_applicant_status_context(application):
     status_label = status_info[0] if status_info else "Received"
     status_variant = status_info[1] if status_info else "review"
     status_description = status_info[2] if status_info else "Your application has been received."
+    case = getattr(application, "case", None)
+    awaiting_resubmission = bool(
+        case and case.case_status == RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION
+    )
     return {
         "application": application,
         "status_label": status_label,
         "status_variant": status_variant,
         "status_description": status_description,
+        "awaiting_resubmission": awaiting_resubmission,
         "upcoming_schedules": _build_applicant_upcoming_schedules(application),
     }
 
@@ -566,3 +574,132 @@ class ApplicantStatusLinkView(TemplateView):
         )
         context.update(_build_applicant_status_context(application))
         return context
+
+
+class ApplicantResubmissionView(TemplateView):
+    """Track Application re-upload page: an emailed-OTP step, then a scoped form exposing only
+    the flagged documents. Files flow through the encrypted vault and the standard readability
+    checks; the email only ever links here (no attachments)."""
+
+    template_name = "recruitment/applicant_resubmission.html"
+
+    def get_application(self):
+        return (
+            RecruitmentApplication.objects.select_related("position", "applicant", "case")
+            .filter(public_token=self.kwargs["token"])
+            .first()
+        )
+
+    def _missing(self, request):
+        messages.error(
+            request,
+            "This link is no longer available. Use Track Application with your Application ID and email.",
+        )
+        return redirect("applicant-status-lookup")
+
+    def get(self, request, *args, **kwargs):
+        application = self.get_application()
+        if application is None:
+            return self._missing(request)
+        requirements, _deadline = get_resubmission_request(application)
+        if not requirements:
+            messages.info(request, "There are no documents awaiting resubmission for this application.")
+            return redirect("applicant-status-link", token=application.public_token)
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        application = kwargs.get("application") or self.get_application()
+        if application is None:
+            raise Http404
+        requirements, deadline = get_resubmission_request(application)
+        context["application"] = application
+        context["requirements"] = requirements
+        context["resubmission_deadline"] = deadline
+        context["otp_verified"] = application.otp_is_currently_valid
+        context["otp_form"] = kwargs.get("otp_form") or ApplicantOTPForm()
+        context["resubmission_form"] = kwargs.get("resubmission_form") or DocumentResubmissionForm(
+            requirements=requirements
+        )
+        context["otp_validity_minutes"] = settings.APPLICATION_OTP_VALIDITY_MINUTES
+        return context
+
+    def post(self, request, *args, **kwargs):
+        application = self.get_application()
+        if application is None:
+            return self._missing(request)
+        requirements, _deadline = get_resubmission_request(application)
+        if not requirements:
+            messages.info(request, "There are no documents awaiting resubmission for this application.")
+            return redirect("applicant-status-link", token=application.public_token)
+
+        action = request.POST.get("action")
+        if action in {"request_otp", "resend"}:
+            try:
+                issue_application_otp(
+                    application,
+                    defer_delivery=False,
+                    enforce_cooldown=(action == "resend"),
+                )
+            except ApplicationOTPDeliveryError as exc:
+                messages.error(request, str(exc))
+            except (OperationalError, ValueError) as exc:
+                if isinstance(exc, OperationalError):
+                    messages.error(
+                        request,
+                        "We could not send a verification code right now. Please try again in a few moments.",
+                    )
+                else:
+                    messages.error(request, str(exc))
+            else:
+                messages.success(request, "A verification code has been sent to your email address.")
+            return redirect("applicant-resubmit", token=application.public_token)
+
+        if action == "verify":
+            otp_form = ApplicantOTPForm(request.POST)
+            if otp_form.is_valid():
+                try:
+                    verify_application_otp(application, otp_form.cleaned_data["otp"])
+                except ValueError as exc:
+                    otp_form.add_error("otp", str(exc))
+                else:
+                    messages.success(
+                        request,
+                        "Email verified. You can now re-upload the requested documents.",
+                    )
+                    return redirect("applicant-resubmit", token=application.public_token)
+            return self.render_to_response(
+                self.get_context_data(application=application, otp_form=otp_form)
+            )
+
+        if action == "resubmit":
+            if not application.otp_is_currently_valid:
+                messages.error(request, "Verify your email before resubmitting your documents.")
+                return redirect("applicant-resubmit", token=application.public_token)
+            resubmission_form = DocumentResubmissionForm(
+                request.POST, request.FILES, requirements=requirements
+            )
+            if resubmission_form.is_valid():
+                try:
+                    submit_document_resubmission(
+                        application,
+                        application.applicant,
+                        resubmission_form.get_uploads(),
+                    )
+                except ValueError as exc:
+                    messages.error(request, str(exc))
+                    return self.render_to_response(
+                        self.get_context_data(
+                            application=application, resubmission_form=resubmission_form
+                        )
+                    )
+                messages.success(request, "Your documents have been resubmitted for review.")
+                return redirect("applicant-status-link", token=application.public_token)
+            return self.render_to_response(
+                self.get_context_data(
+                    application=application, resubmission_form=resubmission_form
+                )
+            )
+
+        messages.error(request, "This action is not available.")
+        return redirect("applicant-resubmit", token=application.public_token)

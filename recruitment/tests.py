@@ -8002,6 +8002,38 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
             ).exists()
         )
 
+    def test_resubmission_view_renders_and_accepts_scoped_reupload(self):
+        application = self.make_submitted_application()
+        first_requirement = get_applicant_document_requirements(application.branch)[0]
+        self._finalize_screening_with_flagged_document(application, first_requirement)
+        with self.captureOnCommitCallbacks(execute=True):
+            process_workflow_action(
+                application, self.secretariat, "return_to_applicant", "Please resubmit."
+            )
+        application.refresh_from_db()
+
+        client = Client()
+        url = reverse("applicant-resubmit", kwargs={"token": application.public_token})
+        # The page renders the OTP step for an awaiting-resubmission application.
+        self.assertEqual(client.get(url).status_code, 200)
+
+        # Verify the applicant (the page's email-OTP step) then re-upload the flagged document.
+        otp_code = issue_application_otp(application, actor=application.applicant)
+        verify_application_otp(application, otp_code, actor=application.applicant)
+        upload = self.build_valid_applicant_document_upload(
+            first_requirement.code, content_prefix="reuploaded"
+        )
+        response = client.post(
+            url,
+            {"action": "resubmit", first_requirement.file_field_name: upload},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+        self.assertEqual(application.case.case_status, RecruitmentCase.CaseStatus.ACTIVE)
+        self.assertEqual(application.current_handler_role, RecruitmentUser.Role.SECRETARIAT)
+
     def test_submit_document_resubmission_requires_a_valid_otp(self):
         application = self.make_submitted_application()
         first_requirement = get_applicant_document_requirements(application.branch)[0]

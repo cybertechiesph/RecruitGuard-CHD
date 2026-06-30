@@ -893,6 +893,35 @@ class ApplicantOTPForm(BootstrapFormMixin, forms.Form):
         return otp
 
 
+class DocumentResubmissionForm(BootstrapFormMixin, forms.Form):
+    """Scoped re-upload form for Track Application: one required file per flagged document.
+
+    ``requirements`` is the list of applicant document-requirement objects the reviewer flagged
+    for resubmission; only those slots are exposed (already-accepted documents are untouched).
+    """
+
+    def __init__(self, *args, requirements=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.requirements = list(requirements or [])
+        self.upload_field_names = []
+        for requirement in self.requirements:
+            self.fields[requirement.file_field_name] = forms.FileField(
+                required=True,
+                label=requirement.title,
+                help_text="Upload a clear, readable PDF, JPG, or PNG.",
+                widget=forms.ClearableFileInput(attrs={"accept": ".pdf,.jpg,.jpeg,.png"}),
+            )
+            self.upload_field_names.append((requirement.code, requirement.file_field_name))
+        self._apply_bootstrap()
+
+    def get_uploads(self):
+        return {
+            code: self.cleaned_data.get(field_name)
+            for code, field_name in self.upload_field_names
+            if self.cleaned_data.get(field_name)
+        }
+
+
 class ApplicantStatusLookupForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form):
     captcha_scope = "applicant_status_lookup"
 
