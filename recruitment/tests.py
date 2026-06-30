@@ -65,6 +65,7 @@ from .models import (
     InterviewRating,
     Notification,
     NotificationLog,
+    PositionDocumentRequirement,
     PositionReference,
     PositionPosting,
     RecruitmentApplication,
@@ -80,6 +81,13 @@ from .permissions import (
     INTERNAL_MFA_VERIFIED_SESSION_KEY,
 )
 from .requirements import (
+    APPLICANT_DOCUMENT_REQUIREMENTS_BY_BRANCH,
+    DIPLOMA,
+    MIN_REQUIRED_DOCUMENT_CODES,
+    PERFORMANCE_RATING,
+    PERSONAL_DATA_SHEET,
+    SIGNED_COVER_LETTER,
+    TRAINING_CERTIFICATES,
     get_applicant_document_requirements,
     get_required_applicant_document_requirements,
 )
@@ -104,7 +112,10 @@ from .services import (
     save_exam_record,
     save_exam_schedule,
     create_competency_rating_template,
+    create_default_position_document_requirements,
     get_competency_rating_template,
+    get_missing_required_applicant_document_requirements,
+    set_position_document_requirements,
     get_published_competency_rating_template,
     compute_competency_rating_score,
     set_application_ete_rating,
@@ -273,7 +284,7 @@ class BaseRecruitmentTestCase(TestCase):
     ):
         uploaded_evidence = []
         for requirement in get_required_applicant_document_requirements(
-            branch=application.branch,
+            application,
             performance_rating_not_applicable=(
                 performance_rating_applicability
                 == RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
@@ -334,7 +345,7 @@ class BaseRecruitmentTestCase(TestCase):
         default_status = default_status or ScreeningDocumentReview.ReviewStatus.MEETS
         overrides = overrides or {}
         payload = {}
-        for requirement in get_applicant_document_requirements(application.branch):
+        for requirement in get_applicant_document_requirements(application):
             has_evidence = application.evidence_items.filter(
                 document_key=requirement.code,
                 is_current_version=True,
@@ -5316,7 +5327,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         self.assertEqual(document_review.status, ScreeningDocumentReview.ReviewStatus.NEEDS_REVIEW)
         self.assertEqual(
             screening_record.document_reviews.count(),
-            len(get_applicant_document_requirements(application.branch)),
+            len(get_applicant_document_requirements(application)),
         )
 
     def test_screening_view_persists_document_resubmission_request_and_remarks(self):
@@ -10256,3 +10267,223 @@ class E2ESeedCommandTests(BaseRecruitmentTestCase):
             ).count(),
             1,
         )
+
+
+class PositionDocumentRequirementTests(BaseRecruitmentTestCase):
+    def _branch_selections(self, branch, *, applies_overrides=None, level_overrides=None):
+        """Build a full selections list for a branch, defaulting to the standard set."""
+        applies_overrides = applies_overrides or {}
+        level_overrides = level_overrides or {}
+        selections = []
+        for requirement in APPLICANT_DOCUMENT_REQUIREMENTS_BY_BRANCH[branch]:
+            code = requirement.code
+            selections.append(
+                {
+                    "code": code,
+                    "applies": applies_overrides.get(code, True),
+                    "is_required": level_overrides.get(code, requirement.is_required),
+                }
+            )
+        return selections
+
+    def test_set_position_document_requirements_configures_set(self):
+        posting = self.level1_position
+        set_position_document_requirements(
+            posting,
+            self._branch_selections(
+                PositionPosting.Branch.PLANTILLA,
+                applies_overrides={DIPLOMA: False},
+                level_overrides={TRAINING_CERTIFICATES: True},
+            ),
+            self.secretariat,
+        )
+
+        codes = [requirement.code for requirement in get_applicant_document_requirements(posting)]
+        self.assertNotIn(DIPLOMA, codes)
+        required_codes = [
+            requirement.code for requirement in get_required_applicant_document_requirements(posting)
+        ]
+        self.assertIn(TRAINING_CERTIFICATES, required_codes)
+        self.assertNotIn(DIPLOMA, required_codes)
+        self.assertFalse(posting.document_requirements.filter(document_code=DIPLOMA).exists())
+        self.assertTrue(
+            posting.document_requirements.get(document_code=TRAINING_CERTIFICATES).is_required
+        )
+
+    def test_minimum_required_documents_cannot_be_dropped_or_optionalized(self):
+        posting = self.level1_position
+        set_position_document_requirements(
+            posting,
+            self._branch_selections(
+                PositionPosting.Branch.PLANTILLA,
+                applies_overrides={SIGNED_COVER_LETTER: False},
+                level_overrides={PERSONAL_DATA_SHEET: False},
+            ),
+            self.secretariat,
+        )
+        self.assertTrue(
+            posting.document_requirements.get(document_code=SIGNED_COVER_LETTER).is_required
+        )
+        self.assertTrue(
+            posting.document_requirements.get(document_code=PERSONAL_DATA_SHEET).is_required
+        )
+
+    def test_performance_rating_is_offered_only_and_stays_conditional(self):
+        posting = self.level1_position
+        set_position_document_requirements(
+            posting, self._branch_selections(PositionPosting.Branch.PLANTILLA), self.secretariat
+        )
+        offered = [
+            requirement
+            for requirement in get_applicant_document_requirements(posting)
+            if requirement.code == PERFORMANCE_RATING
+        ]
+        self.assertEqual(len(offered), 1)
+        self.assertFalse(offered[0].is_required)
+        self.assertTrue(offered[0].conditional_on_performance_rating)
+
+        set_position_document_requirements(
+            posting,
+            self._branch_selections(
+                PositionPosting.Branch.PLANTILLA, applies_overrides={PERFORMANCE_RATING: False}
+            ),
+            self.secretariat,
+        )
+        codes = [requirement.code for requirement in get_applicant_document_requirements(posting)]
+        self.assertNotIn(PERFORMANCE_RATING, codes)
+
+    def test_resolver_skips_codes_invalid_for_branch(self):
+        posting = self.cos_position
+        PositionDocumentRequirement.objects.create(
+            posting=posting, document_code=SIGNED_COVER_LETTER, is_required=True, order=1
+        )
+        PositionDocumentRequirement.objects.create(
+            posting=posting, document_code=PERFORMANCE_RATING, is_required=True, order=2
+        )
+        codes = [requirement.code for requirement in get_applicant_document_requirements(posting)]
+        self.assertIn(SIGNED_COVER_LETTER, codes)
+        self.assertNotIn(PERFORMANCE_RATING, codes)
+
+    def test_cos_posting_never_stores_performance_rating(self):
+        posting = self.cos_position
+        selections = self._branch_selections(PositionPosting.Branch.COS)
+        selections.append({"code": PERFORMANCE_RATING, "applies": True, "is_required": True})
+        set_position_document_requirements(posting, selections, self.secretariat)
+        self.assertFalse(
+            posting.document_requirements.filter(document_code=PERFORMANCE_RATING).exists()
+        )
+
+    def test_legacy_posting_without_rows_uses_branch_catalog(self):
+        posting = self.level1_position
+        self.assertEqual(posting.document_requirements.count(), 0)
+        self.assertEqual(
+            get_applicant_document_requirements(posting),
+            APPLICANT_DOCUMENT_REQUIREMENTS_BY_BRANCH[PositionPosting.Branch.PLANTILLA],
+        )
+
+    def test_configuration_locked_once_posting_is_live(self):
+        posting = self.level1_position
+        set_position_document_requirements(
+            posting, self._branch_selections(PositionPosting.Branch.PLANTILLA), self.secretariat
+        )
+        application = self.make_application(posting)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        posting.refresh_from_db()
+        self.assertTrue(posting.is_live_for_metadata_lock)
+
+        with self.assertRaises(ValidationError):
+            set_position_document_requirements(
+                posting, self._branch_selections(PositionPosting.Branch.PLANTILLA), self.secretariat
+            )
+
+        existing_row = posting.document_requirements.first()
+        existing_row.is_required = not existing_row.is_required
+        with self.assertRaises(ValidationError):
+            existing_row.save()
+
+    def test_submit_gate_uses_configured_required_set(self):
+        posting = self.level1_position
+        set_position_document_requirements(
+            posting,
+            self._branch_selections(
+                PositionPosting.Branch.PLANTILLA, applies_overrides={DIPLOMA: False}
+            ),
+            self.secretariat,
+        )
+        application = self.make_application(posting)
+        required_codes = [
+            requirement.code
+            for requirement in get_required_applicant_document_requirements(application)
+        ]
+        self.assertNotIn(DIPLOMA, required_codes)
+        self.assertEqual(get_missing_required_applicant_document_requirements(application), [])
+
+    def test_screening_review_uses_configured_document_set(self):
+        posting = self.level1_position
+        set_position_document_requirements(
+            posting,
+            self._branch_selections(
+                PositionPosting.Branch.PLANTILLA, applies_overrides={DIPLOMA: False}
+            ),
+            self.secretariat,
+        )
+        application = self.make_application(posting)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        screening_record = self.finalize_screening_for_current_stage(application, self.secretariat)
+        self.assertEqual(
+            screening_record.document_reviews.count(),
+            len(get_applicant_document_requirements(application)),
+        )
+        self.assertFalse(screening_record.document_reviews.filter(document_key=DIPLOMA).exists())
+
+    def test_create_view_persists_document_configuration(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        payload = {
+            "position_reference": self.admin_aide_position.pk,
+            "branch": PositionPosting.Branch.PLANTILLA,
+            "item_number": "OSEC-DOH-AA6-9-2026",
+            "intake_mode": PositionPosting.IntakeMode.FIXED_PERIOD,
+            "status": PositionPosting.EntryStatus.ACTIVE,
+            "publication_date": "",
+            "opening_date": self.entry_opening_date().isoformat(),
+            "closing_date": "",
+            "qualification_reference": "Per-vacancy document configuration create test.",
+        }
+        for requirement in APPLICANT_DOCUMENT_REQUIREMENTS_BY_BRANCH[PositionPosting.Branch.PLANTILLA]:
+            code = requirement.code
+            if code == DIPLOMA:
+                continue  # leave unchecked so it is dropped
+            payload[f"doc_applies__{code}"] = "on"
+            if code not in MIN_REQUIRED_DOCUMENT_CODES and not requirement.conditional_on_performance_rating:
+                payload[f"doc_level__{code}"] = "required"
+
+        response = client.post(reverse("recruitment-entry-create"), payload)
+        self.assertEqual(response.status_code, 302)
+        created = PositionPosting.objects.get(
+            qualification_reference="Per-vacancy document configuration create test."
+        )
+        configured_codes = set(
+            created.document_requirements.values_list("document_code", flat=True)
+        )
+        self.assertNotIn(DIPLOMA, configured_codes)
+        self.assertIn(SIGNED_COVER_LETTER, configured_codes)
+        self.assertIn(PERSONAL_DATA_SHEET, configured_codes)
+
+    def test_update_view_renders_locked_documents_for_live_posting(self):
+        posting = self.level1_position
+        set_position_document_requirements(
+            posting, self._branch_selections(PositionPosting.Branch.PLANTILLA), self.secretariat
+        )
+        application = self.make_application(posting)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(reverse("recruitment-entry-update", kwargs={"pk": posting.pk}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "locked and cannot be changed")
+        self.assertContains(response, "disabled")

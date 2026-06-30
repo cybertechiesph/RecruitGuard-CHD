@@ -7,7 +7,11 @@ from django.utils import timezone
 from django.views import View
 from django.views.generic import CreateView, ListView, UpdateView
 
-from .forms import PositionReferenceForm, RecruitmentEntryForm
+from .forms import (
+    PositionDocumentRequirementsForm,
+    PositionReferenceForm,
+    RecruitmentEntryForm,
+)
 from .models import PositionPosting, PositionReference
 from .permissions import EntryManagerRequiredMixin, SystemAdministratorRequiredMixin
 from .services import (
@@ -15,6 +19,7 @@ from .services import (
     get_manageable_recruitment_entries,
     persist_position,
     persist_recruitment_entry,
+    set_position_document_requirements,
     update_recruitment_entry_status,
 )
 
@@ -94,50 +99,82 @@ class RecruitmentEntryListView(LoginRequiredMixin, EntryManagerRequiredMixin, Li
         return context
 
 
-class RecruitmentEntryCreateView(LoginRequiredMixin, EntryManagerRequiredMixin, CreateView):
-    template_name = "recruitment/recruitment_entry_form.html"
-    model = PositionPosting
-    form_class = RecruitmentEntryForm
+class _RecruitmentEntryDocumentMixin:
+    """Shared create/edit handling for the embedded application-documents checklist."""
+
+    success_message = ""
+
+    def _documents_form_kwargs(self):
+        posting = getattr(self, "object", None)
+        if self.request.method == "POST":
+            branch = self.request.POST.get("branch") or (posting.branch if posting else None)
+        else:
+            branch = posting.branch if posting else None
+        return {
+            "branch": branch,
+            "posting": posting,
+            "locked": bool(posting and posting.pk and posting.is_live_for_metadata_lock),
+        }
+
+    def _build_documents_form(self, data=None):
+        return PositionDocumentRequirementsForm(data, **self._documents_form_kwargs())
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["selected_position_reference"] = context["form"].selected_position_reference
+        if "documents_form" not in context:
+            data = self.request.POST if self.request.method == "POST" else None
+            context["documents_form"] = self._build_documents_form(data)
         return context
 
     def form_valid(self, form):
-        self.object = persist_recruitment_entry(
+        posting = persist_recruitment_entry(
             entry=form.save(commit=False),
             actor=self.request.user,
             changed_fields=form.changed_data,
         )
-        messages.success(self.request, "Recruitment entry created.")
+        self.object = posting
+        if posting.is_live_for_metadata_lock:
+            # Configuration is locked once the posting is live; keep the existing rows.
+            messages.success(self.request, self.success_message)
+            return redirect(self.get_success_url())
+        documents_form = self._build_documents_form(self.request.POST)
+        if not documents_form.is_valid():
+            return self.render_to_response(
+                self.get_context_data(form=form, documents_form=documents_form)
+            )
+        try:
+            set_position_document_requirements(
+                posting, documents_form.get_selections(), self.request.user
+            )
+        except ValidationError as error:
+            _add_validation_messages(self.request, error)
+            return self.render_to_response(
+                self.get_context_data(form=form, documents_form=documents_form)
+            )
+        messages.success(self.request, self.success_message)
         return redirect(self.get_success_url())
 
     def get_success_url(self):
         return reverse("recruitment-entry-list")
 
 
-class RecruitmentEntryUpdateView(LoginRequiredMixin, EntryManagerRequiredMixin, UpdateView):
+class RecruitmentEntryCreateView(
+    _RecruitmentEntryDocumentMixin, LoginRequiredMixin, EntryManagerRequiredMixin, CreateView
+):
     template_name = "recruitment/recruitment_entry_form.html"
     model = PositionPosting
     form_class = RecruitmentEntryForm
+    success_message = "Recruitment entry created."
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["selected_position_reference"] = context["form"].selected_position_reference
-        return context
 
-    def form_valid(self, form):
-        self.object = persist_recruitment_entry(
-            entry=form.save(commit=False),
-            actor=self.request.user,
-            changed_fields=form.changed_data,
-        )
-        messages.success(self.request, "Recruitment entry updated.")
-        return redirect(self.get_success_url())
-
-    def get_success_url(self):
-        return reverse("recruitment-entry-list")
+class RecruitmentEntryUpdateView(
+    _RecruitmentEntryDocumentMixin, LoginRequiredMixin, EntryManagerRequiredMixin, UpdateView
+):
+    template_name = "recruitment/recruitment_entry_form.html"
+    model = PositionPosting
+    form_class = RecruitmentEntryForm
+    success_message = "Recruitment entry updated."
 
 
 class RecruitmentEntryStatusUpdateView(LoginRequiredMixin, EntryManagerRequiredMixin, View):

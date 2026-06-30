@@ -30,6 +30,7 @@ from recruitment.models import (
 from recruitment.requirements import get_required_applicant_document_requirements
 from recruitment.services import (
     create_competency_rating_template,
+    create_default_position_document_requirements,
     generate_comparative_assessment_report,
     get_competency_rating_template,
     get_current_workflow_section,
@@ -280,6 +281,7 @@ class Command(BaseCommand):
         )
         entry.full_clean()
         entry.save()
+        create_default_position_document_requirements(entry)
         return entry
 
     def _create_application(self, *, entry, applicant, reference, first_name, last_name, label):
@@ -340,7 +342,7 @@ class Command(BaseCommand):
             == RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
         )
         for requirement in get_required_applicant_document_requirements(
-            branch=application.branch,
+            application,
             performance_rating_not_applicable=performance_rating_not_applicable,
         ):
             upload_evidence_item(

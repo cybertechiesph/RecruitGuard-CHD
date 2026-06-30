@@ -80,6 +80,35 @@
                     {% include "recruitment/includes/form_field.html" with field=form.qualification_reference %}
                 </div>
 
+                <div class="rg-form-section mt-4" id="application-documents-section">
+                    <h2 class="rg-form-section__title">5. Application Documents</h2>
+                    <p class="rg-form-section__copy">Choose which documents applicants must provide for this vacancy and whether each is required or optional. The Cover/Application Letter and Personal Data Sheet are always required.</p>
+                    {% if documents_form.locked %}
+                        <div class="alert alert-warning">This recruitment entry already has submitted applications or a linked recruitment case, so its application documents are locked and cannot be changed.</div>
+                    {% endif %}
+                    <div class="rg-doc-checklist">
+                        {% for row in documents_form.rows %}
+                            <div class="rg-doc-row row g-2 align-items-start py-2 border-bottom"
+                                 data-doc-code="{{ row.requirement.code }}"
+                                 {% if row.is_conditional %}data-conditional="true"{% endif %}>
+                                <div class="col-md-1 pt-1">{{ row.applies_field }}</div>
+                                <div class="col-md-7">
+                                    <div class="fw-semibold">{{ row.requirement.title }}</div>
+                                    <div class="form-text">{{ row.requirement.help_text }}</div>
+                                    {% if row.forced_min %}<span class="badge bg-secondary mt-1">Always required</span>{% endif %}
+                                </div>
+                                <div class="col-md-4">
+                                    {% if row.is_conditional %}
+                                        <span class="text-muted small">Offered if applicable (applicant decides)</span>
+                                    {% else %}
+                                        {{ row.level_field }}
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
                 <div class="rg-form-actions">
                     <button type="submit" class="btn btn-rg-primary">Save Entry</button>
                     <a href="{% url 'recruitment-entry-list' %}" class="btn btn-outline-secondary">Cancel</a>
@@ -139,6 +168,30 @@
 
     selector.addEventListener('change', updateReferenceReview);
     updateReferenceReview();
+})();
+
+(function () {
+    var branchSel = document.getElementById('{{ form.branch.id_for_label }}');
+    var section = document.getElementById('application-documents-section');
+    if (!branchSel || !section) {
+        return;
+    }
+
+    function applyBranch() {
+        var isCos = branchSel.value === 'cos';
+        section.querySelectorAll('.rg-doc-row[data-conditional="true"]').forEach(function (row) {
+            row.classList.toggle('d-none', isCos);
+            if (isCos) {
+                var checkbox = row.querySelector('input[type=checkbox]');
+                if (checkbox) {
+                    checkbox.checked = false;
+                }
+            }
+        });
+    }
+
+    branchSel.addEventListener('change', applyBranch);
+    applyBranch();
 })();
 </script>
 {% endblock %}

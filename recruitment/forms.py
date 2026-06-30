@@ -50,7 +50,13 @@ from .models import (
     ScreeningRecord,
 )
 from .notification_services import REQUIREMENT_CHECKLIST_DEFAULT_DEADLINE_DAYS
-from .requirements import PERFORMANCE_RATING, get_applicant_document_requirements
+from .requirements import (
+    APPLICANT_DOCUMENT_REQUIREMENTS_BY_BRANCH,
+    MIN_REQUIRED_DOCUMENT_CODES,
+    PERFORMANCE_RATING,
+    PLANTILLA_APPLICANT_DOCUMENT_REQUIREMENTS,
+    get_applicant_document_requirements,
+)
 from .services import (
     compute_competency_rating_score,
     get_available_actions,
@@ -569,9 +575,7 @@ class ApplicantPortalIntakeForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form
         self.duplicate_document_errors = []
         self.duplicate_document_warnings = self.duplicate_document_errors
         self.saved_draft_notice = ""
-        self.document_requirements = get_applicant_document_requirements(
-            entry.branch if entry else None
-        )
+        self.document_requirements = get_applicant_document_requirements(entry)
         self.document_requirements_by_code = {
             requirement.code: requirement for requirement in self.document_requirements
         }
@@ -1515,7 +1519,7 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
         existing_reviews = self._existing_document_reviews_by_key()
         status_labels = dict(ScreeningDocumentReview.ReviewStatus.choices)
         for display_order, requirement in enumerate(
-            get_applicant_document_requirements(self.application.branch),
+            get_applicant_document_requirements(self.application),
             start=1,
         ):
             evidence = current_documents.get(requirement.code)
@@ -2386,6 +2390,87 @@ class PositionReferenceForm(BootstrapFormMixin, forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["position_slug"].help_text = "Leave blank to generate the slug automatically from the title."
         self._apply_bootstrap()
+
+
+class PositionDocumentRequirementsForm(forms.Form):
+    """Per-vacancy checklist: which applicant documents apply and whether each is required.
+
+    Renders one row per branch catalog document. The minimum required documents and any
+    posting that is already live are rendered as disabled fields, so Django ignores posted
+    values and cleans them to their initial state.
+    """
+
+    APPLIES_PREFIX = "doc_applies__"
+    LEVEL_PREFIX = "doc_level__"
+    LEVEL_CHOICES = [("required", "Required"), ("optional", "Optional")]
+
+    def __init__(self, *args, branch=None, posting=None, locked=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.branch = branch or PositionPosting.Branch.PLANTILLA
+        self.posting = posting
+        self.locked = locked
+        catalog = APPLICANT_DOCUMENT_REQUIREMENTS_BY_BRANCH.get(
+            self.branch, PLANTILLA_APPLICANT_DOCUMENT_REQUIREMENTS
+        )
+        existing = {}
+        if posting is not None and posting.pk:
+            existing = {row.document_code: row for row in posting.document_requirements.all()}
+        self.rows = []
+        for requirement in catalog:
+            code = requirement.code
+            forced_min = code in MIN_REQUIRED_DOCUMENT_CODES
+            existing_row = existing.get(code)
+            if forced_min:
+                applies_initial = True
+            elif existing:
+                applies_initial = existing_row is not None
+            else:
+                # No saved configuration yet (new entry or legacy posting): offer the full
+                # branch standard set, matching the current hardcoded behaviour.
+                applies_initial = True
+            applies_name = self.APPLIES_PREFIX + code
+            self.fields[applies_name] = forms.BooleanField(
+                required=False,
+                initial=applies_initial,
+                disabled=forced_min or locked,
+                label=requirement.title,
+            )
+            row = {
+                "requirement": requirement,
+                "forced_min": forced_min,
+                "is_conditional": requirement.conditional_on_performance_rating,
+                "applies_field": self[applies_name],
+                "level_field": None,
+            }
+            if not requirement.conditional_on_performance_rating:
+                level_required = (
+                    existing_row.is_required if existing_row is not None else requirement.is_required
+                )
+                level_name = self.LEVEL_PREFIX + code
+                self.fields[level_name] = forms.ChoiceField(
+                    choices=self.LEVEL_CHOICES,
+                    required=False,
+                    initial="required" if (forced_min or level_required) else "optional",
+                    widget=forms.RadioSelect,
+                    disabled=forced_min or locked,
+                )
+                row["level_field"] = self[level_name]
+            self.rows.append(row)
+
+    def get_selections(self):
+        selections = []
+        for row in self.rows:
+            code = row["requirement"].code
+            applies = row["forced_min"] or bool(self.cleaned_data.get(self.APPLIES_PREFIX + code))
+            level_value = self.cleaned_data.get(self.LEVEL_PREFIX + code)
+            selections.append(
+                {
+                    "code": code,
+                    "applies": applies,
+                    "is_required": level_value == "required",
+                }
+            )
+        return selections
 
 
 class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):

@@ -709,6 +709,51 @@ class PositionPosting(TimestampedModel):
         return f"{self.title} [{self.job_code}]"
 
 
+class PositionDocumentRequirement(TimestampedModel):
+    """Per-vacancy selection of which applicant documents apply and whether each is required.
+
+    The document catalog (titles/help text/conditional flags) stays in
+    ``recruitment.requirements``; a row here just selects a catalog code for a posting and
+    marks it required or optional. A posting with no rows falls back to its branch catalog.
+    """
+
+    posting = models.ForeignKey(
+        PositionPosting,
+        on_delete=models.CASCADE,
+        related_name="document_requirements",
+    )
+    document_code = models.CharField(max_length=50)
+    is_required = models.BooleanField(default=True)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["posting", "document_code"],
+                name="unique_document_requirement_per_posting",
+            )
+        ]
+
+    def _assert_not_locked(self):
+        if self.posting_id and self.posting.is_live_for_metadata_lock:
+            raise ValidationError(
+                "Application document requirements cannot change once the recruitment entry "
+                "has submitted applications or linked recruitment cases."
+            )
+
+    def save(self, *args, **kwargs):
+        self._assert_not_locked()
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        self._assert_not_locked()
+        return super().delete(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.posting.job_code}: {self.document_code}"
+
+
 class RecruitmentApplication(TimestampedModel):
     class Status(models.TextChoices):
         DRAFT = "draft", "Draft"

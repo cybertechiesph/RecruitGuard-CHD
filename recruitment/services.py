@@ -53,6 +53,7 @@ from .models import (
     InterviewRating,
     InterviewSession,
     Notification,
+    PositionDocumentRequirement,
     PositionReference,
     PositionPosting,
     RecruitmentApplication,
@@ -76,6 +77,8 @@ from .notification_services import (
 )
 from .permissions import WORKFLOW_PROCESSOR_ROLES
 from .requirements import (
+    APPLICANT_DOCUMENT_REQUIREMENTS_BY_BRANCH,
+    MIN_REQUIRED_DOCUMENT_CODES,
     PERFORMANCE_RATING,
     get_applicant_document_requirements,
     get_required_applicant_document_requirements,
@@ -3448,7 +3451,7 @@ def _screening_document_review_rows(
     default_submitted_status=ScreeningDocumentReview.ReviewStatus.MEETS,
 ):
     current_documents = get_current_applicant_document_map(application)
-    requirements = get_applicant_document_requirements(application.branch)
+    requirements = get_applicant_document_requirements(application)
     provided_by_key = {
         (row.get("document_key") or ""): row
         for row in (document_reviews or [])
@@ -5325,7 +5328,7 @@ def get_applicant_document_review_items(application):
             for review in screening_record.document_reviews.select_related("evidence_item")
         }
     review_items = []
-    for requirement in get_applicant_document_requirements(application.branch):
+    for requirement in get_applicant_document_requirements(application):
         evidence = current_documents.get(requirement.code)
         document_review = document_reviews_by_key.get(requirement.code)
         is_not_applicable = (
@@ -5363,7 +5366,7 @@ def get_missing_required_applicant_document_requirements(application):
     return [
         requirement
         for requirement in get_required_applicant_document_requirements(
-            branch=application.branch,
+            application,
             performance_rating_not_applicable=application.performance_rating_not_applicable,
         )
         if requirement.code not in present_document_codes
@@ -5373,7 +5376,7 @@ def get_missing_required_applicant_document_requirements(application):
 def get_duplicate_applicant_document_groups(application):
     requirement_titles = {
         requirement.code: requirement.title
-        for requirement in get_applicant_document_requirements(application.branch)
+        for requirement in get_applicant_document_requirements(application)
     }
     digest_to_codes = {}
     for evidence in get_current_applicant_document_items(application):
@@ -5536,7 +5539,7 @@ def _upsert_public_application_draft(
         )
     requirement_catalog = {
         requirement.code: requirement
-        for requirement in get_applicant_document_requirements(entry.branch)
+        for requirement in get_applicant_document_requirements(entry)
     }
     for requirement_code, uploaded_file in requirement_uploads.items():
         requirement = requirement_catalog[requirement_code]
@@ -8104,6 +8107,82 @@ def persist_recruitment_entry(entry, actor, changed_fields):
         },
     )
     return entry
+
+
+def create_default_position_document_requirements(posting):
+    """Seed the branch-standard document requirement rows for a brand-new posting."""
+    branch_catalog = APPLICANT_DOCUMENT_REQUIREMENTS_BY_BRANCH.get(posting.branch, ())
+    PositionDocumentRequirement.objects.bulk_create(
+        PositionDocumentRequirement(
+            posting=posting,
+            document_code=requirement.code,
+            is_required=requirement.is_required,
+            order=index,
+        )
+        for index, requirement in enumerate(branch_catalog, start=1)
+    )
+
+
+@transaction.atomic
+def set_position_document_requirements(posting, selections, actor):
+    """Replace a posting's applicant document configuration.
+
+    ``selections`` is an iterable of dicts ``{"code", "applies", "is_required"}``. Only codes
+    valid for the posting's branch are honoured; the minimum required set always applies and
+    stays required; conditional documents (performance rating) are stored as optional because
+    their requiredness is applicant-driven.
+    """
+    if posting.is_live_for_metadata_lock:
+        raise ValidationError(
+            "Application document requirements are locked because this recruitment entry has "
+            "submitted applications or linked recruitment cases."
+        )
+
+    branch_catalog = APPLICANT_DOCUMENT_REQUIREMENTS_BY_BRANCH.get(posting.branch, ())
+    selection_by_code = {selection["code"]: selection for selection in selections}
+
+    desired = {}
+    order_by_code = {}
+    for index, requirement in enumerate(branch_catalog, start=1):
+        code = requirement.code
+        order_by_code[code] = index
+        forced_min = code in MIN_REQUIRED_DOCUMENT_CODES
+        selection = selection_by_code.get(code, {})
+        applies = forced_min or bool(selection.get("applies"))
+        if not applies:
+            continue
+        if requirement.conditional_on_performance_rating:
+            is_required = False
+        elif forced_min:
+            is_required = True
+        else:
+            is_required = bool(selection.get("is_required"))
+        desired[code] = is_required
+
+    existing = {row.document_code: row for row in posting.document_requirements.all()}
+    for code, row in existing.items():
+        if code not in desired:
+            row.delete()
+    for code, is_required in desired.items():
+        row = existing.get(code) or PositionDocumentRequirement(
+            posting=posting, document_code=code
+        )
+        row.is_required = is_required
+        row.order = order_by_code[code]
+        row.full_clean()
+        row.save()
+
+    record_system_audit_event(
+        actor=actor,
+        action=AuditLog.Action.RECRUITMENT_ENTRY_UPDATED,
+        description=f"Configured application documents for '{posting.job_code}'.",
+        metadata={
+            "entry_id": posting.id,
+            "entry_code": posting.job_code,
+            "document_codes": sorted(desired),
+            "required_codes": sorted(code for code, required in desired.items() if required),
+        },
+    )
 
 
 def update_recruitment_entry_status(entry, actor, new_status):

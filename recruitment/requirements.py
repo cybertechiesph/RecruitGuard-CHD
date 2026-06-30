@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from .models import PositionPosting
 
@@ -147,24 +147,73 @@ APPLICANT_DOCUMENT_TYPE_CHOICES = [
     (requirement.code, requirement.title) for requirement in PLANTILLA_APPLICANT_DOCUMENT_REQUIREMENTS
 ]
 
-
-def _resolve_branch(branch=None):
-    if hasattr(branch, "branch"):
-        branch = branch.branch
-    return branch or PositionPosting.Branch.PLANTILLA
+# Documents that must always apply and stay required on every vacancy; the per-vacancy
+# configuration UI cannot drop these or mark them optional.
+MIN_REQUIRED_DOCUMENT_CODES = frozenset({SIGNED_COVER_LETTER, PERSONAL_DATA_SHEET})
 
 
-def get_applicant_document_requirements(branch=None):
+def _resolve_posting(source=None):
+    """Return the PositionPosting reachable from ``source`` (a posting or an application), else None."""
+    if isinstance(source, PositionPosting):
+        return source
+    position = getattr(source, "position", None)
+    if isinstance(position, PositionPosting):
+        return position
+    return None
+
+
+def _resolve_branch(source=None):
+    if hasattr(source, "branch"):
+        source = source.branch
+    return source or PositionPosting.Branch.PLANTILLA
+
+
+def _branch_requirements_by_code(branch):
+    return {
+        requirement.code: requirement
+        for requirement in APPLICANT_DOCUMENT_REQUIREMENTS_BY_BRANCH.get(
+            branch, PLANTILLA_APPLICANT_DOCUMENT_REQUIREMENTS
+        )
+    }
+
+
+def get_applicant_document_requirements(source=None):
+    """Resolve the applicant document catalog for a posting/application/branch.
+
+    When ``source`` resolves to a PositionPosting that has its own configured rows, the
+    catalog is built from those rows (title/help text/conditional flag taken from the
+    posting's branch catalog, required/optional taken from the row). Otherwise the branch
+    catalog is returned unchanged, so postings with no configuration behave exactly as before.
+    """
+    posting = _resolve_posting(source)
+    if posting is not None and posting.pk:
+        rows = list(posting.document_requirements.all())
+        if rows:
+            catalog = _branch_requirements_by_code(posting.branch)
+            built = []
+            for row in rows:
+                base = catalog.get(row.document_code)
+                if base is None:
+                    continue
+                if base.conditional_on_performance_rating:
+                    # Conditional documents stay applicant-driven; the row's flag is ignored.
+                    built.append(base)
+                else:
+                    built.append(replace(base, is_required=row.is_required))
+            return tuple(built)
     return APPLICANT_DOCUMENT_REQUIREMENTS_BY_BRANCH.get(
-        _resolve_branch(branch),
+        _resolve_branch(source),
         PLANTILLA_APPLICANT_DOCUMENT_REQUIREMENTS,
     )
 
 
-def get_required_applicant_document_requirements(*, branch=None, performance_rating_not_applicable=False):
+def get_required_applicant_document_requirements(
+    source=None, *, branch=None, performance_rating_not_applicable=False
+):
+    target = source if source is not None else branch
     return tuple(
         requirement
-        for requirement in get_applicant_document_requirements(branch)
+        for requirement in get_applicant_document_requirements(target)
         if requirement.is_required
         or (
             requirement.conditional_on_performance_rating
