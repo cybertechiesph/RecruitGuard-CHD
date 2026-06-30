@@ -74,6 +74,7 @@ from .models import (
     RoutingHistory,
     ScreeningDocumentReview,
     ScreeningRecord,
+    VacancyAssessmentWeights,
     WorkflowOverride,
 )
 from .permissions import (
@@ -113,6 +114,9 @@ from .services import (
     save_exam_schedule,
     create_competency_rating_template,
     create_default_position_document_requirements,
+    get_or_create_vacancy_assessment_weights,
+    lock_vacancy_assessment_weights,
+    persist_recruitment_entry,
     get_competency_rating_template,
     get_missing_required_applicant_document_requirements,
     set_position_document_requirements,
@@ -6245,6 +6249,88 @@ class AssessmentWeightConfigTests(BaseRecruitmentTestCase):
         # Rejected — the stored config stays at the defaults.
         self.assertEqual(config.exam_general_weight, Decimal("60.00"))
         self.assertEqual(config.exam_technical_weight, Decimal("40.00"))
+
+
+class VacancyAssessmentWeightsTests(BaseRecruitmentTestCase):
+    def test_assessment_weights_or_default_returns_unsaved_defaults(self):
+        # A vacancy with no weights row falls back to the office defaults (exam 60/40,
+        # CAR 40/20/40) without persisting anything.
+        weights = self.level1_position.assessment_weights_or_default
+        self.assertIsNone(weights.pk)
+        self.assertEqual(weights.exam_general_weight, Decimal("60.00"))
+        self.assertEqual(weights.exam_technical_weight, Decimal("40.00"))
+        self.assertEqual(weights.ete_weight, Decimal("40.00"))
+        self.assertEqual(weights.exam_weight, Decimal("20.00"))
+        self.assertEqual(weights.interview_weight, Decimal("40.00"))
+
+    def test_get_or_create_persists_a_single_row(self):
+        weights = get_or_create_vacancy_assessment_weights(self.level1_position)
+        self.assertIsNotNone(weights.pk)
+        self.assertEqual(
+            VacancyAssessmentWeights.objects.filter(
+                recruitment_entry=self.level1_position
+            ).count(),
+            1,
+        )
+        # The reverse accessor now returns the persisted row.
+        self.assertEqual(
+            self.level1_position.assessment_weights_or_default.pk, weights.pk
+        )
+
+    def test_lock_marks_locked_and_is_idempotent(self):
+        weights = lock_vacancy_assessment_weights(self.level1_position)
+        self.assertTrue(weights.is_locked)
+        self.assertIsNotNone(weights.locked_at)
+        first_locked_at = weights.locked_at
+        again = lock_vacancy_assessment_weights(self.level1_position)
+        self.assertEqual(again.locked_at, first_locked_at)
+
+    def test_exam_weights_must_sum_to_100(self):
+        weights = VacancyAssessmentWeights(
+            recruitment_entry=self.level1_position,
+            exam_general_weight=Decimal("70.00"),
+            exam_technical_weight=Decimal("40.00"),
+        )
+        with self.assertRaises(ValidationError):
+            weights.full_clean()
+
+    def test_car_weights_must_sum_to_100(self):
+        weights = VacancyAssessmentWeights(
+            recruitment_entry=self.level1_position,
+            ete_weight=Decimal("50.00"),
+            exam_weight=Decimal("30.00"),
+            interview_weight=Decimal("30.00"),
+        )
+        with self.assertRaises(ValidationError):
+            weights.full_clean()
+
+    def test_new_plantilla_vacancy_seeds_default_weights(self):
+        entry = PositionPosting(
+            position_reference=self.admin_aide_position,
+            branch=PositionPosting.Branch.PLANTILLA,
+            level=PositionPosting.Level.LEVEL_1,
+            item_number="OSEC-DOH-AA6-9-2026",
+            intake_mode=PositionPosting.IntakeMode.FIXED_PERIOD,
+            status=PositionPosting.EntryStatus.ACTIVE,
+            closing_date=self.level1_closing_date(),
+        )
+        persist_recruitment_entry(entry, self.secretariat, [])
+        weights = VacancyAssessmentWeights.objects.get(recruitment_entry=entry)
+        self.assertEqual(weights.exam_general_weight, Decimal("60.00"))
+        self.assertEqual(weights.status, VacancyAssessmentWeights.Status.DRAFT)
+
+    def test_new_cos_vacancy_has_no_weights_row(self):
+        entry = PositionPosting(
+            position_reference=self.project_assistant_position,
+            branch=PositionPosting.Branch.COS,
+            level=PositionPosting.Level.LEVEL_1,
+            intake_mode=PositionPosting.IntakeMode.POOLING,
+            status=PositionPosting.EntryStatus.ACTIVE,
+        )
+        persist_recruitment_entry(entry, self.secretariat, [])
+        self.assertFalse(
+            VacancyAssessmentWeights.objects.filter(recruitment_entry=entry).exists()
+        )
 
 
 class ApplicantUploadValidationTests(TestCase):

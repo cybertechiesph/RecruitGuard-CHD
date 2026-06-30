@@ -705,6 +705,17 @@ class PositionPosting(TimestampedModel):
     def engagement_type(self):
         return self.branch
 
+    @property
+    def assessment_weights_or_default(self):
+        """The vacancy's assessment weights, or an unsaved defaults instance when no row
+        exists yet (a COS vacancy, which does not use weights, or a Plantilla vacancy created
+        before per-vacancy weights existed). Reading never persists a row, so the defaults
+        match the former global config (exam 60/40, CAR 40/20/40)."""
+        try:
+            return self.assessment_weights
+        except VacancyAssessmentWeights.DoesNotExist:
+            return VacancyAssessmentWeights(recruitment_entry=self)
+
     def __str__(self):
         return f"{self.title} [{self.job_code}]"
 
@@ -1499,6 +1510,131 @@ class AssessmentWeightConfig(TimestampedModel):
 
     def __str__(self):
         return "Assessment weight configuration"
+
+
+class VacancyAssessmentWeights(TimestampedModel):
+    """Per-vacancy assessment weights — the per-vacancy replacement for the former global
+    ``AssessmentWeightConfig`` singleton.
+
+    Each Plantilla vacancy carries its own exam General/Technical split (used to compute the
+    exam overall) and its CAR ETE/Exam/Interview split (used to compute the CAR overall).
+    Defaults match the office's standard forms (exam 60/40, CAR 40/20/40). Weights are editable
+    until scoring starts for the vacancy, then locked so finalized scores cannot shift under
+    them. COS vacancies do not use weights (a single unweighted end-user exam score, and no
+    CAR), so no row is created for them; reads fall back to the defaults via
+    ``PositionPosting.assessment_weights_or_default``.
+    """
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        LOCKED = "locked", "Locked"
+
+    DEFAULT_EXAM_GENERAL_WEIGHT = Decimal("60.00")
+    DEFAULT_EXAM_TECHNICAL_WEIGHT = Decimal("40.00")
+    DEFAULT_ETE_WEIGHT = Decimal("40.00")
+    DEFAULT_EXAM_WEIGHT = Decimal("20.00")
+    DEFAULT_INTERVIEW_WEIGHT = Decimal("40.00")
+
+    recruitment_entry = models.OneToOneField(
+        PositionPosting,
+        on_delete=models.CASCADE,
+        related_name="assessment_weights",
+    )
+    exam_general_weight = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=DEFAULT_EXAM_GENERAL_WEIGHT,
+    )
+    exam_technical_weight = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=DEFAULT_EXAM_TECHNICAL_WEIGHT,
+    )
+    ete_weight = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=DEFAULT_ETE_WEIGHT,
+    )
+    exam_weight = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=DEFAULT_EXAM_WEIGHT,
+    )
+    interview_weight = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=DEFAULT_INTERVIEW_WEIGHT,
+    )
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    locked_at = models.DateTimeField(blank=True, null=True)
+    updated_by = models.ForeignKey(
+        RecruitmentUser,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        blank=True,
+        null=True,
+    )
+
+    class Meta:
+        verbose_name = "Vacancy assessment weights"
+        verbose_name_plural = "Vacancy assessment weights"
+
+    def clean(self):
+        errors = {}
+        all_fields = (
+            "exam_general_weight",
+            "exam_technical_weight",
+            "ete_weight",
+            "exam_weight",
+            "interview_weight",
+        )
+        for field in all_fields:
+            value = getattr(self, field)
+            if value is None or value < 0 or value > 100:
+                errors[field] = "Enter a percentage between 0 and 100."
+        if not any(f in errors for f in ("exam_general_weight", "exam_technical_weight")):
+            if self.exam_general_weight + self.exam_technical_weight != Decimal("100"):
+                errors["exam_general_weight"] = (
+                    "General Ability and Technical weights must add up to 100%."
+                )
+        if not any(f in errors for f in ("ete_weight", "exam_weight", "interview_weight")):
+            if self.ete_weight + self.exam_weight + self.interview_weight != Decimal("100"):
+                errors["ete_weight"] = (
+                    "ETE, Examination, and Interview weights must add up to 100%."
+                )
+        if errors:
+            raise ValidationError(errors)
+
+    @property
+    def is_locked(self):
+        return self.status == self.Status.LOCKED
+
+    @property
+    def is_editable(self):
+        return self.status != self.Status.LOCKED
+
+    @property
+    def exam_general_fraction(self):
+        return (self.exam_general_weight or Decimal("0")) / Decimal("100")
+
+    @property
+    def exam_technical_fraction(self):
+        return (self.exam_technical_weight or Decimal("0")) / Decimal("100")
+
+    @property
+    def ete_fraction(self):
+        return (self.ete_weight or Decimal("0")) / Decimal("100")
+
+    @property
+    def exam_component_fraction(self):
+        return (self.exam_weight or Decimal("0")) / Decimal("100")
+
+    @property
+    def interview_fraction(self):
+        return (self.interview_weight or Decimal("0")) / Decimal("100")
+
+    def __str__(self):
+        return f"Assessment weights for {self.recruitment_entry.job_code}"
 
 
 class ExamRecord(TimestampedModel):

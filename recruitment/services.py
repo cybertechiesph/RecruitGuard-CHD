@@ -62,6 +62,7 @@ from .models import (
     RoutingHistory,
     ScreeningDocumentReview,
     ScreeningRecord,
+    VacancyAssessmentWeights,
     WorkflowOverride,
 )
 from .notification_services import (
@@ -8082,6 +8083,12 @@ def persist_recruitment_entry(entry, actor, changed_fields):
     entry.apply_position_reference_metadata()
     entry.full_clean()
     entry.save()
+    if is_create and entry.branch == PositionPosting.Branch.PLANTILLA:
+        # Seed the per-vacancy assessment weights with the office defaults (exam 60/40,
+        # CAR 40/20/40) so they are editable from the moment the Plantilla vacancy exists.
+        # COS vacancies use a single unweighted end-user exam score and have no CAR, so they
+        # get no weights row.
+        get_or_create_vacancy_assessment_weights(entry)
     action = (
         AuditLog.Action.RECRUITMENT_ENTRY_CREATED
         if is_create
@@ -8107,6 +8114,27 @@ def persist_recruitment_entry(entry, actor, changed_fields):
         },
     )
     return entry
+
+
+def get_or_create_vacancy_assessment_weights(posting):
+    """Return the vacancy's assessment-weight row, creating it (with seeded defaults) if
+    absent. Use this when a persisted, editable row is needed (seeding, the edit screen,
+    locking). Pure reads for computation should use
+    ``PositionPosting.assessment_weights_or_default`` instead, which never writes."""
+    weights, _created = VacancyAssessmentWeights.objects.get_or_create(recruitment_entry=posting)
+    return weights
+
+
+def lock_vacancy_assessment_weights(posting):
+    """Lock the vacancy's weights once scoring starts, so the split a finalized exam or CAR
+    was computed against can no longer be edited. Mirrors lock_competency_rating_template."""
+    weights = get_or_create_vacancy_assessment_weights(posting)
+    if weights.status != VacancyAssessmentWeights.Status.LOCKED:
+        weights.status = VacancyAssessmentWeights.Status.LOCKED
+        if not weights.locked_at:
+            weights.locked_at = timezone.now()
+        weights.save(update_fields=["status", "locked_at", "updated_at"])
+    return weights
 
 
 def create_default_position_document_requirements(posting):
