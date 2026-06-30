@@ -885,7 +885,7 @@ class FoundationSmokeTests(TestCase):
             follow=True,
         )
 
-        self.assertEqual(response.request["PATH_INFO"], reverse("workflow-queue"))
+        self.assertEqual(response.request["PATH_INFO"], reverse("vacancy-batches"))
         self.assertTrue(
             AuditLog.objects.filter(action=AuditLog.Action.INTERNAL_LOGIN).exists()
         )
@@ -909,7 +909,7 @@ class FoundationSmokeTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.request["PATH_INFO"], reverse("workflow-queue"))
+        self.assertEqual(response.request["PATH_INFO"], reverse("vacancy-batches"))
         self.assertFalse(InternalMFAChallenge.objects.filter(user=user).exists())
         self.assertEqual(mail.outbox, [])
         self.assertTrue(self.client.session[INTERNAL_MFA_VERIFIED_SESSION_KEY])
@@ -982,7 +982,7 @@ class FoundationSmokeTests(TestCase):
             follow=True,
         )
 
-        self.assertEqual(response.request["PATH_INFO"], reverse("workflow-queue"))
+        self.assertEqual(response.request["PATH_INFO"], reverse("vacancy-batches"))
         verified_session = self.client.session
         self.assertNotEqual(initial_session_key, verified_session.session_key)
         self.assertTrue(verified_session[INTERNAL_MFA_VERIFIED_SESSION_KEY])
@@ -7699,7 +7699,7 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         self.assertContains(response, f'href="{reverse("audit-log-list")}"')
         self.assertContains(response, "User Management")
 
-    def test_non_admin_dashboard_redirects_to_workflow_queue(self):
+    def test_non_admin_dashboard_redirects_to_vacancy_console(self):
         roles = {
             "secretariat": self.secretariat,
             "hrm_chief": self.hrm_chief,
@@ -7713,7 +7713,7 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
 
             with self.subTest(role=label):
                 self.assertEqual(response.status_code, 302)
-                self.assertEqual(response["Location"], reverse("workflow-queue"))
+                self.assertEqual(response["Location"], reverse("vacancy-batches"))
 
     def test_non_admin_sidebar_keeps_only_my_queue_link_for_case_navigation(self):
         client = Client()

@@ -277,10 +277,10 @@ class DashboardView(LoginRequiredMixin, InternalUserRequiredMixin, TemplateView)
     template_name = "recruitment/dashboard.html"
 
     def get(self, request, *args, **kwargs):
-        # Workflow roles land directly on their queue — that is their home.
-        # Only System Admin sees the dashboard (a distinct identity overview).
+        # Workflow roles land on the vacancy batch console — that is their home; the flat
+        # My Queue is a secondary view. Only System Admin sees the dashboard overview.
         if request.user.role != RecruitmentUser.Role.SYSTEM_ADMIN:
-            return redirect("workflow-queue")
+            return redirect("vacancy-batches")
         return super().get(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):

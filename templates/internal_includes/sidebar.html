@@ -29,21 +29,8 @@
         {% endif %}
 
         {% if user.role != "system_admin" %}
-            <a href="{% url 'workflow-queue' %}"
-               class="rg-sidebar__link {% if url_name == 'workflow-queue' or url_name == 'application-list' or url_name == 'application-detail' %}is-active{% endif %}">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
-                     fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M9 11l3 3L22 4"/>
-                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-                </svg>
-                My Queue
-            </a>
-        {% endif %}
-
-        {% if user.role != "system_admin" %}
             <a href="{% url 'vacancy-batches' %}"
-               class="rg-sidebar__link {% if url_name == 'vacancy-batches' or url_name == 'vacancy-batch-detail' %}is-active{% endif %}">
+               class="rg-sidebar__link {% if url_name == 'vacancy-batches' or url_name == 'vacancy-batch-detail' or url_name == 'vacancy-batch-exam' or url_name == 'vacancy-batch-interview' or url_name == 'vacancy-batch-cos-deliberation' %}is-active{% endif %}">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
                      fill="none" stroke="currentColor" stroke-width="2"
                      stroke-linecap="round" stroke-linejoin="round">
@@ -53,6 +40,19 @@
                     <rect x="14" y="14" width="7" height="7"/>
                 </svg>
                 Batches
+            </a>
+        {% endif %}
+
+        {% if user.role != "system_admin" %}
+            <a href="{% url 'workflow-queue' %}"
+               class="rg-sidebar__link {% if url_name == 'workflow-queue' or url_name == 'application-list' or url_name == 'application-detail' %}is-active{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 11l3 3L22 4"/>
+                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                </svg>
+                My Queue
             </a>
         {% endif %}
 
