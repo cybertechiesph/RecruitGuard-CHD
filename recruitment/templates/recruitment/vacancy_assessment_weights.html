@@ -1,0 +1,87 @@
+{% extends "internal_base.html" %}
+{% load recruitment_ui %}
+
+{% block content %}
+<div class="rg-page-header">
+    <div>
+        <p class="rg-eyebrow">Recruitment Entry</p>
+        <h1 class="rg-page-title">Assessment Weights</h1>
+        <p class="rg-page-copy">
+            The percentages this vacancy uses when the system computes the exam overall and
+            the Comparative Assessment (CAR) score. Each vacancy carries its own weights;
+            edit them here until scoring starts.
+        </p>
+        <p class="rg-note mb-0">
+            {{ entry.title }} &mdash; <strong>{{ entry.job_code }}</strong>
+            {% if entry.item_number %}&middot; Item {{ entry.item_number }}{% endif %}
+        </p>
+    </div>
+</div>
+
+{% if is_locked %}
+<div class="alert alert-secondary" role="status">
+    These weights are <strong>locked</strong> because scoring has started for this vacancy.
+    They can no longer be changed, so the split that finalized scores were computed against
+    stays fixed.
+</div>
+{% endif %}
+
+<form method="post" novalidate>
+    {% csrf_token %}
+
+    <div class="card p-4 mb-3" style="max-width:680px;">
+        <h2 class="h6 mb-1">CAR overall split</h2>
+        <p class="rg-note mb-3">
+            How the overall Comparative Assessment score is built from its three parts.
+            The three weights must add up to <strong>100%</strong>. Default is
+            ETE 40% + Examination 20% + Interview 40%.
+        </p>
+
+        {% if form.non_field_errors %}
+            <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="row g-3">
+            <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.ete_weight %}</div>
+            <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.exam_weight %}</div>
+            <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.interview_weight %}</div>
+        </div>
+
+        <p class="rg-note mb-0 mt-3">
+            Formula: Overall = ETE &times; (ETE weight) + Exam &times; (Exam weight) + Interview &times; (Interview weight).
+        </p>
+    </div>
+
+    <div class="card p-4 mb-3" style="max-width:680px;">
+        <h2 class="h6 mb-1">Exam score split</h2>
+        <p class="rg-note mb-3">
+            How the written exam's overall score is built from its two components.
+            The two weights must add up to <strong>100%</strong>. Default is
+            General Ability 60% + Technical 40%.
+        </p>
+
+        <div class="row g-3">
+            <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.exam_general_weight %}</div>
+            <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.exam_technical_weight %}</div>
+        </div>
+
+        <p class="rg-note mb-0 mt-3">
+            Formula: Exam score = General Ability &times; (General weight) + Technical &times; (Technical weight).
+        </p>
+    </div>
+
+    <div class="rg-form-actions mt-3 d-flex gap-2">
+        {% if not is_locked %}
+        <button type="submit" class="btn btn-rg-primary">Save weights</button>
+        {% endif %}
+        <a href="{% url 'recruitment-entry-list' %}" class="btn btn-outline-secondary">Back to entries</a>
+    </div>
+</form>
+
+{% if weights.updated_at %}
+<p class="rg-note mt-3">
+    Last updated {{ weights.updated_at|date:"M d, Y H:i" }}{% if weights.updated_by %}
+    by {{ weights.updated_by.get_full_name|default:weights.updated_by.username }}{% endif %}.
+</p>
+{% endif %}
+{% endblock %}

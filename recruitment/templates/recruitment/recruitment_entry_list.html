@@ -120,6 +120,11 @@
                                     <a href="{% url 'recruitment-entry-update' entry.pk %}"
                                        class="btn btn-outline-secondary btn-sm">Edit</a>
 
+                                    {% if entry.branch == "plantilla" %}
+                                        <a href="{% url 'vacancy-assessment-weights' entry.pk %}"
+                                           class="btn btn-outline-secondary btn-sm">Weights</a>
+                                    {% endif %}
+
                                     {% if entry.status != "active" %}
                                         <form method="post" action="{% url 'recruitment-entry-status' entry.pk 'active' %}">
                                             {% csrf_token %}

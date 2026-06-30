@@ -33,6 +33,7 @@ from .forms import (
     ReminderNotificationForm,
     RequirementChecklistNotificationForm,
     ScreeningReviewForm,
+    VacancyAssessmentWeightsForm,
     WorkflowActionForm,
     WorkflowOverrideForm,
     WorkflowReopenForm,
@@ -144,6 +145,8 @@ from .services import (
     save_competency_rating_sheet,
     get_assessment_weight_config,
     update_assessment_weights,
+    get_or_create_vacancy_assessment_weights,
+    update_vacancy_assessment_weights,
     user_can_manage_interview_session,
     user_can_manage_screening,
     user_can_process_application,
@@ -1336,6 +1339,58 @@ class AssessmentWeightConfigView(LoginRequiredMixin, EntryManagerRequiredMixin, 
         else:
             messages.error(request, "Fix the highlighted problems before saving.")
         return render(request, self.template_name, {"config": config, "form": form})
+
+
+class VacancyAssessmentWeightsView(LoginRequiredMixin, EntryManagerRequiredMixin, View):
+    template_name = "recruitment/vacancy_assessment_weights.html"
+
+    def _get_entry(self, pk):
+        entry = get_object_or_404(PositionPosting, pk=pk)
+        if entry.branch != PositionPosting.Branch.PLANTILLA:
+            return None
+        return entry
+
+    def _context(self, entry, weights, form):
+        return {
+            "entry": entry,
+            "weights": weights,
+            "form": form,
+            "is_locked": weights.is_locked,
+        }
+
+    def get(self, request, pk):
+        entry = self._get_entry(pk)
+        if entry is None:
+            messages.info(request, "COS vacancies do not use assessment weights.")
+            return redirect("recruitment-entry-list")
+        weights = get_or_create_vacancy_assessment_weights(entry)
+        form = VacancyAssessmentWeightsForm(instance=weights)
+        return render(request, self.template_name, self._context(entry, weights, form))
+
+    def post(self, request, pk):
+        entry = self._get_entry(pk)
+        if entry is None:
+            messages.info(request, "COS vacancies do not use assessment weights.")
+            return redirect("recruitment-entry-list")
+        weights = get_or_create_vacancy_assessment_weights(entry)
+        if weights.is_locked:
+            messages.error(
+                request,
+                "Assessment weights are locked because scoring has started for this vacancy.",
+            )
+            return redirect("vacancy-assessment-weights", pk=entry.pk)
+        form = VacancyAssessmentWeightsForm(request.POST, instance=weights)
+        if form.is_valid():
+            try:
+                update_vacancy_assessment_weights(entry, form, request.user)
+            except (ValueError, ValidationError) as exc:
+                messages.error(request, str(exc))
+            else:
+                messages.success(request, "Assessment weights updated.")
+                return redirect("vacancy-assessment-weights", pk=entry.pk)
+        else:
+            messages.error(request, "Fix the highlighted problems before saving.")
+        return render(request, self.template_name, self._context(entry, weights, form))
 
 
 class InterviewRatingView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):

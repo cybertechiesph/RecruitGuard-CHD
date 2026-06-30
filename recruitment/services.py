@@ -3946,6 +3946,10 @@ def save_exam_record(
             },
         )
     if finalize:
+        if application.branch == PositionPosting.Branch.PLANTILLA:
+            # Scoring is now committed for the vacancy: lock its assessment weights so the
+            # split this exam (and the downstream CAR) was computed against cannot change.
+            lock_vacancy_assessment_weights(application.position)
         _auto_advance_after_exam_finalized(application, actor, review_stage)
     return exam_record
 
@@ -4223,6 +4227,9 @@ def save_interview_rating(application, actor, cleaned_data):
 
     # First submitted score locks the template so it can no longer be re-shaped.
     lock_competency_rating_template(template)
+    if application.branch == PositionPosting.Branch.PLANTILLA:
+        # Interview scoring has started: lock the vacancy's assessment weights too.
+        lock_vacancy_assessment_weights(application.position)
 
     record_audit_event(
         application=application,
@@ -8134,6 +8141,50 @@ def lock_vacancy_assessment_weights(posting):
         if not weights.locked_at:
             weights.locked_at = timezone.now()
         weights.save(update_fields=["status", "locked_at", "updated_at"])
+    return weights
+
+
+@transaction.atomic
+def update_vacancy_assessment_weights(posting, weights_form, actor):
+    """Persist edits to a Plantilla vacancy's assessment weights and audit the change.
+    Refuses once the weights are locked (scoring has started). The form has already validated
+    that each sub-group (exam General/Technical, CAR ETE/Exam/Interview) sums to 100%."""
+    instance = weights_form.instance
+    if instance.is_locked:
+        raise ValidationError(
+            "Assessment weights are locked because scoring has started for this vacancy."
+        )
+
+    def _snapshot(record):
+        return {
+            "exam_general_weight": str(record.exam_general_weight),
+            "exam_technical_weight": str(record.exam_technical_weight),
+            "ete_weight": str(record.ete_weight),
+            "exam_weight": str(record.exam_weight),
+            "interview_weight": str(record.interview_weight),
+        }
+
+    previous = (
+        _snapshot(VacancyAssessmentWeights.objects.get(pk=instance.pk))
+        if instance.pk
+        else {}
+    )
+    weights = weights_form.save(commit=False)
+    weights.recruitment_entry = posting
+    weights.updated_by = actor
+    weights.full_clean()
+    weights.save()
+    record_system_audit_event(
+        actor=actor,
+        action=AuditLog.Action.ASSESSMENT_WEIGHTS_UPDATED,
+        description=f"Updated assessment weights for {posting.job_code}.",
+        metadata={
+            "entry_id": posting.id,
+            "entry_code": posting.job_code,
+            "previous": previous,
+            **_snapshot(weights),
+        },
+    )
     return weights
 
 

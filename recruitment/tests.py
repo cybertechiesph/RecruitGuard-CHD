@@ -6346,6 +6346,102 @@ class VacancyAssessmentWeightsTests(BaseRecruitmentTestCase):
         # 90 * 0.50 + 80 * 0.50 = 85 — the formula tracks this vacancy's weights.
         self.assertEqual(record.calculate_policy_score(), Decimal("85.00"))
 
+    def test_secretariat_can_view_and_update_vacancy_weights(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        url = reverse("vacancy-assessment-weights", args=[self.level1_position.pk])
+        self.assertEqual(client.get(url).status_code, 200)
+        response = client.post(
+            url,
+            {
+                "ete_weight": "50",
+                "exam_weight": "20",
+                "interview_weight": "30",
+                "exam_general_weight": "55",
+                "exam_technical_weight": "45",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        weights = VacancyAssessmentWeights.objects.get(recruitment_entry=self.level1_position)
+        self.assertEqual(weights.ete_weight, Decimal("50.00"))
+        self.assertEqual(weights.interview_weight, Decimal("30.00"))
+        self.assertEqual(weights.exam_general_weight, Decimal("55.00"))
+        self.assertEqual(weights.updated_by_id, self.secretariat.id)
+        self.assertTrue(
+            AuditLog.objects.filter(
+                action=AuditLog.Action.ASSESSMENT_WEIGHTS_UPDATED,
+                actor=self.secretariat,
+            ).exists()
+        )
+
+    def test_weights_page_requires_entry_manager_role(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.hrmpsb)
+        url = reverse("vacancy-assessment-weights", args=[self.level1_position.pk])
+        self.assertEqual(client.get(url).status_code, 403)
+
+    def test_weights_view_rejects_sums_that_are_not_100(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        url = reverse("vacancy-assessment-weights", args=[self.level1_position.pk])
+        response = client.post(
+            url,
+            {
+                "ete_weight": "40",
+                "exam_weight": "20",
+                "interview_weight": "40",
+                "exam_general_weight": "70",
+                "exam_technical_weight": "40",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        weights = VacancyAssessmentWeights.objects.get(recruitment_entry=self.level1_position)
+        # Rejected — the stored weights stay at the seeded defaults.
+        self.assertEqual(weights.exam_general_weight, Decimal("60.00"))
+
+    def test_cos_vacancy_weights_page_redirects_without_creating_a_row(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        url = reverse("vacancy-assessment-weights", args=[self.cos_position.pk])
+        response = client.get(url)
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(
+            VacancyAssessmentWeights.objects.filter(
+                recruitment_entry=self.cos_position
+            ).exists()
+        )
+
+    def test_locked_weights_cannot_be_edited_through_the_view(self):
+        lock_vacancy_assessment_weights(self.level1_position)
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        url = reverse("vacancy-assessment-weights", args=[self.level1_position.pk])
+        response = client.post(
+            url,
+            {
+                "ete_weight": "50",
+                "exam_weight": "20",
+                "interview_weight": "30",
+                "exam_general_weight": "55",
+                "exam_technical_weight": "45",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        weights = VacancyAssessmentWeights.objects.get(recruitment_entry=self.level1_position)
+        # Refused — scoring has started, so the weights stay at the defaults.
+        self.assertEqual(weights.exam_general_weight, Decimal("60.00"))
+
+    def test_finalizing_an_exam_locks_the_vacancy_weights(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(application, self.applicant)
+        application.refresh_from_db()
+        self.finalize_screening_for_current_stage(application, self.secretariat)
+        self.finalize_exam_for_current_stage(application, self.secretariat)
+        weights = VacancyAssessmentWeights.objects.get(recruitment_entry=self.level1_position)
+        self.assertTrue(weights.is_locked)
+
 
 class ApplicantUploadValidationTests(TestCase):
     def assert_upload_error(self, *, filename, content, content_type, message):

@@ -49,6 +49,7 @@ from .models import (
     RecruitmentUser,
     ScreeningDocumentReview,
     ScreeningRecord,
+    VacancyAssessmentWeights,
 )
 from .notification_services import REQUIREMENT_CHECKLIST_DEFAULT_DEADLINE_DAYS
 from .requirements import (
@@ -1344,6 +1345,53 @@ class AssessmentWeightConfigForm(BootstrapFormMixin, forms.ModelForm):
 
     class Meta:
         model = AssessmentWeightConfig
+        fields = [
+            "ete_weight",
+            "exam_weight",
+            "interview_weight",
+            "exam_general_weight",
+            "exam_technical_weight",
+        ]
+        widgets = {
+            "ete_weight": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
+            "exam_weight": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
+            "interview_weight": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
+            "exam_general_weight": forms.NumberInput(
+                attrs={"step": "0.01", "min": "0", "max": "100"}
+            ),
+            "exam_technical_weight": forms.NumberInput(
+                attrs={"step": "0.01", "min": "0", "max": "100"}
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["ete_weight"].label = "ETE weight (%)"
+        self.fields["ete_weight"].help_text = (
+            "Share of the overall CAR score from Education, Training, and Experience."
+        )
+        self.fields["exam_weight"].label = "Examination weight (%)"
+        self.fields["exam_weight"].help_text = "Share of the overall CAR score from the exam."
+        self.fields["interview_weight"].label = "Interview weight (%)"
+        self.fields["interview_weight"].help_text = (
+            "Share of the overall CAR score from the interview."
+        )
+        self.fields["exam_general_weight"].label = "General Ability weight (%)"
+        self.fields["exam_general_weight"].help_text = (
+            "Share of the exam score that comes from the General Ability component."
+        )
+        self.fields["exam_technical_weight"].label = "Technical weight (%)"
+        self.fields["exam_technical_weight"].help_text = (
+            "Share of the exam score that comes from the Technical component."
+        )
+
+
+class VacancyAssessmentWeightsForm(BootstrapFormMixin, forms.ModelForm):
+    """Per-vacancy assessment weights (exam General/Technical split + CAR ETE/Exam/Interview
+    split). Edited per Plantilla vacancy until scoring starts, then the row is locked."""
+
+    class Meta:
+        model = VacancyAssessmentWeights
         fields = [
             "ete_weight",
             "exam_weight",
