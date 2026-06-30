@@ -532,12 +532,6 @@ class BaseRecruitmentTestCase(TestCase):
         rating_notes="Interview responses addressed the competency requirements.",
         justification="Consistent competency performance recorded by the panel.",
     ):
-        if level is None:
-            level = (
-                self._score_to_competency_level(rating_score)
-                if rating_score is not None
-                else 3
-            )
         scheduled_for = scheduled_for or (timezone.now() + timedelta(days=1))
         session_actor = actor
         if (
@@ -559,18 +553,36 @@ class BaseRecruitmentTestCase(TestCase):
             },
             finalize=False,
         )
-        template = self.publish_competency_rating_sheet(application.position)
-        save_interview_rating(
-            application=application,
-            actor=actor,
-            cleaned_data={
-                "competency_scores": {
-                    competency: level for competency in template.competencies.all()
+        if application.branch == PositionPosting.Branch.COS:
+            # COS interviews use a single end-user / HRMS score, not the competency sheet.
+            save_interview_rating(
+                application=application,
+                actor=actor,
+                cleaned_data={
+                    "rating_score": rating_score if rating_score is not None else "75.00",
+                    "rating_notes": rating_notes,
+                    "justification": justification,
                 },
-                "rating_notes": rating_notes,
-                "justification": justification,
-            },
-        )
+            )
+        else:
+            if level is None:
+                level = (
+                    self._score_to_competency_level(rating_score)
+                    if rating_score is not None
+                    else 3
+                )
+            template = self.publish_competency_rating_sheet(application.position)
+            save_interview_rating(
+                application=application,
+                actor=actor,
+                cleaned_data={
+                    "competency_scores": {
+                        competency: level for competency in template.competencies.all()
+                    },
+                    "rating_notes": rating_notes,
+                    "justification": justification,
+                },
+            )
         return save_interview_session(
             application=application,
             actor=session_actor,
@@ -9046,6 +9058,16 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
         return payload
 
     def rating_payload(self, application, level=3, **overrides):
+        if application.branch == PositionPosting.Branch.COS:
+            # COS interviews use a single end-user / HRMS score, not the competency
+            # sheet. Map the legacy level to its normalized 0-100 score (3/4 -> 75.00).
+            payload = {
+                "rating_score": "{:.2f}".format(level / 4 * 100),
+                "rating_notes": "Interview responses addressed the major competency areas.",
+                "justification": "",
+            }
+            payload.update(overrides)
+            return payload
         template = self.publish_competency_rating_sheet(application.position)
         payload = {
             "competency_scores": {
@@ -9437,14 +9459,127 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
 
         self.assertTrue(interview_session.is_finalized)
         self.assertEqual(interview_rating.rated_by, self.hrm_chief)
-        # Every competency scored at 3 on a 1-4 scale normalizes to 75.
+        # COS uses a single end-user / HRMS score; the simple payload records 75.00.
         self.assertEqual(str(interview_rating.rating_score), "75.00")
+        # COS ratings carry no competency scores.
+        self.assertEqual(interview_rating.competency_scores.count(), 0)
         self.assertTrue(
             AuditLog.objects.filter(
                 application=application,
                 action=AuditLog.Action.INTERVIEW_RATING_RECORDED,
             ).exists()
         )
+
+    def test_cos_interview_rating_records_a_simple_score_without_a_sheet(self):
+        application = self.make_application(self.cos_position)
+        self.move_application_to_hrm_chief_review(application)
+        self.finalize_screening_for_current_stage(application, self.hrm_chief)
+        self.finalize_exam_for_current_stage(application, self.hrm_chief)
+        save_interview_session(
+            application=application,
+            actor=self.hrm_chief,
+            cleaned_data=self.session_payload(),
+            finalize=False,
+        )
+
+        interview_rating = save_interview_rating(
+            application=application,
+            actor=self.hrm_chief,
+            cleaned_data={
+                "rating_score": "88.00",
+                "rating_notes": "Strong end-user interview.",
+                "justification": "",
+            },
+        )
+
+        self.assertEqual(str(interview_rating.rating_score), "88.00")
+        # COS ratings carry no per-competency scores and never need a published sheet.
+        self.assertEqual(interview_rating.competency_scores.count(), 0)
+        self.assertIsNone(get_competency_rating_template(application.position))
+
+    def test_cos_interview_rating_requires_a_score(self):
+        application = self.make_application(self.cos_position)
+        self.move_application_to_hrm_chief_review(application)
+        self.finalize_screening_for_current_stage(application, self.hrm_chief)
+        self.finalize_exam_for_current_stage(application, self.hrm_chief)
+        save_interview_session(
+            application=application,
+            actor=self.hrm_chief,
+            cleaned_data=self.session_payload(),
+            finalize=False,
+        )
+
+        with self.assertRaisesMessage(ValueError, "Enter the interview score"):
+            save_interview_rating(
+                application=application,
+                actor=self.hrm_chief,
+                cleaned_data={"rating_score": "", "rating_notes": "", "justification": ""},
+            )
+
+    def test_cos_low_interview_score_requires_justification(self):
+        application = self.make_application(self.cos_position)
+        self.move_application_to_hrm_chief_review(application)
+        self.finalize_screening_for_current_stage(application, self.hrm_chief)
+        self.finalize_exam_for_current_stage(application, self.hrm_chief)
+        save_interview_session(
+            application=application,
+            actor=self.hrm_chief,
+            cleaned_data=self.session_payload(),
+            finalize=False,
+        )
+
+        with self.assertRaises(ValidationError):
+            save_interview_rating(
+                application=application,
+                actor=self.hrm_chief,
+                cleaned_data={"rating_score": "60.00", "rating_notes": "", "justification": ""},
+            )
+        # A justification unlocks the out-of-band score.
+        interview_rating = save_interview_rating(
+            application=application,
+            actor=self.hrm_chief,
+            cleaned_data={
+                "rating_score": "60.00",
+                "rating_notes": "",
+                "justification": "End-user flagged competency gaps.",
+            },
+        )
+        self.assertEqual(str(interview_rating.rating_score), "60.00")
+
+    def test_cos_interview_rating_view_posts_a_simple_score(self):
+        application = self.make_application(self.cos_position)
+        self.move_application_to_hrm_chief_review(application)
+        self.finalize_screening_for_current_stage(application, self.hrm_chief)
+        self.finalize_exam_for_current_stage(application, self.hrm_chief)
+        save_interview_session(
+            application=application,
+            actor=self.hrm_chief,
+            cleaned_data=self.session_payload(),
+            finalize=False,
+        )
+
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        # The COS interview section renders the simple score form (not the competency grid).
+        detail = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
+        self.assertEqual(detail.status_code, 200)
+        self.assertContains(detail, "Interview Score (0-100)")
+        self.assertNotContains(detail, "Manage rating sheet")
+
+        response = client.post(
+            reverse("interview-rating", kwargs={"pk": application.pk}),
+            {
+                "rating_score": "82.50",
+                "rating_notes": "Recorded from the case detail page.",
+                "justification": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        interview_rating = application.interview_ratings.first()
+        self.assertIsNotNone(interview_rating)
+        self.assertEqual(str(interview_rating.rating_score), "82.50")
+        self.assertEqual(interview_rating.competency_scores.count(), 0)
 
     def test_finalized_interview_session_blocks_session_rating_and_fallback_changes(self):
         application = self.make_application(self.cos_position)
@@ -9765,6 +9900,16 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         return payload
 
     def rating_payload(self, application, level=3, **overrides):
+        if application.branch == PositionPosting.Branch.COS:
+            # COS interviews use a single end-user / HRMS score, not the competency
+            # sheet. Map the legacy level to its normalized 0-100 score (3/4 -> 75.00).
+            payload = {
+                "rating_score": "{:.2f}".format(level / 4 * 100),
+                "rating_notes": "Interview performance supports the recommendation.",
+                "justification": "",
+            }
+            payload.update(overrides)
+            return payload
         template = self.publish_competency_rating_sheet(application.position)
         payload = {
             "competency_scores": {

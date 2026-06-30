@@ -11,7 +11,7 @@ import uuid
 import zipfile
 from collections import namedtuple
 from datetime import timedelta
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from io import BytesIO, StringIO
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -4310,6 +4310,21 @@ def _coerce_competency_scores(template, raw_scores):
     return scores
 
 
+def _coerce_simple_interview_score(raw_score):
+    """Validate a COS simple interview score (0-100) and return a Decimal
+    quantized to 0.01. COS interviews are scored with a single end-user / HRMS
+    number, not the competency rating sheet (spec §6.2)."""
+    if raw_score in (None, ""):
+        raise ValueError("Enter the interview score (0-100) before saving the rating.")
+    try:
+        score = Decimal(str(raw_score)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    except (InvalidOperation, TypeError, ValueError):
+        raise ValueError("Enter the interview score as a number between 0 and 100.")
+    if score < 0 or score > 100:
+        raise ValueError("Interview scores must be between 0 and 100.")
+    return score
+
+
 def compute_competency_rating_score(template, scores_by_competency):
     """Normalize the raw per-competency scores to the 0-100 the CAR consumes.
 
@@ -4347,15 +4362,22 @@ def save_interview_rating(application, actor, cleaned_data):
     if not interview_session:
         raise ValueError("Schedule the interview session before recording interview ratings.")
 
-    template = get_published_competency_rating_template(application.position)
-    if template is None:
-        raise ValueError(
-            "Publish the interview rating sheet for this vacancy before recording interview ratings."
-        )
+    if application.branch == PositionPosting.Branch.COS:
+        # COS interviews use a simple end-user / HRMS score + notes, not the
+        # competency rating sheet (spec §6.2).
+        template = None
+        scores_by_competency = {}
+        rating_value = _coerce_simple_interview_score(cleaned_data.get("rating_score"))
+    else:
+        template = get_published_competency_rating_template(application.position)
+        if template is None:
+            raise ValueError(
+                "Publish the interview rating sheet for this vacancy before recording interview ratings."
+            )
 
-    competency_scores = cleaned_data.get("competency_scores") or {}
-    scores_by_competency = _coerce_competency_scores(template, competency_scores)
-    rating_value = compute_competency_rating_score(template, scores_by_competency)
+        competency_scores = cleaned_data.get("competency_scores") or {}
+        scores_by_competency = _coerce_competency_scores(template, competency_scores)
+        rating_value = compute_competency_rating_score(template, scores_by_competency)
 
     rated_by = cleaned_data.get("rated_by") or actor
     interview_rating = interview_session.ratings.filter(rated_by=rated_by).first()
@@ -4381,20 +4403,23 @@ def save_interview_rating(application, actor, cleaned_data):
     interview_rating.save()
 
     # Persist the per-competency scores (replace any prior set on revision).
+    # COS simple ratings carry no competency scores.
     interview_rating.competency_scores.all().delete()
-    CompetencyScore.objects.bulk_create(
-        [
-            CompetencyScore(
-                interview_rating=interview_rating,
-                competency=competency,
-                score=score,
-            )
-            for competency, score in scores_by_competency.items()
-        ]
-    )
+    if scores_by_competency:
+        CompetencyScore.objects.bulk_create(
+            [
+                CompetencyScore(
+                    interview_rating=interview_rating,
+                    competency=competency,
+                    score=score,
+                )
+                for competency, score in scores_by_competency.items()
+            ]
+        )
 
     # First submitted score locks the template so it can no longer be re-shaped.
-    lock_competency_rating_template(template)
+    if template is not None:
+        lock_competency_rating_template(template)
     if application.branch == PositionPosting.Branch.PLANTILLA:
         # Interview scoring has started: lock the vacancy's assessment weights too.
         lock_vacancy_assessment_weights(application.position)

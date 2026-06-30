@@ -30,6 +30,7 @@ from .forms import (
     CompetencyRatingTemplateForm,
     InterviewSessionForm,
     ReminderNotificationForm,
+    SimpleInterviewRatingForm,
     RequirementChecklistNotificationForm,
     ScreeningReviewForm,
     VacancyAssessmentWeightsForm,
@@ -545,6 +546,18 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
                 context["interview_rating_requires_session"] = True
             elif interview_session.is_finalized:
                 context["interview_rating_locked"] = True
+            elif application.branch == PositionPosting.Branch.COS:
+                # COS interviews are scored with a single end-user / HRMS number,
+                # not the competency rating sheet (spec §6.2).
+                existing_rating = context["current_user_interview_rating"]
+                context["interview_rating_is_simple"] = True
+                context["interview_rating_form"] = SimpleInterviewRatingForm(
+                    initial={
+                        "rating_score": existing_rating.rating_score if existing_rating else None,
+                        "rating_notes": existing_rating.rating_notes if existing_rating else "",
+                        "justification": existing_rating.justification if existing_rating else "",
+                    }
+                )
             else:
                 rating_template = get_published_competency_rating_template(application.position)
                 if rating_template is None:
@@ -1538,20 +1551,24 @@ class InterviewRatingView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, Vi
         if not user_can_manage_interview_rating(request.user, application):
             raise PermissionDenied
 
-        rating_template = get_published_competency_rating_template(application.position)
-        if rating_template is None:
-            messages.error(
-                request,
-                "Publish the interview rating sheet for this vacancy before recording ratings.",
-            )
-            return redirect("application-detail", pk=pk)
+        if application.branch == PositionPosting.Branch.COS:
+            # COS interviews use a simple end-user / HRMS score, not the sheet (spec §6.2).
+            form = SimpleInterviewRatingForm(request.POST)
+        else:
+            rating_template = get_published_competency_rating_template(application.position)
+            if rating_template is None:
+                messages.error(
+                    request,
+                    "Publish the interview rating sheet for this vacancy before recording ratings.",
+                )
+                return redirect("application-detail", pk=pk)
 
-        form = InterviewRatingForm(
-            request.POST,
-            application=application,
-            actor=request.user,
-            template=rating_template,
-        )
+            form = InterviewRatingForm(
+                request.POST,
+                application=application,
+                actor=request.user,
+                template=rating_template,
+            )
         if form.is_valid():
             try:
                 save_interview_rating(

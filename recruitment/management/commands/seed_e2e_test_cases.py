@@ -465,20 +465,33 @@ class Command(BaseCommand):
             },
             finalize=False,
         )
-        template = self._ensure_published_rating_sheet(application, session_actor)
-        level = self._competency_level(score, template.scale_max)
-        competency_scores = {
-            competency: level for competency in template.competencies.all()
-        }
-        save_interview_rating(
-            application=application,
-            actor=rating_actor,
-            cleaned_data={
-                "competency_scores": competency_scores,
-                "rating_notes": "E2E interview rating recorded.",
-                "justification": "Consistent competency performance across the panel sheet.",
-            },
-        )
+        if application.branch == PositionPosting.Branch.COS:
+            # COS interviews use a single end-user / HRMS score, not the competency
+            # sheet (spec §6.2).
+            save_interview_rating(
+                application=application,
+                actor=rating_actor,
+                cleaned_data={
+                    "rating_score": str(score),
+                    "rating_notes": "E2E COS interview rating recorded.",
+                    "justification": "End-user and HRMS interview score recorded for the batch.",
+                },
+            )
+        else:
+            template = self._ensure_published_rating_sheet(application, session_actor)
+            level = self._competency_level(score, template.scale_max)
+            competency_scores = {
+                competency: level for competency in template.competencies.all()
+            }
+            save_interview_rating(
+                application=application,
+                actor=rating_actor,
+                cleaned_data={
+                    "competency_scores": competency_scores,
+                    "rating_notes": "E2E interview rating recorded.",
+                    "justification": "Consistent competency performance across the panel sheet.",
+                },
+            )
         return save_interview_session(
             application=application,
             actor=session_actor,

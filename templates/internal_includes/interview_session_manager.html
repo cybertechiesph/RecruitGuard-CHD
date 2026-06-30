@@ -3,7 +3,8 @@
 {# ── Previous step summary ───────────────────────────────────── #}
 {% include "internal_includes/interview_previous_step.html" %}
 
-{# ── Interview rating sheet builder ──────────────────────────── #}
+{# ── Interview rating sheet builder (competency sheet; not used for COS) ─ #}
+{% if not interview_rating_is_simple %}
 <div class="rg-icard">
     <div class="rg-icard__header">
         <div>
@@ -15,6 +16,7 @@
         </a>
     </div>
 </div>
+{% endif %}
 
 {# ── Session form / locked readout ───────────────────────────── #}
 <div class="rg-icard" id="int-session-section">
@@ -130,6 +132,62 @@
         {% endif %}
     {% endif %}
 </div>
+
+{# ── COS simple interview rating (single end-user / HRMS score) ── #}
+{% if interview_rating_is_simple %}
+<div class="rg-icard" id="int-simple-rating-section">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">Interview rating</h3>
+            <p class="rg-icard__subtitle">
+                Record the end-user / HRMS interview score (0-100) for this COS applicant.
+                Add a justification when it lands below 75 or above 98.
+            </p>
+        </div>
+        {% if current_user_interview_rating %}
+            <span class="rg-pill rg-pill--success rg-pill--sm">
+                On record: {{ current_user_interview_rating.rating_score }}
+            </span>
+        {% endif %}
+    </div>
+    <form method="post" action="{% url 'interview-rating' application.pk %}" novalidate>
+        {% csrf_token %}
+        <div class="rg-field">
+            <label class="form-label" for="{{ interview_rating_form.rating_score.id_for_label }}">
+                {{ interview_rating_form.rating_score.label }}
+                <span class="text-danger" aria-hidden="true">*</span>
+            </label>
+            {{ interview_rating_form.rating_score }}
+            {% for error in interview_rating_form.rating_score.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+        <div class="rg-field">
+            <label class="form-label" for="{{ interview_rating_form.rating_notes.id_for_label }}">
+                {{ interview_rating_form.rating_notes.label }}
+                <span class="rg-int-optional">Optional</span>
+            </label>
+            {{ interview_rating_form.rating_notes }}
+            {% for error in interview_rating_form.rating_notes.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+        <div class="rg-field">
+            <label class="form-label" for="{{ interview_rating_form.justification.id_for_label }}">
+                {{ interview_rating_form.justification.label }}
+            </label>
+            <div class="form-text">Required when the score is below 75 or above 98.</div>
+            {{ interview_rating_form.justification }}
+            {% for error in interview_rating_form.justification.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+        <div class="rg-form-actions mt-2">
+            <button type="submit" class="btn btn-rg-primary btn-sm">Save interview rating</button>
+        </div>
+    </form>
+</div>
+{% endif %}
 
 {# ── Rating monitoring (count only, no scores) ─────────────── #}
 {% if interview_session_form or interview_session_locked %}

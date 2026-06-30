@@ -2194,6 +2194,50 @@ class InterviewRatingForm(DeferredModelValidationMixin, BootstrapFormMixin, form
         return cleaned
 
 
+class SimpleInterviewRatingForm(BootstrapFormMixin, forms.Form):
+    """COS interview rating: a single end-user / HRMS score (0-100) plus notes,
+    instead of the competency rating sheet (spec §6.2). A justification is required
+    when the score lands below 75 or above 98 (mirrors the competency path)."""
+
+    rating_score = forms.DecimalField(
+        label="Interview Score (0-100)",
+        max_digits=5,
+        decimal_places=2,
+        min_value=0,
+        max_value=100,
+        widget=forms.NumberInput(attrs={"min": 0, "max": 100, "step": "0.01"}),
+    )
+    rating_notes = forms.CharField(
+        label="Notes",
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3}),
+    )
+    justification = forms.CharField(
+        label="Justification",
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
+
+    def clean(self):
+        cleaned = super().clean()
+        score = cleaned.get("rating_score")
+        justification = (cleaned.get("justification") or "").strip()
+        if (
+            score is not None
+            and (score < Decimal("75") or score > Decimal("98"))
+            and not justification
+        ):
+            self.add_error(
+                "justification",
+                "Provide a justification when the interview score is below 75 or above 98.",
+            )
+        return cleaned
+
+
 class InterviewFallbackUploadForm(BootstrapFormMixin, forms.Form):
     file = forms.FileField(label="Scanned Fallback Rating Sheet")
     remarks = forms.CharField(
