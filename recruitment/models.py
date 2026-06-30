@@ -899,6 +899,7 @@ class RecruitmentCase(TimestampedModel):
     class CaseStatus(models.TextChoices):
         ACTIVE = "active", "Active"
         RETURNED_TO_APPLICANT = "returned_to_applicant", "Returned to Applicant"
+        AWAITING_RESUBMISSION = "awaiting_resubmission", "Awaiting Resubmission"
         APPROVED = "approved", "Approved"
         REJECTED = "rejected", "Rejected"
 
@@ -946,7 +947,10 @@ class RecruitmentCase(TimestampedModel):
             return timedelta(0)
         if self.current_stage == self.Stage.CLOSED:
             return timedelta(0)
-        if self.case_status == self.CaseStatus.RETURNED_TO_APPLICANT:
+        if self.case_status in {
+            self.CaseStatus.RETURNED_TO_APPLICANT,
+            self.CaseStatus.AWAITING_RESUBMISSION,
+        }:
             pause_started_at = self.updated_at or timezone.now()
             return max(pause_started_at - self.stage_entered_at, timedelta(0))
         return max(self.time_in_current_stage, timedelta(0))
@@ -955,7 +959,10 @@ class RecruitmentCase(TimestampedModel):
     def stage_sla_state(self):
         if self.current_stage == self.Stage.CLOSED:
             return "ok"
-        if self.case_status == self.CaseStatus.RETURNED_TO_APPLICANT:
+        if self.case_status in {
+            self.CaseStatus.RETURNED_TO_APPLICANT,
+            self.CaseStatus.AWAITING_RESUBMISSION,
+        }:
             return "paused"
         elapsed = self.stage_sla_elapsed
         if elapsed >= STAGE_SLA_OVERDUE_THRESHOLD:
@@ -1170,6 +1177,10 @@ class ScreeningRecord(TimestampedModel):
         null=True,
     )
     finalized_by_role = models.CharField(max_length=40, blank=True)
+    # Set when the reviewer requests document resubmission (flagged docs). The case stays
+    # visible as "awaiting resubmission" until the applicant re-uploads or the deadline passes.
+    resubmission_requested_at = models.DateTimeField(blank=True, null=True)
+    resubmission_deadline = models.DateField(blank=True, null=True)
 
     class Meta:
         ordering = ["review_stage", "created_at"]
@@ -1250,6 +1261,13 @@ class ScreeningRecord(TimestampedModel):
     @property
     def is_locked(self):
         return self.is_finalized
+
+    @property
+    def resubmission_is_overdue(self):
+        return bool(
+            self.resubmission_deadline
+            and self.resubmission_deadline < timezone.localdate()
+        )
 
     @property
     def document_review_component_weights(self):

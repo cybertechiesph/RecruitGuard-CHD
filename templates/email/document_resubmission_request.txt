@@ -9,6 +9,9 @@ Please review the document item{{ requested_documents|length|pluralize }} below:
 - {{ document.requirement_title }}
   Instruction: {{ document.remarks }}
 {% endfor %}
+{% if resubmission_deadline %}
+Please resubmit on or before {{ resubmission_deadline|date:"F d, Y" }}.
+{% endif %}
 {% if workflow_remarks %}
 
 Additional note from the recruitment team:

@@ -103,6 +103,7 @@ STATUS_THEMES = {
     RecruitmentApplication.Status.WITHDRAWN: "neutral",
     RecruitmentCase.CaseStatus.ACTIVE: "info",
     RecruitmentCase.CaseStatus.RETURNED_TO_APPLICANT: "warning",
+    RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION: "warning",
     RecruitmentCase.CaseStatus.APPROVED: "success",
     RecruitmentCase.CaseStatus.REJECTED: "danger",
     ScreeningRecord.CompletenessStatus.COMPLETE: "success",
@@ -410,6 +411,11 @@ def _queue_task_display(application):
             return (
                 RecruitmentCase.CaseStatus.RETURNED_TO_APPLICANT.label,
                 status_theme(RecruitmentCase.CaseStatus.RETURNED_TO_APPLICANT),
+            )
+        if recruitment_case.case_status == RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION:
+            return (
+                RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION.label,
+                status_theme(RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION),
             )
         if recruitment_case.case_status == RecruitmentCase.CaseStatus.REJECTED:
             return (

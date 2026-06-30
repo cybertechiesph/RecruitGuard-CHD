@@ -379,6 +379,7 @@ def _build_document_resubmission_fallback_body(
     application,
     requested_documents,
     workflow_remarks="",
+    resubmission_deadline=None,
 ):
     item_label = "item" if len(requested_documents) == 1 else "items"
     lines = [
@@ -396,6 +397,10 @@ def _build_document_resubmission_fallback_body(
     for document in requested_documents:
         lines.append(f"- {document['requirement_title']}")
         lines.append(f"  Instruction: {document['remarks']}")
+    if resubmission_deadline:
+        lines.extend(
+            ["", f"Please resubmit on or before {resubmission_deadline:%B %d, %Y}."]
+        )
     remarks = (workflow_remarks or "").strip()
     if remarks:
         lines.extend(["", "Additional note from the recruitment team:", remarks])
@@ -417,6 +422,7 @@ def _build_document_resubmission_request_notification(
     application,
     document_reviews,
     workflow_remarks="",
+    resubmission_deadline=None,
 ):
     requested_documents = [
         {
@@ -434,6 +440,7 @@ def _build_document_resubmission_request_notification(
                 "requested_documents": requested_documents,
                 "workflow_remarks": (workflow_remarks or "").strip(),
                 "status_link": build_applicant_status_url(application),
+                "resubmission_deadline": resubmission_deadline,
             },
         ).strip()
     except Exception:
@@ -450,6 +457,7 @@ def _build_document_resubmission_request_notification(
             application,
             requested_documents,
             workflow_remarks=workflow_remarks,
+            resubmission_deadline=resubmission_deadline,
         )
     return (
         f"RecruitGuard-CHD document resubmission needed: {application.position.title}",
@@ -884,6 +892,7 @@ def queue_document_resubmission_request_notification(
     *,
     document_reviews,
     workflow_remarks="",
+    resubmission_deadline=None,
 ):
     document_reviews = list(document_reviews or [])
     if not document_reviews:
@@ -892,6 +901,7 @@ def queue_document_resubmission_request_notification(
         application,
         document_reviews,
         workflow_remarks=workflow_remarks,
+        resubmission_deadline=resubmission_deadline,
     )
     return queue_notification(
         application,
@@ -908,6 +918,9 @@ def queue_document_resubmission_request_notification(
             "screening_document_review_ids": [review.id for review in document_reviews],
             "workflow_remarks": (workflow_remarks or "").strip(),
             "status_link": build_applicant_status_url(application),
+            "resubmission_deadline": (
+                resubmission_deadline.isoformat() if resubmission_deadline else ""
+            ),
         },
     )
 

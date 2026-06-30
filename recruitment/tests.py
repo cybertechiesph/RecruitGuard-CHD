@@ -7866,6 +7866,71 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
             mail.outbox[0].body,
         )
 
+    def _finalize_screening_with_flagged_document(self, application, requirement):
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        client.post(
+            reverse("screening-review", kwargs={"pk": application.pk}),
+            {
+                "completeness_status": ScreeningRecord.CompletenessStatus.INCOMPLETE,
+                "completeness_notes": "A corrected document is required.",
+                "qualification_outcome": ScreeningRecord.QualificationOutcome.NOT_QUALIFIED,
+                "screening_notes": "Screening cannot continue until the document is corrected.",
+                **self.screening_document_status_payload(
+                    application,
+                    overrides={
+                        requirement.code: (
+                            ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION
+                        ),
+                    },
+                ),
+                f"document_remarks__{requirement.code}": "Upload a signed and readable copy.",
+                "operation": "finalize",
+            },
+            follow=True,
+        )
+
+    def test_resubmission_request_keeps_case_visible_as_awaiting(self):
+        application = self.make_submitted_application()
+        first_requirement = get_applicant_document_requirements(application.branch)[0]
+        self._finalize_screening_with_flagged_document(application, first_requirement)
+        mail.outbox.clear()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            process_workflow_action(
+                application,
+                self.secretariat,
+                "return_to_applicant",
+                "Please resubmit the corrected document.",
+            )
+
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+        # The case stays with the reviewing role (so it stays in the queue/console), unlocked,
+        # awaiting the applicant — it is NOT handed off to the applicant and dropped.
+        self.assertEqual(
+            application.case.case_status,
+            RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION,
+        )
+        self.assertEqual(application.case.current_handler_role, RecruitmentUser.Role.SECRETARIAT)
+        self.assertEqual(application.current_handler_role, RecruitmentUser.Role.SECRETARIAT)
+        self.assertFalse(application.case.is_stage_locked)
+        self.assertEqual(application.case.stage_sla_state, "paused")
+        self.assertIn(application, list(get_queue_for_user(self.secretariat)))
+        # The applicant can still re-upload while it is returned.
+        self.assertTrue(application.is_editable_by_applicant)
+        # A resubmission deadline (default 2 weeks) is recorded and emailed.
+        screening_record = ScreeningRecord.objects.get(
+            application=application,
+            review_stage=RecruitmentCase.Stage.SECRETARIAT_REVIEW,
+        )
+        self.assertEqual(
+            screening_record.resubmission_deadline,
+            timezone.localdate() + timedelta(days=14),
+        )
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("Please resubmit on or before", mail.outbox[0].body)
+
     def test_return_to_applicant_falls_back_to_text_when_resubmission_template_fails(self):
         application = self.make_submitted_application()
         first_requirement = get_applicant_document_requirements(application.branch)[0]

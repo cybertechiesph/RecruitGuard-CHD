@@ -135,6 +135,9 @@ INTERVIEW_RATING_ROLES_BY_STAGE = {
     RecruitmentCase.Stage.HRMPSB_REVIEW: {RecruitmentUser.Role.HRMPSB_MEMBER},
 }
 MIN_INTERVIEW_OUTPUTS_TO_FINALIZE = 1
+# Default window the applicant has to re-upload flagged documents before the secretariat
+# may remove them from the batch (the "Incomplete shall not be entertained" final outcome).
+DOCUMENT_RESUBMISSION_DEADLINE_DAYS = 14
 INTERVIEW_FALLBACK_LABEL = "Interview Rating Sheet (Fallback)"
 ARTIFACT_TYPE_APPLICANT_DOCUMENT = "applicant_document"
 ARTIFACT_TYPE_WORKFLOW_EVIDENCE = "workflow_evidence"
@@ -6306,6 +6309,90 @@ def _transition_target(application, effective_role, action):
     raise ValueError("This action is not allowed at the current step.")
 
 
+def _flagged_resubmission_reviews(application, *, stage):
+    """The flagged (Request Resubmission) document-review rows on a stage's screening record."""
+    screening_record = get_screening_record(application, stage=stage)
+    if screening_record is None:
+        return screening_record, []
+    flagged = list(
+        screening_record.document_reviews.filter(
+            status=ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION
+        ).order_by("display_order", "created_at")
+    )
+    return screening_record, flagged
+
+
+@transaction.atomic
+def request_document_resubmission(application, actor, remarks):
+    """Request resubmission of the flagged documents while keeping the case VISIBLE in the
+    reviewing role's queue/console as "awaiting resubmission" (it is NOT handed off to the
+    applicant and dropped from the workflow, which is the old return-to-applicant behavior).
+
+    Records a per-resubmission deadline (default 2 weeks), keeps the reviewing role as handler,
+    pauses the stage SLA, and emails the applicant a notify-only Track Application link. The
+    applicant then re-uploads only the flagged documents through that page.
+    """
+    case = application.case
+    review_stage = case.current_stage
+    screening_record, flagged = _flagged_resubmission_reviews(application, stage=review_stage)
+    if not flagged:
+        raise ValueError("Flag at least one document for resubmission before requesting it.")
+
+    previous_status = application.status
+    previous_case_status = case.case_status
+    reviewing_role = application.current_handler_role
+
+    deadline = timezone.localdate() + timedelta(days=DOCUMENT_RESUBMISSION_DEADLINE_DAYS)
+    screening_record.resubmission_requested_at = timezone.now()
+    screening_record.resubmission_deadline = deadline
+    screening_record.save(
+        update_fields=["resubmission_requested_at", "resubmission_deadline", "updated_at"]
+    )
+
+    # The case stays at its reviewing stage with the reviewing handler, unlocked, but flagged as
+    # awaiting the applicant's resubmission so the SLA pauses and the batch console surfaces it.
+    case.case_status = RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION
+    case.is_stage_locked = False
+    case.locked_stage = ""
+    case.closed_at = None
+    case.save(
+        update_fields=["case_status", "is_stage_locked", "locked_stage", "closed_at", "updated_at"]
+    )
+
+    # Application is applicant-editable (RETURNED_TO_APPLICANT) so the scoped re-upload + OTP
+    # work, but it KEEPS the reviewing role as handler so it stays in that role's queue.
+    application.status = RecruitmentApplication.Status.RETURNED_TO_APPLICANT
+    application.current_handler_role = reviewing_role
+    application.closed_at = None
+    application.save(
+        update_fields=["status", "current_handler_role", "closed_at", "updated_at"]
+    )
+
+    record_audit_event(
+        application=application,
+        actor=actor,
+        action=AuditLog.Action.DECISION_RECORDED,
+        description="Requested resubmission of flagged documents.",
+        metadata={
+            "remarks": remarks,
+            "from_status": previous_status,
+            "to_status": application.status,
+            "from_case_status": previous_case_status,
+            "to_case_status": case.case_status,
+            "resubmission_deadline": deadline.isoformat(),
+            "flagged_document_keys": [row.document_key for row in flagged],
+        },
+    )
+    queue_document_resubmission_request_notification(
+        application,
+        actor,
+        document_reviews=flagged,
+        workflow_remarks=remarks,
+        resubmission_deadline=deadline,
+    )
+    return case
+
+
 @transaction.atomic
 def process_workflow_action(application, actor, action, remarks):
     effective_role = get_effective_role_for_action(actor, application)
@@ -6323,6 +6410,16 @@ def process_workflow_action(application, actor, action, remarks):
             )
         raise ValueError("This case is not currently assigned to you.")
     current_section = get_current_workflow_section(application)
+    # A return that flags specific documents is a RESUBMISSION request: the case must stay
+    # visible in the reviewing role's batch as "awaiting resubmission" rather than being handed
+    # off to the applicant and dropped from the workflow (§4.2). A return with no flagged
+    # documents keeps the old generic return-to-applicant behavior below.
+    if action == "return_to_applicant":
+        _screening_record, _flagged = _flagged_resubmission_reviews(
+            application, stage=application.case.current_stage
+        )
+        if _flagged:
+            return request_document_resubmission(application, actor, remarks)
     if (
         effective_role == RecruitmentUser.Role.APPOINTING_AUTHORITY
         and action == "return_car_for_reassessment"
