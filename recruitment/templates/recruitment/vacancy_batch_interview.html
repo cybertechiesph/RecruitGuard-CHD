@@ -1,0 +1,176 @@
+{% extends "internal_base.html" %}
+{% load recruitment_ui %}
+
+{% block internal_title %}{{ entry.title }} — Batch Interview{% endblock %}
+
+{% block breadcrumb %}
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<a class="rg-breadcrumb-link" href="{% url 'vacancy-batches' %}">Vacancy Batches</a>
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<a class="rg-breadcrumb-link" href="{% url 'vacancy-batch-detail' entry.pk %}">{{ entry.job_code }}</a>
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<span class="rg-breadcrumb-current">Batch Interview</span>
+{% endblock %}
+
+{% block content %}
+<div class="rg-page-header">
+    <div>
+        <h1 class="rg-page-title">Batch interview — {{ entry.title }}</h1>
+        <div class="rg-imeta mt-1">
+            {{ entry.job_code }}
+            {% if entry.item_number %}<span class="rg-imeta__sep"></span>Item {{ entry.item_number }}{% endif %}
+        </div>
+        <div class="d-flex flex-wrap gap-1 mt-2">
+            <span class="rg-pill rg-pill--{{ entry.branch|branch_theme }} rg-pill--sm">{{ entry.get_branch_display }}</span>
+            <span class="rg-pill rg-pill--{{ entry.level|level_theme }} rg-pill--sm">{{ entry.get_level_display }}</span>
+        </div>
+    </div>
+    <div class="rg-page-actions">
+        <a href="{% url 'vacancy-batch-detail' entry.pk %}" class="btn btn-outline-secondary btn-sm">Back to batch</a>
+    </div>
+</div>
+
+{# ── One schedule for the whole batch ─────────────────────────── #}
+<div class="card p-4 mb-3">
+    <h2 class="h6 mb-1">1 — Schedule the interview (applies to every candidate)</h2>
+    <p class="rg-note mb-3">The whole pool is interviewed together. Each applicant is notified.</p>
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="operation" value="save_schedule">
+        <div class="row g-3">
+            <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=schedule_form.scheduled_for %}</div>
+            <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=schedule_form.location %}</div>
+            <div class="col-md-8">{% include "recruitment/includes/form_field.html" with field=schedule_form.session_notes %}</div>
+        </div>
+        <div class="rg-form-actions mt-3">
+            <button type="submit" class="btn btn-rg-primary">Send schedule to batch</button>
+        </div>
+    </form>
+</div>
+
+{% if is_plantilla %}
+{# ── Plantilla: competency scoring stays per-case; batch finalize ── #}
+<div class="card p-4 mb-3">
+    <h2 class="h6 mb-1">2 — Score &amp; finalize</h2>
+    <p class="rg-note mb-3">
+        Each candidate is scored on the competency rating sheet from their case page
+        (HRMPSB rates online or the secretariat encodes). Finalize the whole pool once every
+        candidate has at least one rating.
+    </p>
+    <div class="rg-itbl">
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th>Candidate</th>
+                        <th>Scheduled</th>
+                        <th>Ratings</th>
+                        <th class="col-actions"><span class="visually-hidden">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for candidate in candidates %}
+                        <tr>
+                            <td>
+                                <div class="fw-bold" style="font-size:0.8rem;">{{ candidate.application.applicant_display_name }}</div>
+                                <div class="rg-imeta mt-1">{{ candidate.application.reference_label }}</div>
+                            </td>
+                            <td>
+                                {% if candidate.session and candidate.session.scheduled_for %}
+                                    <div style="font-size:0.8125rem;color:#374151;">{{ candidate.session.scheduled_for|date:"M d, Y H:i" }}</div>
+                                {% else %}
+                                    <span class="rg-imeta">Not scheduled</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if candidate.rating_count %}
+                                    <span class="rg-pill rg-pill--success rg-pill--sm">{{ candidate.rating_count }} on record</span>
+                                {% else %}
+                                    <span class="rg-pill rg-pill--neutral rg-pill--sm">0 on record</span>
+                                {% endif %}
+                            </td>
+                            <td class="col-actions">
+                                <a href="{% url 'application-detail' candidate.application.pk %}"
+                                   class="btn btn-outline-secondary btn-sm">Open case</a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <form method="post" class="rg-form-actions mt-3">
+        {% csrf_token %}
+        <button type="submit" name="operation" value="finalize" class="btn btn-rg-primary">Finalize interview batch</button>
+    </form>
+</div>
+{% else %}
+{# ── COS: single end-user score per candidate, inline ─────────── #}
+<div class="card p-4 mb-3">
+    <h2 class="h6 mb-1">2 — Record interview scores</h2>
+    <p class="rg-note mb-3">
+        Enter each candidate's end-user / HRMS interview score (0–100). Add a justification when a
+        score lands below 75 or above 98.
+    </p>
+    <form method="post">
+        {% csrf_token %}
+        <div class="rg-itbl">
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                        <tr>
+                            <th>Candidate</th>
+                            <th>Score</th>
+                            <th>Notes</th>
+                            <th>Justification</th>
+                            <th>Current</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for candidate in candidates %}
+                            <tr>
+                                <td>
+                                    <div class="fw-bold" style="font-size:0.8rem;">{{ candidate.application.applicant_display_name }}</div>
+                                    <div class="rg-imeta mt-1">{{ candidate.application.reference_label }}</div>
+                                    {% if candidate.session and candidate.session.scheduled_for %}
+                                        <div class="rg-imeta mt-1">{{ candidate.session.scheduled_for|date:"M d, H:i" }}</div>
+                                    {% else %}
+                                        <div class="rg-imeta mt-1 text-danger">Not scheduled</div>
+                                    {% endif %}
+                                </td>
+                                <td style="max-width:130px;">
+                                    <input type="number" step="0.01" min="0" max="100" class="form-control"
+                                           name="rating_score_{{ candidate.case_id }}"
+                                           value="{{ candidate.rating.rating_score|default_if_none:'' }}">
+                                </td>
+                                <td>
+                                    <input type="text" class="form-control"
+                                           name="rating_notes_{{ candidate.case_id }}"
+                                           value="{{ candidate.rating.rating_notes|default_if_none:'' }}">
+                                </td>
+                                <td>
+                                    <input type="text" class="form-control"
+                                           name="justification_{{ candidate.case_id }}"
+                                           value="{{ candidate.rating.justification|default_if_none:'' }}">
+                                </td>
+                                <td>
+                                    {% if candidate.rating %}
+                                        <span class="rg-pill rg-pill--info rg-pill--sm">{{ candidate.rating.rating_score }}</span>
+                                    {% else %}
+                                        <span class="rg-imeta">Not recorded</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="rg-form-actions mt-3 d-flex gap-2">
+            <button type="submit" name="operation" value="save_scores" class="btn btn-outline-secondary">Save scores</button>
+            <button type="submit" name="operation" value="finalize" class="btn btn-rg-primary">Finalize interview batch</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+{% endblock %}

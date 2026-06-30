@@ -97,6 +97,7 @@ from .services import (
     emit_deadline_approaching_notifications,
     generate_comparative_assessment_report,
     get_current_workflow_section,
+    interview_is_finalized_for_current_stage,
     get_latest_finalized_comparative_assessment_report,
     get_available_actions,
     get_queue_for_user,
@@ -132,6 +133,10 @@ from .services import (
     vacancy_exam_pool,
     save_vacancy_exam_schedule,
     save_vacancy_exam_scores,
+    vacancy_interview_pool,
+    save_vacancy_interview_schedule,
+    save_vacancy_cos_interview_ratings,
+    finalize_vacancy_interview_batch,
     vacancy_screening_batch_status,
     update_recruitment_entry_status,
     upload_interview_fallback_rating,
@@ -6762,6 +6767,207 @@ class BatchExamTests(BaseRecruitmentTestCase):
         self.assertEqual(response.status_code, 200)
         first.refresh_from_db()
         self.assertEqual(first.status, RecruitmentApplication.Status.HRMPSB_REVIEW)
+
+
+class VacancyBatchInterviewTests(BaseRecruitmentTestCase):
+    """Batch interview over the per-case engine: one schedule for the pool, then a finalize.
+    COS records a single end-user score per candidate; Plantilla scores the competency sheet
+    per-case and finalizes the pool together."""
+
+    def _submit(self, application, applicant):
+        self.verify_application_for_submission(application)
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(application, applicant)
+        application.refresh_from_db()
+        return application
+
+    def _extra_submitted_application(self, position, suffix):
+        applicant = User.objects.create_user(
+            username=f"int-applicant-{suffix}",
+            password="testpass123",
+            email=f"int.{suffix}@example.com",
+            role=RecruitmentUser.Role.APPLICANT,
+        )
+        applicability = (
+            RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
+            if position.branch == PositionPosting.Branch.COS
+            else RecruitmentApplication.PerformanceRatingApplicability.APPLICABLE
+        )
+        application = RecruitmentApplication.objects.create(
+            applicant=applicant,
+            position=position,
+            applicant_first_name=f"Int{suffix}",
+            applicant_last_name="Applicant",
+            applicant_email=f"int.{suffix}@example.com",
+            applicant_phone=f"091788801{suffix}",
+            checklist_privacy_consent=True,
+            checklist_documents_complete=True,
+            checklist_information_certified=True,
+            qualification_summary="Additional applicant for batch-interview testing.",
+            cover_letter="Applying for the same vacancy.",
+            performance_rating_applicability=applicability,
+        )
+        self.upload_required_applicant_documents(
+            application,
+            applicant,
+            content_prefix=f"int-{suffix}",
+            performance_rating_applicability=applicability,
+        )
+        return self._submit(application, applicant)
+
+    def _two_qualified(self, position, reviewer):
+        first = self._submit(self.make_application(position), self.applicant)
+        self.finalize_screening_for_current_stage(first, reviewer)
+        second = self._extra_submitted_application(position, "x")
+        self.finalize_screening_for_current_stage(second, reviewer)
+        first.refresh_from_db()
+        second.refresh_from_db()
+        return first, second
+
+    def _exam_schedule_payload(self):
+        return {
+            "scheduled_for": timezone.now() + timedelta(hours=2),
+            "venue": "CHD CALABARZON Examination Room",
+            "instructions": "Bring a valid government ID.",
+        }
+
+    def _interview_schedule_payload(self):
+        return {
+            "scheduled_for": timezone.now() + timedelta(days=1),
+            "location": "CHD CALABARZON Interview Room",
+            "session_notes": "Panel interview for the qualified batch.",
+        }
+
+    def _two_plantilla_at_interview(self):
+        first, second = self._two_qualified(self.level1_position, self.secretariat)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(self.level1_position, self.secretariat, self._exam_schedule_payload())
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_scores(
+                self.level1_position,
+                self.secretariat,
+                {
+                    first.case.id: {"general_score": "90", "technical_score": "80"},
+                    second.case.id: {"general_score": "85", "technical_score": "75"},
+                },
+                finalize=True,
+            )
+        first.refresh_from_db()
+        second.refresh_from_db()
+        return first, second
+
+    def _two_cos_at_interview(self):
+        first, second = self._two_qualified(self.cos_position, self.secretariat)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(self.cos_position, self.secretariat, self._exam_schedule_payload())
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_scores(
+                self.cos_position,
+                self.secretariat,
+                {first.case.id: {"general_score": "82"}, second.case.id: {"general_score": "78"}},
+                finalize=True,
+            )
+        # COS re-screens + re-exams at HRM Chief before the interview section opens.
+        for application in (first, second):
+            application.refresh_from_db()
+            self.finalize_screening_for_current_stage(application, self.hrm_chief)
+            self.finalize_exam_for_current_stage(application, self.hrm_chief)
+            application.refresh_from_db()
+        return first, second
+
+    def test_plantilla_pool_lists_candidates_at_the_hrmpsb_interview(self):
+        first, second = self._two_plantilla_at_interview()
+        pool = vacancy_interview_pool(self.level1_position)
+        self.assertEqual({a.pk for a in pool}, {first.pk, second.pk})
+        for application in (first, second):
+            self.assertEqual(application.status, RecruitmentApplication.Status.HRMPSB_REVIEW)
+            self.assertEqual(get_current_workflow_section(application), "interview")
+
+    def test_plantilla_batch_finalize_moves_the_pool_to_the_car(self):
+        first, second = self._two_plantilla_at_interview()
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_interview_schedule(self.level1_position, self.secretariat, self._interview_schedule_payload())
+        for application in (first, second):
+            save_interview_rating(
+                application=application,
+                actor=self.hrmpsb,
+                cleaned_data=self.competency_rating_cleaned_data(application, level=3),
+            )
+        finalize_vacancy_interview_batch(self.level1_position, self.secretariat)
+        for application in (first, second):
+            application.refresh_from_db()
+            self.assertTrue(interview_is_finalized_for_current_stage(application))
+            # With the interview done, the pool moves to the CAR section together.
+            self.assertEqual(get_current_workflow_section(application), "car")
+
+    def test_plantilla_finalize_requires_a_rating_per_candidate(self):
+        first, second = self._two_plantilla_at_interview()
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_interview_schedule(self.level1_position, self.secretariat, self._interview_schedule_payload())
+        # Only the first candidate is rated.
+        save_interview_rating(
+            application=first,
+            actor=self.hrmpsb,
+            cleaned_data=self.competency_rating_cleaned_data(first, level=3),
+        )
+        with self.assertRaises(ValueError):
+            finalize_vacancy_interview_batch(self.level1_position, self.secretariat)
+        # All-or-nothing: the rated candidate's session was not finalized either.
+        first.refresh_from_db()
+        self.assertFalse(interview_is_finalized_for_current_stage(first))
+
+    def test_cos_batch_records_simple_scores_and_finalizes(self):
+        first, second = self._two_cos_at_interview()
+        pool = vacancy_interview_pool(self.cos_position)
+        self.assertEqual({a.pk for a in pool}, {first.pk, second.pk})
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_interview_schedule(self.cos_position, self.hrm_chief, self._interview_schedule_payload())
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_cos_interview_ratings(
+                self.cos_position,
+                self.hrm_chief,
+                {
+                    first.case.id: {"rating_score": "88.00"},
+                    second.case.id: {"rating_score": "79.00"},
+                },
+                finalize=True,
+            )
+        first.refresh_from_db()
+        rating = first.interview_ratings.first()
+        self.assertEqual(str(rating.rating_score), "88.00")
+        self.assertEqual(rating.competency_scores.count(), 0)
+        for application in (first, second):
+            application.refresh_from_db()
+            self.assertTrue(interview_is_finalized_for_current_stage(application))
+            # COS moves to the deliberation section at HRM Chief.
+            self.assertEqual(get_current_workflow_section(application), "deliberation")
+
+    def test_cos_finalize_requires_every_candidate_scored(self):
+        first, second = self._two_cos_at_interview()
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_interview_schedule(self.cos_position, self.hrm_chief, self._interview_schedule_payload())
+        with self.assertRaises(ValueError):
+            save_vacancy_cos_interview_ratings(
+                self.cos_position,
+                self.hrm_chief,
+                {first.case.id: {"rating_score": "88.00"}},
+                finalize=True,
+            )
+        first.refresh_from_db()
+        self.assertFalse(interview_is_finalized_for_current_stage(first))
+
+    def test_batch_interview_view_renders_and_404s_by_role(self):
+        self._two_plantilla_at_interview()
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(reverse("vacancy-batch-interview", args=[self.level1_position.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Batch interview")
+        # The HRM Chief does not support a Level-1 Plantilla interview (FRS scoping).
+        other = Client()
+        self.force_login_with_mfa(other, self.hrm_chief)
+        forbidden = other.get(reverse("vacancy-batch-interview", args=[self.level1_position.pk]))
+        self.assertEqual(forbidden.status_code, 404)
 
 
 class ApplicantUploadValidationTests(TestCase):

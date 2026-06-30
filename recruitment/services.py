@@ -4450,6 +4450,128 @@ def save_interview_rating(application, actor, cleaned_data):
     return interview_rating
 
 
+def _vacancy_interview_stage(posting):
+    """The stage a vacancy's interview happens at: HRMPSB for Plantilla, HRM Chief for COS."""
+    if posting.branch == PositionPosting.Branch.COS:
+        return RecruitmentCase.Stage.HRM_CHIEF_REVIEW
+    return RecruitmentCase.Stage.HRMPSB_REVIEW
+
+
+def vacancy_interview_pool(posting):
+    """The vacancy's interview-ready applications: at the interview stage (HRMPSB for
+    Plantilla, HRM Chief for COS), the interview section current, the interview not yet
+    finalized. The qualified pool sits the interview together. Branch-agnostic
+    (Plantilla competency sheet, COS single end-user score)."""
+    stage = _vacancy_interview_stage(posting)
+    cases = (
+        RecruitmentCase.objects.filter(
+            application__position=posting,
+            current_stage=stage,
+            case_status=RecruitmentCase.CaseStatus.ACTIVE,
+            is_stage_locked=False,
+        )
+        .select_related("application", "application__applicant", "application__position")
+        .order_by("application__reference_number", "application_id")
+    )
+    pool = []
+    for case in cases:
+        application = case.application
+        if (
+            get_current_workflow_section(application) == "interview"
+            and not interview_is_finalized_for_current_stage(application)
+        ):
+            pool.append(application)
+    return pool
+
+
+@transaction.atomic
+def save_vacancy_interview_schedule(posting, actor, cleaned_data):
+    """Apply ONE interview schedule to every candidate in the vacancy's interview pool and
+    notify each — the batch sits the interview together. Loops the per-case
+    save_interview_session so each application keeps its own InterviewSession + notice."""
+    pool = vacancy_interview_pool(posting)
+    if not pool:
+        raise ValueError("No candidates are ready for the interview in this vacancy.")
+    notify_panel = posting.branch == PositionPosting.Branch.PLANTILLA
+    for application in pool:
+        save_interview_session(
+            application=application,
+            actor=actor,
+            cleaned_data=dict(cleaned_data),
+            notify_applicant=True,
+            notify_panel=notify_panel,
+        )
+    return pool
+
+
+@transaction.atomic
+def finalize_vacancy_interview_batch(posting, actor):
+    """Finalize the interview session for every candidate in the vacancy's interview pool
+    together. Each must already have at least one rating or a fallback sheet (the per-case
+    save_interview_session enforces that)."""
+    pool = vacancy_interview_pool(posting)
+    if not pool:
+        raise ValueError("No candidates are ready to finalize the interview in this vacancy.")
+    finalized = []
+    for application in pool:
+        session = get_interview_session(application)
+        if session is None:
+            raise ValueError(
+                f"Schedule {application.reference_label}'s interview before finalizing the batch."
+            )
+        save_interview_session(
+            application=application,
+            actor=actor,
+            cleaned_data={
+                "scheduled_for": session.scheduled_for,
+                "location": session.location,
+                "session_notes": session.session_notes,
+            },
+            finalize=True,
+        )
+        finalized.append(application)
+    return finalized
+
+
+@transaction.atomic
+def save_vacancy_cos_interview_ratings(posting, actor, ratings_by_case_id, *, finalize=False):
+    """Record (and optionally finalize) the simple end-user interview score + notes for the
+    whole COS vacancy pool in one go, looping the per-case save_interview_rating (COS path).
+    Finalize is all-or-nothing (atomic): every candidate must have a score, then each
+    interview session is finalized and the pool moves on together."""
+    if posting.branch != PositionPosting.Branch.COS:
+        raise ValueError("Simple interview ratings apply only to COS vacancies.")
+    pool = vacancy_interview_pool(posting)
+    if not pool:
+        raise ValueError("No candidates are ready for the interview in this vacancy.")
+    saved = []
+    for application in pool:
+        row = ratings_by_case_id.get(application.case.id) or {}
+        score = row.get("rating_score")
+        has_score = score not in (None, "")
+        if finalize:
+            if not has_score:
+                raise ValueError(
+                    "Enter every candidate's interview score before finalizing the interview batch "
+                    f"(missing: {application.reference_label})."
+                )
+        elif not has_score:
+            continue  # nothing to record for this candidate yet (draft)
+        save_interview_rating(
+            application=application,
+            actor=actor,
+            cleaned_data={
+                "rating_score": score,
+                "rating_notes": row.get("rating_notes", ""),
+                "justification": row.get("justification", ""),
+            },
+        )
+        saved.append(application)
+    if finalize:
+        finalize_vacancy_interview_batch(posting, actor)
+    return saved
+
+
 # Standard CSC competencies seeded into every new interview rating sheet. The
 # Technical group is left for the Secretariat to fill in per position.
 STANDARD_INTERVIEW_COMPETENCIES = (

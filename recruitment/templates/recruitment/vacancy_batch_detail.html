@@ -40,6 +40,15 @@
     in this vacancy's batch awaiting your action.
 </p>
 
+{% if interview_batch_ready %}
+    <div class="alert alert-info" role="status">
+        The qualified pool has reached the interview &mdash; schedule and score the whole batch together.
+        <div class="mt-2">
+            <a href="{% url 'vacancy-batch-interview' entry.pk %}" class="btn btn-rg-primary btn-sm">Open batch interview</a>
+        </div>
+    </div>
+{% endif %}
+
 {% if screening_batch %}
     {% if screening_batch.is_ready %}
         <div class="alert alert-success" role="status">

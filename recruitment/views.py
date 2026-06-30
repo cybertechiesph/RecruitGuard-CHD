@@ -151,6 +151,10 @@ from .services import (
     vacancy_exam_pool,
     save_vacancy_exam_schedule,
     save_vacancy_exam_scores,
+    vacancy_interview_pool,
+    save_vacancy_interview_schedule,
+    save_vacancy_cos_interview_ratings,
+    finalize_vacancy_interview_batch,
     vacancy_screening_batch_status,
     vacancy_screening_batch_block_message,
     user_can_record_final_decision,
@@ -1003,6 +1007,10 @@ class VacancyBatchDetailView(LoginRequiredMixin, WorkflowProcessorRequiredMixin,
         context["entry"] = entry
         context["applications"] = applications
         context["screening_batch"] = vacancy_screening_batch_status(entry)
+        context["interview_batch_ready"] = any(
+            user_can_view_application(self.request.user, application)
+            for application in vacancy_interview_pool(entry)
+        )
         return context
 
 
@@ -1104,6 +1112,115 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
 
         messages.error(request, "This action is not available.")
         return redirect("vacancy-batch-exam", pk=entry.pk)
+
+
+class VacancyBatchInterviewView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
+    """Vacancy-level batch interview: one schedule over the whole pool, then a finalize.
+    COS records a single end-user score per candidate inline (spec §6.2); Plantilla scores
+    each candidate's competency sheet on the per-case detail and finalizes the pool together.
+    Loops the per-case interview services so FRS routing + lock-step hold."""
+
+    template_name = "recruitment/vacancy_batch_interview.html"
+
+    def _scoped_pool(self, request, entry):
+        return [
+            application
+            for application in vacancy_interview_pool(entry)
+            if user_can_view_application(request.user, application)
+        ]
+
+    def _context(self, request, entry, pool, schedule_form=None):
+        is_plantilla = entry.branch == PositionPosting.Branch.PLANTILLA
+        candidates = []
+        for application in pool:
+            rating = get_interview_rating_for_user(application, request.user)
+            candidates.append(
+                {
+                    "application": application,
+                    "case_id": application.case.id,
+                    "session": get_interview_session(application),
+                    "rating": rating,
+                    "rating_count": get_interview_ratings(application).count(),
+                }
+            )
+        return {
+            "entry": entry,
+            "candidates": candidates,
+            "is_plantilla": is_plantilla,
+            "schedule_form": schedule_form or InterviewSessionForm(),
+        }
+
+    def get(self, request, pk):
+        entry = get_object_or_404(PositionPosting, pk=pk)
+        pool = self._scoped_pool(request, entry)
+        if not pool:
+            raise Http404("No candidates are ready for the interview in this vacancy.")
+        return render(request, self.template_name, self._context(request, entry, pool))
+
+    def post(self, request, pk):
+        entry = get_object_or_404(PositionPosting, pk=pk)
+        pool = self._scoped_pool(request, entry)
+        if not pool:
+            raise Http404("No candidates are ready for the interview in this vacancy.")
+        operation = request.POST.get("operation", "")
+
+        if operation == "save_schedule":
+            form = InterviewSessionForm(request.POST)
+            if not form.is_valid():
+                messages.error(
+                    request,
+                    _format_form_errors(form, "Complete the interview schedule fields before saving."),
+                )
+                return render(
+                    request, self.template_name, self._context(request, entry, pool, schedule_form=form)
+                )
+            try:
+                save_vacancy_interview_schedule(entry, request.user, form.cleaned_data)
+            except (ValueError, ValidationError) as exc:
+                messages.error(request, str(exc))
+            else:
+                messages.success(request, "Interview schedule sent to every candidate in the batch.")
+            return redirect("vacancy-batch-interview", pk=entry.pk)
+
+        if operation in {"save_scores", "finalize"} and entry.branch == PositionPosting.Branch.COS:
+            finalize = operation == "finalize"
+            rows = {}
+            for application in pool:
+                case_id = application.case.id
+                score = (request.POST.get(f"rating_score_{case_id}", "") or "").strip()
+                notes = (request.POST.get(f"rating_notes_{case_id}", "") or "").strip()
+                justification = (request.POST.get(f"justification_{case_id}", "") or "").strip()
+                row = {}
+                if score:
+                    row["rating_score"] = score
+                if notes:
+                    row["rating_notes"] = notes
+                if justification:
+                    row["justification"] = justification
+                if row:
+                    rows[case_id] = row
+            try:
+                save_vacancy_cos_interview_ratings(entry, request.user, rows, finalize=finalize)
+            except (ValueError, ValidationError) as exc:
+                messages.error(request, str(exc))
+                return redirect("vacancy-batch-interview", pk=entry.pk)
+            if finalize:
+                messages.success(request, "Interview batch finalized — the pool moved on together.")
+                return redirect("vacancy-batches")
+            messages.success(request, "Interview scores saved.")
+            return redirect("vacancy-batch-interview", pk=entry.pk)
+
+        if operation == "finalize" and entry.branch == PositionPosting.Branch.PLANTILLA:
+            try:
+                finalize_vacancy_interview_batch(entry, request.user)
+            except (ValueError, ValidationError) as exc:
+                messages.error(request, str(exc))
+                return redirect("vacancy-batch-interview", pk=entry.pk)
+            messages.success(request, "Interview batch finalized — the pool moved on together.")
+            return redirect("vacancy-batches")
+
+        messages.error(request, "This action is not available.")
+        return redirect("vacancy-batch-interview", pk=entry.pk)
 
 
 class WorkflowActionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
