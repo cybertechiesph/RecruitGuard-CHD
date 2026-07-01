@@ -12254,3 +12254,42 @@ class BusinessLogicBypassHardeningTests(BaseRecruitmentTestCase):
                 review_stage=RecruitmentCase.Stage.SECRETARIAT_REVIEW, is_finalized=True
             ).exists()
         )
+
+    def test_pt009_batch_detail_hides_open_exam_while_an_applicant_is_pending(self):
+        # The batch-detail banner must not claim the batch is complete (and must not offer the
+        # exam) while any applicant is still undecided, even though some applicants are already
+        # exam-ready. Otherwise the green "proceed to exam" banner contradicts the on-hold gate.
+        qualified = self._submit(self.make_application(self.level1_position))
+        self.finalize_screening_for_current_stage(qualified, self.secretariat)
+        self._extra_pending_application(self.level1_position, "hold")
+        self.assertFalse(vacancy_screening_batch_status(self.level1_position).is_ready)
+        # ...yet the qualified applicant is exam-ready, which is what used to force the green banner.
+        self.assertTrue(
+            any(
+                user_can_view_application(self.secretariat, application)
+                for application in vacancy_exam_pool(self.level1_position)
+            )
+        )
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(reverse("vacancy-batch-detail", args=[self.level1_position.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Screening batch is on hold")
+        self.assertNotContains(response, "Screening batch is complete")
+        self.assertNotContains(response, "Open batch exam")
+
+    def test_pt009_batch_detail_offers_open_exam_when_every_applicant_is_decided(self):
+        qualified = self._submit(self.make_application(self.level1_position))
+        self.finalize_screening_for_current_stage(qualified, self.secretariat)
+        sibling = self._extra_pending_application(self.level1_position, "ready")
+        self.finalize_screening_for_current_stage(sibling, self.secretariat)
+        self.assertTrue(vacancy_screening_batch_status(self.level1_position).is_ready)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(reverse("vacancy-batch-detail", args=[self.level1_position.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Screening batch is complete")
+        self.assertContains(response, "Open batch exam")
+        self.assertNotContains(response, "Screening batch is on hold")

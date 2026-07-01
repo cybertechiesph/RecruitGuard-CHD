@@ -59,7 +59,7 @@
 {% endif %}
 
 {% if screening_batch %}
-    {% if exam_batch_ready %}
+    {% if screening_batch.is_ready and exam_batch_ready %}
         <div class="alert alert-success" role="status">
             Screening batch is complete &mdash; every applicant has a decision, so the qualified
             pool can proceed to the exam together.
