@@ -1243,16 +1243,18 @@ def user_can_prepare_plantilla_car(user, application):
 
 
 def user_can_upload_evidence(user, application):
-    if user.role == RecruitmentUser.Role.SYSTEM_ADMIN:
-        return True
+    # The System Administrator is an oversight-only role and never adds file
+    # content to a case; uploads belong to the applicant or the assigned
+    # workflow processors.
     if user.role == RecruitmentUser.Role.APPLICANT and application.applicant_id == user.id:
         return application.is_editable_by_applicant
     return user_can_process_application(user, application)
 
 
 def user_can_manage_evidence_archive(user, application):
-    if user.role == RecruitmentUser.Role.SYSTEM_ADMIN:
-        return True
+    # Archiving mutates the secured-files store, so it stays with the workflow
+    # custodians. The System Administrator oversees the trail but never mutates
+    # evidence.
     return user.role in EVIDENCE_ARCHIVE_ROLES and user_can_view_application(user, application)
 
 
@@ -2180,16 +2182,36 @@ def get_evidence_context_application_for_user(user, evidence, preferred_applicat
         if candidate is None or candidate.id in seen_ids:
             continue
         seen_ids.add(candidate.id)
-        if user.role == RecruitmentUser.Role.SYSTEM_ADMIN and evidence_belongs_to_application_context(
-            evidence,
-            candidate,
-        ):
-            return candidate
+        # Note: the System Administrator is intentionally NOT granted here.
+        # Reading evidence content (download / decrypt) requires the ability to
+        # view the owning case, which the oversight role does not have; the
+        # admin sees the secured-files inventory as metadata only.
         if user_can_view_application(user, candidate) and evidence_belongs_to_application_context(
             evidence,
             candidate,
         ):
             return candidate
+    return None
+
+
+def get_evidence_owner_application(evidence):
+    """Owning application for an evidence item, for display only.
+
+    Resolves which application a secured file belongs to so its case reference
+    can be shown in the oversight inventory. This grants no access — it does not
+    authorize download or decryption, only labelling.
+    """
+    if evidence.application_id:
+        return evidence.application
+    if evidence.recruitment_case_id:
+        return evidence.recruitment_case.application
+    if evidence.recruitment_entry_id:
+        return (
+            RecruitmentApplication.objects.select_related("position", "case", "applicant")
+            .filter(position_id=evidence.recruitment_entry_id)
+            .order_by("-submitted_at", "-updated_at", "-created_at")
+            .first()
+        )
     return None
 
 

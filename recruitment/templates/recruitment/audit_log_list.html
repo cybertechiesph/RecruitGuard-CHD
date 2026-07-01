@@ -119,12 +119,18 @@
                     {% if log.application %}
                         <p class="mb-1"><strong>Case:</strong> {{ log.application.reference_label }} | {{ log.application.position.title }}</p>
                     {% endif %}
-                    {% if log.metadata %}
-                        <details class="mt-2">
-                            <summary class="rg-note">Audit details</summary>
-                            <pre class="bg-light border rounded p-3 mt-2 mb-0"><code>{{ log.metadata|pretty_json }}</code></pre>
-                        </details>
-                    {% endif %}
+                    {% with detail_lines=log|audit_detail_summary %}
+                        {% if detail_lines %}
+                            <details class="mt-2">
+                                <summary class="rg-note">Audit details</summary>
+                                <ul class="mt-2 mb-0" style="font-size:.8rem;color:#374151;padding-left:1.1rem;">
+                                    {% for line in detail_lines %}
+                                        <li>{{ line }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </details>
+                        {% endif %}
+                    {% endwith %}
                 </article>
             {% endfor %}
         </div>

@@ -7335,7 +7335,9 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
                 artifact_type="applicant_document",
             )
 
-    def test_system_admin_can_download_uploaded_evidence(self):
+    def test_system_admin_cannot_download_evidence_content(self):
+        # Oversight is metadata-only: the System Administrator must not be able
+        # to decrypt and read an applicant's document content.
         application = self.make_application(self.level1_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
@@ -7355,20 +7357,22 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
             )
         )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            response.content,
-            self.build_valid_applicant_document_bytes(requirement_code),
-        )
-        self.assertTrue(
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(
             AuditLog.objects.filter(
-                application=application,
                 action=AuditLog.Action.EVIDENCE_DOWNLOADED,
                 metadata__evidence_id=evidence.id,
             ).exists()
         )
+        self.assertTrue(
+            AuditLog.objects.filter(
+                actor=self.sysadmin,
+                action=AuditLog.Action.EVIDENCE_ACCESS_DENIED,
+                metadata__evidence_id=evidence.id,
+            ).exists()
+        )
 
-    def test_system_admin_can_view_pdf_evidence_inline(self):
+    def test_system_admin_cannot_inline_view_evidence(self):
         application = self.make_application(self.level1_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
@@ -7378,10 +7382,32 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
             artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
             document_key=requirement_code,
         )
-        self.assertEqual(evidence.content_type, "application/pdf")
 
         client = Client()
         self.force_login_with_mfa(client, self.sysadmin)
+        response = client.get(
+            reverse(
+                "evidence-download",
+                kwargs={"pk": application.pk, "evidence_pk": evidence.pk},
+            ),
+            {"disposition": "inline"},
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_assigned_handler_can_view_pdf_evidence_inline(self):
+        application = self.make_application(self.level2_position)
+        self.move_application_to_hrm_chief_review(application)
+        requirement_code = get_required_applicant_document_requirements()[0].code
+        evidence = EvidenceVaultItem.objects.get(
+            application=application,
+            artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
+            document_key=requirement_code,
+        )
+        self.assertEqual(evidence.content_type, "application/pdf")
+
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
         response = client.get(
             reverse(
                 "evidence-download",
@@ -7406,9 +7432,8 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
         )
 
     def test_inline_request_forced_to_attachment_for_disallowed_content_type(self):
-        application = self.make_application(self.level1_position)
-        self.verify_application_for_submission(application)
-        submit_application(application, self.applicant)
+        application = self.make_application(self.level2_position)
+        self.move_application_to_hrm_chief_review(application)
         requirement_code = get_required_applicant_document_requirements()[0].code
         evidence = EvidenceVaultItem.objects.get(
             application=application,
@@ -7419,7 +7444,7 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
         evidence.save(update_fields=["content_type"])
 
         client = Client()
-        self.force_login_with_mfa(client, self.sysadmin)
+        self.force_login_with_mfa(client, self.hrm_chief)
         response = client.get(
             reverse(
                 "evidence-download",
@@ -7546,7 +7571,7 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
         self.assertEqual(evidence.recruitment_case_id, application.case.id)
         self.assertIsNone(evidence.recruitment_entry_id)
 
-    def test_system_admin_can_search_archive_and_review_evidence_vault(self):
+    def test_system_admin_can_search_and_review_but_cannot_archive(self):
         application = self.make_application(self.level1_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
@@ -7560,16 +7585,26 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
         client = Client()
         self.force_login_with_mfa(client, self.sysadmin)
 
-        initial_response = client.get(
+        # Metadata oversight: the vault lists the file and its owning case, but
+        # exposes no download link and no content.
+        review_response = client.get(
             reverse("evidence-vault-list"),
             {
-                "q": "Personal Data Sheet",
+                "q": application.reference_label,
                 "archival_status": "all",
             },
         )
-        self.assertEqual(initial_response.status_code, 200)
-        self.assertContains(initial_response, application.reference_label)
+        self.assertEqual(review_response.status_code, 200)
+        self.assertContains(review_response, application.reference_label)
+        self.assertContains(review_response, evidence.original_filename)
+        download_url = reverse(
+            "evidence-download",
+            kwargs={"pk": application.pk, "evidence_pk": evidence.pk},
+        )
+        self.assertNotContains(review_response, download_url)
 
+        # Archiving mutates the secured-files store and is denied for the
+        # oversight role.
         archive_response = client.post(
             reverse(
                 "evidence-archive-toggle",
@@ -7580,31 +7615,30 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
                 "archive_tag": "Closed case retention batch",
                 "next": reverse("evidence-vault-list"),
             },
-            follow=True,
         )
-        self.assertEqual(archive_response.status_code, 200)
+        self.assertEqual(archive_response.status_code, 403)
         evidence.refresh_from_db()
-        self.assertTrue(evidence.is_archived)
-        self.assertEqual(evidence.archive_tag, "Closed case retention batch")
-        self.assertTrue(
+        self.assertFalse(evidence.is_archived)
+        self.assertFalse(
             AuditLog.objects.filter(
-                application=application,
                 action=AuditLog.Action.EVIDENCE_ARCHIVED,
                 metadata__evidence_id=evidence.id,
             ).exists()
         )
 
-        archived_response = client.get(
-            reverse("evidence-vault-list"),
-            {
-                "q": application.reference_label,
-                "archival_status": "archived",
-                "current_version_only": "",
-            },
+    def test_system_admin_cannot_upload_evidence(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.sysadmin)
+        response = client.post(
+            reverse("evidence-upload", kwargs={"pk": application.pk}),
+            {"label": "Admin Upload"},
         )
-        self.assertEqual(archived_response.status_code, 200)
-        self.assertContains(archived_response, "Closed case retention batch")
-        self.assertContains(archived_response, application.reference_label)
+
+        self.assertEqual(response.status_code, 403)
 
     def test_assigned_workflow_handler_can_download_screening_document(self):
         application = self.make_application(self.level2_position)
@@ -8379,6 +8413,21 @@ class AuditLoggingTraceabilityTests(BaseRecruitmentTestCase):
         # audit trail lives on its own dedicated page.
         self.assertNotIn("recent_audit_logs", response.context)
         self.assertNotContains(response, "Recent audit records across the system.")
+
+    def test_audit_details_render_human_readable_summary(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.sysadmin)
+        # Generate an oversight "view" record whose metadata is filter state.
+        client.get(reverse("evidence-vault-list"))
+
+        response = client.get(reverse("audit-log-list"))
+
+        self.assertEqual(response.status_code, 200)
+        # The details are summarized in plain language, not dumped as raw JSON.
+        self.assertContains(response, "Secured Files Viewed")
+        self.assertContains(response, "No filters applied.")
+        self.assertNotContains(response, "artifact_scope")
+        self.assertNotContains(response, "current_version_only")
 
     def test_non_admin_roles_cannot_review_audit_logs(self):
         application = self.make_submitted_application()

@@ -91,7 +91,7 @@ from .services import (
     user_can_manage_cos_deliberation,
     get_deliberation_record,
     get_deliberation_records,
-    get_evidence_context_application_for_user,
+    get_evidence_owner_application,
     get_evidence_queryset_for_user,
     get_exam_record,
     get_exam_schedule,
@@ -940,10 +940,9 @@ class EvidenceVaultListView(LoginRequiredMixin, SystemAdministratorRequiredMixin
         context = super().get_context_data(**kwargs)
         evidence_items = list(context["evidence_items"])
         for evidence in evidence_items:
-            evidence.context_application = get_evidence_context_application_for_user(
-                self.request.user,
-                evidence,
-            )
+            # Oversight is metadata-only: resolve the owning case for labelling,
+            # but never authorize the admin to download the file content.
+            evidence.owner_application = get_evidence_owner_application(evidence)
         context["evidence_items"] = evidence_items
         context["search_form"] = self.search_form
         context["result_count"] = len(evidence_items)

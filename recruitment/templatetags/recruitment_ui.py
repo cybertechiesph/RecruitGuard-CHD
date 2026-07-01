@@ -4,7 +4,9 @@ from django import template
 
 from recruitment.models import (
     audit_action_label as resolve_audit_action_label,
+    AuditLog,
     CompletionRequirement,
+    EvidenceVaultItem,
     ExamRecord,
     Notification,
     NotificationLog,
@@ -108,6 +110,125 @@ def status_label(value):
 @register.filter
 def audit_action_label(value):
     return resolve_audit_action_label(value)
+
+
+# Audit-detail rendering: a human-readable summary instead of a raw JSON dump.
+AUDIT_REVIEW_ACTIONS = {
+    AuditLog.Action.EVIDENCE_VAULT_VIEWED,
+    AuditLog.Action.AUDIT_LOG_VIEWED,
+    AuditLog.Action.PROTECTED_RECORD_VIEWED,
+}
+# Internal identifiers / bookkeeping that mean nothing to a human reviewer.
+AUDIT_METADATA_HIDDEN_KEYS = {
+    "review_scope",
+    "version_family",
+    "evidence_id",
+    "previous_version_id",
+    "requested_application_id",
+    "access_source",
+    "document_key",
+}
+AUDIT_METADATA_LABELS = {
+    "filename": "File",
+    "stage": "Step",
+    "artifact_scope": "File scope",
+    "artifact_type": "File type",
+    "version_number": "Version",
+    "is_archived": "Archived",
+    "reason": "Reason",
+    "target_user_id": "Target user ID",
+    "result_count": "Records shown",
+    "sha256": "SHA-256",
+    "to_stage": "Moved to step",
+    "from_stage": "Moved from step",
+}
+AUDIT_METADATA_STAGE_KEYS = {
+    "stage",
+    "to_stage",
+    "from_stage",
+    "workflow_stage",
+    "case_stage",
+    "review_stage",
+}
+AUDIT_SCOPE_LABELS = dict(EvidenceVaultItem.OwnerScope.choices)
+
+
+def _format_audit_metadata_value(key, value):
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "Yes" if value else "No"
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return ""
+        if key in AUDIT_METADATA_STAGE_KEYS:
+            return stage_label(text)
+        if key == "artifact_scope":
+            return AUDIT_SCOPE_LABELS.get(text, text.replace("_", " ").title())
+        return text
+    if isinstance(value, (list, dict)):
+        return json.dumps(value) if value else ""
+    return str(value)
+
+
+def _summarize_audit_review_filters(metadata):
+    applied = []
+    search = (metadata.get("search_query") or "").strip()
+    if search:
+        applied.append(f"search “{search}”")
+    stage = (metadata.get("stage") or "").strip()
+    if stage:
+        applied.append(f"step {stage_label(stage)}")
+    scope = (metadata.get("artifact_scope") or "").strip()
+    if scope:
+        applied.append(f"scope {AUDIT_SCOPE_LABELS.get(scope, scope.replace('_', ' ').title())}")
+    archival = (metadata.get("archival_status") or "").strip()
+    if archival and archival != "active":
+        applied.append(f"archive {archival.replace('_', ' ')}")
+    action_filter = (metadata.get("action_filter") or "").strip()
+    if action_filter:
+        applied.append(f"action {resolve_audit_action_label(action_filter)}")
+    role_filter = (metadata.get("actor_role_filter") or "").strip()
+    if role_filter:
+        applied.append(f"role {role_label(role_filter)}")
+    if metadata.get("sensitive_only"):
+        applied.append("sensitive records only")
+
+    lines = []
+    if applied:
+        lines.append("Filtered by " + ", ".join(applied) + ".")
+    else:
+        lines.append("No filters applied.")
+    if "result_count" in metadata:
+        count = metadata.get("result_count") or 0
+        lines.append(f"{count} record{'' if count == 1 else 's'} shown.")
+    return lines
+
+
+@register.filter
+def audit_detail_summary(log):
+    """Human-readable lines describing an audit record's metadata.
+
+    Replaces the raw JSON dump: empty and purely-technical fields are dropped,
+    keys and enum values are humanized, and oversight 'review' events are
+    summarized by the filters that were applied.
+    """
+    metadata = getattr(log, "metadata", None)
+    if not isinstance(metadata, dict) or not metadata:
+        return []
+    if getattr(log, "action", "") in AUDIT_REVIEW_ACTIONS:
+        return _summarize_audit_review_filters(metadata)
+    lines = []
+    for key, value in metadata.items():
+        if key in AUDIT_METADATA_HIDDEN_KEYS:
+            continue
+        text = _format_audit_metadata_value(key, value)
+        if not text:
+            continue
+        label = AUDIT_METADATA_LABELS.get(key, key.replace("_", " ").capitalize())
+        lines.append(f"{label}: {text}")
+    return lines
 
 
 @register.filter
