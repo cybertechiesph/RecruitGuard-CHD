@@ -1089,6 +1089,12 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
         pool = self._scoped_pool(request, entry)
         if not pool:
             raise Http404("No candidates are ready for the exam in this vacancy.")
+        # Batch gate (Phase-4): while any applicant is still pending screening or awaiting
+        # resubmission, the exam screen must not be exposed at all — not even read-only. Send
+        # the reviewer back to the batch detail so a forced URL cannot preview the exam stage.
+        if not vacancy_screening_batch_status(entry).is_ready:
+            messages.error(request, vacancy_screening_batch_block_message(entry))
+            return redirect("vacancy-batch-detail", pk=entry.pk)
         return render(request, self.template_name, self._context(request, entry, pool))
 
     def post(self, request, pk):
@@ -1096,6 +1102,12 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
         pool = self._scoped_pool(request, entry)
         if not pool:
             raise Http404("No candidates are ready for the exam in this vacancy.")
+        # Same batch gate as GET: refuse every exam operation (schedule/score/finalize) while
+        # the screening batch is on hold. The exam services re-check this too, but blocking here
+        # keeps a forced POST from re-rendering the read-only exam screen on a form error.
+        if not vacancy_screening_batch_status(entry).is_ready:
+            messages.error(request, vacancy_screening_batch_block_message(entry))
+            return redirect("vacancy-batch-detail", pk=entry.pk)
         operation = request.POST.get("operation", "")
 
         if operation == "save_schedule":

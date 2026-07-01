@@ -17,15 +17,17 @@ from django.contrib.auth import get_user_model
 from django.contrib.messages import get_messages
 from django.core import mail
 from django.core.cache import cache
-from django.core.exceptions import ValidationError
+from django.contrib.admin.sites import AdminSite
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.db import transaction
-from django.test import Client, SimpleTestCase, TestCase, override_settings
+from django.test import Client, RequestFactory, SimpleTestCase, TestCase, override_settings
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 
+from .admin import ExamRecordAdmin, ScreeningRecordAdmin
 from .captcha import (
     CAPTCHA_ANSWER_SESSION_KEY,
     validate_recaptcha_token,
@@ -11816,3 +11818,243 @@ class PositionDocumentRequirementTests(BaseRecruitmentTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "locked and cannot be changed")
         self.assertContains(response, "disabled")
+
+
+class BusinessLogicBypassHardeningTests(BaseRecruitmentTestCase):
+    """Regression coverage for the PT-03 business-logic-bypass pentest scenarios: a case cannot be
+    forced to a later stage (PT-007), a finalized record cannot be tampered with and assessment
+    weights lock once scoring starts (PT-008), and the batch cannot reach the exam while an
+    applicant is still undecided (PT-009)."""
+
+    def _submit(self, application, applicant=None):
+        applicant = applicant or self.applicant
+        self.verify_application_for_submission(application)
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(application, applicant)
+        application.refresh_from_db()
+        return application
+
+    def _extra_pending_application(self, position, suffix):
+        """A second submitted applicant whose screening is left un-finalized, so the vacancy's
+        screening batch stays on hold (pending decision)."""
+        applicant = User.objects.create_user(
+            username=f"bypass-applicant-{suffix}",
+            password="testpass123",
+            email=f"bypass.{suffix}@example.com",
+            role=RecruitmentUser.Role.APPLICANT,
+        )
+        application = RecruitmentApplication.objects.create(
+            applicant=applicant,
+            position=position,
+            applicant_first_name=f"Bypass{suffix}",
+            applicant_last_name="Applicant",
+            applicant_email=f"bypass.{suffix}@example.com",
+            applicant_phone=f"091755500{suffix}",
+            checklist_privacy_consent=True,
+            checklist_documents_complete=True,
+            checklist_information_certified=True,
+            qualification_summary="Second applicant keeping the batch on hold.",
+            cover_letter="Applying for the same vacancy.",
+            performance_rating_applicability=(
+                RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
+            ),
+        )
+        self.upload_required_applicant_documents(
+            application, applicant, content_prefix=f"bypass-{suffix}"
+        )
+        return self._submit(application, applicant)
+
+    # ---- PT-007: forced workflow action / stage skipping -------------------------------------
+
+    def test_pt007_forced_later_stage_action_is_rejected(self):
+        application = self._submit(self.make_application(self.level1_position))
+        # Fresh at Secretariat screening: an HRMPSB-stage action like "recommend" is not offered.
+        self.assertEqual(
+            application.case.current_stage, RecruitmentCase.Stage.SECRETARIAT_REVIEW
+        )
+        available = {
+            value for value, _label in get_available_actions(application, self.secretariat)
+        }
+        self.assertNotIn("recommend", available)
+
+        # Form guard: the forced action fails validation ("not allowed at the current step").
+        form = WorkflowActionForm(
+            {"action": "recommend", "remarks": "Forced past screening."},
+            application=application,
+            user=self.secretariat,
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("action", form.errors)
+
+        # View guard: posting the forced action does not advance the case.
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("workflow-action", kwargs={"pk": application.pk}),
+            {"action": "recommend", "remarks": "Forced past screening."},
+        )
+        self.assertEqual(response.status_code, 302)
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+        self.assertEqual(
+            application.case.current_stage, RecruitmentCase.Stage.SECRETARIAT_REVIEW
+        )
+        self.assertEqual(application.status, RecruitmentApplication.Status.SECRETARIAT_REVIEW)
+
+        # Service guard: the state machine refuses it even if the form is bypassed entirely.
+        with self.assertRaises(ValueError):
+            process_workflow_action(
+                application, self.secretariat, "recommend", "Forced past screening."
+            )
+
+    # ---- PT-008: finalized-record tampering + weight lock ------------------------------------
+
+    def test_pt008_finalized_screening_record_rejects_replayed_save(self):
+        application = self._submit(self.make_application(self.level1_position))
+        self.finalize_screening_for_current_stage(application, self.secretariat)
+        record = ScreeningRecord.objects.get(application=application, is_finalized=True)
+        original_outcome = record.qualification_outcome
+
+        # Replaying a Save after finalize (PT-008 step 3) must be refused, not applied.
+        with self.assertRaises(ValueError):
+            save_screening_review(
+                application=application,
+                actor=self.secretariat,
+                cleaned_data={
+                    "completeness_status": ScreeningRecord.CompletenessStatus.INCOMPLETE,
+                    "completeness_notes": "Tampered after finalize.",
+                    "qualification_outcome": (
+                        ScreeningRecord.QualificationOutcome.NOT_QUALIFIED
+                    ),
+                    "education_score": None,
+                    "training_score": None,
+                    "experience_score": None,
+                    "document_review_score": None,
+                    "screening_notes": "Tampered after finalize.",
+                },
+                finalize=False,
+            )
+        record.refresh_from_db()
+        self.assertEqual(record.qualification_outcome, original_outcome)
+
+    def test_pt008_admin_cannot_edit_finalized_screening_record(self):
+        application = self._submit(self.make_application(self.level1_position))
+        self.finalize_screening_for_current_stage(application, self.secretariat)
+        record = ScreeningRecord.objects.get(application=application, is_finalized=True)
+
+        request = RequestFactory().get("/admin/")
+        request.user = self.secretariat
+        model_admin = ScreeningRecordAdmin(ScreeningRecord, AdminSite())
+
+        # A finalized record is fully read-only and cannot be deleted from the admin.
+        readonly = model_admin.get_readonly_fields(request, obj=record)
+        self.assertIn("qualification_outcome", readonly)
+        self.assertIn("is_finalized", readonly)
+        self.assertFalse(model_admin.has_delete_permission(request, obj=record))
+
+        # A crafted save through the admin/ORM is refused; the stored value is unchanged.
+        record.qualification_outcome = ScreeningRecord.QualificationOutcome.NOT_QUALIFIED
+        record.is_finalized = False
+        with self.assertRaises(PermissionDenied):
+            model_admin.save_model(request, record, form=None, change=True)
+        record.refresh_from_db()
+        self.assertTrue(record.is_finalized)
+        self.assertEqual(
+            record.qualification_outcome, ScreeningRecord.QualificationOutcome.QUALIFIED
+        )
+
+    def test_pt008_weights_lock_blocks_replayed_weight_edit(self):
+        application = self._submit(self.make_application(self.level1_position))
+        self.finalize_screening_for_current_stage(application, self.secretariat)
+        # Single-applicant vacancy: the batch is ready, so scoring can start and lock the weights.
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(
+                self.level1_position,
+                self.secretariat,
+                {
+                    "scheduled_for": timezone.now() + timedelta(hours=2),
+                    "venue": "CHD CALABARZON Examination Room",
+                    "instructions": "Bring a valid government ID.",
+                },
+            )
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_scores(
+                self.level1_position,
+                self.secretariat,
+                {application.case.id: {"general_score": "90", "technical_score": "80"}},
+                finalize=True,
+            )
+
+        weights = get_or_create_vacancy_assessment_weights(self.level1_position)
+        self.assertTrue(weights.is_locked)
+        original_ete = weights.ete_weight
+
+        # PT-008 step 5-6: replaying a weights Save after scoring starts is rejected.
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("vacancy-assessment-weights", args=[self.level1_position.pk]),
+            {
+                "ete_weight": "10",
+                "exam_weight": "80",
+                "interview_weight": "10",
+                "exam_general_weight": "55",
+                "exam_technical_weight": "45",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        weights.refresh_from_db()
+        self.assertEqual(weights.ete_weight, original_ete)
+
+        # The finalized exam record is likewise immutable from the admin.
+        exam_record = ExamRecord.objects.get(application=application, is_finalized=True)
+        request = RequestFactory().get("/admin/")
+        request.user = self.secretariat
+        exam_admin = ExamRecordAdmin(ExamRecord, AdminSite())
+        exam_readonly = exam_admin.get_readonly_fields(request, obj=exam_record)
+        self.assertIn("exam_score", exam_readonly)
+        self.assertIn("is_finalized", exam_readonly)
+        with self.assertRaises(PermissionDenied):
+            exam_admin.save_model(request, exam_record, form=None, change=True)
+
+    # ---- PT-009: batch-gate bypass -----------------------------------------------------------
+
+    def test_pt009_batch_exam_page_redirects_when_batch_on_hold(self):
+        qualified = self._submit(self.make_application(self.level1_position))
+        self.finalize_screening_for_current_stage(qualified, self.secretariat)
+        # A second applicant with un-finalized screening keeps the batch on hold.
+        self._extra_pending_application(self.level1_position, "1")
+        qualified.refresh_from_db()
+        self.assertFalse(vacancy_screening_batch_status(self.level1_position).is_ready)
+        # The qualified applicant is still exam-ready (in the pool), so the page would otherwise
+        # render read-only — the gate must hard-redirect instead of exposing the exam screen.
+        self.assertIn(qualified, vacancy_exam_pool(self.level1_position))
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        detail_url = reverse("vacancy-batch-detail", args=[self.level1_position.pk])
+
+        # GET is hard-redirected to the batch detail — no exam screen is exposed.
+        get_response = client.get(
+            reverse("vacancy-batch-exam", args=[self.level1_position.pk])
+        )
+        self.assertEqual(get_response.status_code, 302)
+        self.assertEqual(get_response.url, detail_url)
+
+        # A forced POST is likewise redirected and does not advance the batch.
+        post_response = client.post(
+            reverse("vacancy-batch-exam", args=[self.level1_position.pk]),
+            {
+                "operation": "finalize",
+                f"general_score_{qualified.case.id}": "90",
+                f"technical_score_{qualified.case.id}": "80",
+            },
+        )
+        self.assertEqual(post_response.status_code, 302)
+        self.assertEqual(post_response.url, detail_url)
+        qualified.refresh_from_db()
+        self.assertFalse(
+            qualified.exam_records.filter(
+                review_stage=RecruitmentCase.Stage.SECRETARIAT_REVIEW, is_finalized=True
+            ).exists()
+        )

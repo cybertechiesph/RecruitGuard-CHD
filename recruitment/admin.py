@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
+from django.core.exceptions import PermissionDenied
 
 from .models import (
     AuditLog,
@@ -37,6 +38,44 @@ def _superuser_only_admin_site(request):
 
 
 admin.site.has_permission = _superuser_only_admin_site
+
+
+class FinalizedRecordAdminGuardMixin:
+    """Keep finalized screening/exam records immutable in the Django admin.
+
+    The view + service layers already refuse to re-save a finalized record (business logic
+    bypass PT-008), but the admin reaches the ORM directly — a superuser could otherwise flip
+    ``is_finalized`` back to ``False`` or rewrite a score/status, changing the split a downstream
+    CAR was computed against. Once a record is finalized we show every field read-only and refuse
+    any save or delete, so the record can only be reopened through the workflow, never edited here.
+    """
+
+    def get_readonly_fields(self, request, obj=None):
+        readonly = list(super().get_readonly_fields(request, obj))
+        if obj is not None and getattr(obj, "is_finalized", False):
+            for field in obj._meta.fields:
+                if (
+                    field.editable
+                    and not field.primary_key
+                    and not field.auto_created
+                    and field.name not in readonly
+                ):
+                    readonly.append(field.name)
+        return readonly
+
+    def has_delete_permission(self, request, obj=None):
+        if obj is not None and getattr(obj, "is_finalized", False):
+            return False
+        return super().has_delete_permission(request, obj)
+
+    def save_model(self, request, obj, form, change):
+        if change and obj.pk:
+            existing = type(obj).objects.filter(pk=obj.pk).first()
+            if existing is not None and existing.is_finalized:
+                raise PermissionDenied(
+                    "This record is finalized and locked; it cannot be edited from the admin."
+                )
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(RecruitmentUser)
@@ -754,7 +793,7 @@ class RoutingHistoryAdmin(admin.ModelAdmin):
 
 
 @admin.register(ScreeningRecord)
-class ScreeningRecordAdmin(admin.ModelAdmin):
+class ScreeningRecordAdmin(FinalizedRecordAdminGuardMixin, admin.ModelAdmin):
     list_display = (
         "application",
         "review_stage",
@@ -793,7 +832,7 @@ class ScreeningDocumentReviewAdmin(admin.ModelAdmin):
 
 
 @admin.register(ExamRecord)
-class ExamRecordAdmin(admin.ModelAdmin):
+class ExamRecordAdmin(FinalizedRecordAdminGuardMixin, admin.ModelAdmin):
     list_display = (
         "application",
         "review_stage",
