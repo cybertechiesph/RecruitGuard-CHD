@@ -15,11 +15,17 @@ Demo data is identified for purge by two invisible markers:
   * applicant users whose username starts with ``demo_applicant_``
 Real ``PositionReference`` rows (loaded by migration 0016) and real staff accounts
 are never touched.
+
+SAFETY: this command is destructive (it deletes data and inserts fake applications),
+so it REFUSES to run when ``settings.DEBUG`` is False (i.e. a production-like
+environment) unless ``--force`` is passed. Do NOT seed a production database that
+holds real applicant submissions.
 """
 
 from contextlib import nullcontext
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management.base import BaseCommand, CommandError
@@ -175,9 +181,26 @@ class Command(BaseCommand):
             action="store_true",
             help="Do not purge legacy E2E / prior demo data before seeding.",
         )
+        parser.add_argument(
+            "--force",
+            action="store_true",
+            help=(
+                "Required to run when DEBUG is False (production-like). This command "
+                "is destructive; never use it on a database with real applicant data."
+            ),
+        )
 
     # -- entry point ------------------------------------------------------------
     def handle(self, *args, **options):
+        if not settings.DEBUG and not options["force"]:
+            target_db = settings.DATABASES.get("default", {}).get("NAME", "?")
+            raise CommandError(
+                "Refusing to run: DEBUG is False, which looks like a production-like "
+                f"environment (target database: {target_db!r}). seed_demo_data is "
+                "destructive -- it deletes synthetic/demo data and inserts fake "
+                "applications. If you are certain this is a disposable demo/staging "
+                "database and NOT one with real applicant submissions, re-run with --force."
+            )
         email_context = (
             nullcontext()
             if options["send_email"]
