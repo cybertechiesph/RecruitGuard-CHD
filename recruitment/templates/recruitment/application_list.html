@@ -110,6 +110,10 @@
                                     {{ task_label }}
                                 </span>
                                 {% include "internal_includes/stage_sla_badge.html" with recruitment_case=application.case variant="sm" %}
+                                {% queue_waiting_on_car application as waiting_on_car %}
+                                {% if waiting_on_car %}
+                                    <div class="rg-imeta mt-1">Waiting on CAR preparation</div>
+                                {% endif %}
                             </td>
                             {% if not is_queue %}
                                 <td>
@@ -124,7 +128,7 @@
                             {% endif %}
                             <td>
                                 <div style="font-size:0.8125rem;color:#374151;">
-                                    {{ application.updated_at|timesince }} ago
+                                    {{ application.updated_at|timesince|truncatewords:2 }} ago
                                 </div>
                                 <div class="rg-imeta mt-1">{{ application.updated_at|date:"M d, Y" }}</div>
                             </td>

@@ -1242,6 +1242,36 @@ def user_can_prepare_plantilla_car(user, application):
     return user.role in PLANTILLA_CAR_PREPARATION_ROLES_BY_LEVEL.get(application.level, set())
 
 
+def plantilla_car_preparer_role_label(application):
+    """Human label for the role(s) that prepare the Plantilla CAR at this case's level
+    (Secretariat for L1, HRM Chief for L2). Used only to explain who the HRMPSB board is
+    waiting on — it does not grant or change any access."""
+    roles = PLANTILLA_CAR_PREPARATION_ROLES_BY_LEVEL.get(application.level, set())
+    labels = [RecruitmentUser.Role(role).label for role in sorted(roles)]
+    return ", ".join(labels) if labels else "the assigned office"
+
+
+def application_awaiting_car_preparation(user, application):
+    """True when this viewer is looking at a Plantilla HRMPSB case whose CAR is still being
+    prepared by another role: the viewer can't prepare it and no CAR (draft or final) exists yet.
+    Drives a "CAR in preparation" state instead of a blank card, and a queue hint — it never
+    changes queue membership or access (the case stays assigned to the HRMPSB member)."""
+    case = getattr(application, "case", None)
+    if not case:
+        return False
+    if (
+        application.branch != PositionPosting.Branch.PLANTILLA
+        or application.status != RecruitmentApplication.Status.HRMPSB_REVIEW
+        or case.current_stage != CAR_REVIEW_STAGE
+        or case.case_status != RecruitmentCase.CaseStatus.ACTIVE
+        or get_current_workflow_section(application) != "car"
+    ):
+        return False
+    if user_can_prepare_plantilla_car(user, application):
+        return False
+    return get_comparative_assessment_report(application) is None
+
+
 def user_can_upload_evidence(user, application):
     # The System Administrator is an oversight-only role and never adds file
     # content to a case; uploads belong to the applicant or the assigned

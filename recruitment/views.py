@@ -66,9 +66,11 @@ from .permissions import (
     WorkflowProcessorRequiredMixin,
 )
 from .services import (
+    application_awaiting_car_preparation,
     application_has_finalized_applicant_pool,
     application_requires_finalized_applicant_pool,
     apply_car_ete_ratings,
+    plantilla_car_preparer_role_label,
     autosave_comparative_assessment_report_notes,
     build_submission_packet,
     build_export_bundle,
@@ -645,6 +647,22 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
         ):
             # The HRMPSB board gets a read-only ranked CAR to deliberate off-system (spec §5.4).
             context["car_readonly"] = True
+        # When the CAR card would otherwise be blank for this viewer (e.g. an HRMPSB member whose
+        # board is still waiting on the Secretariat/HRM Chief to prepare the CAR), surface a
+        # "CAR in preparation" state instead of an empty titlebar. Does not change access.
+        context["car_in_preparation"] = (
+            not context.get("car_form")
+            and not context.get("car_locked")
+            and not context.get("car_readonly")
+            and application_awaiting_car_preparation(user, application)
+        )
+        if context["car_in_preparation"]:
+            label = plantilla_car_preparer_role_label(application)
+            context["car_preparer_role_label"] = label
+            context["car_in_preparation_copy"] = (
+                "The Comparative Assessment Report for this vacancy is being prepared by the "
+                f"{label}. You will be able to record the deliberation once the CAR is finalized."
+            )
         if user_can_record_final_decision(user, application):
             context["final_decision_form"] = FinalDecisionForm()
         if user_can_record_final_selection(user, application):
@@ -1064,9 +1082,19 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
                 }
             )
         weights = entry.assessment_weights_or_default
+        candidate_count = len(candidates)
+        schedule_sent = bool(candidates) and all(c["schedule"] for c in candidates)
+        finalize_exam_body = (
+            f"This locks the recorded exam scores for all {candidate_count} "
+            f"candidate{'' if candidate_count == 1 else 's'} and moves the whole pool to the "
+            "next review step. Scores can no longer be edited afterwards."
+        )
         return {
             "entry": entry,
             "candidates": candidates,
+            "candidate_count": candidate_count,
+            "schedule_sent": schedule_sent,
+            "finalize_exam_body": finalize_exam_body,
             "is_plantilla": entry.branch == PositionPosting.Branch.PLANTILLA,
             "screening_batch": vacancy_screening_batch_status(entry),
             "weights": weights,
@@ -1132,12 +1160,25 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
                 if row:
                     rows[case_id] = row
             try:
-                save_vacancy_exam_scores(entry, request.user, rows, finalize=finalize)
+                saved = save_vacancy_exam_scores(entry, request.user, rows, finalize=finalize)
             except (ValueError, ValidationError) as exc:
                 messages.error(request, str(exc))
                 return redirect("vacancy-batch-exam", pk=entry.pk)
             if finalize:
-                messages.success(request, "Exam batch finalized — the pool advanced together.")
+                count = len(saved)
+                # The whole pool advances together to a single next handler; read it off any
+                # routed application (mutated in place by save_exam_record).
+                next_role = saved[0].current_handler_role if saved else ""
+                if next_role:
+                    next_role_label = RecruitmentUser.Role(next_role).label
+                    messages.success(
+                        request,
+                        f"Exam batch finalized — all {count} "
+                        f"candidate{'' if count == 1 else 's'} advanced to "
+                        f"{next_role_label} review.",
+                    )
+                else:
+                    messages.success(request, "Exam batch finalized — the pool advanced together.")
                 return redirect("vacancy-batches")
             messages.success(request, "Exam scores saved.")
             return redirect("vacancy-batch-exam", pk=entry.pk)

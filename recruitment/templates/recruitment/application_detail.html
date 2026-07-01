@@ -205,8 +205,12 @@
 
                     {% include "internal_includes/deliberation_body.html" %}
 
+                {% elif car_in_preparation %}
+
+                    {% include "internal_includes/comparative_assessment.html" %}
+
                 {% else %}
-                    
+
                     {% include "internal_includes/state_empty.html" with title="Deliberation not yet available" copy="This step will open when the case reaches the proper deliberation review." %}
                 {% endif %}
             </div>

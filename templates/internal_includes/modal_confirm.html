@@ -31,6 +31,8 @@ Parameters:
   confirm_label — confirm button label (default: "Confirm")
   cancel_label  — cancel button label (default: "Cancel")
   form_id       — if set, confirm button submits this form
+  confirm_name  — if set (with form_id), confirm button carries this name…
+  confirm_value — …and this value (e.g. a named submit button: operation=finalize)
   confirm_url   — if set (and no form_id), confirm button links here
   confirm_class — extra CSS class on confirm button
 {% endcomment %}
@@ -83,6 +85,7 @@ Parameters:
                 {% if form_id %}
                     <button type="submit"
                             form="{{ form_id }}"
+                            {% if confirm_name %}name="{{ confirm_name }}" value="{{ confirm_value }}"{% endif %}
                             class="btn btn-sm {% if variant == 'destructive' %}btn-rg-destructive{% elif variant == 'warn' %}btn-rg-warn{% else %}btn-rg-primary{% endif %} {{ confirm_class }}">
                         {{ confirm_label|default:"Confirm" }}
                     </button>
