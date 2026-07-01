@@ -8041,6 +8041,202 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         )
 
 
+class IdorObjectAccessRegressionTests(BaseRecruitmentTestCase):
+    """Pins the PT-013/014/015 IDOR scenarios: swapping an object ID in a URL or
+    request must never disclose another applicant's case, evidence, or output.
+
+    Each attempt has to return 403/404 (or a safe login redirect) with no
+    restricted data served.
+    """
+
+    def _submit(self, position):
+        application = self.make_application(position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        application.refresh_from_db()
+        return application
+
+    def _submit_for(self, position, suffix):
+        # A distinct applicant so two submissions can coexist on the same
+        # vacancy (applicant+position is unique).
+        applicant = User.objects.create_user(
+            username=f"idor-applicant-{suffix}",
+            password="testpass123",
+            email=f"idor-applicant-{suffix}@example.com",
+            role=RecruitmentUser.Role.APPLICANT,
+        )
+        application = RecruitmentApplication.objects.create(
+            applicant=applicant,
+            position=position,
+            applicant_first_name="Test",
+            applicant_last_name=f"Applicant{suffix}",
+            applicant_email=applicant.email,
+            applicant_phone="09171234567",
+            checklist_privacy_consent=True,
+            checklist_documents_complete=True,
+            checklist_information_certified=True,
+            qualification_summary="Qualified applicant.",
+            cover_letter="I am applying.",
+        )
+        self.upload_required_applicant_documents(
+            application, applicant, content_prefix=f"idor-{suffix}"
+        )
+        otp_code = issue_application_otp(application, actor=applicant)
+        verify_application_otp(application, otp_code, actor=applicant)
+        application.refresh_from_db()
+        submit_application(application, applicant)
+        application.refresh_from_db()
+        return application
+
+    def _application_evidence(self, application):
+        return EvidenceVaultItem.objects.get(
+            application=application,
+            artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
+            document_key=get_required_applicant_document_requirements()[0].code,
+        )
+
+    # --- PT-013: unauthorized case access (object and level) -------------
+    def test_secretariat_cannot_open_level2_case_detail(self):
+        application = self._submit(self.level2_position)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_secretariat_cannot_open_level2_vacancy_console(self):
+        self._submit(self.level2_position)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(
+            reverse("vacancy-batch-detail", kwargs={"pk": self.level2_position.pk})
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    # --- PT-014: unauthorized evidence access (download and inline) ------
+    def test_evidence_download_rejects_mismatched_evidence_id(self):
+        # Both cases are Level-1 and viewable by the secretariat role, so the
+        # only thing standing between the request and the file is the evidence
+        # <-> application binding. Swapping in another case's evidence id must
+        # 404 rather than serve the file.
+        app_a = self._submit(self.level1_position)
+        app_b = self._submit_for(self.level1_position, "evswap")
+        evidence_b = self._application_evidence(app_b)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(
+            reverse(
+                "evidence-download",
+                kwargs={"pk": app_a.pk, "evidence_pk": evidence_b.pk},
+            )
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertTrue(
+            AuditLog.objects.filter(
+                application=app_a,
+                action=AuditLog.Action.EVIDENCE_ACCESS_DENIED,
+                metadata__evidence_id=evidence_b.id,
+                metadata__reason="context_mismatch",
+            ).exists()
+        )
+
+    def test_evidence_download_rejects_mismatched_application_id(self):
+        app_a = self._submit(self.level1_position)
+        app_b = self._submit_for(self.level1_position, "appswap")
+        evidence_a = self._application_evidence(app_a)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(
+            reverse(
+                "evidence-download",
+                kwargs={"pk": app_b.pk, "evidence_pk": evidence_a.pk},
+            )
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_inline_disposition_does_not_bypass_evidence_context_check(self):
+        app_a = self._submit(self.level1_position)
+        app_b = self._submit_for(self.level1_position, "inlineswap")
+        evidence_b = self._application_evidence(app_b)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(
+            reverse(
+                "evidence-download",
+                kwargs={"pk": app_a.pk, "evidence_pk": evidence_b.pk},
+            ),
+            {"disposition": "inline"},
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    # --- PT-015: unauthorized output access (CAR/export/audit/decision) --
+    def test_secretariat_cannot_open_application_audit_log(self):
+        application = self._submit(self.level1_position)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(
+            reverse("application-audit-log", kwargs={"pk": application.pk})
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_secretariat_cannot_export_level2_case(self):
+        application = self._submit(self.level2_position)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(reverse("application-export", kwargs={"pk": application.pk}))
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_secretariat_cannot_post_final_decision_for_level2_case(self):
+        application = self._submit(self.level2_position)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("final-decision-record", kwargs={"pk": application.pk}),
+            {"decision_outcome": "approved", "decision_remarks": "unauthorized probe"},
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_secretariat_cannot_post_comparative_assessment_for_restricted_car_case(self):
+        # Drive a Level-2 case to the CAR stage (assigned to the HRM Chief), then
+        # have the secretariat POST the CAR endpoint. Authorization must be
+        # decided before any application-state gate so a restricted case cannot
+        # be distinguished by its response (clean 403, not a state-dependent
+        # redirect).
+        application = self.make_application(self.level2_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb)
+        self.finalize_deliberation_for_current_stage(
+            application, self.hrmpsb, ranking_position=1
+        )
+        self.assertFalse(
+            user_can_manage_comparative_assessment_report(self.secretariat, application)
+        )
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("comparative-assessment-report", kwargs={"pk": application.pk}),
+            {"operation": "save", "summary_notes": "unauthorized probe"},
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+
 class AuditLoggingTraceabilityTests(BaseRecruitmentTestCase):
     def make_submitted_application(self, position=None):
         application = self.make_application(position or self.level1_position)

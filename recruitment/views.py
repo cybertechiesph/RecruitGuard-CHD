@@ -1887,6 +1887,11 @@ class DeliberationRecordView(LoginRequiredMixin, WorkflowProcessorRequiredMixin,
 class ComparativeAssessmentReportView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
     def post(self, request, pk):
         application = get_object_or_404(RecruitmentApplication, pk=pk)
+        # Authorize before touching any application-specific state so an
+        # unauthorized actor cannot distinguish restricted cases by the
+        # response they get (403 vs. a state-dependent redirect).
+        if not user_can_manage_comparative_assessment_report(request.user, application):
+            raise PermissionDenied
         operation = request.POST.get("operation", "save")
         is_autosave = _is_autosave_request(request) and operation != "finalize"
         if (
@@ -1897,8 +1902,6 @@ class ComparativeAssessmentReportView(LoginRequiredMixin, WorkflowProcessorRequi
                 return _autosave_response(False)
             messages.error(request, get_applicant_pool_finalization_block_message(application))
             return redirect("application-detail", pk=pk)
-        if not user_can_manage_comparative_assessment_report(request.user, application):
-            raise PermissionDenied
 
         form = ComparativeAssessmentReportForm(request.POST)
         if form.is_valid():
