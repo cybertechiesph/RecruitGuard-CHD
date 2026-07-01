@@ -9,6 +9,23 @@ MAX_APPLICANT_DOCUMENT_UPLOAD_BYTES = 5 * 1024 * 1024
 GENERIC_CONTENT_TYPES = {"", "application/octet-stream", "binary/octet-stream"}
 VALIDATED_UPLOAD_CACHE_ATTR = "_recruitguard_validated_applicant_document"
 
+# Matches EvidenceVaultItem.original_filename's max_length. A name longer than
+# this would otherwise blow up EvidenceVaultItem.full_clean() and 500 the whole
+# upload, so we clamp it (keeping the extension) before persisting.
+ORIGINAL_FILENAME_MAX_LENGTH = 255
+
+
+def clamp_original_filename(filename, max_length=ORIGINAL_FILENAME_MAX_LENGTH):
+    """Trim an uploaded file's display name to the storage limit, preserving its
+    extension. The bytes are kept intact — only the stored label is shortened."""
+    name = (filename or "").strip()
+    if len(name) <= max_length:
+        return name
+    suffix = Path(name).suffix
+    if len(suffix) >= max_length:
+        return name[:max_length]
+    return f"{name[: max_length - len(suffix)]}{suffix}"
+
 UPLOAD_ERROR_TOO_LARGE = "This file is too large. Choose a file that is 5 MB or smaller."
 UPLOAD_ERROR_EMPTY = "This file is empty. Pick a file that has something in it."
 UPLOAD_ERROR_EXTENSION = (

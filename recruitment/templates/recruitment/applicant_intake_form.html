@@ -162,6 +162,9 @@
                     <span class="rg-intake-optional">Optional</span>
                 </label>
                 {{ form.cover_letter }}
+                <div class="rg-intake-charcount" data-cover-count-wrap aria-live="polite">
+                    <span data-cover-count>0</span> / 1,500 characters
+                </div>
                 <div class="form-text">A short message to the panel. Your signed cover letter still needs to be uploaded in Step 2.</div>
                 {% for error in form.cover_letter.errors %}
                     <div class="invalid-feedback d-block">{{ error }}</div>
@@ -512,10 +515,13 @@
        Source: forms.py constants + clean_* methods. */
     var NAME_RE = /^(?=.*\p{L})[\p{L} .'-]+$/u;   // at least one letter; letters/space/.'- only
     var SUMMARY_MAX = 1000;
+    var COVER_LETTER_MAX = 1500;   // mirror APPLICANT_COVER_LETTER_MAX_LENGTH (forms.py)
 
     function cleanPhoneDigits(raw) {
-        // Strip the separators the backend strips: spaces, hyphens, parentheses.
-        return String(raw || "").replace(/[\s()\-]/g, "");
+        // Strip ONLY the separators the backend strips — literal space, parens,
+        // hyphen (forms.py: re.sub(r"[ ()-]", ...)). Using \s here also stripped
+        // tabs/NBSP, so the browser accepted numbers the server then rejected.
+        return String(raw || "").replace(/[ ()\-]/g, "");
     }
     function normalizePhone(raw) {
         // Returns canonical +639XXXXXXXXX, or "" if not a valid PH mobile.
@@ -603,15 +609,106 @@
             }
         }
 
-        var hasServerError = !!slot.querySelector(
-            ".invalid-feedback.d-block:not([data-client-error])"
-        );
-        slot.classList.toggle("rg-pub-upload-slot--error", !!problem || hasServerError);
-        slot.classList.toggle(
-            "rg-pub-upload-slot--complete",
-            !!file && !problem && !hasServerError
-        );
         input.dataset.fileValidationError = problem || "";
+        // Re-run the cross-slot duplicate scan and repaint every slot. The
+        // per-slot colour is owned by paintSlotState (via refreshDuplicateState)
+        // so a freshly-picked duplicate can't flash green here.
+        refreshDuplicateState();
+    }
+
+    /* ── Per-slot colour state (single source of truth) ──────────
+       A slot is GREEN only when it holds a valid, non-duplicate file (or a
+       saved-draft file). A per-file problem, an unreadable file, a server
+       error, OR the same file reused in another slot all paint it RED.
+       Centralising the toggle here keeps the duplicate scan and the per-file
+       check from fighting over the classes. */
+    function paintSlotState(slot) {
+        var input = form.elements[slot.dataset.slotName];
+        if (!input) return;
+        var hasFile = !!(input.files && input.files.length);
+        var savedFilename = slot.dataset.savedFilename || "";
+        var perFileProblem = input.dataset.fileValidationError || "";
+        var unreadable = input.dataset.fileUnreadable === "1";
+        var hasServerError = !!slot.querySelector(
+            ".invalid-feedback.d-block:not([data-client-error]):not([data-duplicate-error])"
+        );
+        var isDuplicate = slot.dataset.duplicateActive === "1";
+        var hasError = !!perFileProblem || unreadable || hasServerError || isDuplicate;
+        var hasSelection = hasFile || !!savedFilename;
+        slot.classList.toggle("rg-pub-upload-slot--error", hasError);
+        slot.classList.toggle("rg-pub-upload-slot--complete", hasSelection && !hasError);
+    }
+
+    /* ── Live duplicate-file scan ────────────────────────────────
+       The same physical file used for two different document slots is almost
+       always a mistake (and the server rejects it on content hash). We catch
+       it the moment it happens so the box turns RED with a plain message,
+       instead of staying green until submit. Freshly-picked files are keyed
+       by name+size+lastModified; a saved-draft file is keyed by the digest the
+       server already computed. This mirrors documentsProblems()'s keying so the
+       live check and the Next/submit gate agree.
+       KNOWN GAP: the server keys duplicates by SHA-256 content hash, so two
+       byte-identical files with DIFFERENT names (or a freshly-picked file that
+       matches a saved-draft file's content) won't be flagged here — the server
+       still catches those and returns the same short message on submit. We
+       don't hash in the browser to keep this scan synchronous. */
+    function slotDuplicateKey(slot) {
+        var input = form.elements[slot.dataset.slotName];
+        var file = input && input.files && input.files.length ? input.files[0] : null;
+        if (file) return [file.name, file.size, file.lastModified || 0].join("|");
+        if (slot.dataset.savedDigest) return "saved:" + slot.dataset.savedDigest;
+        return "";
+    }
+    function slotIsActiveForDuplicates(slot) {
+        if (slot.hidden) return false;
+        var input = form.elements[slot.dataset.slotName];
+        if (!input || input.disabled) return false;
+        var applicabilityName = slot.dataset.applicabilityName;
+        if (applicabilityName && valOf(applicabilityName) === "not_applicable") return false;
+        return true;
+    }
+    function refreshDuplicateState() {
+        var slots = Array.prototype.slice.call(
+            document.querySelectorAll("[data-intake-slot]")
+        );
+        var groups = {};
+        slots.forEach(function (slot) {
+            if (!slotIsActiveForDuplicates(slot)) return;
+            var key = slotDuplicateKey(slot);
+            if (!key) return;
+            (groups[key] = groups[key] || []).push(slot);
+        });
+        slots.forEach(function (slot) {
+            var input = form.elements[slot.dataset.slotName];
+            var key = slotIsActiveForDuplicates(slot) ? slotDuplicateKey(slot) : "";
+            var group = (key && groups[key]) || [];
+            var existing = slot.querySelector("[data-duplicate-error]");
+            if (group.length > 1) {
+                slot.dataset.duplicateActive = "1";
+                // Don't enumerate the other slots' (long, formal) titles — the
+                // conflicting boxes are already highlighted red, so a short
+                // count keeps the message from ballooning into a wall of text.
+                var otherCount = group.length - 1;
+                var message =
+                    "This file is already used for " + otherCount +
+                    (otherCount === 1 ? " other document. " : " other documents. ") +
+                    "Upload a different file for each one.";
+                if (existing) {
+                    existing.textContent = message;
+                } else if (input && input.parentNode) {
+                    var node = document.createElement("div");
+                    node.className = "invalid-feedback d-block";
+                    node.setAttribute("data-duplicate-error", "");
+                    node.textContent = message;
+                    input.parentNode.insertBefore(node, input.nextSibling);
+                }
+                if (input) input.setAttribute("aria-invalid", "true");
+            } else {
+                delete slot.dataset.duplicateActive;
+                if (existing) existing.remove();
+            }
+            paintSlotState(slot);
+        });
     }
 
     function validateSelectedFileInput(input) {
@@ -651,9 +748,46 @@
         delete input.dataset.fileUnreadable;
         delete input.dataset.fileUnreadableMsg;
     }
+
+    /* ── File-signature (magic byte) check ───────────────────────
+       selectedFileProblem() only sees the extension + browser-reported MIME,
+       so a renamed/corrupt file (e.g. notes.txt → notes.pdf, or a PNG saved as
+       .jpg) sails through every wizard step and is only rejected by the server
+       on POST. We read the first bytes ourselves (piggy-backing on the slice
+       the readability check already reads) and mirror upload_validation.py's
+       magic-byte rules so the browser rejects the same content the server does.
+       These two strings are kept byte-identical to the server copies (UP-1). */
+    var UPLOAD_ERROR_SIGNATURE_UNREADABLE =
+        "We couldn't read this as a PDF, JPG, or PNG. Save it again, then upload it.";
+    var UPLOAD_ERROR_SIGNATURE_MISMATCH =
+        "This file's contents don't match a PDF, JPG, or PNG. Save it again, then upload it.";
+    var FILE_SIGNATURE_EXTENSIONS = { pdf: ["pdf"], jpeg: ["jpg", "jpeg"], png: ["png"] };
+    function bytesStartWith(bytes, signature) {
+        if (bytes.length < signature.length) return false;
+        for (var i = 0; i < signature.length; i++) {
+            if (bytes[i] !== signature[i]) return false;
+        }
+        return true;
+    }
+    function fileSignatureProblem(arrayBuffer, filename) {
+        var bytes = new Uint8Array(arrayBuffer || new ArrayBuffer(0));
+        var detected = null;
+        if (bytesStartWith(bytes, [0x25, 0x50, 0x44, 0x46, 0x2D])) detected = "pdf";      // %PDF-
+        else if (bytesStartWith(bytes, [0xFF, 0xD8, 0xFF])) detected = "jpeg";            // JPEG
+        else if (bytesStartWith(bytes, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])) detected = "png";
+        if (!detected) return UPLOAD_ERROR_SIGNATURE_UNREADABLE;
+        var extMatch = /\.([^.]+)$/.exec(String(filename || ""));
+        var extension = extMatch ? extMatch[1].toLowerCase() : "";
+        if (FILE_SIGNATURE_EXTENSIONS[detected].indexOf(extension) === -1) {
+            return UPLOAD_ERROR_SIGNATURE_MISMATCH;
+        }
+        return "";
+    }
+
     function checkFileReadable(file) {
         // Resolves {ok:true} or {ok:false,msg}. Reads only a slice — a
-        // moved/deleted/online-only file fails on the very first read.
+        // moved/deleted/online-only file fails on the very first read, and the
+        // same bytes let us verify the PDF/JPG/PNG signature (see above).
         return new Promise(function (resolve) {
             if (!file) { resolve({ ok: true }); return; }
             var blob = file.slice(0, Math.min(file.size || 0, 65536));
@@ -661,12 +795,16 @@
                 var notFound = err && err.name === "NotFoundError";
                 resolve({ ok: false, msg: notFound ? READ_ERROR_NOT_FOUND : READ_ERROR_UNREADABLE });
             }
+            function inspect(buffer) {
+                var signatureError = fileSignatureProblem(buffer, file.name);
+                resolve(signatureError ? { ok: false, msg: signatureError } : { ok: true });
+            }
             if (typeof blob.arrayBuffer === "function") {
-                blob.arrayBuffer().then(function () { resolve({ ok: true }); }, fail);
+                blob.arrayBuffer().then(inspect, fail);
                 return;
             }
             var reader = new FileReader();
-            reader.onload = function () { resolve({ ok: true }); };
+            reader.onload = function () { inspect(reader.result); };
             reader.onerror = function () { fail(reader.error); };
             try { reader.readAsArrayBuffer(blob); }
             catch (err) { fail(err); }
@@ -696,7 +834,10 @@
     function informationProblems() {
         var p = [];
         ["first_name", "last_name"].forEach(function (n) {
-            var v = valOf(n);
+            // Collapse internal whitespace runs to a single space first, mirroring
+            // forms.py's re.sub(r"\s+", " ", ...); otherwise a name with a tab
+            // (e.g. "Ana\tMaria") was rejected here but accepted by the server.
+            var v = valOf(n).replace(/\s+/g, " ");
             if (!v) {
                 p.push({ field: form.elements[n], msg: "Please fill in your name." });
             } else if (!NAME_RE.test(v)) {
@@ -706,7 +847,7 @@
         var email = valOf("email");
         if (!email) {
             p.push({ field: form.elements["email"], msg: "Please enter your email address." });
-        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
             p.push({ field: form.elements["email"], msg: "Enter an email address with an @ symbol, like name@example.com." });
         }
         var phone = valOf("phone");
@@ -804,12 +945,11 @@
         Object.keys(duplicateGroups).forEach(function (key) {
             var group = duplicateGroups[key];
             if (group.length < 2) return;
-            var labels = group.map(function (item) { return item.label; }).join(", ");
+            // The visible "same file" message is rendered live by
+            // refreshDuplicateState(); here we only need to block the step and
+            // focus the first offending field, so suppress a second message.
             group.forEach(function (item) {
-                p.push({
-                    field: item.field,
-                    msg: "Use a different file for this document. The same file is selected for: " + labels + "."
-                });
+                p.push({ field: item.field, msg: "", suppressMessage: true });
             });
         });
         return p;
@@ -1104,10 +1244,17 @@
     }
     var appFieldset = document.querySelector("[data-intake-applicability-fieldset]");
     if (appFieldset) {
-        appFieldset.addEventListener("change", updatePerformanceRatingSlot);
+        appFieldset.addEventListener("change", function () {
+            updatePerformanceRatingSlot();
+            // A slot switching to "not applicable" leaves the duplicate scan,
+            // so re-evaluate every slot's state when applicability changes.
+            refreshDuplicateState();
+        });
     }
     // Run once on page load to honor any pre-selected value
     updatePerformanceRatingSlot();
+    // Paint the initial duplicate state (catches duplicates among saved-draft files).
+    refreshDuplicateState();
 
     /* ── Mobile number: helpful placeholder + tidy-on-blur ────────
        We don't hard-mask (that fights applicants who paste a +63 number).
@@ -1144,6 +1291,24 @@
         };
         summaryEl.addEventListener("input", updateCount);
         updateCount();
+    }
+
+    /* ── Cover letter note: same live counter + hard ceiling ───────── */
+    var coverEl = form.elements["cover_letter"];
+    var coverCountEl = document.querySelector("[data-cover-count]");
+    var coverCountWrap = document.querySelector("[data-cover-count-wrap]");
+    if (coverEl && coverCountEl) {
+        coverEl.setAttribute("maxlength", String(COVER_LETTER_MAX));
+        var updateCoverCount = function () {
+            var len = (coverEl.value || "").length;
+            coverCountEl.textContent = len.toLocaleString("en-US");
+            if (coverCountWrap) {
+                coverCountWrap.classList.toggle("is-near", len >= COVER_LETTER_MAX * 0.9 && len < COVER_LETTER_MAX);
+                coverCountWrap.classList.toggle("is-full", len >= COVER_LETTER_MAX);
+            }
+        };
+        coverEl.addEventListener("input", updateCoverCount);
+        updateCoverCount();
     }
 })();
 </script>

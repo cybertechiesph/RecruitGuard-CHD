@@ -84,7 +84,10 @@ from .requirements import (
     get_applicant_document_requirements,
     get_required_applicant_document_requirements,
 )
-from .upload_validation import validate_applicant_document_upload
+from .upload_validation import (
+    clamp_original_filename,
+    validate_applicant_document_upload,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -6409,7 +6412,7 @@ def store_generated_evidence_item(
         version_number=version_number,
         previous_version=previous_version,
         is_current_version=True,
-        original_filename=filename,
+        original_filename=clamp_original_filename(filename),
         content_type=content_type or "",
         size_bytes=len(raw_bytes),
         digest_algorithm="sha256",
@@ -6506,7 +6509,7 @@ def upload_evidence_item(
         version_number=version_number,
         previous_version=previous_version,
         is_current_version=True,
-        original_filename=uploaded_file.name,
+        original_filename=clamp_original_filename(uploaded_file.name),
         content_type=content_type,
         size_bytes=file_size,
         digest_algorithm="sha256",
@@ -6613,20 +6616,23 @@ def submit_application(application, actor):
         raise ValueError("Complete the submission checklist before final submission.")
     missing_requirements = get_missing_required_applicant_document_requirements(application)
     if missing_requirements:
-        missing_labels = "; ".join(requirement.title for requirement in missing_requirements)
+        # No title enumeration — a plantilla has many required slots and the
+        # formal titles are long, so listing them produced a wall of text in
+        # the finalize error banner. A count keeps it readable; the intake form
+        # highlights exactly which slots are missing when the applicant returns.
+        missing_count = len(missing_requirements)
         raise ValueError(
-            "Upload the required requirement-coded applicant documents before final submission. "
-            f"Missing: {missing_labels}."
+            "Upload all required documents before final submission. "
+            f"{missing_count} required document{'' if missing_count == 1 else 's'} "
+            f"{'is' if missing_count == 1 else 'are'} still missing."
         )
     duplicate_document_groups = get_duplicate_applicant_document_groups(application)
     if duplicate_document_groups:
-        duplicate_labels = "; ".join(
-            ", ".join(item["title"] for item in group)
-            for group in duplicate_document_groups
-        )
+        # No enumerated title list — the intake form already flags the specific
+        # slots; a short sentence keeps this safety-net error readable.
         raise ValueError(
             "Each document slot must use a different file before final submission. "
-            f"Duplicates: {duplicate_labels}."
+            "Upload a different file for each affected document."
         )
     if not application.position.is_open_for_intake:
         raise ValueError("This recruitment entry is not currently open for intake.")

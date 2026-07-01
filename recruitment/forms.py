@@ -76,6 +76,14 @@ APPLICANT_QUALIFICATION_SUMMARY_MAX_LENGTH = 1000
 APPLICANT_QUALIFICATION_SUMMARY_LENGTH_ERROR_MESSAGE = (
     "Please shorten this to 1,000 characters or less."
 )
+APPLICANT_NAME_MAX_LENGTH = 80
+APPLICANT_NAME_LENGTH_ERROR_MESSAGE = (
+    "Please shorten this to 80 characters or less."
+)
+APPLICANT_COVER_LETTER_MAX_LENGTH = 1500
+APPLICANT_COVER_LETTER_LENGTH_ERROR_MESSAGE = (
+    "Please shorten this to 1,500 characters or less."
+)
 
 _APPLICANT_NAME_ALLOWED_RE = re.compile(APPLICANT_NAME_ALLOWED_PATTERN, re.UNICODE)
 _APPLICANT_MOBILE_SEPARATORS_RE = re.compile(r"[ ()-]")
@@ -536,13 +544,21 @@ class InternalUserUpdateForm(BootstrapFormMixin, forms.ModelForm):
 class ApplicantPortalIntakeForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form):
     captcha_scope = "applicant_intake"
 
-    first_name = forms.CharField(max_length=150)
-    last_name = forms.CharField(max_length=150)
+    first_name = forms.CharField(
+        max_length=APPLICANT_NAME_MAX_LENGTH,
+        error_messages={"max_length": APPLICANT_NAME_LENGTH_ERROR_MESSAGE},
+    )
+    last_name = forms.CharField(
+        max_length=APPLICANT_NAME_MAX_LENGTH,
+        error_messages={"max_length": APPLICANT_NAME_LENGTH_ERROR_MESSAGE},
+    )
     email = forms.EmailField()
     phone = forms.CharField(max_length=50)
     qualification_summary = forms.CharField(widget=forms.Textarea(attrs={"rows": 5}))
     cover_letter = forms.CharField(
         required=False,
+        max_length=APPLICANT_COVER_LETTER_MAX_LENGTH,
+        error_messages={"max_length": APPLICANT_COVER_LETTER_LENGTH_ERROR_MESSAGE},
         widget=forms.Textarea(attrs={"rows": 4}),
     )
     performance_rating_applicability = forms.ChoiceField(
@@ -742,29 +758,32 @@ class ApplicantPortalIntakeForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form
             digest_to_codes.setdefault(evidence.sha256_digest, set()).add(requirement_code)
         duplicate_groups = []
         for requirement_codes in digest_to_codes.values():
-            if len(requirement_codes) < 2:
-                continue
-            duplicate_groups.append(
-                sorted(
-                    requirement_code
-                    for requirement_code in requirement_codes
-                    if requirement_code in self.document_requirements_by_code
-                )
+            # Filter to in-scope requirements FIRST, then require >= 2. Guarding
+            # on the unfiltered set let a digest shared with a stale/out-of-scope
+            # draft document produce a group of length 1 or 0 downstream — i.e.
+            # a "used for 0 other documents" message or a phantom "Duplicate file
+            # detected" banner with no slot highlighted.
+            in_scope_codes = sorted(
+                requirement_code
+                for requirement_code in requirement_codes
+                if requirement_code in self.document_requirements_by_code
             )
+            if len(in_scope_codes) < 2:
+                continue
+            duplicate_groups.append(in_scope_codes)
         return duplicate_groups
 
     def _build_duplicate_document_warnings(self):
-        warnings = []
-        for requirement_codes in self._build_duplicate_document_groups():
-            requirement_titles = ", ".join(
-                self.document_requirements_by_code[requirement_code].title
-                for requirement_code in requirement_codes
-            )
-            warnings.append(
-                "The same file cannot be used for multiple document slots: "
-                f"{requirement_titles}. Upload a different file for each document."
-            )
-        return warnings
+        # One short summary line, no matter how many slots or groups collide.
+        # The offending upload slots are already flagged inline (and rendered
+        # with rg-pub-upload-slot--error), so enumerating their long, formal
+        # titles here only produced a wall of text.
+        if self._build_duplicate_document_groups():
+            return [
+                "The same file is used for more than one document. "
+                "Upload a different file for each one."
+            ]
+        return []
 
     def clean(self):
         cleaned_data = super().clean()
@@ -848,13 +867,14 @@ class ApplicantPortalIntakeForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form
         self.duplicate_document_warnings = self._build_duplicate_document_warnings()
         self.duplicate_document_errors = self.duplicate_document_warnings
         for requirement_codes in self._build_duplicate_document_groups():
-            requirement_titles = ", ".join(
-                self.document_requirements_by_code[requirement_code].title
-                for requirement_code in requirement_codes
-            )
+            # Count the *other* slots sharing this file rather than listing their
+            # titles — keeps the inline error short (see the applicant screenshot
+            # feedback) while the red slots show which ones are affected.
+            other_count = len(requirement_codes) - 1
             duplicate_message = (
-                "This appears to be the same file used for another document slot: "
-                f"{requirement_titles}. Upload a different file for this document."
+                f"This file is already used for {other_count} other "
+                f"document{'' if other_count == 1 else 's'}. "
+                "Upload a different file for each one."
             )
             for requirement_code in requirement_codes:
                 requirement = self.document_requirements_by_code[requirement_code]
