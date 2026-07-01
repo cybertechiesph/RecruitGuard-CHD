@@ -64,6 +64,7 @@ from .permissions import (
     InternalUserRequiredMixin,
     SystemAdministratorRequiredMixin,
     WorkflowProcessorRequiredMixin,
+    WORKFLOW_PROCESSOR_ROLES,
 )
 from .services import (
     application_awaiting_car_preparation,
@@ -114,6 +115,7 @@ from .services import (
     get_screening_record,
     get_screening_records,
     get_all_audit_logs,
+    get_closed_cases_for_user,
     get_queue_for_user,
     get_visible_positions_for_user,
     grant_secretariat_override,
@@ -172,6 +174,8 @@ from .services import (
     user_can_view_application,
     user_is_interview_rating_support_encoder,
 )
+from .templatetags.recruitment_ui import QUEUE_TASK_LABELS
+from django.db.models import Q
 
 
 EXAM_FIELD_LABELS = {
@@ -376,6 +380,57 @@ class PositionListView(LoginRequiredMixin, InternalUserRequiredMixin, ListView):
 
     def get_queryset(self):
         return get_visible_positions_for_user(self.request.user)
+
+
+# Section keys offered in the workflow list "Needed step" filter (built from the
+# canonical queue labels; "overview" is a non-actionable placeholder, so it is dropped).
+WORKFLOW_LIST_STEP_CHOICES = [
+    (key, label) for key, label in QUEUE_TASK_LABELS.items() if key != "overview"
+]
+
+
+def _apply_workflow_list_search(queryset, q):
+    """Filter a role-scoped application queryset by applicant name / reference / position.
+    Stays inside the caller's already-scoped queryset — it only narrows, never widens."""
+    q = (q or "").strip()
+    if not q:
+        return queryset
+    return queryset.filter(
+        Q(applicant__first_name__icontains=q)
+        | Q(applicant__last_name__icontains=q)
+        | Q(reference_number__icontains=q)
+        | Q(position__title__icontains=q)
+    )
+
+
+def _workflow_list_object_list(base_queryset, params):
+    """Apply the shared search + step filter to a scoped queryset. Returns a queryset when only
+    search is applied, or a Python list when the step filter is applied (the current workflow
+    section is computed per-application, not stored, so it can't be filtered in the database).
+    Either type is paginatable by ListView."""
+    queryset = _apply_workflow_list_search(base_queryset, params.get("q", ""))
+    step = (params.get("step", "") or "").strip()
+    if step:
+        return [
+            application
+            for application in queryset
+            if get_current_workflow_section(application) == step
+        ]
+    return queryset
+
+
+def _add_workflow_list_search_context(context, request):
+    """Populate the shared search/filter/pagination context used by application_list.html."""
+    params = request.GET
+    context["q"] = (params.get("q", "") or "").strip()
+    context["step"] = (params.get("step", "") or "").strip()
+    context["step_choices"] = WORKFLOW_LIST_STEP_CHOICES
+    context["show_search"] = True
+    querystring = request.GET.copy()
+    querystring.pop("page", None)
+    context["querystring"] = querystring.urlencode()
+    paginator = context.get("paginator")
+    context["total_count"] = paginator.count if paginator else len(context.get("applications") or [])
 
 
 class ApplicationListView(LoginRequiredMixin, InternalUserRequiredMixin, ListView):
@@ -663,6 +718,46 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
                 "The Comparative Assessment Report for this vacancy is being prepared by the "
                 f"{label}. You will be able to record the deliberation once the CAR is finalized."
             )
+        # UX-03 — surface the earlier review stage's finalized screening + exam results so the
+        # HRM Chief / HRMPSB re-validate against the work being checked instead of re-keying blind.
+        current_review_stage = getattr(context["recruitment_case"], "current_stage", None)
+        if (
+            current_review_stage
+            in {RecruitmentCase.Stage.HRM_CHIEF_REVIEW, RecruitmentCase.Stage.HRMPSB_REVIEW}
+            and user.role in {RecruitmentUser.Role.HRM_CHIEF, RecruitmentUser.Role.HRMPSB_MEMBER}
+        ):
+            context["prior_screening_record"] = next(
+                (
+                    record
+                    for record in reversed(list(context["screening_records"]))
+                    if record.is_finalized and record.review_stage != current_review_stage
+                ),
+                None,
+            )
+            context["prior_exam_record"] = next(
+                (
+                    record
+                    for record in reversed(list(context["exam_records"]))
+                    if record.is_finalized and record.review_stage != current_review_stage
+                ),
+                None,
+            )
+        # UX-07 — batch-aware navigation: the user's next scoped case in the same vacancy and a
+        # link back to that vacancy's batch. Stays entirely inside get_queue_for_user scoping.
+        if user.role in WORKFLOW_PROCESSOR_ROLES and getattr(application, "position_id", None):
+            scoped_batch = [
+                candidate
+                for candidate in get_queue_for_user(user)
+                if candidate.position_id == application.position_id
+            ]
+            if scoped_batch:
+                context["batch_url"] = reverse(
+                    "vacancy-batch-detail", kwargs={"pk": application.position_id}
+                )
+                if not user_can_process_application(user, application):
+                    context["next_batch_case"] = next(
+                        (c for c in scoped_batch if c.pk != application.pk), None
+                    )
         if user_can_record_final_decision(user, application):
             context["final_decision_form"] = FinalDecisionForm()
         if user_can_record_final_selection(user, application):
@@ -978,13 +1073,39 @@ class EvidenceVaultListView(LoginRequiredMixin, SystemAdministratorRequiredMixin
 class WorkflowQueueView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, ListView):
     template_name = "recruitment/application_list.html"
     context_object_name = "applications"
+    paginate_by = 25
 
     def get_queryset(self):
-        return get_queue_for_user(self.request.user)
+        return _workflow_list_object_list(
+            get_queue_for_user(self.request.user), self.request.GET
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["is_queue"] = True
+        _add_workflow_list_search_context(context, self.request)
+        return context
+
+
+class ClosedCaseListView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, ListView):
+    """Closed / decided cases the user retains view access to — the records-request lookup that
+    the active queue can't provide. Scoped by get_closed_cases_for_user, which mirrors the
+    existing closed-case access rules, so it never shows a case the user couldn't already open."""
+
+    template_name = "recruitment/application_list.html"
+    context_object_name = "applications"
+    paginate_by = 25
+
+    def get_queryset(self):
+        return _workflow_list_object_list(
+            get_closed_cases_for_user(self.request.user), self.request.GET
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["is_queue"] = False
+        context["is_closed_list"] = True
+        _add_workflow_list_search_context(context, self.request)
         return context
 
 

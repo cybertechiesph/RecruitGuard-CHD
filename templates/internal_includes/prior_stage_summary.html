@@ -1,0 +1,97 @@
+{% load recruitment_ui %}
+{% comment %}
+UX-03 — Read-only summary of an earlier review stage's finalized results (the Secretariat's
+screening + exam that the HRM Chief / HRMPSB re-validate). Inputs:
+  prior_screening_record : ScreeningRecord | None
+  prior_exam_record      : ExamRecord | None
+The data-* attributes expose the values so the "Copy results" accelerator in the screening
+wizard can prefill the reviewer's own (still editable) form. Read-only by design — the
+independent re-validation step is unchanged.
+{% endcomment %}
+{% if prior_screening_record or prior_exam_record %}
+<section class="rg-icard rg-prior-review mb-3" id="prior-review-summary"
+         {% if prior_screening_record %}data-prior-completeness="{{ prior_screening_record.completeness_status }}" data-prior-qualification="{{ prior_screening_record.qualification_outcome }}"{% endif %}>
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">Earlier review &mdash; Secretariat</h3>
+            <p class="rg-icard__subtitle">
+                The finalized results you are re-validating, for reference. Record your own findings below.
+            </p>
+        </div>
+        <span class="rg-pill rg-pill--info rg-pill--sm">Reference only</span>
+    </div>
+
+    {% if prior_screening_record %}
+        <div class="d-flex flex-wrap gap-4 mb-2">
+            <div>
+                <div class="rg-imeta">Completeness</div>
+                <span class="rg-pill rg-pill--{{ prior_screening_record.completeness_status|status_theme }} rg-pill--sm">
+                    {{ prior_screening_record.completeness_status|status_label }}
+                </span>
+            </div>
+            <div>
+                <div class="rg-imeta">Qualification</div>
+                <span class="rg-pill rg-pill--{{ prior_screening_record.qualification_outcome|status_theme }} rg-pill--sm">
+                    {{ prior_screening_record.qualification_outcome|status_label }}
+                </span>
+            </div>
+        </div>
+        <div class="mb-2">
+            <div class="rg-imeta mb-1">Document review</div>
+            <ul class="list-unstyled mb-0">
+                {% for review in prior_screening_record.document_reviews.all %}
+                <li class="d-flex justify-content-between align-items-center py-1"
+                    style="border-bottom:1px solid #eef1f4;"
+                    data-prior-doc-key="{{ review.document_key }}" data-prior-doc-status="{{ review.status }}">
+                    <span style="font-size:0.8125rem;">{{ review.requirement_title }}</span>
+                    <span class="rg-pill rg-pill--sm rg-pill--{% if review.status == 'meets' %}success{% elif review.status == 'request_resubmission' %}warning{% elif review.status == 'absent' %}danger{% else %}neutral{% endif %}">
+                        {{ review.get_status_display }}
+                    </span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% if prior_screening_record.screening_notes %}
+        <div class="mb-2">
+            <div class="rg-imeta">Screening notes</div>
+            <p class="mb-0" style="font-size:0.8125rem;">{{ prior_screening_record.screening_notes }}</p>
+        </div>
+        {% endif %}
+    {% endif %}
+
+    {% if prior_exam_record %}
+        <div class="d-flex flex-wrap gap-4 pt-2" style="border-top:1px solid #eef1f4;">
+            <div>
+                <div class="rg-imeta">Exam status</div>
+                <span class="rg-pill rg-pill--{{ prior_exam_record.exam_status|status_theme }} rg-pill--sm">
+                    {{ prior_exam_record.exam_status|status_label|default:"—" }}
+                </span>
+            </div>
+            {% if prior_exam_record.exam_score is not None %}
+            <div>
+                <div class="rg-imeta">Exam score</div>
+                <strong style="font-size:1rem;">{{ prior_exam_record.exam_score }}</strong>
+            </div>
+            {% endif %}
+            {% if prior_exam_record.general_score is not None %}
+            <div>
+                <div class="rg-imeta">General ability</div>
+                <strong>{{ prior_exam_record.general_score }}</strong>
+            </div>
+            {% endif %}
+            {% if prior_exam_record.technical_score is not None %}
+            <div>
+                <div class="rg-imeta">Technical</div>
+                <strong>{{ prior_exam_record.technical_score }}</strong>
+            </div>
+            {% endif %}
+            {% if prior_exam_record.exam_date %}
+            <div>
+                <div class="rg-imeta">Exam date</div>
+                <strong>{{ prior_exam_record.exam_date|date:"M d, Y" }}</strong>
+            </div>
+            {% endif %}
+        </div>
+    {% endif %}
+</section>
+{% endif %}

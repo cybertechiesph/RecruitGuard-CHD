@@ -22,6 +22,13 @@
 
 {% include "internal_includes/case_header.html" %}
 
+{% if next_batch_case %}
+<div class="alert alert-info d-flex flex-wrap align-items-center gap-2 mt-2 mb-0" role="status">
+    <span>Next in this batch: <strong>{{ next_batch_case.applicant_display_name }}</strong></span>
+    <a class="btn btn-rg-primary btn-sm" href="{% url 'application-detail' next_batch_case.pk %}">Open next case</a>
+</div>
+{% endif %}
+
 
 {% include "internal_includes/case_pipeline.html" %}
 
@@ -109,6 +116,8 @@
 
         
         <div class="rg-cws-main">
+
+            {% include "internal_includes/prior_stage_summary.html" %}
 
             {% comment %}
             The original "Overview" tab rendered an Applicant Snapshot card.

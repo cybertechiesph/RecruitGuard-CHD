@@ -1137,7 +1137,41 @@ def get_queue_for_user(user):
                 overrides__target_role=RecruitmentUser.Role.SECRETARIAT,
             )
         ).distinct()
-    return queryset
+    # Urgency ordering: oldest stage-entry first, so the most overdue cases (the
+    # longest in their current stage) lead the queue instead of being buried in
+    # insertion order. pk breaks ties deterministically.
+    return queryset.order_by("case__stage_entered_at", "pk")
+
+
+def get_closed_cases_for_user(user):
+    """Closed/decided cases the user retains view access to — a lookup surface for records
+    requests. Strictly mirrors _user_has_closed_application_access as queryset filters so it
+    never widens the "see only what you need" access model: the list only ever contains cases
+    the user could already open by URL."""
+    is_processor = user.role in WORKFLOW_PROCESSOR_ROLES
+    is_exporter = user.role in EXPORT_ROLES
+    if not (is_processor or is_exporter):
+        return RecruitmentApplication.objects.none()
+    queryset = RecruitmentApplication.objects.select_related(
+        "applicant", "position", "case"
+    ).filter(
+        status__in=[
+            RecruitmentApplication.Status.APPROVED,
+            RecruitmentApplication.Status.REJECTED,
+        ]
+    )
+    # Secretariat never sees Level 2 closed cases (helper's first guard).
+    if user.role == RecruitmentUser.Role.SECRETARIAT:
+        queryset = queryset.exclude(level=PositionPosting.Level.LEVEL_2)
+    # Helper split: closed-stage cases need a processor role; approved/rejected
+    # cases not yet at the closed stage need an export role.
+    if is_processor and is_exporter:
+        pass  # sees both (secretariat / HRM chief / appointing authority)
+    elif is_processor:
+        queryset = queryset.filter(case__current_stage=RecruitmentCase.Stage.CLOSED)
+    else:  # is_exporter only — no role currently, kept for completeness
+        queryset = queryset.exclude(case__current_stage=RecruitmentCase.Stage.CLOSED)
+    return queryset.order_by("-closed_at", "-updated_at", "pk").distinct()
 
 
 def _user_has_closed_application_access(user, application):

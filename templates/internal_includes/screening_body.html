@@ -28,7 +28,12 @@
                 <h2 class="rg-scr-panel__title">Step 1 &mdash; Review the documents</h2>
                 <p class="rg-scr-panel__subtitle">Open each file, then set its status. Do this for every required document.</p>
             </div>
-            <div>
+            <div class="d-flex flex-wrap gap-2">
+                {% if prior_screening_record %}
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="scr-copy-prior">
+                    Copy results from Secretariat review
+                </button>
+                {% endif %}
                 <button type="button" class="btn btn-outline-secondary btn-sm" id="scr-mark-all-meets">
                     Mark remaining as &ldquo;Meets&rdquo;
                 </button>
@@ -943,29 +948,64 @@ function rgInitScreeningDocDrawer() {}
        (system-applied) rows or remarks. Dispatches change so validation, the
        review summary, and autosave all pick the values up. */
     document.addEventListener("DOMContentLoaded", function () {
-        var btn = document.getElementById("scr-mark-all-meets");
         var statusEl = document.getElementById("scr-mark-all-status");
-        if (!btn) return;
-        btn.addEventListener("click", function () {
-            var selects = document.querySelectorAll('select[name^="document_status__"]');
-            var changed = 0;
-            selects.forEach(function (sel) {
-                if (sel.disabled) return;
-                if ((sel.value || "") !== "") return;
-                var hasMeets = Array.prototype.some.call(sel.options, function (o) {
-                    return o.value === "meets";
+        var btn = document.getElementById("scr-mark-all-meets");
+        if (btn) {
+            btn.addEventListener("click", function () {
+                var selects = document.querySelectorAll('select[name^="document_status__"]');
+                var changed = 0;
+                selects.forEach(function (sel) {
+                    if (sel.disabled) return;
+                    if ((sel.value || "") !== "") return;
+                    var hasMeets = Array.prototype.some.call(sel.options, function (o) {
+                        return o.value === "meets";
+                    });
+                    if (!hasMeets) return;
+                    sel.value = "meets";
+                    sel.dispatchEvent(new Event("change", { bubbles: true }));
+                    changed++;
                 });
-                if (!hasMeets) return;
-                sel.value = "meets";
-                sel.dispatchEvent(new Event("change", { bubbles: true }));
-                changed++;
+                if (statusEl) {
+                    statusEl.textContent = changed === 1
+                        ? "1 document marked as Meets — review each row before finalizing."
+                        : changed + " documents marked as Meets — review each row before finalizing.";
+                }
             });
-            if (statusEl) {
-                statusEl.textContent = changed === 1
-                    ? "1 document marked as Meets — review each row before finalizing."
-                    : changed + " documents marked as Meets — review each row before finalizing.";
-            }
-        });
+        }
+
+        /* UX-03 — copy the prior Secretariat review's results into this reviewer's own
+           (still editable) form. An explicit act, so the independent re-validation is
+           preserved; every field can be changed before finalizing. */
+        var copyBtn = document.getElementById("scr-copy-prior");
+        var priorCard = document.getElementById("prior-review-summary");
+        if (copyBtn && priorCard) {
+            copyBtn.addEventListener("click", function () {
+                var applied = 0;
+                function setField(sel, value) {
+                    if (!sel || value == null || value === "") return;
+                    var hasOpt = Array.prototype.some.call(sel.options || [], function (o) {
+                        return o.value === value;
+                    });
+                    if (sel.options && !hasOpt) return;
+                    sel.value = value;
+                    sel.dispatchEvent(new Event("change", { bubbles: true }));
+                    applied++;
+                }
+                setField(document.querySelector('[name="completeness_status"]'),
+                         priorCard.getAttribute("data-prior-completeness"));
+                setField(document.querySelector('[name="qualification_outcome"]'),
+                         priorCard.getAttribute("data-prior-qualification"));
+                priorCard.querySelectorAll("[data-prior-doc-key]").forEach(function (row) {
+                    var key = row.getAttribute("data-prior-doc-key");
+                    var status = row.getAttribute("data-prior-doc-status");
+                    setField(document.querySelector('select[name="document_status__' + key + '"]'), status);
+                });
+                if (statusEl) {
+                    statusEl.textContent = "Copied " + applied +
+                        " values from the Secretariat review — review and adjust each before finalizing.";
+                }
+            });
+        }
     });
 })();
 </script>

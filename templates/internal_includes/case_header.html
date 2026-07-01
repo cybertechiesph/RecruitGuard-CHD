@@ -21,7 +21,12 @@
     </div>
     <div class="rg-cws-header__actions">
         {% if request.user.role != "system_admin" %}
-            <a href="{% url 'workflow-queue' %}" class="btn btn-outline-secondary btn-sm">&larr; Back to queue</a>
+            {% if batch_url %}
+                <a href="{{ batch_url }}" class="btn btn-outline-secondary btn-sm">&larr; Back to batch</a>
+                <a href="{% url 'workflow-queue' %}" class="btn btn-outline-secondary btn-sm">Queue</a>
+            {% else %}
+                <a href="{% url 'workflow-queue' %}" class="btn btn-outline-secondary btn-sm">&larr; Back to queue</a>
+            {% endif %}
         {% endif %}
         {% if case_handoff_form %}
             <button type="button"
