@@ -299,14 +299,18 @@ HRM Chief on COS). Two states:
     form.addEventListener("input", clearError);
     form.addEventListener("change", clearError);
 
-    if (window.RG && window.RG.attachAutosave) {
-        window.RG.attachAutosave(form, {
-            indicator: document.getElementById("car-autosave"),
-            operationField: "operation",
-            operationValue: "save",
-            debounceMs: 1800
-        });
-    }
+    /* Attach after DOMContentLoaded so recruitguard-autosave.js
+       (loaded at end of body) has defined window.RG. */
+    document.addEventListener("DOMContentLoaded", function () {
+        if (window.RG && window.RG.attachAutosave) {
+            window.RG.attachAutosave(form, {
+                indicator: document.getElementById("car-autosave"),
+                operationField: "operation",
+                operationValue: "save",
+                debounceMs: 1800
+            });
+        }
+    });
 })();
 </script>
 

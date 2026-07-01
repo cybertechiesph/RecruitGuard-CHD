@@ -28,6 +28,12 @@
                 <h2 class="rg-scr-panel__title">Step 1 &mdash; Review the documents</h2>
                 <p class="rg-scr-panel__subtitle">Open each file, then set its status. Do this for every required document.</p>
             </div>
+            <div>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="scr-mark-all-meets">
+                    Mark remaining as &ldquo;Meets&rdquo;
+                </button>
+                <span class="visually-hidden" role="status" id="scr-mark-all-status"></span>
+            </div>
         </div>
 
         <div class="rg-scr-resub-notice" id="scr-resub-notice" role="status" hidden>
@@ -911,15 +917,55 @@ function rgInitScreeningDocDrawer() {}
 <script>
 (function () {
     "use strict";
-    if (!(window.RG && window.RG.attachAutosave)) return;
-    var form = document.getElementById("scr-form");
-    var indicator = document.getElementById("scr-autosave");
-    if (!form) return;
-    window.RG.attachAutosave(form, {
-        indicator: indicator,
-        operationField: "operation",
-        operationValue: "save",
-        debounceMs: 1500
+    /* Attach after DOMContentLoaded: this inline script runs during parse, before
+       recruitguard-autosave.js (loaded at end of body) defines window.RG. */
+    document.addEventListener("DOMContentLoaded", function () {
+        if (!(window.RG && window.RG.attachAutosave)) return;
+        var form = document.getElementById("scr-form");
+        var indicator = document.getElementById("scr-autosave");
+        if (!form) return;
+        window.RG.attachAutosave(form, {
+            indicator: indicator,
+            operationField: "operation",
+            operationValue: "save",
+            debounceMs: 1500
+        });
+    });
+})();
+</script>
+
+<script>
+(function () {
+    "use strict";
+    /* UX-05 — "Mark remaining as Meets" accelerator for the common complete-folder
+       case. Only fills the still-empty editable dropdowns; never overwrites a row
+       already set to Request Resubmission / Absent, and never touches fixed
+       (system-applied) rows or remarks. Dispatches change so validation, the
+       review summary, and autosave all pick the values up. */
+    document.addEventListener("DOMContentLoaded", function () {
+        var btn = document.getElementById("scr-mark-all-meets");
+        var statusEl = document.getElementById("scr-mark-all-status");
+        if (!btn) return;
+        btn.addEventListener("click", function () {
+            var selects = document.querySelectorAll('select[name^="document_status__"]');
+            var changed = 0;
+            selects.forEach(function (sel) {
+                if (sel.disabled) return;
+                if ((sel.value || "") !== "") return;
+                var hasMeets = Array.prototype.some.call(sel.options, function (o) {
+                    return o.value === "meets";
+                });
+                if (!hasMeets) return;
+                sel.value = "meets";
+                sel.dispatchEvent(new Event("change", { bubbles: true }));
+                changed++;
+            });
+            if (statusEl) {
+                statusEl.textContent = changed === 1
+                    ? "1 document marked as Meets — review each row before finalizing."
+                    : changed + " documents marked as Meets — review each row before finalizing.";
+            }
+        });
     });
 })();
 </script>

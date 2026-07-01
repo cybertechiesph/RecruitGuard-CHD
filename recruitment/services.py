@@ -3879,7 +3879,7 @@ def _document_review_status_counts(document_reviews):
 
 
 @transaction.atomic
-def save_screening_review(application, actor, cleaned_data, finalize=False):
+def save_screening_review(application, actor, cleaned_data, finalize=False, allow_partial=False):
     if not hasattr(application, "case"):
         raise ValueError("A case must exist before screening can be recorded.")
     review_stage = application.case.current_stage
@@ -3902,18 +3902,21 @@ def save_screening_review(application, actor, cleaned_data, finalize=False):
             level=application.level,
         )
 
+    allow_partial = bool(allow_partial and not finalize)
+
     document_reviews = _screening_document_review_rows(
         application,
         screening_record,
         cleaned_data.get("document_reviews"),
     )
-    _validate_screening_review_consistency(
-        completeness_status=cleaned_data["completeness_status"],
-        completeness_notes=cleaned_data["completeness_notes"],
-        qualification_outcome=cleaned_data["qualification_outcome"],
-        screening_notes=cleaned_data["screening_notes"],
-        document_reviews=document_reviews,
-    )
+    if not allow_partial:
+        _validate_screening_review_consistency(
+            completeness_status=cleaned_data["completeness_status"],
+            completeness_notes=cleaned_data["completeness_notes"],
+            qualification_outcome=cleaned_data["qualification_outcome"],
+            screening_notes=cleaned_data["screening_notes"],
+            document_reviews=document_reviews,
+        )
 
     screening_record.recruitment_case = application.case
     screening_record.reviewed_by = actor
@@ -3928,7 +3931,13 @@ def save_screening_review(application, actor, cleaned_data, finalize=False):
     screening_record.is_finalized = False
     screening_record.finalized_by = None
     screening_record.finalized_at = None
-    screening_record.full_clean()
+    if allow_partial:
+        # Draft: skip full_clean's required-field enforcement (blank
+        # completeness/qualification are allowed mid-review) but still guard the
+        # unique constraint. Finalize always runs full_clean below.
+        screening_record.validate_unique()
+    else:
+        screening_record.full_clean()
     screening_record.save()
     _sync_screening_document_reviews(screening_record, document_reviews)
     if finalize:

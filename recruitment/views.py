@@ -1457,16 +1457,18 @@ class ScreeningReviewView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, Vi
 
         operation = request.POST.get("operation", "save")
         is_autosave = _is_autosave_request(request) and operation != "finalize"
-        form = ScreeningReviewForm(request.POST, application=application)
+        is_finalize = operation == "finalize"
+        form = ScreeningReviewForm(request.POST, application=application, draft=not is_finalize)
         if form.is_valid():
             try:
                 screening_record = save_screening_review(
                     application=application,
                     actor=request.user,
                     cleaned_data=form.cleaned_data,
-                    finalize=operation == "finalize",
+                    finalize=is_finalize,
+                    allow_partial=not is_finalize,
                 )
-            except ValueError as exc:
+            except (ValueError, ValidationError) as exc:
                 if is_autosave:
                     return _autosave_response(False)
                 messages.error(request, str(exc))
