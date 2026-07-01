@@ -3705,6 +3705,73 @@ body.applicant-portal-body {
         grid-template-columns: 1fr;
     }
 }
+.rg-pub-privacy__legal {
+    width: min(880px, calc(100% - 2rem));
+    margin: 2rem auto 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.9rem;
+}
+.rg-pub-privacy__panel {
+    padding: 1.25rem 1.3rem;
+    background: rgba(255, 255, 255, 0.055);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 0.75rem;
+}
+.rg-pub-privacy__panel-title {
+    margin: 0 0 0.55rem;
+    font-size: 0.925rem;
+    font-weight: 700;
+    color: var(--rg-brand-gold);
+}
+.rg-pub-privacy__panel-copy {
+    margin: 0 0 0.6rem;
+    font-size: 0.82rem;
+    line-height: 1.55;
+    color: rgba(255, 255, 255, 0.78);
+}
+.rg-pub-privacy__panel-copy:last-child {
+    margin-bottom: 0;
+}
+.rg-pub-privacy__rights {
+    list-style: none;
+    margin: 0 0 0.7rem;
+    padding: 0;
+    display: grid;
+    gap: 0.45rem;
+}
+.rg-pub-privacy__rights li {
+    position: relative;
+    padding-left: 1.15rem;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.78);
+}
+.rg-pub-privacy__rights li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.5em;
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 50%;
+    background: var(--rg-brand-gold);
+}
+.rg-pub-privacy__rights strong {
+    color: #fff;
+    font-weight: 700;
+}
+.rg-pub-privacy__panel-note {
+    margin: 0;
+    font-size: 0.76rem;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.6);
+}
+@media (max-width: 720px) {
+    .rg-pub-privacy__legal {
+        grid-template-columns: 1fr;
+    }
+}
 
 /* ─────────────────────────────────────────────────────────────────
    Track Application — redesigned status page (TA1)
