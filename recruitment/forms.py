@@ -1455,10 +1455,29 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
     )
     COMPLETENESS_BLOCKING_DOCUMENT_STATUSES = {
         ScreeningDocumentReview.ReviewStatus.NOT_REVIEWED,
-        ScreeningDocumentReview.ReviewStatus.NEEDS_REVIEW,
         ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION,
         ScreeningDocumentReview.ReviewStatus.ABSENT,
     }
+    # Reviewers only ever pick between three document outcomes. The remaining
+    # statuses are system-applied, never chosen here: NOT_REVIEWED is the
+    # undecided default (rendered as the blank placeholder), and ABSENT /
+    # NOT_APPLICABLE auto-fill the fixed rows for missing or not-applicable
+    # requirements.
+    EDITABLE_DOCUMENT_STATUS_CHOICES = (
+        ("", "Select status"),
+        (
+            ScreeningDocumentReview.ReviewStatus.MEETS.value,
+            ScreeningDocumentReview.ReviewStatus.MEETS.label,
+        ),
+        (
+            ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION.value,
+            ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION.label,
+        ),
+        (
+            ScreeningDocumentReview.ReviewStatus.ABSENT.value,
+            ScreeningDocumentReview.ReviewStatus.ABSENT.label,
+        ),
+    )
 
     class Meta:
         model = ScreeningRecord
@@ -1584,8 +1603,16 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
             field_name = self._document_status_field_name(requirement)
             remarks_field_name = self._document_remarks_field_name(requirement)
             widget = forms.HiddenInput if status_is_fixed else forms.Select
+            # Fixed rows submit their system-applied value through a hidden
+            # input, so they keep the full choice set to validate; the editable
+            # dropdown is limited to the three reviewer-selectable outcomes.
+            status_choices = (
+                ScreeningDocumentReview.ReviewStatus.choices
+                if status_is_fixed
+                else self.EDITABLE_DOCUMENT_STATUS_CHOICES
+            )
             self.fields[field_name] = forms.ChoiceField(
-                choices=ScreeningDocumentReview.ReviewStatus.choices,
+                choices=status_choices,
                 required=False,
                 initial=initial_status,
                 widget=widget(
@@ -2442,44 +2469,6 @@ class FinalSelectionForm(BootstrapFormMixin, forms.Form):
                 "Record the deep-selection justification before finalizing this selection.",
             )
         return cleaned_data
-
-
-class PositionReferenceForm(BootstrapFormMixin, forms.ModelForm):
-    class Meta:
-        model = PositionReference
-        fields = [
-            "position_title",
-            "position_slug",
-            "salary_grade",
-            "level_classification",
-            "class_id",
-            "os_code",
-            "occupational_service",
-            "occupational_group",
-            "reference_status",
-            "is_active",
-            "notes",
-            "position_code",
-            "agency_item_number",
-            "office_division_default",
-            "qs_education",
-            "qs_training",
-            "qs_experience",
-            "qs_eligibility",
-            "employment_track_applicability",
-        ]
-        widgets = {
-            "notes": forms.Textarea(attrs={"rows": 3}),
-            "qs_education": forms.Textarea(attrs={"rows": 2}),
-            "qs_training": forms.Textarea(attrs={"rows": 2}),
-            "qs_experience": forms.Textarea(attrs={"rows": 2}),
-            "qs_eligibility": forms.Textarea(attrs={"rows": 2}),
-        }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["position_slug"].help_text = "Leave blank to generate the slug automatically from the title."
-        self._apply_bootstrap()
 
 
 class PositionDocumentRequirementsForm(forms.Form):

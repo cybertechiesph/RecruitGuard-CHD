@@ -1316,7 +1316,6 @@ class ScreeningDocumentReview(TimestampedModel):
     class ReviewStatus(models.TextChoices):
         NOT_REVIEWED = "not_reviewed", "Not Reviewed"
         MEETS = "meets", "Meets"
-        NEEDS_REVIEW = "needs_review", "Needs Review"
         REQUEST_RESUBMISSION = "request_resubmission", "Request Resubmission"
         ABSENT = "absent", "Absent"
         NOT_APPLICABLE = "not_applicable", "Not Applicable"
@@ -1398,7 +1397,6 @@ class ScreeningDocumentReview(TimestampedModel):
     def is_blocking_completeness(self):
         return self.is_required and self.status in {
             self.ReviewStatus.NOT_REVIEWED,
-            self.ReviewStatus.NEEDS_REVIEW,
             self.ReviewStatus.REQUEST_RESUBMISSION,
             self.ReviewStatus.ABSENT,
         }

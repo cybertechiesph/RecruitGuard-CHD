@@ -55,7 +55,6 @@ from .models import (
     InterviewSession,
     Notification,
     PositionDocumentRequirement,
-    PositionReference,
     PositionPosting,
     RecruitmentApplication,
     RecruitmentCase,
@@ -103,7 +102,6 @@ EXPORT_ROLES = {
 ENTRY_MANAGER_ROLES = {
     RecruitmentUser.Role.SECRETARIAT,
     RecruitmentUser.Role.HRM_CHIEF,
-    RecruitmentUser.Role.SYSTEM_ADMIN,
 }
 CASE_REOPEN_ROLES = {
     RecruitmentUser.Role.HRM_CHIEF,
@@ -1016,7 +1014,7 @@ def record_audit_log_review(
     result_count=0,
 ):
     metadata = {
-        "review_scope": "application_audit" if application is not None else "system_audit",
+        "review_scope": "application_audit" if application is not None else "consolidated_audit",
         "search_query": search_query,
         "action_filter": action,
         "actor_role_filter": actor_role,
@@ -1034,7 +1032,7 @@ def record_audit_log_review(
     return record_system_audit_event(
         actor=actor,
         action=AuditLog.Action.AUDIT_LOG_VIEWED,
-        description="Reviewed system audit logs.",
+        description="Reviewed the consolidated audit log.",
         metadata=metadata,
     )
 
@@ -1148,12 +1146,6 @@ def _user_has_closed_application_access(user, application):
     if case and case.current_stage == RecruitmentCase.Stage.CLOSED:
         return user.role in WORKFLOW_PROCESSOR_ROLES
     return user.role in EXPORT_ROLES
-
-
-def get_manageable_positions(user):
-    if user.role not in ENTRY_MANAGER_ROLES:
-        return PositionReference.objects.none()
-    return PositionReference.objects.all().order_by("position_title", "salary_grade", "class_id")
 
 
 def get_manageable_recruitment_entries(user):
@@ -2077,6 +2069,31 @@ def get_application_audit_logs(
 
 def get_system_audit_logs(*, search_query="", action="", actor_role="", sensitive_only=False):
     queryset = AuditLog.objects.filter(application__isnull=True).select_related("actor").order_by("-created_at")
+    return _filter_audit_logs(
+        queryset,
+        search_query=search_query,
+        action=action,
+        actor_role=actor_role,
+        sensitive_only=sensitive_only,
+    )
+
+
+def get_all_audit_logs(*, search_query="", action="", actor_role="", sensitive_only=False):
+    """Consolidated audit trail: system/identity events plus case activity.
+
+    Unlike ``get_system_audit_logs`` this does not exclude application-scoped
+    records, so the System Administrator's audit review shows the full trail of
+    who acted on a case and when (oversight), while case content remains gated
+    behind the per-case views.
+    """
+    queryset = (
+        AuditLog.objects.select_related(
+            "actor",
+            "application",
+            "application__position",
+        )
+        .order_by("-created_at")
+    )
     return _filter_audit_logs(
         queryset,
         search_query=search_query,
@@ -3631,7 +3648,6 @@ def build_submission_packet(application):
 
 SCREENING_COMPLETENESS_BLOCKING_DOCUMENT_STATUSES = {
     ScreeningDocumentReview.ReviewStatus.NOT_REVIEWED,
-    ScreeningDocumentReview.ReviewStatus.NEEDS_REVIEW,
     ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION,
     ScreeningDocumentReview.ReviewStatus.ABSENT,
 }
@@ -8810,31 +8826,6 @@ def build_export_bundle(application, actor):
             archive.writestr(path, content)
     zip_buffer.seek(0)
     return zip_buffer.getvalue()
-
-
-def persist_position(position, actor, changed_fields):
-    is_create = position.pk is None
-    position.full_clean()
-    position.save()
-    action = AuditLog.Action.POSITION_CREATED if is_create else AuditLog.Action.POSITION_UPDATED
-    description = (
-        f"Created position reference catalog record '{position.position_title}'."
-        if is_create
-        else f"Updated position reference catalog record '{position.position_title}'."
-    )
-    record_system_audit_event(
-        actor=actor,
-        action=action,
-        description=description,
-        metadata={
-            "position_id": position.id,
-            "position_slug": position.position_slug,
-            "position_title": position.position_title,
-            "reference_status": position.reference_status,
-            "changed_fields": changed_fields,
-        },
-    )
-    return position
 
 
 def persist_recruitment_entry(entry, actor, changed_fields):

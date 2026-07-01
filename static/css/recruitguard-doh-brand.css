@@ -3614,6 +3614,99 @@ body.applicant-portal-body {
 }
 
 /* ─────────────────────────────────────────────────────────────────
+   Privacy & Data Protection band (RA 10173 assurance, landing page)
+   Full-bleed dark institutional-green panel echoing the photo hero:
+   gold eyebrow + gold-accented icons carry the DOH seal accent, with
+   translucent glass cards over the green gradient.
+───────────────────────────────────────────────────────────────── */
+.rg-pub-privacy {
+    margin-top: 2.5rem;
+    padding: 3rem 1rem 3.25rem;
+    color: #fff;
+    background:
+        radial-gradient(circle at 88% 12%, rgba(253, 184, 19, 0.12), transparent 40%),
+        linear-gradient(158deg, #143f1e 0%, #0e2f14 62%, #0a2410 100%);
+    border-top: 4px solid var(--rg-brand-gold);
+}
+.rg-pub-privacy__inner {
+    width: min(880px, calc(100% - 2rem));
+    margin-inline: auto;
+    display: grid;
+    grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+    gap: 2rem 2.75rem;
+    align-items: start;
+}
+.rg-pub-privacy__eyebrow {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--rg-brand-gold);
+    margin-bottom: 0.7rem;
+}
+.rg-pub-privacy__title {
+    margin: 0 0 0.85rem;
+    font-size: clamp(1.4rem, 2.6vw, 1.85rem);
+    font-weight: 700;
+    line-height: 1.22;
+    letter-spacing: -0.01em;
+    color: #fff;
+}
+.rg-pub-privacy__copy {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.65;
+    color: rgba(255, 255, 255, 0.82);
+}
+.rg-pub-privacy__grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.9rem;
+}
+.rg-pub-privacy__card {
+    padding: 1.1rem 1.15rem;
+    background: rgba(255, 255, 255, 0.055);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 0.75rem;
+}
+.rg-pub-privacy__icon {
+    display: inline-flex;
+    color: var(--rg-brand-gold);
+    margin-bottom: 0.6rem;
+}
+.rg-pub-privacy__icon svg {
+    width: 1.35rem;
+    height: 1.35rem;
+}
+.rg-pub-privacy__card-title {
+    margin: 0 0 0.3rem;
+    font-size: 0.925rem;
+    font-weight: 700;
+    color: #fff;
+}
+.rg-pub-privacy__card-copy {
+    margin: 0;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.72);
+}
+@media (max-width: 720px) {
+    .rg-pub-privacy__inner {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+    }
+}
+@media (max-width: 460px) {
+    .rg-pub-privacy__grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ─────────────────────────────────────────────────────────────────
    Track Application — redesigned status page (TA1)
 ───────────────────────────────────────────────────────────────── */
 .rg-ta-wrap {

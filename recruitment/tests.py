@@ -103,7 +103,6 @@ from .services import (
     get_queue_for_user,
     grant_secretariat_override,
     issue_application_otp,
-    persist_position,
     process_workflow_action,
     repair_auto_advance_workflow_boundaries,
     record_final_decision,
@@ -2136,63 +2135,6 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
 
         self.assertEqual(first.position_slug, "budget-officer")
         self.assertEqual(second.position_slug, "budget-officer-2")
-
-    def test_persist_position_rejects_verified_reference_with_missing_official_metadata(self):
-        with self.assertRaises(ValidationError):
-            persist_position(
-                PositionReference(
-                    position_title="Half-Encoded Record",
-                    reference_status=PositionReference.ReferenceStatus.VERIFIED_REFERENCE,
-                    is_active=True,
-                ),
-                actor=self.sysadmin,
-                changed_fields=["position_title", "reference_status"],
-            )
-
-    def test_system_admin_can_create_position_reference_catalog_record(self):
-        client = Client()
-        self.force_login_with_mfa(client, self.sysadmin)
-        response = client.post(
-            reverse("position-catalog-create"),
-            {
-                "position_title": "Nurse II",
-                "position_slug": "",
-                "salary_grade": "15",
-                "level_classification": PositionReference.LevelClassification.SECOND_LEVEL,
-                "class_id": "NURS2",
-                "os_code": "09-MH",
-                "occupational_service": "Medicine and Health Service",
-                "occupational_group": "Nursing",
-                "reference_status": PositionReference.ReferenceStatus.VERIFIED_REFERENCE,
-                "notes": "Synthetic test record.",
-                "position_code": "POS-010",
-                "agency_item_number": "",
-                "office_division_default": "Clinical Services",
-                "qs_education": "Bachelor of Science in Nursing",
-                "qs_training": "",
-                "qs_experience": "",
-                "qs_eligibility": "RA 1080",
-                "employment_track_applicability": "plantilla",
-                "is_active": "on",
-            },
-        )
-
-        self.assertEqual(response.status_code, 302)
-        self.assertTrue(PositionReference.objects.filter(position_title="Nurse II").exists())
-        self.assertTrue(
-            AuditLog.objects.filter(
-                action=AuditLog.Action.POSITION_CREATED,
-                metadata__position_title="Nurse II",
-            ).exists()
-        )
-
-    def test_entry_manager_cannot_create_position_reference_catalog_record(self):
-        client = Client()
-        self.force_login_with_mfa(client, self.hrm_chief)
-
-        response = client.get(reverse("position-catalog-create"))
-
-        self.assertEqual(response.status_code, 403)
 
     def test_plantilla_entry_requires_fixed_period_and_closing_date(self):
         entry = PositionPosting(
@@ -5361,7 +5303,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
                 **self.screening_document_status_payload(
                     application,
                     overrides={
-                        first_requirement.code: ScreeningDocumentReview.ReviewStatus.NEEDS_REVIEW,
+                        first_requirement.code: ScreeningDocumentReview.ReviewStatus.ABSENT,
                     },
                 ),
                 "operation": "finalize",
@@ -5373,7 +5315,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         self.assertContains(response, "Screening finalized and locked.")
         screening_record = ScreeningRecord.objects.get(application=application)
         document_review = screening_record.document_reviews.get(document_key=first_requirement.code)
-        self.assertEqual(document_review.status, ScreeningDocumentReview.ReviewStatus.NEEDS_REVIEW)
+        self.assertEqual(document_review.status, ScreeningDocumentReview.ReviewStatus.ABSENT)
         self.assertEqual(
             screening_record.document_reviews.count(),
             len(get_applicant_document_requirements(application)),
@@ -5454,7 +5396,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         self.assertContains(response, "Add the instruction the applicant should follow")
         self.assertFalse(ScreeningRecord.objects.filter(application=application, is_finalized=True).exists())
 
-    def test_screening_view_blocks_complete_when_required_document_needs_review(self):
+    def test_screening_view_blocks_complete_when_required_document_absent(self):
         application = self.make_application(self.level1_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
@@ -5469,7 +5411,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
                 **self.screening_document_status_payload(
                     application,
                     overrides={
-                        first_requirement.code: ScreeningDocumentReview.ReviewStatus.NEEDS_REVIEW,
+                        first_requirement.code: ScreeningDocumentReview.ReviewStatus.ABSENT,
                     },
                 ),
                 "operation": "finalize",
@@ -6455,6 +6397,23 @@ class VacancyBatchConsoleTests(BaseRecruitmentTestCase):
         self.force_login_with_mfa(client, self.secretariat)
         response = client.get(reverse("vacancy-batch-detail", args=[self.level2_position.pk]))
         self.assertEqual(response.status_code, 404)
+
+    def test_batch_exam_button_is_gated_on_the_exam_pool(self):
+        application = self._submit(self.make_application(self.level1_position))
+        self.finalize_screening_for_current_stage(application, self.secretariat)
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        # Screened with the exam still pending -> the batch detail offers the exam.
+        response = client.get(reverse("vacancy-batch-detail", args=[self.level1_position.pk]))
+        self.assertContains(response, "Open batch exam")
+
+        # Once the exam is finalized the pool advances; the (now dead) exam link is gone,
+        # and the interview link takes its place.
+        with self.captureOnCommitCallbacks(execute=True):
+            self.finalize_exam_for_current_stage(application, self.secretariat)
+        response = client.get(reverse("vacancy-batch-detail", args=[self.level1_position.pk]))
+        self.assertNotContains(response, "Open batch exam")
+        self.assertContains(response, "Open batch interview")
 
     def test_console_requires_workflow_processor_role(self):
         client = Client()
@@ -8017,7 +7976,10 @@ class AuditLoggingTraceabilityTests(BaseRecruitmentTestCase):
         ).latest("created_at")
         self.assertTrue(log.is_sensitive_access)
 
-    def test_system_admin_can_review_system_audit_logs_only(self):
+    def test_system_admin_audit_log_shows_system_and_case_activity(self):
+        # Case activity (application-scoped) generates audit records...
+        application = self.make_submitted_application()
+        # ...alongside system/identity events.
         record_system_audit_event(
             actor=self.sysadmin,
             action=AuditLog.Action.PASSWORD_CHANGED,
@@ -8030,16 +7992,20 @@ class AuditLoggingTraceabilityTests(BaseRecruitmentTestCase):
         response = client.get(reverse("audit-log-list"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "System Audit Log")
+        self.assertContains(response, "Audit Log")
+        # Both system/identity events and case activity appear in the
+        # consolidated oversight trail.
         self.assertContains(response, "Password Changed")
-        self.assertFalse(response.context["audit_logs"][0].application_id if response.context["audit_logs"] else False)
+        audit_logs = response.context["audit_logs"]
+        self.assertTrue(any(log.application_id == application.id for log in audit_logs))
+        self.assertTrue(any(log.application_id is None for log in audit_logs))
         log = AuditLog.objects.filter(
             application__isnull=True,
             actor=self.sysadmin,
             action=AuditLog.Action.AUDIT_LOG_VIEWED,
         ).latest("created_at")
         self.assertTrue(log.is_sensitive_access)
-        self.assertEqual(log.metadata["review_scope"], "system_audit")
+        self.assertEqual(log.metadata["review_scope"], "consolidated_audit")
 
     def test_non_admin_roles_cannot_review_audit_logs(self):
         application = self.make_submitted_application()
