@@ -2,9 +2,6 @@ from django.contrib.auth import views as auth_views
 from django.urls import path
 
 from .entry_views import (
-    PositionCatalogCreateView,
-    PositionCatalogListView,
-    PositionCatalogUpdateView,
     RecruitmentEntryCreateView,
     RecruitmentEntryListView,
     RecruitmentEntryStatusUpdateView,
@@ -129,13 +126,6 @@ urlpatterns = [
         name="notification-unread-count",
     ),
     path("positions/", PositionListView.as_view(), name="position-list"),
-    path("positions/catalog/", PositionCatalogListView.as_view(), name="position-catalog-list"),
-    path("positions/catalog/new/", PositionCatalogCreateView.as_view(), name="position-catalog-create"),
-    path(
-        "positions/catalog/<int:pk>/edit/",
-        PositionCatalogUpdateView.as_view(),
-        name="position-catalog-update",
-    ),
     path("entries/", RecruitmentEntryListView.as_view(), name="recruitment-entry-list"),
     path("entries/new/", RecruitmentEntryCreateView.as_view(), name="recruitment-entry-create"),
     path(

@@ -18,7 +18,6 @@ WORKFLOW_PROCESSOR_ROLES = {
 ENTRY_MANAGER_ROLES = {
     RecruitmentUser.Role.SECRETARIAT,
     RecruitmentUser.Role.HRM_CHIEF,
-    RecruitmentUser.Role.SYSTEM_ADMIN,
 }
 
 
