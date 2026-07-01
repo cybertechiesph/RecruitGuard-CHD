@@ -2,6 +2,13 @@
 
 {% block internal_title %}{% if object %}Update Internal User{% else %}Create Internal User{% endif %}{% endblock %}
 
+{% block breadcrumb %}
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<a href="{% url 'internal-user-list' %}" class="rg-breadcrumb-home">User Management</a>
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<span class="rg-breadcrumb-current">{% if object %}Update{% else %}Create{% endif %}</span>
+{% endblock %}
+
 {% block content %}
 <div class="rg-page-header">
     <div>
