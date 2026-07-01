@@ -3776,3 +3776,89 @@ class AuditLog(TimestampedModel):
 
     def __str__(self):
         return f"{self.get_action_display()} @ {self.created_at:%Y-%m-%d %H:%M}"
+
+
+# Human-readable labels for each audit action, as shown to reviewers in the
+# audit log and evidence views. This is the single source of truth for the
+# friendly wording (e.g. "Secured Files Viewed" rather than the stored
+# ``evidence_vault_viewed`` code); the template tag renders from it and the
+# audit search resolves through it so a search matches what the reviewer sees.
+AUDIT_ACTION_DISPLAY_LABELS = {
+    AuditLog.Action.INTERNAL_LOGIN: "User Signed In",
+    AuditLog.Action.INTERNAL_LOGOUT: "User Signed Out",
+    AuditLog.Action.PASSWORD_CHANGED: "Password Changed",
+    AuditLog.Action.INTERNAL_ACCOUNT_CREATED: "Internal Account Created",
+    AuditLog.Action.INTERNAL_ACCOUNT_UPDATED: "Internal Account Updated",
+    AuditLog.Action.INTERNAL_ACCOUNT_ACTIVATED: "Internal Account Activated",
+    AuditLog.Action.INTERNAL_ACCOUNT_DEACTIVATED: "Internal Account Deactivated",
+    AuditLog.Action.INTERNAL_ROLE_CHANGED: "Internal Role Changed",
+    AuditLog.Action.POSITION_CREATED: "Position Created",
+    AuditLog.Action.POSITION_UPDATED: "Position Updated",
+    AuditLog.Action.RECRUITMENT_ENTRY_CREATED: "Recruitment Entry Created",
+    AuditLog.Action.RECRUITMENT_ENTRY_UPDATED: "Recruitment Entry Updated",
+    AuditLog.Action.RECRUITMENT_ENTRY_STATUS_CHANGED: "Recruitment Entry Status Changed",
+    AuditLog.Action.APPLICATION_CREATED: "Application Created",
+    AuditLog.Action.APPLICATION_UPDATED: "Application Updated",
+    AuditLog.Action.APPLICATION_OTP_SENT: "Verification Code Sent",
+    AuditLog.Action.APPLICATION_OTP_VERIFIED: "Email Verified",
+    AuditLog.Action.APPLICATION_SUBMITTED: "Application Submitted",
+    AuditLog.Action.CASE_CREATED: "Case Created",
+    AuditLog.Action.CASE_REOPENED: "Case Reopened",
+    AuditLog.Action.ROUTED: "Case Assigned",
+    AuditLog.Action.SCREENING_RECORDED: "Screening Saved",
+    AuditLog.Action.SCREENING_FINALIZED: "Screening Finalized",
+    AuditLog.Action.EXAM_RECORDED: "Exam Saved",
+    AuditLog.Action.EXAM_FINALIZED: "Exam Finalized",
+    AuditLog.Action.INTERVIEW_SCHEDULED: "Interview Scheduled",
+    AuditLog.Action.INTERVIEW_FINALIZED: "Interview Finalized",
+    AuditLog.Action.INTERVIEW_RATING_RECORDED: "Interview Rating Saved",
+    AuditLog.Action.INTERVIEW_FALLBACK_UPLOADED: "Interview Rating File Uploaded",
+    AuditLog.Action.DELIBERATION_RECORDED: "Deliberation Saved",
+    AuditLog.Action.DELIBERATION_FINALIZED: "Deliberation Finalized",
+    AuditLog.Action.CAR_GENERATED: "Comparative Assessment Report Created",
+    AuditLog.Action.CAR_FINALIZED: "Comparative Assessment Report Finalized",
+    AuditLog.Action.DECISION_RECORDED: "Decision Saved",
+    AuditLog.Action.COMPLETION_RECORDED: "Completion Saved",
+    AuditLog.Action.CASE_CLOSED: "Case Closed",
+    AuditLog.Action.NOTIFICATION_SENT: "Notification Sent",
+    AuditLog.Action.NOTIFICATION_FAILED: "Notification Failed",
+    AuditLog.Action.OVERRIDE_GRANTED: "Special Authorization Recorded",
+    AuditLog.Action.OVERRIDE_USED: "Special Authorization Used",
+    AuditLog.Action.EVIDENCE_UPLOADED: "File Uploaded",
+    AuditLog.Action.EVIDENCE_DOWNLOADED: "File Downloaded",
+    AuditLog.Action.EVIDENCE_ARCHIVED: "File Archived",
+    AuditLog.Action.EVIDENCE_RESTORED: "File Restored",
+    AuditLog.Action.PROTECTED_RECORD_VIEWED: "Protected Record Viewed",
+    AuditLog.Action.EVIDENCE_VAULT_VIEWED: "Secured Files Viewed",
+    AuditLog.Action.AUDIT_LOG_VIEWED: "Audit Log Viewed",
+    AuditLog.Action.EXPORT_GENERATED: "Export Created",
+}
+
+
+def audit_action_label(action):
+    """Friendly, reviewer-facing label for a stored audit ``action`` code."""
+    if not action:
+        return "Record Updated"
+    return AUDIT_ACTION_DISPLAY_LABELS.get(action, str(action).replace("_", " ").title())
+
+
+def audit_action_codes_matching(query):
+    """Action codes whose reviewer-facing label or code contains ``query``.
+
+    The audit search box matches on the wording a reviewer actually sees.
+    Friendly labels such as "Secured Files Viewed" live only in the display
+    map above, so a search for "secure" resolves through here — the stored
+    ``action`` code (``evidence_vault_viewed``) and the record ``description``
+    never contain that word.
+    """
+    needle = (query or "").strip().lower()
+    if not needle:
+        return []
+    matches = []
+    for value, model_label in AuditLog.Action.choices:
+        haystack = " ".join(
+            (str(value), str(model_label), audit_action_label(value))
+        ).lower()
+        if needle in haystack:
+            matches.append(value)
+    return matches

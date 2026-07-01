@@ -3,7 +3,7 @@ import json
 from django import template
 
 from recruitment.models import (
-    AuditLog,
+    audit_action_label as resolve_audit_action_label,
     CompletionRequirement,
     ExamRecord,
     Notification,
@@ -34,57 +34,6 @@ STATUS_LABELS = {
     **dict(ExamRecord.ExamStatus.choices),
     **dict(CompletionRequirement.RequirementStatus.choices),
     **dict(NotificationLog.DeliveryStatus.choices),
-}
-
-AUDIT_ACTION_LABELS = {
-    AuditLog.Action.INTERNAL_LOGIN: "User Signed In",
-    AuditLog.Action.INTERNAL_LOGOUT: "User Signed Out",
-    AuditLog.Action.PASSWORD_CHANGED: "Password Changed",
-    AuditLog.Action.INTERNAL_ACCOUNT_CREATED: "Internal Account Created",
-    AuditLog.Action.INTERNAL_ACCOUNT_UPDATED: "Internal Account Updated",
-    AuditLog.Action.INTERNAL_ACCOUNT_ACTIVATED: "Internal Account Activated",
-    AuditLog.Action.INTERNAL_ACCOUNT_DEACTIVATED: "Internal Account Deactivated",
-    AuditLog.Action.INTERNAL_ROLE_CHANGED: "Internal Role Changed",
-    AuditLog.Action.POSITION_CREATED: "Position Created",
-    AuditLog.Action.POSITION_UPDATED: "Position Updated",
-    AuditLog.Action.RECRUITMENT_ENTRY_CREATED: "Recruitment Entry Created",
-    AuditLog.Action.RECRUITMENT_ENTRY_UPDATED: "Recruitment Entry Updated",
-    AuditLog.Action.RECRUITMENT_ENTRY_STATUS_CHANGED: "Recruitment Entry Status Changed",
-    AuditLog.Action.APPLICATION_CREATED: "Application Created",
-    AuditLog.Action.APPLICATION_UPDATED: "Application Updated",
-    AuditLog.Action.APPLICATION_OTP_SENT: "Verification Code Sent",
-    AuditLog.Action.APPLICATION_OTP_VERIFIED: "Email Verified",
-    AuditLog.Action.APPLICATION_SUBMITTED: "Application Submitted",
-    AuditLog.Action.CASE_CREATED: "Case Created",
-    AuditLog.Action.CASE_REOPENED: "Case Reopened",
-    AuditLog.Action.ROUTED: "Case Assigned",
-    AuditLog.Action.SCREENING_RECORDED: "Screening Saved",
-    AuditLog.Action.SCREENING_FINALIZED: "Screening Finalized",
-    AuditLog.Action.EXAM_RECORDED: "Exam Saved",
-    AuditLog.Action.EXAM_FINALIZED: "Exam Finalized",
-    AuditLog.Action.INTERVIEW_SCHEDULED: "Interview Scheduled",
-    AuditLog.Action.INTERVIEW_FINALIZED: "Interview Finalized",
-    AuditLog.Action.INTERVIEW_RATING_RECORDED: "Interview Rating Saved",
-    AuditLog.Action.INTERVIEW_FALLBACK_UPLOADED: "Interview Rating File Uploaded",
-    AuditLog.Action.DELIBERATION_RECORDED: "Deliberation Saved",
-    AuditLog.Action.DELIBERATION_FINALIZED: "Deliberation Finalized",
-    AuditLog.Action.CAR_GENERATED: "Comparative Assessment Report Created",
-    AuditLog.Action.CAR_FINALIZED: "Comparative Assessment Report Finalized",
-    AuditLog.Action.DECISION_RECORDED: "Decision Saved",
-    AuditLog.Action.COMPLETION_RECORDED: "Completion Saved",
-    AuditLog.Action.CASE_CLOSED: "Case Closed",
-    AuditLog.Action.NOTIFICATION_SENT: "Notification Sent",
-    AuditLog.Action.NOTIFICATION_FAILED: "Notification Failed",
-    AuditLog.Action.OVERRIDE_GRANTED: "Special Authorization Recorded",
-    AuditLog.Action.OVERRIDE_USED: "Special Authorization Used",
-    AuditLog.Action.EVIDENCE_UPLOADED: "File Uploaded",
-    AuditLog.Action.EVIDENCE_DOWNLOADED: "File Downloaded",
-    AuditLog.Action.EVIDENCE_ARCHIVED: "File Archived",
-    AuditLog.Action.EVIDENCE_RESTORED: "File Restored",
-    AuditLog.Action.PROTECTED_RECORD_VIEWED: "Protected Record Viewed",
-    AuditLog.Action.EVIDENCE_VAULT_VIEWED: "Secured Files Viewed",
-    AuditLog.Action.AUDIT_LOG_VIEWED: "Audit Log Viewed",
-    AuditLog.Action.EXPORT_GENERATED: "Export Created",
 }
 
 STATUS_THEMES = {
@@ -158,9 +107,7 @@ def status_label(value):
 
 @register.filter
 def audit_action_label(value):
-    if not value:
-        return "Record Updated"
-    return AUDIT_ACTION_LABELS.get(value, str(value).replace("_", " ").title())
+    return resolve_audit_action_label(value)
 
 
 @register.filter

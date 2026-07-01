@@ -32,6 +32,7 @@ from .email_branding import email_branding_context
 from .models import (
     ApplicationETERating,
     AuditLog,
+    audit_action_codes_matching,
     ComparativeAssessmentReport,
     ComparativeAssessmentReportItem,
     CompetencyDefinition,
@@ -2031,7 +2032,10 @@ def get_case_timeline(application):
 
 def _filter_audit_logs(queryset, *, search_query="", action="", actor_role="", sensitive_only=False):
     if search_query:
-        queryset = queryset.filter(
+        # Also match the reviewer-facing action wording (e.g. "Secured Files
+        # Viewed"), which is a display label rather than a stored field, so the
+        # search covers what the reviewer actually sees on each record.
+        search_filter = (
             Q(case_reference__icontains=search_query)
             | Q(workflow_stage__icontains=search_query)
             | Q(description__icontains=search_query)
@@ -2039,6 +2043,10 @@ def _filter_audit_logs(queryset, *, search_query="", action="", actor_role="", s
             | Q(actor__first_name__icontains=search_query)
             | Q(actor__last_name__icontains=search_query)
         )
+        matching_action_codes = audit_action_codes_matching(search_query)
+        if matching_action_codes:
+            search_filter |= Q(action__in=matching_action_codes)
+        queryset = queryset.filter(search_filter)
     if action:
         queryset = queryset.filter(action=action)
     if actor_role:

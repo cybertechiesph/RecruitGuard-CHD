@@ -112,7 +112,6 @@ from .services import (
     get_screening_record,
     get_screening_records,
     get_all_audit_logs,
-    get_system_audit_logs,
     get_queue_for_user,
     get_visible_positions_for_user,
     grant_secretariat_override,
@@ -948,15 +947,6 @@ class EvidenceVaultListView(LoginRequiredMixin, SystemAdministratorRequiredMixin
         context["evidence_items"] = evidence_items
         context["search_form"] = self.search_form
         context["result_count"] = len(evidence_items)
-        # Include recent audit logs for the combined Evidence & Audit view
-        context["recent_audit_logs"] = list(
-            get_system_audit_logs(
-                search_query="",
-                action="",
-                actor_role="",
-                sensitive_only=False,
-            )[:50]
-        )
         record_evidence_vault_access(
             self.request.user,
             search_query=self.search_filters["q"],

@@ -106,6 +106,7 @@ from .services import (
     interview_is_finalized_for_current_stage,
     get_latest_finalized_comparative_assessment_report,
     get_available_actions,
+    get_all_audit_logs,
     get_queue_for_user,
     grant_secretariat_override,
     issue_application_otp,
@@ -8338,6 +8339,46 @@ class AuditLoggingTraceabilityTests(BaseRecruitmentTestCase):
         ).latest("created_at")
         self.assertTrue(log.is_sensitive_access)
         self.assertEqual(log.metadata["review_scope"], "consolidated_audit")
+
+    def test_audit_search_matches_displayed_action_label(self):
+        # "Secured Files Viewed" is the reviewer-facing label for the
+        # evidence_vault_viewed action code. A search for the wording shown on
+        # screen must find the record even though neither the stored code nor
+        # the description contains "secure".
+        vault_log = AuditLog.objects.create(
+            actor=self.sysadmin,
+            action=AuditLog.Action.EVIDENCE_VAULT_VIEWED,
+            description="Reviewed evidence vault records.",
+        )
+
+        results = list(get_all_audit_logs(search_query="secure"))
+        self.assertIn(vault_log, results)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.sysadmin)
+        response = client.get(reverse("audit-log-list"), {"q": "secure"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Secured Files Viewed")
+        self.assertTrue(
+            any(
+                entry.action == AuditLog.Action.EVIDENCE_VAULT_VIEWED
+                for entry in response.context["audit_logs"]
+            )
+        )
+
+    def test_evidence_vault_page_omits_audit_pane(self):
+        self.make_submitted_application()
+
+        client = Client()
+        self.force_login_with_mfa(client, self.sysadmin)
+        response = client.get(reverse("evidence-vault-list"))
+
+        self.assertEqual(response.status_code, 200)
+        # The Secured Files page no longer carries a combined audit pane; the
+        # audit trail lives on its own dedicated page.
+        self.assertNotIn("recent_audit_logs", response.context)
+        self.assertNotContains(response, "Recent audit records across the system.")
 
     def test_non_admin_roles_cannot_review_audit_logs(self):
         application = self.make_submitted_application()
