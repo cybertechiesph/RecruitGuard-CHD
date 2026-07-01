@@ -286,7 +286,7 @@ class DashboardView(LoginRequiredMixin, InternalUserRequiredMixin, TemplateView)
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
-        context["positions"] = get_visible_positions_for_user(user)[:6]
+        context["open_entry_count"] = get_visible_positions_for_user(user).count()
         if user.role == RecruitmentUser.Role.SYSTEM_ADMIN:
             internal_users = RecruitmentUser.objects.filter(role__in=RecruitmentUser.internal_roles())
             context["internal_user_count"] = internal_users.count()
@@ -371,6 +371,11 @@ class NotificationUnreadCountView(LoginRequiredMixin, InternalUserRequiredMixin,
 class PositionListView(LoginRequiredMixin, InternalUserRequiredMixin, ListView):
     template_name = "recruitment/position_list.html"
     context_object_name = "positions"
+
+    def get(self, request, *args, **kwargs):
+        if request.user.role == RecruitmentUser.Role.SYSTEM_ADMIN:
+            raise PermissionDenied
+        return super().get(request, *args, **kwargs)
 
     def get_queryset(self):
         return get_visible_positions_for_user(self.request.user)

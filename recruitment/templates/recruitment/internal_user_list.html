@@ -69,12 +69,22 @@
                         <td class="text-end">
                             <div class="d-flex justify-content-end gap-2 flex-wrap">
                                 <a href="{% url 'internal-user-update' internal_user.pk %}" class="btn btn-outline-secondary btn-sm">Edit</a>
-                                <form method="post" action="{% url 'internal-user-toggle-active' internal_user.pk %}">
+                                <form id="toggleActive{{ internal_user.pk }}" method="post"
+                                      action="{% url 'internal-user-toggle-active' internal_user.pk %}">
                                     {% csrf_token %}
-                                    <button type="submit" class="btn btn-outline-dark btn-sm">
-                                        {% if internal_user.is_active %}Deactivate{% else %}Activate{% endif %}
-                                    </button>
                                 </form>
+                                {% if internal_user == user %}
+                                    <button type="button" class="btn btn-outline-dark btn-sm" disabled
+                                            title="You cannot deactivate your own account.">Deactivate</button>
+                                {% elif internal_user.is_active %}
+                                    <button type="button" class="btn btn-outline-dark btn-sm"
+                                            data-bs-toggle="modal" data-bs-target="#confirmToggle{{ internal_user.pk }}">
+                                        Deactivate
+                                    </button>
+                                {% else %}
+                                    <button type="submit" form="toggleActive{{ internal_user.pk }}"
+                                            class="btn btn-outline-dark btn-sm">Activate</button>
+                                {% endif %}
                             </div>
                         </td>
                     </tr>
@@ -89,4 +99,12 @@
         </table>
     </div>
 </div>
+
+{% for internal_user in internal_users %}
+    {% if internal_user.is_active and internal_user != user %}
+        {% with uid=internal_user.pk|stringformat:"s" %}
+            {% include "internal_includes/modal_confirm.html" with modal_id="confirmToggle"|add:uid variant="destructive" title="Deactivate “"|add:internal_user.username|add:"”?" body="This will immediately sign the user out of the internal portal and block sign-in until the account is reactivated." confirm_label="Deactivate Account" cancel_label="Cancel" form_id="toggleActive"|add:uid %}
+        {% endwith %}
+    {% endif %}
+{% endfor %}
 {% endblock %}

@@ -43,7 +43,7 @@ removes a class of "dead template code" bugs.
                 </div>
                 <div class="rg-istat-row__divider"></div>
                 <div class="rg-istat">
-                    <span class="rg-istat__value">{{ positions|length }}</span>
+                    <span class="rg-istat__value">{{ open_entry_count }}</span>
                     <span class="rg-istat__label">Open entries</span>
                 </div>
             </div>
@@ -52,7 +52,7 @@ removes a class of "dead template code" bugs.
                 {% for entry in recent_identity_logs %}
                     <div class="rg-dash-sysad-event">
                         <span class="rg-dash-sysad-event__action">{{ entry.action|audit_action_label }}</span>
-                        <span class="rg-dash-sysad-event__desc">{{ entry.description }}</span>
+                        <span class="rg-dash-sysad-event__desc">{{ entry.description }} — {{ entry.actor|default:"System" }}</span>
                         <span class="rg-dash-sysad-event__time">{{ entry.created_at|date:"M d, Y H:i" }}</span>
                     </div>
                 {% endfor %}

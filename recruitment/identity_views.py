@@ -337,9 +337,11 @@ class InternalUserUpdateView(LoginRequiredMixin, SystemAdministratorRequiredMixi
             new_role = form.cleaned_data["role"]
             new_is_active = form.cleaned_data["is_active"]
             if new_role != RecruitmentUser.Role.SYSTEM_ADMIN:
-                raise PermissionDenied("System Administrator cannot remove their own role.")
+                form.add_error("role", "You cannot remove your own System Administrator role.")
             if not new_is_active:
-                raise PermissionDenied("System Administrator cannot deactivate their own account.")
+                form.add_error("is_active", "You cannot deactivate your own account.")
+            if form.errors:
+                return self.form_invalid(form)
 
         previous_role = target_snapshot.role
         previous_is_active = target_snapshot.is_active
@@ -422,7 +424,8 @@ class InternalUserToggleActiveView(LoginRequiredMixin, SystemAdministratorRequir
             pk=pk,
         )
         if user == request.user:
-            raise PermissionDenied("System Administrator cannot deactivate their own account.")
+            messages.error(request, "You cannot deactivate your own account. Ask another System Administrator to do this.")
+            return redirect("internal-user-list")
         user.is_active = not user.is_active
         user.save(update_fields=["is_active"])
         action = (

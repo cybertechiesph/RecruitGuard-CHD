@@ -2081,6 +2081,52 @@ class IdentityAdministrationTests(BaseRecruitmentTestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn("/admin/login/", response.url)
 
+    def test_system_admin_self_deactivation_redirects_with_message(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.sysadmin)
+
+        response = client.post(
+            reverse("internal-user-toggle-active", kwargs={"pk": self.sysadmin.pk}),
+            follow=True,
+        )
+
+        self.assertEqual(response.request["PATH_INFO"], reverse("internal-user-list"))
+        self.sysadmin.refresh_from_db()
+        self.assertTrue(self.sysadmin.is_active)
+        messages = [str(m) for m in response.context["messages"]]
+        self.assertTrue(any("your own account" in m for m in messages))
+
+    def test_system_admin_self_role_change_shows_form_error(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.sysadmin)
+
+        response = client.post(
+            reverse("internal-user-update", kwargs={"pk": self.sysadmin.pk}),
+            {
+                "username": self.sysadmin.username,
+                "first_name": self.sysadmin.first_name,
+                "last_name": self.sysadmin.last_name,
+                "email": self.sysadmin.email,
+                "employee_id": self.sysadmin.employee_id,
+                "office_name": self.sysadmin.office_name,
+                "role": RecruitmentUser.Role.SECRETARIAT,
+                "is_active": "on",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFormError(response.context["form"], "role", "You cannot remove your own System Administrator role.")
+        self.sysadmin.refresh_from_db()
+        self.assertEqual(self.sysadmin.role, RecruitmentUser.Role.SYSTEM_ADMIN)
+
+    def test_system_admin_cannot_open_position_list(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.sysadmin)
+
+        response = client.get(reverse("position-list"))
+
+        self.assertEqual(response.status_code, 403)
+
 
 class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
     def mark_application_as_submitted_without_case(self, application):
