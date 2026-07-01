@@ -6833,7 +6833,7 @@ class BatchExamTests(BaseRecruitmentTestCase):
         self.force_login_with_mfa(client, self.secretariat)
         response = client.get(reverse("vacancy-batch-exam", args=[self.level1_position.pk]))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Batch exam")
+        self.assertContains(response, "Batch Exam")
 
     def test_batch_exam_view_404s_for_a_non_reviewing_role(self):
         # The HRM Chief does not handle a Level-1 vacancy's screening/exam (FRS scoping).
@@ -7059,7 +7059,7 @@ class VacancyBatchInterviewTests(BaseRecruitmentTestCase):
         self.force_login_with_mfa(client, self.secretariat)
         response = client.get(reverse("vacancy-batch-interview", args=[self.level1_position.pk]))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Batch interview")
+        self.assertContains(response, "Batch Interview")
         # The HRM Chief does not support a Level-1 Plantilla interview (FRS scoping).
         other = Client()
         self.force_login_with_mfa(other, self.hrm_chief)

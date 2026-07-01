@@ -1,11 +1,14 @@
 {% extends "internal_base.html" %}
 
+{% block internal_title %}{% if object %}Update Internal User{% else %}Create Internal User{% endif %}{% endblock %}
+
 {% block content %}
 <div class="rg-page-header">
     <div>
         <p class="rg-eyebrow">Identity and Access</p>
         <h1 class="rg-page-title">{% if object %}Update Internal User{% else %}Create Internal User{% endif %}</h1>
         <p class="rg-page-copy">Create or update staff accounts without changing the locked role model of the system.</p>
+        <p class="rg-note">Fields marked <span class="rg-required">*</span> are required.</p>
     </div>
     <div class="rg-page-actions">
         <a href="{% url 'internal-user-list' %}" class="btn btn-outline-secondary">Back to Internal Users</a>

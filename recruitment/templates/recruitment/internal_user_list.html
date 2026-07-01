@@ -1,6 +1,8 @@
 {% extends "internal_base.html" %}
 {% load recruitment_ui %}
 
+{% block internal_title %}User Management{% endblock %}
+
 {% block content %}
 <div class="rg-page-header">
     <div>
@@ -25,14 +27,14 @@
         <span class="rg-kpi__hint">Currently enabled internal access</span>
     </div>
     <div class="rg-kpi">
-        <span class="rg-kpi__label">Actor Model</span>
-        <strong class="rg-kpi__value">Locked</strong>
-        <span class="rg-kpi__hint">No new internal actors are introduced here</span>
+        <span class="rg-kpi__label">Inactive Accounts</span>
+        <strong class="rg-kpi__value">{{ inactive_internal_users }}</strong>
+        <span class="rg-kpi__hint">Blocked from signing in until reactivated</span>
     </div>
     <div class="rg-kpi">
-        <span class="rg-kpi__label">Portal Scope</span>
-        <strong class="rg-kpi__value">Admin</strong>
-        <span class="rg-kpi__hint">Identity and access control only</span>
+        <span class="rg-kpi__label">Roles</span>
+        <strong class="rg-kpi__value">Fixed set</strong>
+        <span class="rg-kpi__hint">Accounts are assigned one of the five HRMPSB roles</span>
     </div>
 </div>
 

@@ -295,6 +295,7 @@ class InternalUserListView(LoginRequiredMixin, SystemAdministratorRequiredMixin,
         context = super().get_context_data(**kwargs)
         queryset = context["internal_users"]
         context["active_internal_users"] = queryset.filter(is_active=True).count()
+        context["inactive_internal_users"] = queryset.filter(is_active=False).count()
         return context
 
 

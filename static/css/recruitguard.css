@@ -4825,6 +4825,13 @@ textarea.form-control {
     align-items: center;
 }
 
+/* Required-field marker */
+.rg-required {
+    color: #b3261e;
+    margin-left: .15rem;
+    font-weight: 600;
+}
+
 /* Inline field validation */
 .rg-field.has-error .form-control,
 .rg-field.has-error .form-select {

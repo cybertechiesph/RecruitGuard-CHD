@@ -65,7 +65,7 @@ Toggling and unread-count polling are handled by recruitguard-notifications.js.
                     <path fill="currentColor" d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
                 </svg>
                 <p class="rg-notif__empty-title">You&rsquo;re all caught up.</p>
-                <p class="rg-notif__empty-text">New updates about your cases will appear here.</p>
+                <p class="rg-notif__empty-text">{% if user.role == "system_admin" %}New account and system updates will appear here.{% else %}New updates about your cases will appear here.{% endif %}</p>
             </li>
             {% endfor %}
         </ul>

@@ -4,11 +4,11 @@
         <div class="invalid-feedback d-block">{{ error }}</div>
     {% endfor %}
 {% elif field.field.widget.input_type == "checkbox" %}
-    <div class="rg-field rg-field--checkbox">
+    <div class="rg-field rg-field--checkbox{% if field.errors %} has-error{% endif %}">
         <div class="form-check">
             {{ field }}
             <div>
-                <label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                <label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %}<span class="rg-required" aria-hidden="true">*</span>{% endif %}</label>
                 {% if field.help_text %}
                     <div class="form-text">{{ field.help_text }}</div>
                 {% endif %}
@@ -19,8 +19,8 @@
         {% endfor %}
     </div>
 {% else %}
-    <div class="rg-field">
-        <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+    <div class="rg-field{% if field.errors %} has-error{% endif %}">
+        <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %}<span class="rg-required" aria-hidden="true">*</span>{% endif %}</label>
         {{ field }}
         {% if field.help_text %}
             <div class="form-text">{{ field.help_text }}</div>
