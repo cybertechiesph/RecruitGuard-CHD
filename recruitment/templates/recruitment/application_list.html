@@ -11,7 +11,7 @@
 {% block content %}
 <div class="rg-page-header">
     <div>
-        <h1 class="rg-page-title">{% if is_queue %}My queue{% elif is_closed_list %}Closed cases{% else %}Cases I can view{% endif %}</h1>
+        <h1 class="rg-page-title">{% if is_queue %}My Queue{% elif is_closed_list %}Closed Cases{% else %}Cases I Can View{% endif %}</h1>
         {% if is_closed_list %}
             <p class="rg-imeta mt-1">Approved and rejected cases you retain access to, for records requests.</p>
         {% endif %}
