@@ -35,7 +35,6 @@ from .models import (
     DeliberationRecord,
     ExamRecord,
     ExamSchedule,
-    EvidenceVaultItem,
     FinalDecision,
     format_weight_percentage,
     InterviewRating,
@@ -957,44 +956,6 @@ class EvidenceUploadForm(BootstrapFormMixin, forms.Form):
                 "The uploaded file is larger than the allowed file size."
             )
         return uploaded_file
-
-
-class EvidenceVaultSearchForm(BootstrapFormMixin, forms.Form):
-    ARCHIVAL_STATUS_CHOICES = (
-        ("active", "Active only"),
-        ("archived", "Archived only"),
-        ("all", "All files"),
-    )
-
-    q = forms.CharField(required=False, label="Search")
-    stage = forms.ChoiceField(
-        required=False,
-        choices=[("", "All steps"), *EvidenceVaultItem.Stage.choices],
-        label="Step",
-    )
-    artifact_scope = forms.ChoiceField(
-        required=False,
-            choices=[("", "All file scopes"), *EvidenceVaultItem.OwnerScope.choices],
-            label="File Scope",
-    )
-    archival_status = forms.ChoiceField(
-        required=False,
-        choices=ARCHIVAL_STATUS_CHOICES,
-        initial="active",
-        label="Archive Status",
-    )
-    current_version_only = forms.BooleanField(
-        required=False,
-        initial=True,
-        label="Show latest versions only",
-    )
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["q"].help_text = (
-            "Search by Application ID, recruitment entry, file label, filename, SHA-256 hash, archive label, or uploader."
-        )
-        self._apply_bootstrap()
 
 
 class AuditLogSearchForm(BootstrapFormMixin, forms.Form):

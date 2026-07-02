@@ -18,7 +18,6 @@ from .forms import (
     CompletionTrackingForm,
     DeliberationRecordForm,
     EvidenceArchiveForm,
-    EvidenceVaultSearchForm,
     ExamRecordForm,
     ExamScheduleForm,
     EvidenceUploadForm,
@@ -91,7 +90,6 @@ from .services import (
     user_can_manage_cos_deliberation,
     get_deliberation_record,
     get_deliberation_records,
-    get_evidence_context_application_for_user,
     get_evidence_queryset_for_user,
     get_exam_record,
     get_exam_schedule,
@@ -112,7 +110,6 @@ from .services import (
     get_screening_record,
     get_screening_records,
     get_all_audit_logs,
-    get_system_audit_logs,
     get_queue_for_user,
     get_visible_positions_for_user,
     grant_secretariat_override,
@@ -122,7 +119,6 @@ from .services import (
     record_export_denied,
     record_final_decision,
     record_final_selection,
-    record_evidence_vault_access,
     record_protected_record_access,
     reopen_recruitment_case,
     route_case_between_secretariat_and_hrm_chief,
@@ -476,8 +472,14 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
             "prepare_block_message",
             "",
         )
-        context["evidence_items"] = []
-        context["can_archive_evidence"] = False
+        context["evidence_items"] = list(
+            get_evidence_queryset_for_user(
+                user,
+                application=application,
+                archival_status="all",
+            )
+        )
+        context["can_archive_evidence"] = user_can_manage_evidence_archive(user, application)
         context["evidence_vault_url"] = ""
         context["submission_packet"] = (
             build_submission_packet(application) if context["recruitment_case"] else {}
@@ -496,19 +498,6 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
             context["decision_record_label"] = "Final Selection"
             context["decision_actor_label"] = "Appointing Authority"
             context["decision_completion_label"] = "appointment"
-        if user.role == RecruitmentUser.Role.SYSTEM_ADMIN:
-            context["audit_log_url"] = reverse("application-audit-log", kwargs={"pk": application.pk})
-            context["evidence_items"] = list(
-                get_evidence_queryset_for_user(
-                    user,
-                    application=application,
-                    archival_status="all",
-                )
-            )
-            context["can_archive_evidence"] = user_can_manage_evidence_archive(user, application)
-            context["evidence_vault_url"] = (
-                f"{reverse('evidence-vault-list')}?q={application.reference_label}"
-            )
         if user_can_upload_evidence(user, application):
             context["evidence_form"] = EvidenceUploadForm()
         if user_can_manage_screening(user, application):
@@ -788,7 +777,7 @@ class AuditLogListView(LoginRequiredMixin, SystemAdministratorRequiredMixin, Tem
         return context
 
 
-class EvidenceUploadView(LoginRequiredMixin, SystemAdministratorRequiredMixin, View):
+class EvidenceUploadView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
     def post(self, request, pk):
         application = get_object_or_404(RecruitmentApplication, pk=pk)
         if not user_can_upload_evidence(request.user, application):
@@ -816,7 +805,7 @@ class EvidenceUploadView(LoginRequiredMixin, SystemAdministratorRequiredMixin, V
                 request,
                 "; ".join(error for errors in form.errors.values() for error in errors),
             )
-        return redirect("evidence-vault-list")
+        return redirect("application-detail", pk=pk)
 
 
 class EvidenceDownloadView(LoginRequiredMixin, InternalUserRequiredMixin, View):
@@ -870,7 +859,7 @@ class EvidenceDownloadView(LoginRequiredMixin, InternalUserRequiredMixin, View):
         return response
 
 
-class EvidenceArchiveToggleView(LoginRequiredMixin, SystemAdministratorRequiredMixin, View):
+class EvidenceArchiveToggleView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
     def post(self, request, pk, evidence_pk):
         application = get_object_or_404(RecruitmentApplication, pk=pk)
         if not user_can_manage_evidence_archive(request.user, application):
@@ -908,64 +897,7 @@ class EvidenceArchiveToggleView(LoginRequiredMixin, SystemAdministratorRequiredM
                 request,
                 "; ".join(error for errors in form.errors.values() for error in errors),
             )
-        return redirect(_safe_next_url(request, reverse("evidence-vault-list")))
-
-
-class EvidenceVaultListView(LoginRequiredMixin, SystemAdministratorRequiredMixin, ListView):
-    template_name = "recruitment/evidence_vault_list.html"
-    context_object_name = "evidence_items"
-
-    def get_queryset(self):
-        self.search_form = EvidenceVaultSearchForm(self.request.GET or None)
-        if self.search_form.is_valid():
-            cleaned_data = self.search_form.cleaned_data
-        else:
-            cleaned_data = {
-                "q": "",
-                "stage": "",
-                "artifact_scope": "",
-                "archival_status": "active",
-                "current_version_only": True,
-            }
-        self.search_filters = cleaned_data
-        return get_evidence_queryset_for_user(
-            self.request.user,
-            search_query=cleaned_data["q"],
-            stage=cleaned_data["stage"],
-            artifact_scope=cleaned_data["artifact_scope"],
-            archival_status=cleaned_data["archival_status"],
-            current_version_only=cleaned_data["current_version_only"],
-        )
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        evidence_items = list(context["evidence_items"])
-        for evidence in evidence_items:
-            evidence.context_application = get_evidence_context_application_for_user(
-                self.request.user,
-                evidence,
-            )
-        context["evidence_items"] = evidence_items
-        context["search_form"] = self.search_form
-        context["result_count"] = len(evidence_items)
-        # Include recent audit logs for the combined Evidence & Audit view
-        context["recent_audit_logs"] = list(
-            get_system_audit_logs(
-                search_query="",
-                action="",
-                actor_role="",
-                sensitive_only=False,
-            )[:50]
-        )
-        record_evidence_vault_access(
-            self.request.user,
-            search_query=self.search_filters["q"],
-            stage=self.search_filters["stage"],
-            artifact_scope=self.search_filters["artifact_scope"],
-            archival_status=self.search_filters["archival_status"],
-            current_version_only=self.search_filters["current_version_only"],
-        )
-        return context
+        return redirect(_safe_next_url(request, reverse("application-detail", kwargs={"pk": pk})))
 
 
 class WorkflowQueueView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, ListView):

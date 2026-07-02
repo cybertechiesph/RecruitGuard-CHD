@@ -37,7 +37,6 @@ from .views import (
     EvidenceArchiveToggleView,
     EvidenceDownloadView,
     EvidenceUploadView,
-    EvidenceVaultListView,
     VacancyAssessmentWeightsView,
     ExaminationRecordView,
     ExamScheduleView,
@@ -171,7 +170,6 @@ urlpatterns = [
     path("applications/<int:pk>/final-selection/", FinalSelectionView.as_view(), name="final-selection-record"),
     path("applications/<int:pk>/completion/", CompletionTrackingView.as_view(), name="completion-tracking"),
     path("applications/<int:pk>/close/", CaseClosureView.as_view(), name="case-close"),
-    path("evidence/", EvidenceVaultListView.as_view(), name="evidence-vault-list"),
     path(
         "applications/<int:pk>/notifications/checklist/",
         RequirementChecklistNotificationView.as_view(),

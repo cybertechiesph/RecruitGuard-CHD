@@ -335,8 +335,8 @@
             {% endif %}
 
             
-            {% if request.user.role == "system_admin" %}
-            <div class="rg-cws-stage-section" id="cws-evidence" style="display:none;">
+            {% if evidence_items or evidence_form or can_archive_evidence %}
+            <div class="rg-cws-stage-section" id="cws-evidence">
                 {% include "internal_includes/stage_titlebar.html" with title="Secured Files" %}
 
                 <div class="rg-icard">
@@ -379,8 +379,39 @@
                                             </span>
                                         {% endif %}
                                     </div>
-                                    <a href="{% url 'evidence-download' application.pk item.pk %}"
-                                       class="btn btn-outline-secondary btn-sm">Download</a>
+                                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                                        <a href="{% url 'evidence-download' application.pk item.pk %}"
+                                           class="btn btn-outline-secondary btn-sm">Download</a>
+                                        {% if can_archive_evidence %}
+                                            {% if item.is_archived %}
+                                                <form method="post"
+                                                      action="{% url 'evidence-archive-toggle' application.pk item.pk %}">
+                                                    {% csrf_token %}
+                                                    <input type="hidden" name="action" value="restore">
+                                                    <input type="hidden" name="next"
+                                                           value="{% url 'application-detail' application.pk %}">
+                                                    <button type="submit" class="btn btn-outline-secondary btn-sm">
+                                                        Restore
+                                                    </button>
+                                                </form>
+                                            {% else %}
+                                                <form method="post"
+                                                      action="{% url 'evidence-archive-toggle' application.pk item.pk %}"
+                                                      class="d-flex flex-wrap gap-2 align-items-center">
+                                                    {% csrf_token %}
+                                                    <input type="hidden" name="action" value="archive">
+                                                    <input type="hidden" name="next"
+                                                           value="{% url 'application-detail' application.pk %}">
+                                                    <input type="text" name="archive_tag" maxlength="255"
+                                                           class="form-control form-control-sm"
+                                                           placeholder="Archive label" required>
+                                                    <button type="submit" class="btn btn-outline-warning btn-sm">
+                                                        Archive
+                                                    </button>
+                                                </form>
+                                            {% endif %}
+                                        {% endif %}
+                                    </div>
                                 </article>
                             {% endfor %}
                         </div>

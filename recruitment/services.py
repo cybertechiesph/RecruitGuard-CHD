@@ -980,29 +980,6 @@ def record_protected_record_access(application, actor, source):
     )
 
 
-def record_evidence_vault_access(
-    actor,
-    *,
-    search_query="",
-    stage="",
-    artifact_scope="",
-    archival_status="",
-    current_version_only=True,
-):
-    return record_system_audit_event(
-        actor=actor,
-        action=AuditLog.Action.EVIDENCE_VAULT_VIEWED,
-        description="Reviewed evidence vault records.",
-        metadata={
-            "search_query": search_query,
-            "stage": stage,
-            "artifact_scope": artifact_scope,
-            "archival_status": archival_status,
-            "current_version_only": bool(current_version_only),
-        },
-    )
-
-
 def record_audit_log_review(
     actor,
     *,
@@ -1239,16 +1216,12 @@ def user_can_prepare_plantilla_car(user, application):
 
 
 def user_can_upload_evidence(user, application):
-    if user.role == RecruitmentUser.Role.SYSTEM_ADMIN:
-        return True
     if user.role == RecruitmentUser.Role.APPLICANT and application.applicant_id == user.id:
         return application.is_editable_by_applicant
     return user_can_process_application(user, application)
 
 
 def user_can_manage_evidence_archive(user, application):
-    if user.role == RecruitmentUser.Role.SYSTEM_ADMIN:
-        return True
     return user.role in EVIDENCE_ARCHIVE_ROLES and user_can_view_application(user, application)
 
 
@@ -2169,11 +2142,6 @@ def get_evidence_context_application_for_user(user, evidence, preferred_applicat
         if candidate is None or candidate.id in seen_ids:
             continue
         seen_ids.add(candidate.id)
-        if user.role == RecruitmentUser.Role.SYSTEM_ADMIN and evidence_belongs_to_application_context(
-            evidence,
-            candidate,
-        ):
-            return candidate
         if user_can_view_application(user, candidate) and evidence_belongs_to_application_context(
             evidence,
             candidate,

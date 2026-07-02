@@ -7198,7 +7198,7 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
                 artifact_type="applicant_document",
             )
 
-    def test_system_admin_can_download_uploaded_evidence(self):
+    def test_system_admin_cannot_download_uploaded_evidence(self):
         application = self.make_application(self.level1_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
@@ -7218,20 +7218,26 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
             )
         )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            response.content,
-            self.build_valid_applicant_document_bytes(requirement_code),
-        )
-        self.assertTrue(
+        # The System Administrator is an accounts + audit role only; evidence
+        # content is off-limits and the attempt is logged as a denied access.
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(
             AuditLog.objects.filter(
                 application=application,
                 action=AuditLog.Action.EVIDENCE_DOWNLOADED,
                 metadata__evidence_id=evidence.id,
             ).exists()
         )
+        self.assertTrue(
+            AuditLog.objects.filter(
+                application=application,
+                action=AuditLog.Action.EVIDENCE_ACCESS_DENIED,
+                metadata__evidence_id=evidence.id,
+                metadata__reason="unauthorized",
+            ).exists()
+        )
 
-    def test_system_admin_can_view_pdf_evidence_inline(self):
+    def test_workflow_handler_can_view_pdf_evidence_inline(self):
         application = self.make_application(self.level1_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
@@ -7244,7 +7250,7 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
         self.assertEqual(evidence.content_type, "application/pdf")
 
         client = Client()
-        self.force_login_with_mfa(client, self.sysadmin)
+        self.force_login_with_mfa(client, self.secretariat)
         response = client.get(
             reverse(
                 "evidence-download",
@@ -7282,7 +7288,7 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
         evidence.save(update_fields=["content_type"])
 
         client = Client()
-        self.force_login_with_mfa(client, self.sysadmin)
+        self.force_login_with_mfa(client, self.secretariat)
         response = client.get(
             reverse(
                 "evidence-download",
@@ -7409,7 +7415,10 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
         self.assertEqual(evidence.recruitment_case_id, application.case.id)
         self.assertIsNone(evidence.recruitment_entry_id)
 
-    def test_system_admin_can_search_archive_and_review_evidence_vault(self):
+    def test_workflow_handler_can_archive_and_restore_evidence(self):
+        # Custody of per-case evidence (archive/retention) belongs to the
+        # workflow handler, not the System Administrator. Level 1 intake is
+        # handled by the Secretariat.
         application = self.make_application(self.level1_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
@@ -7419,19 +7428,10 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
             artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
             document_key=get_required_applicant_document_requirements()[0].code,
         )
+        detail_url = reverse("application-detail", kwargs={"pk": application.pk})
 
         client = Client()
-        self.force_login_with_mfa(client, self.sysadmin)
-
-        initial_response = client.get(
-            reverse("evidence-vault-list"),
-            {
-                "q": "Personal Data Sheet",
-                "archival_status": "all",
-            },
-        )
-        self.assertEqual(initial_response.status_code, 200)
-        self.assertContains(initial_response, application.reference_label)
+        self.force_login_with_mfa(client, self.secretariat)
 
         archive_response = client.post(
             reverse(
@@ -7441,11 +7441,11 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
             {
                 "action": "archive",
                 "archive_tag": "Closed case retention batch",
-                "next": reverse("evidence-vault-list"),
+                "next": detail_url,
             },
-            follow=True,
         )
-        self.assertEqual(archive_response.status_code, 200)
+        self.assertEqual(archive_response.status_code, 302)
+        self.assertEqual(archive_response["Location"], detail_url)
         evidence.refresh_from_db()
         self.assertTrue(evidence.is_archived)
         self.assertEqual(evidence.archive_tag, "Closed case retention batch")
@@ -7457,17 +7457,52 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
             ).exists()
         )
 
-        archived_response = client.get(
-            reverse("evidence-vault-list"),
+        restore_response = client.post(
+            reverse(
+                "evidence-archive-toggle",
+                kwargs={"pk": application.pk, "evidence_pk": evidence.pk},
+            ),
             {
-                "q": application.reference_label,
-                "archival_status": "archived",
-                "current_version_only": "",
+                "action": "restore",
+                "next": detail_url,
             },
         )
-        self.assertEqual(archived_response.status_code, 200)
-        self.assertContains(archived_response, "Closed case retention batch")
-        self.assertContains(archived_response, application.reference_label)
+        self.assertEqual(restore_response.status_code, 302)
+        evidence.refresh_from_db()
+        self.assertFalse(evidence.is_archived)
+
+    def test_workflow_handler_can_upload_evidence(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        application.refresh_from_db()
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("evidence-upload", kwargs={"pk": application.pk}),
+            {
+                "label": "Secretariat Routing Notes",
+                "file": SimpleUploadedFile(
+                    "routing-notes.pdf",
+                    self.build_valid_applicant_document_bytes(
+                        "routing-notes",
+                        content_prefix="internal routing notes",
+                    ),
+                    content_type="application/pdf",
+                ),
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response["Location"],
+            reverse("application-detail", kwargs={"pk": application.pk}),
+        )
+        evidence = EvidenceVaultItem.objects.get(label="Secretariat Routing Notes")
+        self.assertEqual(evidence.uploaded_by_role, RecruitmentUser.Role.SECRETARIAT)
+        self.assertEqual(evidence.artifact_scope, EvidenceVaultItem.OwnerScope.CASE)
+        self.assertEqual(evidence.recruitment_case_id, application.case.id)
 
     def test_assigned_workflow_handler_can_download_screening_document(self):
         application = self.make_application(self.level2_position)
@@ -7534,7 +7569,7 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
             {"unauthorized"},
         )
 
-    def test_non_admin_roles_cannot_access_evidence_vault_routes(self):
+    def test_non_handler_and_sysadmin_cannot_upload_or_archive_evidence(self):
         application = self.make_application(self.level1_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
@@ -7544,18 +7579,18 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
             document_key=get_required_applicant_document_requirements()[0].code,
         )
 
+        # Level 1 intake is handled by the Secretariat. Every other workflow
+        # role is not the handler and the System Administrator is not a workflow
+        # role at all, so none of them may take evidence custody actions.
         roles = {
-            "secretariat": self.secretariat,
             "hrm_chief": self.hrm_chief,
             "hrmpsb_member": self.hrmpsb,
             "appointing_authority": self.appointing,
+            "system_admin": self.sysadmin,
         }
         for label, user in roles.items():
             client = Client()
             self.force_login_with_mfa(client, user)
-            with self.subTest(role=label, endpoint="evidence_vault_list"):
-                response = client.get(reverse("evidence-vault-list"))
-                self.assertEqual(response.status_code, 403)
             with self.subTest(role=label, endpoint="evidence_upload"):
                 response = client.post(
                     reverse("evidence-upload", kwargs={"pk": application.pk}),
@@ -7654,7 +7689,9 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "System Administrator")
         self.assertContains(response, "rg-pill--system-admin")
-        self.assertContains(response, f'href="{reverse("evidence-vault-list")}"')
+        # The Secured Files vault was removed from the System Administrator role;
+        # the account keeps only its Audit Log and User Management navigation.
+        self.assertNotContains(response, "Secured Files")
         self.assertContains(response, f'href="{reverse("audit-log-list")}"')
         self.assertContains(response, "User Management")
 
@@ -7960,21 +7997,6 @@ class AuditLoggingTraceabilityTests(BaseRecruitmentTestCase):
         ).latest("created_at")
         self.assertTrue(log.is_sensitive_access)
         self.assertEqual(log.metadata["review_scope"], "application_audit")
-
-    def test_evidence_vault_review_logs_sensitive_access(self):
-        self.make_submitted_application()
-
-        client = Client()
-        self.force_login_with_mfa(client, self.sysadmin)
-        response = client.get(reverse("evidence-vault-list"))
-
-        self.assertEqual(response.status_code, 200)
-        log = AuditLog.objects.filter(
-            application__isnull=True,
-            actor=self.sysadmin,
-            action=AuditLog.Action.EVIDENCE_VAULT_VIEWED,
-        ).latest("created_at")
-        self.assertTrue(log.is_sensitive_access)
 
     def test_system_admin_audit_log_shows_system_and_case_activity(self):
         # Case activity (application-scoped) generates audit records...
