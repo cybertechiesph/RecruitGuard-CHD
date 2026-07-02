@@ -3607,12 +3607,12 @@ body.applicant-portal-body {
 /* ─────────────────────────────────────────────────────────────────
    Privacy & Data Protection band (RA 10173 assurance, landing page)
    Full-bleed dark institutional-green panel echoing the photo hero:
-   gold eyebrow + gold-accented icons carry the DOH seal accent, with
-   translucent glass cards over the green gradient.
+   gold eyebrow over a concise notice (purpose + recipients) plus a
+   muted footnote covering data-subject rights, DPO contact, retention.
 ───────────────────────────────────────────────────────────────── */
 .rg-pub-privacy {
     margin-top: 2.5rem;
-    padding: 3rem 1rem 3.25rem;
+    padding: 2.25rem 1rem 2.5rem;
     color: #fff;
     background:
         radial-gradient(circle at 88% 12%, rgba(253, 184, 19, 0.12), transparent 40%),
@@ -3620,12 +3620,8 @@ body.applicant-portal-body {
     border-top: 4px solid var(--rg-brand-gold);
 }
 .rg-pub-privacy__inner {
-    width: min(880px, calc(100% - 2rem));
+    width: min(760px, calc(100% - 2rem));
     margin-inline: auto;
-    display: grid;
-    grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
-    gap: 2rem 2.75rem;
-    align-items: start;
 }
 .rg-pub-privacy__eyebrow {
     display: inline-block;
@@ -3634,11 +3630,11 @@ body.applicant-portal-body {
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--rg-brand-gold);
-    margin-bottom: 0.7rem;
+    margin-bottom: 0.55rem;
 }
 .rg-pub-privacy__title {
-    margin: 0 0 0.85rem;
-    font-size: clamp(1.4rem, 2.6vw, 1.85rem);
+    margin: 0 0 0.6rem;
+    font-size: clamp(1.35rem, 2.4vw, 1.7rem);
     font-weight: 700;
     line-height: 1.22;
     letter-spacing: -0.01em;
@@ -3646,122 +3642,21 @@ body.applicant-portal-body {
 }
 .rg-pub-privacy__copy {
     margin: 0;
+    max-width: 62ch;
     font-size: 0.9rem;
-    line-height: 1.65;
+    line-height: 1.6;
     color: rgba(255, 255, 255, 0.82);
 }
-.rg-pub-privacy__grid {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.9rem;
-}
-.rg-pub-privacy__card {
-    padding: 1.1rem 1.15rem;
-    background: rgba(255, 255, 255, 0.055);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 0.75rem;
-}
-.rg-pub-privacy__icon {
-    display: inline-flex;
-    color: var(--rg-brand-gold);
-    margin-bottom: 0.6rem;
-}
-.rg-pub-privacy__icon svg {
-    width: 1.35rem;
-    height: 1.35rem;
-}
-.rg-pub-privacy__card-title {
-    margin: 0 0 0.3rem;
-    font-size: 0.925rem;
-    font-weight: 700;
-    color: #fff;
-}
-.rg-pub-privacy__card-copy {
-    margin: 0;
-    font-size: 0.82rem;
-    line-height: 1.5;
-    color: rgba(255, 255, 255, 0.72);
-}
-@media (max-width: 720px) {
-    .rg-pub-privacy__inner {
-        grid-template-columns: 1fr;
-        gap: 1.5rem;
-    }
-}
-@media (max-width: 460px) {
-    .rg-pub-privacy__grid {
-        grid-template-columns: 1fr;
-    }
-}
-.rg-pub-privacy__legal {
-    width: min(880px, calc(100% - 2rem));
-    margin: 2rem auto 0;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.9rem;
-}
-.rg-pub-privacy__panel {
-    padding: 1.25rem 1.3rem;
-    background: rgba(255, 255, 255, 0.055);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 0.75rem;
-}
-.rg-pub-privacy__panel-title {
-    margin: 0 0 0.55rem;
-    font-size: 0.925rem;
-    font-weight: 700;
-    color: var(--rg-brand-gold);
-}
-.rg-pub-privacy__panel-copy {
-    margin: 0 0 0.6rem;
-    font-size: 0.82rem;
+.rg-pub-privacy__footnote {
+    margin: 1.5rem 0 0;
+    max-width: 74ch;
+    font-size: 0.8rem;
     line-height: 1.55;
-    color: rgba(255, 255, 255, 0.78);
+    color: rgba(255, 255, 255, 0.62);
 }
-.rg-pub-privacy__panel-copy:last-child {
-    margin-bottom: 0;
-}
-.rg-pub-privacy__rights {
-    list-style: none;
-    margin: 0 0 0.7rem;
-    padding: 0;
-    display: grid;
-    gap: 0.45rem;
-}
-.rg-pub-privacy__rights li {
-    position: relative;
-    padding-left: 1.15rem;
-    font-size: 0.82rem;
-    line-height: 1.5;
-    color: rgba(255, 255, 255, 0.78);
-}
-.rg-pub-privacy__rights li::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 0.5em;
-    width: 0.4rem;
-    height: 0.4rem;
-    border-radius: 50%;
-    background: var(--rg-brand-gold);
-}
-.rg-pub-privacy__rights strong {
-    color: #fff;
+.rg-pub-privacy__footnote strong {
+    color: rgba(255, 255, 255, 0.85);
     font-weight: 700;
-}
-.rg-pub-privacy__panel-note {
-    margin: 0;
-    font-size: 0.76rem;
-    line-height: 1.5;
-    color: rgba(255, 255, 255, 0.6);
-}
-@media (max-width: 720px) {
-    .rg-pub-privacy__legal {
-        grid-template-columns: 1fr;
-    }
 }
 
 /* ─────────────────────────────────────────────────────────────────
