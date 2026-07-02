@@ -347,6 +347,10 @@
 <div class="rg-intake-actionbar">
     <div class="rg-intake-actionbar__inner">
         <div class="rg-intake-actionbar__msg" id="rg-intake-error" role="alert" hidden></div>
+        <div class="rg-intake-actionbar__progress" id="rg-intake-progress" role="status" aria-live="polite" hidden>
+            <progress id="rg-intake-progress-bar" max="100" value="0" style="width:100%; height:0.5rem;"></progress>
+            <span id="rg-intake-progress-text" class="rg-intake-actionbar__progress-text" style="display:block; font-size:0.8125rem; color:#374151; margin-top:0.25rem;"></span>
+        </div>
         <div class="rg-intake-actionbar__btns">
             <a href="{% url 'applicant-vacancy-detail' entry.pk %}"
                class="btn btn-outline-secondary btn-sm rg-intake-cancel">
@@ -1145,9 +1149,40 @@
         return inputs;
     }
     var submitBtnLabel = submitBtn ? submitBtn.textContent : "";
+    var submittingInFlight = false;
+    var progressBox = document.getElementById("rg-intake-progress");
+    var progressBar = document.getElementById("rg-intake-progress-bar");
+    var progressText = document.getElementById("rg-intake-progress-text");
+
+    function lockForSubmit() {
+        // Lock the submit button and show a persistent, indeterminate "uploading" status
+        // so an impatient applicant on a slow connection can neither double-submit nor
+        // assume the page froze and abandon it. submittingInFlight also suppresses the
+        // UX-02 leave-page guard for this navigation.
+        submittingInFlight = true;
+        form.setAttribute("aria-busy", "true");
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Submitting your application…"; }
+        if (nextBtn) nextBtn.disabled = true;
+        if (backBtn) backBtn.disabled = true;
+        if (errorBox) { errorBox.hidden = true; errorBox.textContent = ""; }
+        if (progressBar) progressBar.removeAttribute("value");  // indeterminate bar
+        if (progressText) progressText.textContent =
+            "Uploading your documents — this can take a few minutes on a slow connection. Please keep this page open.";
+        if (progressBox) progressBox.hidden = false;
+    }
+    function uploadForm() {
+        // Native submit (Tier 1): the browser POSTs, follows the redirect to the OTP page,
+        // and surfaces the server's one-time "draft is ready" message — all of which an XHR
+        // upload would consume via its automatic redirect-follow (and it would double-fetch
+        // /otp/, regressing UX-07). The lock + indeterminate status above already remove the
+        // double-submit and the frozen-page abandonment; a determinate percent bar would
+        // require XHR and is deferred to avoid that message/redirect regression.
+        lockForSubmit();
+        form.submit();
+    }
     function verifyReadabilityThenSubmit() {
         var inputs = selectedFileInputsForSubmit();
-        if (!inputs.length) { form.submit(); return; }
+        if (!inputs.length) { uploadForm(); return; }
         if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Checking your files…"; }
         Promise.all(inputs.map(function (input) {
             return checkFileReadable(input.files[0]).then(function (result) {
@@ -1163,14 +1198,17 @@
                     problems.push({ field: item.input, msg: item.result.msg });
                 }
             });
-            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = submitBtnLabel; }
             if (problems.length) {
+                // Re-enable so the applicant can fix the unreadable file and retry.
+                if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = submitBtnLabel; }
                 currentStep = "documents";
                 renderStep();
                 showErrors(problems);
                 return;
             }
-            form.submit();
+            // All checks passed — lock and upload with progress. Crucially do NOT
+            // re-enable the button here (that was the double-submit / frozen-page bug).
+            uploadForm();
         });
     }
 
@@ -1192,9 +1230,16 @@
         verifyReadabilityThenSubmit();
     });
 
-    // Clear the action-bar error when the user resumes editing
-    form.addEventListener("input", clearError);
-    form.addEventListener("change", clearError);
+    // Clear the action-bar error when the user resumes editing. A file-input change
+    // is skipped: its own handler renders the "why this file was rejected" inline
+    // error at selection time, and clearError (via clearFieldErrors) would otherwise
+    // wipe it as the change event bubbles here, leaving only the red slot (UX-09).
+    function clearErrorOnEdit(e) {
+        if (e && e.target && e.target.type === "file") return;
+        clearError();
+    }
+    form.addEventListener("input", clearErrorOnEdit);
+    form.addEventListener("change", clearErrorOnEdit);
 
     // On reload with server-side errors, open the first step containing one
     var startStep = "information";
@@ -1311,6 +1356,123 @@
         coverEl.addEventListener("input", updateCoverCount);
         updateCoverCount();
     }
+
+    /* ── UX-02: local draft of typed answers + leave-page guard ──────
+       Persist only the TYPED fields (never files) to localStorage so a refresh,
+       Back, "Cancel" link, or dropped connection before the first server submit
+       doesn't wipe everything. Restore only into a blank, non-server-draft form;
+       wipe on "Clear it" (borrowed-phone safety) or on reaching OTP (see the
+       clear script in applicant_otp.html, where the draft is safely on the server). */
+    (function () {
+        if (typeof Storage === "undefined") return;
+        var DRAFT_KEY = "rg-intake-{{ entry.pk }}";
+        var MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+        var TEXT_FIELDS = ["first_name", "last_name", "email", "phone", "qualification_summary", "cover_letter"];
+        var CHOICE_FIELDS = ["performance_rating_applicability"];
+        var CHECK_FIELDS = ["submission_confirmation"];
+        var VALUE_FIELDS = TEXT_FIELDS.concat(CHOICE_FIELDS);
+        var hasServerDraft = {% if form.saved_draft_notice %}true{% else %}false{% endif %} ||
+            window.location.search.indexOf("token=") !== -1;
+        var initialSnapshot = "";
+
+        function readValues() {
+            var data = {};
+            VALUE_FIELDS.forEach(function (name) {
+                var el = form.elements[name];
+                data[name] = el != null && typeof el.value === "string" ? el.value : "";
+            });
+            CHECK_FIELDS.forEach(function (name) {
+                var el = form.elements[name];
+                data[name] = el && el.checked ? "1" : "";
+            });
+            return data;
+        }
+        function anyTyped(values) {
+            return TEXT_FIELDS.some(function (n) { return ((values[n] || "") + "").trim() !== ""; });
+        }
+        function applyValues(values) {
+            VALUE_FIELDS.forEach(function (name) {
+                var el = form.elements[name];
+                if (el != null && typeof el.value !== "undefined") {
+                    try { el.value = values[name] || ""; } catch (e) {}
+                }
+            });
+            CHECK_FIELDS.forEach(function (name) {
+                var el = form.elements[name];
+                if (el) el.checked = values[name] === "1";
+            });
+        }
+        function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch (e) {} }
+        function blankValues() {
+            var blank = {};
+            VALUE_FIELDS.concat(CHECK_FIELDS).forEach(function (n) { blank[n] = ""; });
+            return blank;
+        }
+        function showRestoreNotice() {
+            var rail = document.querySelector(".rg-intake-steprail");
+            if (!rail || !rail.parentNode || document.getElementById("rg-intake-restore")) return;
+            var notice = document.createElement("div");
+            notice.id = "rg-intake-restore";
+            notice.className = "alert alert-info";
+            notice.setAttribute("role", "status");
+            notice.appendChild(document.createTextNode("We restored what you typed earlier on this device. Not yours? "));
+            var btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "btn btn-link p-0 align-baseline";
+            btn.textContent = "Clear it.";
+            btn.addEventListener("click", function () {
+                clearDraft();
+                applyValues(blankValues());
+                if (notice.parentNode) notice.parentNode.removeChild(notice);
+                initialSnapshot = JSON.stringify(readValues());
+            });
+            notice.appendChild(btn);
+            rail.parentNode.insertBefore(notice, rail);
+        }
+        function saveDraft() {
+            try {
+                var values = readValues();
+                if (anyTyped(values)) {
+                    localStorage.setItem(DRAFT_KEY, JSON.stringify({ savedAt: (new Date()).getTime(), values: values }));
+                }
+            } catch (e) {}
+        }
+
+        // Restore into a blank, non-server-draft form only (never clobber a ?token= draft).
+        if (!hasServerDraft && !anyTyped(readValues())) {
+            try {
+                var parsed = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
+                if (parsed && parsed.values && parsed.savedAt) {
+                    if (((new Date()).getTime() - parsed.savedAt) < MAX_AGE_MS && anyTyped(parsed.values)) {
+                        applyValues(parsed.values);
+                        showRestoreNotice();
+                    } else {
+                        clearDraft();
+                    }
+                }
+            } catch (e) {}
+        }
+
+        // Debounced save (1 s) of typed answers on every edit.
+        var saveTimer = null;
+        function scheduleSave() {
+            if (saveTimer) clearTimeout(saveTimer);
+            saveTimer = setTimeout(saveDraft, 1000);
+        }
+        form.addEventListener("input", scheduleSave);
+        form.addEventListener("change", scheduleSave);
+
+        // Leave-page guard: warn only when the form differs from its initial state and
+        // a real submit isn't in flight (uploadForm sets submittingInFlight before POST).
+        initialSnapshot = JSON.stringify(readValues());
+        window.addEventListener("beforeunload", function (e) {
+            if (submittingInFlight) return undefined;
+            if (JSON.stringify(readValues()) === initialSnapshot) return undefined;
+            e.preventDefault();
+            e.returnValue = "";
+            return "";
+        });
+    })();
 })();
 </script>
 {% endblock %}

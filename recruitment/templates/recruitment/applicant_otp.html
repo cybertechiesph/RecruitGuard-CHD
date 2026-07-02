@@ -30,6 +30,12 @@
 
 {% block content %}
 
+<script>
+    // The typed-answer draft is now saved on the server (we reached the OTP step),
+    // so drop the local copy — including on a shared/borrowed phone (UX-02).
+    try { localStorage.removeItem("rg-intake-{{ application.position.pk }}"); } catch (e) {}
+</script>
+
 <div class="rg-pub-wrap" style="max-width:560px; padding-top:1.5rem;">
 
     {# ── Applicant journey indicator (Apply / Verify / Done) ───── #}

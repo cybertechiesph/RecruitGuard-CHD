@@ -66,12 +66,16 @@
     {# Filter bar #}
     {% if plantilla_entries or cos_entries %}
     <div class="rg-pub-filters">
+        <label class="visually-hidden" for="rg-job-filter">Filter positions by name</label>
+        <input id="rg-job-filter" class="form-control" type="search"
+               placeholder="Type a position name, e.g. Nurse" autocomplete="off" style="max-width:280px;">
         <select class="form-select" id="filter-type" aria-label="Filter by position type" style="max-width:220px;">
             <option value="">All Position Types</option>
             <option value="plantilla">Permanent (Plantilla)</option>
             <option value="cos">Contract of Service</option>
         </select>
     </div>
+    <p id="rg-job-no-match" class="rg-pub-page-copy" role="status" hidden style="margin:0.75rem 0 0;"></p>
     {% endif %}
 
     {# Plantilla entries #}
@@ -297,23 +301,44 @@
 <script>
 (function () {
     var filterType = document.getElementById('filter-type');
+    var nameFilter = document.getElementById('rg-job-filter');
+    var noMatch = document.getElementById('rg-job-no-match');
     var cards = document.querySelectorAll('.js-job-card');
     var countEl = document.querySelector('.js-result-count');
 
+    function cardText(card) {
+        var title = card.querySelector('.rg-pub-job-card__title');
+        var ref = card.querySelector('.rg-pub-job-card__ref');
+        return ((title ? title.textContent : '') + ' ' + (ref ? ref.textContent : '')).toLowerCase();
+    }
+
     function applyFilters() {
         var type = filterType ? filterType.value : '';
+        var query = nameFilter ? nameFilter.value.trim().toLowerCase() : '';
         var visible = 0;
         cards.forEach(function (card) {
-            var show = (!type || card.dataset.type === type);
+            var show = (!type || card.dataset.type === type) &&
+                       (!query || cardText(card).indexOf(query) !== -1);
             card.style.display = show ? '' : 'none';
             if (show) visible++;
         });
         if (countEl) {
             countEl.textContent = 'Showing ' + visible + ' position' + (visible !== 1 ? 's' : '');
         }
+        if (noMatch) {
+            if (visible === 0) {
+                noMatch.textContent = query
+                    ? 'No positions match “' + nameFilter.value.trim() + '”. Clear the search to see all openings.'
+                    : 'No positions match the selected filter.';
+                noMatch.hidden = false;
+            } else {
+                noMatch.hidden = true;
+            }
+        }
     }
 
     if (filterType) filterType.addEventListener('change', applyFilters);
+    if (nameFilter) nameFilter.addEventListener('input', applyFilters);
     // Run once on load so the count reflects the rendered cards from the start.
     applyFilters();
 
