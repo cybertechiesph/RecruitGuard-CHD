@@ -59,7 +59,7 @@
 {% endif %}
 
 {% if screening_batch %}
-    {% if screening_batch.is_ready %}
+    {% if exam_batch_ready %}
         <div class="alert alert-success" role="status">
             Screening batch is complete &mdash; every applicant has a decision, so the qualified
             pool can proceed to the exam together.
@@ -67,7 +67,7 @@
                 <a href="{% url 'vacancy-batch-exam' entry.pk %}" class="btn btn-rg-primary btn-sm">Open batch exam</a>
             </div>
         </div>
-    {% else %}
+    {% elif not screening_batch.is_ready %}
         <div class="alert alert-warning" role="status">
             Screening batch is on hold: <strong>{{ screening_batch.pending }}</strong>
             applicant{{ screening_batch.pending|pluralize }} still need a screening decision

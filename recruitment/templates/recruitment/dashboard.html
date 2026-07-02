@@ -18,10 +18,8 @@ removes a class of "dead template code" bugs.
     </div>
 </div>
 
-{% include "internal_includes/banner.html" with variant="observer" title="System Administrator access" copy="Case content is not visible by default for this role. You have access to identity management, user administration, and audit log review." %}
-
 <div class="row g-3">
-    <div class="col-lg-7">
+    <div class="col-12">
         <div class="rg-icard rg-icard--hero h-100">
             <div class="rg-icard__header">
                 <div>
@@ -60,36 +58,6 @@ removes a class of "dead template code" bugs.
                 {% endfor %}
             {% else %}
                 {% include "internal_includes/state_empty.html" with title="No identity events yet" copy="Account creation, role changes, and activation events will appear here." %}
-            {% endif %}
-        </div>
-    </div>
-
-    <div class="col-lg-5 d-flex flex-column gap-3">
-        <div class="rg-icard">
-            <div class="rg-icard__header">
-                <h2 class="rg-icard__title">Open recruitment entries</h2>
-                <div class="rg-icard__actions">
-                    <a href="{% url 'recruitment-entry-list' %}" class="btn btn-outline-secondary btn-sm">Manage</a>
-                </div>
-            </div>
-            {% if positions %}
-                {% for position in positions|slice:":4" %}
-                    <div class="rg-dash-queue-row" style="display:flex;gap:.75rem;align-items:center;padding:.65rem 0;border-bottom:1px solid #edf0f3;">
-                        <div style="flex:1;min-width:0;">
-                            <div class="col-ref" style="font-family:ui-monospace,SFMono-Regular,'Cascadia Mono',Consolas,Menlo,monospace;font-size:0.75rem;font-weight:700;color:#7f8a96;">
-                                {{ position.job_code }}
-                            </div>
-                            <div style="font-size:0.875rem;font-weight:600;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                                {{ position.title }}
-                            </div>
-                        </div>
-                        <span class="rg-pill rg-pill--{{ position.branch|branch_theme }} rg-pill--sm">
-                            {{ position.get_branch_display }}
-                        </span>
-                    </div>
-                {% endfor %}
-            {% else %}
-                {% include "internal_includes/state_empty.html" with title="No active entries" copy="Active recruitment entries will appear here." %}
             {% endif %}
         </div>
     </div>

@@ -111,6 +111,7 @@ from .services import (
     get_case_timeline,
     get_screening_record,
     get_screening_records,
+    get_all_audit_logs,
     get_system_audit_logs,
     get_queue_for_user,
     get_visible_positions_for_user,
@@ -765,7 +766,7 @@ class AuditLogListView(LoginRequiredMixin, SystemAdministratorRequiredMixin, Tem
                 "sensitive_only": False,
             }
         audit_logs = list(
-            get_system_audit_logs(
+            get_all_audit_logs(
                 search_query=cleaned_data["q"],
                 action=cleaned_data["action"],
                 actor_role=cleaned_data["actor_role"],
@@ -1029,6 +1030,10 @@ class VacancyBatchDetailView(LoginRequiredMixin, WorkflowProcessorRequiredMixin,
         context["entry"] = entry
         context["applications"] = applications
         context["screening_batch"] = vacancy_screening_batch_status(entry)
+        context["exam_batch_ready"] = any(
+            user_can_view_application(self.request.user, application)
+            for application in vacancy_exam_pool(entry)
+        )
         context["interview_batch_ready"] = any(
             user_can_view_application(self.request.user, application)
             for application in vacancy_interview_pool(entry)

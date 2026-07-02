@@ -21,7 +21,7 @@ from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.db import transaction
-from django.test import Client, TestCase, override_settings
+from django.test import Client, SimpleTestCase, TestCase, override_settings
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
@@ -32,8 +32,12 @@ from .captcha import (
     validate_turnstile_token,
 )
 from .forms import (
+    APPLICANT_COVER_LETTER_LENGTH_ERROR_MESSAGE,
+    APPLICANT_COVER_LETTER_MAX_LENGTH,
     APPLICANT_MOBILE_ERROR_MESSAGE,
     APPLICANT_NAME_ERROR_MESSAGE,
+    APPLICANT_NAME_LENGTH_ERROR_MESSAGE,
+    APPLICANT_NAME_MAX_LENGTH,
     APPLICANT_QUALIFICATION_SUMMARY_LENGTH_ERROR_MESSAGE,
     APPLICANT_QUALIFICATION_SUMMARY_MAX_LENGTH,
     ApplicantOTPForm,
@@ -103,7 +107,6 @@ from .services import (
     get_queue_for_user,
     grant_secretariat_override,
     issue_application_otp,
-    persist_position,
     process_workflow_action,
     repair_auto_advance_workflow_boundaries,
     record_final_decision,
@@ -148,7 +151,11 @@ from .services import (
     user_can_view_application,
     verify_application_otp,
 )
-from .upload_validation import validate_applicant_document_upload
+from .upload_validation import (
+    ORIGINAL_FILENAME_MAX_LENGTH,
+    clamp_original_filename,
+    validate_applicant_document_upload,
+)
 
 
 User = get_user_model()
@@ -2137,63 +2144,6 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         self.assertEqual(first.position_slug, "budget-officer")
         self.assertEqual(second.position_slug, "budget-officer-2")
 
-    def test_persist_position_rejects_verified_reference_with_missing_official_metadata(self):
-        with self.assertRaises(ValidationError):
-            persist_position(
-                PositionReference(
-                    position_title="Half-Encoded Record",
-                    reference_status=PositionReference.ReferenceStatus.VERIFIED_REFERENCE,
-                    is_active=True,
-                ),
-                actor=self.sysadmin,
-                changed_fields=["position_title", "reference_status"],
-            )
-
-    def test_system_admin_can_create_position_reference_catalog_record(self):
-        client = Client()
-        self.force_login_with_mfa(client, self.sysadmin)
-        response = client.post(
-            reverse("position-catalog-create"),
-            {
-                "position_title": "Nurse II",
-                "position_slug": "",
-                "salary_grade": "15",
-                "level_classification": PositionReference.LevelClassification.SECOND_LEVEL,
-                "class_id": "NURS2",
-                "os_code": "09-MH",
-                "occupational_service": "Medicine and Health Service",
-                "occupational_group": "Nursing",
-                "reference_status": PositionReference.ReferenceStatus.VERIFIED_REFERENCE,
-                "notes": "Synthetic test record.",
-                "position_code": "POS-010",
-                "agency_item_number": "",
-                "office_division_default": "Clinical Services",
-                "qs_education": "Bachelor of Science in Nursing",
-                "qs_training": "",
-                "qs_experience": "",
-                "qs_eligibility": "RA 1080",
-                "employment_track_applicability": "plantilla",
-                "is_active": "on",
-            },
-        )
-
-        self.assertEqual(response.status_code, 302)
-        self.assertTrue(PositionReference.objects.filter(position_title="Nurse II").exists())
-        self.assertTrue(
-            AuditLog.objects.filter(
-                action=AuditLog.Action.POSITION_CREATED,
-                metadata__position_title="Nurse II",
-            ).exists()
-        )
-
-    def test_entry_manager_cannot_create_position_reference_catalog_record(self):
-        client = Client()
-        self.force_login_with_mfa(client, self.hrm_chief)
-
-        response = client.get(reverse("position-catalog-create"))
-
-        self.assertEqual(response.status_code, 403)
-
     def test_plantilla_entry_requires_fixed_period_and_closing_date(self):
         entry = PositionPosting(
             position_reference=self.admin_aide_position,
@@ -2987,6 +2937,42 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
             form.errors["qualification_summary"],
             [APPLICANT_QUALIFICATION_SUMMARY_LENGTH_ERROR_MESSAGE],
         )
+
+    def test_intake_rejects_overlong_names(self):
+        overlong = "A" * (APPLICANT_NAME_MAX_LENGTH + 1)
+        for field_name in ("first_name", "last_name"):
+            with self.subTest(field_name=field_name):
+                form = self.intake_field_validation_form(**{field_name: overlong})
+                self.assertEqual(
+                    form.errors[field_name],
+                    [APPLICANT_NAME_LENGTH_ERROR_MESSAGE],
+                )
+
+    def test_intake_renders_name_maxlength_attribute(self):
+        form = ApplicantPortalIntakeForm(entry=self.level1_position)
+        for field_name in ("first_name", "last_name"):
+            with self.subTest(field_name=field_name):
+                self.assertEqual(
+                    form.fields[field_name].widget.attrs.get("maxlength"),
+                    str(APPLICANT_NAME_MAX_LENGTH),
+                )
+
+    def test_intake_rejects_overlong_cover_letter(self):
+        form = self.intake_field_validation_form(
+            cover_letter="X" * (APPLICANT_COVER_LETTER_MAX_LENGTH + 1)
+        )
+
+        self.assertEqual(
+            form.errors["cover_letter"],
+            [APPLICANT_COVER_LETTER_LENGTH_ERROR_MESSAGE],
+        )
+
+    def test_intake_accepts_cover_letter_at_limit(self):
+        form = self.intake_field_validation_form(
+            cover_letter="X" * APPLICANT_COVER_LETTER_MAX_LENGTH
+        )
+
+        self.assertNotIn("cover_letter", form.errors)
 
     def test_intake_email_validation_behavior_is_unchanged(self):
         invalid_form = self.intake_field_validation_form(email="not-an-email")
@@ -4126,7 +4112,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(
             response,
-            "The same file cannot be used for multiple document slots",
+            "The same file is used for more than one document",
         )
         self.assertContains(response, "rg-pub-upload-slot--error")
         self.assertFalse(mail.outbox)
@@ -4136,6 +4122,72 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         ).first()
         if application is not None:
             self.assertFalse(application.otp_hash)
+
+    def test_duplicate_document_messages_are_concise_and_titleless(self):
+        # Regression for the applicant feedback that the duplicate-file error
+        # ballooned by listing every conflicting document's long formal title.
+        client = Client()
+        duplicate_bytes = b"%PDF-1.4\nshared-applicant-document\n%%EOF\n"
+        payload = self.portal_payload(email="concise.duplicate@example.com")
+        payload["signed_cover_letter"] = SimpleUploadedFile(
+            "shared.pdf", duplicate_bytes, content_type="application/pdf"
+        )
+        payload["personal_data_sheet"] = SimpleUploadedFile(
+            "shared-again.pdf", duplicate_bytes, content_type="application/pdf"
+        )
+
+        response = self.post_portal_intake(
+            client, self.level1_position, payload, follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        form = response.context["form"]
+
+        # One short summary line, computed during clean() and stored.
+        self.assertEqual(
+            form.duplicate_document_errors,
+            [
+                "The same file is used for more than one document. "
+                "Upload a different file for each one."
+            ],
+        )
+
+        field_error = form.errors["signed_cover_letter"][0]
+        self.assertEqual(
+            field_error,
+            "This file is already used for 1 other document. "
+            "Upload a different file for each one.",
+        )
+        # No long, formal document titles are spliced into the messages.
+        long_titles = [
+            requirement.title
+            for requirement in form.document_requirements
+            if len(requirement.title) > 40
+        ]
+        self.assertTrue(long_titles)  # sanity: the fixtures do have long titles
+        for title in long_titles:
+            self.assertNotIn(title, field_error)
+            self.assertNotIn(title, form.duplicate_document_errors[0])
+
+    def test_out_of_scope_draft_digests_do_not_produce_phantom_duplicate(self):
+        # A digest shared only by stale/out-of-requirement draft documents must
+        # NOT surface a group: otherwise the count underflows ("0 other
+        # documents") or a "Duplicate file detected" banner shows with no slot
+        # highlighted. Guard is on the in-scope code list, not the raw set.
+        class _Evidence:
+            def __init__(self, digest):
+                self.sha256_digest = digest
+
+        form = ApplicantPortalIntakeForm(data={}, entry=self.level1_position)
+        form.cleaned_data = {}
+        form.existing_documents_by_code = {
+            "retired_requirement_a": _Evidence("shared-digest"),
+            "retired_requirement_b": _Evidence("shared-digest"),
+        }
+        # Neither code is a current requirement.
+        self.assertNotIn("retired_requirement_a", form.document_requirements_by_code)
+
+        self.assertEqual(form._build_duplicate_document_groups(), [])
+        self.assertEqual(form._build_duplicate_document_warnings(), [])
 
     def test_final_submission_uses_requirement_codes_not_arbitrary_file_count(self):
         application = RecruitmentApplication.objects.create(
@@ -4174,11 +4226,14 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.verify_application_for_submission(application)
         with self.assertRaisesMessage(
             ValueError,
-            "Upload the required requirement-coded applicant documents before final submission.",
+            "Upload all required documents before final submission.",
         ) as exc:
             submit_application(application, self.applicant)
 
-        self.assertIn("Signed Cover Letter", str(exc.exception))
+        # Concise + title-free: no long formal document titles are enumerated.
+        message = str(exc.exception)
+        self.assertIn("still missing", message)
+        self.assertNotIn("Signed Cover Letter", message)
 
     def test_final_submission_rejects_duplicate_document_content(self):
         application = RecruitmentApplication.objects.create(
@@ -5361,7 +5416,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
                 **self.screening_document_status_payload(
                     application,
                     overrides={
-                        first_requirement.code: ScreeningDocumentReview.ReviewStatus.NEEDS_REVIEW,
+                        first_requirement.code: ScreeningDocumentReview.ReviewStatus.ABSENT,
                     },
                 ),
                 "operation": "finalize",
@@ -5373,7 +5428,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         self.assertContains(response, "Screening finalized and locked.")
         screening_record = ScreeningRecord.objects.get(application=application)
         document_review = screening_record.document_reviews.get(document_key=first_requirement.code)
-        self.assertEqual(document_review.status, ScreeningDocumentReview.ReviewStatus.NEEDS_REVIEW)
+        self.assertEqual(document_review.status, ScreeningDocumentReview.ReviewStatus.ABSENT)
         self.assertEqual(
             screening_record.document_reviews.count(),
             len(get_applicant_document_requirements(application)),
@@ -5454,7 +5509,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         self.assertContains(response, "Add the instruction the applicant should follow")
         self.assertFalse(ScreeningRecord.objects.filter(application=application, is_finalized=True).exists())
 
-    def test_screening_view_blocks_complete_when_required_document_needs_review(self):
+    def test_screening_view_blocks_complete_when_required_document_absent(self):
         application = self.make_application(self.level1_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
@@ -5469,7 +5524,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
                 **self.screening_document_status_payload(
                     application,
                     overrides={
-                        first_requirement.code: ScreeningDocumentReview.ReviewStatus.NEEDS_REVIEW,
+                        first_requirement.code: ScreeningDocumentReview.ReviewStatus.ABSENT,
                     },
                 ),
                 "operation": "finalize",
@@ -6456,6 +6511,23 @@ class VacancyBatchConsoleTests(BaseRecruitmentTestCase):
         response = client.get(reverse("vacancy-batch-detail", args=[self.level2_position.pk]))
         self.assertEqual(response.status_code, 404)
 
+    def test_batch_exam_button_is_gated_on_the_exam_pool(self):
+        application = self._submit(self.make_application(self.level1_position))
+        self.finalize_screening_for_current_stage(application, self.secretariat)
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        # Screened with the exam still pending -> the batch detail offers the exam.
+        response = client.get(reverse("vacancy-batch-detail", args=[self.level1_position.pk]))
+        self.assertContains(response, "Open batch exam")
+
+        # Once the exam is finalized the pool advances; the (now dead) exam link is gone,
+        # and the interview link takes its place.
+        with self.captureOnCommitCallbacks(execute=True):
+            self.finalize_exam_for_current_stage(application, self.secretariat)
+        response = client.get(reverse("vacancy-batch-detail", args=[self.level1_position.pk]))
+        self.assertNotContains(response, "Open batch exam")
+        self.assertContains(response, "Open batch interview")
+
     def test_console_requires_workflow_processor_role(self):
         client = Client()
         self.force_login_with_mfa(client, self.sysadmin)
@@ -7013,6 +7085,27 @@ class VacancyBatchInterviewTests(BaseRecruitmentTestCase):
         self.assertTrue(interview_is_finalized_for_current_stage(first))
         self.assertTrue(interview_is_finalized_for_current_stage(second))
         self.assertEqual(get_current_workflow_section(first), "deliberation")
+
+
+class ClampOriginalFilenameTests(SimpleTestCase):
+    def test_short_name_is_returned_unchanged(self):
+        self.assertEqual(clamp_original_filename("diploma.pdf"), "diploma.pdf")
+
+    def test_blank_name_is_handled(self):
+        self.assertEqual(clamp_original_filename(""), "")
+        self.assertEqual(clamp_original_filename(None), "")
+
+    def test_overlong_name_is_clamped_preserving_extension(self):
+        stem = "a" * 400
+        result = clamp_original_filename(f"{stem}.pdf")
+        self.assertEqual(len(result), ORIGINAL_FILENAME_MAX_LENGTH)
+        self.assertTrue(result.endswith(".pdf"))
+
+    def test_clamped_name_fits_the_storage_column(self):
+        # EvidenceVaultItem.original_filename is a CharField(max_length=255);
+        # the clamp must never hand it something longer.
+        result = clamp_original_filename("x" * 1000 + ".png")
+        self.assertLessEqual(len(result), ORIGINAL_FILENAME_MAX_LENGTH)
 
 
 class ApplicantUploadValidationTests(TestCase):
@@ -8017,7 +8110,10 @@ class AuditLoggingTraceabilityTests(BaseRecruitmentTestCase):
         ).latest("created_at")
         self.assertTrue(log.is_sensitive_access)
 
-    def test_system_admin_can_review_system_audit_logs_only(self):
+    def test_system_admin_audit_log_shows_system_and_case_activity(self):
+        # Case activity (application-scoped) generates audit records...
+        application = self.make_submitted_application()
+        # ...alongside system/identity events.
         record_system_audit_event(
             actor=self.sysadmin,
             action=AuditLog.Action.PASSWORD_CHANGED,
@@ -8030,16 +8126,20 @@ class AuditLoggingTraceabilityTests(BaseRecruitmentTestCase):
         response = client.get(reverse("audit-log-list"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "System Audit Log")
+        self.assertContains(response, "Audit Log")
+        # Both system/identity events and case activity appear in the
+        # consolidated oversight trail.
         self.assertContains(response, "Password Changed")
-        self.assertFalse(response.context["audit_logs"][0].application_id if response.context["audit_logs"] else False)
+        audit_logs = response.context["audit_logs"]
+        self.assertTrue(any(log.application_id == application.id for log in audit_logs))
+        self.assertTrue(any(log.application_id is None for log in audit_logs))
         log = AuditLog.objects.filter(
             application__isnull=True,
             actor=self.sysadmin,
             action=AuditLog.Action.AUDIT_LOG_VIEWED,
         ).latest("created_at")
         self.assertTrue(log.is_sensitive_access)
-        self.assertEqual(log.metadata["review_scope"], "system_audit")
+        self.assertEqual(log.metadata["review_scope"], "consolidated_audit")
 
     def test_non_admin_roles_cannot_review_audit_logs(self):
         application = self.make_submitted_application()

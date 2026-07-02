@@ -8126,12 +8126,6 @@ textarea.form-control {
     background: #f0fdf4;
 }
 
-.rg-scr-status-pill[data-fixed-status="needs_review"] {
-    border-color: #fde68a;
-    color: #92400e;
-    background: #fffbeb;
-}
-
 .rg-scr-status-pill[data-fixed-status="absent"] {
     border-color: #fecaca;
     color: #991b1b;
