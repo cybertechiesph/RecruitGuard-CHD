@@ -104,7 +104,7 @@
                             {% include "internal_includes/stage_sla_badge.html" with recruitment_case=application.case variant="sm" %}
                         </td>
                         <td>
-                            <div style="font-size:0.8125rem;color:#374151;">{{ application.updated_at|timesince|truncatewords:2 }} ago</div>
+                            <div style="font-size:0.8125rem;color:#374151;">{{ application.updated_at|timesince_short }} ago</div>
                             <div class="rg-imeta mt-1">{{ application.updated_at|date:"M d, Y" }}</div>
                         </td>
                         <td class="col-actions">

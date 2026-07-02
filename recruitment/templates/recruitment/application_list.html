@@ -50,16 +50,19 @@
 </form>
 {% endif %}
 
-{% if applications %}
+{% if applications or branch %}
     <div class="rg-queue-toolbar">
+        {# Server-side branch filter (a GET param, so it works across pages and the count
+           reflects the branch-filtered total). Preserves the active q / step filters. #}
         <div class="rg-queue-filters" role="group" aria-label="Filter cases by type">
-            <button type="button" class="rg-queue-chip is-active" data-queue-filter="all">All</button>
-            <button type="button" class="rg-queue-chip" data-queue-filter="plantilla">Plantilla</button>
-            <button type="button" class="rg-queue-chip" data-queue-filter="cos">Contract of Service</button>
+            <a class="rg-queue-chip{% if not branch %} is-active{% endif %}"
+               href="?{% if q %}q={{ q|urlencode }}&{% endif %}{% if step %}step={{ step|urlencode }}{% endif %}">All</a>
+            <a class="rg-queue-chip{% if branch == 'plantilla' %} is-active{% endif %}"
+               href="?branch=plantilla{% if q %}&q={{ q|urlencode }}{% endif %}{% if step %}&step={{ step|urlencode }}{% endif %}">Plantilla</a>
+            <a class="rg-queue-chip{% if branch == 'cos' %} is-active{% endif %}"
+               href="?branch=cos{% if q %}&q={{ q|urlencode }}{% endif %}{% if step %}&step={{ step|urlencode }}{% endif %}">Contract of Service</a>
         </div>
-        <p class="rg-queue-count js-queue-count"
-           aria-live="polite"
-           data-queue-suffix="{% if is_queue %}in your queue{% elif is_closed_list %}closed{% else %}you can view{% endif %}">
+        <p class="rg-queue-count" aria-live="polite">
             <strong>{{ total_count }}</strong>
             case{{ total_count|pluralize }}
             {% if is_queue %}in your queue{% elif is_closed_list %}closed{% else %}you can view{% endif %}.
@@ -69,7 +72,7 @@
 
 {% if not applications %}
     <div class="rg-icard">
-        {% if q or step %}
+        {% if q or step or branch %}
             {% include "internal_includes/state_empty.html" with title="No matching cases" copy="No cases match your search or step filter. Try a different term, or reset the filters." %}
         {% elif is_queue %}
             {% include "internal_includes/state_empty.html" with title="You're all caught up" copy="No cases need your action right now. New assignments will appear here." %}
@@ -162,7 +165,7 @@
                             {% endif %}
                             <td>
                                 <div style="font-size:0.8125rem;color:#374151;">
-                                    {{ application.updated_at|timesince|truncatewords:2 }} ago
+                                    {{ application.updated_at|timesince_short }} ago
                                 </div>
                                 <div class="rg-imeta mt-1">{{ application.updated_at|date:"M d, Y" }}</div>
                             </td>
@@ -179,44 +182,8 @@
                 </tbody>
             </table>
         </div>
-        <div class="rg-queue-noresults js-queue-noresults" hidden>
-            No cases match this filter.
-        </div>
     </div>
 
     {% include "internal_includes/pagination.html" %}
-
-    <script>
-    (function () {
-        "use strict";
-        var chips = document.querySelectorAll("[data-queue-filter]");
-        var rows = document.querySelectorAll("[data-queue-row]");
-        var countEl = document.querySelector(".js-queue-count");
-        var noResults = document.querySelector(".js-queue-noresults");
-        if (!chips.length) return;
-        var suffix = countEl ? (countEl.dataset.queueSuffix || "") : "";
-
-        function applyFilter(value) {
-            var visible = 0;
-            rows.forEach(function (row) {
-                var show = value === "all" || row.dataset.branch === value;
-                row.hidden = !show;
-                if (show) visible++;
-            });
-            if (countEl) {
-                countEl.innerHTML = "<strong>" + visible + "</strong> case" +
-                    (visible === 1 ? "" : "s") + " " + suffix + ".";
-            }
-            if (noResults) noResults.hidden = visible !== 0;
-        }
-        chips.forEach(function (chip) {
-            chip.addEventListener("click", function () {
-                chips.forEach(function (c) { c.classList.remove("is-active"); });
-                chip.classList.add("is-active");
-                applyFilter(chip.dataset.queueFilter);
-            });
-        });
-    })();
-    </script>
 {% endif %}
 {% endblock %}

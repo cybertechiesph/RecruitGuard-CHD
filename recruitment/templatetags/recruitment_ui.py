@@ -1,6 +1,7 @@
 import json
 
 from django import template
+from django.utils.timesince import timesince as django_timesince
 
 from recruitment.models import (
     audit_action_label as resolve_audit_action_label,
@@ -26,6 +27,16 @@ from recruitment.services import (
 )
 
 register = template.Library()
+
+
+@register.filter
+def timesince_short(value):
+    """Largest-unit-only 'time since' (e.g. '2 days', '1 month'). Django's timesince can
+    return two comma-joined units ('2 days, 3 hours'); list rows only need the leading unit,
+    so this trims the rest cleanly (no trailing ellipsis)."""
+    if not value:
+        return ""
+    return django_timesince(value).split(",")[0]
 
 
 ROLE_LABELS = dict(RecruitmentUser.Role.choices)

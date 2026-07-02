@@ -409,6 +409,9 @@ def _workflow_list_object_list(base_queryset, params):
     section is computed per-application, not stored, so it can't be filtered in the database).
     Either type is paginatable by ListView."""
     queryset = _apply_workflow_list_search(base_queryset, params.get("q", ""))
+    branch = (params.get("branch", "") or "").strip()
+    if branch in {PositionPosting.Branch.PLANTILLA, PositionPosting.Branch.COS}:
+        queryset = queryset.filter(branch=branch)
     step = (params.get("step", "") or "").strip()
     if step:
         return [
@@ -424,6 +427,7 @@ def _add_workflow_list_search_context(context, request):
     params = request.GET
     context["q"] = (params.get("q", "") or "").strip()
     context["step"] = (params.get("step", "") or "").strip()
+    context["branch"] = (params.get("branch", "") or "").strip()
     context["step_choices"] = WORKFLOW_LIST_STEP_CHOICES
     context["show_search"] = True
     querystring = request.GET.copy()
@@ -1280,6 +1284,10 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
                     row["technical_score"] = technical
                 if row:
                     rows[case_id] = row
+            # Capture the pre-finalize handler role so the toast can tell "routed to a new
+            # office" apart from "same office, next step". The pool moves in lockstep, so one
+            # representative role is enough.
+            handler_before_finalize = pool[0].current_handler_role if pool else ""
             try:
                 saved = save_vacancy_exam_scores(entry, request.user, rows, finalize=finalize)
             except (ValueError, ValidationError) as exc:
@@ -1287,10 +1295,13 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
                 return redirect("vacancy-batch-exam", pk=entry.pk)
             if finalize:
                 count = len(saved)
-                # The whole pool advances together to a single next handler; read it off any
-                # routed application (mutated in place by save_exam_record).
+                # save_exam_record mutates each routed application in place, so a changed
+                # handler role means the pool advanced to a new office. When it is unchanged
+                # (e.g. a COS batch the HRM Chief finalizes at their own review stage — the
+                # case only moves from the exam section to the interview section), don't claim
+                # a handoff that didn't happen.
                 next_role = saved[0].current_handler_role if saved else ""
-                if next_role:
+                if next_role and next_role != handler_before_finalize:
                     next_role_label = RecruitmentUser.Role(next_role).label
                     messages.success(
                         request,
@@ -1299,7 +1310,11 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
                         f"{next_role_label} review.",
                     )
                 else:
-                    messages.success(request, "Exam batch finalized — the pool advanced together.")
+                    messages.success(
+                        request,
+                        f"Exam batch finalized — all {count} "
+                        f"candidate{'' if count == 1 else 's'} moved to the next review step.",
+                    )
                 return redirect("vacancy-batches")
             messages.success(request, "Exam scores saved.")
             return redirect("vacancy-batch-exam", pk=entry.pk)
