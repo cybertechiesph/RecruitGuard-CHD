@@ -1,0 +1,80 @@
+{% comment %}
+  RecruitGuard-CHD — light/dark theme bootstrap (internal + auth pages only).
+
+  Pulled into {% block head_early %} by internal_base.html and each of the six
+  pre-login auth templates. The applicant portal never includes this file, so it
+  never receives the data-theme / data-bs-theme attribute and always stays light.
+
+  Runs synchronously in <head> BEFORE first paint to prevent a flash-of-light
+  when a dark preference is saved. Behaviour:
+    - explicit choice in localStorage["rg-theme"] wins;
+    - otherwise follow the OS (prefers-color-scheme) and LIVE-follow OS changes
+      until the user makes an explicit choice via the top-bar toggle;
+    - cross-tab sync via the storage event.
+{% endcomment %}
+<script>
+(function () {
+    "use strict";
+    var KEY = "rg-theme";
+    var root = document.documentElement;
+    var mql = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+
+    function stored() {
+        try { return localStorage.getItem(KEY); } catch (e) { return null; }
+    }
+    function osDark() { return !!(mql && mql.matches); }
+    function resolve() {
+        var s = stored();
+        if (s === "light" || s === "dark") return s;
+        return osDark() ? "dark" : "light";
+    }
+    function apply(theme) {
+        root.setAttribute("data-theme", theme);
+        root.setAttribute("data-bs-theme", theme);
+    }
+
+    /* 1) No-flash: set the attribute immediately, before the body paints. */
+    apply(resolve());
+
+    /* 2) Live-follow the OS until the user makes an explicit choice. */
+    function onOS() { if (!stored()) { apply(resolve()); syncToggle(); } }
+    if (mql) {
+        if (mql.addEventListener) mql.addEventListener("change", onOS);
+        else if (mql.addListener) mql.addListener(onOS);
+    }
+
+    /* 3) Cross-tab sync: another tab changed (or cleared) the preference. */
+    window.addEventListener("storage", function (e) {
+        if (e.key === KEY || e.key === null) { apply(resolve()); syncToggle(); }
+    });
+
+    /* 4) Toggle button (rendered in the internal top bar). */
+    function syncToggle() {
+        var btn = document.querySelector("[data-rg-theme-toggle]");
+        if (!btn) return;
+        var dark = root.getAttribute("data-theme") === "dark";
+        var label = dark ? "Switch to light theme" : "Switch to dark theme";
+        btn.setAttribute("aria-pressed", dark ? "true" : "false");
+        btn.setAttribute("aria-label", label);
+        btn.setAttribute("title", label);
+        var text = btn.querySelector("[data-rg-theme-toggle-text]");
+        if (text) text.textContent = dark ? "Dark" : "Light";
+    }
+    function wire() {
+        var btn = document.querySelector("[data-rg-theme-toggle]");
+        if (!btn) return;
+        syncToggle();
+        btn.addEventListener("click", function () {
+            var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+            try { localStorage.setItem(KEY, next); } catch (e) {}
+            apply(next);
+            syncToggle();
+        });
+    }
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", wire);
+    } else {
+        wire();
+    }
+})();
+</script>

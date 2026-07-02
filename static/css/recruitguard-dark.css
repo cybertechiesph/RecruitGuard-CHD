@@ -1,0 +1,1763 @@
+/* ==========================================================================
+   RecruitGuard-CHD — Dark theme layer
+   --------------------------------------------------------------------------
+   SCOPE
+     Every dark rule is scoped under html[data-theme="dark"]. That attribute is
+     set (by internal_includes/theme_head.html) ONLY on the internal staff
+     portal and the six pre-login auth templates. The applicant portal never
+     receives it, so none of these rules can ever reach applicant pages — and
+     for that reason applicant-only selectors (.applicant-portal-body …,
+     .rg-pub-*, .rg-intake-*, .rg-ta-*, .rg-applicant-panel*) are intentionally
+     NOT written here; they would be dead weight.
+
+   PRINT SAFETY
+     The whole dark layer lives inside @media screen { … } so print / headless
+     PDF rendering always falls back to the light base theme. The ONLY things
+     outside that wrapper are (a) the mode-independent toggle-button chrome and
+     (b) a defensive @media print reset at the very end.
+
+   CASCADE
+     Loaded AFTER recruitguard.css and recruitguard-doh-brand.css. Most colour
+     comes through --rg-* / --rgi-* custom properties, so the token layer
+     (section 3) flips the bulk of the UI automatically; the remaining sections
+     override the hardcoded literals the audit catalogued.
+
+   SECTIONS
+     1  Toggle chrome                         [outside @media screen]
+     -- @media screen -------------------------------------------------
+     2  Toggle dark state
+     3  Token layer (semantic + brand + rgi)
+     4  Global surfaces / body / scrollbar
+     5  Cards, panels, lists, tables
+     6  Sidebar, context bar, topbar
+     7  Forms & focus
+     8  Buttons & green-fill contrast fixes
+     9  Status: alerts, pills, washes, workflow buttons
+     10 Case-workspace bodies (screening/exam/interview/deliberation/
+        decision/completion/final-selection) + drawers / action bars / rails
+     11 Login / auth card + seal chips
+     12 Misc literal cleanups
+     13 Reduced-motion transitions
+     -- /@media screen ------------------------------------------------
+     14 Print safety net                       [outside @media screen]
+   ========================================================================== */
+
+
+/* ==========================================================================
+   1 · TOGGLE CHROME — mode-independent (outside @media screen)
+   Compact top-bar pill. Light appearance by default; sun shown, moon hidden.
+   ========================================================================== */
+.rg-theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    height: 1.9rem;
+    padding: 0 0.7rem;
+    border: 1px solid #cfd6dd;
+    border-radius: 999px;
+    background: #fff;
+    color: #5f6c78;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.rg-theme-toggle:hover {
+    background: #f1f4f7;
+    border-color: #b8c0ca;
+    color: #111827;
+}
+.rg-theme-toggle:focus-visible {
+    outline: 2px solid #1e5c2d;
+    outline-offset: 2px;
+}
+.rg-theme-toggle__icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+.rg-theme-toggle__sun  { display: inline-flex; }
+.rg-theme-toggle__moon { display: none; }
+
+@media (max-width: 640px) {
+    .rg-theme-toggle__text { display: none; }
+}
+
+
+@media screen {
+
+/* ==========================================================================
+   2 · TOGGLE — dark state
+   ========================================================================== */
+html[data-theme="dark"] .rg-theme-toggle {
+    background: #1b2733;
+    border-color: rgba(255, 255, 255, 0.14);
+    color: #c3d0dc;
+}
+html[data-theme="dark"] .rg-theme-toggle:hover {
+    background: #22303d;
+    border-color: rgba(255, 255, 255, 0.24);
+    color: #e8edf2;
+}
+html[data-theme="dark"] .rg-theme-toggle:focus-visible {
+    outline-color: #5bbf72;
+}
+html[data-theme="dark"] .rg-theme-toggle__sun  { display: none; }
+html[data-theme="dark"] .rg-theme-toggle__moon { display: inline-flex; }
+
+
+/* ==========================================================================
+   3 · TOKEN LAYER
+   Re-declared on BOTH html[data-theme="dark"] and html[data-theme="dark"] body.
+   The body selector (0,1,2) beats .internal-portal-body (0,1,0) where the
+   --rgi-* / brand tokens are originally declared, so the redefinitions win.
+   Flipping these auto-updates every var()-driven component.
+   ========================================================================== */
+html[data-theme="dark"],
+html[data-theme="dark"] body {
+    color-scheme: dark;
+
+    /* --- semantic tokens (recruitguard.css :root) --- */
+    --rg-ink: #e8edf2;
+    --rg-muted: #9aa8b6;
+    --rg-border: rgba(255, 255, 255, 0.12);
+    --rg-border-strong: rgba(255, 255, 255, 0.20);
+    --rg-surface: #131b26;
+    --rg-surface-elevated: #1b2733;
+    --rg-surface-soft: #141d28;
+    --rg-secondary: #17222b;
+    --rg-shadow-soft: 0 24px 56px rgba(0, 0, 0, 0.55);
+    --rg-shadow-card: 0 18px 40px rgba(0, 0, 0, 0.50);
+
+    /* --- brand tokens (recruitguard-doh-brand.css) --- */
+    --rg-brand-green: #5bbf72;          /* light green: text/links/icons on dark */
+    --rg-brand-green-strong: #74cf88;   /* brighter hover                        */
+    --rg-brand-green-soft: rgba(91, 191, 114, 0.15);
+    --rg-brand-green-ink: #d3ecda;
+    --rg-brand-gold: #ffcb4d;
+    --rg-brand-gold-strong: #ffdd85;
+    --rg-brand-gold-soft: rgba(253, 184, 19, 0.15);
+    --rg-brand-success: #8fd257;
+    --rg-brand-success-soft: rgba(126, 187, 66, 0.16);
+    --rg-brand-success-ink: #a9dd76;
+    --rg-brand-health-blue: #4bb4e8;
+    --rg-brand-health-blue-soft: rgba(50, 160, 218, 0.16);
+    --rg-brand-health-blue-ink: #7cc6ec;
+    --rg-brand-danger: #ec6f68;
+
+    /* rebinds */
+    --rg-primary: var(--rg-brand-green);
+    --rg-primary-strong: var(--rg-brand-green-strong);
+    --rg-primary-soft: rgba(91, 191, 114, 0.15);
+    --rg-accent: var(--rg-brand-gold);
+    --rg-accent-strong: var(--rg-brand-gold-strong);
+
+    /* --- internal --rgi-* tokens (recruitguard.css .internal-portal-body) --- */
+    --rgi-surface: #131b26;
+    --rgi-card: #1b2733;
+    --rgi-border: rgba(255, 255, 255, 0.12);
+    --rgi-border-strong: rgba(255, 255, 255, 0.20);
+    --rgi-muted: #9aa8b6;
+    --rgi-ink: #e8edf2;
+    --rgi-primary-hover: #74cf88;
+    --rgi-accent: #ffcb4d;
+    --rgi-shadow: 0 2px 8px rgba(0, 0, 0, 0.40);
+    /* --rgi-navy is declared once (recruitguard.css L4515) and consumed nowhere
+       — a dead token. Given no bg/text use exists, it is set to a mid-navy
+       background tone so any future use reads correctly on dark. */
+    --rgi-navy: #223a52;
+}
+
+
+/* ==========================================================================
+   4 · GLOBAL SURFACES / BODY / SCROLLBAR
+   ========================================================================== */
+
+/* Body background — brand.css sets this !important, so override at equal
+   specificity + !important. */
+html[data-theme="dark"] body.internal-portal-body {
+    background:
+        radial-gradient(circle at top right, rgba(253, 184, 19, 0.10), transparent 30%),
+        linear-gradient(180deg, #0f1620 0%, #131b26 60%, #0f1620 100%) !important;
+    color: var(--rg-ink);
+}
+
+/* Page base + main content + auth column shells (literals #f5f6f7/#f5f6f9). */
+html[data-theme="dark"] :is(
+    .rg-main-content,
+    .rg-login-form-col,
+    .rg-standalone-403
+) {
+    background: #131b26;
+}
+
+/* Native-chrome scrollbars (color-scheme handles Firefox; WebKit styled here). */
+html[data-theme="dark"] ::-webkit-scrollbar { width: 12px; height: 12px; }
+html[data-theme="dark"] ::-webkit-scrollbar-track { background: #0f1620; }
+html[data-theme="dark"] ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.14);
+    border: 3px solid #0f1620;
+    border-radius: 8px;
+}
+html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.22); }
+
+
+/* ==========================================================================
+   5 · CARDS, PANELS, LISTS, TABLES
+   ========================================================================== */
+
+/* --- Elevated card surfaces (hardcoded #fff / white-alpha → #1b2733) --- */
+html[data-theme="dark"] :is(
+    .internal-portal-body .card,
+    .rg-surface,
+    .rg-icard,
+    .rg-icard--section,
+    .rg-stat-chip,
+    .rg-admin-note,
+    .rg-kpi,
+    .rg-list-item,
+    .rg-table-shell,
+    .rg-record,
+    .rg-entry-card,
+    .rg-service-banner,
+    .rg-service-notice,
+    .rg-path-panel,
+    .rg-count-badge,
+    .rg-forbidden-icon,
+    .rg-level-label,
+    .rg-fixed-value,
+    .internal-portal-body .rg-cws-disclosure,
+    .rg-itbl,
+    .rg-fsect,
+    .rg-drawer,
+    .rg-istat-row,
+    .rg-ifilter-bar,
+    .rg-checklist-panel,
+    .rg-upload-card,
+    .rg-vacancy-split,
+    .rg-vacancy-list__header,
+    .rg-stage-status,
+    .rg-step-indicator__num,
+    .rg-notif__panel,
+    .rg-notif-page
+) {
+    background: #1b2733;
+    color: var(--rg-ink);
+}
+
+/* Soft inset / hover surfaces (near-white → deep inset). */
+html[data-theme="dark"] :is(
+    .rg-form-section,
+    .rg-auth-side__panel,
+    .rg-empty-state,
+    .internal-portal-body .rg-empty-state,
+    .rg-progress-step,
+    .rg-field--checkbox,
+    .rg-step,
+    .rg-dash-announce
+) {
+    background: #141d28;
+}
+html[data-theme="dark"] :is(
+    .rg-dash-queue-row:hover,
+    .internal-portal-body .rg-nav-link:hover,
+    .internal-portal-body .rg-nav-link.is-active
+) {
+    background: rgba(255, 255, 255, 0.06);
+}
+html[data-theme="dark"] :is(
+    .rg-progress-step.is-future,
+    .rg-empty-state,
+    .internal-portal-body .rg-empty-state
+) {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+/* --- Card / panel borders (hairline literals → translucent white) --- */
+html[data-theme="dark"] :is(
+    .internal-portal-body .card,
+    .rg-surface,
+    .rg-icard,
+    .internal-portal-body .rg-user-pill,
+    .rg-service-banner,
+    .rg-service-notice,
+    .rg-path-panel,
+    .rg-count-badge,
+    .rg-level-label,
+    .rg-entry-row,
+    .rg-path-panel__header,
+    .rg-login-security-notice,
+    .rg-dash-queue-row,
+    .rg-dash-announce,
+    .rg-dash-sysad-event,
+    .internal-portal-body .rg-cws-disclosure,
+    .rg-icard__header,
+    .rg-fsect__header,
+    .rg-fsect__footer,
+    .rg-skeleton-row,
+    .rg-idivider,
+    .rg-itbl,
+    .rg-drawer__header,
+    .rg-drawer__footer,
+    .rg-istat-row,
+    .rg-ifilter-bar,
+    .rg-vacancy-card,
+    .rg-checklist-panel,
+    .rg-upload-card,
+    .rg-notif__panel,
+    .rg-notif-page
+) {
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* --- Tables --- */
+html[data-theme="dark"] :is(
+    .internal-portal-body .table thead th,
+    .rg-itbl thead th
+) {
+    background: #1b2733;
+    color: var(--rg-muted);
+    border-bottom-color: rgba(255, 255, 255, 0.12);
+}
+html[data-theme="dark"] .table thead th {
+    background: rgba(255, 255, 255, 0.04);
+}
+html[data-theme="dark"] .table > :not(caption) > * > * {
+    border-color: rgba(255, 255, 255, 0.08);
+}
+html[data-theme="dark"] :is(
+    .table tbody tr:hover,
+    .internal-portal-body .table tbody tr:hover,
+    .rg-itbl tbody tr:hover td
+) {
+    background: rgba(255, 255, 255, 0.04);
+}
+html[data-theme="dark"] .rg-itbl--zebra tbody tr:nth-child(even) td {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* Modal / drawer shells + scrims. */
+html[data-theme="dark"] .rg-modal-confirm .modal-content {
+    background: #1b2733;
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+html[data-theme="dark"] :is(
+    .rg-modal-confirm .modal-header,
+    .rg-modal-confirm .modal-footer,
+    .rg-modal-confirm__summary,
+    .rg-icard__header,
+    .rg-fsect__header,
+    .rg-fsect__footer
+) {
+    border-color: rgba(255, 255, 255, 0.08);
+}
+html[data-theme="dark"] .rg-modal-confirm__summary { background: #141d28; }
+html[data-theme="dark"] :is(.rg-drawer-overlay, .rg-drawer__overlay) {
+    background: rgba(0, 0, 0, 0.55);
+}
+html[data-theme="dark"] .rg-sidebar.is-open { box-shadow: 0 0 40px rgba(0, 0, 0, 0.60); }
+
+
+/* ==========================================================================
+   6 · SIDEBAR, CONTEXT BAR, TOPBAR
+   ========================================================================== */
+html[data-theme="dark"] :is(
+    .rg-sidebar,
+    .rg-context-bar,
+    .internal-portal-body .rg-topbar
+) {
+    background: #131b26;
+    color: var(--rg-ink);
+}
+html[data-theme="dark"] .rg-sidebar { border-right-color: rgba(255, 255, 255, 0.10); }
+html[data-theme="dark"] :is(
+    .rg-sidebar__brand,
+    .rg-sidebar__footer,
+    .rg-context-bar,
+    .internal-portal-body .rg-topbar
+) {
+    border-color: rgba(255, 255, 255, 0.10);
+}
+html[data-theme="dark"] .rg-sidebar__brand { border-bottom-color: rgba(255, 255, 255, 0.10); }
+
+/* Sidebar links / labels. */
+html[data-theme="dark"] .rg-sidebar__link { color: #d6dfe8; }
+html[data-theme="dark"] .rg-sidebar__link:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: #e8edf2;
+}
+html[data-theme="dark"] :is(.rg-sidebar__section-label, .rg-sidebar__brand small) { color: #9aa8b6; }
+html[data-theme="dark"] .rg-sidebar__brand { color: #e8edf2; }
+
+/* Active nav link — light rule uses !important (brand.css). Match it. */
+html[data-theme="dark"] .rg-sidebar__link.is-active {
+    background: rgba(91, 191, 114, 0.15) !important;
+    color: var(--rg-brand-green) !important;
+    border-color: rgba(91, 191, 114, 0.30);
+}
+
+/* Context bar text / user pill / breadcrumbs. */
+html[data-theme="dark"] :is(
+    .rg-context-bar__breadcrumb,
+    .rg-context-bar__role,
+    .internal-portal-body .rg-user-pill,
+    .rg-breadcrumb-home,
+    .rg-topbar__menu-btn
+) {
+    color: #9aa8b6;
+}
+html[data-theme="dark"] :is(.rg-context-bar__role strong, .rg-breadcrumb-current) { color: #e8edf2; }
+html[data-theme="dark"] .rg-breadcrumb-home:hover { color: #e8edf2; }
+html[data-theme="dark"] .internal-portal-body .rg-user-pill {
+    background: #1b2733;
+    border-color: rgba(255, 255, 255, 0.12);
+}
+html[data-theme="dark"] .rg-breadcrumb-sep { color: rgba(255, 255, 255, 0.30); }
+
+/* Sidebar seal chip: 44×44 background-image with no bg colour — give it a
+   white chip WITHOUT clipping the contained (background-size:contain) image. */
+html[data-theme="dark"] .rg-sidebar__brand-seal {
+    background-color: #fff;
+    background-origin: content-box;
+    padding: 4px;
+    border-radius: 8px;
+    box-sizing: border-box;
+}
+
+
+/* ==========================================================================
+   7 · FORMS & FOCUS
+   ========================================================================== */
+html[data-theme="dark"] :is(
+    .form-control,
+    .form-select,
+    .internal-portal-body .form-control,
+    .internal-portal-body .form-select,
+    .rg-login-card input,
+    .rg-login-form-card input
+) {
+    background: #1b2733;
+    border-color: rgba(255, 255, 255, 0.16);
+    color: var(--rg-ink);
+}
+html[data-theme="dark"] :is(.form-control::placeholder, .form-select::placeholder) {
+    color: #8a99a8;
+}
+html[data-theme="dark"] :is(.form-label, .internal-portal-body .form-label) { color: #d6dfe8; }
+html[data-theme="dark"] :is(.form-text, .internal-portal-body .form-text) { color: #9aa8b6; }
+
+/* Focus ring — brand.css forces a DARK-green rgba(30,92,45,.15) box-shadow
+   !important which is invisible on dark. Restate brighter, at !important. */
+html[data-theme="dark"] :is(
+    .form-control,
+    .form-select,
+    .internal-portal-body .form-control,
+    .internal-portal-body .form-select,
+    .rg-login-card input,
+    .rg-login-form-card input
+):focus {
+    border-color: var(--rg-brand-green) !important;
+    box-shadow: 0 0 0 3px rgba(91, 191, 114, 0.30) !important;
+}
+
+/* Generic visible focus outline (brand green). */
+html[data-theme="dark"] :is(a, button, summary, [tabindex], .btn, .form-control, .form-select):focus-visible {
+    outline-color: #5bbf72;
+}
+
+/* Invalid-field state (danger). */
+html[data-theme="dark"] :is(.rg-field.has-error .form-control, .rg-field.has-error .form-select) {
+    border-color: #f87171;
+    background: rgba(220, 38, 38, 0.10);
+}
+html[data-theme="dark"] :is(.rg-field.has-error .form-control, .rg-field.has-error .form-select):focus {
+    box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.30) !important;
+}
+html[data-theme="dark"] .rg-field__error { color: #f87171; }
+html[data-theme="dark"] :is(.rg-required, .rg-field.has-error label) { color: #f87171; }
+
+
+/* ==========================================================================
+   8 · BUTTONS & GREEN-FILL CONTRAST FIXES
+   --------------------------------------------------------------------------
+   When --rg-brand-green becomes a LIGHT token, any element using it as a SOLID
+   fill under white text loses contrast. For those, force a mid-deep green that
+   keeps white text ≥ 3:1. Green used as TEXT keeps the light token.
+   ========================================================================== */
+html[data-theme="dark"] :is(
+    .btn-rg-primary,
+    .internal-portal-body .btn-rg-primary,
+    .rg-login-page .btn-rg-primary,
+    .rg-login-body-wrap .btn-rg-primary,
+    .btn-rg-finalize,
+    .rg-wf-action-btn--endorse,
+    .rg-wf-action-btn--recommend,
+    .rg-wf-action-btn--approve,
+    .rg-wf-action-btn--release,
+    .rg-del-avg-strip,
+    .rg-del-rank-badge,
+    .rg-scr-doc-drawer__header,
+    .rg-scr-steprail__item.is-current .rg-scr-steprail__num
+) {
+    background: #278040;
+    border-color: #278040;
+    color: #fff;
+}
+html[data-theme="dark"] :is(
+    .btn-rg-primary:hover,
+    .btn-rg-primary:focus,
+    .internal-portal-body .btn-rg-primary:hover,
+    .internal-portal-body .btn-rg-primary:focus,
+    .btn-rg-finalize:hover:not(:disabled):not(.is-blocked),
+    .rg-wf-action-btn--endorse:hover,
+    .rg-wf-action-btn--recommend:hover,
+    .rg-wf-action-btn--approve:hover,
+    .rg-wf-action-btn--release:hover,
+    .rg-scr-doc-view:hover,
+    .rg-scr-doc-view:focus
+) {
+    background: #206c33;
+    border-color: #206c33;
+    color: #fff;
+}
+
+/* Pipeline complete circle + lock ribbon — light rules use !important. */
+html[data-theme="dark"] .rg-pipeline__stage.is-complete .rg-pipeline__circle {
+    background: #278040 !important;
+    border-color: #278040 !important;
+    color: #fff !important;
+}
+html[data-theme="dark"] .rg-cws-lock-ribbon {
+    background: #278040 !important;
+    color: #fff !important;
+}
+
+/* Current pipeline circle — brand.css forces background:#fff !important. Make
+   it an elevated dark card so the numeral / amber accents stay legible. */
+html[data-theme="dark"] .rg-pipeline__stage.is-current .rg-pipeline__circle,
+html[data-theme="dark"] .rg-cws-pipeline .rg-pipeline__stage.is-current .rg-pipeline__circle {
+    background: #1b2733 !important;
+}
+
+/* Observer notice band (token gradient, both stops now light) → deep green. */
+html[data-theme="dark"] .rg-cws-observer-notice {
+    background: linear-gradient(90deg, #26783d 0%, #278040 100%);
+    color: #fff;
+}
+
+/* Outline / ghost / secondary buttons — white fill → transparent-on-dark. */
+html[data-theme="dark"] :is(
+    .internal-portal-body .btn-outline-secondary,
+    .internal-portal-body .btn-light,
+    .internal-portal-body .btn-rg-secondary,
+    .internal-portal-body .btn-rg-ghost,
+    .internal-portal-body .btn-rg-destructive,
+    .internal-portal-body .btn-outline-danger,
+    .internal-portal-body .btn-rg-warn
+) {
+    background: #1b2733;
+    color: #d6dfe8;
+    border-color: rgba(255, 255, 255, 0.16);
+}
+html[data-theme="dark"] :is(
+    .internal-portal-body .btn-outline-secondary:hover,
+    .internal-portal-body .btn-light:hover,
+    .internal-portal-body .btn-rg-ghost:hover,
+    .internal-portal-body .btn-rg-ghost:focus
+) {
+    background: rgba(255, 255, 255, 0.06);
+    color: #e8edf2;
+    border-color: rgba(255, 255, 255, 0.24);
+}
+html[data-theme="dark"] :is(
+    .internal-portal-body .btn-rg-secondary:hover,
+    .internal-portal-body .btn-rg-secondary:focus
+) {
+    background: rgba(91, 191, 114, 0.15);
+    border-color: var(--rg-brand-green);
+    color: var(--rg-brand-green);
+}
+
+/* Disabled finalize button. */
+html[data-theme="dark"] :is(.btn-rg-finalize:disabled, .btn-rg-finalize.is-blocked) {
+    background: #263340;
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #8a99a8;
+}
+
+/* code / inline snippets. */
+html[data-theme="dark"] code { color: #8ec5f0; }
+
+
+/* ==========================================================================
+   9 · STATUS — alerts, pills, washes, workflow buttons
+   Each family flips as a triad: translucent bg + LIGHT text + translucent border.
+   ========================================================================== */
+
+/* -------- Alerts (recruitguard.css custom washes) -------- */
+html[data-theme="dark"] .alert { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.40); }
+html[data-theme="dark"] .alert-success {
+    background: rgba(126, 187, 66, 0.16);
+    border-color: rgba(126, 187, 66, 0.34);
+    color: #a9dd76;
+}
+html[data-theme="dark"] .alert-info {
+    background: rgba(75, 180, 232, 0.14);
+    border-color: rgba(75, 180, 232, 0.32);
+    color: #7cc6ec;
+}
+html[data-theme="dark"] .alert-warning {
+    background: rgba(253, 184, 19, 0.14);
+    border-color: rgba(253, 184, 19, 0.36);
+    color: #f0c661;
+}
+html[data-theme="dark"] :is(.alert-danger, .alert-error) {
+    background: rgba(236, 111, 104, 0.14);
+    border-color: rgba(236, 111, 104, 0.38);
+    color: #f0a8a2;
+}
+
+/* -------- Pills — background wash -------- */
+html[data-theme="dark"] :is(
+    .rg-pill--success, .rg-pill--active, .rg-progress-step.is-complete
+) { background: rgba(126, 187, 66, 0.16); }
+html[data-theme="dark"] :is(
+    .rg-pill--info, .rg-pill--level-1, .rg-pill--applicant, .rg-progress-step.is-current, .rg-pill--reopened
+) { background: rgba(75, 180, 232, 0.14); }
+html[data-theme="dark"] :is(
+    .rg-pill--warning, .rg-pill--cos, .rg-pill--locked, .rg-pill--suspended
+) { background: rgba(253, 184, 19, 0.14); }
+html[data-theme="dark"] :is(
+    .rg-pill--danger, .rg-pill--level-2, .rg-pill--appointing-authority, .rg-pill--on-hold
+) { background: rgba(236, 111, 104, 0.14); }
+html[data-theme="dark"] :is(.rg-pill--plantilla, .rg-pill--secretariat) { background: rgba(75, 180, 232, 0.14); }
+html[data-theme="dark"] .rg-pill--hrm-chief { background: rgba(100, 130, 220, 0.18); }
+html[data-theme="dark"] .rg-pill--hrmpsb-member { background: rgba(168, 130, 224, 0.18); }
+html[data-theme="dark"] :is(
+    .rg-pill--neutral, .rg-pill--system-admin, .rg-pill--draft, .rg-pill--closed, .rg-pill--withdrawn
+) { background: #223041; }
+
+/* -------- Pills — text -------- */
+html[data-theme="dark"] :is(.rg-pill--success, .rg-pill--active) { color: #a9dd76; }
+html[data-theme="dark"] :is(
+    .rg-pill--info, .rg-pill--level-1, .rg-pill--applicant, .rg-pill--plantilla, .rg-pill--secretariat, .rg-pill--reopened
+) { color: #7cc6ec; }
+html[data-theme="dark"] :is(.rg-pill--warning, .rg-pill--cos, .rg-pill--locked, .rg-pill--suspended) { color: #f0c661; }
+html[data-theme="dark"] :is(.rg-pill--danger) { color: #f0a8a2; }
+html[data-theme="dark"] :is(.rg-pill--level-2, .rg-pill--appointing-authority, .rg-pill--on-hold) { color: #f0a877; }
+html[data-theme="dark"] .rg-pill--hrm-chief { color: #9db0f0; }
+html[data-theme="dark"] .rg-pill--hrmpsb-member { color: #c9adf2; }
+html[data-theme="dark"] :is(
+    .rg-pill--neutral, .rg-pill--system-admin, .rg-pill--draft, .rg-pill--closed, .rg-pill--withdrawn
+) { color: #c3d0dc; }
+
+/* -------- Pills — border -------- */
+html[data-theme="dark"] :is(.rg-pill--success, .rg-pill--active) { border-color: rgba(126, 187, 66, 0.34); }
+html[data-theme="dark"] :is(
+    .rg-pill--info, .rg-pill--level-1, .rg-pill--applicant, .rg-pill--reopened
+) { border-color: rgba(75, 180, 232, 0.32); }
+html[data-theme="dark"] :is(.rg-pill--plantilla, .rg-pill--secretariat) { border-color: rgba(63, 169, 176, 0.32); }
+html[data-theme="dark"] :is(.rg-pill--warning, .rg-pill--cos, .rg-pill--locked, .rg-pill--suspended) { border-color: rgba(253, 184, 19, 0.36); }
+html[data-theme="dark"] :is(.rg-pill--danger, .rg-pill--level-2, .rg-pill--appointing-authority, .rg-pill--on-hold) { border-color: rgba(236, 111, 104, 0.36); }
+html[data-theme="dark"] .rg-pill--hrm-chief { border-color: rgba(100, 130, 220, 0.35); }
+html[data-theme="dark"] .rg-pill--hrmpsb-member { border-color: rgba(168, 130, 224, 0.32); }
+html[data-theme="dark"] :is(.rg-pill--neutral, .rg-pill--system-admin, .rg-pill--draft, .rg-pill--closed, .rg-pill--withdrawn) { border-color: rgba(255, 255, 255, 0.14); }
+
+/* -------- Progress-step + timeline connectors -------- */
+html[data-theme="dark"] .rg-progress-step.is-complete { border-color: rgba(126, 187, 66, 0.30); }
+html[data-theme="dark"] .rg-progress-step.is-current {
+    border-color: rgba(75, 180, 232, 0.35);
+    box-shadow: inset 0 0 0 1px rgba(90, 150, 220, 0.20);
+}
+
+/* -------- Workflow return / reject buttons (outline, gold / red) -------- */
+html[data-theme="dark"] :is(
+    .rg-wf-action-btn--return-to-applicant,
+    .rg-wf-action-btn--return-to-hrm-chief,
+    .rg-wf-action-btn--return-car-for-reassessment
+) {
+    background: #1b2733;
+    color: #f0c04b;
+    border-color: rgba(253, 184, 19, 0.42);
+}
+html[data-theme="dark"] .rg-wf-action-btn--reject {
+    background: #1b2733;
+    color: #f2a8a3;
+    border-color: rgba(201, 47, 39, 0.45);
+}
+html[data-theme="dark"] .rg-wf-action-btn--reject:hover { background: rgba(201, 47, 39, 0.16); }
+/* Gold badge that carries DARK text stays as-is (do NOT lighten its text). */
+html[data-theme="dark"] .rg-wf-return-doclist li { border-color: rgba(253, 184, 19, 0.42); }
+
+
+/* ==========================================================================
+   10 · CASE-WORKSPACE BODIES
+   screening / exam / interview / deliberation / decision / completion /
+   final-selection — plus drawers, action bars, step rails.
+   ========================================================================== */
+
+/* -------- Text ramp (headings / body / muted) -------- */
+/* Headings → #e8edf2 */
+html[data-theme="dark"] :is(
+    .rg-cws-header__title, .rg-cws-stage-titlebar__title,
+    .rg-scr-elig-bar__verdict, .rg-scr-doc-row__name, .rg-scr-modal-summary__value,
+    .rg-scr-locked-field__value, .rg-scr-decision-strip__title, .rg-scr-panel__title,
+    .rg-scr-doc-title, .rg-scr-primary-link, .rg-scr-reference-grid strong,
+    .rg-exam-locked-field__value,
+    .rg-int-context-item__value, .rg-int-session-info-row__value, .rg-int-progress-item__name,
+    .rg-int-prev-step__value--strong, .rg-int-readout-grid strong, .rg-int-monitor-item__name,
+    .rg-del-rating-row__evaluator, .rg-del-car-item__name, .rg-del-car-item__score-val,
+    .rg-del-locked__facts strong,
+    .rg-pkt-section__title, .rg-pkt-row__value,
+    .rg-dec-locked-frame__header-title,
+    .rg-cmp-archive-meta__value, .rg-cmp-timeline-item__action, .rg-cmp-checklist__title,
+    .rg-icard__title, .rg-fsect__title, .rg-drawer__title, .rg-istat__value,
+    .rg-vacancy-list__title, .rg-vacancy-card__title, .rg-vacancy-detail__title,
+    .rg-checklist-panel__title, .rg-list-summary strong, .rg-ifield-display,
+    .rg-workspace-tab:hover, .rg-stage-tab:hover, .rg-drawer__close:hover,
+    .rg-notif__item-title, .rg-notif-page__title
+) { color: #e8edf2; }
+
+/* Body → #d6dfe8 */
+html[data-theme="dark"] :is(
+    .rg-scr-ready-item--met, .rg-scr-ready-item--blocking, .rg-scr-choice-btn:hover,
+    .rg-scr-file-name, .rg-scr-reference-note,
+    .rg-car-ete-row__name, .rg-int-competency-row__label,
+    .rg-int-submitted-state__meta, .rg-del-rating-row__notes, .rg-del-car-item__score-val,
+    .rg-del-rating-row__justification, .rg-del-car-item__decision,
+    .rg-pkt-session-item__label, .rg-pkt-evidence-item, .rg-dec-choice-btn,
+    .rg-cmp-req-row__label, .rg-cmp-req-progress, .rg-cmp-reopen-zone__body,
+    .rg-modal-confirm .modal-body, .rg-banner--observer,
+    .rg-istate-empty__title, .rg-istate-error__title
+) { color: #d6dfe8; }
+
+/* Muted → #9aa8b6 */
+html[data-theme="dark"] :is(
+    .rg-ifield-display__label, .rg-imeta,
+    .rg-cws-header__ref, .rg-cws-header__meta, .rg-cws-header__facts,
+    .rg-cws-stage-tab, .rg-cws-fin-bar__info, .rg-cws-meta-row__label, .rg-cws-main .rg-note,
+    .rg-scr-elig-bar__label, .rg-scr-elig-bar__meta, .rg-scr-doc-verdict-btn,
+    .rg-scr-modal-summary__label, .rg-scr-locked-field__label, .rg-scr-choice-btn,
+    .rg-scr-kicker, .rg-scr-step-state__item, .rg-scr-panel__subtitle,
+    .rg-scr-doc-table th, .rg-scr-doc-meta, .rg-scr-secondary-link, .rg-scr-status-pill,
+    .rg-scr-reference-grid span,
+    .rg-exam-locked-field__label,
+    .rg-int-context-item__label, .rg-int-session-info-row__label,
+    .rg-int-submitted-state__notice, .rg-int-no-submission, .rg-int-progress-item__role,
+    .rg-int-revise-notice, .rg-int-competency-group__head, .rg-int-competency-scale-note,
+    .rg-int-monitor-item__role,
+    .rg-del-score-badge__num, .rg-del-rating-row__role, .rg-del-car-item__scores,
+    .rg-del-car-item__decision, .rg-del-rank-badge,
+    .rg-pkt-section__badge--none, .rg-pkt-row__label, .rg-pkt-outcome-pill--pending,
+    .rg-dec-choice-btn__sub,
+    .rg-cmp-req-row__notes, .rg-cmp-timeline-item__meta, .rg-cmp-req-status-badge--na,
+    .rg-icard__subtitle, .rg-fsect__help, .rg-drawer__meta, .rg-drawer__section-title,
+    .rg-list-summary, .rg-istat__label, .rg-imeta__sep,
+    .rg-vacancy-card__meta, .rg-vacancy-detail__heading, .rg-workspace-tab, .rg-stage-tab,
+    .rg-istate-empty__copy, .rg-istate-loading__label, .rg-istate-error__copy,
+    .rg-notif__item-text, .rg-notif-page__text, .rg-queue-count, .rg-sensitive-tag
+) { color: #9aa8b6; }
+
+/* Faint meta → #8a99a8 */
+html[data-theme="dark"] :is(
+    .rg-scr-elig-bar__icon, .rg-scr-doc-row__tag, .rg-scr-ready-item,
+    .rg-scr-optional-label, .rg-scr-primary-link:hover,
+    .rg-int-score-val, .rg-int-score-dial-label,
+    .rg-del-score-badge__sub, .rg-del-car-item__score-label,
+    .rg-cmp-req-form-row__seq, .rg-cmp-archive-meta__label,
+    .rg-notif__item-meta, .rg-notif-page__meta
+) { color: #8a99a8; }
+
+/* -------- Surfaces (white / near-white → dark card / inset) -------- */
+html[data-theme="dark"] :is(
+    .rg-cws-header, .rg-cws-pipeline, .rg-cws-fin-bar,
+    .rg-scr-doc-verdict-btn, .rg-scr-choice-btn, .rg-scr-decision-strip, .rg-scr-panel,
+    .rg-scr-primary-link, .rg-scr-doc-table,
+    .rg-int-score-dial, .rg-del-car-item, .rg-del-score-badge,
+    .rg-dec-choice-btn, .rg-cmp-reopen-zone, .rg-cmp-req-form-row
+) {
+    background: #1b2733;
+    color: var(--rg-ink);
+}
+html[data-theme="dark"] :is(
+    .rg-cws-locked-frame, .rg-scr-elig-bar, .rg-scr-elig-bar--pending, .rg-scr-elig-bar--no-status,
+    .rg-scr-modal-summary, .rg-int-no-submission, .rg-int-score-wrap,
+    .rg-car-ete-row, .rg-del-rating-row, .rg-del-locked-summary,
+    .rg-pkt-session-item, .rg-pkt-overview, .rg-cmp-req-row, .rg-cmp-archive-meta,
+    .rg-scr-step-state__item, .rg-scr-qualification-reference
+) {
+    background: #141d28;
+}
+html[data-theme="dark"] :is(
+    .rg-scr-doc-verdict-btn:hover, .rg-scr-choice-btn:hover, .rg-dec-choice-btn:hover,
+    .rg-del-rank-badge, .rg-pkt-section__head, .rg-dec-locked-frame__header,
+    .rg-stage-tab:hover, .internal-portal-body .btn-rg-ghost:hover
+) {
+    background: #22303d;
+}
+html[data-theme="dark"] .rg-scr-doc-table tr.is-muted td { background: #131b26; }
+
+/* -------- Borders / dividers -------- */
+html[data-theme="dark"] :is(
+    .rg-cws-header, .rg-cws-stage-tabs, .rg-cws-fin-bar,
+    .rg-scr-elig-bar, .rg-scr-elig-bar--pending, .rg-scr-elig-bar--no-status,
+    .rg-scr-doc-verdict-btn, .rg-scr-modal-summary, .rg-scr-choice-btn,
+    .rg-scr-decision-strip, .rg-scr-panel, .rg-scr-panel__tag,
+    .rg-exam-cond-group, .rg-int-score-wrap, .rg-int-score-dial, .rg-int-revise-panel,
+    .rg-del-score-badge, .rg-del-locked-summary, .rg-del-rank-badge,
+    .rg-pkt-section, .rg-pkt-section__head, .rg-pkt-overview,
+    .rg-dec-choice-btn, .rg-dec-locked-frame, .rg-dec-locked-frame__header,
+    .rg-cmp-archive-meta, .rg-cws-locked-frame, .rg-car-ete-row,
+    .rg-int-competency-group__head, .rg-int-progress-item, .rg-del-rating-row, .rg-del-car-item,
+    .rg-pkt-session-item, .rg-cmp-req-row, .rg-cmp-req-form-row, .rg-cmp-req-progress,
+    .rg-scr-step-state__item, .rg-scr-doc-table-wrap, .rg-scr-status-pill, .rg-scr-qualification-reference
+) {
+    border-color: rgba(255, 255, 255, 0.12);
+}
+html[data-theme="dark"] :is(
+    .rg-cws-pipeline, .rg-cws-stage-titlebar, .rg-cws-meta-row,
+    .rg-scr-doc-row, .rg-scr-modal-summary__row, .rg-scr-locked-field,
+    .rg-exam-locked-field, .rg-int-session-info-row,
+    .rg-scr-doc-table th, .rg-scr-doc-table td
+) {
+    border-bottom-color: rgba(255, 255, 255, 0.10);
+}
+html[data-theme="dark"] :is(
+    .rg-car-ete-input, .rg-int-competency-row__input .rg-competency-score-input,
+    .rg-scr-primary-link, .rg-del-rating-row:hover
+) {
+    border-color: rgba(255, 255, 255, 0.18);
+}
+html[data-theme="dark"] :is(.rg-scr-doc-verdict-btn:hover, .rg-scr-choice-btn:hover) {
+    border-color: rgba(255, 255, 255, 0.24);
+}
+/* Progress-bar tracks, timeline spines, connector bases, separator dots. */
+html[data-theme="dark"] :is(
+    .rg-cmp-req-progress__bar, .rg-cmp-timeline::before,
+    .rg-cws-pipeline .rg-pipeline__connector, .rg-pipeline__connector
+) {
+    background: rgba(255, 255, 255, 0.10);
+}
+html[data-theme="dark"] :is(.rg-imeta__sep, .rg-cws-header__facts span:not(:last-child)::after) {
+    background: #3a4756;
+}
+
+/* -------- Status washes (case-workspace, Tailwind palette) -------- */
+/* success */
+html[data-theme="dark"] :is(
+    .rg-scr-elig-bar--qualified, .rg-scr-elig-bar--completed, .rg-scr-doc-verdict-btn.is-meets,
+    .rg-scr-choice-btn.is-active-success, .rg-int-submitted-state, .rg-int-submitted,
+    .rg-del-score-badge--passing, .rg-del-car-item:first-child,
+    .rg-dec-choice-btn.is-active--selected, .rg-dec-status-bar--selected,
+    .rg-cmp-closed-banner--selected, .rg-cmp-req-form-row[data-req-status="completed"],
+    .rg-scr-step-state__item.is-complete, .rg-scr-status-pill[data-fixed-status="meets"],
+    .rg-pill--active, .rg-banner--success
+) { background: rgba(34, 197, 94, 0.14); }
+html[data-theme="dark"] :is(
+    .rg-scr-elig-bar--qualified .rg-scr-elig-bar__icon, .rg-scr-ready-item--met .rg-scr-ready-item__icon,
+    .rg-scr-elig-bar--completed .rg-scr-elig-bar__icon, .rg-int-submitted-dial,
+    .rg-del-car-item:first-child .rg-del-rank-badge, .rg-pkt-section__badge--ok,
+    .rg-pkt-outcome-pill--passed, .rg-dec-outcome-pill--selected, .rg-cmp-req-status-badge--completed,
+    .rg-cws-pipeline .rg-pipeline__stage.is-complete .rg-pipeline__circle
+) { background: rgba(34, 197, 94, 0.22); }
+html[data-theme="dark"] :is(
+    .rg-scr-elig-bar--qualified .rg-scr-elig-bar__verdict, .rg-scr-doc-verdict-btn.is-meets,
+    .rg-scr-choice-btn.is-active-success, .rg-scr-elig-bar--completed .rg-scr-elig-bar__verdict,
+    .rg-int-submitted-dial__score, .rg-int-submitted-state__headline, .rg-int-submitted__heading,
+    .rg-del-score-badge--passing .rg-del-score-badge__num, .rg-pkt-section__badge--ok,
+    .rg-pkt-outcome-pill--passed, .rg-dec-choice-btn.is-active--selected, .rg-dec-outcome-pill--selected,
+    .rg-dec-status-bar--selected, .rg-cmp-closed-banner--selected, .rg-cmp-req-status-badge--completed,
+    .rg-scr-step-state__item.is-complete, .rg-scr-status-pill[data-fixed-status="meets"],
+    .rg-scr-elig-bar--qualified .rg-scr-elig-bar__icon, .rg-int-score-dial-label.is-passing,
+    .rg-int-progress-item__tag, .rg-pill--active, .rg-banner--success
+) { color: #4ade80; }
+html[data-theme="dark"] :is(
+    .rg-scr-elig-bar--qualified, .rg-scr-doc-verdict-btn.is-meets, .rg-scr-choice-btn.is-active-success,
+    .rg-scr-elig-bar--completed, .rg-int-submitted-state, .rg-int-submitted, .rg-int-submitted-dial,
+    .rg-del-score-badge--passing, .rg-del-car-item:first-child, .rg-pkt-section__badge--ok,
+    .rg-pkt-outcome-pill--passed, .rg-dec-choice-btn.is-active--selected, .rg-dec-outcome-pill--selected,
+    .rg-dec-status-bar--selected, .rg-cmp-closed-banner--selected, .rg-cmp-req-status-badge--completed,
+    .rg-cmp-req-form-row[data-req-status="completed"], .rg-int-progress-item--submitted,
+    .rg-scr-step-state__item.is-complete, .rg-scr-status-pill[data-fixed-status="meets"], .rg-banner--success
+) { border-color: rgba(74, 222, 128, 0.40); }
+html[data-theme="dark"] .rg-cmp-req-progress__fill { background: #22c55e; }
+
+/* danger */
+html[data-theme="dark"] :is(
+    .rg-scr-elig-bar--not-qualified, .rg-scr-doc-verdict-btn.is-absent, .rg-scr-choice-btn.is-active-danger,
+    .rg-scr-elig-bar--absent, .rg-scr-status-pill.is-absent, .rg-scr-status-pill[data-fixed-status="absent"],
+    .rg-exam-validation-alert, .rg-dec-choice-btn.is-active--not-selected, .rg-dec-status-bar--not-selected,
+    .rg-cmp-closed-banner--not-selected, .rg-scr-actionbar__msg, .rg-fs-actions__msg,
+    .rg-del-recorder__msg, .rg-del-car__msg, .rg-banner--error, .rg-scr-result-facts__item--absent
+) { background: rgba(220, 38, 38, 0.14); }
+html[data-theme="dark"] :is(
+    .rg-scr-elig-bar--not-qualified .rg-scr-elig-bar__icon, .rg-scr-ready-item--blocking .rg-scr-ready-item__icon,
+    .rg-scr-elig-bar--absent .rg-scr-elig-bar__icon, .rg-pkt-outcome-pill--failed, .rg-dec-outcome-pill--not-selected
+) { background: rgba(220, 38, 38, 0.22); }
+html[data-theme="dark"] :is(
+    .rg-scr-elig-bar--not-qualified .rg-scr-elig-bar__verdict, .rg-scr-doc-verdict-btn.is-absent,
+    .rg-scr-choice-btn.is-active-danger, .rg-scr-elig-bar--absent .rg-scr-elig-bar__verdict,
+    .rg-exam-validation-alert, .rg-pkt-outcome-pill--failed, .rg-dec-choice-btn.is-active--not-selected,
+    .rg-dec-outcome-pill--not-selected, .rg-dec-status-bar--not-selected, .rg-cmp-closed-banner--not-selected,
+    .rg-cmp-reopen-zone__title, .rg-scr-status-pill.is-absent, .rg-scr-status-pill[data-fixed-status="absent"],
+    .rg-scr-elig-bar--not-qualified .rg-scr-elig-bar__icon, .rg-cmp-req-form-row__delete-label,
+    .rg-cmp-reopen-zone__icon
+) { color: #f87171; }
+html[data-theme="dark"] :is(
+    .rg-scr-actionbar__msg, .rg-scr-result-facts__item--absent, .rg-fs-actions__msg,
+    .rg-del-recorder__msg, .rg-del-car__msg, .rg-banner--error
+) { color: #f2a8a3; }
+html[data-theme="dark"] :is(
+    .rg-scr-elig-bar--not-qualified, .rg-scr-doc-verdict-btn.is-absent, .rg-scr-choice-btn.is-active-danger,
+    .rg-scr-elig-bar--absent, .rg-exam-validation-alert, .rg-pkt-outcome-pill--failed,
+    .rg-dec-choice-btn.is-active--not-selected, .rg-dec-outcome-pill--not-selected, .rg-dec-status-bar--not-selected,
+    .rg-cmp-closed-banner--not-selected, .rg-cmp-reopen-zone, .rg-scr-status-pill.is-absent,
+    .rg-scr-status-pill[data-fixed-status="absent"], .rg-scr-actionbar__msg, .rg-fs-actions__msg,
+    .rg-del-recorder__msg, .rg-del-car__msg, .rg-banner--error, .rg-scr-result-facts__item--absent
+) { border-color: rgba(248, 113, 113, 0.45); }
+/* Delete-pending row — light rule is !important on both bg + border. */
+html[data-theme="dark"] .rg-cmp-req-form-row.is-delete-pending {
+    background: rgba(220, 38, 38, 0.16) !important;
+    border-color: rgba(248, 113, 113, 0.45) !important;
+}
+
+/* gold / amber */
+html[data-theme="dark"] :is(
+    .rg-scr-doc-verdict-btn.is-review, .rg-scr-choice-btn.is-active-warning, .rg-scr-elig-bar--waived,
+    .rg-int-threshold-notice, .rg-del-score-badge--marginal, .rg-del-rating-row__justification,
+    .rg-cmp-req-form-row[data-req-status="pending"], .rg-pkt-section__badge--warn, .rg-pkt-missing-strip,
+    .rg-cmp-req-status-badge--pending, .rg-sensitive-tag, .rg-cmp-blockers, .rg-dec-permanence-warning,
+    .rg-scr-resub-notice, .rg-scr-locked-remark, .rg-scr-doc-resub-tag, .rg-banner--warning, .rg-banner--locked
+) { background: rgba(253, 184, 19, 0.14); }
+html[data-theme="dark"] :is(.rg-scr-elig-bar--waived .rg-scr-elig-bar__icon, .rg-pkt-section__badge--warn, .rg-pkt-missing-strip, .rg-cmp-req-status-badge--pending) { background: rgba(253, 184, 19, 0.20); }
+html[data-theme="dark"] :is(
+    .rg-scr-doc-verdict-btn.is-review, .rg-scr-choice-btn.is-active-warning,
+    .rg-scr-elig-bar--waived .rg-scr-elig-bar__verdict, .rg-int-score-val.is-marginal, .rg-int-threshold-notice,
+    .rg-del-score-badge--marginal .rg-del-score-badge__num, .rg-del-rating-row__justification,
+    .rg-pkt-section__badge--warn, .rg-pkt-missing-strip, .rg-cmp-req-status-badge--pending,
+    .rg-scr-elig-bar--waived .rg-scr-elig-bar__icon, .rg-int-score-dial-label.is-marginal,
+    .rg-sensitive-tag, .rg-cmp-blockers, .rg-dec-permanence-warning, .rg-banner--warning
+) { color: #f0c661; }
+html[data-theme="dark"] :is(
+    .rg-scr-doc-verdict-btn.is-review, .rg-scr-choice-btn.is-active-warning, .rg-scr-elig-bar--waived,
+    .rg-int-score-dial.is-marginal, .rg-int-threshold-notice, .rg-del-score-badge--marginal,
+    .rg-del-rating-row__justification, .rg-pkt-section__badge--warn, .rg-pkt-missing-strip,
+    .rg-cmp-req-status-badge--pending, .rg-cmp-req-form-row[data-req-status="pending"], .rg-sensitive-tag,
+    .rg-cmp-blockers, .rg-dec-permanence-warning, .rg-scr-resub-notice, .rg-scr-locked-remark,
+    .rg-scr-doc-resub-tag, .rg-banner--warning, .rg-banner--locked
+) { border-color: rgba(253, 184, 19, 0.42); }
+html[data-theme="dark"] :is(.rg-cmp-blockers__icon, .rg-dec-permanence-warning svg) { color: #f08a4b; }
+
+/* info / blue */
+html[data-theme="dark"] :is(
+    .rg-int-lock-distinction, .rg-dec-handoff, .rg-cmp-decision-ref,
+    .rg-cmp-closed-banner--neutral, .rg-scr-step-state__item.is-current, .rg-pill--reopened,
+    .rg-int-modal-privacy, .rg-banner--info
+) { background: rgba(56, 189, 248, 0.12); }
+html[data-theme="dark"] :is(
+    .rg-int-lock-distinction, .rg-dec-handoff, .rg-cmp-decision-ref, .rg-scr-step-state__item.is-current
+) { color: #7dd3fc; }
+html[data-theme="dark"] .rg-cmp-closed-banner--neutral { color: #93c5fd; }
+html[data-theme="dark"] :is(
+    .rg-int-lock-distinction, .rg-dec-handoff, .rg-cmp-decision-ref, .rg-cmp-closed-banner--neutral,
+    .rg-scr-step-state__item.is-current, .rg-int-modal-privacy, .rg-banner--info
+) { border-color: rgba(56, 189, 248, 0.40); }
+
+/* Current pipeline stage amber accents (rg-cws). */
+html[data-theme="dark"] :is(
+    .rg-cws-pipeline .rg-pipeline__stage.is-current .rg-pipeline__circle,
+    .rg-cws-pipeline .rg-pipeline__stage.is-current .rg-pipeline__label
+) { border-color: rgba(253, 184, 19, 0.55); color: #fbbf24; }
+html[data-theme="dark"] .rg-cws-pipeline .rg-pipeline__stage.is-complete .rg-pipeline__label { color: #7fb894; }
+html[data-theme="dark"] .rg-cws-pipeline .rg-pipeline__connector.is-complete { background: rgba(74, 222, 128, 0.50); }
+
+/* Deliberation avg-strip label sits on green fill — keep light. */
+html[data-theme="dark"] .rg-del-avg-strip__label { color: rgba(255, 255, 255, 0.75); }
+
+/* Banner left-accent surfaces. */
+html[data-theme="dark"] :is(.rg-banner--observer, .rg-int-no-submission, .rg-int-revise-notice) {
+    border-color: rgba(255, 255, 255, 0.14);
+}
+
+/* Doc drawer viewport (already dark) — nudge and keep. */
+html[data-theme="dark"] .rg-scr-doc-drawer { background: #131b26; }
+html[data-theme="dark"] .rg-scr-doc-drawer__body { background: #0f1620; }
+html[data-theme="dark"] :is(.rg-scr-doc-drawer__frame, .rg-scr-doc-drawer__image) { background: #1b2733; }
+
+/* Sticky action bars (white → elevated dark, deepen top shadow). */
+html[data-theme="dark"] .rg-scr-actionbar {
+    background: #1b2733;
+    border-top-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.45);
+}
+html[data-theme="dark"] :is(.rg-scr-actionbar, .rg-wf-action-choices, .rg-exam-cond-group, .rg-scr-disclosure) {
+    border-top-color: rgba(255, 255, 255, 0.12);
+}
+html[data-theme="dark"] .rg-scr-disclosure { background: #141d28; }
+
+/* Step rails. */
+html[data-theme="dark"] :is(.rg-scr-steprail__num, .rg-scr-steprail__line) { background: #263340; }
+html[data-theme="dark"] .rg-scr-steprail__item:hover { background: rgba(255, 255, 255, 0.05); }
+html[data-theme="dark"] .rg-scr-steprail__item { color: #9aa8b6; }
+html[data-theme="dark"] .rg-scr-steprail__item.is-disabled,
+html[data-theme="dark"] .rg-scr-steprail__item.is-disabled .rg-scr-steprail__num { color: #6b7a89 !important; }
+html[data-theme="dark"] .rg-scr-steprail__item.is-disabled .rg-scr-steprail__num { background: rgba(255, 255, 255, 0.06); }
+
+/* Skeleton shimmer. */
+html[data-theme="dark"] .rg-skeleton {
+    background-image: linear-gradient(90deg, #1f2b38 25%, #2a3744 50%, #1f2b38 75%);
+}
+html[data-theme="dark"] .rg-spinner { border-color: rgba(255, 255, 255, 0.16); }
+
+/* Final-selection surfaces. */
+html[data-theme="dark"] .rg-fs-candidate:hover { background: #141d28; }
+html[data-theme="dark"] .rg-fs-candidate__ref { color: #9aa8b6; }
+html[data-theme="dark"] .rg-fs-return-card { border-color: rgba(253, 184, 19, 0.42); }
+html[data-theme="dark"] .rg-fs-candidate__warn { color: #e6a552; }
+
+
+/* ==========================================================================
+   11 · LOGIN / AUTH CARD + SEAL CHIPS
+   ========================================================================== */
+
+/* Card bodies (both login-card systems + 403 card). */
+html[data-theme="dark"] :is(
+    .rg-login-card,
+    .rg-login-form-card,
+    .rg-standalone-403__card
+) {
+    background: #1b2733;
+    border-color: rgba(255, 255, 255, 0.12);
+    color: var(--rg-ink);
+    box-shadow: 0 24px 56px rgba(0, 0, 0, 0.55), 0 2px 10px rgba(0, 0, 0, 0.45);
+}
+/* keep the gold top accent border on .rg-login-card as authored (var-driven) */
+
+html[data-theme="dark"] :is(.rg-login-form-card__title, .rg-forbidden-title) { color: #e8edf2; }
+html[data-theme="dark"] :is(
+    .rg-login-form-card__sub, .rg-login-card__sub, .rg-login-security-notice,
+    .rg-login-card__notice, .rg-forbidden-copy
+) { color: #9aa8b6; }
+html[data-theme="dark"] :is(.rg-login-security-notice, .rg-login-card__notice) {
+    border-color: rgba(255, 255, 255, 0.10);
+}
+html[data-theme="dark"] .rg-forbidden-icon {
+    background: #1b2733;
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #9aa8b6;
+}
+
+/* Login brand column (#002e4a navy) + auth-side gradient are ALREADY dark with
+   light text; only deepen the navy panel slightly, leave the rest. */
+html[data-theme="dark"] .rg-login-brand { background: #0d1826; }
+
+/* Seal chips — logos stay on light. */
+html[data-theme="dark"] .rg-login-card__seal {
+    /* keeps its authored background-color:#fff + border-radius:50% */
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+
+/* ==========================================================================
+   12 · MISC LITERAL CLEANUPS
+   ========================================================================== */
+
+/* Dashboard text ramp. */
+html[data-theme="dark"] :is(
+    .rg-dash-section__title, .rg-dash-queue-row__name, .rg-dash-sysad-event__action, .rg-dash-stat__value
+) { color: #e8edf2; }
+html[data-theme="dark"] :is(.rg-dash-announce, .rg-dash-sysad-event__desc) { color: #9aa8b6; }
+html[data-theme="dark"] :is(
+    .rg-dash-queue-row__ref, .rg-dash-queue-row__meta, .rg-dash-stat__label,
+    .rg-dash-sysad-event__time
+) { color: #8a99a8; }
+
+/* Internal page headers / titles / copy. */
+html[data-theme="dark"] :is(
+    .internal-portal-body h1, .internal-portal-body h2, .internal-portal-body h3,
+    .internal-portal-body h4, .rg-page-title, .rg-brand-title
+) { color: #e8edf2; }
+html[data-theme="dark"] :is(.rg-page-copy, .rg-muted, .rg-note, .rg-brand-subtitle) { color: #9aa8b6; }
+html[data-theme="dark"] .rg-page-header { border-bottom-color: rgba(255, 255, 255, 0.14); }
+
+/* Count / level chips + entry rows / path panels. */
+html[data-theme="dark"] .rg-count-badge { color: #d6dfe8; }
+html[data-theme="dark"] :is(.rg-entry-row__summary, .rg-level-label) { color: #d6dfe8; }
+html[data-theme="dark"] :is(.rg-entry-row, .rg-path-panel__header) { border-color: rgba(255, 255, 255, 0.10); }
+
+/* Empty-state icon + timeline connector. */
+html[data-theme="dark"] .rg-istate-empty__icon { color: #5a6874; }
+html[data-theme="dark"] .rg-timeline__item::after { background: rgba(255, 255, 255, 0.16); }
+html[data-theme="dark"] .rg-timeline__item::before { box-shadow: 0 0 0 4px rgba(91, 191, 114, 0.25); }
+
+/* Card gradient washes originally over a white base — retint over dark. */
+html[data-theme="dark"] .rg-entry-card--plantilla {
+    background-image: linear-gradient(180deg, rgba(63, 169, 176, 0.10), transparent 60%);
+}
+html[data-theme="dark"] .rg-entry-card--cos {
+    background-image: linear-gradient(180deg, rgba(230, 170, 50, 0.10), transparent 60%);
+}
+
+
+/* ==========================================================================
+   13 · REDUCED-MOTION TRANSITIONS
+   Gentle colour transition on major surfaces, only when motion is welcome.
+   ========================================================================== */
+@media (prefers-reduced-motion: no-preference) {
+    html[data-theme="dark"] :is(
+        body, .card, .rg-surface, .rg-icard, .rg-sidebar, .rg-context-bar,
+        .form-control, .form-select, .btn
+    ) {
+        transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+    }
+}
+
+} /* end @media screen */
+
+
+/* ==========================================================================
+   14 · PRINT SAFETY NET (outside @media screen)
+   Belt-and-suspenders: force light native chrome for print even if a dark
+   preference is active.
+   ========================================================================== */
+@media print {
+    html[data-theme="dark"] { color-scheme: light; }
+}
+
+/* ==========================================================================
+   MISSED-COMPONENT OVERRIDES — slice-3 case-workspace/notifications/interview/
+   deliberation/completion/packet/SLA/queue-chips (generated + hand-checked).
+   ========================================================================== */
+@media screen {
+html[data-theme="dark"] .rg-workspace-tabs { border-bottom: 2px solid rgba(255,255,255,0.10); }
+html[data-theme="dark"] .rg-stage-tabs { border-bottom: 1px solid rgba(255,255,255,0.10); }
+html[data-theme="dark"] .rg-stage-status__prereq { color: #d4dde6; }
+html[data-theme="dark"] .rg-stage-status__warning { color: #f0837c; }
+html[data-theme="dark"] .rg-vacancy-list { border-right: 1px solid rgba(255,255,255,0.10); }
+html[data-theme="dark"] .rg-vacancy-card__badge { background: rgba(126,187,66,0.15); border: 1px solid rgba(126,187,66,0.34); }
+html[data-theme="dark"] .rg-vacancy-detail h3 { color: #e8edf2; }
+html[data-theme="dark"] .rg-vacancy-detail ul { color: #d4dde6; }
+html[data-theme="dark"] .rg-vacancy-detail__privacy { color: #9aa8b6; }
+html[data-theme="dark"] .rg-vacancy-detail__note { color: #8a99a8; }
+html[data-theme="dark"] .rg-doc-inventory th { background: #182230; border-bottom: 1px solid rgba(255,255,255,0.10); color: #9aa8b6; }
+html[data-theme="dark"] .rg-doc-inventory td { border-bottom: 1px solid rgba(255,255,255,0.10); color: #d4dde6; }
+html[data-theme="dark"] .rg-evidence-detail { border: 1px solid rgba(255,255,255,0.10); background: #182230; }
+html[data-theme="dark"] .rg-evidence-detail dt { color: #e8edf2; }
+html[data-theme="dark"] .rg-evidence-detail dd { color: #d4dde6; }
+html[data-theme="dark"] .rg-upload-card__icon { color: #8a99a8; }
+html[data-theme="dark"] .rg-upload-card__label { color: #d4dde6; }
+html[data-theme="dark"] .rg-upload-card__hint { color: #8a99a8; }
+html[data-theme="dark"] .rg-checklist-item { color: #d4dde6; }
+html[data-theme="dark"] .rg-icard--alert { background: rgba(253,184,19,0.12); }
+html[data-theme="dark"] .rg-icard--flat { background: #182230; }
+html[data-theme="dark"] .rg-icard--inset { background: #182230; border-color: rgba(255,255,255,0.14); }
+html[data-theme="dark"] .rg-istate-error__icon { color: #f0837c; }
+html[data-theme="dark"] .rg-banner--blocked { background: rgba(253,184,19,0.12); border-color: rgba(253,184,19,0.35); color: #f0c661; }
+html[data-theme="dark"] .rg-modal-confirm__summary-item { color: #9aa8b6; }
+html[data-theme="dark"] .rg-modal-confirm__summary-item + .rg-modal-confirm__summary-item { border-top: 1px solid rgba(255,255,255,0.10); }
+html[data-theme="dark"] .rg-cmp-timeline-item--sensitive .rg-cmp-timeline-item__dot { outline-color: #f0837c; }
+html[data-theme="dark"] .rg-cmp-timeline-item__body { border-bottom: 1px solid rgba(255,255,255,0.08); }
+html[data-theme="dark"] .rg-packet-header, html[data-theme="dark"] .rg-completion-letterhead { background: #1b2733; }
+html[data-theme="dark"] .rg-scr-locked-bridge { background: #182230; }
+html[data-theme="dark"] .rg-cmp-checklist { border-top: 1px solid rgba(255,255,255,0.10); }
+html[data-theme="dark"] .rg-cmp-checklist__count { color: #9aa8b6; }
+html[data-theme="dark"] .rg-cmp-checklist__empty { color: #8a99a8; }
+html[data-theme="dark"] .rg-cmp-checklist__help { color: #9aa8b6; background: #182230; }
+html[data-theme="dark"] .rg-pkt-row__meta { color: #9aa8b6; }
+html[data-theme="dark"] .rg-pkt-section__empty { color: #8a99a8; }
+html[data-theme="dark"] .rg-pkt-section__notes { background: #182230; border-left: 3px solid rgba(255,255,255,0.14); color: #d4dde6; }
+html[data-theme="dark"] .rg-del-panel-summary--empty { background: #182230; }
+html[data-theme="dark"] .rg-del-panel-summary__notice { color: #9aa8b6; }
+html[data-theme="dark"] .rg-del-rating-row__encoded { color: #8a99a8; }
+html[data-theme="dark"] .rg-del-recorder__footer { border-top: 1px solid rgba(255,255,255,0.10); }
+html[data-theme="dark"] .rg-del-locked__label { color: #9aa8b6; }
+html[data-theme="dark"] .rg-del-locked__field { border-top: 1px solid rgba(255,255,255,0.10); }
+html[data-theme="dark"] .rg-del-locked__field p { color: #d4dde6; }
+html[data-theme="dark"] .rg-del-car__author { color: #8a99a8; }
+html[data-theme="dark"] .rg-del-car__ranklist-head { color: #9aa8b6; }
+html[data-theme="dark"] .rg-del-car__ranklist-count { color: #8a99a8; }
+html[data-theme="dark"] .rg-del-car__empty { background: #182230; border: 1px dashed rgba(255,255,255,0.10); color: #9aa8b6; }
+html[data-theme="dark"] .rg-del-car__summary-notes { background: #182230; border-left: 3px solid rgba(255,255,255,0.14); color: #d4dde6; }
+html[data-theme="dark"] .rg-del-car__footer { border-top: 1px solid rgba(255,255,255,0.10); }
+html[data-theme="dark"] .rg-del-car__readiness-item { color: #9aa8b6; }
+html[data-theme="dark"] .rg-del-car__readiness-icon { border: 1.5px solid rgba(255,255,255,0.14); }
+html[data-theme="dark"] .rg-int-prev-step { background: #1b2733; border: 1px solid rgba(255,255,255,0.10); }
+html[data-theme="dark"] .rg-int-prev-step__label { color: #8a99a8; }
+html[data-theme="dark"] .rg-int-prev-step__value { color: #d4dde6; }
+html[data-theme="dark"] .rg-int-prev-step__empty { color: #8a99a8; }
+html[data-theme="dark"] .rg-int-prev-step__score { color: #d4dde6; }
+html[data-theme="dark"] .rg-int-readout-grid__label { color: #8a99a8; }
+html[data-theme="dark"] .rg-int-readout-notes { background: #182230; border-left: 3px solid rgba(255,255,255,0.14); color: #d4dde6; }
+html[data-theme="dark"] .rg-int-readout-finalmeta { border-top: 1px solid rgba(255,255,255,0.10); color: #9aa8b6; }
+html[data-theme="dark"] .rg-int-banner--info { background: rgba(75,180,232,0.14); border-color: rgba(75,180,232,0.32); }
+html[data-theme="dark"] .rg-int-banner--info .rg-int-banner__title { color: #8fbdf0; }
+html[data-theme="dark"] .rg-int-banner--info p { color: #8fbdf0; }
+html[data-theme="dark"] .rg-int-banner--warn { background: rgba(253,184,19,0.12); border-color: rgba(253,184,19,0.35); }
+html[data-theme="dark"] .rg-int-banner--warn .rg-int-banner__title { color: #f0c661; }
+html[data-theme="dark"] .rg-int-banner--warn p { color: #f0c661; }
+html[data-theme="dark"] .rg-int-banner--muted { background: #182230; color: #9aa8b6; }
+html[data-theme="dark"] .rg-int-encoding-banner { border: 1px solid rgba(253,184,19,0.35); color: #f0c661; }
+html[data-theme="dark"] .rg-int-encoding-banner svg { color: #f0c661; }
+html[data-theme="dark"] .rg-int-score__range { color: #8a99a8; }
+html[data-theme="dark"] .rg-int-score__dial { border: 2px solid rgba(255,255,255,0.10); background: #182230; }
+html[data-theme="dark"] .rg-int-score__val { color: #8a99a8; }
+html[data-theme="dark"] .rg-int-score__label { color: #8a99a8; }
+html[data-theme="dark"] .rg-int-threshold { border: 1px solid rgba(253,184,19,0.35); color: #f0c661; }
+html[data-theme="dark"] .rg-int-submitted__dial { background: #1b2733; }
+html[data-theme="dark"] .rg-int-submitted__body p { color: #d4dde6; }
+html[data-theme="dark"] .rg-int-submitted__notice { color: #9aa8b6; }
+html[data-theme="dark"] .rg-int-actionbar { background: #1b2733; border-top: 1px solid rgba(255,255,255,0.10); box-shadow: 0 -4px 14px rgba(0,0,0,0.45); }
+html[data-theme="dark"] .rg-int-actionbar__msg { background: rgba(236,111,104,0.15); border: 1px solid rgba(236,111,104,0.35); color: #f0a8a2; }
+html[data-theme="dark"] .rg-int-optional { color: #8a99a8; }
+html[data-theme="dark"] .rg-int-monitor-item { background: #182230; border: 1px solid rgba(255,255,255,0.10); }
+html[data-theme="dark"] .rg-int-monitor-item__tag { border: 1px solid rgba(126,187,66,0.34); }
+html[data-theme="dark"] .rg-applicant-panel { background: #1b2733; border: 1px solid rgba(255,255,255,0.10); }
+html[data-theme="dark"] .rg-applicant-panel__name { color: #9aa8b6; }
+html[data-theme="dark"] .rg-applicant-panel__chevron { color: #8a99a8; }
+html[data-theme="dark"] .rg-applicant-panel__body { border-top: 1px solid rgba(255,255,255,0.10); }
+html[data-theme="dark"] .rg-applicant-panel__label { color: #8a99a8; }
+html[data-theme="dark"] .rg-applicant-panel__grid strong { color: #e8edf2; }
+html[data-theme="dark"] .rg-applicant-panel__field { border-top: 1px solid rgba(255,255,255,0.10); }
+html[data-theme="dark"] .rg-applicant-panel__field p { color: #d4dde6; }
+html[data-theme="dark"] .rg-applicant-panel__empty { color: #8a99a8; }
+html[data-theme="dark"] .rg-applicant-panel__certs li { color: #8a99a8; }
+html[data-theme="dark"] .rg-applicant-panel__certs li::before { border: 1.5px solid rgba(255,255,255,0.14); }
+html[data-theme="dark"] .rg-applicant-panel__certs li.is-checked { color: #d4dde6; }
+html[data-theme="dark"] .rg-queue-chip { border: 1px solid rgba(255,255,255,0.10); background: #1b2733; color: #c3d0dc; }
+html[data-theme="dark"] .rg-pipeline-summary { background: #1b2733; border: 1px solid rgba(255,255,255,0.10); }
+html[data-theme="dark"] .rg-pipeline-summary:hover, html[data-theme="dark"] .rg-pipeline-summary:focus { background: #182230; }
+html[data-theme="dark"] .rg-pipeline-summary__tick { background: rgba(255,255,255,0.18); }
+html[data-theme="dark"] .rg-pipeline-summary__toggle { color: #9aa8b6; }
+html[data-theme="dark"] .rg-notif__bell { border: 1px solid rgba(255,255,255,0.10); background: #1b2733; color: var(--rg-brand-green-ink, #d3ecda); }
+html[data-theme="dark"] .rg-notif__bell:hover, html[data-theme="dark"] .rg-notif__bell:focus-visible { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.14); }
+html[data-theme="dark"] .rg-notif__bell[aria-expanded="true"] { background: rgba(126,187,66,0.15); border-color: rgba(126,187,66,0.40); }
+html[data-theme="dark"] .rg-notif__badge { box-shadow: 0 0 0 2px #1b2733; }
+html[data-theme="dark"] .rg-notif__panel-header { border-bottom: 1px solid rgba(255,255,255,0.08); background: #182230; }
+html[data-theme="dark"] .rg-notif__panel-title { color: var(--rg-brand-green-ink, #d3ecda); }
+html[data-theme="dark"] .rg-notif__item { border-bottom: 1px solid rgba(255,255,255,0.08); }
+html[data-theme="dark"] .rg-notif__item-link:hover { background: #182230; }
+html[data-theme="dark"] .rg-notif__item-link:focus-visible { background: rgba(126,187,66,0.15); }
+html[data-theme="dark"] .rg-notif__item--unread .rg-notif__item-link { background: var(--rg-brand-green-soft, rgba(126,187,66,0.15)); }
+html[data-theme="dark"] .rg-notif__item--unread .rg-notif__item-link:hover { background: rgba(126,187,66,0.24); }
+html[data-theme="dark"] .rg-notif__empty { color: #c3d0dc; }
+html[data-theme="dark"] .rg-notif__empty-title { color: #e8edf2; }
+html[data-theme="dark"] .rg-notif__empty .rg-notif__empty-text, html[data-theme="dark"] .rg-notif__empty-text { color: #9aa8b6; }
+html[data-theme="dark"] .rg-notif__panel-footer { border-top: 1px solid rgba(255,255,255,0.08); background: #182230; }
+html[data-theme="dark"] .rg-notif-page__item { border-bottom: 1px solid rgba(255,255,255,0.08); }
+html[data-theme="dark"] .rg-notif-page__row:hover { background: #182230; }
+html[data-theme="dark"] .rg-notif-page__row:focus-visible { background: rgba(126,187,66,0.15); }
+html[data-theme="dark"] .rg-notif-page__item--unread .rg-notif-page__row { background: var(--rg-brand-green-soft, rgba(126,187,66,0.15)); }
+html[data-theme="dark"] .rg-notif-page__item--unread .rg-notif-page__row:hover { background: rgba(126,187,66,0.24); }
+html[data-theme="dark"] .rg-notif-page__meta-tag { color: #8a99a8; }
+html[data-theme="dark"] .rg-notif-page__meta-time { color: #9aa8b6; }
+html[data-theme="dark"] .rg-notif-page__empty { color: #c3d0dc; }
+html[data-theme="dark"] .rg-notif-page__empty-title { color: #e8edf2; }
+html[data-theme="dark"] .rg-notif-page__empty-text { color: #9aa8b6; }
+html[data-theme="dark"] .rg-sla-badge--ok { background: rgba(255,255,255,0.05); color: #c3d0dc; border-color: rgba(255,255,255,0.10); }
+html[data-theme="dark"] .rg-sla-badge--warning { background: rgba(253,184,19,0.14); color: #f0c661; border-color: rgba(253,184,19,0.35); }
+html[data-theme="dark"] .rg-sla-badge--overdue { background: rgba(236,111,104,0.15); color: #f0a8a2; border-color: rgba(236,111,104,0.35); }
+html[data-theme="dark"] .rg-sla-badge--paused { background: rgba(75,180,232,0.14); color: #8fbdf0; border-color: rgba(75,180,232,0.32); }
+html[data-theme="dark"] .rg-scr-doc-drawer__frame, html[data-theme="dark"] .rg-scr-doc-drawer__image { background: #ffffff; }
+}
+
+/* ==========================================================================
+   Screening doc-table headers + status pills/select (per-variant so the
+   colored meets/absent/resubmission states keep their semantic wash).
+   ========================================================================== */
+@media screen {
+html[data-theme="dark"] .rg-scr-doc-table th { background: #182230; color: #9aa8b6; }
+html[data-theme="dark"] .rg-scr-doc-table th,
+html[data-theme="dark"] .rg-scr-doc-table td { border-bottom-color: rgba(255,255,255,0.10); }
+html[data-theme="dark"] .rg-scr-status-select {
+    background: #1b2733;
+    color: #e8edf2;
+    border-color: rgba(255,255,255,0.16);
+}
+html[data-theme="dark"] .rg-scr-status-pill {
+    background: #182230;
+    color: #c3d0dc;
+    border-color: rgba(255,255,255,0.14);
+}
+html[data-theme="dark"] .rg-scr-status-pill.is-absent,
+html[data-theme="dark"] .rg-scr-status-pill[data-fixed-status="absent"] {
+    background: rgba(236,111,104,0.15);
+    color: #f0a8a2;
+    border-color: rgba(236,111,104,0.35);
+}
+html[data-theme="dark"] .rg-scr-status-pill[data-fixed-status="meets"] {
+    background: rgba(126,187,66,0.15);
+    color: #a9dd76;
+    border-color: rgba(126,187,66,0.34);
+}
+}
+
+/* Bootstrap fixed (non-theme-aware) utilities used in internal markup/JS */
+@media screen {
+html[data-theme="dark"] .bg-light { background-color: #182230 !important; }
+html[data-theme="dark"] .bg-white { background-color: #1b2733 !important; }
+html[data-theme="dark"] .text-dark { color: #e8edf2 !important; }
+html[data-theme="dark"] .text-black { color: #e8edf2 !important; }
+}
+
+/* ==========================================================================
+   TEXT-COLOR completeness pass — every dark text literal in source mapped to
+   its dark-theme light equivalent (fixes muted/body text that used literals
+   instead of tokens). Scoped; later-wins over partial earlier coverage.
+   ========================================================================== */
+@media screen {
+html[data-theme="dark"] code { color: #8ec5f0; }
+html[data-theme="dark"] .alert-success { color: #a9dd76; }
+html[data-theme="dark"] .alert-info { color: #8fbdf0; }
+html[data-theme="dark"] .alert-warning { color: #f0c661; }
+html[data-theme="dark"] .alert-danger, html[data-theme="dark"] .alert-error { color: #f0a8a2; }
+html[data-theme="dark"] .rg-count-badge { color: #e8edf2; }
+html[data-theme="dark"] .rg-entry-row__summary { color: #d4dde6; }
+html[data-theme="dark"] .rg-level-label { color: #d4dde6; }
+html[data-theme="dark"] .rg-path-panel--plantilla .rg-level-label { color: #7fd3d6; }
+html[data-theme="dark"] .rg-path-panel--cos .rg-level-label { color: #f0c661; }
+html[data-theme="dark"] .rg-pill--cos { color: #f0c661; }
+html[data-theme="dark"] .rg-pill--level-1 { color: #8fbdf0; }
+html[data-theme="dark"] .rg-pill--level-2 { color: #f0a877; }
+html[data-theme="dark"] .rg-pill--success { color: #a9dd76; }
+html[data-theme="dark"] .rg-pill--warning { color: #f0c661; }
+html[data-theme="dark"] .rg-pill--danger { color: #f0a8a2; }
+html[data-theme="dark"] .rg-pill--info { color: #8fbdf0; }
+html[data-theme="dark"] .rg-pill--neutral { color: #9aa8b6; }
+html[data-theme="dark"] .rg-pill--secretariat { color: #7fd3d6; }
+html[data-theme="dark"] .rg-pill--hrm-chief { color: #9db0f0; }
+html[data-theme="dark"] .rg-pill--hrmpsb-member { color: #c9adf2; }
+html[data-theme="dark"] .rg-pill--appointing-authority { color: #f0a877; }
+html[data-theme="dark"] .rg-pill--system-admin { color: #c3d0dc; }
+html[data-theme="dark"] .rg-pill--applicant { color: #8fbdf0; }
+html[data-theme="dark"] .rg-login-form-card__title { color: #e8edf2; }
+html[data-theme="dark"] .rg-login-form-card__sub { color: #9aa8b6; }
+html[data-theme="dark"] .rg-login-security-notice { color: #9aa8b6; }
+html[data-theme="dark"] .rg-context-bar__breadcrumb { color: #9aa8b6; }
+html[data-theme="dark"] .rg-breadcrumb-home { color: #9aa8b6; }
+html[data-theme="dark"] .rg-breadcrumb-home:hover { color: #e8edf2; }
+html[data-theme="dark"] .rg-breadcrumb-current { color: #e8edf2; }
+html[data-theme="dark"] .rg-sidebar__section-label { color: #8a99a8; }
+html[data-theme="dark"] .rg-dash-section__title { color: #e8edf2; }
+html[data-theme="dark"] .rg-dash-queue-row__ref { color: #9aa8b6; }
+html[data-theme="dark"] .rg-dash-queue-row__name { color: #e8edf2; }
+html[data-theme="dark"] .rg-dash-queue-row__meta { color: #9aa8b6; }
+html[data-theme="dark"] .rg-dash-announce { color: #9aa8b6; }
+html[data-theme="dark"] .rg-dash-sysad-event__action { color: #e8edf2; }
+html[data-theme="dark"] .rg-dash-sysad-event__desc { color: #9aa8b6; }
+html[data-theme="dark"] .rg-dash-sysad-event__time { color: #8a99a8; }
+html[data-theme="dark"] .rg-dash-stat__value { color: #e8edf2; }
+html[data-theme="dark"] .rg-dash-stat__label { color: #9aa8b6; }
+html[data-theme="dark"] .rg-forbidden-icon { color: #8a99a8; }
+html[data-theme="dark"] .rg-forbidden-title { color: #e8edf2; }
+html[data-theme="dark"] .rg-forbidden-copy { color: #9aa8b6; }
+html[data-theme="dark"] .internal-portal-body .rg-brand-title { color: #e8edf2; }
+html[data-theme="dark"] .internal-portal-body .rg-brand-subtitle { color: #9aa8b6; }
+html[data-theme="dark"] .internal-portal-body .rg-nav-link { color: #d4dde6; }
+html[data-theme="dark"] .internal-portal-body .rg-nav-link:hover, html[data-theme="dark"] .internal-portal-body .rg-nav-link.is-active { color: #e8edf2; }
+html[data-theme="dark"] .internal-portal-body .rg-user-pill { color: #9aa8b6; }
+html[data-theme="dark"] .internal-portal-body .btn-outline-secondary, html[data-theme="dark"] .internal-portal-body .btn-outline-light, html[data-theme="dark"] .internal-portal-body .btn-outline-warning, html[data-theme="dark"] .internal-portal-body .btn-light { color: #d4dde6; }
+html[data-theme="dark"] .internal-portal-body .btn-outline-secondary:hover, html[data-theme="dark"] .internal-portal-body .btn-outline-secondary:focus, html[data-theme="dark"] .internal-portal-body .btn-outline-light:hover, html[data-theme="dark"] .internal-portal-body .btn-outline-light:focus, html[data-theme="dark"] .internal-portal-body .btn-light:hover, html[data-theme="dark"] .internal-portal-body .btn-light:focus { color: #e8edf2; }
+html[data-theme="dark"] .internal-portal-body .btn-outline-warning:hover, html[data-theme="dark"] .internal-portal-body .btn-outline-warning:focus { color: #f0c661; }
+html[data-theme="dark"] .internal-portal-body .rg-page-title, html[data-theme="dark"] .internal-portal-body h1, html[data-theme="dark"] .internal-portal-body h2, html[data-theme="dark"] .internal-portal-body h3, html[data-theme="dark"] .internal-portal-body h4 { color: #e8edf2; }
+html[data-theme="dark"] .internal-portal-body .rg-page-copy, html[data-theme="dark"] .internal-portal-body .rg-section-copy, html[data-theme="dark"] .internal-portal-body .rg-note, html[data-theme="dark"] .internal-portal-body .rg-muted, html[data-theme="dark"] .internal-portal-body .rg-kpi__hint, html[data-theme="dark"] .internal-portal-body .rg-kpi__label, html[data-theme="dark"] .internal-portal-body .rg-record__meta, html[data-theme="dark"] .internal-portal-body .rg-info-row__label, html[data-theme="dark"] .internal-portal-body .form-text, html[data-theme="dark"] .internal-portal-body .rg-eyebrow { color: #9aa8b6; }
+html[data-theme="dark"] .internal-portal-body .table thead th { color: #9aa8b6; }
+html[data-theme="dark"] .rg-sidebar__brand { color: #e8edf2; }
+html[data-theme="dark"] .rg-sidebar__brand small { color: #9aa8b6; }
+html[data-theme="dark"] .rg-sidebar__link { color: #d4dde6; }
+html[data-theme="dark"] .rg-sidebar__link:hover { color: #e8edf2; }
+html[data-theme="dark"] .rg-context-bar__role { color: #9aa8b6; }
+html[data-theme="dark"] .rg-context-bar__role strong { color: #e8edf2; }
+html[data-theme="dark"] .rg-pipeline__circle { color: #8a99a8; }
+html[data-theme="dark"] .rg-pipeline__stage.is-future .rg-pipeline__circle { color: #8a99a8; }
+html[data-theme="dark"] .rg-pipeline__label { color: #9aa8b6; }
+html[data-theme="dark"] .rg-workspace-tab { color: #9aa8b6; }
+html[data-theme="dark"] .rg-workspace-tab:hover { color: #e8edf2; }
+html[data-theme="dark"] .rg-stage-tab { color: #9aa8b6; }
+html[data-theme="dark"] .rg-stage-tab:hover { color: #e8edf2; }
+html[data-theme="dark"] .rg-stage-status__prereq { color: #d4dde6; }
+html[data-theme="dark"] .rg-stage-status__warning { color: #f0837c; }
+html[data-theme="dark"] .rg-step-indicator__step { color: #8a99a8; }
+html[data-theme="dark"] .rg-vacancy-list__title { color: #e8edf2; }
+html[data-theme="dark"] .rg-vacancy-card__title { color: #e8edf2; }
+html[data-theme="dark"] .rg-vacancy-card__meta { color: #9aa8b6; }
+html[data-theme="dark"] .rg-vacancy-detail__heading { color: #9aa8b6; }
+html[data-theme="dark"] .rg-vacancy-detail__title { color: #e8edf2; }
+html[data-theme="dark"] .rg-vacancy-detail h3 { color: #e8edf2; }
+html[data-theme="dark"] .rg-vacancy-detail ul { color: #d4dde6; }
+html[data-theme="dark"] .rg-vacancy-detail__privacy { color: #9aa8b6; }
+html[data-theme="dark"] .rg-vacancy-detail__note { color: #8a99a8; }
+html[data-theme="dark"] .rg-receipt-success p { color: #9aa8b6; }
+html[data-theme="dark"] .rg-doc-inventory th { color: #9aa8b6; }
+html[data-theme="dark"] .rg-doc-inventory td { color: #d4dde6; }
+html[data-theme="dark"] .rg-evidence-detail dt { color: #e8edf2; }
+html[data-theme="dark"] .rg-evidence-detail dd { color: #d4dde6; }
+html[data-theme="dark"] .rg-upload-card__icon { color: #8a99a8; }
+html[data-theme="dark"] .rg-upload-card__label { color: #d4dde6; }
+html[data-theme="dark"] .rg-upload-card__hint { color: #8a99a8; }
+html[data-theme="dark"] .rg-checklist-panel__title { color: #e8edf2; }
+html[data-theme="dark"] .rg-checklist-item { color: #d4dde6; }
+html[data-theme="dark"] .rg-topbar__menu-btn { color: #d4dde6; }
+html[data-theme="dark"] .rg-icard__title { color: #e8edf2; }
+html[data-theme="dark"] .rg-icard__subtitle { color: #9aa8b6; }
+html[data-theme="dark"] .rg-pill--draft { color: #9aa8b6; }
+html[data-theme="dark"] .rg-pill--on-hold { color: #f0a877; }
+html[data-theme="dark"] .rg-pill--withdrawn { color: #8a99a8; }
+html[data-theme="dark"] .rg-pill--closed { color: #9aa8b6; }
+html[data-theme="dark"] .internal-portal-body .btn-rg-ghost { color: #9aa8b6; }
+html[data-theme="dark"] .internal-portal-body .btn-rg-ghost:hover, html[data-theme="dark"] .internal-portal-body .btn-rg-ghost:focus { color: #e8edf2; }
+html[data-theme="dark"] .internal-portal-body .btn-rg-destructive { color: #f0837c; }
+html[data-theme="dark"] .internal-portal-body .btn-rg-destructive:hover, html[data-theme="dark"] .internal-portal-body .btn-rg-destructive:focus, html[data-theme="dark"] .internal-portal-body .btn-outline-danger:hover, html[data-theme="dark"] .internal-portal-body .btn-outline-danger:focus { color: #f0837c; }
+html[data-theme="dark"] .internal-portal-body .btn-outline-danger { color: #f0837c; }
+html[data-theme="dark"] .internal-portal-body .btn-rg-warn { color: #f0c661; }
+html[data-theme="dark"] .rg-itbl thead th { color: #9aa8b6; }
+html[data-theme="dark"] .rg-itbl .col-ref { color: #9aa8b6; }
+html[data-theme="dark"] .rg-fsect__title { color: #e8edf2; }
+html[data-theme="dark"] .rg-fsect__help { color: #9aa8b6; }
+html[data-theme="dark"] .rg-field__error { color: #f0837c; }
+html[data-theme="dark"] .internal-portal-body .form-label { color: #d4dde6; }
+html[data-theme="dark"] .internal-portal-body .form-text { color: #9aa8b6; }
+html[data-theme="dark"] .rg-istate-empty__title { color: #d4dde6; }
+html[data-theme="dark"] .rg-istate-empty__copy { color: #9aa8b6; }
+html[data-theme="dark"] .rg-istate-loading__label { color: #9aa8b6; }
+html[data-theme="dark"] .rg-istate-error__icon { color: #f0837c; }
+html[data-theme="dark"] .rg-istate-error__title { color: #d4dde6; }
+html[data-theme="dark"] .rg-istate-error__copy { color: #9aa8b6; }
+html[data-theme="dark"] .rg-banner--info { color: #8fbdf0; }
+html[data-theme="dark"] .rg-banner--success { color: #a9dd76; }
+html[data-theme="dark"] .rg-banner--error { color: #f0a8a2; }
+html[data-theme="dark"] .rg-banner--observer { color: #d4dde6; }
+html[data-theme="dark"] .rg-banner--blocked { color: #f0c661; }
+html[data-theme="dark"] .rg-modal-confirm .modal-title { color: #e8edf2; }
+html[data-theme="dark"] .rg-modal-confirm .modal-body { color: #d4dde6; }
+html[data-theme="dark"] .rg-modal-confirm__summary-item { color: #9aa8b6; }
+html[data-theme="dark"] .rg-drawer__title { color: #e8edf2; }
+html[data-theme="dark"] .rg-drawer__meta { color: #9aa8b6; }
+html[data-theme="dark"] .rg-drawer__close { color: #9aa8b6; }
+html[data-theme="dark"] .rg-drawer__close:hover { color: #e8edf2; }
+html[data-theme="dark"] .rg-drawer__section-title { color: #8a99a8; }
+html[data-theme="dark"] .rg-istat__value { color: #e8edf2; }
+html[data-theme="dark"] .rg-istat__label { color: #9aa8b6; }
+html[data-theme="dark"] .rg-list-summary { color: #9aa8b6; }
+html[data-theme="dark"] .rg-list-summary strong { color: #e8edf2; }
+html[data-theme="dark"] .rg-ifield-display { color: #e8edf2; }
+html[data-theme="dark"] .rg-ifield-display__label { color: #9aa8b6; }
+html[data-theme="dark"] .rg-imeta { color: #9aa8b6; }
+html[data-theme="dark"] .rg-cws-header__ref { color: #9aa8b6; }
+html[data-theme="dark"] .rg-cws-header__title { color: #e8edf2; }
+html[data-theme="dark"] .rg-cws-header__meta { color: #9aa8b6; }
+html[data-theme="dark"] .rg-cws-header__facts { color: #9aa8b6; }
+html[data-theme="dark"] .rg-cws-stage-tab { color: #9aa8b6; }
+html[data-theme="dark"] .rg-cws-stage-titlebar__title { color: #e8edf2; }
+html[data-theme="dark"] .rg-cws-fin-bar__info { color: #9aa8b6; }
+html[data-theme="dark"] .rg-cws-meta-row__label { color: #9aa8b6; }
+html[data-theme="dark"] .rg-cws-main .rg-note { color: #9aa8b6; }
+html[data-theme="dark"] .rg-scr-elig-bar__icon { color: #8a99a8; }
+html[data-theme="dark"] .rg-scr-elig-bar__label { color: #9aa8b6; }
+html[data-theme="dark"] .rg-scr-elig-bar__verdict { color: #e8edf2; }
+html[data-theme="dark"] .rg-scr-elig-bar__meta { color: #9aa8b6; }
+html[data-theme="dark"] .rg-scr-elig-bar--qualified .rg-scr-elig-bar__verdict { color: #a9dd76; }
+html[data-theme="dark"] .rg-scr-elig-bar--not-qualified .rg-scr-elig-bar__icon { color: #f0837c; }
+html[data-theme="dark"] .rg-scr-elig-bar--not-qualified .rg-scr-elig-bar__verdict { color: #f0837c; }
+html[data-theme="dark"] .rg-scr-doc-row__name { color: #e8edf2; }
+html[data-theme="dark"] .rg-scr-doc-row__tag { color: #8a99a8; }
+html[data-theme="dark"] .rg-scr-doc-verdict-btn { color: #9aa8b6; }
+html[data-theme="dark"] .rg-scr-doc-verdict-btn.is-meets { color: #a9dd76; }
+html[data-theme="dark"] .rg-scr-doc-verdict-btn.is-review { color: #f0c661; }
+html[data-theme="dark"] .rg-scr-doc-verdict-btn.is-absent { color: #f0837c; }
+html[data-theme="dark"] .rg-scr-ready-item { color: #8a99a8; }
+html[data-theme="dark"] .rg-scr-ready-item--met { color: #d4dde6; }
+html[data-theme="dark"] .rg-scr-ready-item--blocking { color: #d4dde6; }
+html[data-theme="dark"] .rg-scr-ready-item--blocking .rg-scr-ready-item__icon { color: #f0837c; }
+html[data-theme="dark"] .rg-scr-modal-summary__label { color: #9aa8b6; }
+html[data-theme="dark"] .rg-scr-modal-summary__value { color: #e8edf2; }
+html[data-theme="dark"] .rg-scr-locked-field__label { color: #9aa8b6; }
+html[data-theme="dark"] .rg-scr-locked-field__value { color: #e8edf2; }
+html[data-theme="dark"] .rg-scr-choice-btn { color: #9aa8b6; }
+html[data-theme="dark"] .rg-scr-choice-btn:hover { color: #d4dde6; }
+html[data-theme="dark"] .rg-scr-choice-btn.is-active-success { color: #a9dd76; }
+html[data-theme="dark"] .rg-scr-choice-btn.is-active-warning { color: #f0c661; }
+html[data-theme="dark"] .rg-scr-choice-btn.is-active-danger { color: #f0837c; }
+html[data-theme="dark"] .rg-scr-elig-bar--completed .rg-scr-elig-bar__verdict { color: #a9dd76; }
+html[data-theme="dark"] .rg-scr-elig-bar--waived .rg-scr-elig-bar__verdict { color: #f0c661; }
+html[data-theme="dark"] .rg-scr-elig-bar--absent .rg-scr-elig-bar__icon { color: #f0837c; }
+html[data-theme="dark"] .rg-scr-elig-bar--absent .rg-scr-elig-bar__verdict { color: #f0837c; }
+html[data-theme="dark"] .rg-exam-validation-alert { color: #f0a8a2; }
+html[data-theme="dark"] .rg-exam-locked-field__label { color: #9aa8b6; }
+html[data-theme="dark"] .rg-exam-locked-field__value { color: #e8edf2; }
+html[data-theme="dark"] .rg-int-context-item__label { color: #9aa8b6; }
+html[data-theme="dark"] .rg-int-context-item__value { color: #e8edf2; }
+html[data-theme="dark"] .rg-int-session-info-row__label { color: #9aa8b6; }
+html[data-theme="dark"] .rg-int-session-info-row__value { color: #e8edf2; }
+html[data-theme="dark"] .rg-int-score-val { color: #8a99a8; }
+html[data-theme="dark"] .rg-int-score-dial-label { color: #8a99a8; }
+html[data-theme="dark"] .rg-int-score-val.is-passing { color: #a9dd76; }
+html[data-theme="dark"] .rg-int-score-val.is-marginal { color: #f0c661; }
+html[data-theme="dark"] .rg-car-ete-row__name { color: #d4dde6; }
+html[data-theme="dark"] .rg-int-competency-group__head { color: #9aa8b6; }
+html[data-theme="dark"] .rg-int-competency-row__label { color: #d4dde6; }
+html[data-theme="dark"] .rg-int-competency-scale-note { color: #9aa8b6; }
+html[data-theme="dark"] .rg-int-threshold-notice { color: #f0c661; }
+html[data-theme="dark"] .rg-int-submitted-dial__score { color: #a9dd76; }
+html[data-theme="dark"] .rg-int-submitted-state__headline { color: #a9dd76; }
+html[data-theme="dark"] .rg-int-submitted-state__meta { color: #d4dde6; }
+html[data-theme="dark"] .rg-int-submitted-state__notice { color: #9aa8b6; }
+html[data-theme="dark"] .rg-int-no-submission { color: #9aa8b6; }
+html[data-theme="dark"] .rg-int-progress-item__name { color: #e8edf2; }
+html[data-theme="dark"] .rg-int-progress-item__role { color: #9aa8b6; }
+html[data-theme="dark"] .rg-int-revise-notice { color: #9aa8b6; }
+html[data-theme="dark"] .rg-del-score-badge__num { color: #9aa8b6; }
+html[data-theme="dark"] .rg-del-score-badge__sub { color: #8a99a8; }
+html[data-theme="dark"] .rg-del-score-badge--passing .rg-del-score-badge__num { color: #a9dd76; }
+html[data-theme="dark"] .rg-del-score-badge--marginal .rg-del-score-badge__num { color: #f0c661; }
+html[data-theme="dark"] .rg-del-rating-row__evaluator { color: #e8edf2; }
+html[data-theme="dark"] .rg-del-rating-row__role { color: #9aa8b6; }
+html[data-theme="dark"] .rg-del-rating-row__notes { color: #d4dde6; }
+html[data-theme="dark"] .rg-del-rating-row__justification { color: #f0c661; }
+html[data-theme="dark"] .rg-del-car-item:first-child .rg-del-rank-badge { color: #a9dd76; }
+html[data-theme="dark"] .rg-del-rank-badge { color: #9aa8b6; }
+html[data-theme="dark"] .rg-del-car-item__name { color: #e8edf2; }
+html[data-theme="dark"] .rg-del-car-item__scores { color: #9aa8b6; }
+html[data-theme="dark"] .rg-del-car-item__score-label { color: #8a99a8; }
+html[data-theme="dark"] .rg-del-car-item__score-val { color: #d4dde6; }
+html[data-theme="dark"] .rg-del-car-item__decision { color: #9aa8b6; }
+html[data-theme="dark"] .rg-pkt-section__title { color: #e8edf2; }
+html[data-theme="dark"] .rg-pkt-section__badge--ok { color: #a9dd76; }
+html[data-theme="dark"] .rg-pkt-section__badge--warn { color: #f0c661; }
+html[data-theme="dark"] .rg-pkt-section__badge--none { color: #9aa8b6; }
+html[data-theme="dark"] .rg-pkt-row__label { color: #9aa8b6; }
+html[data-theme="dark"] .rg-pkt-row__value { color: #e8edf2; }
+html[data-theme="dark"] .rg-pkt-outcome-pill--passed { color: #a9dd76; }
+html[data-theme="dark"] .rg-pkt-outcome-pill--failed { color: #f0a8a2; }
+html[data-theme="dark"] .rg-pkt-outcome-pill--pending { color: #c3d0dc; }
+html[data-theme="dark"] .rg-pkt-session-item__label { color: #d4dde6; }
+html[data-theme="dark"] .rg-pkt-evidence-item { color: #d4dde6; }
+html[data-theme="dark"] .rg-pkt-missing-strip { color: #f0c661; }
+html[data-theme="dark"] .rg-dec-choice-btn { color: #d4dde6; }
+html[data-theme="dark"] .rg-dec-choice-btn.is-active--selected { color: #a9dd76; }
+html[data-theme="dark"] .rg-dec-choice-btn.is-active--not-selected { color: #f0a8a2; }
+html[data-theme="dark"] .rg-dec-choice-btn__sub { color: #9aa8b6; }
+html[data-theme="dark"] .rg-dec-choice-btn.is-active--not-selected .rg-dec-choice-btn__sub { color: #f0837c; }
+html[data-theme="dark"] .rg-dec-outcome-pill--selected { color: #a9dd76; }
+html[data-theme="dark"] .rg-dec-outcome-pill--not-selected { color: #f0a8a2; }
+html[data-theme="dark"] .rg-dec-status-bar--selected { color: #a9dd76; }
+html[data-theme="dark"] .rg-dec-status-bar--not-selected { color: #f0a8a2; }
+html[data-theme="dark"] .rg-dec-locked-frame__header-title { color: #e8edf2; }
+html[data-theme="dark"] .rg-cmp-closed-banner--selected { color: #a9dd76; }
+html[data-theme="dark"] .rg-cmp-closed-banner--not-selected { color: #f0a8a2; }
+html[data-theme="dark"] .rg-cmp-req-row__label { color: #d4dde6; }
+html[data-theme="dark"] .rg-cmp-req-row__notes { color: #9aa8b6; }
+html[data-theme="dark"] .rg-cmp-req-status-badge--completed { color: #a9dd76; }
+html[data-theme="dark"] .rg-cmp-req-status-badge--pending { color: #f0c661; }
+html[data-theme="dark"] .rg-cmp-req-status-badge--na { color: #c3d0dc; }
+html[data-theme="dark"] .rg-cmp-req-form-row__seq { color: #8a99a8; }
+html[data-theme="dark"] .rg-cmp-req-form-row__delete-label { color: #f0837c; }
+html[data-theme="dark"] .rg-cmp-req-progress { color: #d4dde6; }
+html[data-theme="dark"] .rg-cmp-archive-meta__label { color: #8a99a8; }
+html[data-theme="dark"] .rg-cmp-archive-meta__value { color: #e8edf2; }
+html[data-theme="dark"] .rg-cmp-timeline-item__action { color: #e8edf2; }
+html[data-theme="dark"] .rg-cmp-timeline-item__meta { color: #9aa8b6; }
+html[data-theme="dark"] .rg-cmp-reopen-zone__icon { color: #f0837c; }
+html[data-theme="dark"] .rg-cmp-reopen-zone__title { color: #f0a8a2; }
+html[data-theme="dark"] .rg-cmp-reopen-zone__body { color: #d4dde6; }
+html[data-theme="dark"] .rg-scr-kicker { color: #9aa8b6; }
+html[data-theme="dark"] .rg-scr-decision-strip__title { color: #e8edf2; }
+html[data-theme="dark"] .rg-scr-step-state__item { color: #9aa8b6; }
+html[data-theme="dark"] .rg-scr-step-state__item.is-current { color: #8fbdf0; }
+html[data-theme="dark"] .rg-scr-step-state__item.is-complete { color: #a9dd76; }
+html[data-theme="dark"] .rg-scr-panel__title { color: #e8edf2; }
+html[data-theme="dark"] .rg-scr-panel__subtitle { color: #9aa8b6; }
+html[data-theme="dark"] .rg-scr-panel__tag { color: #c3d0dc; }
+html[data-theme="dark"] .rg-scr-doc-table th { color: #9aa8b6; }
+html[data-theme="dark"] .rg-scr-doc-table tr.is-muted td { color: #8a99a8; }
+html[data-theme="dark"] .rg-scr-doc-title { color: #e8edf2; }
+html[data-theme="dark"] .rg-scr-doc-meta { color: #9aa8b6; }
+html[data-theme="dark"] .rg-scr-file-name { color: #d4dde6; }
+html[data-theme="dark"] .rg-scr-primary-link { color: #e8edf2; }
+html[data-theme="dark"] .rg-scr-primary-link:hover { color: #e8edf2; }
+html[data-theme="dark"] .rg-scr-secondary-link { color: #9aa8b6; }
+html[data-theme="dark"] .rg-scr-secondary-link:hover { color: #e8edf2; }
+html[data-theme="dark"] .rg-scr-status-pill { color: #9aa8b6; }
+html[data-theme="dark"] .rg-scr-status-pill.is-absent { color: #f0a8a2; }
+html[data-theme="dark"] .rg-scr-status-pill.is-not-applicable { color: #9aa8b6; }
+html[data-theme="dark"] .rg-scr-status-pill[data-fixed-status="meets"] { color: #a9dd76; }
+html[data-theme="dark"] .rg-scr-status-pill[data-fixed-status="absent"] { color: #f0a8a2; }
+html[data-theme="dark"] .rg-scr-choice-btn.is-disabled, html[data-theme="dark"] .rg-scr-choice-btn:disabled { color: #8a99a8; }
+html[data-theme="dark"] .rg-scr-optional-label { color: #8a99a8; }
+html[data-theme="dark"] .rg-scr-reference-note { color: #d4dde6; }
+html[data-theme="dark"] .rg-scr-reference-grid span { color: #9aa8b6; }
+html[data-theme="dark"] .rg-scr-reference-grid strong { color: #e8edf2; }
+html[data-theme="dark"] .rg-pill--plantilla { color: #f0c661; }
+html[data-theme="dark"] .btn-rg-finalize.is-blocked, html[data-theme="dark"] .btn-rg-finalize:disabled { color: #8a99a8; }
+html[data-theme="dark"] .rg-login-card__sub { color: #9aa8b6; }
+html[data-theme="dark"] .rg-login-card__notice { color: #9aa8b6; }
+html[data-theme="dark"] .rg-scr-steprail__item { color: #8a99a8; }
+html[data-theme="dark"] .rg-scr-steprail__num { color: #8a99a8; }
+html[data-theme="dark"] .rg-scr-actionbar__msg { color: #f0a8a2; }
+html[data-theme="dark"] .rg-scr-doc-remarks__hint { color: #f0c661; }
+html[data-theme="dark"] .rg-wf-action-btn--return-to-applicant, html[data-theme="dark"] .rg-wf-action-btn--return-to-hrm-chief, html[data-theme="dark"] .rg-wf-action-btn--return-car-for-reassessment { color: #f0c661; }
+html[data-theme="dark"] .rg-wf-action-btn__badge { color: #f0c661; }
+html[data-theme="dark"] .rg-wf-return-doclist__name { color: #f0c661; }
+html[data-theme="dark"] .rg-wf-return-doclist__remark { color: #f0c661; }
+html[data-theme="dark"] .rg-wf-action-btn--return-to-applicant:hover, html[data-theme="dark"] .rg-wf-action-btn--return-to-hrm-chief:hover, html[data-theme="dark"] .rg-wf-action-btn--return-car-for-reassessment:hover { color: #f0c661; }
+html[data-theme="dark"] .rg-scr-doc-remarks__toggle { color: #9aa8b6; }
+html[data-theme="dark"] .rg-scr-doc-remarks__label { color: #9aa8b6; }
+html[data-theme="dark"] .rg-scr-doc-remarks__req { color: #f0c661; }
+html[data-theme="dark"] .rg-scr-status-pill[data-fixed-status="request_resubmission"] { color: #f0c661; }
+html[data-theme="dark"] .rg-scr-resub-notice { color: #f0c661; }
+html[data-theme="dark"] .rg-scr-resub-notice__copy strong { color: #f0c661; }
+html[data-theme="dark"] .rg-scr-doc-resub-tag { color: #f0c661; }
+html[data-theme="dark"] .rg-scr-result-facts { color: #c3d0dc; }
+html[data-theme="dark"] .rg-scr-result-facts__item--flag { color: #f0c661; }
+html[data-theme="dark"] .rg-scr-result-facts__item--absent { color: #f0a8a2; }
+html[data-theme="dark"] .rg-scr-locked-section-label { color: #9aa8b6; }
+html[data-theme="dark"] .rg-scr-locked-remark { color: #f0c661; }
+html[data-theme="dark"] .rg-scr-doc-drawer__empty { color: #8a99a8; }
+html[data-theme="dark"] .rg-scr-disclosure__hint { color: #9aa8b6; }
+html[data-theme="dark"] .rg-scr-disclosure__chevron { color: #9aa8b6; }
+html[data-theme="dark"] .rg-fs-candidate__ref { color: #9aa8b6; }
+html[data-theme="dark"] .rg-fs-candidate__warn { color: #f0c661; }
+html[data-theme="dark"] .rg-fs-actions__msg { color: #f0a8a2; }
+html[data-theme="dark"] .rg-cmp-checklist__title { color: #e8edf2; }
+html[data-theme="dark"] .rg-cmp-checklist__count { color: #9aa8b6; }
+html[data-theme="dark"] .rg-cmp-checklist__empty { color: #8a99a8; }
+html[data-theme="dark"] .rg-cmp-checklist__help { color: #9aa8b6; }
+html[data-theme="dark"] .rg-cmp-blockers { color: #f0c661; }
+html[data-theme="dark"] .rg-pkt-row__meta { color: #9aa8b6; }
+html[data-theme="dark"] .rg-pkt-section__empty { color: #8a99a8; }
+html[data-theme="dark"] .rg-pkt-section__notes { color: #d4dde6; }
+html[data-theme="dark"] .rg-dec-permanence-warning { color: #f0c661; }
+html[data-theme="dark"] .rg-exam-cond-group__head { color: #9aa8b6; }
+html[data-theme="dark"] .rg-exam-cond-group__note { color: #9aa8b6; }
+html[data-theme="dark"] .rg-exam-validation-alert { color: #f0c661; }
+html[data-theme="dark"] .rg-del-panel-summary__notice { color: #9aa8b6; }
+html[data-theme="dark"] .rg-del-rating-row__encoded { color: #8a99a8; }
+html[data-theme="dark"] .rg-del-rating-row__notes, html[data-theme="dark"] .rg-del-rating-row__justification { color: #d4dde6; }
+html[data-theme="dark"] .rg-del-rating-row__justification { color: #d4dde6; }
+html[data-theme="dark"] .rg-del-recorder__msg { color: #f0a8a2; }
+html[data-theme="dark"] .rg-del-locked__label { color: #9aa8b6; }
+html[data-theme="dark"] .rg-del-locked__facts strong { color: #e8edf2; }
+html[data-theme="dark"] .rg-del-locked__field p { color: #d4dde6; }
+html[data-theme="dark"] .rg-del-car__author { color: #8a99a8; }
+html[data-theme="dark"] .rg-del-car__ranklist-head { color: #9aa8b6; }
+html[data-theme="dark"] .rg-del-car__ranklist-count { color: #8a99a8; }
+html[data-theme="dark"] .rg-del-car__empty { color: #9aa8b6; }
+html[data-theme="dark"] .rg-del-car__summary-notes { color: #d4dde6; }
+html[data-theme="dark"] .rg-del-car-item__score-val { color: #e8edf2; }
+html[data-theme="dark"] .rg-del-car-item__decision { color: #d4dde6; }
+html[data-theme="dark"] .rg-del-car__readiness-item { color: #9aa8b6; }
+html[data-theme="dark"] .rg-del-car__msg { color: #f0a8a2; }
+html[data-theme="dark"] .rg-autosave { color: #8a99a8; }
+html[data-theme="dark"] .rg-autosave.is-saving { color: #9aa8b6; }
+html[data-theme="dark"] .rg-int-prev-step__label { color: #8a99a8; }
+html[data-theme="dark"] .rg-int-prev-step__value { color: #d4dde6; }
+html[data-theme="dark"] .rg-int-prev-step__value--strong { color: #e8edf2; }
+html[data-theme="dark"] .rg-int-prev-step__empty { color: #8a99a8; }
+html[data-theme="dark"] .rg-int-prev-step__score { color: #d4dde6; }
+html[data-theme="dark"] .rg-int-readout-grid__label { color: #8a99a8; }
+html[data-theme="dark"] .rg-int-readout-grid strong { color: #e8edf2; }
+html[data-theme="dark"] .rg-int-readout-notes { color: #d4dde6; }
+html[data-theme="dark"] .rg-int-readout-finalmeta { color: #8a99a8; }
+html[data-theme="dark"] .rg-int-banner--info { color: #8fbdf0; }
+html[data-theme="dark"] .rg-int-banner--info .rg-int-banner__title { color: #8fbdf0; }
+html[data-theme="dark"] .rg-int-banner--info p { color: #8fbdf0; }
+html[data-theme="dark"] .rg-int-banner--warn { color: #f0c661; }
+html[data-theme="dark"] .rg-int-banner--warn .rg-int-banner__title { color: #f0c661; }
+html[data-theme="dark"] .rg-int-banner--warn p { color: #f0c661; }
+html[data-theme="dark"] .rg-int-banner--muted { color: #9aa8b6; }
+html[data-theme="dark"] .rg-int-encoding-banner { color: #f0c661; }
+html[data-theme="dark"] .rg-int-encoding-banner svg { color: #f0c661; }
+html[data-theme="dark"] .rg-int-score__range { color: #8a99a8; }
+html[data-theme="dark"] .rg-int-score__val { color: #8a99a8; }
+html[data-theme="dark"] .rg-int-score__val.is-marginal { color: #f0c661; }
+html[data-theme="dark"] .rg-int-score__label { color: #8a99a8; }
+html[data-theme="dark"] .rg-int-score__label.is-marginal { color: #f0c661; }
+html[data-theme="dark"] .rg-int-threshold { color: #f0c661; }
+html[data-theme="dark"] .rg-int-submitted__heading { color: #a9dd76; }
+html[data-theme="dark"] .rg-int-submitted__body p { color: #d4dde6; }
+html[data-theme="dark"] .rg-int-submitted__notice { color: #9aa8b6; }
+html[data-theme="dark"] .rg-int-actionbar__msg { color: #f0a8a2; }
+html[data-theme="dark"] .rg-int-optional { color: #8a99a8; }
+html[data-theme="dark"] .rg-int-monitor-item__name { color: #e8edf2; }
+html[data-theme="dark"] .rg-int-monitor-item__role { color: #9aa8b6; }
+html[data-theme="dark"] .rg-applicant-panel__name { color: #9aa8b6; }
+html[data-theme="dark"] .rg-applicant-panel__chevron { color: #8a99a8; }
+html[data-theme="dark"] .rg-applicant-panel__label { color: #8a99a8; }
+html[data-theme="dark"] .rg-applicant-panel__grid strong { color: #e8edf2; }
+html[data-theme="dark"] .rg-applicant-panel__field p { color: #d4dde6; }
+html[data-theme="dark"] .rg-applicant-panel__empty { color: #8a99a8; }
+html[data-theme="dark"] .rg-applicant-panel__certs li { color: #8a99a8; }
+html[data-theme="dark"] .rg-applicant-panel__certs li.is-checked { color: #d4dde6; }
+html[data-theme="dark"] .rg-queue-chip { color: #c3d0dc; }
+html[data-theme="dark"] .rg-queue-count { color: #9aa8b6; }
+html[data-theme="dark"] .rg-queue-noresults { color: #8a99a8; }
+html[data-theme="dark"] .rg-pipeline-summary__toggle { color: #9aa8b6; }
+html[data-theme="dark"] .rg-notif__item-title { color: #e8edf2; }
+html[data-theme="dark"] .rg-notif__item-text { color: #c3d0dc; }
+html[data-theme="dark"] .rg-notif__item-meta { color: #8a99a8; }
+html[data-theme="dark"] .rg-notif__empty { color: #c3d0dc; }
+html[data-theme="dark"] .rg-notif__empty-title { color: #e8edf2; }
+html[data-theme="dark"] .rg-notif__empty .rg-notif__empty-text, html[data-theme="dark"] .rg-notif__empty-text { color: #9aa8b6; }
+html[data-theme="dark"] .rg-notif-page__title { color: #e8edf2; }
+html[data-theme="dark"] .rg-notif-page__text { color: #c3d0dc; }
+html[data-theme="dark"] .rg-notif-page__meta { color: #8a99a8; }
+html[data-theme="dark"] .rg-notif-page__meta-tag { color: #8a99a8; }
+html[data-theme="dark"] .rg-notif-page__meta-time { color: #9aa8b6; }
+html[data-theme="dark"] .rg-notif-page__empty { color: #c3d0dc; }
+html[data-theme="dark"] .rg-notif-page__empty-title { color: #e8edf2; }
+html[data-theme="dark"] .rg-notif-page__empty-text { color: #9aa8b6; }
+html[data-theme="dark"] .rg-sla-badge--ok { color: #c3d0dc; }
+html[data-theme="dark"] .rg-sla-badge--warning { color: #f0c661; }
+html[data-theme="dark"] .rg-sla-badge--overdue { color: #f0a8a2; }
+html[data-theme="dark"] .rg-sla-badge--paused { color: #8fbdf0; }
+html[data-theme="dark"] .rg-help-intro__copy { color: #c3d0dc; }
+html[data-theme="dark"] .rg-help-section__title { color: #e8edf2; }
+}
+
+/* ==========================================================================
+   INLINE-STYLE overrides — attribute selectors + !important beat hardcoded
+   inline color/background in internal template partials (theme-aware fallback).
+   ========================================================================== */
+/* Inline-style color overrides (attribute selectors beat inline via !important) */
+@media screen {
+html[data-theme="dark"] [style*="color:#9aa4af"] { color: #8a99a8 !important; }
+html[data-theme="dark"] [style*="color: #9aa4af"] { color: #8a99a8 !important; }
+html[data-theme="dark"] [style*="color:#374151"] { color: #d4dde6 !important; }
+html[data-theme="dark"] [style*="color: #374151"] { color: #d4dde6 !important; }
+html[data-theme="dark"] [style*="color:#5f6c78"] { color: #9aa8b6 !important; }
+html[data-theme="dark"] [style*="color: #5f6c78"] { color: #9aa8b6 !important; }
+html[data-theme="dark"] [style*="color:#111827"] { color: #e8edf2 !important; }
+html[data-theme="dark"] [style*="color: #111827"] { color: #e8edf2 !important; }
+html[data-theme="dark"] [style*="color:#6b7280"] { color: #9aa8b6 !important; }
+html[data-theme="dark"] [style*="color: #6b7280"] { color: #9aa8b6 !important; }
+html[data-theme="dark"] [style*="color:#64748b"] { color: #9aa8b6 !important; }
+html[data-theme="dark"] [style*="color: #64748b"] { color: #9aa8b6 !important; }
+html[data-theme="dark"] [style*="color:#dc2626"] { color: #f0837c !important; }
+html[data-theme="dark"] [style*="color: #dc2626"] { color: #f0837c !important; }
+html[data-theme="dark"] [style*="color:#5a4106"] { color: #f0c661 !important; }
+html[data-theme="dark"] [style*="color: #5a4106"] { color: #f0c661 !important; }
+html[data-theme="dark"] [style*="color:#1e293b"] { color: #e8edf2 !important; }
+html[data-theme="dark"] [style*="color: #1e293b"] { color: #e8edf2 !important; }
+html[data-theme="dark"] [style*="color:#991b1b"] { color: #f0a8a2 !important; }
+html[data-theme="dark"] [style*="color: #991b1b"] { color: #f0a8a2 !important; }
+html[data-theme="dark"] [style*="color:#854d0e"] { color: #f0c661 !important; }
+html[data-theme="dark"] [style*="color: #854d0e"] { color: #f0c661 !important; }
+html[data-theme="dark"] [style*="color:#8b96a0"] { color: #9aa8b6 !important; }
+html[data-theme="dark"] [style*="color: #8b96a0"] { color: #9aa8b6 !important; }
+html[data-theme="dark"] [style*="color:#8c4b00"] { color: #f0c661 !important; }
+html[data-theme="dark"] [style*="color: #8c4b00"] { color: #f0c661 !important; }
+html[data-theme="dark"] [style*="background:#f8fafc"] { background-color: #182230 !important; }
+html[data-theme="dark"] [style*="background: #f8fafc"] { background-color: #182230 !important; }
+html[data-theme="dark"] [style*="background-color:#f8fafc"] { background-color: #182230 !important; }
+html[data-theme="dark"] [style*="background-color: #f8fafc"] { background-color: #182230 !important; }
+html[data-theme="dark"] [style*="background:#fafbfc"] { background-color: #182230 !important; }
+html[data-theme="dark"] [style*="background: #fafbfc"] { background-color: #182230 !important; }
+html[data-theme="dark"] [style*="background-color:#fafbfc"] { background-color: #182230 !important; }
+html[data-theme="dark"] [style*="background-color: #fafbfc"] { background-color: #182230 !important; }
+html[data-theme="dark"] [style*="background:#fef2f2"] { background-color: rgba(236,111,104,0.15) !important; }
+html[data-theme="dark"] [style*="background: #fef2f2"] { background-color: rgba(236,111,104,0.15) !important; }
+html[data-theme="dark"] [style*="background-color:#fef2f2"] { background-color: rgba(236,111,104,0.15) !important; }
+html[data-theme="dark"] [style*="background-color: #fef2f2"] { background-color: rgba(236,111,104,0.15) !important; }
+}
