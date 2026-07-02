@@ -67,15 +67,20 @@
                 <p class="rg-pub-section__copy mb-1"><strong>Salary Grade</strong></p>
                 <p class="rg-pub-section__copy mb-0">{% if entry.position_reference.salary_grade %}SG {{ entry.position_reference.salary_grade }}{% else %}Not recorded{% endif %}</p>
             </div>
-            <div class="col-md-4">
-                <p class="rg-pub-section__copy mb-1"><strong>Level Classification</strong></p>
-                <p class="rg-pub-section__copy mb-0">{{ entry.position_reference.get_level_classification_display|default:"Not recorded" }}</p>
-            </div>
-            <div class="col-md-4">
-                <p class="rg-pub-section__copy mb-1"><strong>Class ID</strong></p>
-                <p class="rg-pub-section__copy mb-0">{{ entry.position_reference.class_id|default:"Not recorded" }}</p>
-            </div>
         </div>
+        <details class="rg-pub-reference-details" style="margin-top:0.85rem;">
+            <summary style="cursor:pointer; font-size:0.9375rem;">Official reference details</summary>
+            <div class="row g-3" style="margin-top:0.35rem;">
+                <div class="col-md-6">
+                    <p class="rg-pub-section__copy mb-1"><strong>Level Classification</strong></p>
+                    <p class="rg-pub-section__copy mb-0">{{ entry.position_reference.get_level_classification_display|default:"Not recorded" }}</p>
+                </div>
+                <div class="col-md-6">
+                    <p class="rg-pub-section__copy mb-1"><strong>Class ID</strong></p>
+                    <p class="rg-pub-section__copy mb-0">{{ entry.position_reference.class_id|default:"Not recorded" }}</p>
+                </div>
+            </div>
+        </details>
     </div>
     {% endif %}
 

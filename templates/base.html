@@ -33,6 +33,7 @@
 <body class="{% block body_class %}{% endblock %}">
     {% block layout_wrapper %}
     {% block site_header %}{% endblock %}
+    {% block message_stack %}
     {% if messages %}
         <div class="rg-message-stack">
             {% for message in messages %}
@@ -40,6 +41,7 @@
             {% endfor %}
         </div>
     {% endif %}
+    {% endblock %}
     <main class="site-shell {% block main_class %}rg-container py-4{% endblock %}">
         {% block content %}{% endblock %}
     </main>

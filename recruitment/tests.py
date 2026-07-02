@@ -3118,7 +3118,10 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         intake_response = self.client.get(
             reverse("applicant-intake", kwargs={"pk": self.level1_position.pk})
         )
-        self.assertEqual(intake_response.status_code, 404)
+        # A closed-but-existing vacancy now redirects applicants back to the openings
+        # list with an explanation instead of dead-ending on a staff-flavored 404.
+        self.assertEqual(intake_response.status_code, 302)
+        self.assertEqual(intake_response.url, reverse("applicant-portal"))
 
     def test_plantilla_fourteenth_publication_day_still_accepts_intake(self):
         publication_date = timezone.localdate() - timedelta(days=13)
@@ -3158,7 +3161,8 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         intake_response = self.client.get(
             reverse("applicant-intake", kwargs={"pk": self.level1_position.pk})
         )
-        self.assertEqual(intake_response.status_code, 404)
+        self.assertEqual(intake_response.status_code, 302)
+        self.assertEqual(intake_response.url, reverse("applicant-portal"))
 
     def test_public_vacancy_detail_uses_reference_metadata_over_legacy_entry_text(self):
         self.level1_position.description = "Legacy description should stay hidden."

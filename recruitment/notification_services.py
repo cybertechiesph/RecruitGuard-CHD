@@ -21,6 +21,7 @@ from .models import (
     RecruitmentCase,
     RecruitmentUser,
 )
+from .applicant_labels import applicant_branch_label, applicant_status_label
 
 
 logger = logging.getLogger(__name__)
@@ -254,8 +255,8 @@ def _build_submission_acknowledgment(application):
         "Your application has been received by RecruitGuard-CHD.",
         f"Application ID: {application.reference_number}",
         f"Position: {application.position.title}",
-        f"Recruitment type: {application.position.get_branch_display()}",
-        f"Current status: {application.get_status_display()}",
+        f"Position type: {applicant_branch_label(application)}",
+        f"Current status: {applicant_status_label(application)}",
         "",
         "Keep your Application ID so you can check your application status.",
     ]
@@ -553,6 +554,8 @@ def _render_notification_html(notification):
         "status_link": (
             metadata.get("status_link") or build_applicant_status_url(application)
         ),
+        "status_label": applicant_status_label(application),
+        "position_type_label": applicant_branch_label(application),
         "meta": metadata,
         "reporting_instructions": REPORTING_INSTRUCTIONS,
         **email_branding_context(audience),

@@ -57,7 +57,8 @@
         <div class="alert alert-danger" role="alert"
              {% if form.errors|length == 1 and form.captcha_answer.errors %}data-captcha-error-summary{% endif %}>
             <strong>Please fix the highlighted fields below.</strong>
-            Your typed information has been kept. You may need to re-select your files.
+            Your typed information has been kept. Files already saved to your draft are listed
+            below; re-select only the slots showing an error.
         </div>
     {% endif %}
 

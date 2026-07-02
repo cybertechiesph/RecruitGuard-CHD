@@ -636,6 +636,11 @@ class ApplicantPortalIntakeForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form
             )
         self._apply_bootstrap()
         self.fields["performance_rating_applicability"].widget.attrs["class"] = "rg-pub-radio-list"
+        # Mobile autofill hints for the applicant's own identity fields (WCAG 1.3.5).
+        self.fields["first_name"].widget.attrs["autocomplete"] = "given-name"
+        self.fields["last_name"].widget.attrs["autocomplete"] = "family-name"
+        self.fields["email"].widget.attrs["autocomplete"] = "email"
+        self.fields["phone"].widget.attrs["autocomplete"] = "tel-national"
         self._refresh_document_slots()
 
     def clean_email(self):

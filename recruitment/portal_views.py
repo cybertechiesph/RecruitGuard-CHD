@@ -13,6 +13,7 @@ from .forms import (
     DocumentResubmissionForm,
 )
 from .models import PositionPosting, RecruitmentApplication, RecruitmentCase
+from .applicant_labels import APPLICANT_STATUS_LABELS as _APPLICANT_STATUS_LABELS
 from .requirements import PERFORMANCE_RATING, get_applicant_document_requirements
 from .services import (
     ApplicationOTPDeliveryError,
@@ -27,56 +28,6 @@ from .services import (
     verify_application_otp,
 )
 from .upload_validation import MAX_APPLICANT_DOCUMENT_UPLOAD_BYTES
-
-
-_APPLICANT_STATUS_LABELS = {
-    RecruitmentApplication.Status.DRAFT: None,  # drafts not shown
-    RecruitmentApplication.Status.SECRETARIAT_REVIEW: (
-        "Under Review",
-        "review",
-        "Your application is currently being reviewed by our recruitment team. "
-        "You will be contacted if additional information is needed.",
-    ),
-    RecruitmentApplication.Status.HRM_CHIEF_REVIEW: (
-        "Under Review",
-        "review",
-        "Your application is currently being reviewed by our recruitment team.",
-    ),
-    RecruitmentApplication.Status.HRMPSB_REVIEW: (
-        "Under Evaluation",
-        "evaluation",
-        "Your application is currently being evaluated. "
-        "You may be contacted for an examination or interview schedule.",
-    ),
-    RecruitmentApplication.Status.APPOINTING_AUTHORITY_REVIEW: (
-        "Under Processing",
-        "review",
-        "Your application is being processed for the next steps. "
-        "You will be contacted with further instructions.",
-    ),
-    RecruitmentApplication.Status.RETURNED_TO_APPLICANT: (
-        "Action Required",
-        "returned",
-        "Your application has been returned. Please check your email for instructions on what to do next.",
-    ),
-    RecruitmentApplication.Status.APPROVED: (
-        "Approved",
-        "approved",
-        "Congratulations! Your application has been approved. "
-        "You will be contacted with further instructions.",
-    ),
-    RecruitmentApplication.Status.REJECTED: (
-        "Not Selected",
-        "not-selected",
-        "Thank you for your interest. Unfortunately, your application was not selected for this position. "
-        "You are welcome to apply for other open positions.",
-    ),
-    RecruitmentApplication.Status.WITHDRAWN: (
-        "Withdrawn",
-        "not-selected",
-        "This application has been withdrawn.",
-    ),
-}
 
 
 def _posting_is_closing_soon(posting):
@@ -205,7 +156,12 @@ class ApplicantPortalIntakeView(FormView):
             pk=kwargs["pk"],
         )
         if not self.entry.is_open_for_intake:
-            raise Http404
+            messages.error(
+                request,
+                "This position is no longer accepting applications. "
+                "You can browse the other open positions below.",
+            )
+            return redirect("applicant-portal")
         return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
