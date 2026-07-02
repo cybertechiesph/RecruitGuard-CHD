@@ -349,8 +349,8 @@
 
             
             {% if request.user.role == "system_admin" %}
-            <div class="rg-cws-stage-section" id="cws-evidence" style="display:none;">
-                {% include "internal_includes/stage_titlebar.html" with title="Secured Files" %}
+            <details class="rg-cws-disclosure" id="cws-evidence">
+                <summary class="rg-cws-disclosure__summary">Secured files (evidence)</summary>
 
                 <div class="rg-icard">
                     <div class="rg-icard__header">
@@ -426,7 +426,7 @@
                         </form>
                     </div>
                 {% endif %}
-            </div>
+            </details>
             {% endif %}
 
             

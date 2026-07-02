@@ -16,7 +16,7 @@ variant options:
   blocked    — amber left-ruled, action blocked
   locked     — gold left-ruled, record locked/finalized
 {% endcomment %}
-<div class="rg-banner rg-banner--{{ variant|default:'info' }}" role="{% if variant == 'error' %}alert{% else %}note{% endif %}">
+<div class="rg-banner rg-banner--{{ variant|default:'info' }}" role="{% if variant == 'error' %}alert{% else %}status{% endif %}">
     <div class="rg-banner__icon" aria-hidden="true">
         {% if variant == "observer" %}
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"

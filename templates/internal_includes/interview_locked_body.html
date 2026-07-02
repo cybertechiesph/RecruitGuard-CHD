@@ -52,7 +52,7 @@
             </div>
 
             <div class="rg-exam-locked-field">
-                <div class="rg-exam-locked-field__label">Scheduled For</div>
+                <div class="rg-exam-locked-field__label">Scheduled for</div>
                 <div class="rg-exam-locked-field__value">
                     {% if current_interview_session.scheduled_for %}
                         {{ current_interview_session.scheduled_for|date:"l, F j, Y" }}
@@ -64,7 +64,7 @@
             </div>
 
             <div class="rg-exam-locked-field">
-                <div class="rg-exam-locked-field__label">Location / Medium</div>
+                <div class="rg-exam-locked-field__label">Location / medium</div>
                 <div class="rg-exam-locked-field__value">
                     {{ current_interview_session.location|default:"—" }}
                 </div>
@@ -72,7 +72,7 @@
 
             {% if current_interview_session.session_notes %}
             <div class="rg-exam-locked-field">
-                <div class="rg-exam-locked-field__label">Session Notes</div>
+                <div class="rg-exam-locked-field__label">Session notes</div>
                 <div class="rg-exam-locked-field__value">
                     {{ current_interview_session.session_notes }}
                 </div>
@@ -88,7 +88,7 @@
             </div>
 
             <div class="rg-exam-locked-field">
-                <div class="rg-exam-locked-field__label">Ratings Submitted</div>
+                <div class="rg-exam-locked-field__label">Ratings submitted</div>
                 <div class="rg-exam-locked-field__value">
                     {% if current_interview_ratings %}
                         <span class="rg-pill rg-pill--success rg-pill--sm">
@@ -130,7 +130,7 @@
 
             {% if current_interview_fallback_evidence %}
             <div class="rg-exam-locked-field">
-                <div class="rg-exam-locked-field__label">Fallback Sheets</div>
+                <div class="rg-exam-locked-field__label">Fallback sheets</div>
                 <div class="rg-exam-locked-field__value">
                     <span class="rg-pill rg-pill--neutral rg-pill--sm">
                         {{ current_interview_fallback_evidence|length }}

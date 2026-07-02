@@ -2121,9 +2121,31 @@ textarea.form-control {
     transform: none;
 }
 
-/* UX-04 — Read-only disclosure for Case History in the case shell.
-   The timeline was rendered but permanently hidden behind a dead tab switcher
-   (now removed). It is reachable for every role via a collapsible summary,
+/* A1 — Global keyboard focus indicator (WCAG 2.4.7).
+   The internal `.btn` override above strips Bootstrap's focus box-shadow, and no
+   `:focus-visible` style existed anywhere, so keyboard focus was invisible across the
+   whole internal portal (sidebar links, queue chips, table actions, the audit
+   <summary>, workflow buttons). One brand-green outline restores a visible ring for
+   keyboard/AT users everywhere; individual components may still layer richer rings on
+   top. `outline` is used (not box-shadow) so it is unaffected by the `.btn` override. */
+.internal-portal-body a:focus-visible,
+.internal-portal-body button:focus-visible,
+.internal-portal-body summary:focus-visible,
+.internal-portal-body [tabindex]:focus-visible,
+.internal-portal-body .btn:focus-visible,
+.internal-portal-body .form-control:focus-visible,
+.internal-portal-body .form-select:focus-visible,
+.internal-portal-body input:focus-visible,
+.internal-portal-body select:focus-visible,
+.internal-portal-body textarea:focus-visible {
+    outline: 2px solid var(--rg-brand-green, #1e5c2d);
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+
+/* UX-04 — Read-only disclosure for Case History / Evidence in the case shell.
+   These sections were rendered but permanently hidden behind a dead tab switcher
+   (now removed). They are reachable for every role via a collapsible summary,
    collapsed by default so the main screen still shows only the current step. */
 .internal-portal-body .rg-cws-disclosure {
     margin-top: 1rem;
@@ -5624,18 +5646,14 @@ textarea.form-control {
     font-weight: 700;
     color: #111827;
     line-height: 1.3;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
 }
 
 .rg-cws-header__meta {
     font-size: 0.75rem;
     color: #5f6c78;
     margin-top: 0.15rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
 }
 
 .rg-cws-header__pills {

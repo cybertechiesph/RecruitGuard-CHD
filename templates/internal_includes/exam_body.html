@@ -638,7 +638,7 @@ reviewer can see the disposition at a glance without scrolling to step 2.
             if (sections[s]) sections[s].hidden = s !== currentStep;
             if (rail[s]) {
                 rail[s].classList.toggle("is-current", s === currentStep);
-                rail[s].classList.toggle("is-done", i < idx);
+                rail[s].classList.toggle("is-done", i < idx && stepProblems(s).length === 0);
                 rail[s].setAttribute("aria-current", s === currentStep ? "step" : "false");
             }
         });
@@ -742,9 +742,6 @@ reviewer can see the disposition at a glance without scrolling to step 2.
             form.submit();
         });
     }
-
-    form.addEventListener("input", clearError);
-    form.addEventListener("change", clearError);
 
     /* Initial sync (handles edit-with-existing-record + server errors) */
     refresh();

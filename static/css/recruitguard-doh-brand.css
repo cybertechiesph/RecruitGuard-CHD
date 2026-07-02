@@ -3055,10 +3055,6 @@ body.applicant-portal-body {
 .rg-notif__bell:focus-visible {
     background: #f1f5f9;
     border-color: #cbd5e1;
-    outline: none;
-}
-.rg-notif__bell:focus-visible {
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35);
 }
 .rg-notif__bell[aria-expanded="true"] {
     background: #ecfdf5;
@@ -3129,11 +3125,6 @@ body.applicant-portal-body {
     cursor: pointer;
 }
 .rg-notif__mark-all-btn:hover { text-decoration: underline; }
-.rg-notif__mark-all-btn:focus-visible {
-    outline: 2px solid rgba(59, 130, 246, 0.45);
-    outline-offset: 2px;
-    border-radius: 0.25rem;
-}
 
 .rg-notif__list {
     list-style: none;
@@ -3165,8 +3156,8 @@ body.applicant-portal-body {
     outline: none;
     box-shadow: inset 0 0 0 2px rgba(22, 163, 74, 0.45);
 }
-.rg-notif__item--unread .rg-notif__item-link { background: #f0fdf4; }
-.rg-notif__item--unread .rg-notif__item-link:hover { background: #dcfce7; }
+.rg-notif__item--unread .rg-notif__item-link { background: var(--rg-brand-green-soft, #e6f0dc); }
+.rg-notif__item--unread .rg-notif__item-link:hover { background: #d4e8c0; }
 .rg-notif__item-dot {
     width: 0.5rem;
     height: 0.5rem;
@@ -3176,8 +3167,8 @@ body.applicant-portal-body {
     flex: 0 0 auto;
 }
 .rg-notif__item--unread .rg-notif__item-dot {
-    background: var(--rg-brand-green, #16a34a);
-    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
+    background: var(--rg-brand-green, #1e5c2d);
+    box-shadow: 0 0 0 3px rgba(30, 92, 45, 0.18);
 }
 .rg-notif__item-body {
     display: flex;
@@ -3286,8 +3277,8 @@ body.applicant-portal-body {
     outline: none;
     box-shadow: inset 0 0 0 2px rgba(22, 163, 74, 0.45);
 }
-.rg-notif-page__item--unread .rg-notif-page__row { background: #f0fdf4; }
-.rg-notif-page__item--unread .rg-notif-page__row:hover { background: #dcfce7; }
+.rg-notif-page__item--unread .rg-notif-page__row { background: var(--rg-brand-green-soft, #e6f0dc); }
+.rg-notif-page__item--unread .rg-notif-page__row:hover { background: #d4e8c0; }
 .rg-notif-page__dot {
     width: 0.6rem;
     height: 0.6rem;
@@ -3297,8 +3288,8 @@ body.applicant-portal-body {
     flex: 0 0 auto;
 }
 .rg-notif-page__item--unread .rg-notif-page__dot {
-    background: var(--rg-brand-green, #16a34a);
-    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18);
+    background: var(--rg-brand-green, #1e5c2d);
+    box-shadow: 0 0 0 3px rgba(30, 92, 45, 0.18);
 }
 .rg-notif-page__body {
     display: flex;
