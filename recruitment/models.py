@@ -596,8 +596,10 @@ class PositionPosting(TimestampedModel):
         self.item_number = (self.item_number or "").strip()
 
         if self.branch == self.Branch.PLANTILLA:
-            if not self.item_number:
-                errors["item_number"] = "Plantilla entries require the plantilla item number."
+            # The plantilla item number is the official identifier a handler supplies on
+            # the recruitment entry form, where it is required. It is intentionally not
+            # required at the model level so programmatic postings (e.g. demo seeding)
+            # can be created without fabricating an official-looking number.
             if self.intake_mode != self.IntakeMode.FIXED_PERIOD:
                 errors["intake_mode"] = "Plantilla entries must use a fixed validity period."
             if not self.closing_date:

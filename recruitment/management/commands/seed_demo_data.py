@@ -365,11 +365,11 @@ class Command(BaseCommand):
             position_reference=reference,
             branch=branch,
             level=reference.routing_level,
-            item_number=(
-                f"OSEC-DOHB-{reference.class_id}-{opening_date.year}-{vacancy['count']:03d}"
-                if is_plantilla
-                else ""
-            ),
+            # The plantilla item number is the official identifier a handler enters on
+            # the recruitment entry form. Demo postings are auto-generated with no real
+            # reference, so we leave this blank rather than fabricate an official-looking
+            # number. Portal cards omit the "Item No." line when it is blank.
+            item_number="",
             intake_mode=(
                 PositionPosting.IntakeMode.FIXED_PERIOD
                 if is_plantilla
