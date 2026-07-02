@@ -414,15 +414,28 @@
     var GENERIC_FILE_MIME_TYPES = ["", "application/octet-stream", "binary/octet-stream"];
 
     /* ── Helpers ────────────────────────────────────────────── */
-    function clearFieldErrors() {
+    function clearFieldErrors(preserveActiveFileErrors) {
         // Remove any dynamically-inserted inline client errors and reset field state.
+        // When preserveActiveFileErrors is set (form-level clearing on an unrelated edit),
+        // keep the error node + red slot for any file input whose invalid file is STILL
+        // selected (data-file-validation-error present) — that error must stay until the
+        // file is replaced or removed (UX-09), even while the applicant types in another
+        // field. Per-field clearing (clearClientErrorForField) is unaffected.
         Array.prototype.forEach.call(
             document.querySelectorAll("[data-client-error]"),
-            function (n) { n.remove(); }
+            function (n) {
+                if (preserveActiveFileErrors) {
+                    var key = n.getAttribute("data-client-error-for");
+                    var owner = key ? form.elements[key] : null;
+                    if (owner && owner.dataset && owner.dataset.fileValidationError) return;
+                }
+                n.remove();
+            }
         );
         Array.prototype.forEach.call(
             form.querySelectorAll("[aria-invalid]"),
             function (el) {
+                if (preserveActiveFileErrors && el.dataset && el.dataset.fileValidationError) return;
                 el.classList.remove("is-invalid");
                 el.removeAttribute("aria-invalid");
                 if (el.hasAttribute("data-orig-describedby")) {
@@ -1170,15 +1183,65 @@
             "Uploading your documents — this can take a few minutes on a slow connection. Please keep this page open.";
         if (progressBox) progressBox.hidden = false;
     }
+    function uploadFailed() {
+        // Network error / timeout / abort during the XHR upload: nothing navigated, so the
+        // typed answers and selected files are all still here. Re-open the form for a retry.
+        submittingInFlight = false;
+        form.removeAttribute("aria-busy");
+        if (progressBox) progressBox.hidden = true;
+        if (progressBar) progressBar.value = 0;
+        if (nextBtn) nextBtn.disabled = false;
+        if (backBtn) backBtn.disabled = false;
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Try again"; }
+        if (errorBox) {
+            errorBox.textContent = "The upload did not go through — check your connection and try again. Your typed answers are still here.";
+            errorBox.hidden = false;
+        }
+    }
     function uploadForm() {
-        // Native submit (Tier 1): the browser POSTs, follows the redirect to the OTP page,
-        // and surfaces the server's one-time "draft is ready" message — all of which an XHR
-        // upload would consume via its automatic redirect-follow (and it would double-fetch
-        // /otp/, regressing UX-07). The lock + indeterminate status above already remove the
-        // double-submit and the frozen-page abandonment; a determinate percent bar would
-        // require XHR and is deferred to avoid that message/redirect regression.
         lockForSubmit();
-        form.submit();
+        // Tier 2: upload via XHR so a real percent bar can show during the (possibly large,
+        // slow-connection) multi-file POST, and a dropped connection surfaces a retry rather
+        // than a browser error page. Falls back to the native submit (Tier 1) if XHR/FormData
+        // are unavailable or throw synchronously; the no-JS path already uses the native POST.
+        if (typeof XMLHttpRequest === "undefined" || typeof FormData === "undefined") {
+            submittingInFlight = true; form.submit(); return;
+        }
+        var url = new URL(form.getAttribute("action") || window.location.href, window.location.href).href;
+        try {
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", url, true);
+            if (xhr.upload) {
+                xhr.upload.addEventListener("progress", function (e) {
+                    if (e.lengthComputable) {
+                        var pct = Math.round((e.loaded / e.total) * 100);
+                        if (progressBar) progressBar.value = pct;
+                        if (progressText) progressText.textContent = "Uploading… " + pct + "%";
+                    }
+                });
+            }
+            xhr.addEventListener("load", function () {
+                if (xhr.responseURL && xhr.responseURL !== url) {
+                    // Success: the server redirected to the OTP page — follow it.
+                    if (progressBar) progressBar.value = 100;
+                    if (progressText) progressText.textContent = "Uploaded. Taking you to email verification…";
+                    window.location.assign(xhr.responseURL);
+                } else {
+                    // Same URL, 200: the server re-rendered the form with validation errors
+                    // (rare — every step is client-gated, and valid uploads were saved to the
+                    // draft). Re-submit natively so the browser renders those errors.
+                    form.submit();
+                }
+            });
+            xhr.addEventListener("error", uploadFailed);
+            xhr.addEventListener("timeout", uploadFailed);
+            xhr.addEventListener("abort", uploadFailed);
+            xhr.send(new FormData(form));
+        } catch (err) {
+            // XHR path threw synchronously — fall back to the native submit (Tier 1).
+            submittingInFlight = true;
+            form.submit();
+        }
     }
     function verifyReadabilityThenSubmit() {
         var inputs = selectedFileInputsForSubmit();
@@ -1230,13 +1293,13 @@
         verifyReadabilityThenSubmit();
     });
 
-    // Clear the action-bar error when the user resumes editing. A file-input change
-    // is skipped: its own handler renders the "why this file was rejected" inline
-    // error at selection time, and clearError (via clearFieldErrors) would otherwise
-    // wipe it as the change event bubbles here, leaving only the red slot (UX-09).
-    function clearErrorOnEdit(e) {
-        if (e && e.target && e.target.type === "file") return;
-        clearError();
+    // Clear stale action-bar/field errors when the applicant resumes editing, but preserve
+    // a file-slot error whose invalid file is STILL selected — it must remain until that
+    // file is replaced or removed, even while the applicant types in another field (UX-09).
+    // Per-field clearing (clearClientErrorForField, on replace/remove) still clears fully.
+    function clearErrorOnEdit() {
+        clearFieldErrors(true);
+        if (errorBox) { errorBox.hidden = true; errorBox.textContent = ""; }
     }
     form.addEventListener("input", clearErrorOnEdit);
     form.addEventListener("change", clearErrorOnEdit);
