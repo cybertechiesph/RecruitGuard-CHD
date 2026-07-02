@@ -20,23 +20,6 @@
     </div>
 </div>
 
-{% if applications %}
-    <div class="rg-queue-toolbar">
-        <div class="rg-queue-filters" role="group" aria-label="Filter cases by type">
-            <button type="button" class="rg-queue-chip is-active" data-queue-filter="all">All</button>
-            <button type="button" class="rg-queue-chip" data-queue-filter="plantilla">Plantilla</button>
-            <button type="button" class="rg-queue-chip" data-queue-filter="cos">Contract of Service</button>
-        </div>
-        <p class="rg-queue-count js-queue-count"
-           aria-live="polite"
-           data-queue-suffix="{% if is_queue %}in your queue{% else %}you can view{% endif %}">
-            <strong>{{ applications|length }}</strong>
-            case{{ applications|length|pluralize }}
-            {% if is_queue %}in your queue{% else %}you can view{% endif %}.
-        </p>
-    </div>
-{% endif %}
-
 {% if not applications %}
     <div class="rg-icard">
         {% if is_queue %}
@@ -46,13 +29,33 @@
         {% endif %}
     </div>
 {% else %}
+    <div data-rg-list>
+    <div class="rg-queue-toolbar">
+        <input type="search" class="form-control rg-list-search" data-rg-search
+               placeholder="Search by reference, applicant, or position&hellip;"
+               aria-label="Search cases" autocomplete="off">
+        <div class="rg-queue-filters" role="group" aria-label="Filter cases by type">
+            <button type="button" class="rg-queue-chip is-active" data-rg-facet="branch" data-rg-value="all">All</button>
+            <button type="button" class="rg-queue-chip" data-rg-facet="branch" data-rg-value="plantilla">Plantilla</button>
+            <button type="button" class="rg-queue-chip" data-rg-facet="branch" data-rg-value="cos">Contract of Service</button>
+        </div>
+        <p class="rg-queue-count"
+           aria-live="polite"
+           data-rg-count
+           data-rg-noun="case"
+           data-rg-suffix="{% if is_queue %}in your queue{% else %}you can view{% endif %}">
+            <strong>{{ applications|length }}</strong>
+            case{{ applications|length|pluralize }}
+            {% if is_queue %}in your queue{% else %}you can view{% endif %}.
+        </p>
+    </div>
     <div class="rg-itbl rg-itbl--sticky">
         <div class="table-responsive">
             <table class="table align-middle">
                 <thead>
                     <tr>
-                        <th>Case</th>
-                        <th>Position</th>
+                        <th data-rg-sort>Case</th>
+                        <th data-rg-sort>Position</th>
                         {% if not is_queue %}
                             <th>Branch / Level</th>
                         {% endif %}
@@ -60,13 +63,14 @@
                         {% if not is_queue %}
                             <th>Assigned To</th>
                         {% endif %}
-                        <th>Last Updated</th>
+                        <th data-rg-sort data-rg-type="date">Last Updated</th>
                         <th class="col-actions"><span class="visually-hidden">Actions</span></th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for application in applications %}
-                        <tr data-queue-row data-branch="{{ application.branch }}">
+                        <tr data-rg-row data-branch="{{ application.branch }}"
+                            data-search="{{ application.reference_label }} {{ application.applicant_display_name }} {{ application.position.title }} {{ application.position.job_code }}">
                             <td class="col-ref">
                                 <div class="fw-bold" style="font-family:ui-monospace,SFMono-Regular,'Cascadia Mono',Consolas,Menlo,monospace;font-size:0.78rem;color:#5f6c78;">
                                     {{ application.reference_label }}
@@ -122,7 +126,7 @@
                                     {% endif %}
                                 </td>
                             {% endif %}
-                            <td>
+                            <td data-sort-value="{{ application.updated_at|date:'c' }}">
                                 <div style="font-size:0.8125rem;color:#374151;">
                                     {{ application.updated_at|timesince }} ago
                                 </div>
@@ -141,42 +145,10 @@
                 </tbody>
             </table>
         </div>
-        <div class="rg-queue-noresults js-queue-noresults" hidden>
-            No cases match this filter.
+        <div class="rg-queue-noresults" data-rg-noresults hidden>
+            No cases match your search.
         </div>
     </div>
-
-    <script>
-    (function () {
-        "use strict";
-        var chips = document.querySelectorAll("[data-queue-filter]");
-        var rows = document.querySelectorAll("[data-queue-row]");
-        var countEl = document.querySelector(".js-queue-count");
-        var noResults = document.querySelector(".js-queue-noresults");
-        if (!chips.length) return;
-        var suffix = countEl ? (countEl.dataset.queueSuffix || "") : "";
-
-        function applyFilter(value) {
-            var visible = 0;
-            rows.forEach(function (row) {
-                var show = value === "all" || row.dataset.branch === value;
-                row.hidden = !show;
-                if (show) visible++;
-            });
-            if (countEl) {
-                countEl.innerHTML = "<strong>" + visible + "</strong> case" +
-                    (visible === 1 ? "" : "s") + " " + suffix + ".";
-            }
-            if (noResults) noResults.hidden = visible !== 0;
-        }
-        chips.forEach(function (chip) {
-            chip.addEventListener("click", function () {
-                chips.forEach(function (c) { c.classList.remove("is-active"); });
-                chip.classList.add("is-active");
-                applyFilter(chip.dataset.queueFilter);
-            });
-        });
-    })();
-    </script>
+    </div>
 {% endif %}
 {% endblock %}

@@ -43,23 +43,32 @@
         {% include "internal_includes/state_empty.html" with title="No recruitment entries recorded yet" copy="Create a Plantilla or COS entry to begin managing applications for a position." action_url=create_entry_url action_label="Create First Entry" %}
     </div>
 {% else %}
+    <div data-rg-list>
+    <div class="rg-list-toolbar">
+        <input type="search" class="form-control rg-list-search" data-rg-search
+               placeholder="Search by code, title, or position&hellip;"
+               aria-label="Search recruitment entries" autocomplete="off">
+        <p class="rg-list-count" aria-live="polite"
+           data-rg-count data-rg-noun="entry"><strong>{{ entries|length }}</strong> entries.</p>
+    </div>
     <div class="rg-itbl rg-itbl--sticky">
         <div class="table-responsive">
             <table class="table align-middle">
                 <thead>
                     <tr>
-                        <th>Entry</th>
-                        <th>Position</th>
+                        <th data-rg-sort>Entry</th>
+                        <th data-rg-sort>Position</th>
                         <th>Branch / Intake</th>
-                        <th>Level</th>
-                        <th>Status</th>
-                        <th>Schedule</th>
+                        <th data-rg-sort data-rg-type="number">Level</th>
+                        <th data-rg-sort>Status</th>
+                        <th data-rg-sort data-rg-type="date">Schedule</th>
                         <th class="col-actions"><span class="visually-hidden">Actions</span></th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for entry in entries %}
-                        <tr>
+                        <tr data-rg-row
+                            data-search="{{ entry.job_code }} {{ entry.title }} {% if entry.position_reference %}{{ entry.position_reference.position_title }} {{ entry.position_reference.class_id }}{% endif %} {{ entry.get_branch_display }} {{ entry.get_status_display }}">
                             <td>
                                 <div style="font-family:ui-monospace,SFMono-Regular,'Cascadia Mono',Consolas,Menlo,monospace;font-size:0.78rem;font-weight:700;color:#5f6c78;">
                                     {{ entry.job_code }}
@@ -93,7 +102,7 @@
                                     </span>
                                 </div>
                             </td>
-                            <td>
+                            <td data-sort-value="{{ entry.level }}">
                                 <span class="rg-pill rg-pill--{{ entry.level|level_theme }} rg-pill--sm">
                                     {{ entry.get_level_display }}
                                 </span>
@@ -103,7 +112,7 @@
                                     {{ entry.get_status_display }}
                                 </span>
                             </td>
-                            <td>
+                            <td data-sort-value="{{ entry.opening_date|date:'c' }}">
                                 <div class="rg-imeta" style="flex-direction:column;gap:0.1rem;align-items:flex-start;">
                                     <span>{{ entry.opening_date|date:"M d, Y" }}</span>
                                     <span>
@@ -165,6 +174,10 @@
                 </tbody>
             </table>
         </div>
+        <div class="rg-queue-noresults" data-rg-noresults hidden>
+            No entries match your search.
+        </div>
+    </div>
     </div>
 {% endif %}
 {% endblock %}

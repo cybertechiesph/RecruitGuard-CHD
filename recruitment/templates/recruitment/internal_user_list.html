@@ -36,21 +36,30 @@
     </div>
 </div>
 
+<div data-rg-list>
+<div class="rg-list-toolbar">
+    <input type="search" class="form-control rg-list-search" data-rg-search
+           placeholder="Search by username, email, role, or office&hellip;"
+           aria-label="Search internal users" autocomplete="off">
+    <p class="rg-list-count" aria-live="polite"
+       data-rg-count data-rg-noun="user"><strong>{{ internal_users|length }}</strong> users.</p>
+</div>
 <div class="rg-table-shell">
     <div class="table-responsive">
         <table class="table align-middle">
             <thead>
                 <tr>
-                    <th>Username</th>
-                    <th>Role</th>
-                    <th>Office</th>
-                    <th>Status</th>
+                    <th data-rg-sort>Username</th>
+                    <th data-rg-sort>Role</th>
+                    <th data-rg-sort>Office</th>
+                    <th data-rg-sort>Status</th>
                     <th class="text-end">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 {% for internal_user in internal_users %}
-                    <tr>
+                    <tr data-rg-row
+                        data-search="{{ internal_user.username }} {{ internal_user.email }} {{ internal_user.get_role_display }} {{ internal_user.office_name }}">
                         <td>
                             <strong>{{ internal_user.username }}</strong>
                             <div class="small text-muted">{{ internal_user.email }}</div>
@@ -86,5 +95,9 @@
             </tbody>
         </table>
     </div>
+    <div class="rg-queue-noresults" data-rg-noresults hidden>
+        No users match your search.
+    </div>
+</div>
 </div>
 {% endblock %}

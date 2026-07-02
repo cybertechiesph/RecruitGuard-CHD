@@ -2585,13 +2585,19 @@ textarea.form-control {
     margin-bottom: 1.25rem;
 }
 
-.rg-pub-filters .form-select {
+.rg-pub-filters .form-select,
+.rg-pub-filters .form-control {
     min-height: 2.5rem;
     font-size: 0.875rem;
     flex: 1;
     min-width: 160px;
     max-width: 280px;
     border-radius: 6px;
+}
+
+.rg-pub-filters .form-control {
+    flex: 2;
+    max-width: 340px;
 }
 
 .rg-pub-result-count {
@@ -3629,7 +3635,8 @@ textarea.form-control {
         padding: 1.25rem;
     }
 
-    .rg-pub-filters .form-select {
+    .rg-pub-filters .form-select,
+    .rg-pub-filters .form-control {
         max-width: 100%;
         width: 100%;
     }

@@ -2893,6 +2893,66 @@ body.applicant-portal-body {
     color: #8a94a0;
 }
 
+/* ── Reusable list search / sort toolbar (rg-list.js) ───────────────────── */
+.rg-list-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.6rem 1rem;
+    margin-bottom: 0.85rem;
+}
+.rg-list-search {
+    min-height: 2.5rem;
+    font-size: 0.875rem;
+    flex: 1 1 240px;
+    min-width: 200px;
+    max-width: 360px;
+    border-radius: 6px;
+}
+.rg-queue-toolbar .rg-list-search {
+    margin-right: auto;
+}
+.rg-list-count {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #5f6c78;
+}
+.rg-list-count strong {
+    color: var(--rg-brand-green-ink);
+}
+
+/* Sortable column headers */
+th.rg-sortable {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+th.rg-sortable:hover {
+    color: var(--rg-brand-green);
+}
+th.rg-sortable::after {
+    content: "\2195";  /* up-down arrow: sortable but unsorted */
+    margin-left: 0.35rem;
+    font-size: 0.8em;
+    opacity: 0.35;
+}
+th.rg-sortable.rg-sorted-asc::after {
+    content: "\2191";  /* up arrow */
+    opacity: 0.9;
+}
+th.rg-sortable.rg-sorted-desc::after {
+    content: "\2193";  /* down arrow */
+    opacity: 0.9;
+}
+
+@media (max-width: 640px) {
+    .rg-list-search {
+        max-width: 100%;
+        width: 100%;
+    }
+}
+
 /* ==========================================================================
    CASE WORKSPACE — collapsible pipeline summary
    Default state: thin bar showing "Step N of M — {current stage}"

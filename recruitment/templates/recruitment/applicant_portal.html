@@ -66,6 +66,9 @@
     {# Filter bar #}
     {% if plantilla_entries or cos_entries %}
     <div class="rg-pub-filters">
+        <input type="search" class="form-control" id="filter-search"
+               placeholder="Search by title, item number, or office&hellip;"
+               aria-label="Search job openings" autocomplete="off" style="max-width:340px;">
         <select class="form-select" id="filter-type" aria-label="Filter by position type" style="max-width:220px;">
             <option value="">All Position Types</option>
             <option value="plantilla">Permanent (Plantilla)</option>
@@ -79,6 +82,7 @@
     <a href="{% url 'applicant-vacancy-detail' entry.pk %}"
        class="rg-pub-job-card rg-pub-job-card--plantilla js-job-card"
        data-type="plantilla"
+       data-search="{{ entry.title }} {{ entry.item_number }} {{ entry.official_office_label|default:'CHD CALABARZON' }}"
        aria-label="View details for {{ entry.title }}">
         <div class="rg-pub-job-card__inner">
             <div class="rg-pub-job-card__body">
@@ -115,6 +119,7 @@
     <a href="{% url 'applicant-vacancy-detail' entry.pk %}"
        class="rg-pub-job-card rg-pub-job-card--cos js-job-card"
        data-type="cos"
+       data-search="{{ entry.title }} {{ entry.item_number }} {{ entry.official_office_label|default:'CHD CALABARZON' }}"
        aria-label="View details for {{ entry.title }}">
         <div class="rg-pub-job-card__inner">
             <div class="rg-pub-job-card__body">
@@ -154,6 +159,12 @@
     </div>
     {% endif %}
 
+    {# Shown only when a search/filter hides every card #}
+    <div class="rg-pub-info-box rg-pub-info-box--info js-no-results" style="text-align:center; padding:2rem; display:none;">
+        <p style="font-weight:600; margin-bottom:0.35rem;">No positions match your search.</p>
+        <p style="font-size:0.875rem; margin:0;">Try a different keyword or clear the filters.</p>
+    </div>
+
     <p class="rg-pub-result-count js-result-count" style="margin-top:1rem;" aria-live="polite"></p>
 
     {# Need help applying? Public Assistance Desk contact. #}
@@ -189,23 +200,32 @@
 <script>
 (function () {
     var filterType = document.getElementById('filter-type');
+    var filterSearch = document.getElementById('filter-search');
     var cards = document.querySelectorAll('.js-job-card');
     var countEl = document.querySelector('.js-result-count');
+    var noResultsEl = document.querySelector('.js-no-results');
 
     function applyFilters() {
         var type = filterType ? filterType.value : '';
+        var query = filterSearch ? filterSearch.value.trim().toLowerCase() : '';
         var visible = 0;
         cards.forEach(function (card) {
-            var show = (!type || card.dataset.type === type);
+            var matchesType = (!type || card.dataset.type === type);
+            var matchesQuery = (!query || (card.dataset.search || '').toLowerCase().indexOf(query) !== -1);
+            var show = matchesType && matchesQuery;
             card.style.display = show ? '' : 'none';
             if (show) visible++;
         });
+        if (noResultsEl) {
+            noResultsEl.style.display = (visible === 0 && cards.length > 0) ? '' : 'none';
+        }
         if (countEl) {
             countEl.textContent = 'Showing ' + visible + ' position' + (visible !== 1 ? 's' : '');
         }
     }
 
     if (filterType) filterType.addEventListener('change', applyFilters);
+    if (filterSearch) filterSearch.addEventListener('input', applyFilters);
     // Run once on load so the count reflects the rendered cards from the start.
     applyFilters();
 

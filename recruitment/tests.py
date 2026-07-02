@@ -3013,6 +3013,16 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertNotContains(response, "Manage Entries")
         self.assertNotContains(response, "Internal Users")
 
+    def test_portal_renders_vacancy_search_box_and_searchable_cards(self):
+        response = self.client.get(reverse("applicant-portal"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="filter-search"')
+        self.assertContains(response, 'aria-label="Search job openings"')
+        # Each job card carries searchable text so the client-side filter can match it.
+        self.assertContains(response, 'data-search="{}'.format(self.level1_position.title))
+        self.assertContains(response, "js-no-results")
+
     @override_settings(APPLICATION_OTP_VALIDITY_MINUTES=12)
     def test_applicant_help_displays_configured_otp_duration(self):
         response = self.client.get(reverse("applicant-help"))
@@ -7762,6 +7772,47 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         self.assertContains(response, "Needed Step")
         self.assertContains(response, "Exam")
         self.assertNotContains(response, "HRM Chief Review")
+
+    def test_workflow_queue_renders_search_and_sortable_columns(self):
+        application = self.make_application(self.level2_position)
+        self.move_application_to_hrm_chief_review(application)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        response = client.get(reverse("workflow-queue"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "data-rg-list")
+        self.assertContains(response, "data-rg-search")
+        self.assertContains(response, "data-rg-sort")
+        # Branch chips drive the reusable facet filter, and each row is searchable.
+        self.assertContains(response, 'data-rg-facet="branch"')
+        self.assertContains(response, "data-rg-row")
+        self.assertContains(response, "data-search=")
+
+    def test_recruitment_entry_list_renders_search_and_sortable_columns(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+
+        response = client.get(reverse("recruitment-entry-list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "data-rg-list")
+        self.assertContains(response, "data-rg-search")
+        self.assertContains(response, "data-rg-sort")
+        self.assertContains(response, "data-rg-row")
+
+    def test_internal_user_list_renders_search_and_sortable_columns(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.sysadmin)
+
+        response = client.get(reverse("internal-user-list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "data-rg-list")
+        self.assertContains(response, "data-rg-search")
+        self.assertContains(response, "data-rg-sort")
+        self.assertContains(response, "data-rg-row")
 
     def test_applicant_user_cannot_access_internal_dashboard(self):
         client = Client()
