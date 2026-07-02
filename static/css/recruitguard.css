@@ -4412,8 +4412,24 @@ textarea.form-control {
         width: auto;
     }
 
+    .rg-topbar__menu-btn {
+        display: inline-flex;
+    }
+
     .rg-sidebar {
-        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        z-index: 1045;
+        width: 260px;
+        transform: translateX(-105%);
+        transition: transform .2s ease;
+    }
+
+    .rg-sidebar.is-open {
+        transform: translateX(0);
+        box-shadow: 0 0 24px rgba(0, 0, 0, .25);
     }
 
     .rg-context-bar {
@@ -4447,6 +4463,15 @@ textarea.form-control {
    ────────────────────────────────────────────────────────────── */
 .rg-context-bar {
     justify-content: space-between;
+}
+
+.rg-topbar__menu-btn {
+    display: none;
+    background: none;
+    border: 0;
+    padding: .4rem;
+    color: #374151;
+    cursor: pointer;
 }
 
 .rg-sidebar__link.is-active {
@@ -4862,6 +4887,13 @@ textarea.form-control {
     display: flex;
     gap: 0.5rem;
     align-items: center;
+}
+
+/* Required-field marker */
+.rg-required {
+    color: #b3261e;
+    margin-left: .15rem;
+    font-weight: 600;
 }
 
 /* Inline field validation */

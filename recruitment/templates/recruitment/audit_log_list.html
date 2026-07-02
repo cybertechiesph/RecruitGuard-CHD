@@ -1,6 +1,13 @@
 {% extends "internal_base.html" %}
 {% load recruitment_ui %}
 
+{% block internal_title %}{% if review_scope == "application" %}Case Audit Log{% else %}Audit Log{% endif %}{% endblock %}
+
+{% block breadcrumb %}
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<span class="rg-breadcrumb-current">{% if review_scope == "application" %}Case Audit Log{% else %}Audit Log{% endif %}</span>
+{% endblock %}
+
 {% block content %}
 <div class="rg-page-header">
     <div>
@@ -137,5 +144,6 @@
     {% else %}
         <div class="rg-empty-state">No audit records match the current filters.</div>
     {% endif %}
+    {% include "internal_includes/pagination.html" %}
 </div>
 {% endblock %}

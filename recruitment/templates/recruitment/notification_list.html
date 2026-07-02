@@ -13,7 +13,7 @@
     <div>
         <p class="rg-eyebrow">Notifications</p>
         <h1 class="rg-page-title">Notifications</h1>
-        <p class="rg-page-subtitle">Updates about cases and applications assigned to you.</p>
+        <p class="rg-page-subtitle">{% if user.role == "system_admin" %}Updates about accounts, access, and system activity.{% else %}Updates about cases and applications assigned to you.{% endif %}</p>
     </div>
     {% if has_unread %}
     <div class="rg-page-actions">
@@ -72,7 +72,7 @@
             <path fill="currentColor" d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
         </svg>
         <h2 class="rg-notif-page__empty-title">You&rsquo;re all caught up.</h2>
-        <p class="rg-notif-page__empty-text">When something needs your attention &mdash; a case assignment, a returned application, or a scheduled interview &mdash; it will appear here.</p>
+        <p class="rg-notif-page__empty-text">{% if user.role == "system_admin" %}When something needs your attention &mdash; an account change or a security event &mdash; it will appear here.{% else %}When something needs your attention &mdash; a case assignment, a returned application, or a scheduled interview &mdash; it will appear here.{% endif %}</p>
     </div>
     {% endif %}
 </div>

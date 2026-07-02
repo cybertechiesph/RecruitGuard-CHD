@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.paginator import Paginator
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -292,7 +293,7 @@ class DashboardView(LoginRequiredMixin, InternalUserRequiredMixin, TemplateView)
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
-        context["positions"] = get_visible_positions_for_user(user)[:6]
+        context["open_entry_count"] = get_visible_positions_for_user(user).count()
         if user.role == RecruitmentUser.Role.SYSTEM_ADMIN:
             internal_users = RecruitmentUser.objects.filter(role__in=RecruitmentUser.internal_roles())
             context["internal_user_count"] = internal_users.count()
@@ -377,6 +378,11 @@ class NotificationUnreadCountView(LoginRequiredMixin, InternalUserRequiredMixin,
 class PositionListView(LoginRequiredMixin, InternalUserRequiredMixin, ListView):
     template_name = "recruitment/position_list.html"
     context_object_name = "positions"
+
+    def get(self, request, *args, **kwargs):
+        if request.user.role == RecruitmentUser.Role.SYSTEM_ADMIN:
+            raise PermissionDenied
+        return super().get(request, *args, **kwargs)
 
     def get_queryset(self):
         return get_visible_positions_for_user(self.request.user)
@@ -881,26 +887,34 @@ class AuditLogListView(LoginRequiredMixin, SystemAdministratorRequiredMixin, Tem
                 "actor_role": "",
                 "sensitive_only": False,
             }
-        audit_logs = list(
-            get_all_audit_logs(
-                search_query=cleaned_data["q"],
-                action=cleaned_data["action"],
-                actor_role=cleaned_data["actor_role"],
-                sensitive_only=cleaned_data["sensitive_only"],
-            )
-        )
-        context["search_form"] = self.search_form
-        context["audit_logs"] = audit_logs
-        context["result_count"] = len(audit_logs)
-        context["review_scope"] = "system"
-        record_audit_log_review(
-            actor=self.request.user,
+        audit_logs = get_all_audit_logs(
             search_query=cleaned_data["q"],
             action=cleaned_data["action"],
             actor_role=cleaned_data["actor_role"],
             sensitive_only=cleaned_data["sensitive_only"],
-            result_count=len(audit_logs),
         )
+        paginator = Paginator(audit_logs, 50)
+        page_number = self.request.GET.get("page")
+        page_obj = paginator.get_page(page_number)
+        params = self.request.GET.copy()
+        params.pop("page", None)
+        context["search_form"] = self.search_form
+        context["audit_logs"] = page_obj.object_list
+        context["page_obj"] = page_obj
+        context["result_count"] = paginator.count
+        context["querystring"] = params.urlencode()
+        context["review_scope"] = "system"
+        # Only record a review on the first page so paging does not spam the trail
+        # with duplicate "audit log reviewed" events.
+        if page_number in (None, "", "1"):
+            record_audit_log_review(
+                actor=self.request.user,
+                search_query=cleaned_data["q"],
+                action=cleaned_data["action"],
+                actor_role=cleaned_data["actor_role"],
+                sensitive_only=cleaned_data["sensitive_only"],
+                result_count=paginator.count,
+            )
         return context
 
 
@@ -1030,6 +1044,7 @@ class EvidenceArchiveToggleView(LoginRequiredMixin, SystemAdministratorRequiredM
 class EvidenceVaultListView(LoginRequiredMixin, SystemAdministratorRequiredMixin, ListView):
     template_name = "recruitment/evidence_vault_list.html"
     context_object_name = "evidence_items"
+    paginate_by = 50
 
     def get_queryset(self):
         self.search_form = EvidenceVaultSearchForm(self.request.GET or None)
@@ -1062,7 +1077,10 @@ class EvidenceVaultListView(LoginRequiredMixin, SystemAdministratorRequiredMixin
             evidence.owner_application = get_evidence_owner_application(evidence)
         context["evidence_items"] = evidence_items
         context["search_form"] = self.search_form
-        context["result_count"] = len(evidence_items)
+        context["result_count"] = context["paginator"].count if context.get("paginator") else len(evidence_items)
+        params = self.request.GET.copy()
+        params.pop("page", None)
+        context["querystring"] = params.urlencode()
         record_evidence_vault_access(
             self.request.user,
             search_query=self.search_filters["q"],

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static recruitment_ui %}
 
 {% block title %}{% block internal_title %}Internal Portal{% endblock %} | Internal Portal{% endblock %}
 {% block body_class %}internal-portal-body {% block workspace_body_class %}{% endblock %}{% endblock %}
@@ -21,9 +21,35 @@ background:
 {% block layout_wrapper %}
 <div class="rg-layout">
     {% include "internal_includes/sidebar.html" %}
+    <div class="rg-drawer-overlay" id="internal-sidebarOverlay"></div>
 
     <div class="rg-main-area">
-        {% include "internal_includes/topbar.html" %}
+        <header class="rg-context-bar" role="banner">
+            <button type="button"
+                    class="rg-topbar__menu-btn"
+                    data-drawer="internal-sidebar"
+                    aria-label="Open navigation menu"
+                    aria-controls="internal-sidebar">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" aria-hidden="true">
+                    <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+                </svg>
+            </button>
+            <nav class="rg-context-bar__breadcrumb" aria-label="Breadcrumb">
+                <a href="{% url 'dashboard' %}" class="rg-breadcrumb-home">{% if user.role == "system_admin" %}Dashboard{% else %}Batches{% endif %}</a>
+                {% block breadcrumb %}{% endblock %}
+            </nav>
+            <div class="rg-context-bar__right">
+                <span class="rg-context-bar__role">
+                    <span class="rg-pill rg-pill--{{ user.role|role_theme }}" style="font-size:0.7rem;min-height:1.6rem;padding:0.2rem 0.6rem;">
+                        {{ user.role|role_label }}
+                    </span>
+                </span>
+                {% notifications_bell %}
+                <span class="rg-user-pill">{{ user.get_full_name|default:user.username }}</span>
+            </div>
+        </header>
 
         {% if messages %}
             <div class="rg-message-stack" style="padding:0 1.5rem;margin-top:.75rem;">
@@ -108,7 +134,7 @@ background:
     /* Close drawer on Escape key */
     document.addEventListener("keydown", function (e) {
         if (e.key === "Escape") {
-            document.querySelectorAll(".rg-drawer.is-open").forEach(function (d) {
+            document.querySelectorAll(".rg-drawer.is-open, .rg-sidebar.is-open").forEach(function (d) {
                 closeDrawer(d.id);
             });
         }

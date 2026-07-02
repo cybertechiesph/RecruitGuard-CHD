@@ -462,7 +462,18 @@ class InternalPasswordResetForm(CaptchaFormMixin, BootstrapFormMixin, PasswordRe
 
 
 class InternalMFAOTPForm(BootstrapFormMixin, forms.Form):
-    otp = forms.CharField(max_length=6, min_length=6, label="Verification Code")
+    otp = forms.CharField(
+        max_length=6,
+        min_length=6,
+        label="Verification Code",
+        widget=forms.TextInput(attrs={
+            "autofocus": True,
+            "inputmode": "numeric",
+            "autocomplete": "one-time-code",
+            "pattern": "[0-9]{6}",
+            "maxlength": "6",
+        }),
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

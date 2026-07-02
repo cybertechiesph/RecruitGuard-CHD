@@ -3,6 +3,11 @@
 
 {% block internal_title %}Secured Files{% endblock %}
 
+{% block breadcrumb %}
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<span class="rg-breadcrumb-current">Secured Files</span>
+{% endblock %}
+
 {% block content %}
 <div class="rg-page-header">
     <div>
@@ -56,17 +61,17 @@
                         <tr>
                             <td>
                                 <strong style="font-size:.8125rem;">{{ item.label }}</strong><br>
-                                <span style="font-size:.7rem;color:#5f6c78;">{{ item.original_filename }}</span>
+                                <span style="font-size:.75rem;color:#5f6c78;">{{ item.original_filename }}</span>
                                 {% if item.owner_application %}
-                                    <br><span style="font-size:.65rem;color:#8b96a0;">{{ item.owner_application.reference_label }}</span>
+                                    <br><span style="font-size:.75rem;color:#8b96a0;">{{ item.owner_application.reference_label }}</span>
                                 {% endif %}
                                 {% if item.is_archived %}
-                                    <br><span style="font-size:.65rem;color:#8c4b00;">Archived{% if item.archive_tag %}: {{ item.archive_tag }}{% endif %}</span>
+                                    <br><span style="font-size:.75rem;color:#8c4b00;">Archived{% if item.archive_tag %}: {{ item.archive_tag }}{% endif %}</span>
                                 {% endif %}
                             </td>
                             <td>
                                 {% if item.stage %}
-                                    <span class="rg-pill rg-pill--info" style="font-size:.65rem;">{{ item.stage|stage_label }}</span>
+                                    <span class="rg-pill rg-pill--info" style="font-size:.75rem;">{{ item.stage|stage_label }}</span>
                                 {% else %}
                                     <span class="rg-note" style="font-size:.7rem;">&mdash;</span>
                                 {% endif %}
@@ -76,7 +81,12 @@
                             </td>
                             <td style="font-size:.75rem;">{{ item.created_at|date:"M d, Y H:i" }}</td>
                             <td style="font-size:.75rem;">{{ item.version_label }}</td>
-                            <td style="font-size:.7rem;font-family:monospace;">{{ item.sha256_digest|truncatechars:14 }}</td>
+                            <td style="font-size:.75rem;font-family:monospace;">
+                                <span title="{{ item.sha256_digest }}">{{ item.sha256_digest|truncatechars:14 }}</span>
+                                <button type="button" class="btn btn-link btn-sm p-0 rg-copy-hash"
+                                        data-hash="{{ item.sha256_digest }}"
+                                        aria-label="Copy full SHA-256 for {{ item.original_filename }}">Copy</button>
+                            </td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -85,5 +95,17 @@
     {% else %}
         <div class="rg-empty-state">No files match the current filters.</div>
     {% endif %}
+    {% include "internal_includes/pagination.html" %}
 </div>
+
+<script>
+document.addEventListener("click", function (e) {
+    var btn = e.target.closest(".rg-copy-hash");
+    if (!btn) return;
+    navigator.clipboard.writeText(btn.dataset.hash).then(function () {
+        btn.textContent = "Copied";
+        setTimeout(function () { btn.textContent = "Copy"; }, 1500);
+    });
+});
+</script>
 {% endblock %}
