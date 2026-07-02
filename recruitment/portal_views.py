@@ -557,7 +557,7 @@ class ApplicantResubmissionView(TemplateView):
         application = self.get_application()
         if application is None:
             return self._missing(request)
-        requirements, _deadline = get_resubmission_request(application)
+        requirements, _deadline, _remarks = get_resubmission_request(application)
         if not requirements:
             messages.info(request, "There are no documents awaiting resubmission for this application.")
             return redirect("applicant-status-link", token=application.public_token)
@@ -568,14 +568,14 @@ class ApplicantResubmissionView(TemplateView):
         application = kwargs.get("application") or self.get_application()
         if application is None:
             raise Http404
-        requirements, deadline = get_resubmission_request(application)
+        requirements, deadline, remarks_by_code = get_resubmission_request(application)
         context["application"] = application
         context["requirements"] = requirements
         context["resubmission_deadline"] = deadline
         context["otp_verified"] = application.otp_is_currently_valid
         context["otp_form"] = kwargs.get("otp_form") or ApplicantOTPForm()
         context["resubmission_form"] = kwargs.get("resubmission_form") or DocumentResubmissionForm(
-            requirements=requirements
+            requirements=requirements, remarks_by_code=remarks_by_code
         )
         context["otp_validity_minutes"] = settings.APPLICATION_OTP_VALIDITY_MINUTES
         return context
@@ -584,7 +584,7 @@ class ApplicantResubmissionView(TemplateView):
         application = self.get_application()
         if application is None:
             return self._missing(request)
-        requirements, _deadline = get_resubmission_request(application)
+        requirements, _deadline, remarks_by_code = get_resubmission_request(application)
         if not requirements:
             messages.info(request, "There are no documents awaiting resubmission for this application.")
             return redirect("applicant-status-link", token=application.public_token)
@@ -633,7 +633,7 @@ class ApplicantResubmissionView(TemplateView):
                 messages.error(request, "Verify your email before resubmitting your documents.")
                 return redirect("applicant-resubmit", token=application.public_token)
             resubmission_form = DocumentResubmissionForm(
-                request.POST, request.FILES, requirements=requirements
+                request.POST, request.FILES, requirements=requirements, remarks_by_code=remarks_by_code
             )
             if resubmission_form.is_valid():
                 try:

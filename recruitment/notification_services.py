@@ -228,6 +228,14 @@ def build_applicant_status_url(application):
     return f"{base_url}{path}" if base_url else path
 
 
+def build_applicant_otp_url(application):
+    """Absolute link back to the OTP verification page, so an applicant who closed
+    the tab after intake can return, enter the code, and finish submitting."""
+    path = reverse("applicant-otp", kwargs={"token": application.public_token})
+    base_url = (getattr(settings, "APPLICANT_PORTAL_BASE_URL", "") or "").strip().rstrip("/")
+    return f"{base_url}{path}" if base_url else path
+
+
 def _append_status_link(lines, application):
     lines.extend(
         [

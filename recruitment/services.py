@@ -67,6 +67,7 @@ from .models import (
     WorkflowOverride,
 )
 from .notification_services import (
+    build_applicant_otp_url,
     create_in_app_notifications,
     queue_applicant_interview_notice_notification,
     queue_application_returned_to_applicant_notification,
@@ -6207,6 +6208,19 @@ def _deliver_application_otp(application, otp_code, *, actor=None, otp_expires_a
         f"It expires in {settings.APPLICATION_OTP_VALIDITY_MINUTES} minutes.\n\n"
         "Do not share this code. RecruitGuard-CHD staff will never ask for it."
     )
+    # Draft applicants land on the OTP page; give them a way back if they close the
+    # tab there (drafts have no reference_number yet, so this link is their only
+    # recovery). Resubmission-state OTP emails deliberately omit it — that flow
+    # returns to the /resubmit/ page, not /otp/.
+    continue_url = (
+        build_applicant_otp_url(application)
+        if application.status == RecruitmentApplication.Status.DRAFT
+        else ""
+    )
+    if continue_url:
+        text_body += (
+            f"\n\nContinue your application for {application.position.title}:\n{continue_url}"
+        )
     try:
         html_body = render_to_string(
             "email/applicant_otp.html",
@@ -6215,6 +6229,8 @@ def _deliver_application_otp(application, otp_code, *, actor=None, otp_expires_a
                 "otp_code": otp_code,
                 "otp_expires_at": otp_expires_at,
                 "otp_validity_minutes": settings.APPLICATION_OTP_VALIDITY_MINUTES,
+                "continue_url": continue_url,
+                "position_title": application.position.title,
                 **email_branding_context("applicant"),
             },
         )
@@ -7053,20 +7069,22 @@ def request_document_resubmission(application, actor, remarks):
 
 def get_resubmission_request(application):
     """For an application whose case is awaiting resubmission, return the document requirements
-    the applicant must re-upload (the flagged ones) and the resubmission deadline. Returns
-    ([], None) when the application is not awaiting resubmission."""
+    the applicant must re-upload (the flagged ones), the resubmission deadline, and a
+    {document_code: reviewer remarks} map explaining why each was returned. Returns
+    ([], None, {}) when the application is not awaiting resubmission."""
     case = getattr(application, "case", None)
     if case is None or case.case_status != RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION:
-        return [], None
+        return [], None, {}
     screening_record, flagged = _flagged_resubmission_reviews(application, stage=case.current_stage)
     flagged_codes = {row.document_key for row in flagged}
+    remarks_by_code = {row.document_key: (row.remarks or "") for row in flagged}
     requirements = [
         requirement
         for requirement in get_applicant_document_requirements(application)
         if requirement.code in flagged_codes
     ]
     deadline = screening_record.resubmission_deadline if screening_record else None
-    return requirements, deadline
+    return requirements, deadline, remarks_by_code
 
 
 @transaction.atomic

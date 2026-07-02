@@ -24,6 +24,16 @@
     </p>
     {% endif %}
 
+    {% if continue_url %}
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:18px; background:#f7fbf3; border:1px solid #cfe0c0; border-radius:8px;">
+        <tr><td style="padding:14px 16px; color:#374151; font-size:13px; line-height:1.6;">
+            <strong style="color:#1e5c2d;">Continue your application</strong><br>
+            You are applying for <strong>{{ position_title }}</strong>. If you closed the application page, use this link to return, enter the code, and finish submitting.
+        </td></tr>
+    </table>
+    {% include "email/_button.html" with button_url=continue_url button_label="Continue your application" %}
+    {% endif %}
+
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:18px; background:#fff8e6; border:1px solid #ffdf88; border-radius:8px;">
         <tr><td style="padding:14px 16px; color:#6b4d06; font-size:13px; line-height:1.6;">
             <strong>Security reminder:</strong> Do not share this code. RecruitGuard-CHD staff will never ask for it.

@@ -936,17 +936,22 @@ class DocumentResubmissionForm(BootstrapFormMixin, forms.Form):
     for resubmission; only those slots are exposed (already-accepted documents are untouched).
     """
 
-    def __init__(self, *args, requirements=None, **kwargs):
+    def __init__(self, *args, requirements=None, remarks_by_code=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.requirements = list(requirements or [])
+        remarks_by_code = remarks_by_code or {}
         self.upload_field_names = []
         for requirement in self.requirements:
-            self.fields[requirement.file_field_name] = forms.FileField(
+            field = forms.FileField(
                 required=True,
                 label=requirement.title,
                 help_text="Upload a clear, readable PDF, JPG, or PNG.",
                 widget=forms.ClearableFileInput(attrs={"accept": ".pdf,.jpg,.jpeg,.png"}),
             )
+            # Surfaced above each slot on the resubmission page so the applicant sees
+            # exactly why this document was returned (recognition over recall).
+            field.resubmission_remarks = (remarks_by_code.get(requirement.code) or "").strip()
+            self.fields[requirement.file_field_name] = field
             self.upload_field_names.append((requirement.code, requirement.file_field_name))
         self._apply_bootstrap()
 

@@ -34,6 +34,14 @@
     {% endif %}
 
     {% if not otp_verified %}
+        <div class="alert alert-info" role="status">
+            <strong>{{ requirements|length }} document{{ requirements|length|pluralize }}</strong>
+            need{{ requirements|length|pluralize:"s," }} to be corrected. Verify your email to
+            see the details and re-upload.
+        </div>
+    {% endif %}
+
+    {% if not otp_verified %}
         {# Step 1 — verify the applicant by email before allowing re-upload. #}
         <div class="card p-4 mb-3">
             <h2 class="h6">Step 1 — Verify your email</h2>
@@ -67,7 +75,13 @@
             <form method="post" enctype="multipart/form-data" novalidate>
                 {% csrf_token %}
                 {% for field in resubmission_form %}
-                    {% include "recruitment/includes/form_field.html" with field=field %}
+                    <div class="rg-resubmit-item mb-4">
+                        <div class="alert alert-warning py-2 px-3 mb-2" style="font-size:0.9rem;">
+                            <strong>Why it was returned:</strong>
+                            {{ field.field.resubmission_remarks|default:"The recruitment team asked for a clearer copy of this document." }}
+                        </div>
+                        {% include "recruitment/includes/form_field.html" with field=field %}
+                    </div>
                 {% endfor %}
                 <div class="d-flex gap-2 mt-3">
                     <button type="submit" name="action" value="resubmit" class="btn btn-rg-primary">

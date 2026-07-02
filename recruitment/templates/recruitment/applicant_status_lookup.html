@@ -190,8 +190,8 @@
         {% if status_variant == "returned" %}
             {% if awaiting_resubmission %}
                 <p class="rg-ta-action-card__copy">
-                    Some of your documents need to be resubmitted. Re-upload only the requested
-                    files below &mdash; your already-accepted documents stay as they are.
+                    Some of your documents need to be corrected and re-uploaded. Tap
+                    Resubmit documents to see which ones and why.
                 </p>
                 <a href="{% url 'applicant-resubmit' token=application.public_token %}"
                    class="btn btn-rg-primary">Resubmit documents</a>
