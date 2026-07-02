@@ -85,7 +85,7 @@
             Enter each candidate's end-user assessment score (0–100), as encoded by the HRMO.
         {% endif %}
     </p>
-    <form method="post">
+    <form method="post" id="examScoreForm" novalidate>
         {% csrf_token %}
         <div class="rg-itbl">
             <div class="table-responsive">
@@ -136,14 +136,60 @@
                 </table>
             </div>
         </div>
+        <div class="invalid-feedback d-block mt-2" id="examScoreError" hidden>
+            Scores must be between 0 and 100.
+        </div>
+        {% if not schedule_sent %}
+            <div class="alert alert-info mt-3 mb-0" role="status">
+                Send the exam schedule to the batch (section 1) before finalizing.
+            </div>
+        {% endif %}
         <div class="rg-form-actions mt-3 d-flex gap-2">
             <button type="submit" name="operation" value="save_scores" class="btn btn-outline-secondary"{% if not screening_batch.is_ready %} disabled{% endif %}>
                 Save scores
             </button>
-            <button type="submit" name="operation" value="finalize" class="btn btn-rg-primary"{% if not screening_batch.is_ready %} disabled{% endif %}>
+            <button type="button" class="btn btn-rg-primary"{% if not screening_batch.is_ready %} disabled{% endif %}
+                    data-bs-toggle="modal" data-bs-target="#confirmFinalizeExam">
                 Finalize exam batch
             </button>
         </div>
     </form>
 </div>
+
+{% include "internal_includes/modal_confirm.html" with modal_id="confirmFinalizeExam" variant="destructive" title="Finalize this exam batch?" body=finalize_exam_body confirm_label="Finalize Exam Batch" cancel_label="Cancel" form_id="examScoreForm" confirm_name="operation" confirm_value="finalize" %}
+
+<script>
+(function () {
+    "use strict";
+    var form = document.getElementById("examScoreForm");
+    if (!form) return;
+    var errorLine = document.getElementById("examScoreError");
+    form.addEventListener("submit", function (event) {
+        var inputs = form.querySelectorAll('input[type="number"]');
+        var invalid = [];
+        inputs.forEach(function (input) {
+            input.classList.remove("is-invalid");
+            var raw = (input.value || "").trim();
+            if (raw === "") return;
+            var val = parseFloat(raw);
+            if (isNaN(val) || val < 0 || val > 100) {
+                input.classList.add("is-invalid");
+                invalid.push(input);
+            }
+        });
+        if (invalid.length) {
+            event.preventDefault();
+            if (errorLine) errorLine.hidden = false;
+            var modalEl = document.getElementById("confirmFinalizeExam");
+            if (modalEl && window.bootstrap) {
+                var inst = bootstrap.Modal.getInstance(modalEl);
+                if (inst) { inst.hide(); }
+            }
+            try { invalid[0].focus(); } catch (err) {}
+        } else if (errorLine) {
+            errorLine.hidden = true;
+        }
+    });
+})();
+</script>
 {% endblock %}

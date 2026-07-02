@@ -1522,6 +1522,7 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
 
     def __init__(self, *args, **kwargs):
         self.application = kwargs.pop("application", None)
+        self.draft = kwargs.pop("draft", False)
         self.document_review_fields = []
         self._document_review_field_metadata = []
         super().__init__(*args, **kwargs)
@@ -1558,6 +1559,11 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
             remarks_field.widget.attrs["class"] = (
                 f"{existing_remarks_class} rg-scr-remarks-field js-doc-remarks"
             ).strip()
+        if self.draft:
+            # Draft saves persist whatever the reviewer has entered so far; the
+            # completeness/qualification requirements are enforced only on finalize.
+            for field in self.fields.values():
+                field.required = False
 
     def _document_review_weight_display(self):
         level = getattr(self.application, "level", None)
@@ -1736,6 +1742,11 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
             value = cleaned_data.get(field_name)
             if value is not None and (value < 0 or value > 100):
                 self.add_error(field_name, self.SCORE_RANGE_MESSAGE)
+        if self.draft:
+            # Ranges/formats are validated above; completeness and cross-field
+            # consistency are enforced only on finalize, so partial autosaves and
+            # manual "Save draft" of an in-progress form are not rejected.
+            return cleaned_data
         component_values = [
             cleaned_data.get("education_score"),
             cleaned_data.get("training_score"),

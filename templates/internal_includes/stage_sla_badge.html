@@ -31,6 +31,11 @@ Renders nothing if there is no case or the case is closed.
                 {% else %}
                     In {{ stage_name }} for {{ sla.elapsed_days }} days
                 {% endif %}
+                {% if sla.is_overdue %}
+                    · <strong>Overdue</strong><span class="visually-hidden"> — over the {{ sla.overdue_days }}-day target</span>
+                {% elif sla.is_warning %}
+                    · <strong>Due soon</strong><span class="visually-hidden"> — approaching the {{ sla.overdue_days }}-day target</span>
+                {% endif %}
             {% endif %}
         </span>
     </span>

@@ -1137,7 +1137,41 @@ def get_queue_for_user(user):
                 overrides__target_role=RecruitmentUser.Role.SECRETARIAT,
             )
         ).distinct()
-    return queryset
+    # Urgency ordering: oldest stage-entry first, so the most overdue cases (the
+    # longest in their current stage) lead the queue instead of being buried in
+    # insertion order. pk breaks ties deterministically.
+    return queryset.order_by("case__stage_entered_at", "pk")
+
+
+def get_closed_cases_for_user(user):
+    """Closed/decided cases the user retains view access to — a lookup surface for records
+    requests. Strictly mirrors _user_has_closed_application_access as queryset filters so it
+    never widens the "see only what you need" access model: the list only ever contains cases
+    the user could already open by URL."""
+    is_processor = user.role in WORKFLOW_PROCESSOR_ROLES
+    is_exporter = user.role in EXPORT_ROLES
+    if not (is_processor or is_exporter):
+        return RecruitmentApplication.objects.none()
+    queryset = RecruitmentApplication.objects.select_related(
+        "applicant", "position", "case"
+    ).filter(
+        status__in=[
+            RecruitmentApplication.Status.APPROVED,
+            RecruitmentApplication.Status.REJECTED,
+        ]
+    )
+    # Secretariat never sees Level 2 closed cases (helper's first guard).
+    if user.role == RecruitmentUser.Role.SECRETARIAT:
+        queryset = queryset.exclude(level=PositionPosting.Level.LEVEL_2)
+    # Helper split: closed-stage cases need a processor role; approved/rejected
+    # cases not yet at the closed stage need an export role.
+    if is_processor and is_exporter:
+        pass  # sees both (secretariat / HRM chief / appointing authority)
+    elif is_processor:
+        queryset = queryset.filter(case__current_stage=RecruitmentCase.Stage.CLOSED)
+    else:  # is_exporter only — no role currently, kept for completeness
+        queryset = queryset.exclude(case__current_stage=RecruitmentCase.Stage.CLOSED)
+    return queryset.order_by("-closed_at", "-updated_at", "pk").distinct()
 
 
 def _user_has_closed_application_access(user, application):
@@ -1240,6 +1274,36 @@ def user_can_prepare_plantilla_car(user, application):
     ):
         return False
     return user.role in PLANTILLA_CAR_PREPARATION_ROLES_BY_LEVEL.get(application.level, set())
+
+
+def plantilla_car_preparer_role_label(application):
+    """Human label for the role(s) that prepare the Plantilla CAR at this case's level
+    (Secretariat for L1, HRM Chief for L2). Used only to explain who the HRMPSB board is
+    waiting on — it does not grant or change any access."""
+    roles = PLANTILLA_CAR_PREPARATION_ROLES_BY_LEVEL.get(application.level, set())
+    labels = [RecruitmentUser.Role(role).label for role in sorted(roles)]
+    return ", ".join(labels) if labels else "the assigned office"
+
+
+def application_awaiting_car_preparation(user, application):
+    """True when this viewer is looking at a Plantilla HRMPSB case whose CAR is still being
+    prepared by another role: the viewer can't prepare it and no CAR (draft or final) exists yet.
+    Drives a "CAR in preparation" state instead of a blank card, and a queue hint — it never
+    changes queue membership or access (the case stays assigned to the HRMPSB member)."""
+    case = getattr(application, "case", None)
+    if not case:
+        return False
+    if (
+        application.branch != PositionPosting.Branch.PLANTILLA
+        or application.status != RecruitmentApplication.Status.HRMPSB_REVIEW
+        or case.current_stage != CAR_REVIEW_STAGE
+        or case.case_status != RecruitmentCase.CaseStatus.ACTIVE
+        or get_current_workflow_section(application) != "car"
+    ):
+        return False
+    if user_can_prepare_plantilla_car(user, application):
+        return False
+    return get_comparative_assessment_report(application) is None
 
 
 def user_can_upload_evidence(user, application):
@@ -3849,7 +3913,7 @@ def _document_review_status_counts(document_reviews):
 
 
 @transaction.atomic
-def save_screening_review(application, actor, cleaned_data, finalize=False):
+def save_screening_review(application, actor, cleaned_data, finalize=False, allow_partial=False):
     if not hasattr(application, "case"):
         raise ValueError("A case must exist before screening can be recorded.")
     review_stage = application.case.current_stage
@@ -3872,18 +3936,21 @@ def save_screening_review(application, actor, cleaned_data, finalize=False):
             level=application.level,
         )
 
+    allow_partial = bool(allow_partial and not finalize)
+
     document_reviews = _screening_document_review_rows(
         application,
         screening_record,
         cleaned_data.get("document_reviews"),
     )
-    _validate_screening_review_consistency(
-        completeness_status=cleaned_data["completeness_status"],
-        completeness_notes=cleaned_data["completeness_notes"],
-        qualification_outcome=cleaned_data["qualification_outcome"],
-        screening_notes=cleaned_data["screening_notes"],
-        document_reviews=document_reviews,
-    )
+    if not allow_partial:
+        _validate_screening_review_consistency(
+            completeness_status=cleaned_data["completeness_status"],
+            completeness_notes=cleaned_data["completeness_notes"],
+            qualification_outcome=cleaned_data["qualification_outcome"],
+            screening_notes=cleaned_data["screening_notes"],
+            document_reviews=document_reviews,
+        )
 
     screening_record.recruitment_case = application.case
     screening_record.reviewed_by = actor
@@ -3898,7 +3965,13 @@ def save_screening_review(application, actor, cleaned_data, finalize=False):
     screening_record.is_finalized = False
     screening_record.finalized_by = None
     screening_record.finalized_at = None
-    screening_record.full_clean()
+    if allow_partial:
+        # Draft: skip full_clean's required-field enforcement (blank
+        # completeness/qualification are allowed mid-review) but still guard the
+        # unique constraint. Finalize always runs full_clean below.
+        screening_record.validate_unique()
+    else:
+        screening_record.full_clean()
     screening_record.save()
     _sync_screening_document_reviews(screening_record, document_reviews)
     if finalize:

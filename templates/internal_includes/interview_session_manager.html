@@ -542,24 +542,28 @@
 <script>
 (function () {
     "use strict";
-    if (!(window.RG && window.RG.attachAutosave)) return;
-    var form = document.getElementById("int-session-form");
-    var indicator = document.getElementById("int-session-autosave");
-    if (!form) return;
-    var dateInput = document.getElementById("id_scheduled_for");
-    var locInput = document.getElementById("id_location");
-    window.RG.attachAutosave(form, {
-        indicator: indicator,
-        operationField: "operation",
-        operationValue: "save",
-        debounceMs: 1800,
-        // Avoid noisy server rejections: only autosave when both
-        // required fields have values.
-        canSave: function () {
-            var hasDate = dateInput && (dateInput.value || "").trim() !== "";
-            var hasLoc = locInput && (locInput.value || "").trim() !== "";
-            return hasDate && hasLoc;
-        }
+    /* Attach after DOMContentLoaded: this inline script runs during parse, before
+       recruitguard-autosave.js (loaded at end of body) defines window.RG. */
+    document.addEventListener("DOMContentLoaded", function () {
+        if (!(window.RG && window.RG.attachAutosave)) return;
+        var form = document.getElementById("int-session-form");
+        var indicator = document.getElementById("int-session-autosave");
+        if (!form) return;
+        var dateInput = document.getElementById("id_scheduled_for");
+        var locInput = document.getElementById("id_location");
+        window.RG.attachAutosave(form, {
+            indicator: indicator,
+            operationField: "operation",
+            operationValue: "save",
+            debounceMs: 1800,
+            // Avoid noisy server rejections: only autosave when both
+            // required fields have values.
+            canSave: function () {
+                var hasDate = dateInput && (dateInput.value || "").trim() !== "";
+                var hasLoc = locInput && (locInput.value || "").trim() !== "";
+                return hasDate && hasLoc;
+            }
+        });
     });
 })();
 </script>

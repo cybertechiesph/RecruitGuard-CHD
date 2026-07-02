@@ -759,14 +759,17 @@ reviewer can see the disposition at a glance without scrolling to step 2.
     currentStep = startStep;
     renderStep();
 
-    /* Autosave (silent draft save) */
-    if (window.RG && window.RG.attachAutosave) {
-        window.RG.attachAutosave(form, {
-            indicator: document.getElementById("exam-autosave"),
-            operationField: "operation",
-            operationValue: "save",
-            debounceMs: 1800
-        });
-    }
+    /* Autosave (silent draft save) — attach after DOMContentLoaded so
+       recruitguard-autosave.js (loaded at end of body) has defined window.RG. */
+    document.addEventListener("DOMContentLoaded", function () {
+        if (window.RG && window.RG.attachAutosave) {
+            window.RG.attachAutosave(form, {
+                indicator: document.getElementById("exam-autosave"),
+                operationField: "operation",
+                operationValue: "save",
+                debounceMs: 1800
+            });
+        }
+    });
 })();
 </script>

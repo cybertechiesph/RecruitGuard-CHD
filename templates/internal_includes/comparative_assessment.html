@@ -299,14 +299,18 @@ HRM Chief on COS). Two states:
     form.addEventListener("input", clearError);
     form.addEventListener("change", clearError);
 
-    if (window.RG && window.RG.attachAutosave) {
-        window.RG.attachAutosave(form, {
-            indicator: document.getElementById("car-autosave"),
-            operationField: "operation",
-            operationValue: "save",
-            debounceMs: 1800
-        });
-    }
+    /* Attach after DOMContentLoaded so recruitguard-autosave.js
+       (loaded at end of body) has defined window.RG. */
+    document.addEventListener("DOMContentLoaded", function () {
+        if (window.RG && window.RG.attachAutosave) {
+            window.RG.attachAutosave(form, {
+                indicator: document.getElementById("car-autosave"),
+                operationField: "operation",
+                operationValue: "save",
+                debounceMs: 1800
+            });
+        }
+    });
 })();
 </script>
 
@@ -484,4 +488,8 @@ HRM Chief on COS). Two states:
         </p>
     {% endif %}
 </section>
+
+{% elif car_in_preparation %}
+{# ── CAR still being prepared by another role — status body for the HRMPSB board ─ #}
+{% include "internal_includes/state_empty.html" with title="CAR in preparation" copy=car_in_preparation_copy %}
 {% endif %}

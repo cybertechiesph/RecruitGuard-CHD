@@ -287,14 +287,17 @@ HRM Chief on a COS case; each carries its own footer.
     form.addEventListener("input", clearError);
     form.addEventListener("change", clearError);
 
-    /* Wire autosave (silent draft save) */
-    if (window.RG && window.RG.attachAutosave) {
-        window.RG.attachAutosave(form, {
-            indicator: document.getElementById("del-autosave"),
-            operationField: "operation",
-            operationValue: "save",
-            debounceMs: 1800
-        });
-    }
+    /* Wire autosave (silent draft save) — attach after DOMContentLoaded so
+       recruitguard-autosave.js (loaded at end of body) has defined window.RG. */
+    document.addEventListener("DOMContentLoaded", function () {
+        if (window.RG && window.RG.attachAutosave) {
+            window.RG.attachAutosave(form, {
+                indicator: document.getElementById("del-autosave"),
+                operationField: "operation",
+                operationValue: "save",
+                debounceMs: 1800
+            });
+        }
+    });
 })();
 </script>

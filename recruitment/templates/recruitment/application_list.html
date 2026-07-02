@@ -11,36 +11,73 @@
 {% block content %}
 <div class="rg-page-header">
     <div>
-        <h1 class="rg-page-title">{% if is_queue %}My queue{% else %}Cases I can view{% endif %}</h1>
+        <h1 class="rg-page-title">{% if is_queue %}My queue{% elif is_closed_list %}Closed cases{% else %}Cases I can view{% endif %}</h1>
+        {% if is_closed_list %}
+            <p class="rg-imeta mt-1">Approved and rejected cases you retain access to, for records requests.</p>
+        {% endif %}
     </div>
     <div class="rg-page-actions">
-        {% if not is_queue %}
-            <a href="{% url 'workflow-queue' %}" class="btn btn-rg-primary btn-sm">My queue</a>
+        {% if is_queue %}
+            <a href="{% url 'workflow-closed' %}" class="btn btn-outline-secondary btn-sm">Closed cases &rarr;</a>
+        {% else %}
+            <a href="{% url 'workflow-queue' %}" class="btn btn-rg-primary btn-sm">&larr; Back to My Queue</a>
         {% endif %}
     </div>
 </div>
 
-{% if applications %}
+{% if show_search %}
+<form method="get" class="rg-queue-search d-flex flex-wrap align-items-end gap-2 mb-3" role="search">
+    <div class="rg-field mb-0" style="flex:1 1 260px;">
+        <label class="form-label" for="q">Search applicant, reference, or position</label>
+        <input type="search" class="form-control" id="q" name="q" value="{{ q }}"
+               placeholder="Name, RG reference, or position title">
+    </div>
+    <div class="rg-field mb-0" style="flex:0 1 210px;">
+        <label class="form-label" for="step">Needed step</label>
+        <select class="form-select" id="step" name="step">
+            <option value="">All steps</option>
+            {% for key, label in step_choices %}
+                <option value="{{ key }}"{% if key == step %} selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-rg-primary btn-sm">Apply</button>
+        {% if q or step %}
+            <a href="{{ request.path }}" class="btn btn-outline-secondary btn-sm">Reset</a>
+        {% endif %}
+    </div>
+</form>
+{% endif %}
+
+{% if applications or branch %}
     <div class="rg-queue-toolbar">
+        {# Server-side branch filter (a GET param, so it works across pages and the count
+           reflects the branch-filtered total). Preserves the active q / step filters. #}
         <div class="rg-queue-filters" role="group" aria-label="Filter cases by type">
-            <button type="button" class="rg-queue-chip is-active" data-queue-filter="all">All</button>
-            <button type="button" class="rg-queue-chip" data-queue-filter="plantilla">Plantilla</button>
-            <button type="button" class="rg-queue-chip" data-queue-filter="cos">Contract of Service</button>
+            <a class="rg-queue-chip{% if not branch %} is-active{% endif %}"
+               href="?{% if q %}q={{ q|urlencode }}&{% endif %}{% if step %}step={{ step|urlencode }}{% endif %}">All</a>
+            <a class="rg-queue-chip{% if branch == 'plantilla' %} is-active{% endif %}"
+               href="?branch=plantilla{% if q %}&q={{ q|urlencode }}{% endif %}{% if step %}&step={{ step|urlencode }}{% endif %}">Plantilla</a>
+            <a class="rg-queue-chip{% if branch == 'cos' %} is-active{% endif %}"
+               href="?branch=cos{% if q %}&q={{ q|urlencode }}{% endif %}{% if step %}&step={{ step|urlencode }}{% endif %}">Contract of Service</a>
         </div>
-        <p class="rg-queue-count js-queue-count"
-           aria-live="polite"
-           data-queue-suffix="{% if is_queue %}in your queue{% else %}you can view{% endif %}">
-            <strong>{{ applications|length }}</strong>
-            case{{ applications|length|pluralize }}
-            {% if is_queue %}in your queue{% else %}you can view{% endif %}.
+        <p class="rg-queue-count" aria-live="polite">
+            <strong>{{ total_count }}</strong>
+            case{{ total_count|pluralize }}
+            {% if is_queue %}in your queue{% elif is_closed_list %}closed{% else %}you can view{% endif %}.
         </p>
     </div>
 {% endif %}
 
 {% if not applications %}
     <div class="rg-icard">
-        {% if is_queue %}
+        {% if q or step or branch %}
+            {% include "internal_includes/state_empty.html" with title="No matching cases" copy="No cases match your search or step filter. Try a different term, or reset the filters." %}
+        {% elif is_queue %}
             {% include "internal_includes/state_empty.html" with title="You're all caught up" copy="No cases need your action right now. New assignments will appear here." %}
+        {% elif is_closed_list %}
+            {% include "internal_includes/state_empty.html" with title="No closed cases" copy="Closed cases you can view will appear here." %}
         {% else %}
             {% include "internal_includes/state_empty.html" with title="No cases to show" copy="Cases you are allowed to view will appear here." %}
         {% endif %}
@@ -110,6 +147,10 @@
                                     {{ task_label }}
                                 </span>
                                 {% include "internal_includes/stage_sla_badge.html" with recruitment_case=application.case variant="sm" %}
+                                {% queue_waiting_on_car application as waiting_on_car %}
+                                {% if waiting_on_car %}
+                                    <div class="rg-imeta mt-1">Waiting on CAR preparation</div>
+                                {% endif %}
                             </td>
                             {% if not is_queue %}
                                 <td>
@@ -124,7 +165,7 @@
                             {% endif %}
                             <td>
                                 <div style="font-size:0.8125rem;color:#374151;">
-                                    {{ application.updated_at|timesince }} ago
+                                    {{ application.updated_at|timesince_short }} ago
                                 </div>
                                 <div class="rg-imeta mt-1">{{ application.updated_at|date:"M d, Y" }}</div>
                             </td>
@@ -141,42 +182,8 @@
                 </tbody>
             </table>
         </div>
-        <div class="rg-queue-noresults js-queue-noresults" hidden>
-            No cases match this filter.
-        </div>
     </div>
 
-    <script>
-    (function () {
-        "use strict";
-        var chips = document.querySelectorAll("[data-queue-filter]");
-        var rows = document.querySelectorAll("[data-queue-row]");
-        var countEl = document.querySelector(".js-queue-count");
-        var noResults = document.querySelector(".js-queue-noresults");
-        if (!chips.length) return;
-        var suffix = countEl ? (countEl.dataset.queueSuffix || "") : "";
-
-        function applyFilter(value) {
-            var visible = 0;
-            rows.forEach(function (row) {
-                var show = value === "all" || row.dataset.branch === value;
-                row.hidden = !show;
-                if (show) visible++;
-            });
-            if (countEl) {
-                countEl.innerHTML = "<strong>" + visible + "</strong> case" +
-                    (visible === 1 ? "" : "s") + " " + suffix + ".";
-            }
-            if (noResults) noResults.hidden = visible !== 0;
-        }
-        chips.forEach(function (chip) {
-            chip.addEventListener("click", function () {
-                chips.forEach(function (c) { c.classList.remove("is-active"); });
-                chip.classList.add("is-active");
-                applyFilter(chip.dataset.queueFilter);
-            });
-        });
-    })();
-    </script>
+    {% include "internal_includes/pagination.html" %}
 {% endif %}
 {% endblock %}

@@ -1,0 +1,28 @@
+{% comment %}
+Shared pagination control for paginated internal lists.
+Inputs:
+  page_obj    — Django Page object (from a paginated ListView)
+  querystring — GET params minus "page" (urlencoded, no leading "?"), optional
+Renders nothing when there is a single page.
+{% endcomment %}
+{% if page_obj.paginator.num_pages > 1 %}
+<nav class="rg-pagination d-flex align-items-center gap-2 mt-3" aria-label="Pagination">
+    {% if page_obj.has_previous %}
+        <a class="btn btn-outline-secondary btn-sm"
+           href="?page={{ page_obj.previous_page_number }}{% if querystring %}&{{ querystring }}{% endif %}">
+            &larr; Previous
+        </a>
+    {% else %}
+        <span class="btn btn-outline-secondary btn-sm disabled" aria-disabled="true">&larr; Previous</span>
+    {% endif %}
+    <span class="rg-imeta">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+        <a class="btn btn-outline-secondary btn-sm"
+           href="?page={{ page_obj.next_page_number }}{% if querystring %}&{{ querystring }}{% endif %}">
+            Next &rarr;
+        </a>
+    {% else %}
+        <span class="btn btn-outline-secondary btn-sm disabled" aria-disabled="true">Next &rarr;</span>
+    {% endif %}
+</nav>
+{% endif %}

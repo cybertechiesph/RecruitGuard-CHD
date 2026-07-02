@@ -1,6 +1,7 @@
 import json
 
 from django import template
+from django.utils.timesince import timesince as django_timesince
 
 from recruitment.models import (
     audit_action_label as resolve_audit_action_label,
@@ -20,9 +21,22 @@ from recruitment.notification_services import (
     get_recent_notifications,
     get_unread_count,
 )
-from recruitment.services import get_current_workflow_section
+from recruitment.services import (
+    application_awaiting_car_preparation,
+    get_current_workflow_section,
+)
 
 register = template.Library()
+
+
+@register.filter
+def timesince_short(value):
+    """Largest-unit-only 'time since' (e.g. '2 days', '1 month'). Django's timesince can
+    return two comma-joined units ('2 days, 3 hours'); list rows only need the leading unit,
+    so this trims the rest cleanly (no trailing ellipsis)."""
+    if not value:
+        return ""
+    return django_timesince(value).split(",")[0]
 
 
 ROLE_LABELS = dict(RecruitmentUser.Role.choices)
@@ -389,6 +403,7 @@ QUEUE_TASK_LABELS = {
     "screening": "Screening",
     "exam": "Exam",
     "interview": "Interview",
+    "car": "CAR",
     "deliberation": "Deliberation",
     "actions": "Disposition",
     "decision": "Decision",
@@ -400,6 +415,7 @@ QUEUE_TASK_THEMES = {
     "screening": "info",
     "exam": "info",
     "interview": "info",
+    "car": "info",
     "deliberation": "info",
     "actions": "warning",
     "decision": "info",
@@ -518,6 +534,18 @@ def queue_task_label(application):
 @register.simple_tag
 def queue_task_theme(application):
     return _queue_task_display(application)[1]
+
+
+@register.simple_tag(takes_context=True)
+def queue_waiting_on_car(context, application):
+    """True when this row is a Plantilla HRMPSB case whose CAR is still being prepared by
+    another role and the current viewer can't prepare it — used only to add a soft
+    "Waiting on CAR preparation" hint. The case stays in the queue; access is unchanged."""
+    request = context.get("request")
+    user = getattr(request, "user", None)
+    if user is None or not getattr(user, "is_authenticated", False):
+        return False
+    return application_awaiting_car_preparation(user, application)
 
 
 @register.simple_tag
