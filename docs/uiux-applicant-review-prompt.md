@@ -179,6 +179,18 @@ Rules for this section:
   - 2–4 ideas, quality over quantity. It's fine to say the current approach is
     already close to right.
 
+## Working style (you have a large, multi-screen surface to cover)
+- Work against the current `main` branch: review the app as it exists on main, and
+  write the plan file on main. Do not create a feature branch for this review.
+- Delegate independent chunks to subagents where it helps — e.g. one pass per
+  journey stage (browse, intake, OTP/verification, status/resubmit) — and keep
+  working while they run. Intervene if a subagent lacks context or drifts.
+- Verify as you go: before writing a finding, re-confirm it against an actual
+  observation or the source file, not memory. A fresh-context verifier subagent
+  reviewing the drafted plan against what's live catches more than self-review.
+- Before marking a finding confirmed, point to the evidence (screenshot, tool
+  result, or line of code). If something is unverified, say so in the item.
+
 ## Method
 Actually exercise the UI end to end as described above — submit valid and invalid
 data, drop/kill an upload, submit an incomplete form, enter a wrong OTP, and take
