@@ -2060,6 +2060,11 @@ class ExamScheduleForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.M
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["scheduled_for"].label = "Exam Schedule"
+        # Gray out past dates in the calendar picker (courtesy only — the
+        # server-side past-date rule in clean_scheduled_for stays authoritative).
+        self.fields["scheduled_for"].widget.attrs["min"] = timezone.localtime().strftime(
+            "%Y-%m-%dT00:00"
+        )
         self.fields["venue"].label = "Exam Venue"
         self.fields["instructions"].label = "Instructions for the Applicant"
         self.fields["instructions"].required = False
@@ -2103,6 +2108,11 @@ class InterviewSessionForm(DeferredModelValidationMixin, BootstrapFormMixin, for
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["scheduled_for"].label = "Interview Schedule"
+        # Gray out past dates in the calendar picker (courtesy only — the
+        # server-side past-date rule in clean_scheduled_for stays authoritative).
+        self.fields["scheduled_for"].widget.attrs["min"] = timezone.localtime().strftime(
+            "%Y-%m-%dT00:00"
+        )
         self.fields["location"].label = "Interview Location / Medium"
         self.fields["session_notes"].label = "Session Notes"
         self.fields["session_notes"].required = False

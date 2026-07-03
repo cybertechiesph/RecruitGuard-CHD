@@ -45,7 +45,7 @@
             {% if pick.notes %}<div class="mt-1">{{ pick.notes }}</div>{% endif %}
         </div>
     {% elif can_manage %}
-        <form method="post">
+        <form method="post" id="cosDelibForm">
             {% csrf_token %}
             <div class="rg-itbl mb-3">
                 <div class="table-responsive">
@@ -54,6 +54,9 @@
                             <tr>
                                 <th style="width:3rem;"><span class="visually-hidden">Choose</span></th>
                                 <th>Candidate</th>
+                                <th>Screening</th>
+                                <th>Exam</th>
+                                <th>Interview</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -61,11 +64,35 @@
                                 <tr>
                                     <td>
                                         <input type="radio" name="chosen_case" value="{{ candidate.case_id }}"
+                                               data-candidate-name="{{ candidate.application.applicant_display_name }}"
                                                {% if pick and pick.chosen_case_id == candidate.case_id %}checked{% endif %}>
                                     </td>
                                     <td>
                                         <div class="fw-bold" style="font-size:0.8rem;">{{ candidate.application.applicant_display_name }}</div>
                                         <div class="rg-imeta mt-1">{{ candidate.application.reference_label }}</div>
+                                    </td>
+                                    <td>
+                                        {% if candidate.screening_outcome %}
+                                            <span class="rg-pill rg-pill--{{ candidate.screening_outcome|status_theme }} rg-pill--sm">
+                                                {{ candidate.screening_outcome|status_label }}
+                                            </span>
+                                        {% else %}
+                                            <span class="rg-imeta">&mdash;</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if candidate.exam_score is not None %}
+                                            <strong style="font-size:0.85rem;">{{ candidate.exam_score }}</strong>
+                                        {% else %}
+                                            <span class="rg-imeta">&mdash;</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if candidate.interview_score is not None %}
+                                            <strong style="font-size:0.85rem;">{{ candidate.interview_score }}</strong>
+                                        {% else %}
+                                            <span class="rg-imeta">&mdash;</span>
+                                        {% endif %}
                                     </td>
                                 </tr>
                             {% endfor %}
@@ -73,15 +100,73 @@
                     </table>
                 </div>
             </div>
+            <p class="rg-note mb-3">Candidates are ordered by interview score (highest first). The pick itself is free — choose whoever the deliberation identified.</p>
             <div class="rg-field">
                 <label class="form-label" for="cos-delib-notes">Deliberation notes / remarks</label>
                 <textarea id="cos-delib-notes" name="notes" class="form-control" rows="3">{% if pick %}{{ pick.notes }}{% endif %}</textarea>
             </div>
+            <div class="invalid-feedback mt-2" id="cosDelibError" hidden>
+                Choose the applicant the deliberation identified before finalizing.
+            </div>
             <div class="rg-form-actions mt-3 d-flex gap-2">
                 <button type="submit" name="operation" value="save" class="btn btn-outline-secondary">Save pick</button>
-                <button type="submit" name="operation" value="finalize" class="btn btn-rg-primary">Finalize deliberation</button>
+                <button type="button" class="btn btn-rg-primary" id="cosDelibFinalizeBtn">Finalize deliberation</button>
             </div>
         </form>
+
+        {# WF-15: irreversible batch action — confirm like the sibling batch finalizes do. #}
+        <div class="modal fade rg-modal-confirm rg-modal-confirm--destructive" id="confirmFinalizeCosDelib"
+             tabindex="-1" aria-labelledby="confirmFinalizeCosDelibLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 class="modal-title h5" id="confirmFinalizeCosDelibLabel">Finalize the deliberation pick?</h2>
+                        <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="mb-0 rg-modal-confirm__body-copy">
+                            This records <strong id="cosDelibChosenName">the chosen applicant</strong> as the board's
+                            pick and moves all {{ candidate_count }} candidate{{ candidate_count|pluralize }} to the
+                            decision step. It can't be changed without an authorized reopen.
+                        </p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" form="cosDelibForm" name="operation" value="finalize"
+                                class="btn btn-sm btn-rg-destructive">Finalize deliberation</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+        (function () {
+            "use strict";
+            var form = document.getElementById("cosDelibForm");
+            var finalizeBtn = document.getElementById("cosDelibFinalizeBtn");
+            var errorLine = document.getElementById("cosDelibError");
+            var chosenNameEl = document.getElementById("cosDelibChosenName");
+            var modalEl = document.getElementById("confirmFinalizeCosDelib");
+            if (!form || !finalizeBtn) return;
+            finalizeBtn.addEventListener("click", function () {
+                var chosen = form.querySelector('input[name="chosen_case"]:checked');
+                if (!chosen) {
+                    if (errorLine) { errorLine.hidden = false; errorLine.classList.add("d-block"); }
+                    return;
+                }
+                if (errorLine) { errorLine.hidden = true; errorLine.classList.remove("d-block"); }
+                if (chosenNameEl) {
+                    chosenNameEl.textContent = chosen.getAttribute("data-candidate-name") || "the chosen applicant";
+                }
+                if (modalEl && window.bootstrap) {
+                    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+                }
+            });
+            form.addEventListener("change", function () {
+                if (errorLine) { errorLine.hidden = true; errorLine.classList.remove("d-block"); }
+            });
+        })();
+        </script>
     {% else %}
         <div class="alert alert-info" role="status">
             The COS deliberation pick is recorded by the HRM Chief once the pool reaches this step.

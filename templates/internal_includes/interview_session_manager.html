@@ -326,9 +326,12 @@
         <button type="button" class="btn btn-outline-secondary btn-sm" id="int-notify-applicant-btn">
             Notify applicant
         </button>
+        {% if application.branch == "plantilla" %}
+        {# WF-13: COS interviews have no HRMPSB panel — don't offer the panel notice there. #}
         <button type="button" class="btn btn-outline-secondary btn-sm" id="int-notify-panel-btn">
             Notify HRMPSB panel
         </button>
+        {% endif %}
         <button type="button" class="btn-rg-finalize" id="int-finalize-session-btn">
             Finalize session
         </button>

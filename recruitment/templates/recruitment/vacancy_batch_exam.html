@@ -49,7 +49,10 @@
     {% if weights.is_locked %}
         <span class="rg-pill rg-pill--neutral rg-pill--sm">Locked (scoring started)</span>
     {% else %}
-        <a href="{% url 'vacancy-assessment-weights' entry.pk %}" class="btn btn-outline-secondary btn-sm">Edit weights</a>
+        <div class="d-flex align-items-center gap-2">
+            <a href="{% url 'vacancy-assessment-weights' entry.pk %}" class="btn btn-outline-secondary btn-sm">Edit weights</a>
+            <span class="rg-imeta">Locked when scoring starts</span>
+        </div>
     {% endif %}
 </div>
 {% endif %}
@@ -136,7 +139,8 @@
                 </table>
             </div>
         </div>
-        <div class="invalid-feedback d-block mt-2" id="examScoreError" hidden>
+        {# WF-16(b): no d-block here — the hint stays hidden until a score is actually invalid. #}
+        <div class="invalid-feedback mt-2" id="examScoreError" hidden>
             Scores must be between 0 and 100.
         </div>
         {% if not schedule_sent %}
@@ -179,7 +183,7 @@
         });
         if (invalid.length) {
             event.preventDefault();
-            if (errorLine) errorLine.hidden = false;
+            if (errorLine) { errorLine.hidden = false; errorLine.classList.add("d-block"); }
             var modalEl = document.getElementById("confirmFinalizeExam");
             if (modalEl && window.bootstrap) {
                 var inst = bootstrap.Modal.getInstance(modalEl);
@@ -188,6 +192,7 @@
             try { invalid[0].focus(); } catch (err) {}
         } else if (errorLine) {
             errorLine.hidden = true;
+            errorLine.classList.remove("d-block");
         }
     });
 })();

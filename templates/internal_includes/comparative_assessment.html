@@ -38,14 +38,28 @@ HRM Chief on COS). Two states:
                 candidate{{ current_comparative_assessment_report_items|length|pluralize }}
             </span>
         </div>
+        {% if not car_all_rows_scored %}
+            {# WF-11: ETE ratings are still missing, so any ordering here would be the
+               alphabetical sort fallback — don't present it as a ranking. #}
+            <div class="alert alert-info" role="status" style="font-size:0.8125rem;">
+                Rankings appear once every candidate has an ETE rating and the draft is updated.
+            </div>
+        {% endif %}
         <ul class="rg-del-car-list">
             {% for item in current_comparative_assessment_report_items %}
             <li class="rg-del-car-item">
-                <div class="rg-del-rank-badge">#{{ item.rank_order }}</div>
+                {% if car_all_rows_scored %}
+                    <div class="rg-del-rank-badge">#{{ item.rank_order }}</div>
+                {% else %}
+                    <div class="rg-del-rank-badge" title="Unranked until every candidate has a score" aria-hidden="true">&mdash;</div>
+                {% endif %}
                 <div class="rg-del-car-item__body">
                     <div class="rg-del-car-item__name">
                         {{ item.applicant_display_name }}
                     </div>
+                    {% if item.assessment_score is None %}
+                        <p class="rg-del-car-item__decision"><em>Unranked &mdash; enter the ETE rating</em></p>
+                    {% endif %}
                     <div class="rg-del-car-item__scores">
                         {% if item.qualification_outcome %}
                         <div class="rg-del-car-item__score-cell">
@@ -87,7 +101,7 @@ HRM Chief on COS). Two states:
                             <span class="rg-del-car-item__score-val">{{ item.assessment_score }}</span>
                         </div>
                         {% endif %}
-                        {% if item.preliminary_rank_order %}
+                        {% if item.preliminary_rank_order and car_all_rows_scored %}
                         <div class="rg-del-car-item__score-cell">
                             <span class="rg-del-car-item__score-label">System rank</span>
                             <span class="rg-del-car-item__score-val">#{{ item.preliminary_rank_order }}</span>

@@ -4763,10 +4763,11 @@ def save_vacancy_interview_schedule(posting, actor, cleaned_data):
 
 
 @transaction.atomic
-def finalize_vacancy_interview_batch(posting, actor):
+def finalize_vacancy_interview_batch(posting, actor, first_deliberation_note=""):
     """Finalize the interview session for every candidate in the vacancy's interview pool
     together. Each must already have at least one rating or a fallback sheet (the per-case
-    save_interview_session enforces that)."""
+    save_interview_session enforces that). An optional first-deliberation note ("held on X,
+    members present N") is written to each case's history for the two-touchpoint record."""
     pool = vacancy_interview_pool(posting)
     if not pool:
         raise ValueError("No candidates are ready to finalize the interview in this vacancy.")
@@ -4788,6 +4789,18 @@ def finalize_vacancy_interview_batch(posting, actor):
             finalize=True,
         )
         finalized.append(application)
+    if first_deliberation_note:
+        for application in finalized:
+            record_audit_event(
+                application=application,
+                actor=actor,
+                action=AuditLog.Action.DELIBERATION_RECORDED,
+                description=first_deliberation_note,
+                metadata={
+                    "recruitment_entry_id": posting.id,
+                    "source": "interview_batch_finalize",
+                },
+            )
     return finalized
 
 
