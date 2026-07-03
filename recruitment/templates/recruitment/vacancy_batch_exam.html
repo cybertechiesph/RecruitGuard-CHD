@@ -127,6 +127,8 @@
                                 <td>
                                     {% if candidate.exam_record and candidate.exam_record.is_finalized %}
                                         <span class="rg-pill rg-pill--success rg-pill--sm">Finalized: {{ candidate.exam_record.exam_score }}</span>
+                                    {% elif candidate.exam_record.exam_status == "absent" or candidate.exam_record.exam_status == "waived" %}
+                                        <span class="rg-pill rg-pill--warning rg-pill--sm">{{ candidate.exam_record.get_exam_status_display }} — will not proceed</span>
                                     {% elif candidate.exam_record.exam_score is not None %}
                                         <span class="rg-pill rg-pill--info rg-pill--sm">Draft: {{ candidate.exam_record.exam_score }}</span>
                                     {% else %}
@@ -160,7 +162,7 @@
     </form>
 </div>
 
-{% include "internal_includes/modal_confirm.html" with modal_id="confirmFinalizeExam" variant="destructive" title="Finalize this exam batch?" body=finalize_exam_body confirm_label="Finalize Exam Batch" cancel_label="Cancel" form_id="examScoreForm" confirm_name="operation" confirm_value="finalize" %}
+{% include "internal_includes/modal_confirm.html" with modal_id="confirmFinalizeExam" variant="destructive" title="Finalize this exam batch?" body=finalize_exam_body summary_items=finalize_exam_summary_items confirm_label="Finalize Exam Batch" cancel_label="Cancel" form_id="examScoreForm" confirm_name="operation" confirm_value="finalize" %}
 
 <script>
 (function () {

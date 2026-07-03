@@ -298,8 +298,31 @@ def _build_selected_notification(application):
     )
 
 
-def _build_non_selected_notification(application, cut_at_screening=False):
-    if cut_at_screening:
+def _build_non_selected_notification(application, cut_at_screening=False, exam_status=""):
+    # exam_status carries ExamRecord.ExamStatus values ("absent" / "waived") when the
+    # application was closed at exam finalization because the candidate did not take
+    # (or was waived from) the scheduled examination (judgment item A).
+    if exam_status == "absent":
+        result_line = (
+            f"Your application for {application.position.title} "
+            f"under {application.position.get_branch_display()} recruitment did not proceed "
+            "because you did not take the scheduled examination."
+        )
+        closing = (
+            "Thank you for your interest. You are welcome to apply for other open positions "
+            "that match your qualifications."
+        )
+    elif exam_status == "waived":
+        result_line = (
+            f"For your application for {application.position.title} "
+            f"under {application.position.get_branch_display()} recruitment, "
+            "your examination was waived and the application did not proceed."
+        )
+        closing = (
+            "Thank you for your interest. You are welcome to apply for other open positions "
+            "that match your qualifications."
+        )
+    elif cut_at_screening:
         result_line = (
             f"After the initial screening of qualifications for {application.position.title} "
             f"under {application.position.get_branch_display()} recruitment, your application "
@@ -709,8 +732,12 @@ def queue_selected_applicant_notification(application, actor=None):
     )
 
 
-def queue_non_selected_applicant_notification(application, actor=None, cut_at_screening=False):
-    subject, body = _build_non_selected_notification(application, cut_at_screening=cut_at_screening)
+def queue_non_selected_applicant_notification(
+    application, actor=None, cut_at_screening=False, exam_status=""
+):
+    subject, body = _build_non_selected_notification(
+        application, cut_at_screening=cut_at_screening, exam_status=exam_status
+    )
     return queue_notification(
         application,
         notification_type=NotificationLog.NotificationType.NON_SELECTED_APPLICANT,
@@ -722,6 +749,7 @@ def queue_non_selected_applicant_notification(application, actor=None, cut_at_sc
             "status": application.status,
             "branch": application.branch,
             "cut_at_screening": cut_at_screening,
+            "exam_status": exam_status,
             "status_link": build_applicant_status_url(application),
         },
     )

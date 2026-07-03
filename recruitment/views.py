@@ -43,6 +43,7 @@ from .models import (
     AuditLog,
     CompletionRecord,
     EvidenceVaultItem,
+    ExamRecord,
     Notification,
     PositionPosting,
     RecruitmentApplication,
@@ -1237,7 +1238,23 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
             f"candidate{'' if candidate_count == 1 else 's'} and moves the whole pool to the "
             "next review step. Scores can no longer be edited afterwards."
         )
+        # Judgment item A: candidates marked Absent/Waived lock without advancing — say so
+        # in the finalize confirmation.
+        absent_waived_count = sum(
+            1
+            for c in candidates
+            if c["exam_record"]
+            and c["exam_record"].exam_status
+            in {ExamRecord.ExamStatus.ABSENT, ExamRecord.ExamStatus.WAIVED}
+        )
+        finalize_exam_summary_items = []
+        if absent_waived_count:
+            finalize_exam_summary_items.append(
+                f"{absent_waived_count} candidate{'' if absent_waived_count == 1 else 's'} "
+                "marked Absent/Waived will not proceed"
+            )
         return {
+            "finalize_exam_summary_items": finalize_exam_summary_items,
             "entry": entry,
             "candidates": candidates,
             "candidate_count": candidate_count,

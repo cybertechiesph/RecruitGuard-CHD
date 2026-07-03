@@ -218,15 +218,22 @@ HRM Chief on COS). Two states:
                     Make sure the candidate rankings are correct before continuing.
                 </p>
                 <div class="rg-car-quorum">
-                    <label class="form-label" for="car-quorum-met">Quorum met during deliberation?</label>
-                    <select id="car-quorum-met" name="quorum_met" form="car-form" class="form-select form-select-sm" style="max-width:140px;">
+                    <label class="form-label" for="car-quorum-met">Quorum met during deliberation? <span class="text-danger" aria-hidden="true">*</span></label>
+                    <select id="car-quorum-met" name="quorum_met" form="car-form" required
+                            class="form-select form-select-sm" style="max-width:140px;">
                         <option value="">—</option>
                         <option value="yes">Yes</option>
                         <option value="no">No</option>
                     </select>
-                    <label class="form-label mt-2" for="car-members-present">HRMPSB members present</label>
-                    <input type="number" id="car-members-present" name="members_present" form="car-form"
-                           class="form-control form-control-sm" min="0" max="20" step="1" style="max-width:140px;">
+                    <div class="invalid-feedback" id="car-quorum-error">
+                        Deliberation quorum (at least 3 of the 5 HRMPSB members) must be met before the CAR can be finalized.
+                    </div>
+                    <label class="form-label mt-2" for="car-members-present">HRMPSB members present (3&ndash;5) <span class="text-danger" aria-hidden="true">*</span></label>
+                    <input type="number" id="car-members-present" name="members_present" form="car-form" required
+                           class="form-control form-control-sm" min="3" max="5" step="1" style="max-width:140px;">
+                    <div class="invalid-feedback" id="car-members-error">
+                        Record how many HRMPSB members were present (3&ndash;5).
+                    </div>
                     <div class="form-text">Recorded with the finalized report (the board's deliberation itself is held on paper).</div>
                 </div>
                 <div class="rg-car-recommendation mt-3">
@@ -299,6 +306,20 @@ HRM Chief on COS). Two states:
     }
     if (confirmBtn) {
         confirmBtn.addEventListener("click", function () {
+            // WF-02 courtesy mirror of the server rule: quorum Yes + 3–5 members present.
+            var quorum = document.getElementById("car-quorum-met");
+            if (quorum && quorum.value !== "yes") {
+                quorum.classList.add("is-invalid");
+                if (quorum.focus) { try { quorum.focus(); } catch (e) {} }
+                return;
+            }
+            var members = document.getElementById("car-members-present");
+            var membersVal = members ? parseInt(members.value, 10) : NaN;
+            if (members && (isNaN(membersVal) || membersVal < 3 || membersVal > 5)) {
+                members.classList.add("is-invalid");
+                if (members.focus) { try { members.focus(); } catch (e) {} }
+                return;
+            }
             var rec = document.getElementById("car-recommended-case");
             if (rec && !rec.value) {
                 rec.classList.add("is-invalid");
@@ -309,6 +330,13 @@ HRM Chief on COS). Two states:
             form.submit();
         });
     }
+    ["car-quorum-met", "car-members-present"].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) {
+            el.addEventListener("change", function () { el.classList.remove("is-invalid"); });
+            el.addEventListener("input", function () { el.classList.remove("is-invalid"); });
+        }
+    });
 
     form.addEventListener("input", clearError);
     form.addEventListener("change", clearError);

@@ -538,6 +538,27 @@ class BaseRecruitmentTestCase(TestCase):
             return 3
         return max(1, min(scale_max, int(round(value / 100 * scale_max))))
 
+    def extra_plantilla_panel_raters(self, exclude=None, count=2):
+        """WF-01 requires ratings from at least 3 HRMPSB members before a Plantilla
+        interview session can finalize. Provide additional panel members, created on
+        first use so tests that never finalize a Plantilla interview keep their
+        original notification-recipient counts."""
+        raters = []
+        for index in (2, 3, 4):
+            if len(raters) >= count:
+                break
+            user, _ = User.objects.get_or_create(
+                username=f"hrmpsb-rater-{index}",
+                defaults={
+                    "email": f"hrmpsb.rater{index}@example.com",
+                    "role": RecruitmentUser.Role.HRMPSB_MEMBER,
+                },
+            )
+            if exclude is not None and user.pk == exclude.pk:
+                continue
+            raters.append(user)
+        return raters
+
     def finalize_interview_for_current_stage(
         self,
         application,
@@ -590,17 +611,22 @@ class BaseRecruitmentTestCase(TestCase):
                     else 3
                 )
             template = self.publish_competency_rating_sheet(application.position)
-            save_interview_rating(
-                application=application,
-                actor=actor,
-                cleaned_data={
-                    "competency_scores": {
-                        competency: level for competency in template.competencies.all()
+            # WF-01: a Plantilla session needs the HRMPSB panel minimum (3 ratings)
+            # before it can finalize — the primary rater plus two more members, all
+            # scoring the same uniform level so per-candidate averages are unchanged.
+            panel_raters = [actor] + self.extra_plantilla_panel_raters(exclude=actor)
+            for panel_rater in panel_raters:
+                save_interview_rating(
+                    application=application,
+                    actor=panel_rater,
+                    cleaned_data={
+                        "competency_scores": {
+                            competency: level for competency in template.competencies.all()
+                        },
+                        "rating_notes": rating_notes,
+                        "justification": justification,
                     },
-                    "rating_notes": rating_notes,
-                    "justification": justification,
-                },
-            )
+                )
         return save_interview_session(
             application=application,
             actor=session_actor,
@@ -673,11 +699,8 @@ class BaseRecruitmentTestCase(TestCase):
             and application.case.current_stage == RecruitmentCase.Stage.HRMPSB_REVIEW
         ):
             self.finalize_applicant_pool_for_test(application.position)
-            car_actor = (
-                self.secretariat
-                if application.level == PositionPosting.Level.LEVEL_1
-                else self.hrm_chief
-            )
+            # WF-04 (client decision): the Secretariat prepares the CAR for BOTH levels.
+            car_actor = self.secretariat
             if not ComparativeAssessmentReport.objects.filter(
                 recruitment_entry=application.position,
                 review_stage=RecruitmentCase.Stage.HRMPSB_REVIEW,
@@ -731,16 +754,16 @@ class BaseRecruitmentTestCase(TestCase):
             and application.case.current_stage == RecruitmentCase.Stage.HRMPSB_REVIEW
             and actor.role == RecruitmentUser.Role.HRMPSB_MEMBER
         ):
-            car_actor = (
-                self.secretariat
-                if application.level == PositionPosting.Level.LEVEL_1
-                else self.hrm_chief
-            )
+            # WF-04 (client decision): the Secretariat prepares the CAR for BOTH levels.
+            car_actor = self.secretariat
         return generate_comparative_assessment_report(
             application=application,
             actor=car_actor,
             cleaned_data={
                 "summary_notes": summary_notes,
+                # WF-02: the deliberation quorum (3–5 members, met) is required at finalize.
+                "quorum_met": True,
+                "members_present": 4,
                 # The board's recommended applicant is captured at finalize (defaults to
                 # this application's own case, which is always in the pool).
                 "recommended_case_id": (
@@ -776,13 +799,27 @@ class BaseRecruitmentTestCase(TestCase):
                 ).first()
             if not selected_item:
                 raise ValueError("Plantilla final selection requires a selected CAR applicant.")
+            # WF-03: picking someone other than the board's recommendation (rank #1
+            # fallback) requires a written justification for the official record.
+            recommended_case_id = report.recommended_case_id
+            if recommended_case_id is None:
+                rank_one = candidate_items.filter(rank_order=1).first()
+                recommended_case_id = rank_one.recruitment_case_id if rank_one else None
+            cleaned_data = {
+                "selected_item": selected_item,
+                "decision_notes": decision_notes,
+            }
+            if (
+                recommended_case_id
+                and selected_item.recruitment_case_id != recommended_case_id
+            ):
+                cleaned_data["deep_selection_justification"] = (
+                    "Documented justification for selecting against the board's recommendation."
+                )
             return record_final_selection(
                 application=application,
                 actor=actor,
-                cleaned_data={
-                    "selected_item": selected_item,
-                    "decision_notes": decision_notes,
-                },
+                cleaned_data=cleaned_data,
             )
         return record_final_decision(
             application=application,
@@ -7034,12 +7071,15 @@ class VacancyBatchInterviewTests(BaseRecruitmentTestCase):
         first, second = self._two_plantilla_at_interview()
         with self.captureOnCommitCallbacks(execute=True):
             save_vacancy_interview_schedule(self.level1_position, self.secretariat, self._interview_schedule_payload())
+        # WF-01: each Plantilla session needs ratings from 3 HRMPSB members to finalize.
+        panel_raters = [self.hrmpsb] + self.extra_plantilla_panel_raters(exclude=self.hrmpsb)
         for application in (first, second):
-            save_interview_rating(
-                application=application,
-                actor=self.hrmpsb,
-                cleaned_data=self.competency_rating_cleaned_data(application, level=3),
-            )
+            for panel_rater in panel_raters:
+                save_interview_rating(
+                    application=application,
+                    actor=panel_rater,
+                    cleaned_data=self.competency_rating_cleaned_data(application, level=3),
+                )
         finalize_vacancy_interview_batch(self.level1_position, self.secretariat)
         for application in (first, second):
             application.refresh_from_db()
@@ -9799,6 +9839,13 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
             actor=self.hrmpsb,
             cleaned_data=self.rating_payload(application, level=3),
         )
+        # WF-01: two more panel ratings so the session meets the 3-member minimum.
+        for panel_rater in self.extra_plantilla_panel_raters(exclude=self.hrmpsb):
+            save_interview_rating(
+                application=application,
+                actor=panel_rater,
+                cleaned_data=self.rating_payload(application, level=3),
+            )
         interview_session = save_interview_session(
             application=application,
             actor=self.secretariat,
@@ -9957,6 +10004,14 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
             actor=self.hrmpsb,
             cleaned_data=self.rating_payload(application, level=3),
         )
+        # WF-01: two more panel ratings so the session can finalize — second_hrmpsb
+        # deliberately stays without a rating to receive the finalized notice.
+        for panel_rater in self.extra_plantilla_panel_raters(exclude=self.hrmpsb):
+            save_interview_rating(
+                application=application,
+                actor=panel_rater,
+                cleaned_data=self.rating_payload(application, level=3),
+            )
 
         save_interview_session(
             application=application,
@@ -9993,6 +10048,8 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
             )
 
     def test_interview_finalize_requires_at_least_one_rating_or_fallback_sheet(self):
+        # WF-01: Plantilla sessions need ratings from at least 3 HRMPSB members
+        # (COS keeps the single-rating minimum — the chief interviews alone).
         application = self.make_application(self.level1_position)
         self.move_application_to_hrmpsb_review(application)
         scheduled_for = timezone.now() + timedelta(days=1)
@@ -10005,7 +10062,7 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
 
         with self.assertRaisesMessage(
             ValueError,
-            "Record at least one interview rating or upload a fallback rating sheet before finalizing the interview session.",
+            "This interview needs ratings from at least 3 HRMPSB members before it can be finalized (currently 0).",
         ):
             save_interview_session(
                 application=application,
@@ -10013,6 +10070,53 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
                 cleaned_data=self.session_payload(scheduled_for=scheduled_for),
                 finalize=True,
             )
+
+        # One and two ratings are still short of the panel minimum.
+        save_interview_rating(
+            application=application,
+            actor=self.hrmpsb,
+            cleaned_data=self.rating_payload(application, level=3),
+        )
+        with self.assertRaisesMessage(
+            ValueError,
+            "This interview needs ratings from at least 3 HRMPSB members before it can be finalized (currently 1).",
+        ):
+            save_interview_session(
+                application=application,
+                actor=self.secretariat,
+                cleaned_data=self.session_payload(scheduled_for=scheduled_for),
+                finalize=True,
+            )
+        second_rater, third_rater = self.extra_plantilla_panel_raters(exclude=self.hrmpsb)
+        save_interview_rating(
+            application=application,
+            actor=second_rater,
+            cleaned_data=self.rating_payload(application, level=3),
+        )
+        with self.assertRaisesMessage(
+            ValueError,
+            "This interview needs ratings from at least 3 HRMPSB members before it can be finalized (currently 2).",
+        ):
+            save_interview_session(
+                application=application,
+                actor=self.secretariat,
+                cleaned_data=self.session_payload(scheduled_for=scheduled_for),
+                finalize=True,
+            )
+
+        # The third rating satisfies the panel minimum.
+        save_interview_rating(
+            application=application,
+            actor=third_rater,
+            cleaned_data=self.rating_payload(application, level=3),
+        )
+        session = save_interview_session(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data=self.session_payload(scheduled_for=scheduled_for),
+            finalize=True,
+        )
+        self.assertTrue(session.is_finalized)
 
     def test_hrmpsb_member_cannot_schedule_plantilla_interview_session(self):
         application = self.make_application(self.level1_position)
@@ -10846,6 +10950,8 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             actor=self.secretariat,
             cleaned_data={
                 "summary_notes": "Prepared by HRMS from finalized HRMPSB records.",
+                "quorum_met": True,
+                "members_present": 4,
                 "recommended_case_id": application.case.id,
             },
             finalize=True,
@@ -10874,31 +10980,46 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             1,
         )
 
-    def test_hrm_chief_prepares_level2_car_and_secretariat_cannot_take_it(self):
+    def test_secretariat_prepares_level2_car_and_hrm_chief_cannot_take_it(self):
+        # WF-04 (client decision): the Secretariat generates the CAR for BOTH levels;
+        # the HRM Chief no longer prepares the Level-2 CAR.
         application = self.make_application(self.level2_position)
         self.move_application_to_hrmpsb_review(application)
         self.finalize_interview_for_current_stage(application, self.hrmpsb)
         self.finalize_deliberation_for_current_stage(application, self.hrmpsb, ranking_position=1)
 
-        self.assertFalse(user_can_manage_comparative_assessment_report(self.secretariat, application))
-        self.assertFalse(user_can_view_application(self.secretariat, application))
-        self.assertTrue(user_can_manage_comparative_assessment_report(self.hrm_chief, application))
-        self.assertTrue(get_queue_for_user(self.hrm_chief).filter(pk=application.pk).exists())
+        self.assertTrue(user_can_manage_comparative_assessment_report(self.secretariat, application))
+        self.assertFalse(user_can_manage_comparative_assessment_report(self.hrm_chief, application))
+        self.assertTrue(get_queue_for_user(self.secretariat).filter(pk=application.pk).exists())
+        self.assertFalse(get_queue_for_user(self.hrm_chief).filter(pk=application.pk).exists())
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "This case is not currently assigned to you for CAR preparation.",
+        ):
+            generate_comparative_assessment_report(
+                application=application,
+                actor=self.hrm_chief,
+                cleaned_data={"summary_notes": "HRM Chief should not prepare this CAR."},
+                finalize=False,
+            )
 
         report = generate_comparative_assessment_report(
             application=application,
-            actor=self.hrm_chief,
+            actor=self.secretariat,
             cleaned_data={
-                "summary_notes": "Level 2 CAR prepared by HRM Chief.",
+                "summary_notes": "Level 2 CAR prepared by the Secretariat (WF-04).",
+                "quorum_met": True,
+                "members_present": 4,
                 "recommended_case_id": application.case.id,
             },
             finalize=True,
         )
 
         self.assertTrue(report.is_finalized)
-        self.assertEqual(report.generated_by, self.hrm_chief)
-        self.assertEqual(report.finalized_by, self.hrm_chief)
-        self.assertEqual(report.generated_by_role, RecruitmentUser.Role.HRM_CHIEF)
+        self.assertEqual(report.generated_by, self.secretariat)
+        self.assertEqual(report.finalized_by, self.secretariat)
+        self.assertEqual(report.generated_by_role, RecruitmentUser.Role.SECRETARIAT)
 
     def test_hrmpsb_member_cannot_prepare_car_after_deliberation(self):
         application = self.make_application(self.level1_position)
@@ -11008,6 +11129,8 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             actor=self.secretariat,
             cleaned_data={
                 "summary_notes": "CAR includes advisory preliminary ranking.",
+                "quorum_met": True,
+                "members_present": 4,
                 "recommended_case_id": secondary_application.case.id,
             },
             finalize=True,
@@ -11120,7 +11243,11 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             generate_comparative_assessment_report(
                 application=application,
                 actor=self.secretariat,
-                cleaned_data={"summary_notes": "No recommendation provided."},
+                cleaned_data={
+                    "summary_notes": "No recommendation provided.",
+                    "quorum_met": True,
+                    "members_present": 4,
+                },
                 finalize=True,
             )
         # No finalized CAR should have been created.
@@ -11141,6 +11268,8 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             actor=self.secretariat,
             cleaned_data={
                 "summary_notes": "Finalized CAR with recommendation.",
+                "quorum_met": True,
+                "members_present": 4,
                 "recommended_case_id": application.case.id,
                 "recommendation_notes": "Strongest competency profile in the pool.",
             },
@@ -11169,6 +11298,8 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
                 actor=self.secretariat,
                 cleaned_data={
                     "summary_notes": "Cross-vacancy recommendation.",
+                    "quorum_met": True,
+                    "members_present": 4,
                     "recommended_case_id": other.case.id,
                 },
                 finalize=True,
@@ -11267,6 +11398,8 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             actor=self.secretariat,
             cleaned_data={
                 "summary_notes": "Final entry-level CAR.",
+                "quorum_met": True,
+                "members_present": 4,
                 "recommended_case_id": secondary_application.case.id,
             },
             finalize=True,
@@ -11501,6 +11634,10 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
                 cleaned_data={
                     "selected_item": selected_item,
                     "decision_notes": "Selected the second-ranked applicant from the CAR.",
+                    # WF-03: deviating from the board's recommendation needs a justification.
+                    "deep_selection_justification": (
+                        "Documented justification for selecting against the board's recommendation."
+                    ),
                 },
             )
 
@@ -11664,6 +11801,8 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
             actor=self.secretariat,
             cleaned_data={
                 "summary_notes": "Final CAR after HRMPSB reassessment.",
+                "quorum_met": True,
+                "members_present": 4,
                 "recommended_case_id": applications[0].case.id,
             },
             finalize=True,

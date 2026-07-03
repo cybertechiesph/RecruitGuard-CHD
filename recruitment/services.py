@@ -139,7 +139,12 @@ INTERVIEW_RATING_ROLES_BY_STAGE = {
     RecruitmentCase.Stage.HRM_CHIEF_REVIEW: {RecruitmentUser.Role.HRM_CHIEF},
     RecruitmentCase.Stage.HRMPSB_REVIEW: {RecruitmentUser.Role.HRMPSB_MEMBER},
 }
+# COS interviews are conducted by the HRM Chief alone — one rating locks the session.
 MIN_INTERVIEW_OUTPUTS_TO_FINALIZE = 1
+# Plantilla interview sessions feed 40% of the CAR: the HRMPSB panel minimum (3 members)
+# must be on record before the session can lock (WF-01). A fallback rating sheet has no
+# rater-count metadata, so each uploaded sheet counts as one rater toward the minimum.
+MIN_INTERVIEW_RATINGS_PLANTILLA = 3
 # Default window the applicant has to re-upload flagged documents before the secretariat
 # may remove them from the batch (the "Incomplete shall not be entertained" final outcome).
 DOCUMENT_RESUBMISSION_DEADLINE_DAYS = 14
@@ -159,9 +164,12 @@ DELIBERATION_ROLES_BY_BRANCH = {
 }
 CAR_REVIEW_STAGE = RecruitmentCase.Stage.HRMPSB_REVIEW
 TOP_FIVE_SELECTION_LIMIT = 5
+# WF-04 (client decision): the Secretariat generates the CAR for BOTH levels. If the client
+# wants the HRM Chief to retain Level-2 access too, make Level 2 the union
+# {SECRETARIAT, HRM_CHIEF} — and mirror it in ComparativeAssessmentReport.clean().
 PLANTILLA_CAR_PREPARATION_ROLES_BY_LEVEL = {
     PositionPosting.Level.LEVEL_1: {RecruitmentUser.Role.SECRETARIAT},
-    PositionPosting.Level.LEVEL_2: {RecruitmentUser.Role.HRM_CHIEF},
+    PositionPosting.Level.LEVEL_2: {RecruitmentUser.Role.SECRETARIAT},
 }
 CAR_LABEL = "Comparative Assessment Report"
 PLANTILLA_POOL_NOT_FINAL_MESSAGE = (
@@ -1129,15 +1137,20 @@ def get_queue_for_user(user):
             position__comparative_assessment_reports__review_stage=RecruitmentCase.Stage.HRMPSB_REVIEW,
             position__comparative_assessment_reports__is_finalized=True,
         )
-    queryset = (assigned_queryset | support_queryset).distinct()
     if user.role == RecruitmentUser.Role.SECRETARIAT:
-        queryset = queryset.filter(
+        # The Level-1/override restriction applies to cases ASSIGNED to the Secretariat.
+        # Support carve-outs stay untouched: WF-04 makes the Secretariat the CAR preparer
+        # for BOTH levels, so a Level-2 case at the CAR section must reach its queue.
+        # No .distinct() here — it would make the queryset non-combinable with the
+        # support union below, which applies distinct() over the whole result anyway.
+        assigned_queryset = assigned_queryset.filter(
             Q(level=PositionPosting.Level.LEVEL_1)
             | Q(
                 overrides__is_active=True,
                 overrides__target_role=RecruitmentUser.Role.SECRETARIAT,
             )
-        ).distinct()
+        )
+    queryset = (assigned_queryset | support_queryset).distinct()
     # Urgency ordering: oldest stage-entry first, so the most overdue cases (the
     # longest in their current stage) lead the queue instead of being buried in
     # insertion order. pk breaks ties deterministically.
@@ -1279,7 +1292,7 @@ def user_can_prepare_plantilla_car(user, application):
 
 def plantilla_car_preparer_role_label(application):
     """Human label for the role(s) that prepare the Plantilla CAR at this case's level
-    (Secretariat for L1, HRM Chief for L2). Used only to explain who the HRMPSB board is
+    (Secretariat for both levels — WF-04). Used only to explain who the HRMPSB board is
     waiting on — it does not grant or change any access."""
     roles = PLANTILLA_CAR_PREPARATION_ROLES_BY_LEVEL.get(application.level, set())
     labels = [RecruitmentUser.Role(role).label for role in sorted(roles)]
@@ -1655,6 +1668,58 @@ def _auto_advance_after_exam_finalized(application, actor, review_stage):
                 remarks="COS examination finalized by Secretariat; next assigned office is HRM Chief.",
             )
     return False
+
+
+def _close_absent_or_waived_exam_application(application, actor, exam_record):
+    """Judgment item A (client decision, 2026-07-04): a candidate whose finalized exam is
+    Absent or Waived cannot be ranked under the fixed ETE 40/Exam 20/Interview 40 formula,
+    so the application does not proceed. Terminal close (same rejected/closed handling as
+    removal from batch), status recorded as the reason, applicant notified with adjusted copy.
+    The two statuses stay distinct in the record — they answer different audit questions."""
+    is_absent = exam_record.exam_status == ExamRecord.ExamStatus.ABSENT
+    reason = (
+        "Marked Absent at the scheduled examination — the application does not proceed."
+        if is_absent
+        else "Examination waived — the application does not proceed."
+    )
+    previous_status = application.status
+    previous_case_status = application.case.case_status
+    _sync_case_after_workflow_action(
+        application=application,
+        actor=actor,
+        next_role="",
+        next_status=RecruitmentApplication.Status.REJECTED,
+        remarks=reason,
+    )
+    application.current_handler_role = ""
+    application.status = RecruitmentApplication.Status.REJECTED
+    application.closed_at = timezone.now()
+    application.save(
+        update_fields=["current_handler_role", "status", "closed_at", "updated_at"]
+    )
+    record_audit_event(
+        application=application,
+        actor=actor,
+        action=AuditLog.Action.APPLICANT_DISQUALIFIED,
+        description=(
+            "Did not proceed after exam finalization: marked Absent at the examination."
+            if is_absent
+            else "Did not proceed after exam finalization: the examination was waived."
+        ),
+        metadata={
+            "reason": reason,
+            "exam_status": exam_record.exam_status,
+            "exam_record_id": exam_record.id,
+            "from_status": previous_status,
+            "to_status": application.status,
+            "from_case_status": previous_case_status,
+            "to_case_status": application.case.case_status,
+        },
+    )
+    queue_non_selected_applicant_notification(
+        application, actor=actor, exam_status=exam_record.exam_status
+    )
+    return application
 
 
 def _auto_advance_after_car_finalized(report, actor):
@@ -4262,11 +4327,19 @@ def save_exam_record(
             },
         )
     if finalize:
-        if application.branch == PositionPosting.Branch.PLANTILLA:
-            # Scoring is now committed for the vacancy: lock its assessment weights so the
-            # split this exam (and the downstream CAR) was computed against cannot change.
-            lock_vacancy_assessment_weights(application.position)
-        _auto_advance_after_exam_finalized(application, actor, review_stage)
+        if exam_record.exam_status in {
+            ExamRecord.ExamStatus.ABSENT,
+            ExamRecord.ExamStatus.WAIVED,
+        }:
+            # Judgment item A: Absent/Waived candidates do not advance — terminal close
+            # with the status as the reason + applicant notification (HARD rule).
+            _close_absent_or_waived_exam_application(application, actor, exam_record)
+        else:
+            if application.branch == PositionPosting.Branch.PLANTILLA:
+                # Scoring is now committed for the vacancy: lock its assessment weights so the
+                # split this exam (and the downstream CAR) was computed against cannot change.
+                lock_vacancy_assessment_weights(application.position)
+            _auto_advance_after_exam_finalized(application, actor, review_stage)
     return exam_record
 
 
@@ -4341,6 +4414,40 @@ def save_vacancy_exam_scores(posting, actor, scores_by_case_id, *, finalize=Fals
         technical = row.get("technical_score") if is_plantilla else None
         has_general = general not in (None, "")
         has_technical = technical not in (None, "")
+        # Judgment item A: a candidate already marked Absent/Waived (per-case exam screen)
+        # is exempt from the score requirement. On finalize their record locks as-is and
+        # save_exam_record routes them to the terminal do-not-proceed handling.
+        existing_record = get_exam_record(application)
+        existing_status = existing_record.exam_status if existing_record else ""
+        if (
+            existing_status
+            in {ExamRecord.ExamStatus.ABSENT, ExamRecord.ExamStatus.WAIVED}
+            and not has_general
+            and not has_technical
+        ):
+            if finalize:
+                save_exam_record(
+                    application=application,
+                    actor=actor,
+                    cleaned_data={
+                        "exam_type": existing_record.exam_type or exam_type,
+                        "exam_status": existing_status,
+                        "exam_result": existing_record.exam_result,
+                        "technical_score": None,
+                        "technical_result": existing_record.technical_result,
+                        "general_score": None,
+                        "general_result": existing_record.general_result,
+                        "exam_date": existing_record.exam_date,
+                        "administered_by": existing_record.administered_by or administered_by,
+                        "valid_from": None,
+                        "valid_until": None,
+                        "exam_notes": existing_record.exam_notes,
+                    },
+                    finalize=True,
+                    allow_partial=False,
+                )
+                saved.append(application)
+            continue
         if finalize:
             if not has_general or (is_plantilla and not has_technical):
                 raise ValueError(
@@ -4431,10 +4538,19 @@ def save_interview_session(
 
     existing_rating_count = interview_session.ratings.count() if interview_session.pk else 0
     fallback_count = get_interview_fallback_evidence(application, stage=review_stage).count()
-    if (
-        finalize
-        and existing_rating_count + fallback_count < MIN_INTERVIEW_OUTPUTS_TO_FINALIZE
-    ):
+    min_required_outputs = (
+        MIN_INTERVIEW_RATINGS_PLANTILLA
+        if application.branch == PositionPosting.Branch.PLANTILLA
+        else MIN_INTERVIEW_OUTPUTS_TO_FINALIZE
+    )
+    if finalize and existing_rating_count + fallback_count < min_required_outputs:
+        if application.branch == PositionPosting.Branch.PLANTILLA:
+            raise ValueError(
+                "This interview needs ratings from at least "
+                f"{MIN_INTERVIEW_RATINGS_PLANTILLA} HRMPSB members before it can be finalized "
+                f"(currently {existing_rating_count + fallback_count}). Each uploaded fallback "
+                "rating sheet counts as one rater."
+            )
         raise ValueError(
             "Record at least one interview rating or upload a fallback rating sheet before finalizing the interview session."
         )
@@ -5445,6 +5561,16 @@ def generate_comparative_assessment_report(application, actor, cleaned_data, fin
             raise ValueError(
                 "Prepare the CAR draft before finalizing the Comparative Assessment Report."
             )
+        # WF-02: enforce the deliberation quorum up front (mirrors the model clean) so a
+        # direct POST can't bypass it and no CAR PDF/evidence is generated for a bad finalize.
+        if cleaned_data.get("quorum_met") is not True:
+            raise ValueError(
+                "Deliberation quorum (at least 3 of the 5 HRMPSB members) must be met "
+                "before the CAR can be finalized."
+            )
+        members_present = cleaned_data.get("members_present")
+        if members_present is None or not (3 <= members_present <= 5):
+            raise ValueError("Record how many HRMPSB members were present (3–5).")
         candidate_rows = _car_candidate_rows(
             application.position,
             review_stage,
@@ -7629,6 +7755,24 @@ def record_final_selection(application, actor, cleaned_data):
     ).strip():
         raise ValueError(
             "Record the deep-selection justification before finalizing this selection."
+        )
+    # WF-03: deviating from the board's recommendation (rank #1 fallback when none was
+    # recorded) requires a written justification — HARD rule, mirrored in FinalSelection.clean.
+    recommended_case_id = report.recommended_case_id
+    if recommended_case_id is None:
+        recommended_case_id = (
+            report.items.filter(rank_order=1)
+            .values_list("recruitment_case_id", flat=True)
+            .first()
+        )
+    if (
+        recommended_case_id
+        and selected_item.recruitment_case_id != recommended_case_id
+        and not (cleaned_data.get("deep_selection_justification") or "").strip()
+    ):
+        raise ValueError(
+            "You are selecting someone other than the board's recommended candidate. "
+            "Record the justification for the official record."
         )
 
     report_items = _final_selection_items_are_ready(report)

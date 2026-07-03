@@ -2428,7 +2428,7 @@ class ComparativeAssessmentReportForm(DeferredModelValidationMixin, BootstrapFor
         ]
         widgets = {
             "summary_notes": forms.Textarea(attrs={"rows": 4}),
-            "members_present": forms.NumberInput(attrs={"min": "0", "max": "20", "step": "1"}),
+            "members_present": forms.NumberInput(attrs={"min": "3", "max": "5", "step": "1"}),
             "recommendation_notes": forms.Textarea(attrs={"rows": 3}),
         }
 
@@ -2515,6 +2515,19 @@ class FinalSelectionForm(BootstrapFormMixin, forms.Form):
             raise forms.ValidationError("Select an applicant from the finalized CAR.")
         return selected_item
 
+    def _recommended_case_id(self):
+        """The board's recommended case, falling back to the CAR's rank #1 when no
+        recommendation was recorded (legacy reports)."""
+        if self.report is None:
+            return None
+        if self.report.recommended_case_id:
+            return self.report.recommended_case_id
+        return (
+            self.report.items.filter(rank_order=1)
+            .values_list("recruitment_case_id", flat=True)
+            .first()
+        )
+
     def clean(self):
         cleaned_data = super().clean()
         selected_item = cleaned_data.get("selected_item")
@@ -2529,6 +2542,19 @@ class FinalSelectionForm(BootstrapFormMixin, forms.Form):
             self.add_error(
                 "deep_selection_justification",
                 "Record the deep-selection justification before finalizing this selection.",
+            )
+        # WF-03: a pick that deviates from the board's recommendation needs a justification.
+        recommended_case_id = self._recommended_case_id()
+        if (
+            selected_item
+            and recommended_case_id
+            and selected_item.recruitment_case_id != recommended_case_id
+            and not justification
+        ):
+            self.add_error(
+                "deep_selection_justification",
+                "You are selecting someone other than the board's recommended candidate. "
+                "Record the justification for the official record.",
             )
         return cleaned_data
 

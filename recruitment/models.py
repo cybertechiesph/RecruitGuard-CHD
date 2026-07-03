@@ -2692,9 +2692,11 @@ class ComparativeAssessmentReport(TimestampedModel):
 
     def clean(self):
         errors = {}
+        # Keep in sync with services.PLANTILLA_CAR_PREPARATION_ROLES_BY_LEVEL.
+        # WF-04 (client decision): the Secretariat prepares the CAR for both levels.
         preparation_roles_by_level = {
             PositionPosting.Level.LEVEL_1: {RecruitmentUser.Role.SECRETARIAT},
-            PositionPosting.Level.LEVEL_2: {RecruitmentUser.Role.HRM_CHIEF},
+            PositionPosting.Level.LEVEL_2: {RecruitmentUser.Role.SECRETARIAT},
         }
         allowed_preparation_roles = preparation_roles_by_level.get(
             self.recruitment_entry.level,
@@ -2738,6 +2740,17 @@ class ComparativeAssessmentReport(TimestampedModel):
                 errors["evidence_item"] = (
                     "The generated CAR file must stay linked to the same recruitment entry as the report."
                 )
+        # WF-02: quorum (3–5 of the 5 HRMPSB members) is a HARD gate on finalize.
+        # Draft saves stay unvalidated — the deliberation may not have happened yet.
+        if self.is_finalized and self.quorum_met is not True:
+            errors["quorum_met"] = (
+                "Deliberation quorum (at least 3 of the 5 HRMPSB members) must be met "
+                "before the CAR can be finalized."
+            )
+        if self.is_finalized and (
+            self.members_present is None or not (3 <= self.members_present <= 5)
+        ):
+            errors["members_present"] = "Record how many HRMPSB members were present (3–5)."
         if self.is_finalized and not self.recommended_case_id:
             errors["recommended_case"] = (
                 "Record the HRMPSB board's recommended applicant before finalizing the CAR."
@@ -2973,6 +2986,25 @@ class FinalSelection(TimestampedModel):
             errors["deep_selection_justification"] = (
                 "Record the deep-selection justification before finalizing this selection."
             )
+        # WF-03: selecting against the board's recommendation (falling back to rank #1 when
+        # no recommendation was recorded) requires a written justification for the record.
+        if self.selected_item_id and self.comparative_assessment_report_id:
+            recommended_case_id = self.comparative_assessment_report.recommended_case_id
+            if recommended_case_id is None:
+                recommended_case_id = (
+                    self.comparative_assessment_report.items.filter(rank_order=1)
+                    .values_list("recruitment_case_id", flat=True)
+                    .first()
+                )
+            if (
+                recommended_case_id
+                and self.selected_item.recruitment_case_id != recommended_case_id
+                and not (self.deep_selection_justification or "").strip()
+            ):
+                errors["deep_selection_justification"] = (
+                    "You are selecting someone other than the board's recommended candidate. "
+                    "Record the justification for the official record."
+                )
         if self.decided_by_id and self.decided_by.role != RecruitmentUser.Role.APPOINTING_AUTHORITY:
             errors["decided_by"] = "Only the Appointing Authority may record the final CAR selection."
         if not (self.decision_notes or "").strip():
