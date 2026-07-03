@@ -3,6 +3,7 @@ import uuid
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, models, transaction
@@ -475,10 +476,29 @@ class PositionPosting(TimestampedModel):
         return f"SG {salary_grade}" if salary_grade else ""
 
     @classmethod
+    def publication_period_days(cls):
+        """WF-07: env-configurable via settings.PLANTILLA_PUBLICATION_PERIOD_DAYS;
+        the class attribute stays as the fallback default. Read at call time so
+        override_settings works in tests."""
+        return getattr(
+            settings,
+            "PLANTILLA_PUBLICATION_PERIOD_DAYS",
+            cls.PLANTILLA_PUBLICATION_PERIOD_DAYS,
+        )
+
+    @classmethod
     def calculate_plantilla_closing_date(cls, start_date):
         if not start_date:
             return None
-        return start_date + timedelta(days=cls.PLANTILLA_PUBLICATION_PERIOD_DAYS - 1)
+        return start_date + timedelta(days=cls.publication_period_days() - 1)
+
+    @property
+    def close_blocked_until(self):
+        """WF-07: the future closing date that blocks an early Close, or None when
+        closing is allowed (no closing date, or the date has arrived)."""
+        if self.closing_date and self.closing_date > timezone.localdate():
+            return self.closing_date
+        return None
 
     @property
     def plantilla_publication_start_date(self):

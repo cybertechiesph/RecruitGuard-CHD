@@ -2803,6 +2803,13 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         )
 
     def test_closed_entry_is_removed_from_management_list(self):
+        # WF-07: closing is only allowed once the publication period has run — move the
+        # closing date to today so this close is legitimate.
+        PositionPosting.objects.filter(pk=self.level1_position.pk).update(
+            closing_date=timezone.localdate(),
+            updated_at=timezone.now(),
+        )
+        self.level1_position.refresh_from_db()
         client = Client()
         self.force_login_with_mfa(client, self.hrm_chief)
         response = client.post(
@@ -2819,6 +2826,48 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         self.assertFalse(self.level1_position.is_active)
         self.assertNotContains(response, self.level1_position.job_code)
         self.assertContains(response, self.level2_position.job_code)
+
+    def test_close_is_blocked_before_the_publication_period_ends(self):
+        # WF-07 (HARD): a vacancy with a future closing date cannot be closed early —
+        # an early close would cut the published window and unlock deliberation/CAR
+        # for an incomplete pool. Suspend stays available.
+        self.assertGreater(self.level1_position.closing_date, timezone.localdate())
+
+        with self.assertRaisesMessage(
+            ValidationError,
+            "It can't be closed before then. Use Suspend if applications must stop",
+        ):
+            update_recruitment_entry_status(
+                self.level1_position,
+                self.hrm_chief,
+                PositionPosting.EntryStatus.CLOSED,
+            )
+        self.level1_position.refresh_from_db()
+        self.assertEqual(self.level1_position.status, PositionPosting.EntryStatus.ACTIVE)
+
+        # The view path surfaces the same block as a message, without committing.
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        response = client.post(
+            reverse(
+                "recruitment-entry-status",
+                kwargs={"pk": self.level1_position.pk, "status": PositionPosting.EntryStatus.CLOSED},
+            ),
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "It can&#x27;t be closed before then.")
+        self.level1_position.refresh_from_db()
+        self.assertEqual(self.level1_position.status, PositionPosting.EntryStatus.ACTIVE)
+
+        # Suspend still works at any time.
+        update_recruitment_entry_status(
+            self.level1_position,
+            self.hrm_chief,
+            PositionPosting.EntryStatus.SUSPENDED,
+        )
+        self.level1_position.refresh_from_db()
+        self.assertEqual(self.level1_position.status, PositionPosting.EntryStatus.SUSPENDED)
 
     def test_status_service_blocks_transition_when_entry_fails_full_validation(self):
         PositionPosting.objects.filter(pk=self.level1_position.pk).update(

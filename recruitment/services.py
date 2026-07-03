@@ -9295,6 +9295,19 @@ def set_position_document_requirements(posting, selections, actor):
 
 
 def update_recruitment_entry_status(entry, actor, new_status):
+    # WF-07 (HARD): the publication period is a promise to applicants — the vacancy
+    # cannot be closed before its closing date. An early close would also auto-finalize
+    # the applicant pool and unlock deliberation/CAR for an incomplete pool. Suspend
+    # remains available as the emergency valve.
+    if (
+        new_status == PositionPosting.EntryStatus.CLOSED
+        and entry.close_blocked_until is not None
+    ):
+        raise ValidationError(
+            f"This vacancy's publication period runs until "
+            f"{entry.close_blocked_until.strftime('%B %d, %Y')}. It can't be closed "
+            "before then. Use Suspend if applications must stop for an exceptional reason."
+        )
     previous_status = entry.status
     previous_closing_date = entry.closing_date
     previous_updated_by = entry.updated_by
