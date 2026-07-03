@@ -2610,7 +2610,12 @@ class CosVacancyDeliberation(TimestampedModel):
 class ApplicationETERating(TimestampedModel):
     """The Secretariat's manual Education/Training/Experience rating for a candidate,
     entered at the CAR stage. Stored per application so it survives CAR draft
-    regenerations; the CAR's ETE component uses it when present."""
+    regenerations; the CAR's ETE component uses it when present.
+
+    WF-05: three scored components (0–100 each) with a required one-line basis per
+    component. ``rating`` stays the computed weighted sum (branch composition — see
+    services.ETE_COMPONENT_WEIGHTS_BY_BRANCH) so the existing CAR read path keeps
+    working for old records that only carry the single number."""
 
     application = models.OneToOneField(
         RecruitmentApplication,
@@ -2618,6 +2623,12 @@ class ApplicationETERating(TimestampedModel):
         related_name="ete_rating",
     )
     rating = models.DecimalField(max_digits=6, decimal_places=2)
+    education_score = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True)
+    training_score = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True)
+    experience_score = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True)
+    education_basis = models.CharField(max_length=255, blank=True)
+    training_basis = models.CharField(max_length=255, blank=True)
+    experience_basis = models.CharField(max_length=255, blank=True)
     recorded_by = models.ForeignKey(
         RecruitmentUser,
         on_delete=models.PROTECT,
@@ -2626,8 +2637,15 @@ class ApplicationETERating(TimestampedModel):
     recorded_by_role = models.CharField(max_length=40, blank=True)
 
     def clean(self):
+        errors = {}
         if self.rating is None or self.rating < 0 or self.rating > 100:
-            raise ValidationError({"rating": "ETE rating must be between 0 and 100."})
+            errors["rating"] = "ETE rating must be between 0 and 100."
+        for field_name in ("education_score", "training_score", "experience_score"):
+            value = getattr(self, field_name)
+            if value is not None and (value < 0 or value > 100):
+                errors[field_name] = "ETE component scores must be between 0 and 100."
+        if errors:
+            raise ValidationError(errors)
 
     def save(self, *args, **kwargs):
         if self.recorded_by_id:

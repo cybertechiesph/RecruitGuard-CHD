@@ -1553,7 +1553,12 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
         self.fields["education_score"].label = "Education Score"
         self.fields["training_score"].label = "Training Score"
         self.fields["experience_score"].label = "Experience Score"
-        self.fields["document_review_score"].label = "Official Document Review Score"
+        # WF-05: the per-component E/T/E scoring now lives on the CAR draft (ETE
+        # ratings with a basis per component); this score remains only as the
+        # fallback for records made before that change.
+        self.fields["document_review_score"].label = (
+            "Document review score (legacy — superseded by ETE ratings on the CAR)"
+        )
         self.fields["screening_notes"].label = "Screening Notes"
         for field_name in self.SCORE_FIELD_NAMES:
             self.fields[field_name].required = False

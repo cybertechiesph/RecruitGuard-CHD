@@ -73,6 +73,7 @@ from .notification_services import (
     queue_application_returned_to_applicant_notification,
     queue_document_resubmission_request_notification,
     queue_exam_invitation_notification,
+    queue_interview_batch_panel_digest_notifications,
     queue_interview_session_scheduled_notifications,
     queue_non_selected_applicant_notification,
     queue_selected_applicant_notification,
@@ -4218,7 +4219,16 @@ def save_exam_record(
         raise ValueError("Exam details can only be edited while the case is assigned to Secretariat or HRM Chief review.")
     if finalize:
         exam_schedule = get_exam_schedule(application, stage=review_stage)
-        if exam_schedule is None or not exam_schedule.applicant_was_notified:
+        schedule_satisfied = bool(exam_schedule and exam_schedule.applicant_was_notified)
+        if not schedule_satisfied:
+            # WF-12: at a re-validation stage (e.g. the HRM Chief re-checking the
+            # Secretariat's exam) the exam already happened — a notified schedule from
+            # ANY prior review stage satisfies the guard, and no second "exam invitation"
+            # is emailed to the applicant in that path (no new schedule is created).
+            schedule_satisfied = application.exam_schedules.filter(
+                applicant_notified_at__isnull=False
+            ).exists()
+        if not schedule_satisfied:
             raise ValueError(
                 "Schedule the examination and notify the applicant before recording final results."
             )
@@ -4862,19 +4872,43 @@ def vacancy_interview_pool(posting):
 def save_vacancy_interview_schedule(posting, actor, cleaned_data):
     """Apply ONE interview schedule to every candidate in the vacancy's interview pool and
     notify each — the batch sits the interview together. Loops the per-case
-    save_interview_session so each application keeps its own InterviewSession + notice."""
+    save_interview_session so each application keeps its own InterviewSession + notice.
+
+    WF-14: panel members get ONE digest email per batch action (subject names the vacancy
+    and candidate count, body lists the candidates + shared date/venue) instead of one
+    near-identical email per candidate. Per-applicant notices and the per-case (single
+    session) panel notice are unchanged."""
     pool = vacancy_interview_pool(posting)
     if not pool:
         raise ValueError("No candidates are ready for the interview in this vacancy.")
     notify_panel = posting.branch == PositionPosting.Branch.PLANTILLA
+    sessions = []
     for application in pool:
-        save_interview_session(
-            application=application,
-            actor=actor,
-            cleaned_data=dict(cleaned_data),
-            notify_applicant=True,
-            notify_panel=notify_panel,
+        sessions.append(
+            save_interview_session(
+                application=application,
+                actor=actor,
+                cleaned_data=dict(cleaned_data),
+                notify_applicant=True,
+                notify_panel=False,
+            )
         )
+    if notify_panel:
+        recipients = get_interview_schedule_notification_recipients(pool[0])
+        queue_interview_batch_panel_digest_notifications(
+            posting,
+            pool,
+            sessions[0],
+            recipients,
+            actor=actor,
+        )
+        # In-app notices stay per case so each links to the case it concerns.
+        for application, session in zip(pool, sessions):
+            _emit_interview_scheduled_in_app_notifications(
+                application,
+                session,
+                recipients,
+            )
     return pool
 
 
@@ -5259,14 +5293,32 @@ def get_application_ete_rating(application):
     return getattr(application, "ete_rating", None)
 
 
-def set_application_ete_rating(application, actor, rating):
+# WF-05 (PENDING CLIENT CONFIRMATION): the composition of the three ETE components
+# inside the CAR's 40%, per branch — matching the policy text the screening screen
+# already displayed. Weights are (education, training, experience).
+ETE_COMPONENT_WEIGHTS_BY_BRANCH = {
+    PositionPosting.Branch.PLANTILLA: (Decimal("0.40"), Decimal("0.30"), Decimal("0.30")),
+    PositionPosting.Branch.COS: (Decimal("0.30"), Decimal("0.30"), Decimal("0.40")),
+}
+ETE_COMPONENT_LABELS = ("education", "training", "experience")
+
+
+def set_application_ete_rating(application, actor, rating, *, components=None):
     """Persist the Secretariat's manual ETE rating for a candidate. The CAR's ETE
     (40%) component uses this value once it is set; until then the CAR falls back to
-    the screening score."""
+    the screening score. ``components`` optionally carries the WF-05 sub-scores and
+    basis lines (education/training/experience)."""
     record = getattr(application, "ete_rating", None)
     if record is None:
         record = ApplicationETERating(application=application)
     record.rating = rating
+    if components:
+        record.education_score = components["education_score"]
+        record.training_score = components["training_score"]
+        record.experience_score = components["experience_score"]
+        record.education_basis = components["education_basis"]
+        record.training_basis = components["training_basis"]
+        record.experience_basis = components["experience_basis"]
     record.recorded_by = actor
     record.full_clean()
     record.save()
@@ -5275,12 +5327,100 @@ def set_application_ete_rating(application, actor, rating):
 
 @transaction.atomic
 def apply_car_ete_ratings(application, actor, posted):
-    """Persist per-candidate ETE ratings posted from the CAR draft screen. Inputs are
-    named ``ete_<recruitment_case_id>``. Blank or out-of-range values are skipped."""
+    """Persist per-candidate ETE ratings posted from the CAR draft screen.
+
+    WF-05 inputs: ``ete_education_<case_id>``, ``ete_training_<case_id>``,
+    ``ete_experience_<case_id>`` (0–100 each) plus a required one-line basis per
+    component (``ete_<component>_basis_<case_id>``). The stored ``rating`` is the
+    branch-weighted composition of the three. An incomplete row (missing score or
+    blank basis) blocks the draft update with a plain message.
+
+    The legacy single ``ete_<case_id>`` input is still honored for old callers;
+    blank or out-of-range legacy values are skipped."""
     if not user_can_manage_comparative_assessment_report(actor, application):
         return
+    weights = ETE_COMPONENT_WEIGHTS_BY_BRANCH.get(
+        application.branch,
+        ETE_COMPONENT_WEIGHTS_BY_BRANCH[PositionPosting.Branch.PLANTILLA],
+    )
+
+    component_case_ids = set()
+    for key in posted.keys():
+        if key.startswith("ete_education_") and not key.startswith("ete_education_basis_"):
+            try:
+                component_case_ids.add(int(key[len("ete_education_"):]))
+            except ValueError:
+                continue
+
+    for case_id in sorted(component_case_ids):
+        scores_raw = {
+            label: (posted.get(f"ete_{label}_{case_id}") or "").strip()
+            for label in ETE_COMPONENT_LABELS
+        }
+        bases = {
+            label: (posted.get(f"ete_{label}_basis_{case_id}") or "").strip()
+            for label in ETE_COMPONENT_LABELS
+        }
+        if not any(scores_raw.values()) and not any(bases.values()):
+            continue  # untouched row on the draft
+        case = (
+            RecruitmentCase.objects.select_related("application")
+            .filter(pk=case_id, application__position=application.position)
+            .first()
+        )
+        if case is None:
+            continue
+        candidate_name = case.application.applicant_display_name
+        missing_scores = [label for label in ETE_COMPONENT_LABELS if not scores_raw[label]]
+        if missing_scores:
+            raise ValueError(
+                f"Enter {candidate_name}'s education, training, and experience scores "
+                f"together (missing: {', '.join(missing_scores)})."
+            )
+        scores = {}
+        for label in ETE_COMPONENT_LABELS:
+            try:
+                value = Decimal(scores_raw[label])
+            except ArithmeticError:
+                raise ValueError(
+                    f"{candidate_name}'s {label} score must be a number between 0 and 100."
+                )
+            if value < 0 or value > 100:
+                raise ValueError(
+                    f"{candidate_name}'s {label} score must be between 0 and 100."
+                )
+            scores[label] = value
+        missing_bases = [label for label in ETE_COMPONENT_LABELS if not bases[label]]
+        if missing_bases:
+            raise ValueError(
+                f"Add the one-line basis for {candidate_name}'s "
+                f"{', '.join(missing_bases)} rating"
+                f"{'s' if len(missing_bases) != 1 else ''} — each ETE component needs "
+                "its basis on record."
+            )
+        rating = (
+            scores["education"] * weights[0]
+            + scores["training"] * weights[1]
+            + scores["experience"] * weights[2]
+        ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        set_application_ete_rating(
+            case.application,
+            actor,
+            rating,
+            components={
+                "education_score": scores["education"],
+                "training_score": scores["training"],
+                "experience_score": scores["experience"],
+                "education_basis": bases["education"],
+                "training_basis": bases["training"],
+                "experience_basis": bases["experience"],
+            },
+        )
+
     for key in list(posted.keys()):
-        if not key.startswith("ete_"):
+        if not key.startswith("ete_") or key.startswith(
+            ("ete_education_", "ete_training_", "ete_experience_")
+        ):
             continue
         raw = (posted.get(key) or "").strip()
         if raw == "":
@@ -5292,6 +5432,8 @@ def apply_car_ete_ratings(application, actor, posted):
             continue
         if rating < 0 or rating > 100:
             continue
+        if case_id in component_case_ids:
+            continue  # the component inputs above are authoritative for this candidate
         case = (
             RecruitmentCase.objects.select_related("application")
             .filter(pk=case_id, application__position=application.position)
@@ -7909,6 +8051,80 @@ def record_final_selection(application, actor, cleaned_data):
     return selection
 
 
+def _close_cos_non_selected_pool(selected_application, actor, decision):
+    """WF-10: recording the COS Selected decision resolves the rest of the vacancy pool —
+    every other ACTIVE case closes as not selected and its applicant is notified,
+    mirroring the Plantilla final-selection behavior. Manually recorded Not-selected
+    decisions on individual cases are untouched (their cases are no longer ACTIVE)."""
+    siblings = (
+        RecruitmentApplication.objects.select_related("case", "position", "applicant")
+        .filter(
+            position=selected_application.position,
+            case__case_status=RecruitmentCase.CaseStatus.ACTIVE,
+            case__is_stage_locked=False,
+        )
+        .exclude(pk=selected_application.pk)
+    )
+    closed = []
+    for sibling in siblings:
+        previous_role = sibling.current_handler_role
+        previous_status = sibling.status
+        case_transition = _sync_case_after_workflow_action(
+            application=sibling,
+            actor=actor,
+            next_role="",
+            next_status=RecruitmentApplication.Status.REJECTED,
+            remarks="Not selected — another applicant was chosen for this COS vacancy.",
+        )
+        sibling.current_handler_role = ""
+        sibling.status = RecruitmentApplication.Status.REJECTED
+        sibling.closed_at = (
+            timezone.now()
+            if sibling.case.current_stage == RecruitmentCase.Stage.CLOSED
+            else None
+        )
+        sibling.save(
+            update_fields=["current_handler_role", "status", "closed_at", "updated_at"]
+        )
+        record_audit_event(
+            application=sibling,
+            actor=actor,
+            action=AuditLog.Action.DECISION_RECORDED,
+            description="Closed as not selected after the COS selection was recorded for another applicant.",
+            metadata={
+                "final_decision_id": decision.id,
+                "selected_application_id": selected_application.id,
+                "decision_outcome": FinalDecision.Outcome.NOT_SELECTED,
+                "from_status": previous_status,
+                "to_status": sibling.status,
+                "from_role": previous_role,
+                "to_role": "",
+                "from_stage": case_transition["previous_stage"],
+                "to_stage": sibling.case.current_stage,
+                "from_case_status": case_transition["previous_case_status"],
+                "to_case_status": sibling.case.case_status,
+                "case_locked": sibling.case.is_stage_locked,
+            },
+        )
+        record_routing_history_event(
+            application=sibling,
+            actor=actor,
+            route_type=RoutingHistory.RouteType.CLOSE,
+            description="Closed as not selected after the COS deliberation pick's selection was recorded.",
+            recruitment_case=sibling.case,
+            from_handler_role=previous_role,
+            to_handler_role="",
+            from_status=previous_status,
+            to_status=sibling.status,
+            from_stage=case_transition["previous_stage"],
+            to_stage=sibling.case.current_stage,
+            notes=decision.decision_notes,
+        )
+        queue_non_selected_applicant_notification(sibling, actor=actor)
+        closed.append(sibling)
+    return closed
+
+
 @transaction.atomic
 def record_final_decision(application, actor, cleaned_data):
     if application.branch == PositionPosting.Branch.PLANTILLA:
@@ -8039,6 +8255,10 @@ def record_final_decision(application, actor, cleaned_data):
         queue_selected_applicant_notification(application, actor=actor)
     else:
         queue_non_selected_applicant_notification(application, actor=actor)
+    if application.branch == PositionPosting.Branch.COS and decision.is_selected:
+        # WF-10: the COS Selected decision resolves the whole vacancy pool — mirror the
+        # Plantilla behavior instead of stranding the non-selected siblings unnotified.
+        _close_cos_non_selected_pool(application, actor, decision)
     return decision
 
 

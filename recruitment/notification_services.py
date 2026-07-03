@@ -781,6 +781,81 @@ def queue_application_returned_to_applicant_notification(
     )
 
 
+def _build_interview_batch_panel_digest(posting, applications, interview_session, recipient):
+    """WF-14: one digest per panel member per batch scheduling action — the whole pool
+    shares the date/venue, so one email lists every candidate instead of N copies."""
+    recipient_name = recipient.get_full_name() or recipient.username
+    candidate_count = len(applications)
+    lines = [
+        f"Dear {recipient_name},",
+        "",
+        (
+            f"An interview has been scheduled for {posting.title}: "
+            f"{candidate_count} candidate{'' if candidate_count == 1 else 's'} "
+            "will be interviewed and are ready for panel rating."
+        ),
+        f"Schedule: {_format_schedule(interview_session.scheduled_for)}",
+        f"Location / medium: {interview_session.location}",
+        "",
+        "Candidates:",
+    ]
+    for application in applications:
+        lines.append(
+            f"- {application.applicant_display_name} ({application.reference_number})"
+        )
+    if interview_session.session_notes:
+        lines.extend(["", "Session notes:", interview_session.session_notes.strip()])
+    lines.extend(
+        [
+            "",
+            "Please sign in to RecruitGuard-CHD to review each case and submit your interview ratings.",
+        ]
+    )
+    return (
+        f"RecruitGuard-CHD interview schedule: {posting.title} ({candidate_count} candidate{'' if candidate_count == 1 else 's'})",
+        "\n".join(lines),
+    )
+
+
+def queue_interview_batch_panel_digest_notifications(
+    posting,
+    applications,
+    interview_session,
+    recipients,
+    actor=None,
+):
+    """WF-14: one digest email per panel member for a batch scheduling action. Logged
+    against the batch's first application (the digest concerns the whole vacancy pool)."""
+    notifications = []
+    for recipient in recipients:
+        subject, body = _build_interview_batch_panel_digest(
+            posting,
+            applications,
+            interview_session,
+            recipient,
+        )
+        notifications.append(
+            queue_notification(
+                applications[0],
+                notification_type=NotificationLog.NotificationType.INTERVIEW_SESSION_SCHEDULED,
+                actor=actor,
+                subject=subject,
+                body=body,
+                recipient_name=recipient.get_full_name() or recipient.username,
+                recipient_email=recipient.email,
+                metadata={
+                    "recruitment_entry_id": posting.id,
+                    "candidate_count": len(applications),
+                    "batch_digest": True,
+                    "candidate_references": [
+                        application.reference_number for application in applications
+                    ],
+                },
+            )
+        )
+    return notifications
+
+
 def queue_interview_session_scheduled_notifications(
     application,
     interview_session,

@@ -776,6 +776,18 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
                     )
         if user_can_record_final_decision(user, application):
             context["final_decision_form"] = FinalDecisionForm()
+            if application.branch == PositionPosting.Branch.COS:
+                # WF-10: a COS Selected decision resolves the rest of the pool — tell
+                # the chief how many siblings will be closed + notified.
+                context["cos_pool_sibling_count"] = (
+                    RecruitmentApplication.objects.filter(
+                        position=application.position,
+                        case__case_status=RecruitmentCase.CaseStatus.ACTIVE,
+                        case__is_stage_locked=False,
+                    )
+                    .exclude(pk=application.pk)
+                    .count()
+                )
         if user_can_record_final_selection(user, application):
             report = context["current_comparative_assessment_report"]
             context["final_selection_report"] = report

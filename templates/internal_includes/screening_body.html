@@ -248,6 +248,16 @@
                 </div>
             {% endif %}
         </div>
+        {% else %}
+        {# WF-05: never leave "compare against the minimum qualifications" dangling —
+           say explicitly when no QS is on file for this position. #}
+        <div class="rg-scr-qualification-reference">
+            <div class="rg-scr-kicker">Minimum qualifications for this position</div>
+            <div class="rg-scr-reference-note">
+                No qualification standards are on file for this position reference.
+                Check the plantilla / QS issuance before recording the decision.
+            </div>
+        </div>
         {% endif %}
         {% endwith %}
 
@@ -308,34 +318,10 @@
                 </svg>
             </summary>
             <div class="rg-field rg-scr-disclosure__body">
+                {# WF-05: the per-component Education/Training/Experience scoring moved to
+                   the CAR draft (ETE ratings with a basis per component). Only the legacy
+                   document review score remains here for old records. #}
                 <div class="rg-scr-score-grid">
-                    <div>
-                        <label class="form-label" for="{{ screening_form.education_score.id_for_label }}">
-                            {{ screening_form.education_score.label }}
-                        </label>
-                        {{ screening_form.education_score }}
-                        {% for error in screening_form.education_score.errors %}
-                            <div class="invalid-feedback d-block">{{ error }}</div>
-                        {% endfor %}
-                    </div>
-                    <div>
-                        <label class="form-label" for="{{ screening_form.training_score.id_for_label }}">
-                            {{ screening_form.training_score.label }}
-                        </label>
-                        {{ screening_form.training_score }}
-                        {% for error in screening_form.training_score.errors %}
-                            <div class="invalid-feedback d-block">{{ error }}</div>
-                        {% endfor %}
-                    </div>
-                    <div>
-                        <label class="form-label" for="{{ screening_form.experience_score.id_for_label }}">
-                            {{ screening_form.experience_score.label }}
-                        </label>
-                        {{ screening_form.experience_score }}
-                        {% for error in screening_form.experience_score.errors %}
-                            <div class="invalid-feedback d-block">{{ error }}</div>
-                        {% endfor %}
-                    </div>
                     <div>
                         <label class="form-label" for="{{ screening_form.document_review_score.id_for_label }}">
                             {{ screening_form.document_review_score.label }}
@@ -346,7 +332,6 @@
                         {% endfor %}
                     </div>
                 </div>
-                <div class="form-text">{{ screening_form.document_review_weight_display }}</div>
             </div>
         </details>
     </section>

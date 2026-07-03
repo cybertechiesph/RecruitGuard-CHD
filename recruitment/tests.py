@@ -50,6 +50,7 @@ from .forms import (
     WorkflowActionForm,
 )
 from .models import (
+    ApplicationETERating,
     AuditLog,
     ComparativeAssessmentReport,
     ComparativeAssessmentReportItem,
@@ -7116,6 +7117,41 @@ class VacancyBatchInterviewTests(BaseRecruitmentTestCase):
             self.assertEqual(application.status, RecruitmentApplication.Status.HRMPSB_REVIEW)
             self.assertEqual(get_current_workflow_section(application), "interview")
 
+    def test_batch_schedule_sends_one_panel_digest_per_member(self):
+        # WF-14: batch-scheduling N candidates yields exactly one digest email per panel
+        # member (listing all N) and N applicant notices — not one panel email per session.
+        first, second = self._two_plantilla_at_interview()
+        second_member = User.objects.create_user(
+            username="hrmpsb-batch-digest",
+            password="testpass123",
+            email="hrmpsb.digest@example.com",
+            role=RecruitmentUser.Role.HRMPSB_MEMBER,
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_interview_schedule(
+                self.level1_position, self.secretariat, self._interview_schedule_payload()
+            )
+
+        panel_logs = NotificationLog.objects.filter(
+            notification_type=NotificationLog.NotificationType.INTERVIEW_SESSION_SCHEDULED,
+            application__position=self.level1_position,
+        )
+        self.assertEqual(panel_logs.count(), 2)  # one per member (hrmpsb + second_member)
+        self.assertEqual(
+            {log.recipient_email for log in panel_logs},
+            {self.hrmpsb.email, second_member.email},
+        )
+        for log in panel_logs:
+            self.assertIn("2 candidates", log.subject)
+            self.assertIn(first.applicant_display_name, log.body)
+            self.assertIn(second.applicant_display_name, log.body)
+
+        applicant_notices = NotificationLog.objects.filter(
+            notification_type=NotificationLog.NotificationType.APPLICANT_INTERVIEW_NOTICE,
+            application__position=self.level1_position,
+        )
+        self.assertEqual(applicant_notices.count(), 2)
+
     def test_plantilla_batch_finalize_moves_the_pool_to_the_car(self):
         first, second = self._two_plantilla_at_interview()
         with self.captureOnCommitCallbacks(execute=True):
@@ -7177,6 +7213,63 @@ class VacancyBatchInterviewTests(BaseRecruitmentTestCase):
             self.assertTrue(interview_is_finalized_for_current_stage(application))
             # COS moves to the deliberation section at HRM Chief.
             self.assertEqual(get_current_workflow_section(application), "deliberation")
+
+    def test_cos_selected_decision_resolves_the_rest_of_the_pool(self):
+        # WF-10: recording the COS Selected decision closes the sibling cases as not
+        # selected and notifies each — mirroring Plantilla instead of stranding them.
+        first, second = self._two_cos_at_interview()
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_interview_schedule(
+                self.cos_position, self.hrm_chief, self._interview_schedule_payload()
+            )
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_cos_interview_ratings(
+                self.cos_position,
+                self.hrm_chief,
+                {
+                    first.case.id: {"rating_score": "88.00"},
+                    second.case.id: {"rating_score": "79.00"},
+                },
+                finalize=True,
+            )
+        first.refresh_from_db()
+        second.refresh_from_db()
+        with self.captureOnCommitCallbacks(execute=True):
+            save_cos_vacancy_deliberation(
+                self.cos_position,
+                self.hrm_chief,
+                first.case.id,
+                "Most qualified per the deliberation.",
+                finalize=True,
+            )
+        first.refresh_from_db()
+        second.refresh_from_db()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            record_final_decision(
+                application=first,
+                actor=self.hrm_chief,
+                cleaned_data={
+                    "decision_outcome": FinalDecision.Outcome.SELECTED,
+                    "decision_notes": "Selected after the COS deliberation pick.",
+                },
+            )
+
+        first.refresh_from_db()
+        second.refresh_from_db()
+        second.case.refresh_from_db()
+        self.assertEqual(first.status, RecruitmentApplication.Status.APPROVED)
+        self.assertEqual(second.status, RecruitmentApplication.Status.REJECTED)
+        self.assertEqual(second.current_handler_role, "")
+        self.assertTrue(second.case.is_stage_locked)
+        self.assertTrue(
+            NotificationLog.objects.filter(
+                application=second,
+                notification_type=NotificationLog.NotificationType.NON_SELECTED_APPLICANT,
+            ).exists()
+        )
+        # The selected case is untouched by the sibling sweep.
+        self.assertEqual(first.case.current_stage, RecruitmentCase.Stage.COMPLETION)
 
     def test_cos_finalize_requires_every_candidate_scored(self):
         first, second = self._two_cos_at_interview()
@@ -11256,6 +11349,59 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         )
         item = draft.items.get(recruitment_case=application.case)
         self.assertEqual(item.ete_rating, Decimal("65.00"))
+
+    def test_car_view_saves_component_ete_ratings_with_required_basis(self):
+        # WF-05: the CAR draft collects Education/Training/Experience (0–100 each)
+        # plus a required one-line basis per component; the stored rating is the
+        # Plantilla 40/30/30 composition.
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb)
+        self.finalize_deliberation_for_current_stage(application, self.hrmpsb, ranking_position=1)
+        application.refresh_from_db()
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        case_id = application.case.id
+        payload = {
+            "operation": "save",
+            "summary_notes": "Draft with component ETE.",
+            f"ete_education_{case_id}": "90",
+            f"ete_training_{case_id}": "80",
+            f"ete_experience_{case_id}": "70",
+            f"ete_education_basis_{case_id}": "Master's degree; only Bachelor's required",
+            f"ete_training_basis_{case_id}": "40 hours of relevant training",
+            # experience basis intentionally blank first
+        }
+        response = client.post(
+            reverse("comparative-assessment-report", kwargs={"pk": application.pk}),
+            payload,
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "each ETE component needs its basis on record")
+        self.assertFalse(ApplicationETERating.objects.filter(application=application).exists())
+
+        payload[f"ete_experience_basis_{case_id}"] = "Three years of directly relevant experience"
+        response = client.post(
+            reverse("comparative-assessment-report", kwargs={"pk": application.pk}),
+            payload,
+        )
+        self.assertEqual(response.status_code, 302)
+        rating = ApplicationETERating.objects.get(application=application)
+        # 90×.40 + 80×.30 + 70×.30 = 81.00 (Plantilla composition).
+        self.assertEqual(rating.rating, Decimal("81.00"))
+        self.assertEqual(rating.education_score, Decimal("90.00"))
+        self.assertEqual(rating.training_score, Decimal("80.00"))
+        self.assertEqual(rating.experience_score, Decimal("70.00"))
+        self.assertEqual(rating.education_basis, "Master's degree; only Bachelor's required")
+        draft = (
+            ComparativeAssessmentReport.objects.filter(recruitment_entry=application.position)
+            .order_by("-version_number")
+            .first()
+        )
+        item = draft.items.get(recruitment_case=application.case)
+        self.assertEqual(item.ete_rating, Decimal("81.00"))
 
     def test_car_finalize_records_quorum_attestation(self):
         application = self.make_application(self.level1_position)

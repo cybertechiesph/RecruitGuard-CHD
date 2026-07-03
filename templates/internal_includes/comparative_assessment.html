@@ -138,20 +138,67 @@ HRM Chief on COS). Two states:
         <div class="rg-field">
             <label class="form-label">ETE ratings (Education, Training, Experience)</label>
             <div class="form-text">
-                Enter each candidate's ETE rating (0&ndash;100). Press
-                <strong>Update draft CAR</strong> to recompute the overall score and ranking.
+                Score each component 0&ndash;100 and record a one-line basis for each
+                (e.g. <em>"Master's degree; only Bachelor's required"</em>). The composition
+                inside the CAR's 40% is education 40%, training 30%, experience 30%.
+                Press <strong>Update draft CAR</strong> to recompute the overall score and ranking.
             </div>
             <div class="rg-car-ete-grid">
                 {% for item in current_comparative_assessment_report_items %}
-                <div class="rg-car-ete-row">
-                    <span class="rg-car-ete-row__name">{{ item.applicant_display_name }}</span>
-                    <input type="number"
-                           class="rg-car-ete-input"
-                           name="ete_{{ item.recruitment_case_id }}"
-                           value="{{ item.ete_rating|default_if_none:'' }}"
-                           min="0" max="100" step="0.01"
-                           aria-label="ETE rating for {{ item.applicant_display_name }}">
+                {% with ete=item.application.ete_rating %}
+                <div class="rg-car-ete-row" style="display:block;padding:0.6rem 0;border-bottom:1px solid #eef1f4;">
+                    <div class="rg-car-ete-row__name mb-1">
+                        {{ item.applicant_display_name }}
+                        {% if ete and ete.rating is not None %}
+                            <span class="rg-pill rg-pill--info rg-pill--sm" title="Computed ETE rating on record">ETE {{ ete.rating }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <label class="form-label" style="font-size:0.72rem;" for="ete-education-{{ item.recruitment_case_id }}">Education (40%)</label>
+                            <input type="number" id="ete-education-{{ item.recruitment_case_id }}"
+                                   class="rg-car-ete-input form-control form-control-sm"
+                                   name="ete_education_{{ item.recruitment_case_id }}"
+                                   value="{{ ete.education_score|default_if_none:'' }}"
+                                   min="0" max="100" step="0.01"
+                                   aria-label="Education score for {{ item.applicant_display_name }}">
+                            <input type="text" class="form-control form-control-sm mt-1"
+                                   name="ete_education_basis_{{ item.recruitment_case_id }}"
+                                   value="{{ ete.education_basis|default:'' }}"
+                                   placeholder="Basis — required"
+                                   aria-label="Education basis for {{ item.applicant_display_name }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" style="font-size:0.72rem;" for="ete-training-{{ item.recruitment_case_id }}">Training (30%)</label>
+                            <input type="number" id="ete-training-{{ item.recruitment_case_id }}"
+                                   class="rg-car-ete-input form-control form-control-sm"
+                                   name="ete_training_{{ item.recruitment_case_id }}"
+                                   value="{{ ete.training_score|default_if_none:'' }}"
+                                   min="0" max="100" step="0.01"
+                                   aria-label="Training score for {{ item.applicant_display_name }}">
+                            <input type="text" class="form-control form-control-sm mt-1"
+                                   name="ete_training_basis_{{ item.recruitment_case_id }}"
+                                   value="{{ ete.training_basis|default:'' }}"
+                                   placeholder="Basis — required"
+                                   aria-label="Training basis for {{ item.applicant_display_name }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" style="font-size:0.72rem;" for="ete-experience-{{ item.recruitment_case_id }}">Experience (30%)</label>
+                            <input type="number" id="ete-experience-{{ item.recruitment_case_id }}"
+                                   class="rg-car-ete-input form-control form-control-sm"
+                                   name="ete_experience_{{ item.recruitment_case_id }}"
+                                   value="{{ ete.experience_score|default_if_none:'' }}"
+                                   min="0" max="100" step="0.01"
+                                   aria-label="Experience score for {{ item.applicant_display_name }}">
+                            <input type="text" class="form-control form-control-sm mt-1"
+                                   name="ete_experience_basis_{{ item.recruitment_case_id }}"
+                                   value="{{ ete.experience_basis|default:'' }}"
+                                   placeholder="Basis — required"
+                                   aria-label="Experience basis for {{ item.applicant_display_name }}">
+                        </div>
+                    </div>
                 </div>
+                {% endwith %}
                 {% endfor %}
             </div>
         </div>
