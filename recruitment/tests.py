@@ -8116,6 +8116,10 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         self.assertContains(response, "Needed Step")
         self.assertContains(response, "Screening")
         self.assertNotContains(response, "HRM Chief Review")
+        # Guard against multi-line {# #} template comments leaking to the page
+        # (Django only strips single-line comments) — the branch-filter toolbar
+        # is where one previously rendered verbatim.
+        self.assertNotContains(response, "{#")
 
     def test_workflow_queue_updates_current_task_after_screening_finalization(self):
         application = self.make_application(self.level2_position)

@@ -52,8 +52,7 @@
 
 {% if applications or branch %}
     <div class="rg-queue-toolbar">
-        {# Server-side branch filter (a GET param, so it works across pages and the count
-           reflects the branch-filtered total). Preserves the active q / step filters. #}
+        {# Server-side branch filter (GET param; works across pages, count reflects the branch-filtered total; preserves the active q/step filters). #}
         <div class="rg-queue-filters" role="group" aria-label="Filter cases by type">
             <a class="rg-queue-chip{% if not branch %} is-active{% endif %}"
                href="?{% if q %}q={{ q|urlencode }}&{% endif %}{% if step %}step={{ step|urlencode }}{% endif %}">All</a>
