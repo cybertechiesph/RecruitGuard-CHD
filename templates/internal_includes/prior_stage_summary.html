@@ -15,7 +15,11 @@ independent re-validation step is unchanged.
         <div>
             <h3 class="rg-icard__title">Earlier review &mdash; Secretariat</h3>
             <p class="rg-icard__subtitle">
-                The finalized results you are re-validating, for reference. Record your own findings below.
+                {% if user.role == "hrmpsb_member" %}
+                    The finalized results from the earlier stage, for your reference during the interview.
+                {% else %}
+                    The finalized results you are re-validating, for reference. Record your own findings below.
+                {% endif %}
             </p>
         </div>
         <span class="rg-pill rg-pill--info rg-pill--sm">Reference only</span>

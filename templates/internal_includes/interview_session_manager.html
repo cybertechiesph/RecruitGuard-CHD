@@ -199,7 +199,18 @@
                 Each panel member's submitted score is shown below.
             </p>
         </div>
-        {% if current_interview_ratings %}
+        {% if application.branch == "plantilla" %}
+            {# WF-01: the HRMPSB panel minimum (3) gates finalize — show progress toward it. #}
+            {% if current_interview_ratings|length >= 3 %}
+                <span class="rg-pill rg-pill--success rg-pill--sm">
+                    {{ current_interview_ratings|length }} of 3 required ratings submitted
+                </span>
+            {% else %}
+                <span class="rg-pill rg-pill--neutral rg-pill--sm">
+                    {{ current_interview_ratings|length|default:0 }} of 3 required ratings submitted
+                </span>
+            {% endif %}
+        {% elif current_interview_ratings %}
             <span class="rg-pill rg-pill--success rg-pill--sm">
                 {{ current_interview_ratings|length }}
                 rating{{ current_interview_ratings|length|pluralize }} on record
@@ -326,9 +337,12 @@
         <button type="button" class="btn btn-outline-secondary btn-sm" id="int-notify-applicant-btn">
             Notify applicant
         </button>
+        {% if application.branch == "plantilla" %}
+        {# WF-13: COS interviews have no HRMPSB panel — don't offer the panel notice there. #}
         <button type="button" class="btn btn-outline-secondary btn-sm" id="int-notify-panel-btn">
             Notify HRMPSB panel
         </button>
+        {% endif %}
         <button type="button" class="btn-rg-finalize" id="int-finalize-session-btn">
             Finalize session
         </button>
@@ -370,6 +384,7 @@
                             {% if current_interview_fallback_evidence %}
                                 + {{ current_interview_fallback_evidence|length }} fallback
                             {% endif %}
+                            {% if application.branch == "plantilla" %}(3 required){% endif %}
                         </span>
                     </div>
                 </div>
@@ -408,6 +423,9 @@
 
         var totalRatings = {{ current_interview_ratings|length|default:0 }};
         var hasFallback = {% if current_interview_fallback_evidence %}true{% else %}false{% endif %};
+        var fallbackCount = {{ current_interview_fallback_evidence|length|default:0 }};
+        // WF-01 courtesy mirror of the server rule: 3 for Plantilla HRMPSB panels, 1 for COS.
+        var minRequiredOutputs = {% if application.branch == "plantilla" %}3{% else %}1{% endif %};
 
         function clearError() {
             if (window.RGWizardErrors && form) { RGWizardErrors.clearFieldErrors(form); }
@@ -458,9 +476,14 @@
         }
         function validateForFinalize() {
             var probs = collectSaveProblems();
-            if (totalRatings === 0 && !hasFallback) {
+            var totalOutputs = totalRatings + fallbackCount;
+            if (totalOutputs < minRequiredOutputs) {
                 // No field to attach to — route to the summary box.
-                probs.push({ field: null, summaryOnly: true, msg: "Record at least one panel rating or upload a fallback sheet before finalizing." });
+                var msg = minRequiredOutputs > 1
+                    ? ("This interview needs ratings from at least " + minRequiredOutputs +
+                       " HRMPSB members before it can be finalized (currently " + totalOutputs + ").")
+                    : "Record at least one panel rating or upload a fallback sheet before finalizing.";
+                probs.push({ field: null, summaryOnly: true, msg: msg });
             }
             if (probs.length) { revealProblems(probs); return false; }
             clearError();

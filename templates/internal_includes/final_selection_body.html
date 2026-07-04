@@ -77,7 +77,8 @@ Standards applied:
             {% for item in final_selection_items %}
                 {% with candidate=item.recruitment_case.application %}
                 <li>
-                    <label class="rg-del-car-item rg-fs-candidate" data-rank="{{ item.rank_order }}">
+                    <label class="rg-del-car-item rg-fs-candidate" data-rank="{{ item.rank_order }}"
+                           data-recommended="{% if final_selection_report.recommended_case_id %}{% if item.recruitment_case_id == final_selection_report.recommended_case_id %}1{% else %}0{% endif %}{% elif item.rank_order == 1 %}1{% else %}0{% endif %}">
                         <div class="rg-del-rank-badge">#{{ item.rank_order }}</div>
                         <div class="rg-del-car-item__body">
                             <div class="rg-fs-candidate__header">
@@ -180,6 +181,10 @@ Standards applied:
         </div>
 
         <div class="rg-field rg-fs-deep-justification" id="fs-justification-group">
+            <div class="rg-fs-deep-lock" id="fs-deviation-note" role="status" hidden>
+                You are selecting someone other than the board's recommended candidate.
+                Record the justification for the official record.
+            </div>
             <label class="form-label" for="{{ final_selection_form.deep_selection_justification.id_for_label }}">
                 {{ final_selection_form.deep_selection_justification.label }}
                 <span class="text-danger rg-fs-deep-required" aria-hidden="true" hidden>*</span>
@@ -305,6 +310,11 @@ Standards applied:
                     <li><strong>CAR rank:</strong> <span id="fs-modal-rank">—</span></li>
                     <li><strong>Deep selection:</strong> <span id="fs-modal-deep">No</span></li>
                 </ul>
+                <p class="mb-2" id="fs-modal-deviation" hidden style="font-size:0.8rem;color:#8a5a00;">
+                    Board's recommendation:
+                    <strong>{% for item in final_selection_items %}{% if final_selection_report.recommended_case_id %}{% if item.recruitment_case_id == final_selection_report.recommended_case_id %}{{ item.recruitment_case.application.applicant_display_name }} (rank #{{ item.rank_order }}){% endif %}{% elif item.rank_order == 1 %}{{ item.recruitment_case.application.applicant_display_name }} (rank #{{ item.rank_order }}){% endif %}{% endfor %}</strong>
+                    &mdash; you are selecting <strong id="fs-modal-deviation-selected">&mdash;</strong>.
+                </p>
                 <p class="mb-0" style="font-size:0.78rem; color:#5f6c78;">
                     This records the official Plantilla final selection and moves the selected applicant to completion tracking.
                 </p>
@@ -394,6 +404,13 @@ Standards applied:
         var nameEl = label ? label.querySelector(".rg-del-car-item__name") : null;
         return nameEl ? nameEl.textContent.trim() : "";
     }
+    /* WF-03: whether the pick deviates from the board's recommendation (rank #1 fallback). */
+    function selectionDeviates() {
+        var r = selectedRadio();
+        if (!r) return false;
+        var label = r.closest(".rg-fs-candidate");
+        return !!(label && label.dataset.recommended === "0");
+    }
 
     function clearError() {
         if (window.RGWizardErrors) { RGWizardErrors.clearFieldErrors(form); }
@@ -421,7 +438,9 @@ Standards applied:
 
     var deepLockHint = document.getElementById("fs-deep-lock");
 
-    /* Deep-selection visibility + required mark + rank > 5 lock */
+    var deviationNote = document.getElementById("fs-deviation-note");
+
+    /* Deep-selection visibility + required mark + rank > 5 lock + WF-03 deviation */
     function syncDeepVisibility() {
         var rank = selectedRank();
         var lockedByRank = !!(rank && rank > 5);
@@ -431,10 +450,15 @@ Standards applied:
             deepCheckbox.checked = true;
         }
         var on = deepCheckbox && deepCheckbox.checked;
-        if (justGroup) justGroup.hidden = !on;
-        if (justRequiredMark) justRequiredMark.hidden = !on;
+        // WF-03: picking someone other than the board's recommendation also demands
+        // the justification, even inside the top five.
+        var deviates = selectionDeviates();
+        var needsJustification = on || deviates;
+        if (justGroup) justGroup.hidden = !needsJustification;
+        if (justRequiredMark) justRequiredMark.hidden = !needsJustification;
+        if (deviationNote) deviationNote.hidden = !deviates;
         if (justField) {
-            if (on) {
+            if (needsJustification) {
                 justField.setAttribute("aria-required", "true");
             } else {
                 justField.removeAttribute("aria-required");
@@ -494,6 +518,11 @@ Standards applied:
             if (!justField || !(justField.value || "").trim()) {
                 p.push({ field: justField, msg: "Deep selection needs a written justification before recording." });
             }
+        } else if (selectionDeviates()) {
+            // WF-03: deviation from the board's recommendation needs the justification too.
+            if (!justField || !(justField.value || "").trim()) {
+                p.push({ field: justField, msg: "You are selecting someone other than the board's recommended candidate. Record the justification for the official record." });
+            }
         }
         if (!notesField || !(notesField.value || "").trim()) {
             p.push({ field: notesField, msg: "Add decision notes before recording the selection." });
@@ -508,6 +537,16 @@ Standards applied:
             if (modalName) modalName.textContent = selectedName() || "—";
             if (modalRank) modalRank.textContent = "#" + (selectedRank() || "—");
             if (modalDeep) modalDeep.textContent = (deepCheckbox && deepCheckbox.checked) ? "Yes" : "No";
+            var deviationLine = document.getElementById("fs-modal-deviation");
+            if (deviationLine) {
+                var deviates = selectionDeviates();
+                deviationLine.hidden = !deviates;
+                var deviationSelected = document.getElementById("fs-modal-deviation-selected");
+                if (deviates && deviationSelected) {
+                    deviationSelected.textContent =
+                        (selectedName() || "—") + " (rank #" + (selectedRank() || "—") + ")";
+                }
+            }
             if (modalEl && window.bootstrap) bootstrap.Modal.getOrCreateInstance(modalEl).show();
         });
     }

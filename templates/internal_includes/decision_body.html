@@ -608,6 +608,15 @@ they were purely decorative.
                         <span id="dec-modal-outcome" class="fw-bold">—</span>
                     </li>
                 </ul>
+                {% if cos_pool_sibling_count %}
+                    {# WF-10: a Selected outcome resolves the rest of the vacancy pool. #}
+                    <p class="mb-2" id="dec-modal-siblings" hidden style="font-size:0.8rem;color:#8a5a00;">
+                        Recording this selection will also mark the other
+                        <strong>{{ cos_pool_sibling_count }}</strong>
+                        candidate{{ cos_pool_sibling_count|pluralize }} in this vacancy as not
+                        selected and notify them.
+                    </p>
+                {% endif %}
                 <div class="rg-dec-permanence-warning">
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                         <path d="M8 2L14.5 13H1.5L8 2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
@@ -775,6 +784,9 @@ they were purely decorative.
                 modalOutcome.textContent = label;
                 modalOutcome.style.color = color;
             }
+            // WF-10: the sibling-resolution note only applies to a Selected outcome.
+            var siblingsLine = document.getElementById("dec-modal-siblings");
+            if (siblingsLine) siblingsLine.hidden = val !== "selected";
             if (modalEl && window.bootstrap) bootstrap.Modal.getOrCreateInstance(modalEl).show();
         });
     }

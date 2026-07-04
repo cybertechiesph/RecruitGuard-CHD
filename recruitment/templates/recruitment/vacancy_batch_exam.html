@@ -49,7 +49,10 @@
     {% if weights.is_locked %}
         <span class="rg-pill rg-pill--neutral rg-pill--sm">Locked (scoring started)</span>
     {% else %}
-        <a href="{% url 'vacancy-assessment-weights' entry.pk %}" class="btn btn-outline-secondary btn-sm">Edit weights</a>
+        <div class="d-flex align-items-center gap-2">
+            <a href="{% url 'vacancy-assessment-weights' entry.pk %}" class="btn btn-outline-secondary btn-sm">Edit weights</a>
+            <span class="rg-imeta">Locked when scoring starts</span>
+        </div>
     {% endif %}
 </div>
 {% endif %}
@@ -124,6 +127,8 @@
                                 <td>
                                     {% if candidate.exam_record and candidate.exam_record.is_finalized %}
                                         <span class="rg-pill rg-pill--success rg-pill--sm">Finalized: {{ candidate.exam_record.exam_score }}</span>
+                                    {% elif candidate.exam_record.exam_status == "absent" or candidate.exam_record.exam_status == "waived" %}
+                                        <span class="rg-pill rg-pill--warning rg-pill--sm">{{ candidate.exam_record.get_exam_status_display }} — will not proceed</span>
                                     {% elif candidate.exam_record.exam_score is not None %}
                                         <span class="rg-pill rg-pill--info rg-pill--sm">Draft: {{ candidate.exam_record.exam_score }}</span>
                                     {% else %}
@@ -136,7 +141,8 @@
                 </table>
             </div>
         </div>
-        <div class="invalid-feedback d-block mt-2" id="examScoreError" hidden>
+        {# WF-16(b): no d-block here — the hint stays hidden until a score is actually invalid. #}
+        <div class="invalid-feedback mt-2" id="examScoreError" hidden>
             Scores must be between 0 and 100.
         </div>
         {% if not schedule_sent %}
@@ -156,7 +162,7 @@
     </form>
 </div>
 
-{% include "internal_includes/modal_confirm.html" with modal_id="confirmFinalizeExam" variant="destructive" title="Finalize this exam batch?" body=finalize_exam_body confirm_label="Finalize Exam Batch" cancel_label="Cancel" form_id="examScoreForm" confirm_name="operation" confirm_value="finalize" %}
+{% include "internal_includes/modal_confirm.html" with modal_id="confirmFinalizeExam" variant="destructive" title="Finalize this exam batch?" body=finalize_exam_body summary_items=finalize_exam_summary_items confirm_label="Finalize Exam Batch" cancel_label="Cancel" form_id="examScoreForm" confirm_name="operation" confirm_value="finalize" %}
 
 <script>
 (function () {
@@ -179,7 +185,7 @@
         });
         if (invalid.length) {
             event.preventDefault();
-            if (errorLine) errorLine.hidden = false;
+            if (errorLine) { errorLine.hidden = false; errorLine.classList.add("d-block"); }
             var modalEl = document.getElementById("confirmFinalizeExam");
             if (modalEl && window.bootstrap) {
                 var inst = bootstrap.Modal.getInstance(modalEl);
@@ -188,6 +194,7 @@
             try { invalid[0].focus(); } catch (err) {}
         } else if (errorLine) {
             errorLine.hidden = true;
+            errorLine.classList.remove("d-block");
         }
     });
 })();

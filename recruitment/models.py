@@ -3,6 +3,7 @@ import uuid
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, models, transaction
@@ -475,10 +476,29 @@ class PositionPosting(TimestampedModel):
         return f"SG {salary_grade}" if salary_grade else ""
 
     @classmethod
+    def publication_period_days(cls):
+        """WF-07: env-configurable via settings.PLANTILLA_PUBLICATION_PERIOD_DAYS;
+        the class attribute stays as the fallback default. Read at call time so
+        override_settings works in tests."""
+        return getattr(
+            settings,
+            "PLANTILLA_PUBLICATION_PERIOD_DAYS",
+            cls.PLANTILLA_PUBLICATION_PERIOD_DAYS,
+        )
+
+    @classmethod
     def calculate_plantilla_closing_date(cls, start_date):
         if not start_date:
             return None
-        return start_date + timedelta(days=cls.PLANTILLA_PUBLICATION_PERIOD_DAYS - 1)
+        return start_date + timedelta(days=cls.publication_period_days() - 1)
+
+    @property
+    def close_blocked_until(self):
+        """WF-07: the future closing date that blocks an early Close, or None when
+        closing is allowed (no closing date, or the date has arrived)."""
+        if self.closing_date and self.closing_date > timezone.localdate():
+            return self.closing_date
+        return None
 
     @property
     def plantilla_publication_start_date(self):
@@ -2590,7 +2610,12 @@ class CosVacancyDeliberation(TimestampedModel):
 class ApplicationETERating(TimestampedModel):
     """The Secretariat's manual Education/Training/Experience rating for a candidate,
     entered at the CAR stage. Stored per application so it survives CAR draft
-    regenerations; the CAR's ETE component uses it when present."""
+    regenerations; the CAR's ETE component uses it when present.
+
+    WF-05: three scored components (0–100 each) with a required one-line basis per
+    component. ``rating`` stays the computed weighted sum (branch composition — see
+    services.ETE_COMPONENT_WEIGHTS_BY_BRANCH) so the existing CAR read path keeps
+    working for old records that only carry the single number."""
 
     application = models.OneToOneField(
         RecruitmentApplication,
@@ -2598,6 +2623,12 @@ class ApplicationETERating(TimestampedModel):
         related_name="ete_rating",
     )
     rating = models.DecimalField(max_digits=6, decimal_places=2)
+    education_score = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True)
+    training_score = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True)
+    experience_score = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True)
+    education_basis = models.CharField(max_length=255, blank=True)
+    training_basis = models.CharField(max_length=255, blank=True)
+    experience_basis = models.CharField(max_length=255, blank=True)
     recorded_by = models.ForeignKey(
         RecruitmentUser,
         on_delete=models.PROTECT,
@@ -2606,8 +2637,15 @@ class ApplicationETERating(TimestampedModel):
     recorded_by_role = models.CharField(max_length=40, blank=True)
 
     def clean(self):
+        errors = {}
         if self.rating is None or self.rating < 0 or self.rating > 100:
-            raise ValidationError({"rating": "ETE rating must be between 0 and 100."})
+            errors["rating"] = "ETE rating must be between 0 and 100."
+        for field_name in ("education_score", "training_score", "experience_score"):
+            value = getattr(self, field_name)
+            if value is not None and (value < 0 or value > 100):
+                errors[field_name] = "ETE component scores must be between 0 and 100."
+        if errors:
+            raise ValidationError(errors)
 
     def save(self, *args, **kwargs):
         if self.recorded_by_id:
@@ -2692,9 +2730,11 @@ class ComparativeAssessmentReport(TimestampedModel):
 
     def clean(self):
         errors = {}
+        # Keep in sync with services.PLANTILLA_CAR_PREPARATION_ROLES_BY_LEVEL.
+        # WF-04 (client decision): the Secretariat prepares the CAR for both levels.
         preparation_roles_by_level = {
             PositionPosting.Level.LEVEL_1: {RecruitmentUser.Role.SECRETARIAT},
-            PositionPosting.Level.LEVEL_2: {RecruitmentUser.Role.HRM_CHIEF},
+            PositionPosting.Level.LEVEL_2: {RecruitmentUser.Role.SECRETARIAT},
         }
         allowed_preparation_roles = preparation_roles_by_level.get(
             self.recruitment_entry.level,
@@ -2738,6 +2778,17 @@ class ComparativeAssessmentReport(TimestampedModel):
                 errors["evidence_item"] = (
                     "The generated CAR file must stay linked to the same recruitment entry as the report."
                 )
+        # WF-02: quorum (3–5 of the 5 HRMPSB members) is a HARD gate on finalize.
+        # Draft saves stay unvalidated — the deliberation may not have happened yet.
+        if self.is_finalized and self.quorum_met is not True:
+            errors["quorum_met"] = (
+                "Deliberation quorum (at least 3 of the 5 HRMPSB members) must be met "
+                "before the CAR can be finalized."
+            )
+        if self.is_finalized and (
+            self.members_present is None or not (3 <= self.members_present <= 5)
+        ):
+            errors["members_present"] = "Record how many HRMPSB members were present (3–5)."
         if self.is_finalized and not self.recommended_case_id:
             errors["recommended_case"] = (
                 "Record the HRMPSB board's recommended applicant before finalizing the CAR."
@@ -2973,6 +3024,25 @@ class FinalSelection(TimestampedModel):
             errors["deep_selection_justification"] = (
                 "Record the deep-selection justification before finalizing this selection."
             )
+        # WF-03: selecting against the board's recommendation (falling back to rank #1 when
+        # no recommendation was recorded) requires a written justification for the record.
+        if self.selected_item_id and self.comparative_assessment_report_id:
+            recommended_case_id = self.comparative_assessment_report.recommended_case_id
+            if recommended_case_id is None:
+                recommended_case_id = (
+                    self.comparative_assessment_report.items.filter(rank_order=1)
+                    .values_list("recruitment_case_id", flat=True)
+                    .first()
+                )
+            if (
+                recommended_case_id
+                and self.selected_item.recruitment_case_id != recommended_case_id
+                and not (self.deep_selection_justification or "").strip()
+            ):
+                errors["deep_selection_justification"] = (
+                    "You are selecting someone other than the board's recommended candidate. "
+                    "Record the justification for the official record."
+                )
         if self.decided_by_id and self.decided_by.role != RecruitmentUser.Role.APPOINTING_AUTHORITY:
             errors["decided_by"] = "Only the Appointing Authority may record the final CAR selection."
         if not (self.decision_notes or "").strip():

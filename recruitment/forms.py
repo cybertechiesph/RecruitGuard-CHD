@@ -1553,7 +1553,12 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
         self.fields["education_score"].label = "Education Score"
         self.fields["training_score"].label = "Training Score"
         self.fields["experience_score"].label = "Experience Score"
-        self.fields["document_review_score"].label = "Official Document Review Score"
+        # WF-05: the per-component E/T/E scoring now lives on the CAR draft (ETE
+        # ratings with a basis per component); this score remains only as the
+        # fallback for records made before that change.
+        self.fields["document_review_score"].label = (
+            "Document review score (legacy — superseded by ETE ratings on the CAR)"
+        )
         self.fields["screening_notes"].label = "Screening Notes"
         for field_name in self.SCORE_FIELD_NAMES:
             self.fields[field_name].required = False
@@ -2060,6 +2065,11 @@ class ExamScheduleForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.M
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["scheduled_for"].label = "Exam Schedule"
+        # Gray out past dates in the calendar picker (courtesy only — the
+        # server-side past-date rule in clean_scheduled_for stays authoritative).
+        self.fields["scheduled_for"].widget.attrs["min"] = timezone.localtime().strftime(
+            "%Y-%m-%dT00:00"
+        )
         self.fields["venue"].label = "Exam Venue"
         self.fields["instructions"].label = "Instructions for the Applicant"
         self.fields["instructions"].required = False
@@ -2103,6 +2113,11 @@ class InterviewSessionForm(DeferredModelValidationMixin, BootstrapFormMixin, for
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["scheduled_for"].label = "Interview Schedule"
+        # Gray out past dates in the calendar picker (courtesy only — the
+        # server-side past-date rule in clean_scheduled_for stays authoritative).
+        self.fields["scheduled_for"].widget.attrs["min"] = timezone.localtime().strftime(
+            "%Y-%m-%dT00:00"
+        )
         self.fields["location"].label = "Interview Location / Medium"
         self.fields["session_notes"].label = "Session Notes"
         self.fields["session_notes"].required = False
@@ -2418,7 +2433,7 @@ class ComparativeAssessmentReportForm(DeferredModelValidationMixin, BootstrapFor
         ]
         widgets = {
             "summary_notes": forms.Textarea(attrs={"rows": 4}),
-            "members_present": forms.NumberInput(attrs={"min": "0", "max": "20", "step": "1"}),
+            "members_present": forms.NumberInput(attrs={"min": "3", "max": "5", "step": "1"}),
             "recommendation_notes": forms.Textarea(attrs={"rows": 3}),
         }
 
@@ -2505,6 +2520,19 @@ class FinalSelectionForm(BootstrapFormMixin, forms.Form):
             raise forms.ValidationError("Select an applicant from the finalized CAR.")
         return selected_item
 
+    def _recommended_case_id(self):
+        """The board's recommended case, falling back to the CAR's rank #1 when no
+        recommendation was recorded (legacy reports)."""
+        if self.report is None:
+            return None
+        if self.report.recommended_case_id:
+            return self.report.recommended_case_id
+        return (
+            self.report.items.filter(rank_order=1)
+            .values_list("recruitment_case_id", flat=True)
+            .first()
+        )
+
     def clean(self):
         cleaned_data = super().clean()
         selected_item = cleaned_data.get("selected_item")
@@ -2519,6 +2547,19 @@ class FinalSelectionForm(BootstrapFormMixin, forms.Form):
             self.add_error(
                 "deep_selection_justification",
                 "Record the deep-selection justification before finalizing this selection.",
+            )
+        # WF-03: a pick that deviates from the board's recommendation needs a justification.
+        recommended_case_id = self._recommended_case_id()
+        if (
+            selected_item
+            and recommended_case_id
+            and selected_item.recruitment_case_id != recommended_case_id
+            and not justification
+        ):
+            self.add_error(
+                "deep_selection_justification",
+                "You are selecting someone other than the board's recommended candidate. "
+                "Record the justification for the official record.",
             )
         return cleaned_data
 

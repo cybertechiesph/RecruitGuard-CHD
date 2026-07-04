@@ -43,6 +43,7 @@ from .models import (
     AuditLog,
     CompletionRecord,
     EvidenceVaultItem,
+    ExamRecord,
     Notification,
     PositionPosting,
     RecruitmentApplication,
@@ -531,6 +532,11 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
         for item in comparative_assessment_items:
             item.applicant_display_name = item.application.applicant_display_name
         context["current_comparative_assessment_report_items"] = comparative_assessment_items
+        # WF-11: with ETE blank the sort fallback produces an alphabetical pseudo-ranking —
+        # suppress ordinals on the draft until every row carries a real assessment score.
+        context["car_all_rows_scored"] = bool(comparative_assessment_items) and all(
+            item.assessment_score is not None for item in comparative_assessment_items
+        )
         context["car_readiness"] = get_comparative_assessment_readiness(application)
         context["car_requires_deliberation"] = False
         context["car_requires_finalized_deliberation"] = False
@@ -770,6 +776,18 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
                     )
         if user_can_record_final_decision(user, application):
             context["final_decision_form"] = FinalDecisionForm()
+            if application.branch == PositionPosting.Branch.COS:
+                # WF-10: a COS Selected decision resolves the rest of the pool — tell
+                # the chief how many siblings will be closed + notified.
+                context["cos_pool_sibling_count"] = (
+                    RecruitmentApplication.objects.filter(
+                        position=application.position,
+                        case__case_status=RecruitmentCase.CaseStatus.ACTIVE,
+                        case__is_stage_locked=False,
+                    )
+                    .exclude(pk=application.pk)
+                    .count()
+                )
         if user_can_record_final_selection(user, application):
             report = context["current_comparative_assessment_report"]
             context["final_selection_report"] = report
@@ -1232,7 +1250,23 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
             f"candidate{'' if candidate_count == 1 else 's'} and moves the whole pool to the "
             "next review step. Scores can no longer be edited afterwards."
         )
+        # Judgment item A: candidates marked Absent/Waived lock without advancing — say so
+        # in the finalize confirmation.
+        absent_waived_count = sum(
+            1
+            for c in candidates
+            if c["exam_record"]
+            and c["exam_record"].exam_status
+            in {ExamRecord.ExamStatus.ABSENT, ExamRecord.ExamStatus.WAIVED}
+        )
+        finalize_exam_summary_items = []
+        if absent_waived_count:
+            finalize_exam_summary_items.append(
+                f"{absent_waived_count} candidate{'' if absent_waived_count == 1 else 's'} "
+                "marked Absent/Waived will not proceed"
+            )
         return {
+            "finalize_exam_summary_items": finalize_exam_summary_items,
             "entry": entry,
             "candidates": candidates,
             "candidate_count": candidate_count,
@@ -1370,11 +1404,25 @@ class VacancyBatchInterviewView(LoginRequiredMixin, WorkflowProcessorRequiredMix
                     "rating_count": get_interview_ratings(application).count(),
                 }
             )
+        # WF-08: the HRMPSB panel can't rate a Plantilla pool until the rating sheet is
+        # published — surface that prerequisite on the console instead of letting the
+        # panel discover it on their case pages.
+        rating_sheet_published = True
+        rating_sheet_url = ""
+        if is_plantilla:
+            rating_sheet_published = get_published_competency_rating_template(entry) is not None
+            if not rating_sheet_published and pool:
+                # The builder edits the per-position template — any case's URL reaches it.
+                rating_sheet_url = reverse(
+                    "interview-rating-sheet", kwargs={"pk": pool[0].pk}
+                )
         return {
             "entry": entry,
             "candidates": candidates,
             "is_plantilla": is_plantilla,
             "schedule_form": schedule_form or InterviewSessionForm(),
+            "rating_sheet_published": rating_sheet_published,
+            "rating_sheet_url": rating_sheet_url,
         }
 
     def get(self, request, pk):
@@ -1438,8 +1486,21 @@ class VacancyBatchInterviewView(LoginRequiredMixin, WorkflowProcessorRequiredMix
             return redirect("vacancy-batch-interview", pk=entry.pk)
 
         if operation == "finalize" and entry.branch == PositionPosting.Branch.PLANTILLA:
+            # WF-16(c): optional light record of the board's first (pre-CAR) deliberation.
+            note = ""
+            delib_date = (request.POST.get("first_deliberation_date", "") or "").strip()
+            delib_members = (request.POST.get("first_deliberation_members", "") or "").strip()
+            if delib_date or delib_members:
+                note = (
+                    f"First deliberation held on {delib_date}" if delib_date else "First deliberation held"
+                )
+                if delib_members:
+                    note += f", members present {delib_members}"
+                note += "."
             try:
-                finalize_vacancy_interview_batch(entry, request.user)
+                finalize_vacancy_interview_batch(
+                    entry, request.user, first_deliberation_note=note
+                )
             except (ValueError, ValidationError) as exc:
                 messages.error(request, str(exc))
                 return redirect("vacancy-batch-interview", pk=entry.pk)
@@ -1466,11 +1527,34 @@ class VacancyBatchCosDeliberationView(LoginRequiredMixin, WorkflowProcessorRequi
 
     def _context(self, request, entry, pool):
         pick = get_cos_vacancy_deliberation(entry)
+        # WF-09: the pick asks the chief to name "the most qualified applicant" — show the
+        # finalized comparative data (exam, interview, screening) next to each radio so the
+        # decision doesn't rely on recall. Strongest interview scores first; choice stays free.
+        candidates = []
+        for application in pool:
+            exam_record = get_exam_record(application)
+            interview_rating = get_interview_ratings(application).first()
+            screening_record = get_screening_record(application)
+            candidates.append(
+                {
+                    "application": application,
+                    "case_id": application.case.id,
+                    "exam_score": exam_record.exam_score if exam_record else None,
+                    "interview_score": (
+                        interview_rating.rating_score if interview_rating else None
+                    ),
+                    "screening_outcome": (
+                        screening_record.qualification_outcome if screening_record else ""
+                    ),
+                }
+            )
+        candidates.sort(
+            key=lambda c: (c["interview_score"] is None, -(c["interview_score"] or 0))
+        )
         return {
             "entry": entry,
-            "candidates": [
-                {"application": application, "case_id": application.case.id} for application in pool
-            ],
+            "candidates": candidates,
+            "candidate_count": len(candidates),
             "pick": pick,
             "can_manage": user_can_manage_cos_deliberation(request.user, entry),
         }
