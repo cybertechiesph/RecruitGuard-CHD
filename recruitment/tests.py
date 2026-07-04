@@ -8030,6 +8030,12 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         self.assertNotContains(response, "{# Empty state partial.")
 
     def test_recruitment_entry_list_renders_modal_partial_without_raw_include_tags(self):
+        # WF-07: the close modal only renders once the entry is closable — move the
+        # closing date to today so the modal (the subject of this test) appears.
+        PositionPosting.objects.filter(pk=self.level1_position.pk).update(
+            closing_date=timezone.localdate(),
+            updated_at=timezone.now(),
+        )
         client = Client()
         self.force_login_with_mfa(client, self.hrm_chief)
 
@@ -8478,24 +8484,28 @@ class IdorObjectAccessRegressionTests(BaseRecruitmentTestCase):
 
         self.assertEqual(response.status_code, 403)
 
-    def test_secretariat_cannot_post_comparative_assessment_for_restricted_car_case(self):
-        # Drive a Level-2 case to the CAR stage (assigned to the HRM Chief), then
-        # have the secretariat POST the CAR endpoint. Authorization must be
-        # decided before any application-state gate so a restricted case cannot
-        # be distinguished by its response (clean 403, not a state-dependent
-        # redirect).
+    def test_unauthorized_role_cannot_post_comparative_assessment_for_restricted_car_case(self):
+        # Drive a Level-2 case to the CAR stage, then have a role without CAR access
+        # POST the CAR endpoint. Authorization must be decided before any
+        # application-state gate so a restricted case cannot be distinguished by its
+        # response (clean 403, not a state-dependent redirect).
+        # WF-04 (client decision): the Secretariat now prepares the CAR for BOTH
+        # levels, so the restricted probe is the HRM Chief.
         application = self.make_application(self.level2_position)
         self.move_application_to_hrmpsb_review(application)
         self.finalize_interview_for_current_stage(application, self.hrmpsb)
         self.finalize_deliberation_for_current_stage(
             application, self.hrmpsb, ranking_position=1
         )
-        self.assertFalse(
+        self.assertTrue(
             user_can_manage_comparative_assessment_report(self.secretariat, application)
+        )
+        self.assertFalse(
+            user_can_manage_comparative_assessment_report(self.hrm_chief, application)
         )
 
         client = Client()
-        self.force_login_with_mfa(client, self.secretariat)
+        self.force_login_with_mfa(client, self.hrm_chief)
         response = client.post(
             reverse("comparative-assessment-report", kwargs={"pk": application.pk}),
             {"operation": "save", "summary_notes": "unauthorized probe"},

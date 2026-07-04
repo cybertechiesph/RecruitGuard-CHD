@@ -39,8 +39,7 @@ HRM Chief on COS). Two states:
             </span>
         </div>
         {% if not car_all_rows_scored %}
-            {# WF-11: ETE ratings are still missing, so any ordering here would be the
-               alphabetical sort fallback — don't present it as a ranking. #}
+            {# WF-11: with ETE missing the order is the alphabetical fallback — don't present it as a ranking. #}
             <div class="alert alert-info" role="status" style="font-size:0.8125rem;">
                 Rankings appear once every candidate has an ETE rating and the draft is updated.
             </div>

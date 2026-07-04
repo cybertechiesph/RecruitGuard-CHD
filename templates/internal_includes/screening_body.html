@@ -249,8 +249,7 @@
             {% endif %}
         </div>
         {% else %}
-        {# WF-05: never leave "compare against the minimum qualifications" dangling —
-           say explicitly when no QS is on file for this position. #}
+        {# WF-05: say explicitly when no QS is on file — never leave the instruction dangling. #}
         <div class="rg-scr-qualification-reference">
             <div class="rg-scr-kicker">Minimum qualifications for this position</div>
             <div class="rg-scr-reference-note">
@@ -318,9 +317,7 @@
                 </svg>
             </summary>
             <div class="rg-field rg-scr-disclosure__body">
-                {# WF-05: the per-component Education/Training/Experience scoring moved to
-                   the CAR draft (ETE ratings with a basis per component). Only the legacy
-                   document review score remains here for old records. #}
+                {# WF-05: E/T/E scoring moved to the CAR draft; only the legacy document review score remains here. #}
                 <div class="rg-scr-score-grid">
                     <div>
                         <label class="form-label" for="{{ screening_form.document_review_score.id_for_label }}">
