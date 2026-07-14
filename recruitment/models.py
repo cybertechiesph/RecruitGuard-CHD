@@ -1337,9 +1337,11 @@ class ScreeningRecord(TimestampedModel):
 class ScreeningDocumentReview(TimestampedModel):
     class ReviewStatus(models.TextChoices):
         NOT_REVIEWED = "not_reviewed", "Not Reviewed"
-        MEETS = "meets", "Meets"
-        REQUEST_RESUBMISSION = "request_resubmission", "Request Resubmission"
-        ABSENT = "absent", "Absent"
+        COMPLIED = "complied", "Complied"
+        RETURN_FOR_RESUBMISSION = "return_for_resubmission", "Return for Resubmission"
+        # System-applied only (never reviewer-selectable): a required row with
+        # no uploaded file. Documents are "not submitted"; people are absent.
+        NOT_SUBMITTED = "not_submitted", "Not Submitted"
         NOT_APPLICABLE = "not_applicable", "Not Applicable"
 
     screening_record = models.ForeignKey(
@@ -1358,7 +1360,7 @@ class ScreeningDocumentReview(TimestampedModel):
     requirement_title = models.CharField(max_length=255)
     requirement_label = models.CharField(max_length=40, blank=True)
     status = models.CharField(
-        max_length=20,
+        max_length=30,
         choices=ReviewStatus.choices,
         default=ReviewStatus.NOT_REVIEWED,
     )
@@ -1388,10 +1390,10 @@ class ScreeningDocumentReview(TimestampedModel):
             errors["requirement_title"] = "Document review rows must record the requirement title."
         if self.is_not_applicable and self.status != self.ReviewStatus.NOT_APPLICABLE:
             errors["status"] = "Not-applicable requirements must use the Not Applicable status."
-        if not self.evidence_item_id and self.status == self.ReviewStatus.MEETS:
-            errors["status"] = "A document cannot meet the requirement without an uploaded file."
+        if not self.evidence_item_id and self.status == self.ReviewStatus.COMPLIED:
+            errors["status"] = "A document cannot be marked Complied without an uploaded file."
         if (
-            self.status == self.ReviewStatus.REQUEST_RESUBMISSION
+            self.status == self.ReviewStatus.RETURN_FOR_RESUBMISSION
             and not (self.remarks or "").strip()
         ):
             errors["remarks"] = "Record what the applicant needs to correct or resubmit."
@@ -1419,8 +1421,8 @@ class ScreeningDocumentReview(TimestampedModel):
     def is_blocking_completeness(self):
         return self.is_required and self.status in {
             self.ReviewStatus.NOT_REVIEWED,
-            self.ReviewStatus.REQUEST_RESUBMISSION,
-            self.ReviewStatus.ABSENT,
+            self.ReviewStatus.RETURN_FOR_RESUBMISSION,
+            self.ReviewStatus.NOT_SUBMITTED,
         }
 
     def __str__(self):

@@ -8209,13 +8209,13 @@ textarea.form-control {
     background: #f8fafc;
 }
 
-.rg-scr-status-pill[data-fixed-status="meets"] {
+.rg-scr-status-pill[data-fixed-status="complied"] {
     border-color: #bbf7d0;
     color: #166534;
     background: #f0fdf4;
 }
 
-.rg-scr-status-pill[data-fixed-status="absent"] {
+.rg-scr-status-pill[data-fixed-status="not_submitted"] {
     border-color: #fecaca;
     color: #991b1b;
     background: #fff1f2;

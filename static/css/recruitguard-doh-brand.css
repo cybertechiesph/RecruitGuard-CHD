@@ -1011,7 +1011,7 @@ body.applicant-portal-body {
     border-color: var(--rg-brand-gold) !important;
     box-shadow: 0 0 0 3px rgba(253, 184, 19, 0.18) !important;
 }
-.rg-scr-status-pill[data-fixed-status="request_resubmission"] {
+.rg-scr-status-pill[data-fixed-status="return_for_resubmission"] {
     border-color: #ffdf88;
     color: #8a6407;
     background: var(--rg-brand-gold-soft);
@@ -1043,7 +1043,7 @@ body.applicant-portal-body {
    Trimmed to a single signal: a thin gold left-border. The amber status
    pill already names the state, so no background tint or inline tag.
    data-status is written live by the screening JS (updateDocumentRows). */
-[data-document-row][data-status="request_resubmission"] {
+[data-document-row][data-status="return_for_resubmission"] {
     box-shadow: inset 3px 0 0 var(--rg-brand-gold);
 }
 
@@ -1086,7 +1086,7 @@ body.applicant-portal-body {
     padding: 0.05rem 0.4rem;
     font-weight: 600;
 }
-.rg-scr-result-facts__item--absent {
+.rg-scr-result-facts__item--not-submitted {
     color: #8f231d;
     background: #fdeceb;
     border: 1px solid #f3c4c1;

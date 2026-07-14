@@ -853,7 +853,7 @@ html[data-theme="dark"] :is(
     .rg-del-score-badge--passing, .rg-del-car-item:first-child,
     .rg-dec-choice-btn.is-active--selected, .rg-dec-status-bar--selected,
     .rg-cmp-closed-banner--selected, .rg-cmp-req-form-row[data-req-status="completed"],
-    .rg-scr-step-state__item.is-complete, .rg-scr-status-pill[data-fixed-status="meets"],
+    .rg-scr-step-state__item.is-complete, .rg-scr-status-pill[data-fixed-status="complied"],
     .rg-pill--active, .rg-banner--success
 ) { background: rgba(34, 197, 94, 0.14); }
 html[data-theme="dark"] :is(
@@ -870,7 +870,7 @@ html[data-theme="dark"] :is(
     .rg-del-score-badge--passing .rg-del-score-badge__num, .rg-pkt-section__badge--ok,
     .rg-pkt-outcome-pill--passed, .rg-dec-choice-btn.is-active--selected, .rg-dec-outcome-pill--selected,
     .rg-dec-status-bar--selected, .rg-cmp-closed-banner--selected, .rg-cmp-req-status-badge--completed,
-    .rg-scr-step-state__item.is-complete, .rg-scr-status-pill[data-fixed-status="meets"],
+    .rg-scr-step-state__item.is-complete, .rg-scr-status-pill[data-fixed-status="complied"],
     .rg-scr-elig-bar--qualified .rg-scr-elig-bar__icon, .rg-int-score-dial-label.is-passing,
     .rg-int-progress-item__tag, .rg-pill--active, .rg-banner--success
 ) { color: #4ade80; }
@@ -881,17 +881,17 @@ html[data-theme="dark"] :is(
     .rg-pkt-outcome-pill--passed, .rg-dec-choice-btn.is-active--selected, .rg-dec-outcome-pill--selected,
     .rg-dec-status-bar--selected, .rg-cmp-closed-banner--selected, .rg-cmp-req-status-badge--completed,
     .rg-cmp-req-form-row[data-req-status="completed"], .rg-int-progress-item--submitted,
-    .rg-scr-step-state__item.is-complete, .rg-scr-status-pill[data-fixed-status="meets"], .rg-banner--success
+    .rg-scr-step-state__item.is-complete, .rg-scr-status-pill[data-fixed-status="complied"], .rg-banner--success
 ) { border-color: rgba(74, 222, 128, 0.40); }
 html[data-theme="dark"] .rg-cmp-req-progress__fill { background: #22c55e; }
 
 /* danger */
 html[data-theme="dark"] :is(
     .rg-scr-elig-bar--not-qualified, .rg-scr-doc-verdict-btn.is-absent, .rg-scr-choice-btn.is-active-danger,
-    .rg-scr-elig-bar--absent, .rg-scr-status-pill.is-absent, .rg-scr-status-pill[data-fixed-status="absent"],
+    .rg-scr-elig-bar--absent, .rg-scr-status-pill.is-absent, .rg-scr-status-pill[data-fixed-status="not_submitted"],
     .rg-exam-validation-alert, .rg-dec-choice-btn.is-active--not-selected, .rg-dec-status-bar--not-selected,
     .rg-cmp-closed-banner--not-selected, .rg-scr-actionbar__msg, .rg-fs-actions__msg,
-    .rg-del-recorder__msg, .rg-del-car__msg, .rg-banner--error, .rg-scr-result-facts__item--absent
+    .rg-del-recorder__msg, .rg-del-car__msg, .rg-banner--error, .rg-scr-result-facts__item--not-submitted
 ) { background: rgba(220, 38, 38, 0.14); }
 html[data-theme="dark"] :is(
     .rg-scr-elig-bar--not-qualified .rg-scr-elig-bar__icon, .rg-scr-ready-item--blocking .rg-scr-ready-item__icon,
@@ -902,12 +902,12 @@ html[data-theme="dark"] :is(
     .rg-scr-choice-btn.is-active-danger, .rg-scr-elig-bar--absent .rg-scr-elig-bar__verdict,
     .rg-exam-validation-alert, .rg-pkt-outcome-pill--failed, .rg-dec-choice-btn.is-active--not-selected,
     .rg-dec-outcome-pill--not-selected, .rg-dec-status-bar--not-selected, .rg-cmp-closed-banner--not-selected,
-    .rg-cmp-reopen-zone__title, .rg-scr-status-pill.is-absent, .rg-scr-status-pill[data-fixed-status="absent"],
+    .rg-cmp-reopen-zone__title, .rg-scr-status-pill.is-absent, .rg-scr-status-pill[data-fixed-status="not_submitted"],
     .rg-scr-elig-bar--not-qualified .rg-scr-elig-bar__icon, .rg-cmp-req-form-row__delete-label,
     .rg-cmp-reopen-zone__icon
 ) { color: #f87171; }
 html[data-theme="dark"] :is(
-    .rg-scr-actionbar__msg, .rg-scr-result-facts__item--absent, .rg-fs-actions__msg,
+    .rg-scr-actionbar__msg, .rg-scr-result-facts__item--not-submitted, .rg-fs-actions__msg,
     .rg-del-recorder__msg, .rg-del-car__msg, .rg-banner--error
 ) { color: #f2a8a3; }
 html[data-theme="dark"] :is(
@@ -915,8 +915,8 @@ html[data-theme="dark"] :is(
     .rg-scr-elig-bar--absent, .rg-exam-validation-alert, .rg-pkt-outcome-pill--failed,
     .rg-dec-choice-btn.is-active--not-selected, .rg-dec-outcome-pill--not-selected, .rg-dec-status-bar--not-selected,
     .rg-cmp-closed-banner--not-selected, .rg-cmp-reopen-zone, .rg-scr-status-pill.is-absent,
-    .rg-scr-status-pill[data-fixed-status="absent"], .rg-scr-actionbar__msg, .rg-fs-actions__msg,
-    .rg-del-recorder__msg, .rg-del-car__msg, .rg-banner--error, .rg-scr-result-facts__item--absent
+    .rg-scr-status-pill[data-fixed-status="not_submitted"], .rg-scr-actionbar__msg, .rg-fs-actions__msg,
+    .rg-del-recorder__msg, .rg-del-car__msg, .rg-banner--error, .rg-scr-result-facts__item--not-submitted
 ) { border-color: rgba(248, 113, 113, 0.45); }
 /* Delete-pending row — light rule is !important on both bg + border. */
 html[data-theme="dark"] .rg-cmp-req-form-row.is-delete-pending {
@@ -1282,12 +1282,12 @@ html[data-theme="dark"] .rg-scr-status-pill {
     border-color: rgba(255,255,255,0.14);
 }
 html[data-theme="dark"] .rg-scr-status-pill.is-absent,
-html[data-theme="dark"] .rg-scr-status-pill[data-fixed-status="absent"] {
+html[data-theme="dark"] .rg-scr-status-pill[data-fixed-status="not_submitted"] {
     background: rgba(236,111,104,0.15);
     color: #f0a8a2;
     border-color: rgba(236,111,104,0.35);
 }
-html[data-theme="dark"] .rg-scr-status-pill[data-fixed-status="meets"] {
+html[data-theme="dark"] .rg-scr-status-pill[data-fixed-status="complied"] {
     background: rgba(126,187,66,0.15);
     color: #a9dd76;
     border-color: rgba(126,187,66,0.34);
@@ -1582,8 +1582,8 @@ html[data-theme="dark"] .rg-scr-secondary-link:hover { color: #e8edf2; }
 html[data-theme="dark"] .rg-scr-status-pill { color: #9aa8b6; }
 html[data-theme="dark"] .rg-scr-status-pill.is-absent { color: #f0a8a2; }
 html[data-theme="dark"] .rg-scr-status-pill.is-not-applicable { color: #9aa8b6; }
-html[data-theme="dark"] .rg-scr-status-pill[data-fixed-status="meets"] { color: #a9dd76; }
-html[data-theme="dark"] .rg-scr-status-pill[data-fixed-status="absent"] { color: #f0a8a2; }
+html[data-theme="dark"] .rg-scr-status-pill[data-fixed-status="complied"] { color: #a9dd76; }
+html[data-theme="dark"] .rg-scr-status-pill[data-fixed-status="not_submitted"] { color: #f0a8a2; }
 html[data-theme="dark"] .rg-scr-choice-btn.is-disabled, html[data-theme="dark"] .rg-scr-choice-btn:disabled { color: #8a99a8; }
 html[data-theme="dark"] .rg-scr-optional-label { color: #8a99a8; }
 html[data-theme="dark"] .rg-scr-reference-note { color: #d4dde6; }
@@ -1605,13 +1605,13 @@ html[data-theme="dark"] .rg-wf-action-btn--return-to-applicant:hover, html[data-
 html[data-theme="dark"] .rg-scr-doc-remarks__toggle { color: #9aa8b6; }
 html[data-theme="dark"] .rg-scr-doc-remarks__label { color: #9aa8b6; }
 html[data-theme="dark"] .rg-scr-doc-remarks__req { color: #f0c661; }
-html[data-theme="dark"] .rg-scr-status-pill[data-fixed-status="request_resubmission"] { color: #f0c661; }
+html[data-theme="dark"] .rg-scr-status-pill[data-fixed-status="return_for_resubmission"] { color: #f0c661; }
 html[data-theme="dark"] .rg-scr-resub-notice { color: #f0c661; }
 html[data-theme="dark"] .rg-scr-resub-notice__copy strong { color: #f0c661; }
 html[data-theme="dark"] .rg-scr-doc-resub-tag { color: #f0c661; }
 html[data-theme="dark"] .rg-scr-result-facts { color: #c3d0dc; }
 html[data-theme="dark"] .rg-scr-result-facts__item--flag { color: #f0c661; }
-html[data-theme="dark"] .rg-scr-result-facts__item--absent { color: #f0a8a2; }
+html[data-theme="dark"] .rg-scr-result-facts__item--not-submitted { color: #f0a8a2; }
 html[data-theme="dark"] .rg-scr-locked-section-label { color: #9aa8b6; }
 html[data-theme="dark"] .rg-scr-locked-remark { color: #f0c661; }
 html[data-theme="dark"] .rg-scr-doc-drawer__empty { color: #8a99a8; }

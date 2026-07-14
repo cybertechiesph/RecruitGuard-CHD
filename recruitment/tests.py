@@ -371,7 +371,7 @@ class BaseRecruitmentTestCase(TestCase):
         return application
 
     def screening_document_status_payload(self, application, *, default_status=None, overrides=None):
-        default_status = default_status or ScreeningDocumentReview.ReviewStatus.MEETS
+        default_status = default_status or ScreeningDocumentReview.ReviewStatus.COMPLIED
         overrides = overrides or {}
         payload = {}
         for requirement in get_applicant_document_requirements(application):
@@ -394,7 +394,7 @@ class BaseRecruitmentTestCase(TestCase):
             elif is_not_applicable or (not has_evidence and not is_required):
                 status = ScreeningDocumentReview.ReviewStatus.NOT_APPLICABLE
             elif not has_evidence:
-                status = ScreeningDocumentReview.ReviewStatus.ABSENT
+                status = ScreeningDocumentReview.ReviewStatus.NOT_SUBMITTED
             else:
                 status = default_status
             payload[f"document_status__{requirement.code}"] = status
@@ -5536,7 +5536,10 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         self.assertEqual(screening_record.completeness_notes, "")
         self.assertEqual(screening_record.screening_notes, "")
 
-    def test_screening_view_persists_document_review_statuses(self):
+    def test_screening_view_rejects_reviewer_selected_not_submitted(self):
+        # Not Submitted is system-applied only (a required row with no file);
+        # a reviewer can never declare an uploaded document "not submitted" —
+        # the editable dropdown offers Complied / Return for Resubmission only.
         application = self.make_application(self.level1_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
@@ -5556,7 +5559,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
                 **self.screening_document_status_payload(
                     application,
                     overrides={
-                        first_requirement.code: ScreeningDocumentReview.ReviewStatus.ABSENT,
+                        first_requirement.code: ScreeningDocumentReview.ReviewStatus.NOT_SUBMITTED,
                     },
                 ),
                 "operation": "finalize",
@@ -5565,13 +5568,9 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Screening finalized and locked.")
-        screening_record = ScreeningRecord.objects.get(application=application)
-        document_review = screening_record.document_reviews.get(document_key=first_requirement.code)
-        self.assertEqual(document_review.status, ScreeningDocumentReview.ReviewStatus.ABSENT)
-        self.assertEqual(
-            screening_record.document_reviews.count(),
-            len(get_applicant_document_requirements(application)),
+        self.assertContains(response, "Select a valid choice.")
+        self.assertFalse(
+            ScreeningRecord.objects.filter(application=application, is_finalized=True).exists()
         )
 
     def test_screening_view_persists_document_resubmission_request_and_remarks(self):
@@ -5595,7 +5594,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
                     application,
                     overrides={
                         first_requirement.code: (
-                            ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION
+                            ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
                         ),
                     },
                 ),
@@ -5611,7 +5610,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         document_review = screening_record.document_reviews.get(document_key=first_requirement.code)
         self.assertEqual(
             document_review.status,
-            ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION,
+            ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION,
         )
         self.assertEqual(document_review.remarks, "Upload a signed and readable copy.")
 
@@ -5636,7 +5635,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
                     application,
                     overrides={
                         first_requirement.code: (
-                            ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION
+                            ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
                         ),
                     },
                 ),
@@ -5649,7 +5648,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         self.assertContains(response, "Add the instruction the applicant should follow")
         self.assertFalse(ScreeningRecord.objects.filter(application=application, is_finalized=True).exists())
 
-    def test_screening_view_blocks_complete_when_required_document_absent(self):
+    def test_screening_view_blocks_complete_when_required_document_flagged(self):
         application = self.make_application(self.level1_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
@@ -5664,16 +5663,19 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
                 **self.screening_document_status_payload(
                     application,
                     overrides={
-                        first_requirement.code: ScreeningDocumentReview.ReviewStatus.ABSENT,
+                        first_requirement.code: (
+                            ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
+                        ),
                     },
                 ),
+                f"document_remarks__{first_requirement.code}": "Upload a readable copy.",
                 "operation": "finalize",
             },
             follow=True,
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Required documents must be marked Meets before using Complete")
+        self.assertContains(response, "Required documents must be marked Complied before using Complete")
         self.assertFalse(ScreeningRecord.objects.filter(application=application, is_finalized=True).exists())
 
     def test_screening_view_blocks_qualified_when_completeness_is_incomplete(self):
@@ -6761,7 +6763,7 @@ class BatchScreeningGateTests(BaseRecruitmentTestCase):
                     application,
                     overrides={
                         first_requirement.code: (
-                            ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION
+                            ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
                         ),
                     },
                 ),
@@ -9059,7 +9061,7 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
                     application,
                     overrides={
                         first_requirement.code: (
-                            ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION
+                            ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
                         ),
                     },
                 ),
@@ -9112,7 +9114,7 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
                     application,
                     overrides={
                         requirement.code: (
-                            ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION
+                            ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
                         ),
                     },
                 ),
@@ -9300,7 +9302,7 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
                     application,
                     overrides={
                         first_requirement.code: (
-                            ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION
+                            ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
                         ),
                     },
                 ),

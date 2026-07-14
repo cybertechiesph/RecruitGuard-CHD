@@ -72,9 +72,9 @@
             {{ screening_flagged_count }} flagged for resubmission
         </span>
     {% endif %}
-    {% if screening_absent_count %}
-        <span class="rg-scr-result-facts__item rg-scr-result-facts__item--absent">
-            {{ screening_absent_count }} document{{ screening_absent_count|pluralize }} missing
+    {% if screening_not_submitted_count %}
+        <span class="rg-scr-result-facts__item rg-scr-result-facts__item--not-submitted">
+            {{ screening_not_submitted_count }} document{{ screening_not_submitted_count|pluralize }} not submitted
         </span>
     {% endif %}
 </div>
@@ -135,7 +135,7 @@
                                 <td>
                                     <div class="rg-scr-doc-title">{{ review.requirement_title }}</div>
                                     <div class="rg-scr-doc-meta">{{ review.requirement_label }}</div>
-                                    {% if review.status == "request_resubmission" %}
+                                    {% if review.status == "return_for_resubmission" %}
                                         <span class="rg-scr-doc-resub-tag" style="display:inline-flex;">
                                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                                 <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
@@ -158,7 +158,7 @@
                                 </td>
                                 <td>
                                     {% if review.remarks %}
-                                        {% if review.status == "request_resubmission" %}
+                                        {% if review.status == "return_for_resubmission" %}
                                             <div class="rg-scr-locked-remark">{{ review.remarks }}</div>
                                         {% else %}
                                             <div class="rg-scr-doc-meta">{{ review.remarks }}</div>

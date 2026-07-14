@@ -1496,27 +1496,24 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
     )
     COMPLETENESS_BLOCKING_DOCUMENT_STATUSES = {
         ScreeningDocumentReview.ReviewStatus.NOT_REVIEWED,
-        ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION,
-        ScreeningDocumentReview.ReviewStatus.ABSENT,
+        ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION,
+        ScreeningDocumentReview.ReviewStatus.NOT_SUBMITTED,
     }
-    # Reviewers only ever pick between three document outcomes. The remaining
+    # Reviewers only ever pick between two document outcomes: the uploaded
+    # file either complies or goes back to the applicant. The remaining
     # statuses are system-applied, never chosen here: NOT_REVIEWED is the
-    # undecided default (rendered as the blank placeholder), and ABSENT /
-    # NOT_APPLICABLE auto-fill the fixed rows for missing or not-applicable
-    # requirements.
+    # undecided default (rendered as the blank placeholder), and
+    # NOT_SUBMITTED / NOT_APPLICABLE auto-fill the fixed rows for missing or
+    # not-applicable requirements.
     EDITABLE_DOCUMENT_STATUS_CHOICES = (
         ("", "Select status"),
         (
-            ScreeningDocumentReview.ReviewStatus.MEETS.value,
-            ScreeningDocumentReview.ReviewStatus.MEETS.label,
+            ScreeningDocumentReview.ReviewStatus.COMPLIED.value,
+            ScreeningDocumentReview.ReviewStatus.COMPLIED.label,
         ),
         (
-            ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION.value,
-            ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION.label,
-        ),
-        (
-            ScreeningDocumentReview.ReviewStatus.ABSENT.value,
-            ScreeningDocumentReview.ReviewStatus.ABSENT.label,
+            ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION.value,
+            ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION.label,
         ),
     )
 
@@ -1640,7 +1637,7 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
                 initial_status = ScreeningDocumentReview.ReviewStatus.NOT_APPLICABLE
                 status_is_fixed = True
             elif evidence is None and is_required_for_completeness:
-                initial_status = ScreeningDocumentReview.ReviewStatus.ABSENT
+                initial_status = ScreeningDocumentReview.ReviewStatus.NOT_SUBMITTED
                 status_is_fixed = True
             elif evidence is None:
                 initial_status = ScreeningDocumentReview.ReviewStatus.NOT_APPLICABLE
@@ -1657,7 +1654,7 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
             widget = forms.HiddenInput if status_is_fixed else forms.Select
             # Fixed rows submit their system-applied value through a hidden
             # input, so they keep the full choice set to validate; the editable
-            # dropdown is limited to the three reviewer-selectable outcomes.
+            # dropdown is limited to the two reviewer-selectable outcomes.
             status_choices = (
                 ScreeningDocumentReview.ReviewStatus.choices
                 if status_is_fixed
@@ -1733,12 +1730,12 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
             ):
                 self.add_error(field_name, "Required documents cannot be marked not applicable.")
             if (
-                status == ScreeningDocumentReview.ReviewStatus.MEETS
+                status == ScreeningDocumentReview.ReviewStatus.COMPLIED
                 and field_meta["evidence"] is None
             ):
-                self.add_error(field_name, "A missing document cannot be marked Meets.")
+                self.add_error(field_name, "A missing document cannot be marked Complied.")
             if (
-                status == ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION
+                status == ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
                 and not remarks
             ):
                 self.add_error(
@@ -1804,7 +1801,7 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
             )
             self.add_error(
                 "completeness_status",
-                "Required documents must be marked Meets before using Complete: "
+                "Required documents must be marked Complied before using Complete: "
                 f"{blocking_labels}.",
             )
         if (

@@ -34,8 +34,8 @@
                     Copy results from Secretariat review
                 </button>
                 {% endif %}
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="scr-mark-all-meets">
-                    Mark remaining as &ldquo;Meets&rdquo;
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="scr-mark-all-complied">
+                    Mark remaining as &ldquo;Complied&rdquo;
                 </button>
                 <span class="visually-hidden" role="status" id="scr-mark-all-status"></span>
             </div>
@@ -469,7 +469,7 @@ function rgInitScreeningDocDrawer() {}
     });
 
     var BLOCKING_STATUSES = {
-        not_reviewed: true, request_resubmission: true, absent: true
+        not_reviewed: true, return_for_resubmission: true, not_submitted: true
     };
 
     function docStatusFields() {
@@ -505,7 +505,7 @@ function rgInitScreeningDocDrawer() {}
             });
         }
         docStatusFields().forEach(function (f) {
-            if (f.value !== "request_resubmission") return;
+            if (f.value !== "return_for_resubmission") return;
             var row = f.closest("[data-document-row]");
             var ta = row && row.querySelector(".js-doc-remarks");
             if (ta && ta.value.trim() === "") {
@@ -697,7 +697,7 @@ function rgInitScreeningDocDrawer() {}
     /* ── Resubmission notice ─────────────────────────────────────── */
     function resubmissionCount() {
         return docStatusFields().filter(function (f) {
-            return f.value === "request_resubmission";
+            return f.value === "return_for_resubmission";
         }).length;
     }
     function updateResubmissionNotice() {
@@ -751,7 +751,7 @@ function rgInitScreeningDocDrawer() {}
         var textarea = wrap.querySelector(".js-doc-remarks");
         var reqMarker = wrap.querySelector("[data-remarks-req]");
         var hint = wrap.querySelector("[data-remarks-hint]");
-        var isResub = statusField && statusField.value === "request_resubmission";
+        var isResub = statusField && statusField.value === "return_for_resubmission";
         var hasContent = textarea && textarea.value.trim() !== "";
 
         if (reqMarker) reqMarker.hidden = !isResub;
@@ -777,7 +777,7 @@ function rgInitScreeningDocDrawer() {}
             var statusField = row.querySelector(".js-doc-status");
             var hasContent = textarea && textarea.value.trim() !== "";
             var hasError = wrap.querySelector(".invalid-feedback");
-            var isResub = statusField && statusField.value === "request_resubmission";
+            var isResub = statusField && statusField.value === "return_for_resubmission";
 
             if (panel) panel.hidden = !(isResub || hasContent || hasError);
             if (toggle) {
@@ -924,14 +924,14 @@ function rgInitScreeningDocDrawer() {}
 <script>
 (function () {
     "use strict";
-    /* UX-05 — "Mark remaining as Meets" accelerator for the common complete-folder
-       case. Only fills the still-empty editable dropdowns; never overwrites a row
-       already set to Request Resubmission / Absent, and never touches fixed
-       (system-applied) rows or remarks. Dispatches change so validation, the
-       review summary, and autosave all pick the values up. */
+    /* UX-05 — "Mark remaining as Complied" accelerator for the common
+       complete-folder case. Only fills the still-empty editable dropdowns;
+       never overwrites a row already set to Return for Resubmission, and
+       never touches fixed (system-applied) rows or remarks. Dispatches change
+       so validation, the review summary, and autosave all pick the values up. */
     document.addEventListener("DOMContentLoaded", function () {
         var statusEl = document.getElementById("scr-mark-all-status");
-        var btn = document.getElementById("scr-mark-all-meets");
+        var btn = document.getElementById("scr-mark-all-complied");
         if (btn) {
             btn.addEventListener("click", function () {
                 var selects = document.querySelectorAll('select[name^="document_status__"]');
@@ -939,18 +939,18 @@ function rgInitScreeningDocDrawer() {}
                 selects.forEach(function (sel) {
                     if (sel.disabled) return;
                     if ((sel.value || "") !== "") return;
-                    var hasMeets = Array.prototype.some.call(sel.options, function (o) {
-                        return o.value === "meets";
+                    var hasComplied = Array.prototype.some.call(sel.options, function (o) {
+                        return o.value === "complied";
                     });
-                    if (!hasMeets) return;
-                    sel.value = "meets";
+                    if (!hasComplied) return;
+                    sel.value = "complied";
                     sel.dispatchEvent(new Event("change", { bubbles: true }));
                     changed++;
                 });
                 if (statusEl) {
                     statusEl.textContent = changed === 1
-                        ? "1 document marked as Meets — review each row before finalizing."
-                        : changed + " documents marked as Meets — review each row before finalizing.";
+                        ? "1 document marked as Complied — review each row before finalizing."
+                        : changed + " documents marked as Complied — review each row before finalizing.";
                 }
             });
         }

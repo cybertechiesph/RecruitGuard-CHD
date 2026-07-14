@@ -3812,8 +3812,8 @@ def build_submission_packet(application):
 
 SCREENING_COMPLETENESS_BLOCKING_DOCUMENT_STATUSES = {
     ScreeningDocumentReview.ReviewStatus.NOT_REVIEWED,
-    ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION,
-    ScreeningDocumentReview.ReviewStatus.ABSENT,
+    ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION,
+    ScreeningDocumentReview.ReviewStatus.NOT_SUBMITTED,
 }
 
 
@@ -3822,7 +3822,7 @@ def _screening_document_review_rows(
     screening_record=None,
     document_reviews=None,
     *,
-    default_submitted_status=ScreeningDocumentReview.ReviewStatus.MEETS,
+    default_submitted_status=ScreeningDocumentReview.ReviewStatus.COMPLIED,
 ):
     current_documents = get_current_applicant_document_map(application)
     requirements = get_applicant_document_requirements(application)
@@ -3856,7 +3856,7 @@ def _screening_document_review_rows(
         if is_not_applicable:
             status = ScreeningDocumentReview.ReviewStatus.NOT_APPLICABLE
         elif evidence is None and is_required:
-            status = ScreeningDocumentReview.ReviewStatus.ABSENT
+            status = ScreeningDocumentReview.ReviewStatus.NOT_SUBMITTED
         elif evidence is None:
             status = ScreeningDocumentReview.ReviewStatus.NOT_APPLICABLE
         elif provided.get("status"):
@@ -3923,7 +3923,7 @@ def _validate_screening_review_consistency(
     ):
         blocking_labels = "; ".join(row["requirement_title"] for row in blocking_reviews)
         raise ValueError(
-            "Required documents must be marked Meets before using Complete: "
+            "Required documents must be marked Complied before using Complete: "
             f"{blocking_labels}."
         )
     for row in document_reviews:
@@ -3934,14 +3934,14 @@ def _validate_screening_review_consistency(
         ):
             raise ValueError(f"{row['requirement_title']} cannot be marked not applicable.")
         if (
-            row["status"] == ScreeningDocumentReview.ReviewStatus.MEETS
+            row["status"] == ScreeningDocumentReview.ReviewStatus.COMPLIED
             and row["evidence_item"] is None
         ):
             raise ValueError(
-                f"{row['requirement_title']} cannot meet the requirement without an uploaded file."
+                f"{row['requirement_title']} cannot be marked Complied without an uploaded file."
             )
         if (
-            row["status"] == ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION
+            row["status"] == ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
             and not (row.get("remarks") or "").strip()
         ):
             raise ValueError(
@@ -4091,7 +4091,7 @@ def save_screening_review(application, actor, cleaned_data, finalize=False, allo
             and screening_record.completeness_status
             == ScreeningRecord.CompletenessStatus.COMPLETE
             and not screening_record.document_reviews.filter(
-                status=ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION
+                status=ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
             ).exists()
         )
         if is_definitive_screening_cut:
@@ -7248,13 +7248,13 @@ def _transition_target(application, effective_role, action):
 
 
 def _flagged_resubmission_reviews(application, *, stage):
-    """The flagged (Request Resubmission) document-review rows on a stage's screening record."""
+    """The flagged (Return for Resubmission) document-review rows on a stage's screening record."""
     screening_record = get_screening_record(application, stage=stage)
     if screening_record is None:
         return screening_record, []
     flagged = list(
         screening_record.document_reviews.filter(
-            status=ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION
+            status=ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
         ).order_by("display_order", "created_at")
     )
     return screening_record, flagged
@@ -7698,7 +7698,7 @@ def process_workflow_action(application, actor, action, remarks):
         if screening_record is not None:
             requested_document_reviews = list(
                 screening_record.document_reviews.filter(
-                    status=ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION
+                    status=ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
                 ).order_by("display_order", "created_at")
             )
         if requested_document_reviews:

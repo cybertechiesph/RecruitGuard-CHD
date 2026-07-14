@@ -499,11 +499,11 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
             _reviews = list(_screening_record.document_reviews.all())
             context["screening_flagged_count"] = sum(
                 1 for r in _reviews
-                if r.status == ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION
+                if r.status == ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
             )
-            context["screening_absent_count"] = sum(
+            context["screening_not_submitted_count"] = sum(
                 1 for r in _reviews
-                if r.status == ScreeningDocumentReview.ReviewStatus.ABSENT
+                if r.status == ScreeningDocumentReview.ReviewStatus.NOT_SUBMITTED
             )
         context["applicant_document_review_items"] = get_applicant_document_review_items(application)
         context["exam_records"] = get_exam_records(application)
@@ -819,7 +819,7 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
                 if screening_record is not None:
                     context["resubmission_document_reviews"] = list(
                         screening_record.document_reviews.filter(
-                            status=ScreeningDocumentReview.ReviewStatus.REQUEST_RESUBMISSION
+                            status=ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
                         ).order_by("display_order", "created_at")
                     )
         if get_case_handoff_options(application, user):
