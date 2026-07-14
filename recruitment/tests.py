@@ -10093,7 +10093,7 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
             reverse("interview-rating-sheet-print", kwargs={"pk": application.pk})
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "HRMPSB Interview Rating Sheet")
+        self.assertContains(response, "HRM Promotion and Selection Board")
         # REV-B face-to-face exception: the sheet carries code AND name.
         self.assertContains(response, application.applicant_display_name)
         self.assertContains(response, application.candidate_code_label)

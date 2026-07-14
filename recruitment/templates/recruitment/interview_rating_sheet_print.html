@@ -33,6 +33,10 @@
     table.comp { width: 100%; border-collapse: collapse; margin-top: 16px; }
     table.comp th, table.comp td { border: 1px solid #9aa4af; padding: 8px; text-align: left; vertical-align: top; }
     table.comp th { background: #f1f5ef; font-family: Arial, Helvetica, sans-serif; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+    table.comp td.group-head {
+        background: #f7f8f6; font-family: Arial, Helvetica, sans-serif; font-weight: 700;
+        font-size: 11px; letter-spacing: 0.06em;
+    }
     table.comp .score-box { width: 110px; }
     table.comp .score-cell { height: 34px; }
     .comp-desc { font-size: 11.5px; color: #6b7280; margin-top: 2px; }
@@ -63,50 +67,57 @@
             <img src="{% static 'img/brand/chd-calabarzon-seal.png' %}" alt="DOH–CHD CALABARZON seal">
             <div>
                 <div class="office">Department of Health — Center for Health Development CALABARZON</div>
-                <h1>HRMPSB Interview Rating Sheet</h1>
+                <h1>HRM Promotion and Selection Board — Interview Form</h1>
             </div>
         </div>
 
         <div class="doc-meta">
             {# REV-B face-to-face exception: the live sheet carries code AND name. #}
-            <div><span>Candidate:</span> <strong>{{ application.candidate_code_label }} &mdash; {{ application.applicant_display_name }}</strong></div>
-            <div><span>Position:</span> <strong>{{ entry.title }}</strong> ({{ entry.job_code }})</div>
+            <div><span>Name:</span> <strong>{{ application.applicant_display_name }}</strong> ({{ application.candidate_code_label }})</div>
+            <div><span>Position desired:</span> <strong>{{ entry.title }}</strong> ({{ entry.job_code }})</div>
             {% if interview_session %}
             <div><span>Schedule:</span> {{ interview_session.scheduled_for|date:"F d, Y g:i A" }}</div>
             <div><span>Location / medium:</span> {{ interview_session.location }}</div>
             {% endif %}
         </div>
 
-        {% if competencies %}
+        {% if competency_groups %}
         <table class="comp">
             <thead>
                 <tr>
-                    <th>Competency</th>
+                    <th>Competencies</th>
                     <th class="score-box">Weight</th>
-                    <th class="score-box">Score (0&ndash;100)</th>
+                    <th class="score-box">Score</th>
                 </tr>
             </thead>
             <tbody>
-                {% for competency in competencies %}
+                {% for group in competency_groups %}
+                <tr>
+                    <td colspan="3" class="group-head">{{ group.label|upper }}</td>
+                </tr>
+                {% for competency in group.competencies %}
                 <tr>
                     <td>
-                        <strong>{{ competency.name }}</strong>
-                        <span class="comp-desc">({{ competency.get_group_display }})</span>
+                        {{ competency.name }}
                         {% if competency.description %}
                         <div class="comp-desc">{{ competency.description }}</div>
                         {% endif %}
                     </td>
-                    <td class="score-cell">{% if competency.weight %}{{ competency.weight }}{% endif %}</td>
+                    <td class="score-cell">{% if competency.weight %}{{ competency.weight|floatformat:"-2" }}{% endif %}</td>
                     <td class="score-cell"></td>
                 </tr>
                 {% endfor %}
+                {% endfor %}
                 <tr>
-                    <td style="text-align:right;"><strong>Overall rating</strong></td>
-                    <td></td>
+                    <td style="text-align:right;"><strong>TOTAL SCORE</strong></td>
+                    <td class="score-cell"><strong>{{ competency_total_weight|floatformat:"-2" }}</strong></td>
                     <td class="score-cell"></td>
                 </tr>
             </tbody>
         </table>
+        <p class="comp-desc" style="margin-top:6px;">
+            Note: Expected competency proficiency varies depending on the position.
+        </p>
         {% else %}
         <div class="warn">
             No published competency rating sheet exists for this vacancy yet.
@@ -115,18 +126,19 @@
         {% endif %}
 
         <div class="remarks-block">
-            <div class="label">Justification / remarks</div>
+            <div class="label">Comments</div>
             <div class="remarks-lines"></div>
             <div class="remarks-lines"></div>
             <div class="remarks-lines"></div>
         </div>
 
         <div class="sig-row">
-            <div class="sig"><div class="line">&nbsp;</div><div class="role">Rater's signature over printed name</div></div>
+            <div class="sig"><div class="line">&nbsp;</div><div class="role">Rated by: Name and Signature</div></div>
             <div class="sig"><div class="line">&nbsp;</div><div class="role">Date</div></div>
         </div>
 
         <div class="print-meta">
+            System rendering of the office interview form (DOH-RO4A-MPERIF).
             Scores recorded on paper must be encoded in RecruitGuard-CHD (or uploaded via the
             fallback flow) to count toward the comparative assessment. Printed by
             {{ printed_by.get_full_name|default:printed_by.username }} on {{ printed_at|date:"F d, Y g:i A" }}.

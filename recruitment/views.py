@@ -42,6 +42,7 @@ from .forms import (
 )
 from .models import (
     AuditLog,
+    CompetencyDefinition,
     CompletionRecord,
     EvidenceVaultItem,
     ExamRecord,
@@ -1999,6 +2000,14 @@ class InterviewRatingSheetPrintView(LoginRequiredMixin, WorkflowProcessorRequire
             raise PermissionDenied
         rating_template = get_published_competency_rating_template(application.position)
         competencies = list(rating_template.competencies.all()) if rating_template else []
+        # Mirror the office form (DOH-RO4A-MPERIF): competencies presented in
+        # CORE / ORGANIZATIONAL / TECHNICAL sections with a total-score row.
+        grouped = []
+        for group_value, group_label in CompetencyDefinition.Group.choices:
+            members = [c for c in competencies if c.group == group_value]
+            if members:
+                grouped.append({"label": group_label, "competencies": members})
+        total_weight = sum((c.weight or 0) for c in competencies)
         return render(
             request,
             "recruitment/interview_rating_sheet_print.html",
@@ -2006,7 +2015,8 @@ class InterviewRatingSheetPrintView(LoginRequiredMixin, WorkflowProcessorRequire
                 "application": application,
                 "entry": application.position,
                 "rating_template": rating_template,
-                "competencies": competencies,
+                "competency_groups": grouped,
+                "competency_total_weight": total_weight,
                 "interview_session": get_interview_session(application),
                 "printed_by": request.user,
                 "printed_at": timezone.now(),
@@ -2039,6 +2049,7 @@ class ComparativeAssessmentPrintView(LoginRequiredMixin, WorkflowProcessorRequir
                 "entry": application.position,
                 "report": report,
                 "items": items,
+                "weights": application.position.assessment_weights_or_default,
                 "printed_by": request.user,
                 "printed_at": timezone.now(),
             },

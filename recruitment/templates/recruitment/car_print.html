@@ -44,6 +44,7 @@
     .notes { margin-top: 16px; }
     .notes h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: #374151; margin: 14px 0 4px; }
     .blind-note { margin-top: 14px; font-size: 11.5px; color: #6b7280; font-style: italic; }
+    .sig-label { margin-top: 26px; font-family: Arial, Helvetica, sans-serif; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: #374151; }
     .sig-row { display: flex; gap: 48px; margin-top: 44px; }
     .sig { flex: 1; text-align: center; }
     .sig .line { border-top: 1px solid #111827; margin-bottom: 4px; padding-top: 4px; font-weight: 700; }
@@ -70,30 +71,30 @@
             <img src="{% static 'img/brand/chd-calabarzon-seal.png' %}" alt="DOH–CHD CALABARZON seal">
             <div>
                 <div class="office">Department of Health — Center for Health Development CALABARZON</div>
-                <h1>Comparative Assessment Report</h1>
+                <h1>Comparative Assessment</h1>
+                <div class="office" style="letter-spacing:0.06em;">HRM Promotion and Selection Board</div>
             </div>
         </div>
 
         <div class="doc-meta">
-            <div><span>Vacancy:</span> <strong>{{ entry.title }}</strong> ({{ entry.job_code }})</div>
+            <div><span>Position:</span> <strong>{{ entry.title }}</strong> ({{ entry.job_code }})</div>
+            {% if entry.position_reference.salary_grade %}<div><span>Salary Grade:</span> {{ entry.position_reference.salary_grade }}</div>{% endif %}
+            <div><span>Level:</span> {{ entry.get_level_display }}</div>
+            {% if entry.item_number %}<div><span>Plantilla Item Number:</span> {{ entry.item_number }}</div>{% endif %}
             <div><span>Engagement:</span> {{ entry.get_branch_display }}</div>
             <div><span>Candidates assessed:</span> {{ items|length }}</div>
             {% if report.members_present %}<div><span>HRMPSB members present:</span> {{ report.members_present }}</div>{% endif %}
-            <div><span>Prepared by:</span> {{ report.generated_by.get_full_name|default:report.generated_by.username }} ({{ report.created_at|date:"M d, Y" }})</div>
-            {% if report.is_finalized %}
-            <div><span>Finalized:</span> {{ report.finalized_by.get_full_name|default:report.finalized_by.username }} ({{ report.finalized_at|date:"M d, Y" }})</div>
-            {% endif %}
         </div>
 
         <table class="rank">
             <thead>
                 <tr>
                     <th class="num">Rank</th>
-                    <th>Candidate</th>
+                    <th>Candidates</th>
                     <th class="num">Document Review</th>
-                    <th class="num">ETE Rating</th>
-                    <th class="num">Examination</th>
-                    <th class="num">Interview</th>
+                    <th class="num">ETE ({{ weights.ete_weight|floatformat:"-1" }}%)</th>
+                    <th class="num">Examination ({{ weights.exam_weight|floatformat:"-1" }}%)</th>
+                    <th class="num">Interview ({{ weights.interview_weight|floatformat:"-1" }}%)</th>
                     <th class="num">Overall</th>
                 </tr>
             </thead>
@@ -129,14 +130,34 @@
         {% endif %}
 
         <p class="blind-note">
-            Candidates are identified by their assigned candidate codes. The code-to-person
-            mapping is retained in the recruitment case records and audit trail.
+            ETE: Education, Training and Experience. Candidates are identified by their
+            assigned candidate codes; the office form lists surnames here — this system
+            deliberately blinds the deliberation copy, and the code-to-person mapping is
+            retained in the recruitment case records and audit trail.
         </p>
 
-        <div class="sig-row">
+        <div class="doc-meta" style="margin-top:20px;">
+            <div><span>Prepared by:</span> {{ report.generated_by.get_full_name|default:report.generated_by.username }}, Secretariat ({{ report.created_at|date:"M d, Y" }})</div>
+            {% if report.is_finalized %}
+            <div><span>Finalized by:</span> {{ report.finalized_by.get_full_name|default:report.finalized_by.username }} ({{ report.finalized_at|date:"M d, Y" }})</div>
+            {% endif %}
+        </div>
+
+        <div class="sig-label">Rated by:</div>
+        <div class="sig-row" style="margin-top:20px;">
             <div class="sig"><div class="line">&nbsp;</div><div class="role">HRMPSB Chairperson</div></div>
-            <div class="sig"><div class="line">&nbsp;</div><div class="role">HRMPSB Member</div></div>
-            <div class="sig"><div class="line">&nbsp;</div><div class="role">HRMS Representative</div></div>
+            <div class="sig"><div class="line">&nbsp;</div><div class="role">HRMPSB Vice-Chairperson</div></div>
+            <div class="sig"><div class="line">&nbsp;</div><div class="role">Admin Officer V / HRMO III</div></div>
+        </div>
+        <div class="sig-row" style="margin-top:34px;">
+            <div class="sig"><div class="line">&nbsp;</div><div class="role">RHEA 2nd Level Representative</div></div>
+            <div class="sig"><div class="line">&nbsp;</div><div class="role">Ad Hoc Member</div></div>
+            <div class="sig" style="visibility:hidden;"><div class="line">&nbsp;</div><div class="role">&nbsp;</div></div>
+        </div>
+
+        <div class="doc-meta" style="margin-top:24px;">
+            <div><span>Date of Interview:</span> ______________________</div>
+            <div><span>Date of Deliberation:</span> ______________________</div>
         </div>
 
         <div class="print-meta">
