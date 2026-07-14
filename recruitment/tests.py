@@ -2542,6 +2542,100 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         self.assertEqual(entry.job_code, original_job_code)
         self.assertEqual(entry.qualification_reference, "Updated notes.")
 
+    def _lapsed_cos_entry(self, *, days_closed=1):
+        # Opening-based COS: closing date allowed, so a lapsed deadline can be
+        # built directly (objects.create skips form validation on purpose).
+        return PositionPosting.objects.create(
+            position_reference=self.project_assistant_position,
+            branch=PositionPosting.Branch.COS,
+            level=PositionPosting.Level.LEVEL_1,
+            intake_mode=PositionPosting.IntakeMode.OPENING_BASED,
+            status=PositionPosting.EntryStatus.ACTIVE,
+            opening_date=timezone.localdate() - timedelta(days=20),
+            closing_date=timezone.localdate() - timedelta(days=days_closed),
+        )
+
+    def _entry_edit_payload(self, entry, **overrides):
+        payload = {
+            "position_reference": entry.position_reference_id,
+            "branch": entry.branch,
+            "intake_mode": entry.intake_mode,
+            "status": entry.status,
+            "publication_date": "",
+            "opening_date": entry.opening_date.isoformat() if entry.opening_date else "",
+            "closing_date": entry.closing_date.isoformat() if entry.closing_date else "",
+            "qualification_reference": entry.qualification_reference or "",
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_entry_create_rejects_past_closing_date(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("recruitment-entry-create"),
+            {
+                "position_reference": self.project_assistant_position.pk,
+                "branch": PositionPosting.Branch.COS,
+                "intake_mode": PositionPosting.IntakeMode.OPENING_BASED,
+                "status": PositionPosting.EntryStatus.ACTIVE,
+                "publication_date": "",
+                "opening_date": (timezone.localdate() - timedelta(days=20)).isoformat(),
+                "closing_date": (timezone.localdate() - timedelta(days=1)).isoformat(),
+                "qualification_reference": "",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "The closing date cannot be set to a past date.")
+
+    def test_extending_lapsed_deadline_reopens_flags_and_audits(self):
+        entry = self._lapsed_cos_entry()
+        self.assertFalse(entry.is_open_for_intake)
+        previous_closing = entry.closing_date
+        new_closing = timezone.localdate() + timedelta(days=7)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("recruitment-entry-update", kwargs={"pk": entry.pk}),
+            self._entry_edit_payload(entry, closing_date=new_closing.isoformat()),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        entry.refresh_from_db()
+        self.assertEqual(entry.closing_date, new_closing)
+        self.assertTrue(entry.deadline_extended)
+        self.assertTrue(entry.is_open_for_intake)
+        log = AuditLog.objects.filter(
+            action=AuditLog.Action.RECRUITMENT_ENTRY_DEADLINE_CHANGED,
+            metadata__recruitment_entry_id=entry.id,
+        ).first()
+        self.assertIsNotNone(log)
+        self.assertEqual(log.metadata["previous_closing_date"], previous_closing.isoformat())
+        self.assertEqual(log.metadata["new_closing_date"], new_closing.isoformat())
+        self.assertTrue(log.metadata["is_extension"])
+
+    def test_entry_edit_keeps_unchanged_lapsed_closing_date(self):
+        entry = self._lapsed_cos_entry()
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("recruitment-entry-update", kwargs={"pk": entry.pk}),
+            self._entry_edit_payload(entry, qualification_reference="Notes only."),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        entry.refresh_from_db()
+        self.assertEqual(entry.qualification_reference, "Notes only.")
+        self.assertFalse(entry.deadline_extended)
+        self.assertFalse(
+            AuditLog.objects.filter(
+                action=AuditLog.Action.RECRUITMENT_ENTRY_DEADLINE_CHANGED,
+                metadata__recruitment_entry_id=entry.id,
+            ).exists()
+        )
+
     def test_entry_update_rejects_year_drift_when_generated_code_would_change(self):
         entry = PositionPosting.objects.create(
             position_reference=self.project_assistant_position,

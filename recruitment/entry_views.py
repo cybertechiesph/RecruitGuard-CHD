@@ -11,11 +11,12 @@ from .forms import (
     PositionDocumentRequirementsForm,
     RecruitmentEntryForm,
 )
-from .models import PositionPosting
+from .models import AuditLog, PositionPosting
 from .permissions import EntryManagerRequiredMixin
 from .services import (
     get_manageable_recruitment_entries,
     persist_recruitment_entry,
+    record_system_audit_event,
     set_position_document_requirements,
     update_recruitment_entry_status,
 )
@@ -128,6 +129,62 @@ class RecruitmentEntryUpdateView(
     model = PositionPosting
     form_class = RecruitmentEntryForm
     success_message = "Recruitment entry updated."
+
+    def form_valid(self, form):
+        # REV-A: deadline extensions are transparent, never silent. Capture the
+        # stored closing date before the save so the change can be flagged,
+        # audited, and (when the posting stayed manually Closed) explained.
+        previous = (
+            PositionPosting.objects.filter(pk=form.instance.pk)
+            .values("closing_date", "status")
+            .first()
+        ) or {}
+        previous_closing_date = previous.get("closing_date")
+        new_closing_date = form.cleaned_data.get("closing_date")
+        is_extension = bool(
+            previous_closing_date
+            and new_closing_date
+            and new_closing_date > previous_closing_date
+        )
+        if is_extension:
+            form.instance.deadline_extended = True
+
+        response = super().form_valid(form)
+        posting = self.object
+
+        if previous_closing_date != new_closing_date:
+            record_system_audit_event(
+                actor=self.request.user,
+                action=AuditLog.Action.RECRUITMENT_ENTRY_DEADLINE_CHANGED,
+                description=(
+                    f"Closing date for {posting.job_code} moved from "
+                    f"{previous_closing_date:%b %d, %Y} to {new_closing_date:%b %d, %Y}."
+                    if previous_closing_date and new_closing_date
+                    else f"Closing date for {posting.job_code} changed."
+                ),
+                metadata={
+                    "recruitment_entry_id": posting.id,
+                    "job_code": posting.job_code,
+                    "previous_closing_date": previous_closing_date.isoformat() if previous_closing_date else "",
+                    "new_closing_date": new_closing_date.isoformat() if new_closing_date else "",
+                    "is_extension": is_extension,
+                },
+            )
+        if is_extension:
+            if posting.status == PositionPosting.EntryStatus.ACTIVE:
+                messages.info(
+                    self.request,
+                    "Deadline extended — the posting is open to applicants again and "
+                    "publicly labeled as extended. The change is recorded in the audit log.",
+                )
+            else:
+                messages.warning(
+                    self.request,
+                    "The closing date was extended, but this entry's status is "
+                    f"\"{posting.get_status_display()}\" — it will not reopen to applicants "
+                    "until the status is set back to Active.",
+                )
+        return response
 
 
 class RecruitmentEntryStatusUpdateView(LoginRequiredMixin, EntryManagerRequiredMixin, View):

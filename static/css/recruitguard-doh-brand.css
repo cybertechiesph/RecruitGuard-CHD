@@ -3503,6 +3503,31 @@ body.applicant-portal-body {
     vertical-align: middle;
 }
 
+/* REV-A: transparent deadline-extension badge on the card deadline line */
+.rg-pub-job-card__extended {
+    display: inline-block;
+    padding: 0.1rem 0.45rem;
+    margin-left: 0.35rem;
+    border-radius: 999px;
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fde68a;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    vertical-align: middle;
+}
+
+/* REV-A: extension note inside the vacancy-detail deadline box */
+.rg-pub-deadline-extended {
+    display: block;
+    margin-top: 0.3rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #92400e;
+}
+
 /* "Need help applying?" PAD contact block */
 .rg-pub-help-box {
     display: flex;

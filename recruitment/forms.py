@@ -2711,6 +2711,11 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
             "For Plantilla, set the last day applications are accepted. "
             "Leave blank to default to a 14-day publication period."
         )
+        # REV-A: gray out past dates in the closing-date picker. Client-side
+        # only — the real guard is in clean(). Publication/opening stay
+        # flexible (recording an already-started paper publication is
+        # legitimate); a soft JS confirmation covers those.
+        self.fields["closing_date"].widget.attrs["min"] = timezone.localdate().isoformat()
         self.fields["qualification_reference"].label = "Entry Notes / Qualification Reference"
         self.selected_position_reference = self._resolve_selected_position_reference()
         self._apply_bootstrap()
@@ -2796,5 +2801,29 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
                 "closing_date",
                 "Continuous or pooling COS entries must not define a fixed closing date.",
             )
+
+        # REV-A: a NEW closing-date value cannot be in the past. On create this
+        # blocks born-dead postings; on edit it means extensions always land on
+        # today or later. An existing (unchanged) past value is legitimate —
+        # that's a lapsed deadline waiting to be extended — so only a *changed*
+        # value is checked.
+        effective_closing_date = cleaned_data.get("closing_date") or closing_date
+        if effective_closing_date:
+            original_closing_date = None
+            if self.instance.pk:
+                original_closing_date = (
+                    PositionPosting.objects.filter(pk=self.instance.pk)
+                    .values_list("closing_date", flat=True)
+                    .first()
+                )
+            if (
+                effective_closing_date != original_closing_date
+                and effective_closing_date < timezone.localdate()
+            ):
+                self.add_error(
+                    "closing_date",
+                    "The closing date cannot be set to a past date. To close a "
+                    "posting, set its status to Closed instead.",
+                )
 
         return cleaned_data

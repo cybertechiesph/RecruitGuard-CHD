@@ -104,6 +104,9 @@
                             <span class="rg-pub-job-card__urgent">Closing soon</span>
                         {% endif %}
                         Closes {{ entry.closing_date|date:"F d, Y" }}
+                        {% if entry.deadline_extended %}
+                            <span class="rg-pub-job-card__extended">Deadline extended</span>
+                        {% endif %}
                     {% else %}
                         Always accepting applications
                     {% endif %}
@@ -140,6 +143,9 @@
                             <span class="rg-pub-job-card__urgent">Closing soon</span>
                         {% endif %}
                         Closes {{ entry.closing_date|date:"F d, Y" }}
+                        {% if entry.deadline_extended %}
+                            <span class="rg-pub-job-card__extended">Deadline extended</span>
+                        {% endif %}
                     {% else %}
                         Always accepting applications
                     {% endif %}

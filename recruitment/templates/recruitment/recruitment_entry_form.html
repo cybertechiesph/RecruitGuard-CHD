@@ -193,5 +193,34 @@
     branchSel.addEventListener('change', applyBranch);
     applyBranch();
 })();
+
+(function () {
+    /* REV-A: backdated publication/opening dates are legitimate (the paper
+       publication may have started before this entry was recorded), so they
+       are allowed — but confirmed, never silent. Closing dates are hard-
+       validated server-side instead. */
+    var form = document.querySelector('form[method="post"]');
+    var pubField = document.getElementById('{{ form.publication_date.id_for_label }}');
+    var openField = document.getElementById('{{ form.opening_date.id_for_label }}');
+    if (!form) return;
+    form.addEventListener('submit', function (event) {
+        var today = new Date();
+        today.setHours(0, 0, 0, 0);
+        var backdated = [];
+        [[pubField, 'Publication date'], [openField, 'Opening date']].forEach(function (pair) {
+            var field = pair[0];
+            if (!field || !field.value) return;
+            var value = new Date(field.value + 'T00:00:00');
+            if (value < today) backdated.push(pair[1] + ' (' + field.value + ')');
+        });
+        if (backdated.length === 0) return;
+        var proceed = window.confirm(
+            backdated.join(' and ') +
+            (backdated.length === 1 ? ' is' : ' are') +
+            ' in the past. Are you recording a publication that already started?'
+        );
+        if (!proceed) event.preventDefault();
+    });
+})();
 </script>
 {% endblock %}

@@ -441,6 +441,10 @@ class PositionPosting(TimestampedModel):
     publication_date = models.DateField(blank=True, null=True)
     opening_date = models.DateField(default=timezone.localdate)
     closing_date = models.DateField(blank=True, null=True)
+    # REV-A: set when a published posting's closing date is moved later.
+    # Surfaces the "Deadline extended" label on public pages — extensions are
+    # transparent, never silent.
+    deadline_extended = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     created_by = models.ForeignKey(
         "RecruitmentUser",
@@ -3765,6 +3769,7 @@ class AuditLog(TimestampedModel):
         RECRUITMENT_ENTRY_CREATED = "recruitment_entry_created", "Recruitment Entry Created"
         RECRUITMENT_ENTRY_UPDATED = "recruitment_entry_updated", "Recruitment Entry Updated"
         RECRUITMENT_ENTRY_STATUS_CHANGED = "recruitment_entry_status_changed", "Recruitment Entry Status Changed"
+        RECRUITMENT_ENTRY_DEADLINE_CHANGED = "recruitment_entry_deadline_changed", "Recruitment Entry Deadline Changed"
         APPLICATION_CREATED = "application_created", "Application Created"
         APPLICATION_UPDATED = "application_updated", "Application Updated"
         APPLICATION_OTP_SENT = "application_otp_sent", "Application OTP Sent"

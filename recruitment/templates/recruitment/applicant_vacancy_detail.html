@@ -42,6 +42,11 @@
                     <strong>Closing Soon &mdash;</strong>
                 {% endif %}
                 Application Deadline: <strong>{{ entry.closing_date|date:"F d, Y" }}</strong>
+                {% if entry.deadline_extended %}
+                    <span class="rg-pub-deadline-extended">
+                        Deadline extended &mdash; applications reopened until the new date.
+                    </span>
+                {% endif %}
             </span>
         </div>
         {% else %}
