@@ -414,7 +414,7 @@ class ApplicantReceiptView(TemplateView):
         if self.application is None:
             messages.error(
                 request,
-                "This receipt link is no longer available. If you already submitted, use Track Application with your application ID and email.",
+                "This receipt link is no longer available. If you already submitted, use Track Application with your Tracking Code and email.",
             )
             return redirect("applicant-portal")
         return super().get(request, *args, **kwargs)
@@ -440,11 +440,11 @@ class ApplicantStatusLookupView(FormView):
         kwargs["request"] = self.request
         return kwargs
 
-    def get_unfinished_draft(self, application_id, email):
+    def get_unfinished_draft(self, tracking_code, email):
         return (
             RecruitmentApplication.objects.select_related("position")
             .filter(
-                reference_number=application_id,
+                tracking_code=tracking_code,
                 applicant_email__iexact=email,
                 submitted_at__isnull=True,
                 status=RecruitmentApplication.Status.DRAFT,
@@ -456,7 +456,7 @@ class ApplicantStatusLookupView(FormView):
         application = (
             RecruitmentApplication.objects.select_related("position")
             .filter(
-                reference_number=form.cleaned_data["application_id"],
+                tracking_code=form.cleaned_data["tracking_code"],
                 applicant_email__iexact=form.cleaned_data["email"],
                 submitted_at__isnull=False,
             )
@@ -464,7 +464,7 @@ class ApplicantStatusLookupView(FormView):
         )
         if not application:
             draft = self.get_unfinished_draft(
-                form.cleaned_data["application_id"],
+                form.cleaned_data["tracking_code"],
                 form.cleaned_data["email"],
             )
             if draft is not None:
@@ -478,8 +478,8 @@ class ApplicantStatusLookupView(FormView):
                 return redirect("applicant-otp", token=draft.public_token)
             form.add_error(
                 None,
-                "We could not find an application with that ID and email combination. "
-                "Please check your Application ID and email address and try again.",
+                "We could not find an application with that tracking code and email combination. "
+                "Please check your Tracking Code and email address and try again.",
             )
             return self.form_invalid(form)
         return self.render_to_response(
@@ -502,7 +502,7 @@ class ApplicantStatusLinkView(TemplateView):
         if self.application is None:
             messages.error(
                 request,
-                "This status link is no longer available. Use your Application ID and email to check your status.",
+                "This status link is no longer available. Use your Tracking Code and email to check your status.",
             )
             return redirect("applicant-status-lookup")
         if self.application.submitted_at is None:
@@ -524,7 +524,7 @@ class ApplicantStatusLinkView(TemplateView):
         context["form"] = ApplicantStatusLookupForm(
             request=self.request,
             initial={
-                "application_id": application.reference_number,
+                "tracking_code": application.tracking_code,
                 "email": application.applicant_email,
             }
         )
@@ -549,7 +549,7 @@ class ApplicantResubmissionView(TemplateView):
     def _missing(self, request):
         messages.error(
             request,
-            "This link is no longer available. Use Track Application with your Application ID and email.",
+            "This link is no longer available. Use Track Application with your Tracking Code and email.",
         )
         return redirect("applicant-status-lookup")
 

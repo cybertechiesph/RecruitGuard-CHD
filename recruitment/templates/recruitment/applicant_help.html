@@ -73,7 +73,7 @@
                 <div id="faq-a3" class="accordion-collapse collapse" aria-labelledby="faq-a3-hd">
                     <div class="accordion-body rg-faq__body">
                         <p>Yes. You may apply for multiple open positions. Each position requires a separate application
-                        submission. You will receive a unique Application ID for each one.</p>
+                        submission. You will receive a unique Tracking Code and case number for each one.</p>
                     </div>
                 </div>
             </div>
@@ -159,7 +159,7 @@
                     <div class="accordion-body rg-faq__body">
                         <p>Once you click <strong>&ldquo;Submit My Application&rdquo;</strong> and it is confirmed,
                         your application cannot be edited online. If you need to make a correction or withdraw, please
-                        contact the Public Assistance Desk (below) with your Application ID.</p>
+                        contact the Public Assistance Desk (below) with your case number.</p>
                     </div>
                 </div>
             </div>
@@ -246,15 +246,18 @@
                     <button class="accordion-button rg-faq__button" type="button"
                             data-bs-toggle="collapse" data-bs-target="#faq-s1"
                             aria-expanded="true" aria-controls="faq-s1">
-                        What is the Application ID and where do I find it?
+                        What are the Tracking Code and Case Reference?
                     </button>
                 </h3>
                 <div id="faq-s1" class="accordion-collapse collapse show" aria-labelledby="faq-s1-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>Your Application ID is a unique reference number assigned to your application the moment
-                        you submit. It looks like <strong>RG-20260528-ABCDE1</strong> (year-month-day, then 6 letters
-                        or numbers). It&rsquo;s shown on the confirmation page and sent to your email. Keep it &mdash;
-                        you&rsquo;ll need it to <a href="{% url 'applicant-status-lookup' %}">track your application</a>.</p>
+                        <p>When you submit, you receive two references with different jobs. Your
+                        <strong>Tracking Code</strong> (looks like <strong>TRK-7KQ4-M9X2</strong>) is private &mdash;
+                        together with your email it lets you
+                        <a href="{% url 'applicant-status-lookup' %}">track your application</a> online. Treat it
+                        like a password. Your <strong>case number</strong> (looks like <strong>Case No. 2026-0147</strong>)
+                        is the reference you quote when you call or email the office. Both are shown on your
+                        confirmation page and sent to your email.</p>
                     </div>
                 </div>
             </div>
@@ -264,12 +267,12 @@
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#faq-s2"
                             aria-expanded="false" aria-controls="faq-s2">
-                        I lost my Application ID. Can you help?
+                        I lost my Tracking Code. Can you help?
                     </button>
                 </h3>
                 <div id="faq-s2" class="accordion-collapse collapse" aria-labelledby="faq-s2-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>Yes. Your Application ID was sent to your email when you submitted &mdash; search your
+                        <p>Yes. Your Tracking Code was sent to your email when you submitted &mdash; search your
                         inbox (and Spam folder) for messages from us. The subject line includes &ldquo;RecruitGuard-CHD&rdquo;.</p>
                         <p>If you still can&rsquo;t find it, contact the Public Assistance Desk (below) with your
                         full name, the position you applied for, and the email address you used. We&rsquo;ll look it
@@ -289,7 +292,7 @@
                 <div id="faq-s3" class="accordion-collapse collapse" aria-labelledby="faq-s3-hd">
                     <div class="accordion-body rg-faq__body">
                         <p>Go to the <a href="{% url 'applicant-status-lookup' %}">Track Application</a> page
-                        and enter your Application ID and email address. The portal will show your current status
+                        and enter your Tracking Code and email address. The portal will show your current status
                         in plain language.</p>
                         <p>Easier: every status update email we send includes a direct link straight to your
                         status page &mdash; just click that.</p>
@@ -308,8 +311,9 @@
                 <div id="faq-s4" class="accordion-collapse collapse" aria-labelledby="faq-s4-hd">
                     <div class="accordion-body rg-faq__body">
                         <p>Yes. Our Public Assistance Desk is available at
-                        <a href="tel:+6382492000,4477"><strong>8-249-2000 loc. 4477</strong></a>. Have your Application
-                        ID ready so we can look up your case right away.</p>
+                        <a href="tel:+6382492000,4477"><strong>8-249-2000 loc. 4477</strong></a>. Have your case number
+                        ready so we can look up your case right away &mdash; never share your Tracking Code over
+                        the phone; it&rsquo;s not needed for assistance.</p>
                     </div>
                 </div>
             </div>
@@ -324,10 +328,11 @@
                 </h3>
                 <div id="faq-s5" class="accordion-collapse collapse" aria-labelledby="faq-s5-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>Yes. Anyone with your Application ID and the email address you used can check your status
-                        on the <a href="{% url 'applicant-status-lookup' %}">Track Application</a> page. This is
-                        useful if you&rsquo;re overseas (OFW) or working in an area without good internet &mdash; a
-                        family member can check for you.</p>
+                        <p>Yes &mdash; but only someone you trust. A family member with your Tracking Code and the
+                        email address you used can check your status on the
+                        <a href="{% url 'applicant-status-lookup' %}">Track Application</a> page. This is useful if
+                        you&rsquo;re overseas (OFW) or working in an area without good internet. Share the code only
+                        with someone checking on your behalf.</p>
                         <p>The status page does not show personal information beyond your name and the position. We
                         don&rsquo;t send full application data over phone or email to people other than you.</p>
                     </div>
@@ -345,8 +350,8 @@
                 <div id="faq-s6" class="accordion-collapse collapse" aria-labelledby="faq-s6-hd">
                     <div class="accordion-body rg-faq__body">
                         <p>The Track Application page does not yet show your uploaded documents back to you. If you
-                        want to confirm what we received, contact the Public Assistance Desk with your Application
-                        ID and we&rsquo;ll send you a list of the files attached to your application.</p>
+                        want to confirm what we received, contact the Public Assistance Desk with your case
+                        number and we&rsquo;ll send you a list of the files attached to your application.</p>
                     </div>
                 </div>
             </div>
@@ -364,7 +369,7 @@
                         <p>This means our recruitment team has sent your application back because something needs
                         to be addressed &mdash; for example, a missing document or additional information.
                         Check your email for instructions. If you didn&rsquo;t receive an email, contact the Public
-                        Assistance Desk (below) with your Application ID.</p>
+                        Assistance Desk (below) with your case number.</p>
                     </div>
                 </div>
             </div>
@@ -403,7 +408,7 @@
                 <a href="mailto:hrms@ro4a.doh.gov.ph" class="rg-help-pad__channel-value">hrms@ro4a.doh.gov.ph</a>
             </div>
         </div>
-        <p class="rg-help-pad__note">Include your Application ID if you&rsquo;re asking about a specific application.</p>
+        <p class="rg-help-pad__note">Include your case number if you&rsquo;re asking about a specific application.</p>
     </aside>
 
     <div class="rg-help-back">

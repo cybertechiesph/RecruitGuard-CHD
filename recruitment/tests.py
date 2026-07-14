@@ -1562,7 +1562,7 @@ class CaptchaProtectionTests(TestCase):
         response = self.client.post(
             reverse("applicant-status-lookup"),
             {
-                "application_id": "RG-20260528-ABCDE1",
+                "tracking_code": "TRK-XXXX-XXXX",
                 "email": "applicant@example.com",
             },
         )
@@ -1573,7 +1573,7 @@ class CaptchaProtectionTests(TestCase):
         response = self.client.post(
             reverse("applicant-status-lookup"),
             {
-                "application_id": "RG-20260528-ABCDE1",
+                "tracking_code": "TRK-XXXX-XXXX",
                 "email": "applicant@example.com",
                 "captcha_answer": self.captcha_answer("applicant_status_lookup"),
             },
@@ -2304,9 +2304,9 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
             closing_date=self.level1_closing_date(),
         )
 
-        expected_code = f"RG-PLT-{timezone.localdate().year:04d}-0003"
+        expected_code = f"VAC-PLT-{timezone.localdate().year:04d}-003"
         self.assertEqual(entry.job_code, expected_code)
-        self.assertRegex(entry.job_code, r"^RG-(PLT|COS)-\d{4}-\d{4}$")
+        self.assertRegex(entry.job_code, r"^VAC-(PLT|COS)-\d{4}-\d{3,}$")
 
     def test_entry_code_generation_uses_year_priority_and_next_sequence_within_branch(self):
         current_year = timezone.localdate().year
@@ -2335,9 +2335,9 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
             status=PositionPosting.EntryStatus.DRAFT,
         )
 
-        self.assertEqual(publication_entry.job_code, f"RG-COS-{current_year + 1:04d}-0001")
-        self.assertEqual(opening_entry.job_code, f"RG-COS-{current_year + 2:04d}-0001")
-        self.assertEqual(fallback_entry.job_code, f"RG-COS-{current_year:04d}-0002")
+        self.assertEqual(publication_entry.job_code, f"VAC-COS-{current_year + 1:04d}-001")
+        self.assertEqual(opening_entry.job_code, f"VAC-COS-{current_year + 2:04d}-001")
+        self.assertEqual(fallback_entry.job_code, f"VAC-COS-{current_year:04d}-002")
 
     def test_entry_code_validation_rejects_invalid_pattern_and_missing_saved_code(self):
         entry = PositionPosting.objects.create(
@@ -2368,7 +2368,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         current_year = timezone.localdate().year
         branch_mismatch_entry = PositionPosting(
             position_reference=self.project_assistant_position,
-            job_code=f"RG-PLT-{current_year:04d}-0001",
+            job_code=f"VAC-PLT-{current_year:04d}-001",
             branch=PositionPosting.Branch.COS,
             level=PositionPosting.Level.LEVEL_1,
             intake_mode=PositionPosting.IntakeMode.CONTINUOUS,
@@ -2383,7 +2383,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
 
         year_mismatch_entry = PositionPosting(
             position_reference=self.project_assistant_position,
-            job_code=f"RG-COS-{current_year - 1:04d}-0001",
+            job_code=f"VAC-COS-{current_year - 1:04d}-001",
             branch=PositionPosting.Branch.COS,
             level=PositionPosting.Level.LEVEL_1,
             intake_mode=PositionPosting.IntakeMode.CONTINUOUS,
@@ -2448,7 +2448,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         self.assertEqual(created_entry.position_reference, self.project_assistant_position)
         self.assertEqual(created_entry.title, self.project_assistant_position.position_title)
         self.assertEqual(created_entry.level, PositionPosting.Level.LEVEL_1)
-        self.assertEqual(created_entry.job_code, f"RG-COS-{self.entry_opening_date().year:04d}-0002")
+        self.assertEqual(created_entry.job_code, f"VAC-COS-{self.entry_opening_date().year:04d}-002")
         self.assertTrue(
             AuditLog.objects.filter(
                 action=AuditLog.Action.RECRUITMENT_ENTRY_CREATED,
@@ -2694,7 +2694,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
             reverse("recruitment-entry-create"),
             {
                 "position_reference": self.project_assistant_position.pk,
-                "job_code": "RG-COS-2099-9999",
+                "job_code": "VAC-COS-2099-999",
                 "branch": PositionPosting.Branch.COS,
                 "intake_mode": PositionPosting.IntakeMode.CONTINUOUS,
                 "status": PositionPosting.EntryStatus.ACTIVE,
@@ -3332,7 +3332,8 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
             follow=True,
         )
         application.refresh_from_db()
-        self.assertContains(response, application.reference_number)
+        self.assertContains(response, application.tracking_code)
+        self.assertContains(response, application.case_number_short)
         self.assertEqual(application.status, RecruitmentApplication.Status.SECRETARIAT_REVIEW)
         self.assertEqual(application.current_handler_role, RecruitmentUser.Role.SECRETARIAT)
         self.assertTrue(
@@ -3593,7 +3594,8 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         )
 
         application.refresh_from_db()
-        self.assertContains(receipt_response, application.reference_number)
+        self.assertContains(receipt_response, application.tracking_code)
+        self.assertContains(receipt_response, application.case_number_short)
         self.assertContains(
             receipt_response,
             reverse("applicant-status-link", kwargs={"token": application.public_token}),
@@ -3604,12 +3606,12 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         status_response = client.post(
             reverse("applicant-status-lookup"),
             {
-                "application_id": application.reference_number,
+                "tracking_code": application.tracking_code,
                 "email": "cos.portal@example.com",
             },
         )
         self.assertContains(status_response, "Under Review")
-        self.assertContains(status_response, application.reference_number)
+        self.assertContains(status_response, application.case_number_short)
 
     def test_applicant_status_magic_link_renders_status_page(self):
         client = Client()
@@ -3638,7 +3640,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         response = client.get(reverse("applicant-status-link", kwargs={"token": application.public_token}))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, application.reference_number)
+        self.assertContains(response, application.case_number_short)
         self.assertContains(response, application.applicant_display_name)
         self.assertContains(response, "Application details")
 
@@ -3679,13 +3681,13 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
             position=self.level1_position,
             applicant_email="draft.status.lookup@example.com",
         )
-        application.reference_number = "RG-20260528-DRAFT1"
-        application.save(update_fields=["reference_number", "updated_at"])
+        application.tracking_code = "TRK-DRFT-0001"
+        application.save(update_fields=["tracking_code", "updated_at"])
 
         response = client.post(
             reverse("applicant-status-lookup"),
             {
-                "application_id": "RG-20260528-DRAFT1",
+                "tracking_code": "TRK-DRFT-0001",
                 "email": "draft.status.lookup@example.com",
             },
             follow=True,
@@ -4078,7 +4080,8 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
 
         application.refresh_from_db()
         self.assertIsNotNone(application.submitted_at)
-        self.assertContains(receipt_response, application.reference_number)
+        self.assertContains(receipt_response, application.tracking_code)
+        self.assertContains(receipt_response, application.case_number_short)
 
     def test_performance_rating_not_applicable_archives_saved_rating_evidence(self):
         client = Client()
@@ -5199,7 +5202,7 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
         self.force_login_with_mfa(client, self.secretariat)
         response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
 
-        self.assertContains(response, "RG-")
+        self.assertContains(response, "CASE-")
         self.assertContains(response, "Qualification Screening")
         self.assertContains(response, 'rg-cws-layout rg-cws-layout--full')
         self.assertNotContains(response, "Workflow Snapshot")

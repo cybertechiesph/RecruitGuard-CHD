@@ -4,6 +4,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import secrets
 import smtplib
 import textwrap
@@ -1851,8 +1852,58 @@ def generate_submission_hash(application):
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def generate_application_reference():
-    return f"RG-{timezone.localdate():%Y%m%d}-{uuid.uuid4().hex[:6].upper()}"
+# Tracking-code alphabet: Crockford Base32 (no I, L, O, U — lookalikes are
+# impossible by construction) with the remaining vowels A and E also removed
+# so a random code can never form a word.
+TRACKING_CODE_ALPHABET = "0123456789BCDFGHJKMNPQRSTVWXYZ"
+CASE_NUMBER_PATTERN = re.compile(r"^CASE-(?P<year>\d{4})-(?P<sequence>\d{4,})$")
+IDENTIFIER_GENERATION_RETRIES = 5
+
+
+def generate_case_number(year=None):
+    """Next CASE-<year>-<seq> candidate. Callers must save under the field's
+    unique constraint and retry on IntegrityError — this read is not locked."""
+    year = year or timezone.localdate().year
+    prefix = f"CASE-{year:04d}-"
+    highest = 0
+    references = RecruitmentApplication.objects.filter(
+        reference_number__startswith=prefix
+    ).values_list("reference_number", flat=True)
+    for reference in references:
+        match = CASE_NUMBER_PATTERN.fullmatch(reference or "")
+        if match:
+            highest = max(highest, int(match.group("sequence")))
+    # Padding is cosmetic: sequence 10000 simply prints wider.
+    return f"{prefix}{highest + 1:04d}"
+
+
+def generate_tracking_code():
+    def block():
+        return "".join(secrets.choice(TRACKING_CODE_ALPHABET) for _ in range(4))
+
+    return f"TRK-{block()}-{block()}"
+
+
+def assign_candidate_code(application):
+    """Per-vacancy blinding alias (C-NN) for HRMPSB evaluation surfaces.
+    Numbers are drawn at random from a pool comfortably larger than the
+    vacancy's candidate count, so a code reveals nothing about application
+    order. Idempotent."""
+    if application.candidate_code:
+        return application.candidate_code
+    taken = set(
+        RecruitmentApplication.objects.filter(position=application.position)
+        .exclude(candidate_code="")
+        .values_list("candidate_code", flat=True)
+    )
+    pool_size = max(
+        20,
+        RecruitmentApplication.objects.filter(position=application.position).count() * 2,
+    )
+    candidates = [f"C-{n:02d}" for n in range(1, pool_size + 1) if f"C-{n:02d}" not in taken]
+    application.candidate_code = secrets.choice(candidates)
+    application.save(update_fields=["candidate_code", "updated_at"])
+    return application.candidate_code
 
 
 def _review_stage_from_application_status(application_status):
@@ -1916,6 +1967,10 @@ def _transition_case_stage(case, new_stage, *, force=False):
     if force or case.current_stage != new_stage:
         case.current_stage = new_stage
         case.stage_entered_at = timezone.now()
+        if new_stage == RecruitmentCase.Stage.HRMPSB_REVIEW:
+            # Entering panel evaluation: assign the blinding alias evaluator
+            # surfaces identify the candidate by (REV-B).
+            assign_candidate_code(case.application)
         return True
     return False
 
@@ -7044,24 +7099,40 @@ def submit_application(application, actor):
     previous_status = application.status
     previous_role = application.current_handler_role
     next_role, next_status = _route_for_submission(application)
-    if not application.reference_number:
-        application.reference_number = generate_application_reference()
     application.status = next_status
     application.current_handler_role = next_role
     application.submitted_at = timezone.now()
     application.submission_hash = generate_submission_hash(application)
-    application.save(
-        update_fields=[
-            "reference_number",
-            "status",
-            "current_handler_role",
-            "submitted_at",
-            "submission_hash",
-            "branch",
-            "level",
-            "updated_at",
-        ]
-    )
+    update_fields = [
+        "reference_number",
+        "tracking_code",
+        "status",
+        "current_handler_role",
+        "submitted_at",
+        "submission_hash",
+        "branch",
+        "level",
+        "updated_at",
+    ]
+    # Case number and tracking code are guarded by unique constraints; on a
+    # concurrent-submission collision, regenerate and retry.
+    last_error = None
+    for _ in range(IDENTIFIER_GENERATION_RETRIES):
+        if not application.reference_number:
+            application.reference_number = generate_case_number()
+        if not application.tracking_code:
+            application.tracking_code = generate_tracking_code()
+        try:
+            with transaction.atomic():
+                application.save(update_fields=update_fields)
+            last_error = None
+            break
+        except IntegrityError as exc:
+            application.reference_number = None
+            application.tracking_code = None
+            last_error = exc
+    if last_error is not None:
+        raise last_error
     case = _upsert_recruitment_case_for_submission(
         application=application,
         actor=actor,

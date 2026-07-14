@@ -18,17 +18,30 @@
         </p>
     </div>
 
-    {# Receipt card #}
+    {# Receipt card — the two identifiers have different jobs: the tracking
+       code is the applicant's private key to online status checking; the case
+       number is the public reference safe to quote to the office. #}
     <div class="rg-pub-receipt-card">
         <p style="font-size:0.8125rem; font-weight:600; color:#5f6c78; margin-bottom:0.35rem; text-transform:uppercase; letter-spacing:0.08em;">
-            Your Application ID
+            Your Tracking Code <span style="text-transform:none; letter-spacing:0; font-weight:500;">(keep private)</span>
         </p>
-        <p class="rg-pub-receipt-id">{{ application.reference_label }}</p>
-
+        <p class="rg-pub-receipt-id">{{ application.tracking_code }}</p>
+        <p style="font-size:0.8125rem; color:#5f6c78; margin:0 0 0.75rem;">
+            Use this code with your email to track your application online.
+            Treat it like a password &mdash; don't share it.
+        </p>
         <button class="btn btn-outline-secondary btn-sm" id="copy-btn" style="margin-bottom:1.25rem;"
-                data-value="{{ application.reference_label }}">
-            Copy Application ID
+                data-value="{{ application.tracking_code }}">
+            Copy Tracking Code
         </button>
+
+        <p style="font-size:0.8125rem; font-weight:600; color:#5f6c78; margin-bottom:0.35rem; text-transform:uppercase; letter-spacing:0.08em;">
+            Case Reference
+        </p>
+        <p class="rg-pub-receipt-id" style="font-size:1.05rem;">Case No. {{ application.case_number_short }}</p>
+        <p style="font-size:0.8125rem; color:#5f6c78; margin:0 0 1rem;">
+            Quote this case number if you call or email the office about your application.
+        </p>
 
         <hr style="border-color:#e5e9ed; margin:0 0 1rem;">
 
@@ -64,15 +77,15 @@
         <ol style="padding-left:1.25rem; margin:0; font-size:0.9375rem; color:#374151; line-height:1.7;">
             <li>Your application will be reviewed by our recruitment team.</li>
             <li>You may be contacted at your email or phone number for updates or additional requirements.</li>
-            <li>You can check your application status anytime using your Application ID.</li>
+            <li>You can check your application status anytime using your Tracking Code.</li>
         </ol>
     </div>
 
     {# Reminder box #}
     <div class="rg-pub-info-box rg-pub-info-box--warning" style="margin-bottom:1.5rem;">
         <p>
-            <strong>Save your Application ID.</strong>
-            You will need it to check your application status.
+            <strong>Save your Tracking Code and keep it private.</strong>
+            You will need it to check your application status online.
         </p>
         <p>
             A confirmation has also been sent to <strong>{{ application.applicant_email }}</strong>.
@@ -112,7 +125,7 @@
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(val).then(function () {
                 btn.textContent = 'Copied!';
-                setTimeout(function () { btn.textContent = 'Copy Application ID'; }, 2000);
+                setTimeout(function () { btn.textContent = 'Copy Tracking Code'; }, 2000);
             });
         } else {
             // Fallback
@@ -125,7 +138,7 @@
             document.execCommand('copy');
             document.body.removeChild(ta);
             btn.textContent = 'Copied!';
-            setTimeout(function () { btn.textContent = 'Copy Application ID'; }, 2000);
+            setTimeout(function () { btn.textContent = 'Copy Tracking Code'; }, 2000);
         }
     });
 })();

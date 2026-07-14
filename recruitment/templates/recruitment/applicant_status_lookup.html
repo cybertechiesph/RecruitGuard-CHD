@@ -18,8 +18,8 @@
     <div class="rg-ta-intro">
         <h1 class="rg-ta-intro__title">Track Your Application</h1>
         <p class="rg-ta-intro__copy">
-            Enter the Application ID you received when you submitted your application,
-            along with the email address you used.
+            Enter the private Tracking Code you received when you submitted your
+            application, along with the email address you used.
         </p>
     </div>
 
@@ -37,18 +37,19 @@
             {% endif %}
 
             <div class="rg-pub-field rg-ta-field">
-                <label for="{{ form.application_id.id_for_label }}" class="rg-ta-label">
-                    Application ID <span class="text-danger" aria-hidden="true">*</span>
+                <label for="{{ form.tracking_code.id_for_label }}" class="rg-ta-label">
+                    Tracking Code <span class="text-danger" aria-hidden="true">*</span>
                 </label>
-                {{ form.application_id }}
-                {% if form.application_id.errors %}
+                {{ form.tracking_code }}
+                {% if form.tracking_code.errors %}
                 <div class="invalid-feedback d-block rg-ta-error">
-                    {{ form.application_id.errors.0 }}
+                    {{ form.tracking_code.errors.0 }}
                 </div>
                 {% endif %}
                 <div class="form-text">
-                    Your Application ID looks like <strong>RG-20260528-ABCDE1</strong>
-                    (year-month-day, then 6 letters or numbers).
+                    Your Tracking Code looks like <strong>TRK-7KQ4-M9X2</strong>.
+                    It was shown on your submission receipt and emailed to you —
+                    keep it private.
                 </div>
             </div>
 
@@ -102,7 +103,7 @@
 
     <div class="rg-ta-result-card rg-ta-result-card--{{ status_variant }}">
         <div class="rg-ta-result-card__head">
-            <p class="rg-ta-result-card__ref">{{ application.reference_label }}</p>
+            <p class="rg-ta-result-card__ref">Case No. {{ application.case_number_short }}</p>
             <h1 class="rg-ta-result-card__applicant">{{ application.applicant_display_name }}</h1>
             <p class="rg-ta-result-card__position">
                 {{ application.position.title }}
@@ -225,8 +226,8 @@
         <p class="rg-ta-facts__title">Application details</p>
         <dl class="rg-ta-facts__list">
             <div class="rg-ta-facts__row">
-                <dt>Application ID</dt>
-                <dd><span class="rg-ta-mono">{{ application.reference_label }}</span></dd>
+                <dt>Case Reference</dt>
+                <dd><span class="rg-ta-mono">Case No. {{ application.case_number_short }}</span></dd>
             </div>
             <div class="rg-ta-facts__row">
                 <dt>Position</dt>

@@ -16,8 +16,10 @@ REFERENCE_LEVEL_TO_ROUTING_LEVEL = {
     "SECOND_LEVEL": 2,
 }
 
+# Vacancy codes describe the thing, not the software: VAC-<branch>-<year>-<seq>.
+# Sequence padding is cosmetic — 3 digits normally, growing wider past 999.
 ENTRY_CODE_PATTERN = re.compile(
-    r"^RG-(?P<branch>PLT|COS)-(?P<year>\d{4})-(?P<sequence>\d{4})$"
+    r"^VAC-(?P<branch>PLT|COS)-(?P<year>\d{4})-(?P<sequence>\d{3,})$"
 )
 STAGE_SLA_WARNING_THRESHOLD = timedelta(days=5)
 STAGE_SLA_OVERDUE_THRESHOLD = timedelta(days=7)
@@ -384,7 +386,7 @@ class PositionPosting(TimestampedModel):
         Branch.PLANTILLA: "PLT",
         Branch.COS: "COS",
     }
-    ENTRY_CODE_FORMAT_LABEL = "RG-[BRANCH]-[YEAR]-[4 digit sequence]"
+    ENTRY_CODE_FORMAT_LABEL = "VAC-[BRANCH]-[YEAR]-[3 digit sequence]"
     ENTRY_CODE_GENERATION_RETRIES = 5
     PLANTILLA_PUBLICATION_PERIOD_DAYS = 14
     LIVE_METADATA_LOCKED_FIELDS = {
@@ -574,7 +576,7 @@ class PositionPosting(TimestampedModel):
         branch_segment = self.entry_code_branch_segment
         if not branch_segment:
             return ""
-        return f"RG-{branch_segment}-{self.entry_code_year:04d}-"
+        return f"VAC-{branch_segment}-{self.entry_code_year:04d}-"
 
     def build_next_entry_code(self):
         prefix = self.expected_entry_code_prefix
@@ -593,7 +595,7 @@ class PositionPosting(TimestampedModel):
             if not match or not existing_code.startswith(prefix):
                 continue
             highest_sequence = max(highest_sequence, int(match.group("sequence")))
-        return f"{prefix}{highest_sequence + 1:04d}"
+        return f"{prefix}{highest_sequence + 1:03d}"
 
     def clean(self):
         errors = {}
@@ -804,6 +806,8 @@ class RecruitmentApplication(TimestampedModel):
         NOT_APPLICABLE = "not_applicable", "I do not have an applicable performance rating"
 
     public_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    # Case number (CASE-<year>-<seq>): the everyday internal + printed label.
+    # Safe to display anywhere — it is a label, not a credential.
     reference_number = models.CharField(
         max_length=30,
         unique=True,
@@ -811,6 +815,19 @@ class RecruitmentApplication(TimestampedModel):
         blank=True,
         null=True,
     )
+    # Tracking code (TRK-XXXX-XXXX): the applicant's private credential for
+    # Track Application. Never rendered on internal surfaces.
+    tracking_code = models.CharField(
+        max_length=13,
+        unique=True,
+        editable=False,
+        blank=True,
+        null=True,
+    )
+    # Candidate code (C-NN): per-vacancy blinding alias for HRMPSB evaluation
+    # surfaces. Assigned in randomized order when the case enters HRMPSB
+    # review, so it carries no application-order metadata.
+    candidate_code = models.CharField(max_length=10, blank=True, default="")
     applicant = models.ForeignKey("RecruitmentUser", on_delete=models.CASCADE, related_name="applications")
     position = models.ForeignKey(PositionPosting, on_delete=models.PROTECT, related_name="applications")
     branch = models.CharField(max_length=20, choices=PositionPosting.Branch.choices)
@@ -897,6 +914,20 @@ class RecruitmentApplication(TimestampedModel):
     @property
     def reference_label(self):
         return self.reference_number or "Generated after final submission"
+
+    @property
+    def case_number_short(self):
+        """Display rule: templates print "Case No. 2026-0147" — the label comes
+        from the page, so the stored CASE- prefix is stripped to avoid
+        "Case No. CASE-…" stutter. Raw contexts (exports, audit data) keep the
+        self-describing full value."""
+        if not self.reference_number:
+            return ""
+        return self.reference_number.removeprefix("CASE-")
+
+    @property
+    def candidate_code_label(self):
+        return self.candidate_code or "Unassigned"
 
     @property
     def active_secretariat_override(self):

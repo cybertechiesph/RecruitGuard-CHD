@@ -966,15 +966,15 @@ class DocumentResubmissionForm(BootstrapFormMixin, forms.Form):
 class ApplicantStatusLookupForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form):
     captcha_scope = "applicant_status_lookup"
 
-    application_id = forms.CharField(max_length=30, label="Application ID")
+    tracking_code = forms.CharField(max_length=20, label="Tracking Code")
     email = forms.EmailField(label="Applicant email")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._apply_bootstrap()
 
-    def clean_application_id(self):
-        return self.cleaned_data["application_id"].strip().upper()
+    def clean_tracking_code(self):
+        return self.cleaned_data["tracking_code"].strip().upper()
 
     def clean_email(self):
         return self.cleaned_data["email"].strip().lower()
