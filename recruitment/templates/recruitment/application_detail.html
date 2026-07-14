@@ -1,7 +1,7 @@
 {% extends "internal_base.html" %}
 {% load recruitment_ui %}
 
-{% block internal_title %}{{ application.reference_label }}{% endblock %}
+{% block internal_title %}{% if request.user.role == "hrmpsb_member" %}Candidate {{ application.candidate_code_label }}{% else %}{{ application.reference_label }}{% endif %}{% endblock %}
 {% block workspace_body_class %}rg-cws-page{% endblock %}
 
 {% block breadcrumb %}
@@ -12,7 +12,7 @@
     <a href="{% url 'workflow-queue' %}">My Queue</a>
 {% endif %}
 <span class="rg-breadcrumb-sep">&rsaquo;</span>
-<span class="rg-breadcrumb-current">{{ application.reference_label }}</span>
+<span class="rg-breadcrumb-current">{% if request.user.role == "hrmpsb_member" %}Candidate {{ application.candidate_code_label }}{% else %}{{ application.reference_label }}{% endif %}</span>
 {% endblock %}
 
 {% block content %}
@@ -33,7 +33,11 @@
 {% include "internal_includes/case_pipeline.html" %}
 
 
-{# Applicant profile and submission context, available on every tab. #}
+{# Applicant profile and submission context, available on every tab.
+   REV-B: hidden from HRMPSB members — panel evaluation is blinded, and this
+   panel carries the applicant's name, contact details, and self-written text.
+   The rating context they need lives in the interview and CAR sections. #}
+{% if request.user.role != "hrmpsb_member" %}
 <details class="rg-applicant-panel" open>
     <summary class="rg-applicant-panel__summary">
         <svg class="rg-applicant-panel__icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
@@ -97,6 +101,7 @@
         </div>
     </div>
 </details>
+{% endif %}
 
 
 {% if request.user.role == "system_admin" %}

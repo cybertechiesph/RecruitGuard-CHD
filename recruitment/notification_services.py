@@ -387,9 +387,9 @@ def _build_interview_session_scheduled_notification(application, interview_sessi
         f"Dear {recipient_name},",
         "",
         "An interview session has been scheduled and is ready for panel rating.",
-        f"Applicant: {application.applicant_display_name}",
+        f"Candidate: {application.candidate_code_label} — {application.applicant_display_name}",
         f"Position: {application.position.title}",
-        f"Application ID: {application.reference_number}",
+        f"Case Reference: {application.reference_number}",
         f"Schedule: {_format_schedule(interview_session.scheduled_for)}",
         f"Location / medium: {interview_session.location}",
     ]
@@ -801,7 +801,8 @@ def _build_interview_batch_panel_digest(posting, applications, interview_session
     ]
     for application in applications:
         lines.append(
-            f"- {application.applicant_display_name} ({application.reference_number})"
+            f"- {application.candidate_code_label} — {application.applicant_display_name}"
+            f" ({application.reference_number})"
         )
     if interview_session.session_notes:
         lines.extend(["", "Session notes:", interview_session.session_notes.strip()])

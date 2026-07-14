@@ -1,8 +1,16 @@
 {% load recruitment_ui %}
 <div class="rg-cws-header">
     <div class="rg-cws-header__identity">
-        <div class="rg-cws-header__ref">{{ application.reference_label }}</div>
-        <h1 class="rg-cws-header__title">{{ application.applicant_display_name }}</h1>
+        {% if request.user.role == "hrmpsb_member" %}
+            {# REV-B: panel evaluators identify candidates by code — no name,
+               and no sequential case number (it weakly leaks submission
+               order). The vacancy code below is context enough. #}
+            <div class="rg-cws-header__ref">{{ application.position.job_code }}</div>
+            <h1 class="rg-cws-header__title">Candidate {{ application.candidate_code_label }}</h1>
+        {% else %}
+            <div class="rg-cws-header__ref">{{ application.reference_label }}</div>
+            <h1 class="rg-cws-header__title">{{ application.applicant_display_name }}</h1>
+        {% endif %}
         <div class="rg-cws-header__meta">
             {{ application.position.title }}
             <span class="rg-imeta__sep" style="display:inline-block;"></span>

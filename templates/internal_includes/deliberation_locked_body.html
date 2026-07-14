@@ -298,7 +298,7 @@
             <div class="rg-del-rank-badge">#{{ item.rank_order }}</div>
             <div class="rg-del-car-item__body">
                 <div class="rg-del-car-item__name">
-                    {{ item.recruitment_case.application.applicant.get_full_name }}
+                    {{ item.recruitment_case.application.candidate_code_label }}
                 </div>
                 <div class="rg-del-car-item__scores">
                     {% if item.qualification_outcome %}

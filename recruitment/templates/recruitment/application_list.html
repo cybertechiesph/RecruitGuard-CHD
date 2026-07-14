@@ -108,7 +108,11 @@
                                     {{ application.reference_label }}
                                 </div>
                                 <div class="rg-imeta mt-1">
-                                    {{ application.applicant_display_name }}
+                                    {% if request.user.role == "hrmpsb_member" %}
+                                        Candidate {{ application.candidate_code_label }}
+                                    {% else %}
+                                        {{ application.applicant_display_name }}
+                                    {% endif %}
                                 </div>
                             </td>
                             <td>

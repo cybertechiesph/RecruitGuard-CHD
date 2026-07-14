@@ -5425,7 +5425,9 @@ def apply_car_ete_ratings(application, actor, posted):
         )
         if case is None:
             continue
-        candidate_name = case.application.applicant_display_name
+        # REV-B: this error renders on the blinded CAR screen — identify the
+        # row by candidate code, not name.
+        candidate_name = case.application.candidate_code_label
         missing_scores = [label for label in ETE_COMPONENT_LABELS if not scores_raw[label]]
         if missing_scores:
             raise ValueError(
@@ -5796,6 +5798,7 @@ def generate_comparative_assessment_report(application, actor, cleaned_data, fin
                 "preliminary_rank_order": row["preliminary_rank_order"],
                 "application_reference": row["application"].reference_number or "",
                 "applicant_name": row["application"].applicant_display_name,
+                "candidate_code": row["application"].candidate_code or "",
                 "document_review_outcome": row["qualification_outcome"],
                 "document_review_score": row["document_review_score"],
                 "finalized_document_review_count": row["finalized_document_review_count"],

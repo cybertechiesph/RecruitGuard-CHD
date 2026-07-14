@@ -54,7 +54,7 @@ HRM Chief on COS). Two states:
                 {% endif %}
                 <div class="rg-del-car-item__body">
                     <div class="rg-del-car-item__name">
-                        {{ item.applicant_display_name }}
+                        {{ item.candidate_label }}
                     </div>
                     {% if item.assessment_score is None %}
                         <p class="rg-del-car-item__decision"><em>Unranked &mdash; enter the ETE rating</em></p>
@@ -147,7 +147,7 @@ HRM Chief on COS). Two states:
                 {% with ete=item.application.ete_rating %}
                 <div class="rg-car-ete-row" style="display:block;padding:0.6rem 0;border-bottom:1px solid #eef1f4;">
                     <div class="rg-car-ete-row__name mb-1">
-                        {{ item.applicant_display_name }}
+                        {{ item.candidate_label }}
                         {% if ete and ete.rating is not None %}
                             <span class="rg-pill rg-pill--info rg-pill--sm" title="Computed ETE rating on record">ETE {{ ete.rating }}</span>
                         {% endif %}
@@ -160,12 +160,12 @@ HRM Chief on COS). Two states:
                                    name="ete_education_{{ item.recruitment_case_id }}"
                                    value="{{ ete.education_score|default_if_none:'' }}"
                                    min="0" max="100" step="0.01"
-                                   aria-label="Education score for {{ item.applicant_display_name }}">
+                                   aria-label="Education score for {{ item.candidate_label }}">
                             <input type="text" class="form-control form-control-sm mt-1"
                                    name="ete_education_basis_{{ item.recruitment_case_id }}"
                                    value="{{ ete.education_basis|default:'' }}"
                                    placeholder="Basis — required"
-                                   aria-label="Education basis for {{ item.applicant_display_name }}">
+                                   aria-label="Education basis for {{ item.candidate_label }}">
                         </div>
                         <div class="col-md-4">
                             <label class="form-label" style="font-size:0.72rem;" for="ete-training-{{ item.recruitment_case_id }}">Training (30%)</label>
@@ -174,12 +174,12 @@ HRM Chief on COS). Two states:
                                    name="ete_training_{{ item.recruitment_case_id }}"
                                    value="{{ ete.training_score|default_if_none:'' }}"
                                    min="0" max="100" step="0.01"
-                                   aria-label="Training score for {{ item.applicant_display_name }}">
+                                   aria-label="Training score for {{ item.candidate_label }}">
                             <input type="text" class="form-control form-control-sm mt-1"
                                    name="ete_training_basis_{{ item.recruitment_case_id }}"
                                    value="{{ ete.training_basis|default:'' }}"
                                    placeholder="Basis — required"
-                                   aria-label="Training basis for {{ item.applicant_display_name }}">
+                                   aria-label="Training basis for {{ item.candidate_label }}">
                         </div>
                         <div class="col-md-4">
                             <label class="form-label" style="font-size:0.72rem;" for="ete-experience-{{ item.recruitment_case_id }}">Experience (30%)</label>
@@ -188,12 +188,12 @@ HRM Chief on COS). Two states:
                                    name="ete_experience_{{ item.recruitment_case_id }}"
                                    value="{{ ete.experience_score|default_if_none:'' }}"
                                    min="0" max="100" step="0.01"
-                                   aria-label="Experience score for {{ item.applicant_display_name }}">
+                                   aria-label="Experience score for {{ item.candidate_label }}">
                             <input type="text" class="form-control form-control-sm mt-1"
                                    name="ete_experience_basis_{{ item.recruitment_case_id }}"
                                    value="{{ ete.experience_basis|default:'' }}"
                                    placeholder="Basis — required"
-                                   aria-label="Experience basis for {{ item.applicant_display_name }}">
+                                   aria-label="Experience basis for {{ item.candidate_label }}">
                         </div>
                     </div>
                 </div>
@@ -288,7 +288,7 @@ HRM Chief on COS). Two states:
                         <option value="">— Select the recommended applicant —</option>
                         {% for item in current_comparative_assessment_report_items %}
                             <option value="{{ item.recruitment_case_id }}">
-                                #{{ item.rank_order }} — {{ item.application.applicant_display_name }}
+                                #{{ item.rank_order }} — {{ item.application.candidate_code_label }}
                             </option>
                         {% endfor %}
                     </select>
@@ -432,7 +432,7 @@ HRM Chief on COS). Two states:
                 <div class="rg-del-rank-badge">#{{ item.rank_order }}</div>
                 <div class="rg-del-car-item__body">
                     <div class="rg-del-car-item__name">
-                        {{ item.applicant_display_name }}
+                        {{ item.candidate_label }}
                     </div>
                     <div class="rg-del-car-item__scores">
                         {% if item.qualification_outcome %}
@@ -514,7 +514,7 @@ HRM Chief on COS). Two states:
     {% if current_comparative_assessment_report.recommended_case_id %}
         <p class="rg-del-car__summary-notes">
             <strong>Board's recommended applicant:</strong>
-            {{ current_comparative_assessment_report.recommended_case.application.applicant_display_name }}
+            {{ current_comparative_assessment_report.recommended_case.application.candidate_code_label }}
             {% if current_comparative_assessment_report.recommendation_notes %}
                 &mdash; {{ current_comparative_assessment_report.recommendation_notes }}
             {% endif %}
@@ -542,7 +542,7 @@ HRM Chief on COS). Two states:
             <li class="rg-del-car-item">
                 <div class="rg-del-rank-badge">#{{ item.rank_order }}</div>
                 <div class="rg-del-car-item__body">
-                    <div class="rg-del-car-item__name">{{ item.applicant_display_name }}</div>
+                    <div class="rg-del-car-item__name">{{ item.candidate_label }}</div>
                     <div class="rg-del-car-item__scores">
                         {% if item.exam_score %}
                         <div class="rg-del-car-item__score-cell">
@@ -572,7 +572,7 @@ HRM Chief on COS). Two states:
     {% if current_comparative_assessment_report.recommended_case_id %}
         <p class="rg-del-car__summary-notes">
             <strong>Recorded recommendation:</strong>
-            {{ current_comparative_assessment_report.recommended_case.application.applicant_display_name }}
+            {{ current_comparative_assessment_report.recommended_case.application.candidate_code_label }}
         </p>
     {% endif %}
 </section>

@@ -530,7 +530,9 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
             )
         )
         for item in comparative_assessment_items:
-            item.applicant_display_name = item.application.applicant_display_name
+            # REV-B: CAR surfaces are blinded — rows are identified by the
+            # per-vacancy candidate code, never by name or case number.
+            item.candidate_label = item.application.candidate_code_label
         context["current_comparative_assessment_report_items"] = comparative_assessment_items
         # WF-11: with ETE blank the sort fallback produces an alphabetical pseudo-ranking —
         # suppress ordinals on the draft until every row carries a real assessment score.
