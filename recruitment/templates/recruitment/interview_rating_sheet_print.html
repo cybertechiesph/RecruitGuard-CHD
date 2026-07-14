@@ -81,13 +81,17 @@
             {% endif %}
         </div>
 
+        {% if rating_template.instructions %}
+        <p style="margin:10px 0 0; font-size:12.5px;">{{ rating_template.instructions|linebreaksbr }}</p>
+        {% endif %}
+
         {% if competency_groups %}
         <table class="comp">
             <thead>
                 <tr>
                     <th>Competencies</th>
                     <th class="score-box">Weight</th>
-                    <th class="score-box">Score</th>
+                    <th class="score-box">Score ({{ rating_template.scale_min }}&ndash;{{ rating_template.scale_max }})</th>
                 </tr>
             </thead>
             <tbody>
