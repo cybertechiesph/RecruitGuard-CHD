@@ -3697,6 +3697,11 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertEqual(application.branch, PositionPosting.Branch.COS)
         self.assertEqual(application.status, RecruitmentApplication.Status.SECRETARIAT_REVIEW)
 
+        # REV-I: the lookup no longer shows status directly — it emails a
+        # one-time code first. Clear the submission-time OTP cooldown so the
+        # lookup can send a fresh code immediately.
+        application.otp_requested_at = timezone.now() - timedelta(minutes=5)
+        application.save(update_fields=["otp_requested_at", "updated_at"])
         status_response = client.post(
             reverse("applicant-status-lookup"),
             {
@@ -3704,8 +3709,44 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
                 "email": "cos.portal@example.com",
             },
         )
-        self.assertContains(status_response, "Under Review")
-        self.assertContains(status_response, application.case_number_short)
+        self.assertContains(status_response, "Check Your Email")
+        self.assertNotContains(status_response, "Under Review")
+
+        verify_response = client.post(
+            reverse("applicant-status-lookup"),
+            {"action": "verify", "otp": self.extract_otp_from_last_email()},
+        )
+        self.assertContains(verify_response, "Under Review")
+        self.assertContains(verify_response, application.case_number_short)
+
+        # Option A session: within the verified window, a repeat lookup skips
+        # the code step entirely.
+        repeat_response = client.post(
+            reverse("applicant-status-lookup"),
+            {
+                "tracking_code": application.tracking_code,
+                "email": "cos.portal@example.com",
+            },
+        )
+        self.assertContains(repeat_response, "Under Review")
+
+        # A wrong code never unlocks the status.
+        fresh_client = Client()
+        application.otp_requested_at = timezone.now() - timedelta(minutes=5)
+        application.save(update_fields=["otp_requested_at", "updated_at"])
+        fresh_client.post(
+            reverse("applicant-status-lookup"),
+            {
+                "tracking_code": application.tracking_code,
+                "email": "cos.portal@example.com",
+            },
+        )
+        bad_verify = fresh_client.post(
+            reverse("applicant-status-lookup"),
+            {"action": "verify", "otp": "000000"},
+        )
+        self.assertNotContains(bad_verify, "Under Review")
+        self.assertContains(bad_verify, "invalid")
 
     def test_applicant_status_magic_link_renders_status_page(self):
         client = Client()

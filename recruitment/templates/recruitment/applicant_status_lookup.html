@@ -14,7 +14,7 @@
     visual focus.
     {% endcomment %}
 
-    {% if not application %}
+    {% if not application and not otp_step %}
     <div class="rg-ta-intro">
         <h1 class="rg-ta-intro__title">Track Your Application</h1>
         <p class="rg-ta-intro__copy">
@@ -85,6 +85,51 @@
 
             <button type="submit" class="btn btn-rg-primary btn-lg rg-ta-submit">
                 Check Status &rarr;
+            </button>
+        </form>
+    </div>
+    {% endif %}
+
+
+    {# ── REV-I: emailed-code step between lookup and status ───────── #}
+    {% if otp_step %}
+    <div class="rg-ta-intro">
+        <h1 class="rg-ta-intro__title">Check Your Email</h1>
+        <p class="rg-ta-intro__copy">
+            We sent a verification code to <strong>{{ otp_masked_email }}</strong>.
+            Enter it below to view your application status. The code is valid
+            for {{ otp_validity_minutes }} minute{{ otp_validity_minutes|pluralize }}.
+        </p>
+    </div>
+
+    <div class="rg-ta-lookup-card">
+        <form method="post" novalidate action="{% url 'applicant-status-lookup' %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="verify">
+
+            <div class="rg-pub-field rg-ta-field">
+                <label for="{{ otp_form.otp.id_for_label }}" class="rg-ta-label">
+                    Verification Code <span class="text-danger" aria-hidden="true">*</span>
+                </label>
+                {{ otp_form.otp }}
+                {% if otp_form.otp.errors %}
+                <div class="invalid-feedback d-block rg-ta-error">
+                    {{ otp_form.otp.errors.0 }}
+                </div>
+                {% endif %}
+                <div class="form-text">6-digit code from the email we just sent.</div>
+            </div>
+
+            <button type="submit" class="btn btn-rg-primary btn-lg rg-ta-submit">
+                View My Status &rarr;
+            </button>
+        </form>
+
+        <form method="post" action="{% url 'applicant-status-lookup' %}" style="margin-top:0.75rem; text-align:center;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="resend">
+            <button type="submit" class="btn btn-link" style="font-size:0.8125rem;">
+                Didn't get it? Resend the code
             </button>
         </form>
     </div>

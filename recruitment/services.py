@@ -6611,12 +6611,20 @@ def _deliver_application_otp(application, otp_code, *, actor=None, otp_expires_a
     )
 
 
-def issue_application_otp(application, actor=None, *, defer_delivery=True, enforce_cooldown=False):
-    if not application.is_editable_by_applicant:
-        raise ValueError(
-            "A verification code can only be issued while the application is in draft or "
-            "awaiting the applicant's resubmission."
-        )
+def issue_application_otp(
+    application, actor=None, *, defer_delivery=True, enforce_cooldown=False, purpose="editing"
+):
+    # "editing" covers intake verification and resubmission (draft/returned
+    # states only). "status_lookup" (REV-I) issues codes for any submitted
+    # application — the code still only lands in the owner's inbox.
+    if purpose == "editing":
+        if not application.is_editable_by_applicant:
+            raise ValueError(
+                "A verification code can only be issued while the application is in draft or "
+                "awaiting the applicant's resubmission."
+            )
+    elif application.submitted_at is None:
+        raise ValueError("This application has not been submitted yet.")
     if enforce_cooldown and application.otp_requested_at:
         elapsed = timezone.now() - application.otp_requested_at
         cooldown_seconds = settings.APPLICATION_OTP_RESEND_COOLDOWN_SECONDS
@@ -6686,18 +6694,19 @@ def _record_application_otp_failure(application, actor, *, reason, locked=False)
     )
 
 
-def verify_application_otp(application, otp_code, actor=None):
+def verify_application_otp(application, otp_code, actor=None, purpose="editing"):
     application = RecruitmentApplication.objects.get(pk=application.pk)
     actor = actor or application.applicant
-    locked_error = "Too many invalid verification attempts. Request a new code before final submission."
-    if not application.is_editable_by_applicant:
+    message_suffix = " before final submission." if purpose == "editing" else "."
+    locked_error = f"Too many invalid verification attempts. Request a new code{message_suffix}"
+    if purpose == "editing" and not application.is_editable_by_applicant:
         raise ValueError("Email verification is only available before final submission.")
     if not application.otp_hash or not application.otp_expires_at:
         _record_application_otp_failure(application, actor, reason="missing_code")
         raise ValueError("Request a verification code first.")
     if application.otp_expires_at < timezone.now():
         _record_application_otp_failure(application, actor, reason="expired")
-        raise ValueError("The verification code has expired. Request a new code before final submission.")
+        raise ValueError(f"The verification code has expired. Request a new code{message_suffix}")
     if application.otp_attempt_count >= _application_otp_max_attempts():
         _record_application_otp_failure(application, actor, reason="attempt_limit", locked=True)
         raise ValueError(locked_error)
