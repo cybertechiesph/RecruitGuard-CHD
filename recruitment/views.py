@@ -4,6 +4,8 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from datetime import date
+
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import escape
@@ -42,6 +44,7 @@ from .forms import (
 )
 from .models import (
     AuditLog,
+    AuditLogArchive,
     CompetencyDefinition,
     CompletionRecord,
     EvidenceVaultItem,
@@ -71,6 +74,10 @@ from .permissions import (
     WORKFLOW_PROCESSOR_ROLES,
 )
 from .services import (
+    archive_audit_logs,
+    audit_archive_latest_allowed_cutoff,
+    download_audit_archive,
+    preview_audit_archive,
     application_awaiting_car_preparation,
     application_has_finalized_applicant_pool,
     application_requires_finalized_applicant_pool,
@@ -251,6 +258,29 @@ def _safe_next_url(request, fallback_url):
 
 def _is_autosave_request(request):
     return request.headers.get("X-Requested-With") == "RG-Autosave"
+
+
+# REV-D: "audit log viewed" records one entry per review visit, not one per
+# filter change or page load. A visit = the same session touching the same
+# scope within this window.
+AUDIT_REVIEW_LOG_WINDOW_SECONDS = 30 * 60
+
+
+def _should_record_audit_review(request, scope_key):
+    from datetime import datetime as _datetime
+
+    stamps = request.session.get("audit_review_logged") or {}
+    raw = stamps.get(scope_key)
+    if raw:
+        try:
+            last = _datetime.fromisoformat(raw)
+        except ValueError:
+            last = None
+        if last is not None and (timezone.now() - last).total_seconds() < AUDIT_REVIEW_LOG_WINDOW_SECONDS:
+            return False
+    stamps[scope_key] = timezone.now().isoformat()
+    request.session["audit_review_logged"] = stamps
+    return True
 
 
 def _autosave_response(success=True):
@@ -882,15 +912,16 @@ class ApplicationAuditLogView(
         context["result_count"] = len(audit_logs)
         context["review_scope"] = "application"
         context["recruitment_case"] = getattr(application, "case", None)
-        record_audit_log_review(
-            actor=self.request.user,
-            application=application,
-            search_query=cleaned_data["q"],
-            action=cleaned_data["action"],
-            actor_role=cleaned_data["actor_role"],
-            sensitive_only=cleaned_data["sensitive_only"],
-            result_count=len(audit_logs),
-        )
+        if _should_record_audit_review(self.request, f"application:{application.pk}"):
+            record_audit_log_review(
+                actor=self.request.user,
+                application=application,
+                search_query=cleaned_data["q"],
+                action=cleaned_data["action"],
+                actor_role=cleaned_data["actor_role"],
+                sensitive_only=cleaned_data["sensitive_only"],
+                result_count=len(audit_logs),
+            )
         return context
 
 
@@ -899,6 +930,24 @@ class AuditLogListView(LoginRequiredMixin, SystemAdministratorRequiredMixin, Tem
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        # REV-D archival panel: existing archives, the age guard, and — when a
+        # cutoff was chosen — the confirmation preview (count + date range).
+        context["audit_archives"] = AuditLogArchive.objects.select_related("created_by")[:20]
+        context["archive_latest_cutoff"] = audit_archive_latest_allowed_cutoff()
+        cutoff_raw = (self.request.GET.get("archive_cutoff") or "").strip()
+        if cutoff_raw:
+            try:
+                cutoff = date.fromisoformat(cutoff_raw)
+            except ValueError:
+                cutoff = None
+            if cutoff and cutoff <= audit_archive_latest_allowed_cutoff():
+                context["archive_preview"] = preview_audit_archive(cutoff)
+                context["archive_preview_cutoff"] = cutoff
+            elif cutoff:
+                context["archive_preview_error"] = (
+                    "Only entries older than six months can be archived. Choose a cutoff "
+                    f"on or before {audit_archive_latest_allowed_cutoff():%b %d, %Y}."
+                )
         self.search_form = AuditLogSearchForm(self.request.GET or None)
         if self.search_form.is_valid():
             cleaned_data = self.search_form.cleaned_data
@@ -926,9 +975,11 @@ class AuditLogListView(LoginRequiredMixin, SystemAdministratorRequiredMixin, Tem
         context["result_count"] = paginator.count
         context["querystring"] = params.urlencode()
         context["review_scope"] = "system"
-        # Only record a review on the first page so paging does not spam the trail
-        # with duplicate "audit log reviewed" events.
-        if page_number in (None, "", "1"):
+        # One review entry per visit: the first-page guard stops paging spam,
+        # and the session window (REV-D) stops filter-change spam.
+        if page_number in (None, "", "1") and _should_record_audit_review(
+            self.request, "consolidated"
+        ):
             record_audit_log_review(
                 actor=self.request.user,
                 search_query=cleaned_data["q"],
@@ -938,6 +989,41 @@ class AuditLogListView(LoginRequiredMixin, SystemAdministratorRequiredMixin, Tem
                 result_count=paginator.count,
             )
         return context
+
+
+class AuditLogArchiveView(LoginRequiredMixin, SystemAdministratorRequiredMixin, View):
+    """REV-D: execute an archive run (export, verify, delete). The GET-side
+    preview/confirmation lives on AuditLogListView; this POST only fires from
+    the confirmation form."""
+
+    def post(self, request):
+        cutoff_raw = (request.POST.get("archive_cutoff") or "").strip()
+        try:
+            cutoff = date.fromisoformat(cutoff_raw)
+        except ValueError:
+            messages.error(request, "Choose a valid cutoff date for the archive.")
+            return redirect("audit-log-list")
+        try:
+            archive = archive_audit_logs(request.user, cutoff)
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return redirect("audit-log-list")
+        messages.success(
+            request,
+            f"Archived {archive.entry_count} audit entries to {archive.file_name}. "
+            "The live log now starts after the archived range; the archival "
+            "action itself is on the record.",
+        )
+        return redirect("audit-log-list")
+
+
+class AuditArchiveDownloadView(LoginRequiredMixin, SystemAdministratorRequiredMixin, View):
+    def get(self, request, pk):
+        archive = get_object_or_404(AuditLogArchive, pk=pk)
+        content = download_audit_archive(archive, request.user)
+        response = HttpResponse(content, content_type="text/csv")
+        response["Content-Disposition"] = f'attachment; filename="{archive.file_name}"'
+        return response
 
 
 class EvidenceUploadView(LoginRequiredMixin, SystemAdministratorRequiredMixin, View):
@@ -1709,6 +1795,7 @@ class ScreeningReviewView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, Vi
                     cleaned_data=form.cleaned_data,
                     finalize=is_finalize,
                     allow_partial=not is_finalize,
+                    record_audit=not is_autosave,
                 )
             except (ValueError, ValidationError) as exc:
                 if is_autosave:

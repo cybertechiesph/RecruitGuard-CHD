@@ -23,6 +23,8 @@ from .identity_views import (
     InternalUserUpdateView,
 )
 from .views import (
+    AuditArchiveDownloadView,
+    AuditLogArchiveView,
     AuditLogListView,
     ApplicationDetailView,
     ApplicationAuditLogView,
@@ -208,6 +210,12 @@ urlpatterns = [
     ),
     path("applications/<int:pk>/export/", ExportApplicationBundleView.as_view(), name="application-export"),
     path("audit/", AuditLogListView.as_view(), name="audit-log-list"),
+    path("audit/archive/", AuditLogArchiveView.as_view(), name="audit-log-archive"),
+    path(
+        "audit/archive/<int:pk>/download/",
+        AuditArchiveDownloadView.as_view(),
+        name="audit-archive-download",
+    ),
     path("workflow/queue/", WorkflowQueueView.as_view(), name="workflow-queue"),
     path("workflow/closed/", ClosedCaseListView.as_view(), name="workflow-closed"),
     path("vacancies/", VacancyBatchConsoleView.as_view(), name="vacancy-batches"),

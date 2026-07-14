@@ -556,6 +556,9 @@ def _mark_notification_failed(notification, reason):
             "updated_at",
         ]
     )
+    # REV-D: failures are anomalies and stay on the audit trail — but without
+    # copying the recipient's email address into a second store; the
+    # notification record (referenced by id) already holds it.
     _record_notification_audit(
         application=notification.application,
         actor=notification.triggered_by,
@@ -564,7 +567,6 @@ def _mark_notification_failed(notification, reason):
         metadata={
             "notification_id": notification.id,
             "notification_type": notification.notification_type,
-            "recipient_email": notification.recipient_email,
             "reason": reason,
         },
     )
@@ -643,18 +645,8 @@ def _deliver_notification(notification_id):
             "updated_at",
         ]
     )
-    _record_notification_audit(
-        application=notification.application,
-        actor=notification.triggered_by,
-        action=AuditLog.Action.NOTIFICATION_SENT,
-        description=f"Sent {notification.get_notification_type_display().lower()}.",
-        metadata={
-            "notification_id": notification.id,
-            "notification_type": notification.notification_type,
-            "recipient_email": notification.recipient_email,
-            "sent_at": notification.sent_at.isoformat(),
-        },
-    )
+    # REV-D: routine sends are NOT double-recorded in the audit log — the
+    # notifications table is the source of truth for delivery history.
     return notification
 
 

@@ -21,7 +21,7 @@ from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.mail import EmailMultiAlternatives
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import Max, Min, Q
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
@@ -33,6 +33,7 @@ from .email_branding import email_branding_context
 from .models import (
     ApplicationETERating,
     AuditLog,
+    AuditLogArchive,
     audit_action_codes_matching,
     ComparativeAssessmentReport,
     ComparativeAssessmentReportItem,
@@ -1016,6 +1017,151 @@ def record_evidence_vault_access(
             "current_version_only": bool(current_version_only),
         },
     )
+
+
+# ── REV-D: audit log archival (Option B: export, verify, then delete) ──────
+
+AUDIT_ARCHIVE_MIN_AGE_DAYS = 183  # entries younger than ~6 months can never be archived
+
+
+def audit_archive_latest_allowed_cutoff():
+    return timezone.localdate() - timedelta(days=AUDIT_ARCHIVE_MIN_AGE_DAYS)
+
+
+def preview_audit_archive(cutoff_date):
+    queryset = AuditLog.objects.filter(created_at__date__lt=cutoff_date)
+    aggregate = queryset.aggregate(Min("created_at"), Max("created_at"))
+    return {
+        "count": queryset.count(),
+        "range_start": aggregate["created_at__min"],
+        "range_end": aggregate["created_at__max"],
+    }
+
+
+def archive_audit_logs(actor, cutoff_date):
+    """Export every audit entry older than ``cutoff_date`` to an encrypted CSV
+    (AuditLogArchive — the Secured Files system-archive category), verify the
+    stored payload decrypts back to the same bytes, and only then delete the
+    live rows. The whole operation is atomic: a failed verification rolls
+    everything back with nothing deleted. The archival act itself is written
+    to the audit log AFTER the delete, so it survives its own cleanup."""
+    if cutoff_date > audit_archive_latest_allowed_cutoff():
+        raise ValueError(
+            "Only entries older than six months can be archived. Choose a cutoff "
+            f"on or before {audit_archive_latest_allowed_cutoff():%b %d, %Y}."
+        )
+
+    queryset = AuditLog.objects.filter(created_at__date__lt=cutoff_date).order_by("created_at")
+    preview = queryset.aggregate(Min("created_at"), Max("created_at"))
+    rows = list(
+        queryset.values(
+            "id",
+            "created_at",
+            "actor__username",
+            "actor_role",
+            "action",
+            "case_reference",
+            "workflow_stage",
+            "description",
+            "is_sensitive_access",
+            "application_id",
+            "metadata",
+        )
+    )
+    if not rows:
+        raise ValueError("There are no audit entries older than that cutoff to archive.")
+
+    buffer = StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(
+        [
+            "id", "created_at", "actor", "actor_role", "action", "case_reference",
+            "workflow_stage", "description", "is_sensitive_access", "application_id",
+            "metadata_json",
+        ]
+    )
+    for row in rows:
+        writer.writerow(
+            [
+                row["id"],
+                row["created_at"].isoformat(),
+                row["actor__username"] or "",
+                row["actor_role"],
+                row["action"],
+                row["case_reference"],
+                row["workflow_stage"],
+                row["description"],
+                row["is_sensitive_access"],
+                row["application_id"] or "",
+                json.dumps(row["metadata"], default=str, ensure_ascii=False),
+            ]
+        )
+    raw_bytes = buffer.getvalue().encode("utf-8")
+    digest = hashlib.sha256(raw_bytes).hexdigest()
+    nonce, ciphertext = encrypt_evidence_bytes(raw_bytes)
+
+    with transaction.atomic():
+        archive = AuditLogArchive.objects.create(
+            cutoff_date=cutoff_date,
+            range_start=preview["created_at__min"],
+            range_end=preview["created_at__max"],
+            entry_count=len(rows),
+            file_name=f"audit-archive-{cutoff_date:%Y%m%d}-{len(rows)}-entries.csv",
+            file_size=len(raw_bytes),
+            sha256_digest=digest,
+            nonce=nonce,
+            ciphertext=ciphertext,
+            created_by=actor,
+            created_by_role=getattr(actor, "role", ""),
+        )
+        # Delete-only-after-verified: read the stored payload back and prove it
+        # decrypts to the exact bytes that were hashed. Any mismatch aborts the
+        # transaction with the live rows untouched.
+        stored = AuditLogArchive.objects.get(pk=archive.pk)
+        recovered = AESGCM(_get_aes_key()).decrypt(
+            bytes(stored.nonce), bytes(stored.ciphertext), None
+        )
+        if hashlib.sha256(recovered).hexdigest() != digest:
+            raise ValueError("Archive verification failed; no entries were deleted.")
+        deleted_count, _ = queryset.delete()
+        record_system_audit_event(
+            actor=actor,
+            action=AuditLog.Action.AUDIT_LOG_ARCHIVED,
+            description=(
+                f"Archived {deleted_count} audit entries "
+                f"({archive.range_start:%b %d, %Y} – {archive.range_end:%b %d, %Y}) "
+                f"to {archive.file_name}."
+            ),
+            metadata={
+                "archive_id": archive.pk,
+                "file_name": archive.file_name,
+                "entry_count": deleted_count,
+                "cutoff_date": cutoff_date.isoformat(),
+                "range_start": archive.range_start.isoformat(),
+                "range_end": archive.range_end.isoformat(),
+                "sha256_digest": digest,
+            },
+        )
+    return archive
+
+
+def download_audit_archive(archive, actor):
+    """Decrypt an archive for the system administrator and put the access on
+    the record."""
+    content = AESGCM(_get_aes_key()).decrypt(
+        bytes(archive.nonce), bytes(archive.ciphertext), None
+    )
+    record_system_audit_event(
+        actor=actor,
+        action=AuditLog.Action.AUDIT_ARCHIVE_DOWNLOADED,
+        description=f"Downloaded audit archive {archive.file_name}.",
+        metadata={
+            "archive_id": archive.pk,
+            "file_name": archive.file_name,
+            "entry_count": archive.entry_count,
+        },
+    )
+    return content
 
 
 def record_audit_log_review(
@@ -4035,7 +4181,9 @@ def _document_review_status_counts(document_reviews):
 
 
 @transaction.atomic
-def save_screening_review(application, actor, cleaned_data, finalize=False, allow_partial=False):
+def save_screening_review(
+    application, actor, cleaned_data, finalize=False, allow_partial=False, record_audit=True
+):
     if not hasattr(application, "case"):
         raise ValueError("A case must exist before screening can be recorded.")
     review_stage = application.case.current_stage
@@ -4103,33 +4251,37 @@ def save_screening_review(application, actor, cleaned_data, finalize=False, allo
         screening_record.full_clean()
         screening_record.save()
 
-    record_audit_event(
-        application=application,
-        actor=actor,
-        action=(
-            AuditLog.Action.SCREENING_FINALIZED
-            if finalize
-            else AuditLog.Action.SCREENING_RECORDED
-        ),
-        description=(
-            "Finalized screening output."
-            if finalize
-            else "Saved screening review."
-        ),
-        metadata={
-            "screening_record_id": screening_record.id,
-            "created": created,
-            "review_stage": review_stage,
-            "completeness_status": screening_record.completeness_status,
-            "qualification_outcome": screening_record.qualification_outcome,
-            "education_score": _decimal_string(screening_record.education_score),
-            "training_score": _decimal_string(screening_record.training_score),
-            "experience_score": _decimal_string(screening_record.experience_score),
-            "document_review_score": _decimal_string(screening_record.document_review_score),
-            "document_review_status_counts": _document_review_status_counts(document_reviews),
-            "is_finalized": screening_record.is_finalized,
-        },
-    )
+    # REV-D: background autosaves pass record_audit=False (matching the exam /
+    # interview / deliberation services) so one screening session logs its
+    # deliberate saves and finalize — not dozens of identical draft rows.
+    if record_audit or finalize:
+        record_audit_event(
+            application=application,
+            actor=actor,
+            action=(
+                AuditLog.Action.SCREENING_FINALIZED
+                if finalize
+                else AuditLog.Action.SCREENING_RECORDED
+            ),
+            description=(
+                "Finalized screening output."
+                if finalize
+                else "Saved screening review."
+            ),
+            metadata={
+                "screening_record_id": screening_record.id,
+                "created": created,
+                "review_stage": review_stage,
+                "completeness_status": screening_record.completeness_status,
+                "qualification_outcome": screening_record.qualification_outcome,
+                "education_score": _decimal_string(screening_record.education_score),
+                "training_score": _decimal_string(screening_record.training_score),
+                "experience_score": _decimal_string(screening_record.experience_score),
+                "document_review_score": _decimal_string(screening_record.document_review_score),
+                "document_review_status_counts": _document_review_status_counts(document_reviews),
+                "is_finalized": screening_record.is_finalized,
+            },
+        )
     if finalize:
         _emit_screening_finalized_notification(application, actor, review_stage)
         # Coupling (Gap B): a *definitive* Not-Qualified screening cut rejects the

@@ -8666,6 +8666,115 @@ class AuditLoggingTraceabilityTests(BaseRecruitmentTestCase):
         application.refresh_from_db()
         return application
 
+    # ── REV-D: write-side noise fixes ────────────────────────────────
+
+    def screening_payload(self, **overrides):
+        payload = {
+            "completeness_status": ScreeningRecord.CompletenessStatus.COMPLETE,
+            "completeness_notes": "All required application documents were reviewed.",
+            "qualification_outcome": ScreeningRecord.QualificationOutcome.QUALIFIED,
+            "screening_notes": "Applicant satisfies the documented qualification basis.",
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_screening_autosave_writes_no_audit_entry(self):
+        application = self.make_submitted_application()
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        baseline = AuditLog.objects.filter(
+            application=application, action=AuditLog.Action.SCREENING_RECORDED
+        ).count()
+
+        response = client.post(
+            reverse("screening-review", kwargs={"pk": application.pk}),
+            {
+                **self.screening_payload(),
+                **self.screening_document_status_payload(application),
+                "operation": "save",
+            },
+            HTTP_X_REQUESTED_WITH="RG-Autosave",
+        )
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(
+            AuditLog.objects.filter(
+                application=application, action=AuditLog.Action.SCREENING_RECORDED
+            ).count(),
+            baseline,
+        )
+
+        # A deliberate manual save still logs.
+        client.post(
+            reverse("screening-review", kwargs={"pk": application.pk}),
+            {
+                **self.screening_payload(),
+                **self.screening_document_status_payload(application),
+                "operation": "save",
+            },
+        )
+        self.assertEqual(
+            AuditLog.objects.filter(
+                application=application, action=AuditLog.Action.SCREENING_RECORDED
+            ).count(),
+            baseline + 1,
+        )
+
+    def test_audit_log_view_logged_once_per_visit(self):
+        application = self.make_submitted_application()
+        client = Client()
+        self.force_login_with_mfa(client, self.sysadmin)
+        url = reverse("application-audit-log", kwargs={"pk": application.pk})
+        client.get(url)
+        client.get(url, {"q": "screening"})
+        client.get(url)
+        self.assertEqual(
+            AuditLog.objects.filter(
+                application=application, action=AuditLog.Action.AUDIT_LOG_VIEWED
+            ).count(),
+            1,
+        )
+
+    # ── REV-D: archival (export, verify, then delete) ────────────────
+
+    def test_archive_refuses_recent_cutoff(self):
+        from recruitment.services import archive_audit_logs
+
+        with self.assertRaisesMessage(ValueError, "older than six months"):
+            archive_audit_logs(self.sysadmin, timezone.localdate())
+
+    def test_archive_exports_deletes_and_records_itself(self):
+        from recruitment.services import archive_audit_logs, download_audit_archive
+
+        application = self.make_submitted_application()
+        old_moment = timezone.now() - timedelta(days=400)
+        AuditLog.objects.filter(application=application).update(created_at=old_moment)
+        old_count = AuditLog.objects.filter(created_at__lt=timezone.now() - timedelta(days=365)).count()
+        self.assertGreater(old_count, 0)
+
+        cutoff = timezone.localdate() - timedelta(days=365)
+        archive = archive_audit_logs(self.sysadmin, cutoff)
+
+        self.assertEqual(archive.entry_count, old_count)
+        self.assertEqual(
+            AuditLog.objects.filter(created_at__date__lt=cutoff).count(), 0
+        )
+        # The archival act itself survives on the live log.
+        record = AuditLog.objects.get(action=AuditLog.Action.AUDIT_LOG_ARCHIVED)
+        self.assertEqual(record.metadata["entry_count"], old_count)
+        self.assertTrue(record.is_sensitive_access)
+
+        # Download round-trip: decrypts to CSV containing the archived rows,
+        # and the download is itself on the record.
+        content = download_audit_archive(archive, self.sysadmin)
+        text = content.decode("utf-8")
+        self.assertIn("application_submitted", text)
+        self.assertEqual(text.count("\n") - 1, old_count)
+        self.assertTrue(
+            AuditLog.objects.filter(
+                action=AuditLog.Action.AUDIT_ARCHIVE_DOWNLOADED
+            ).exists()
+        )
+
     def test_submission_audit_log_stores_traceability_fields(self):
         application = self.make_submitted_application()
 
@@ -9065,15 +9174,18 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         self.assertEqual(mime_type, "text/html")
         self.assertIn("Application Received", html_body)
         self.assertIn("DOH–CHD CALABARZON", html_body)
-        self.assertIn(application.reference_number, html_body)
+        # REV-G dual-ID email: labeled short case number + private tracking code.
+        self.assertIn(f"Case No. {application.case_number_short}", html_body)
+        self.assertIn(application.tracking_code, html_body)
         self.assertIn(application.position.title, html_body)
         self.assertIn(status_link, html_body)
         self.assertIn(status_link, notification.metadata["status_link"])
-        self.assertTrue(
+        # REV-D: routine sends are no longer double-recorded in the audit log;
+        # the notifications table is the delivery record.
+        self.assertFalse(
             AuditLog.objects.filter(
                 application=application,
                 action=AuditLog.Action.NOTIFICATION_SENT,
-                metadata__notification_type=NotificationLog.NotificationType.SUBMISSION_ACKNOWLEDGMENT,
             ).exists()
         )
 
@@ -9113,12 +9225,12 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
             any("Failed to render HTML email" in message for message in logs.output)
         )
 
-        # The successful-send audit trail is still recorded.
-        self.assertTrue(
+        # REV-D: no audit row for a routine successful send — the notification
+        # record above is the delivery record.
+        self.assertFalse(
             AuditLog.objects.filter(
                 application=application,
                 action=AuditLog.Action.NOTIFICATION_SENT,
-                metadata__notification_type=NotificationLog.NotificationType.SUBMISSION_ACKNOWLEDGMENT,
             ).exists()
         )
 

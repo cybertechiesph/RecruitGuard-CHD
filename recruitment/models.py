@@ -3810,6 +3810,8 @@ class AuditLog(TimestampedModel):
         PROTECTED_RECORD_VIEWED = "protected_record_viewed", "Protected Record Viewed"
         EVIDENCE_VAULT_VIEWED = "evidence_vault_viewed", "Evidence Vault Viewed"
         AUDIT_LOG_VIEWED = "audit_log_viewed", "Audit Log Viewed"
+        AUDIT_LOG_ARCHIVED = "audit_log_archived", "Audit Log Archived"
+        AUDIT_ARCHIVE_DOWNLOADED = "audit_archive_downloaded", "Audit Archive Downloaded"
         EXPORT_GENERATED = "export_generated", "Export Generated"
         EXPORT_DENIED = "export_denied", "Export Denied"
 
@@ -3833,6 +3835,8 @@ class AuditLog(TimestampedModel):
         Action.PROTECTED_RECORD_VIEWED,
         Action.EVIDENCE_VAULT_VIEWED,
         Action.AUDIT_LOG_VIEWED,
+        Action.AUDIT_LOG_ARCHIVED,
+        Action.AUDIT_ARCHIVE_DOWNLOADED,
     }
 
     application = models.ForeignKey(
@@ -3888,6 +3892,36 @@ class AuditLog(TimestampedModel):
         return f"{self.get_action_display()} @ {self.created_at:%Y-%m-%d %H:%M}"
 
 
+class AuditLogArchive(TimestampedModel):
+    """REV-D archival (Option B): aged audit entries exported to an encrypted
+    CSV held here — the Secured Files "system archive" category, the one
+    secured category the system administrator can download — verified, and
+    only then deleted from the live table. The archival act itself is written
+    back to the audit log, so a cleanup can never be invisible."""
+
+    cutoff_date = models.DateField()
+    range_start = models.DateTimeField()
+    range_end = models.DateTimeField()
+    entry_count = models.PositiveIntegerField()
+    file_name = models.CharField(max_length=150)
+    file_size = models.PositiveIntegerField()
+    sha256_digest = models.CharField(max_length=64)
+    nonce = models.BinaryField()
+    ciphertext = models.BinaryField()
+    created_by = models.ForeignKey(
+        RecruitmentUser,
+        on_delete=models.PROTECT,
+        related_name="audit_archives",
+    )
+    created_by_role = models.CharField(max_length=40, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Audit archive {self.file_name} ({self.entry_count} entries)"
+
+
 # Human-readable labels for each audit action, as shown to reviewers in the
 # audit log and evidence views. This is the single source of truth for the
 # friendly wording (e.g. "Secured Files Viewed" rather than the stored
@@ -3941,6 +3975,8 @@ AUDIT_ACTION_DISPLAY_LABELS = {
     AuditLog.Action.PROTECTED_RECORD_VIEWED: "Protected Record Viewed",
     AuditLog.Action.EVIDENCE_VAULT_VIEWED: "Secured Files Viewed",
     AuditLog.Action.AUDIT_LOG_VIEWED: "Audit Log Viewed",
+    AuditLog.Action.AUDIT_LOG_ARCHIVED: "Audit Log Archived",
+    AuditLog.Action.AUDIT_ARCHIVE_DOWNLOADED: "Audit Archive Downloaded",
     AuditLog.Action.EXPORT_GENERATED: "Export Created",
 }
 
