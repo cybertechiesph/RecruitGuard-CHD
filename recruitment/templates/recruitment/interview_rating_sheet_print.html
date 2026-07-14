@@ -1,0 +1,136 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interview Rating Sheet — {{ application.candidate_code_label }}</title>
+<style>
+    * { box-sizing: border-box; }
+    body {
+        margin: 0; padding: 24px; background: #eef1f4; color: #111827;
+        font-family: Georgia, "Times New Roman", serif; font-size: 13px; line-height: 1.5;
+    }
+    .sheet {
+        max-width: 860px; margin: 0 auto; background: #fff; padding: 40px 48px;
+        border: 1px solid #d7dde3;
+    }
+    .toolbar {
+        max-width: 860px; margin: 0 auto 14px; display: flex; gap: 10px;
+        font-family: Arial, Helvetica, sans-serif;
+    }
+    .toolbar button, .toolbar a {
+        font-size: 14px; padding: 8px 18px; border-radius: 6px; cursor: pointer;
+        text-decoration: none; border: 1px solid #1e5c2d;
+    }
+    .toolbar button { background: #1e5c2d; color: #fff; font-weight: 700; }
+    .toolbar a { background: #fff; color: #1e5c2d; }
+    .doc-head { display: flex; align-items: center; gap: 14px; border-bottom: 3px double #1e5c2d; padding-bottom: 14px; }
+    .doc-head img { width: 56px; height: 56px; }
+    .doc-head .office { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #374151; }
+    .doc-head h1 { font-size: 19px; margin: 2px 0 0; color: #1e5c2d; }
+    .doc-meta { display: flex; flex-wrap: wrap; gap: 4px 28px; margin: 14px 0 4px; font-size: 12.5px; }
+    .doc-meta div span { color: #6b7280; }
+    table.comp { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    table.comp th, table.comp td { border: 1px solid #9aa4af; padding: 8px; text-align: left; vertical-align: top; }
+    table.comp th { background: #f1f5ef; font-family: Arial, Helvetica, sans-serif; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+    table.comp .score-box { width: 110px; }
+    table.comp .score-cell { height: 34px; }
+    .comp-desc { font-size: 11.5px; color: #6b7280; margin-top: 2px; }
+    .remarks-block { margin-top: 18px; }
+    .remarks-block .label { font-family: Arial, Helvetica, sans-serif; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: #374151; }
+    .remarks-lines { border-bottom: 1px solid #9aa4af; height: 26px; }
+    .sig-row { display: flex; gap: 48px; margin-top: 44px; }
+    .sig { flex: 1; text-align: center; }
+    .sig .line { border-top: 1px solid #111827; margin-bottom: 4px; padding-top: 4px; font-weight: 700; }
+    .sig .role { font-size: 11.5px; color: #6b7280; }
+    .warn { margin-top: 16px; padding: 10px 14px; border: 1px solid #fde68a; background: #fffbeb; color: #92400e; font-size: 12px; }
+    .print-meta { margin-top: 28px; font-size: 10.5px; color: #9aa4af; border-top: 1px solid #e5e9ed; padding-top: 8px; }
+    @media print {
+        body { background: #fff; padding: 0; }
+        .toolbar { display: none; }
+        .sheet { border: 0; max-width: none; padding: 0; }
+    }
+</style>
+</head>
+<body>
+    <div class="toolbar">
+        <button type="button" onclick="window.print()">Print this rating sheet</button>
+        <a href="{% url 'application-detail' application.pk %}?tab=interview">&larr; Back to case</a>
+    </div>
+
+    <div class="sheet">
+        <div class="doc-head">
+            <img src="{% static 'img/brand/chd-calabarzon-seal.png' %}" alt="DOH–CHD CALABARZON seal">
+            <div>
+                <div class="office">Department of Health — Center for Health Development CALABARZON</div>
+                <h1>HRMPSB Interview Rating Sheet</h1>
+            </div>
+        </div>
+
+        <div class="doc-meta">
+            {# REV-B face-to-face exception: the live sheet carries code AND name. #}
+            <div><span>Candidate:</span> <strong>{{ application.candidate_code_label }} &mdash; {{ application.applicant_display_name }}</strong></div>
+            <div><span>Position:</span> <strong>{{ entry.title }}</strong> ({{ entry.job_code }})</div>
+            {% if interview_session %}
+            <div><span>Schedule:</span> {{ interview_session.scheduled_for|date:"F d, Y g:i A" }}</div>
+            <div><span>Location / medium:</span> {{ interview_session.location }}</div>
+            {% endif %}
+        </div>
+
+        {% if competencies %}
+        <table class="comp">
+            <thead>
+                <tr>
+                    <th>Competency</th>
+                    <th class="score-box">Weight</th>
+                    <th class="score-box">Score (0&ndash;100)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for competency in competencies %}
+                <tr>
+                    <td>
+                        <strong>{{ competency.name }}</strong>
+                        <span class="comp-desc">({{ competency.get_group_display }})</span>
+                        {% if competency.description %}
+                        <div class="comp-desc">{{ competency.description }}</div>
+                        {% endif %}
+                    </td>
+                    <td class="score-cell">{% if competency.weight %}{{ competency.weight }}{% endif %}</td>
+                    <td class="score-cell"></td>
+                </tr>
+                {% endfor %}
+                <tr>
+                    <td style="text-align:right;"><strong>Overall rating</strong></td>
+                    <td></td>
+                    <td class="score-cell"></td>
+                </tr>
+            </tbody>
+        </table>
+        {% else %}
+        <div class="warn">
+            No published competency rating sheet exists for this vacancy yet.
+            Publish one from the vacancy's rating-sheet setup before the interviews.
+        </div>
+        {% endif %}
+
+        <div class="remarks-block">
+            <div class="label">Justification / remarks</div>
+            <div class="remarks-lines"></div>
+            <div class="remarks-lines"></div>
+            <div class="remarks-lines"></div>
+        </div>
+
+        <div class="sig-row">
+            <div class="sig"><div class="line">&nbsp;</div><div class="role">Rater's signature over printed name</div></div>
+            <div class="sig"><div class="line">&nbsp;</div><div class="role">Date</div></div>
+        </div>
+
+        <div class="print-meta">
+            Scores recorded on paper must be encoded in RecruitGuard-CHD (or uploaded via the
+            fallback flow) to count toward the comparative assessment. Printed by
+            {{ printed_by.get_full_name|default:printed_by.username }} on {{ printed_at|date:"F d, Y g:i A" }}.
+        </div>
+    </div>
+</body>
+</html>

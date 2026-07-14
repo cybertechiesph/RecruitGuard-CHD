@@ -5,6 +5,7 @@ from django.core.paginator import Paginator
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.html import escape
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
@@ -1984,6 +1985,63 @@ class InterviewRatingSheetView(LoginRequiredMixin, WorkflowProcessorRequiredMixi
             request,
             self.template_name,
             self._context(application, template, template_form, formset),
+        )
+
+
+class InterviewRatingSheetPrintView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
+    """REV-E: print-tailored competency rating sheet for the live interview.
+    Shows candidate code AND name — the REV-B face-to-face exception: correct
+    attribution outranks symbolic blinding in the room."""
+
+    def get(self, request, pk):
+        application = get_object_or_404(RecruitmentApplication, pk=pk)
+        if not user_can_view_application(request.user, application):
+            raise PermissionDenied
+        rating_template = get_published_competency_rating_template(application.position)
+        competencies = list(rating_template.competencies.all()) if rating_template else []
+        return render(
+            request,
+            "recruitment/interview_rating_sheet_print.html",
+            {
+                "application": application,
+                "entry": application.position,
+                "rating_template": rating_template,
+                "competencies": competencies,
+                "interview_session": get_interview_session(application),
+                "printed_by": request.user,
+                "printed_at": timezone.now(),
+            },
+        )
+
+
+class ComparativeAssessmentPrintView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
+    """REV-E: print-tailored Comparative Assessment Report. Blinded per REV-B —
+    rows carry candidate codes only, never names or case numbers."""
+
+    def get(self, request, pk):
+        application = get_object_or_404(RecruitmentApplication, pk=pk)
+        if not user_can_view_application(request.user, application):
+            raise PermissionDenied
+        report = get_comparative_assessment_report(application)
+        if report is None:
+            report = get_latest_finalized_comparative_assessment_report(application)
+        if report is None:
+            messages.error(request, "No comparative assessment report exists for this case yet.")
+            return redirect("application-detail", pk=application.pk)
+        items = list(get_comparative_assessment_report_items_for_report(report))
+        for item in items:
+            item.candidate_label = item.application.candidate_code_label
+        return render(
+            request,
+            "recruitment/car_print.html",
+            {
+                "application": application,
+                "entry": application.position,
+                "report": report,
+                "items": items,
+                "printed_by": request.user,
+                "printed_at": timezone.now(),
+            },
         )
 
 

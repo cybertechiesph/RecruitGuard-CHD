@@ -10082,6 +10082,38 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
         payload.update(overrides)
         return payload
 
+    def test_interview_rating_sheet_print_renders(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(
+            reverse("interview-rating-sheet-print", kwargs={"pk": application.pk})
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "HRMPSB Interview Rating Sheet")
+        # REV-B face-to-face exception: the sheet carries code AND name.
+        self.assertContains(response, application.applicant_display_name)
+        self.assertContains(response, application.candidate_code_label)
+
+    def test_car_print_redirects_when_no_report_exists(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(
+            reverse("comparative-assessment-print", kwargs={"pk": application.pk}),
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response, "No comparative assessment report exists for this case yet."
+        )
+
     def rating_payload(self, application, level=3, **overrides):
         if application.branch == PositionPosting.Branch.COS:
             # COS interviews use a single end-user / HRMS score, not the competency

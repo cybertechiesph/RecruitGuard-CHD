@@ -7,6 +7,19 @@
 {% block content %}
 <div class="rg-pub-wrap" style="max-width:580px; padding-top:2.5rem;">
 
+    {# REV-E: print-only official heading — the printout reads as a document,
+       not a screenshot of a web page. #}
+    <div class="rg-receipt-print-head" aria-hidden="true">
+        <div class="rg-receipt-print-head__office">
+            Department of Health &mdash; Center for Health Development CALABARZON
+        </div>
+        <div class="rg-receipt-print-head__title">Application Submission Receipt</div>
+        <div class="rg-receipt-print-head__meta">
+            Case No. {{ application.case_number_short }} &middot;
+            Submitted {{ application.submitted_at|date:"F d, Y g:i A" }}
+        </div>
+    </div>
+
     {# Success icon + headline #}
     <div style="text-align:center; margin-bottom:2rem;">
         <div class="rg-pub-success-icon" role="img" aria-label="Success">&#10003;</div>
@@ -92,27 +105,43 @@
         </p>
     </div>
 
-    {# Action buttons #}
+    {# Action buttons — REV-E: printing is a first-class action, not fine print. #}
     <div style="display:flex; flex-wrap:wrap; gap:0.75rem; justify-content:center; margin-bottom:1.25rem;">
         <a href="{% url 'applicant-status-link' application.public_token %}"
            class="btn btn-rg-primary btn-lg">
             Track My Application
         </a>
+        <button type="button" class="btn btn-outline-secondary btn-lg" onclick="window.print()">
+            Print Receipt
+        </button>
         <a href="{% url 'applicant-portal' %}" class="btn btn-outline-secondary btn-lg">
             Back to Job Openings
         </a>
     </div>
 
-    <p style="text-align:center; font-size:0.8125rem; color:#9aa4af;">
-        <button type="button" class="btn btn-link" onclick="window.print()" style="color:#9aa4af; text-decoration:underline; font-size:0.8125rem; padding:0; border:0; vertical-align:baseline;">Print this page</button>
-    </p>
-
 </div>
 
 <style>
+.rg-receipt-print-head { display: none; }
 @media print {
-    header, footer, .rg-public-footer, #copy-btn, .btn { display: none !important; }
+    /* Only the official heading and the receipt card reach paper. */
+    header, footer, .rg-public-footer, #copy-btn, .btn,
+    .rg-pub-success-icon, .rg-pub-info-box, .card { display: none !important; }
+    .rg-pub-wrap > div:first-child h1, .rg-pub-wrap > div:first-child p { display: none !important; }
+    .rg-receipt-print-head {
+        display: block !important;
+        text-align: center;
+        margin-bottom: 1.25rem;
+        border-bottom: 3px double #000;
+        padding-bottom: 0.75rem;
+    }
+    .rg-receipt-print-head__office {
+        font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase;
+    }
+    .rg-receipt-print-head__title { font-size: 1.25rem; font-weight: 700; margin-top: 0.2rem; }
+    .rg-receipt-print-head__meta { font-size: 0.8125rem; margin-top: 0.2rem; }
     .rg-pub-receipt-card { border: 2px solid #000 !important; }
+    body { background: #fff !important; }
 }
 </style>
 

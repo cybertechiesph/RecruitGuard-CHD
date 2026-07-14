@@ -1,0 +1,148 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comparative Assessment Report — {{ entry.job_code }}</title>
+<style>
+    * { box-sizing: border-box; }
+    body {
+        margin: 0; padding: 24px; background: #eef1f4; color: #111827;
+        font-family: Georgia, "Times New Roman", serif; font-size: 13px; line-height: 1.5;
+    }
+    .sheet {
+        max-width: 860px; margin: 0 auto; background: #fff; padding: 40px 48px;
+        border: 1px solid #d7dde3;
+    }
+    .toolbar {
+        max-width: 860px; margin: 0 auto 14px; display: flex; gap: 10px;
+        font-family: Arial, Helvetica, sans-serif;
+    }
+    .toolbar button, .toolbar a {
+        font-size: 14px; padding: 8px 18px; border-radius: 6px; cursor: pointer;
+        text-decoration: none; border: 1px solid #1e5c2d;
+    }
+    .toolbar button { background: #1e5c2d; color: #fff; font-weight: 700; }
+    .toolbar a { background: #fff; color: #1e5c2d; }
+    .doc-head { display: flex; align-items: center; gap: 14px; border-bottom: 3px double #1e5c2d; padding-bottom: 14px; }
+    .doc-head img { width: 56px; height: 56px; }
+    .doc-head .office { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #374151; }
+    .doc-head h1 { font-size: 19px; margin: 2px 0 0; color: #1e5c2d; }
+    .doc-meta { display: flex; flex-wrap: wrap; gap: 4px 28px; margin: 14px 0 4px; font-size: 12.5px; }
+    .doc-meta div span { color: #6b7280; }
+    .stamp {
+        float: right; border: 2px solid; border-radius: 4px; padding: 2px 10px;
+        font-family: Arial, Helvetica, sans-serif; font-weight: 700; font-size: 12px;
+        letter-spacing: 0.12em; text-transform: uppercase;
+    }
+    .stamp--final { color: #1e5c2d; border-color: #1e5c2d; }
+    .stamp--draft { color: #92400e; border-color: #92400e; }
+    table.rank { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    table.rank th, table.rank td { border: 1px solid #9aa4af; padding: 6px 8px; text-align: left; }
+    table.rank th { background: #f1f5ef; font-family: Arial, Helvetica, sans-serif; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+    table.rank td.num, table.rank th.num { text-align: right; }
+    .notes { margin-top: 16px; }
+    .notes h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: #374151; margin: 14px 0 4px; }
+    .blind-note { margin-top: 14px; font-size: 11.5px; color: #6b7280; font-style: italic; }
+    .sig-row { display: flex; gap: 48px; margin-top: 44px; }
+    .sig { flex: 1; text-align: center; }
+    .sig .line { border-top: 1px solid #111827; margin-bottom: 4px; padding-top: 4px; font-weight: 700; }
+    .sig .role { font-size: 11.5px; color: #6b7280; }
+    .print-meta { margin-top: 28px; font-size: 10.5px; color: #9aa4af; border-top: 1px solid #e5e9ed; padding-top: 8px; }
+    @media print {
+        body { background: #fff; padding: 0; }
+        .toolbar { display: none; }
+        .sheet { border: 0; max-width: none; padding: 0; }
+    }
+</style>
+</head>
+<body>
+    <div class="toolbar">
+        <button type="button" onclick="window.print()">Print this report</button>
+        <a href="{% url 'application-detail' application.pk %}?tab=deliberation">&larr; Back to case</a>
+    </div>
+
+    <div class="sheet">
+        <span class="stamp {% if report.is_finalized %}stamp--final{% else %}stamp--draft{% endif %}">
+            {% if report.is_finalized %}Final{% else %}Draft — v{{ report.version_number }}{% endif %}
+        </span>
+        <div class="doc-head">
+            <img src="{% static 'img/brand/chd-calabarzon-seal.png' %}" alt="DOH–CHD CALABARZON seal">
+            <div>
+                <div class="office">Department of Health — Center for Health Development CALABARZON</div>
+                <h1>Comparative Assessment Report</h1>
+            </div>
+        </div>
+
+        <div class="doc-meta">
+            <div><span>Vacancy:</span> <strong>{{ entry.title }}</strong> ({{ entry.job_code }})</div>
+            <div><span>Engagement:</span> {{ entry.get_branch_display }}</div>
+            <div><span>Candidates assessed:</span> {{ items|length }}</div>
+            {% if report.members_present %}<div><span>HRMPSB members present:</span> {{ report.members_present }}</div>{% endif %}
+            <div><span>Prepared by:</span> {{ report.generated_by.get_full_name|default:report.generated_by.username }} ({{ report.created_at|date:"M d, Y" }})</div>
+            {% if report.is_finalized %}
+            <div><span>Finalized:</span> {{ report.finalized_by.get_full_name|default:report.finalized_by.username }} ({{ report.finalized_at|date:"M d, Y" }})</div>
+            {% endif %}
+        </div>
+
+        <table class="rank">
+            <thead>
+                <tr>
+                    <th class="num">Rank</th>
+                    <th>Candidate</th>
+                    <th class="num">Document Review</th>
+                    <th class="num">ETE Rating</th>
+                    <th class="num">Examination</th>
+                    <th class="num">Interview</th>
+                    <th class="num">Overall</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td class="num">{% if item.rank_order %}{{ item.rank_order }}{% else %}&mdash;{% endif %}</td>
+                    <td><strong>{{ item.candidate_label }}</strong></td>
+                    <td class="num">{{ item.document_review_score|default_if_none:"—" }}</td>
+                    <td class="num">{{ item.ete_rating|default_if_none:"—" }}</td>
+                    <td class="num">{{ item.exam_score|default_if_none:"—" }}</td>
+                    <td class="num">{{ item.interview_average_score|default_if_none:"—" }}</td>
+                    <td class="num"><strong>{{ item.assessment_score|default_if_none:"—" }}</strong></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% if report.summary_notes %}
+        <div class="notes">
+            <h2>Summary Notes</h2>
+            <p>{{ report.summary_notes|linebreaksbr }}</p>
+        </div>
+        {% endif %}
+        {% if report.recommendation_notes %}
+        <div class="notes">
+            <h2>Recommendation</h2>
+            <p>{{ report.recommendation_notes|linebreaksbr }}</p>
+            {% if report.recommended_case %}
+            <p>Recommended candidate: <strong>{{ report.recommended_case.application.candidate_code_label }}</strong></p>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <p class="blind-note">
+            Candidates are identified by their assigned candidate codes. The code-to-person
+            mapping is retained in the recruitment case records and audit trail.
+        </p>
+
+        <div class="sig-row">
+            <div class="sig"><div class="line">&nbsp;</div><div class="role">HRMPSB Chairperson</div></div>
+            <div class="sig"><div class="line">&nbsp;</div><div class="role">HRMPSB Member</div></div>
+            <div class="sig"><div class="line">&nbsp;</div><div class="role">HRMS Representative</div></div>
+        </div>
+
+        <div class="print-meta">
+            Printed from RecruitGuard-CHD by {{ printed_by.get_full_name|default:printed_by.username }}
+            on {{ printed_at|date:"F d, Y g:i A" }}.
+        </div>
+    </div>
+</body>
+</html>

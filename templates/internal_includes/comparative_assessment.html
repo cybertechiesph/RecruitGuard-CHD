@@ -26,6 +26,11 @@ HRM Chief on COS). Two states:
                     Prepared by {{ current_comparative_assessment_report.generated_by.get_full_name }}
                 </div>
             {% endif %}
+            <a href="{% url 'comparative-assessment-print' application.pk %}"
+               class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener"
+               style="margin-top:0.4rem;">
+                Print CAR
+            </a>
         </div>
         {% endif %}
     </div>
@@ -416,13 +421,19 @@ HRM Chief on COS). Two states:
                 The case proceeds to Final Selection / Decision.
             </p>
         </div>
-        <span class="rg-pill rg-pill--neutral rg-pill--sm rg-int-pill-lock">
-            <svg width="9" height="10" viewBox="0 0 12 14" fill="none" aria-hidden="true">
-                <rect x="2" y="6" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M4 6V4.5a2 2 0 0 1 4 0V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-            Locked
-        </span>
+        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:0.4rem;">
+            <span class="rg-pill rg-pill--neutral rg-pill--sm rg-int-pill-lock">
+                <svg width="9" height="10" viewBox="0 0 12 14" fill="none" aria-hidden="true">
+                    <rect x="2" y="6" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+                    <path d="M4 6V4.5a2 2 0 0 1 4 0V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                Locked
+            </span>
+            <a href="{% url 'comparative-assessment-print' application.pk %}"
+               class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener">
+                Print CAR
+            </a>
+        </div>
     </div>
 
     {% if current_comparative_assessment_report_items %}
@@ -533,7 +544,13 @@ HRM Chief on COS). Two states:
                 secretariat records the board's recommended applicant when finalizing the CAR.
             </p>
         </div>
-        <span class="rg-pill rg-pill--info rg-pill--sm">Read-only</span>
+        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:0.4rem;">
+            <span class="rg-pill rg-pill--info rg-pill--sm">Read-only</span>
+            <a href="{% url 'comparative-assessment-print' application.pk %}"
+               class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener">
+                Print CAR
+            </a>
+        </div>
     </div>
 
     {% if current_comparative_assessment_report_items %}

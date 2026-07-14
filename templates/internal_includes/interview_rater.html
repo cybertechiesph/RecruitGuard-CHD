@@ -11,6 +11,10 @@
             <h3 class="rg-icard__title">Interview session</h3>
             <p class="rg-icard__subtitle">When and where the interview will be held.</p>
         </div>
+        <a href="{% url 'interview-rating-sheet-print' application.pk %}"
+           class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener">
+            Print rating sheet
+        </a>
         {% if current_interview_session.is_finalized %}
             <span class="rg-pill rg-pill--neutral rg-pill--sm rg-int-pill-lock">
                 <svg width="9" height="10" viewBox="0 0 12 14" fill="none" aria-hidden="true">

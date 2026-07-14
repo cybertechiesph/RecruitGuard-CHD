@@ -128,7 +128,7 @@
         <form method="post" action="{% url 'applicant-status-lookup' %}" style="margin-top:0.75rem; text-align:center;">
             {% csrf_token %}
             <input type="hidden" name="action" value="resend">
-            <button type="submit" class="btn btn-link" style="font-size:0.8125rem;">
+            <button type="submit" class="btn btn-outline-secondary btn-sm">
                 Didn't get it? Resend the code
             </button>
         </form>

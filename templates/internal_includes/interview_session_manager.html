@@ -11,9 +11,15 @@
             <h3 class="rg-icard__title">Interview rating sheet</h3>
             <p class="rg-icard__subtitle">Compose the competency sheet the HRMPSB panel scores candidates on.</p>
         </div>
-        <a href="{% url 'interview-rating-sheet' application.pk %}" class="btn btn-outline-secondary btn-sm">
-            Manage rating sheet
-        </a>
+        <div class="d-flex flex-wrap gap-2">
+            <a href="{% url 'interview-rating-sheet' application.pk %}" class="btn btn-outline-secondary btn-sm">
+                Manage rating sheet
+            </a>
+            <a href="{% url 'interview-rating-sheet-print' application.pk %}"
+               class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener">
+                Print rating sheet
+            </a>
+        </div>
     </div>
 </div>
 {% endif %}
