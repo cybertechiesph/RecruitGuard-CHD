@@ -8828,7 +8828,7 @@ class AuditLoggingTraceabilityTests(BaseRecruitmentTestCase):
 
         report = client.get(reverse("audit-log-report"), {"category": "case"})
         self.assertEqual(report.status_code, 200)
-        self.assertContains(report, "RecruitGuard-CHD Audit Report")
+        self.assertContains(report, "Recruitment Audit Report")
         self.assertContains(report, "Case activity")
 
         self.assertEqual(

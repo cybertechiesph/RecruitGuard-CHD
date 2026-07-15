@@ -161,8 +161,8 @@
         </div>
 
         <div class="print-meta">
-            Printed from RecruitGuard-CHD by {{ printed_by.get_full_name|default:printed_by.username }}
-            on {{ printed_at|date:"F d, Y g:i A" }}.
+            Printed by {{ printed_by.get_full_name|default:printed_by.username }}
+            on {{ printed_at|date:"F d, Y g:i A" }}. Generation is recorded in the case audit trail.
         </div>
     </div>
 </body>

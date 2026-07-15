@@ -8809,7 +8809,7 @@ def reopen_recruitment_case(application, actor, reason):
     return case
 
 
-def _build_pdf_document(title, lines, *, document_title="RecruitGuard-CHD Export"):
+def _build_pdf_document(title, lines, *, document_title="DOH-CHD CALABARZON Export"):
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=A4)
     _page_width, page_height = A4
@@ -8907,9 +8907,9 @@ def _build_application_pdf(application, *, actor=None, generated_at=None):
             ]
         )
     return _build_pdf_document(
-        "RecruitGuard-CHD Controlled Export Summary",
+        "DOH-CHD CALABARZON Controlled Export Summary",
         lines,
-        document_title=application.reference_number or "RecruitGuard-CHD Export",
+        document_title=application.reference_number or "DOH-CHD CALABARZON Export",
     )
 
 
@@ -8921,7 +8921,7 @@ def _build_comparative_assessment_report_pdf(
     summary_notes,
 ):
     lines = [
-        "RecruitGuard-CHD Comparative Assessment Report",
+        "DOH-CHD CALABARZON Comparative Assessment Report",
         f"Recruitment Entry: {application.position.title} [{application.position.job_code}]",
         f"Branch: {application.position.get_branch_display()}",
         f"Workflow Stage: {application.case.get_current_stage_display()}",
@@ -8957,7 +8957,7 @@ def _build_comparative_assessment_report_pdf(
             ]
         )
     return _build_pdf_document(
-        "RecruitGuard-CHD Comparative Assessment Report",
+        "DOH-CHD CALABARZON Comparative Assessment Report",
         lines,
         document_title=f"{application.position.job_code} Comparative Assessment Report",
     )
@@ -9235,7 +9235,7 @@ def _build_evidence_inventory_pdf(application, actor, generated_at, evidence_exp
                 ]
             )
     return _build_pdf_document(
-        "RecruitGuard-CHD Evidence Inventory",
+        "DOH-CHD CALABARZON Evidence Inventory",
         lines,
         document_title=f"{application.reference_number} Evidence Inventory",
     )
@@ -9538,7 +9538,7 @@ def _build_verification_summary_pdf(application, actor, generated_at, verificati
     else:
         lines.extend(["", "All exported evidence files matched their stored SHA-256 digests."])
     return _build_pdf_document(
-        "RecruitGuard-CHD Verification Summary",
+        "DOH-CHD CALABARZON Verification Summary",
         lines,
         document_title=f"{application.reference_number} Verification Summary",
     )
