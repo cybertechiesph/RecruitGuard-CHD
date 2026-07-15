@@ -866,7 +866,8 @@ class FoundationSmokeTests(TestCase):
         response = self.client.get(reverse("login"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Internal Access")
-        self.assertContains(response, "RecruitGuard-CHD")
+        # The portal presents as the office's system, not the study title.
+        self.assertContains(response, "DOH–CHD CALABARZON")
         self.assertTrue(reverse("login").startswith("/internal/"))
 
     def test_dashboard_redirects_anonymous_users_to_login(self):

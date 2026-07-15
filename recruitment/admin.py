@@ -82,7 +82,7 @@ class FinalizedRecordAdminGuardMixin:
 class RecruitmentUserAdmin(UserAdmin):
     fieldsets = UserAdmin.fieldsets + (
         (
-            "RecruitGuard",
+            "DOH–CHD CALABARZON Recruitment",
             {"fields": ("role", "office_name", "employee_id")},
         ),
     )

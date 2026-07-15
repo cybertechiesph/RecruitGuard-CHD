@@ -260,7 +260,7 @@ def _build_submission_acknowledgment(application):
     lines = [
         f"Dear {application.applicant_display_name},",
         "",
-        "Your application has been received by RecruitGuard-CHD.",
+        "Your application has been received by the DOH–CHD CALABARZON Recruitment Portal.",
         f"Application ID: {application.reference_number}",
         f"Position: {application.position.title}",
         f"Position type: {applicant_branch_label(application)}",
@@ -270,7 +270,7 @@ def _build_submission_acknowledgment(application):
     ]
     _append_status_link(lines, application)
     return (
-        f"RecruitGuard-CHD application received: {application.reference_number}",
+        f"DOH–CHD CALABARZON Recruitment Portal application received: {application.reference_number}",
         "\n".join(lines),
     )
 
@@ -293,7 +293,7 @@ def _build_selected_notification(application):
     ]
     _append_status_link(lines, application)
     return (
-        f"RecruitGuard-CHD application result: {application.position.title}",
+        f"DOH–CHD CALABARZON Recruitment Portal application result: {application.position.title}",
         "\n".join(lines),
     )
 
@@ -349,7 +349,7 @@ def _build_non_selected_notification(application, cut_at_screening=False, exam_s
     ]
     _append_status_link(lines, application)
     return (
-        f"RecruitGuard-CHD application result: {application.position.title}",
+        f"DOH–CHD CALABARZON Recruitment Portal application result: {application.position.title}",
         "\n".join(lines),
     )
 
@@ -376,7 +376,7 @@ def _build_application_returned_to_applicant_notification(application, workflow_
         ]
     )
     return (
-        f"RecruitGuard-CHD application returned: {application.position.title}",
+        f"DOH–CHD CALABARZON Recruitment Portal application returned: {application.position.title}",
         "\n".join(lines),
     )
 
@@ -398,11 +398,11 @@ def _build_interview_session_scheduled_notification(application, interview_sessi
     lines.extend(
         [
             "",
-            "Please sign in to RecruitGuard-CHD to review the case and submit your interview rating.",
+            "Please sign in to the recruitment portal to review the case and submit your interview rating.",
         ]
     )
     return (
-        f"RecruitGuard-CHD interview scheduled: {application.position.title}",
+        f"DOH–CHD CALABARZON Recruitment Portal interview scheduled: {application.position.title}",
         "\n".join(lines),
     )
 
@@ -492,7 +492,7 @@ def _build_document_resubmission_request_notification(
             resubmission_deadline=resubmission_deadline,
         )
     return (
-        f"RecruitGuard-CHD document resubmission needed: {application.position.title}",
+        f"DOH–CHD CALABARZON Recruitment Portal document resubmission needed: {application.position.title}",
         body,
         requested_documents,
     )
@@ -525,7 +525,7 @@ def _build_requirement_checklist_notification(
         ]
     )
     return (
-        f"RecruitGuard-CHD requirement checklist: {application.position.title}",
+        f"DOH–CHD CALABARZON Recruitment Portal requirement checklist: {application.position.title}",
         "\n".join(lines),
     )
 
@@ -801,11 +801,11 @@ def _build_interview_batch_panel_digest(posting, applications, interview_session
     lines.extend(
         [
             "",
-            "Please sign in to RecruitGuard-CHD to review each case and submit your interview ratings.",
+            "Please sign in to the recruitment portal to review each case and submit your interview ratings.",
         ]
     )
     return (
-        f"RecruitGuard-CHD interview schedule: {posting.title} ({candidate_count} candidate{'' if candidate_count == 1 else 's'})",
+        f"DOH–CHD CALABARZON Recruitment Portal interview schedule: {posting.title} ({candidate_count} candidate{'' if candidate_count == 1 else 's'})",
         "\n".join(lines),
     )
 
@@ -915,7 +915,7 @@ def _build_exam_invitation_notification(application, exam_schedule):
         ]
     )
     return (
-        f"RecruitGuard-CHD exam invitation: {application.position.title}",
+        f"DOH–CHD CALABARZON Recruitment Portal exam invitation: {application.position.title}",
         "\n".join(lines),
     )
 
@@ -966,7 +966,7 @@ def _build_applicant_interview_notice_notification(application, interview_sessio
         ]
     )
     return (
-        f"RecruitGuard-CHD interview schedule: {application.position.title}",
+        f"DOH–CHD CALABARZON Recruitment Portal interview schedule: {application.position.title}",
         "\n".join(lines),
     )
 

@@ -1,5 +1,5 @@
 {% extends "email/base.html" %}
-{% block title %}RecruitGuard-CHD Interview Panel Assignment{% endblock %}
+{% block title %}DOH–CHD CALABARZON Recruitment Portal Interview Panel Assignment{% endblock %}
 {% block preheader %}Interview panel assignment for {{ meta.applicant_name }} ({{ meta.position_title }}).{% endblock %}
 {% block body %}
     <h1 style="margin:0; color:#111827; font-size:21px; line-height:1.3; font-weight:700;">Interview Panel Assignment</h1>
@@ -43,5 +43,5 @@
     </table>
     {% endif %}
 
-    {% if portal_url %}{% include "email/_button.html" with button_url=portal_url button_label="Open RecruitGuard-CHD" %}{% endif %}
+    {% if portal_url %}{% include "email/_button.html" with button_url=portal_url button_label="Open DOH–CHD CALABARZON Recruitment Portal" %}{% endif %}
 {% endblock %}

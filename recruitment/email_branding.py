@@ -1,4 +1,4 @@
-"""Shared branding and institutional content for all RecruitGuard-CHD emails.
+"""Shared branding and institutional content for all recruitment portal emails.
 
 Every outbound email — applicant notifications, the internal panel notice, and the
 two auth OTP messages — pulls its header logo, contact footer, data-privacy line and
@@ -32,11 +32,11 @@ DATA_PRIVACY_NOTICE = (
 # Do-not-reply line. Applicants are pointed to the HRM Unit printed in their footer;
 # internal staff messages do not carry the HRMU contact block, so they use a generic line.
 DO_NOT_REPLY_APPLICANT = (
-    "This is a system-generated message from RecruitGuard-CHD. Please do not reply to this "
+    "This is a system-generated message from the DOH–CHD CALABARZON Recruitment Portal. Please do not reply to this "
     "email. For inquiries, contact the Human Resource Management Unit using the details above."
 )
 DO_NOT_REPLY_INTERNAL = (
-    "This is a system-generated message from RecruitGuard-CHD. Please do not reply to this email."
+    "This is a system-generated message from the DOH–CHD CALABARZON Recruitment Portal. Please do not reply to this email."
 )
 
 # Reporting instructions shown only on the applicant exam-invitation and interview-notice.

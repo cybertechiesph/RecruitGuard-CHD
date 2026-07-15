@@ -298,9 +298,9 @@ def _send_internal_login_lockout_alert(attempt):
     if not recipients:
         return False
 
-    subject = "RecruitGuard-CHD internal login lockout alert"
+    subject = "DOH–CHD CALABARZON Recruitment Portal internal login lockout alert"
     body = (
-        "RecruitGuard-CHD detected repeated failed internal login attempts.\n\n"
+        "The DOH–CHD CALABARZON Recruitment Portal detected repeated failed internal login attempts.\n\n"
         f"Username: {attempt.username_normalized}\n"
         f"Source IP: {attempt.ip_address or 'unknown'}\n"
         f"Failed attempts: {attempt.failure_count}\n"
@@ -568,9 +568,9 @@ def _send_internal_email_change_verification(change_request, request=None):
     if request is not None:
         verification_url = request.build_absolute_uri(verification_url)
 
-    subject = "Confirm your RecruitGuard-CHD internal email address"
+    subject = "Confirm your DOH–CHD CALABARZON Recruitment Portal internal email address"
     body = (
-        "RecruitGuard-CHD received a request to use this email address for an internal account.\n\n"
+        "The DOH–CHD CALABARZON Recruitment Portal received a request to use this email address for an internal account.\n\n"
         f"Internal username: {change_request.user.username}\n"
         f"Requested email: {change_request.new_email}\n\n"
         "Confirm the change using this link:\n"
@@ -741,12 +741,12 @@ def _hash_internal_mfa_otp(challenge, otp_code):
 
 
 def _send_internal_mfa_email(challenge, otp_code):
-    subject = "RecruitGuard-CHD internal verification code"
+    subject = "DOH–CHD CALABARZON Recruitment Portal internal verification code"
     text_body = (
-        "RecruitGuard-CHD internal verification code\n\n"
+        "DOH–CHD CALABARZON Recruitment Portal internal verification code\n\n"
         f"Your verification code is {otp_code}.\n"
         f"It expires in {settings.INTERNAL_MFA_OTP_VALIDITY_MINUTES} minutes.\n\n"
-        "Do not share this code. RecruitGuard-CHD staff will never ask for it."
+        "Do not share this code. DOH–CHD CALABARZON staff will never ask for it."
     )
     try:
         html_body = render_to_string(
@@ -6805,12 +6805,12 @@ def _generate_otp_code():
 
 def _deliver_application_otp(application, otp_code, *, actor=None, otp_expires_at=None):
     otp_expires_at = otp_expires_at or application.otp_expires_at
-    subject = "RecruitGuard-CHD applicant verification code"
+    subject = "DOH–CHD CALABARZON Recruitment Portal applicant verification code"
     text_body = (
-        "RecruitGuard-CHD applicant verification code\n\n"
+        "DOH–CHD CALABARZON Recruitment Portal applicant verification code\n\n"
         f"Your verification code is {otp_code}.\n"
         f"It expires in {settings.APPLICATION_OTP_VALIDITY_MINUTES} minutes.\n\n"
-        "Do not share this code. RecruitGuard-CHD staff will never ask for it."
+        "Do not share this code. DOH–CHD CALABARZON staff will never ask for it."
     )
     # Draft applicants land on the OTP page; give them a way back if they close the
     # tab there (drafts have no reference_number yet, so this link is their only

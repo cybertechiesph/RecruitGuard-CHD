@@ -166,7 +166,7 @@ EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
 EMAIL_TIMEOUT = env_int("EMAIL_TIMEOUT", 10)
 DEFAULT_FROM_EMAIL = os.getenv(
     "DEFAULT_FROM_EMAIL",
-    EMAIL_HOST_USER or "noreply@recruitguard.local",
+    EMAIL_HOST_USER or "noreply@recruitment.local",
 )
 # Absolute origin used to build asset URLs (e.g. the agency seal) inside HTML emails.
 # Email clients cannot resolve relative {% static %} paths, so the logo must be an
