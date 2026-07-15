@@ -58,6 +58,7 @@ from recruitment.models import (
 )
 from recruitment.requirements import get_required_applicant_document_requirements
 from recruitment.services import (
+    MIN_INTERVIEW_RATINGS_PLANTILLA,
     create_competency_rating_template,
     create_default_position_document_requirements,
     generate_comparative_assessment_report,
@@ -221,10 +222,12 @@ class Command(BaseCommand):
             "hrm_chief": self._resolve_actor(
                 RecruitmentUser.Role.HRM_CHIEF, "Demo", "HRM Chief"
             ),
-            "hrmpsb": self._resolve_actor(
-                RecruitmentUser.Role.HRMPSB_MEMBER, "Demo", "HRMPSB Member"
-            ),
         }
+        # Workflow governance requires a quorum of HRMPSB members to finalize a
+        # Plantilla interview, so the panel needs that many distinct raters.
+        hrmpsb_panel = self._resolve_hrmpsb_panel(MIN_INTERVIEW_RATINGS_PLANTILLA)
+        actors["hrmpsb_panel"] = hrmpsb_panel
+        actors["hrmpsb"] = hrmpsb_panel[0]
 
         rows = []
         index = 1
@@ -309,6 +312,36 @@ class Command(BaseCommand):
         creator.set_unusable_password()
         creator.save(update_fields=["password"])
         return creator
+
+    def _resolve_hrmpsb_panel(self, count):
+        """`count` distinct active HRMPSB members for interview rating — real
+        accounts first, topped up with disposable demo members so a finalized
+        Plantilla interview meets the HRMPSB quorum (workflow governance)."""
+        User = get_user_model()
+        members = list(
+            User.objects.filter(
+                role=RecruitmentUser.Role.HRMPSB_MEMBER, is_active=True
+            )
+            .exclude(username__startswith=DEMO_STAFF_PREFIX)
+            .order_by("id")[:count]
+        )
+        seq = 0
+        while len(members) < count:
+            seq += 1
+            username = f"{DEMO_STAFF_PREFIX}hrmpsb_panel_{seq}"
+            member, _created = User.objects.get_or_create(
+                username=username,
+                defaults={
+                    "role": RecruitmentUser.Role.HRMPSB_MEMBER,
+                    "first_name": "Demo",
+                    "last_name": f"HRMPSB Member {seq}",
+                    "email": f"{username}@example.invalid",
+                    "is_active": True,
+                    "is_staff": False,
+                },
+            )
+            members.append(member)
+        return members
 
     def _resolve_actor(self, role, first_name, last_name):
         """Prefer a real active staff account for the role; else a disposable actor."""
@@ -543,7 +576,7 @@ class Command(BaseCommand):
             self._finalize_interview(
                 application,
                 session_actor=actors["secretariat"],
-                rating_actor=actors["hrmpsb"],
+                rating_actors=actors["hrmpsb_panel"],
                 score=score,
             )
             applications.append(application)
@@ -568,6 +601,9 @@ class Command(BaseCommand):
                 "summary_notes": "Demo finalized CAR forwarded to the Appointing Authority.",
                 "recommended_case_id": applications[0].case.id,
                 "recommendation_notes": "HRMPSB recommends the top-ranked applicant.",
+                # WF-02: the CAR finalize requires the deliberation quorum.
+                "quorum_met": True,
+                "members_present": MIN_INTERVIEW_RATINGS_PLANTILLA,
             },
             finalize=True,
         )
@@ -657,7 +693,7 @@ class Command(BaseCommand):
         template.save(update_fields=["status", "published_at", "updated_at"])
         return template
 
-    def _finalize_interview(self, application, *, session_actor, rating_actor, score):
+    def _finalize_interview(self, application, *, session_actor, rating_actors, score):
         scheduled_for = timezone.now() + timedelta(days=2)
         save_interview_session(
             application=application,
@@ -674,15 +710,18 @@ class Command(BaseCommand):
         competency_scores = {
             competency: level for competency in template.competencies.all()
         }
-        save_interview_rating(
-            application=application,
-            actor=rating_actor,
-            cleaned_data={
-                "competency_scores": competency_scores,
-                "rating_notes": "Demo interview rating recorded.",
-                "justification": "Consistent competency performance across the panel sheet.",
-            },
-        )
+        # Each HRMPSB panel member records their own rating so the interview
+        # meets the finalize quorum.
+        for rating_actor in rating_actors:
+            save_interview_rating(
+                application=application,
+                actor=rating_actor,
+                cleaned_data={
+                    "competency_scores": competency_scores,
+                    "rating_notes": "Demo interview rating recorded.",
+                    "justification": "Consistent competency performance across the panel sheet.",
+                },
+            )
         return save_interview_session(
             application=application,
             actor=session_actor,
