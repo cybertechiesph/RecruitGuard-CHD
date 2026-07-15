@@ -151,7 +151,66 @@
             {% endif %}
         </div>
     </form>
+    {% if review_scope != "application" and date_presets %}
+        <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
+            <span class="rg-imeta">Quick ranges:</span>
+            {% for preset in date_presets %}
+                <a class="btn btn-outline-secondary btn-sm"
+                   href="{% url 'audit-log-list' %}?date_from={{ preset.date_from|date:'Y-m-d' }}&amp;date_to={{ preset.date_to|date:'Y-m-d' }}">
+                    {{ preset.label }}
+                </a>
+            {% endfor %}
+        </div>
+    {% endif %}
 </div>
+
+{% if review_scope != "application" and session_summary %}
+{# ── REV-F session view header: one sign-in, replayed start to finish ── #}
+<div class="card p-4 mb-4">
+    <h2 class="h4 mb-2">Session view</h2>
+    <p class="mb-1">
+        <strong>{{ session_summary.actor.get_full_name|default:session_summary.actor.username }}</strong>
+        {% if session_summary.actor_role %}({{ session_summary.actor_role|role_label }}){% endif %}
+        &mdash; {{ session_summary.entry_count }} recorded action{{ session_summary.entry_count|pluralize }}
+    </p>
+    <p class="rg-imeta mb-1">
+        {% if session_summary.signed_in_at %}
+            Signed in {{ session_summary.signed_in_at|date:"M d, Y g:i A" }}
+        {% else %}
+            First activity {{ session_summary.first_activity|date:"M d, Y g:i A" }}
+        {% endif %}
+        {% if session_summary.ip_address %} &middot; from {{ session_summary.ip_address }}{% endif %}
+        {% if session_summary.user_agent %} &middot; {{ session_summary.user_agent|truncatechars:80 }}{% endif %}
+    </p>
+    <p class="rg-imeta mb-2">
+        Last activity {{ session_summary.last_activity|date:"M d, Y g:i A" }}
+        {% if session_summary.logout_at %}
+            &middot; signed out {{ session_summary.logout_at|date:"g:i A" }}
+        {% else %}
+            &middot; no sign-out recorded &mdash; session expired
+        {% endif %}
+    </p>
+    <a href="{% url 'audit-log-list' %}" class="btn btn-outline-secondary btn-sm">Leave session view</a>
+</div>
+{% endif %}
+
+{% if review_scope != "application" and audit_summary %}
+{# ── REV-F summary strip: the difference between a log and a report ── #}
+<div class="card p-3 mb-4">
+    <div class="d-flex flex-wrap align-items-center gap-2">
+        <span class="rg-pill rg-pill--neutral"><strong>{{ audit_summary.total }}</strong>&nbsp;action{{ audit_summary.total|pluralize }}</span>
+        {% for cat in audit_summary.categories %}
+            <span class="rg-pill rg-pill--info">{{ cat.label }}: {{ cat.count }}</span>
+        {% endfor %}
+        {% if audit_summary.busiest_day and audit_summary.total %}
+            <span class="rg-pill rg-pill--neutral">Busiest day: {{ audit_summary.busiest_day|date:"M d" }} ({{ audit_summary.busiest_day_count }})</span>
+        {% endif %}
+        <span class="flex-grow-1"></span>
+        <a href="{% url 'audit-log-export-csv' %}?{{ querystring }}" class="btn btn-outline-secondary btn-sm">Export CSV</a>
+        <a href="{% url 'audit-log-report' %}?{{ querystring }}" class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener">Printable report</a>
+    </div>
+</div>
+{% endif %}
 
 <div class="card p-4">
     <div class="rg-section__header">
@@ -175,7 +234,15 @@
                                 {% endif %}
                             </div>
                         </div>
-                        <span class="rg-note">{{ log.created_at|date:"M d, Y H:i" }}</span>
+                        <div class="d-flex flex-column align-items-end gap-1">
+                            <span class="rg-note">{{ log.created_at|date:"M d, Y H:i" }}</span>
+                            {% if review_scope != "application" and log.session_tag and log.action == "internal_login" and not session_tag %}
+                                <a class="btn btn-outline-secondary btn-sm"
+                                   href="{% url 'audit-log-list' %}?session={{ log.session_tag }}">
+                                    View session
+                                </a>
+                            {% endif %}
+                        </div>
                     </div>
                     <div class="d-flex flex-wrap gap-2 mb-2">
                         {% if log.actor_role %}

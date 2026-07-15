@@ -21,7 +21,7 @@ from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.mail import EmailMultiAlternatives
 from django.db import IntegrityError, transaction
-from django.db.models import Max, Min, Q
+from django.db.models import Count, Max, Min, Q
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
@@ -30,7 +30,11 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
 from .email_branding import email_branding_context
+from .request_context import current_session_tag
 from .models import (
+    AUDIT_ACTION_CATEGORIES,
+    AUDIT_CATEGORY_BY_ACTION,
+    audit_actions_for_category,
     ApplicationETERating,
     AuditLog,
     AuditLogArchive,
@@ -223,6 +227,9 @@ def record_audit_event(application, actor, action, description, metadata=None):
         action=action,
         description=description,
         metadata=metadata,
+        # REV-F: stamp which sign-in produced this entry (empty outside a
+        # request, e.g. management commands).
+        session_tag=current_session_tag(),
     )
 
 
@@ -2364,7 +2371,19 @@ def get_case_timeline(application):
     ).order_by("created_at")
 
 
-def _filter_audit_logs(queryset, *, search_query="", action="", actor_role="", sensitive_only=False):
+def _filter_audit_logs(
+    queryset,
+    *,
+    search_query="",
+    action="",
+    actor_role="",
+    sensitive_only=False,
+    category="",
+    actor=None,
+    date_from=None,
+    date_to=None,
+    session_tag="",
+):
     if search_query:
         # Also match the reviewer-facing action wording (e.g. "Secured Files
         # Viewed"), which is a display label rather than a stored field, so the
@@ -2381,10 +2400,20 @@ def _filter_audit_logs(queryset, *, search_query="", action="", actor_role="", s
         if matching_action_codes:
             search_filter |= Q(action__in=matching_action_codes)
         queryset = queryset.filter(search_filter)
+    if category:
+        queryset = queryset.filter(action__in=audit_actions_for_category(category))
     if action:
         queryset = queryset.filter(action=action)
     if actor_role:
         queryset = queryset.filter(actor_role=actor_role)
+    if actor is not None:
+        queryset = queryset.filter(actor=actor)
+    if date_from:
+        queryset = queryset.filter(created_at__date__gte=date_from)
+    if date_to:
+        queryset = queryset.filter(created_at__date__lte=date_to)
+    if session_tag:
+        queryset = queryset.filter(session_tag=session_tag)
     if sensitive_only:
         queryset = queryset.filter(is_sensitive_access=True)
     return queryset
@@ -2397,6 +2426,10 @@ def get_application_audit_logs(
     action="",
     actor_role="",
     sensitive_only=False,
+    category="",
+    actor=None,
+    date_from=None,
+    date_to=None,
 ):
     queryset = application.audit_logs.select_related(
         "actor",
@@ -2409,6 +2442,10 @@ def get_application_audit_logs(
         action=action,
         actor_role=actor_role,
         sensitive_only=sensitive_only,
+        category=category,
+        actor=actor,
+        date_from=date_from,
+        date_to=date_to,
     )
 
 
@@ -2423,7 +2460,18 @@ def get_system_audit_logs(*, search_query="", action="", actor_role="", sensitiv
     )
 
 
-def get_all_audit_logs(*, search_query="", action="", actor_role="", sensitive_only=False):
+def get_all_audit_logs(
+    *,
+    search_query="",
+    action="",
+    actor_role="",
+    sensitive_only=False,
+    category="",
+    actor=None,
+    date_from=None,
+    date_to=None,
+    session_tag="",
+):
     """Consolidated audit trail: system/identity events plus case activity.
 
     Unlike ``get_system_audit_logs`` this does not exclude application-scoped
@@ -2445,7 +2493,72 @@ def get_all_audit_logs(*, search_query="", action="", actor_role="", sensitive_o
         action=action,
         actor_role=actor_role,
         sensitive_only=sensitive_only,
+        category=category,
+        actor=actor,
+        date_from=date_from,
+        date_to=date_to,
+        session_tag=session_tag,
     )
+
+
+def summarize_audit_logs(queryset):
+    """REV-F summary strip: what turns a filtered listing into a report —
+    total actions, per-category counts, and the busiest day."""
+    from django.db.models.functions import TruncDate
+
+    total = queryset.count()
+    category_counts = {key: 0 for key in AUDIT_ACTION_CATEGORIES}
+    other = 0
+    for row in queryset.values("action").annotate(n=Count("id")):
+        key = AUDIT_CATEGORY_BY_ACTION.get(row["action"])
+        if key is None:
+            other += row["n"]
+        else:
+            category_counts[key] += row["n"]
+    busiest = (
+        queryset.annotate(day=TruncDate("created_at"))
+        .values("day")
+        .annotate(n=Count("id"))
+        .order_by("-n")
+        .first()
+    )
+    return {
+        "total": total,
+        "categories": [
+            {"key": key, "label": AUDIT_ACTION_CATEGORIES[key]["label"], "count": category_counts[key]}
+            for key in AUDIT_ACTION_CATEGORIES
+            if category_counts[key]
+        ],
+        "other_count": other,
+        "busiest_day": busiest["day"] if busiest else None,
+        "busiest_day_count": busiest["n"] if busiest else 0,
+    }
+
+
+def build_audit_session_summary(session_tag):
+    """REV-F session view header: the sign-in that anchors the tag, the device
+    facts recorded on it, and an honest ending (logout, or last activity)."""
+    entries = AuditLog.objects.filter(session_tag=session_tag)
+    if not entries.exists():
+        return None
+    login_entry = entries.filter(action=AuditLog.Action.INTERNAL_LOGIN).order_by("created_at").first()
+    logout_entry = entries.filter(action=AuditLog.Action.INTERNAL_LOGOUT).order_by("-created_at").first()
+    first = entries.order_by("created_at").first()
+    last = entries.order_by("-created_at").first()
+    anchor = login_entry or first
+    metadata = anchor.metadata if isinstance(anchor.metadata, dict) else {}
+    return {
+        "session_tag": session_tag,
+        "actor": anchor.actor,
+        "actor_role": anchor.actor_role,
+        "signed_in_at": login_entry.created_at if login_entry else None,
+        "first_activity": first.created_at,
+        "last_activity": last.created_at,
+        "logout_at": logout_entry.created_at if logout_entry else None,
+        "ip_address": metadata.get("ip_address", ""),
+        "user_agent": metadata.get("user_agent", ""),
+        "entry_count": entries.count(),
+    }
 
 
 def _evidence_stage_for_application(application):

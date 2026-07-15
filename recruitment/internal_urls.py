@@ -25,7 +25,9 @@ from .identity_views import (
 from .views import (
     AuditArchiveDownloadView,
     AuditLogArchiveView,
+    AuditLogExportCsvView,
     AuditLogListView,
+    AuditLogReportView,
     ApplicationDetailView,
     ApplicationAuditLogView,
     CaseHandoffView,
@@ -210,6 +212,8 @@ urlpatterns = [
     ),
     path("applications/<int:pk>/export/", ExportApplicationBundleView.as_view(), name="application-export"),
     path("audit/", AuditLogListView.as_view(), name="audit-log-list"),
+    path("audit/export/csv/", AuditLogExportCsvView.as_view(), name="audit-log-export-csv"),
+    path("audit/export/report/", AuditLogReportView.as_view(), name="audit-log-report"),
     path("audit/archive/", AuditLogArchiveView.as_view(), name="audit-log-archive"),
     path(
         "audit/archive/<int:pk>/download/",

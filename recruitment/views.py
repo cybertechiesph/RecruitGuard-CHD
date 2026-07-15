@@ -4,7 +4,9 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from datetime import date
+import csv
+from datetime import date, timedelta
+from io import StringIO
 
 from django.urls import reverse
 from django.utils import timezone
@@ -43,6 +45,8 @@ from .forms import (
     WorkflowReopenForm,
 )
 from .models import (
+    AUDIT_ACTION_CATEGORIES,
+    AUDIT_CATEGORY_BY_ACTION,
     AuditLog,
     AuditLogArchive,
     CompetencyDefinition,
@@ -74,6 +78,9 @@ from .permissions import (
     WORKFLOW_PROCESSOR_ROLES,
 )
 from .services import (
+    build_audit_session_summary,
+    record_system_audit_event,
+    summarize_audit_logs,
     archive_audit_logs,
     audit_archive_latest_allowed_cutoff,
     download_audit_archive,
@@ -889,15 +896,7 @@ class ApplicationAuditLogView(
         context = super().get_context_data(**kwargs)
         application = context["application"]
         self.search_form = AuditLogSearchForm(self.request.GET or None)
-        if self.search_form.is_valid():
-            cleaned_data = self.search_form.cleaned_data
-        else:
-            cleaned_data = {
-                "q": "",
-                "action": "",
-                "actor_role": "",
-                "sensitive_only": False,
-            }
+        cleaned_data = _audit_search_cleaned_data(self.search_form)
         audit_logs = list(
             get_application_audit_logs(
                 application,
@@ -905,6 +904,10 @@ class ApplicationAuditLogView(
                 action=cleaned_data["action"],
                 actor_role=cleaned_data["actor_role"],
                 sensitive_only=cleaned_data["sensitive_only"],
+                category=cleaned_data["category"],
+                actor=cleaned_data["actor"],
+                date_from=cleaned_data["date_from"],
+                date_to=cleaned_data["date_to"],
             )
         )
         context["search_form"] = self.search_form
@@ -949,21 +952,32 @@ class AuditLogListView(LoginRequiredMixin, SystemAdministratorRequiredMixin, Tem
                     f"on or before {audit_archive_latest_allowed_cutoff():%b %d, %Y}."
                 )
         self.search_form = AuditLogSearchForm(self.request.GET or None)
-        if self.search_form.is_valid():
-            cleaned_data = self.search_form.cleaned_data
-        else:
-            cleaned_data = {
-                "q": "",
-                "action": "",
-                "actor_role": "",
-                "sensitive_only": False,
-            }
+        cleaned_data = _audit_search_cleaned_data(self.search_form)
+        session_tag = (self.request.GET.get("session") or "").strip()
         audit_logs = get_all_audit_logs(
             search_query=cleaned_data["q"],
             action=cleaned_data["action"],
             actor_role=cleaned_data["actor_role"],
             sensitive_only=cleaned_data["sensitive_only"],
+            category=cleaned_data["category"],
+            actor=cleaned_data["actor"],
+            date_from=cleaned_data["date_from"],
+            date_to=cleaned_data["date_to"],
+            session_tag=session_tag,
         )
+        # REV-F: the session view reads chronologically — a visit replayed
+        # top to bottom.
+        if session_tag:
+            audit_logs = audit_logs.order_by("created_at")
+            context["session_summary"] = build_audit_session_summary(session_tag)
+            context["session_tag"] = session_tag
+        context["audit_summary"] = summarize_audit_logs(audit_logs)
+        today = timezone.localdate()
+        context["date_presets"] = [
+            {"label": "Today", "date_from": today, "date_to": today},
+            {"label": "Last 7 days", "date_from": today - timedelta(days=6), "date_to": today},
+            {"label": "This month", "date_from": today.replace(day=1), "date_to": today},
+        ]
         paginator = Paginator(audit_logs, 50)
         page_number = self.request.GET.get("page")
         page_obj = paginator.get_page(page_number)
@@ -989,6 +1003,145 @@ class AuditLogListView(LoginRequiredMixin, SystemAdministratorRequiredMixin, Tem
                 result_count=paginator.count,
             )
         return context
+
+
+def _audit_search_cleaned_data(search_form):
+    if search_form.is_valid():
+        return search_form.cleaned_data
+    return {
+        "q": "",
+        "category": "",
+        "action": "",
+        "actor_role": "",
+        "actor": None,
+        "date_from": None,
+        "date_to": None,
+        "sensitive_only": False,
+    }
+
+
+def _filtered_audit_logs_from_request(request):
+    """Shared by the list view and both exports so a report always contains
+    exactly what the filtered screen shows."""
+    form = AuditLogSearchForm(request.GET or None)
+    cleaned = _audit_search_cleaned_data(form)
+    session_tag = (request.GET.get("session") or "").strip()
+    queryset = get_all_audit_logs(
+        search_query=cleaned["q"],
+        action=cleaned["action"],
+        actor_role=cleaned["actor_role"],
+        sensitive_only=cleaned["sensitive_only"],
+        category=cleaned["category"],
+        actor=cleaned["actor"],
+        date_from=cleaned["date_from"],
+        date_to=cleaned["date_to"],
+        session_tag=session_tag,
+    )
+    if session_tag:
+        queryset = queryset.order_by("created_at")
+    return queryset, cleaned, session_tag
+
+
+def _describe_audit_filters(cleaned, session_tag):
+    parts = []
+    if cleaned["q"]:
+        parts.append(f'search "{cleaned["q"]}"')
+    if cleaned["category"]:
+        parts.append(f"category {AUDIT_ACTION_CATEGORIES[cleaned['category']]['label']}")
+    if cleaned["action"]:
+        parts.append(f"action {cleaned['action']}")
+    if cleaned["actor"]:
+        parts.append(f"user {cleaned['actor'].get_full_name() or cleaned['actor'].username}")
+    if cleaned["actor_role"]:
+        parts.append(f"role {cleaned['actor_role']}")
+    if cleaned["date_from"]:
+        parts.append(f"from {cleaned['date_from']:%b %d, %Y}")
+    if cleaned["date_to"]:
+        parts.append(f"to {cleaned['date_to']:%b %d, %Y}")
+    if cleaned["sensitive_only"]:
+        parts.append("sensitive only")
+    if session_tag:
+        parts.append("single session")
+    return "; ".join(parts) if parts else "no filters (full trail)"
+
+
+class AuditLogExportCsvView(LoginRequiredMixin, SystemAdministratorRequiredMixin, View):
+    """REV-F: CSV export of the filtered audit view. The export itself is
+    audit-logged."""
+
+    def get(self, request):
+        queryset, cleaned, session_tag = _filtered_audit_logs_from_request(request)
+        filters_label = _describe_audit_filters(cleaned, session_tag)
+        buffer = StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(
+            ["created_at", "actor", "actor_role", "action", "category",
+             "case_reference", "workflow_stage", "description", "sensitive"]
+        )
+        count = 0
+        for entry in queryset.iterator():
+            writer.writerow(
+                [
+                    entry.created_at.isoformat(),
+                    entry.actor.username if entry.actor else "",
+                    entry.actor_role,
+                    entry.action,
+                    AUDIT_CATEGORY_BY_ACTION.get(entry.action, "other"),
+                    entry.case_reference,
+                    entry.workflow_stage,
+                    entry.description,
+                    entry.is_sensitive_access,
+                ]
+            )
+            count += 1
+        record_system_audit_event(
+            actor=request.user,
+            action=AuditLog.Action.EXPORT_GENERATED,
+            description=f"Exported {count} audit entries to CSV ({filters_label}).",
+            metadata={"export": "audit_csv", "entry_count": count, "filters": filters_label},
+        )
+        response = HttpResponse(buffer.getvalue(), content_type="text/csv")
+        response["Content-Disposition"] = (
+            f'attachment; filename="audit-report-{timezone.localdate():%Y%m%d}.csv"'
+        )
+        return response
+
+
+class AuditLogReportView(LoginRequiredMixin, SystemAdministratorRequiredMixin, View):
+    """REV-F: print-ready audit report — the filtered view as a document a
+    director can hold: header with the filters applied, the summary strip,
+    then the entries."""
+
+    def get(self, request):
+        queryset, cleaned, session_tag = _filtered_audit_logs_from_request(request)
+        summary = summarize_audit_logs(queryset)
+        entries = list(queryset[:1000])
+        record_system_audit_event(
+            actor=request.user,
+            action=AuditLog.Action.EXPORT_GENERATED,
+            description=(
+                f"Generated printable audit report ({summary['total']} entries; "
+                f"{_describe_audit_filters(cleaned, session_tag)})."
+            ),
+            metadata={
+                "export": "audit_report",
+                "entry_count": summary["total"],
+                "filters": _describe_audit_filters(cleaned, session_tag),
+            },
+        )
+        return render(
+            request,
+            "recruitment/audit_report_print.html",
+            {
+                "entries": entries,
+                "entry_cap": 1000,
+                "summary": summary,
+                "filters_label": _describe_audit_filters(cleaned, session_tag),
+                "session_summary": build_audit_session_summary(session_tag) if session_tag else None,
+                "printed_by": request.user,
+                "printed_at": timezone.now(),
+            },
+        )
 
 
 class AuditLogArchiveView(LoginRequiredMixin, SystemAdministratorRequiredMixin, View):

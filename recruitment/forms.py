@@ -25,6 +25,7 @@ from .captcha import (
     validate_captcha_answer,
 )
 from .models import (
+    AUDIT_ACTION_CATEGORIES,
     AuditLog,
     ComparativeAssessmentReport,
     ComparativeAssessmentReportItem,
@@ -1040,6 +1041,12 @@ class EvidenceVaultSearchForm(BootstrapFormMixin, forms.Form):
 
 class AuditLogSearchForm(BootstrapFormMixin, forms.Form):
     q = forms.CharField(required=False, label="Search")
+    # REV-F: auditors think in categories, not in ~70 internal event names.
+    category = forms.ChoiceField(
+        required=False,
+        choices=[],
+        label="Category",
+    )
     action = forms.ChoiceField(
         required=False,
         choices=audit_action_choices(),
@@ -1050,6 +1057,22 @@ class AuditLogSearchForm(BootstrapFormMixin, forms.Form):
         choices=[("", "All roles"), *RecruitmentUser.Role.choices],
         label="User Role",
     )
+    actor = forms.ModelChoiceField(
+        required=False,
+        queryset=RecruitmentUser.objects.none(),
+        label="User",
+        empty_label="All users",
+    )
+    date_from = forms.DateField(
+        required=False,
+        label="From",
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+    date_to = forms.DateField(
+        required=False,
+        label="To",
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
     sensitive_only = forms.BooleanField(
         required=False,
         label="Sensitive records only",
@@ -1059,6 +1082,14 @@ class AuditLogSearchForm(BootstrapFormMixin, forms.Form):
         super().__init__(*args, **kwargs)
         self.fields["q"].help_text = (
             "Search by case reference, step, description, or username."
+        )
+        self.fields["category"].choices = [
+            ("", "All categories"),
+            *[(key, group["label"]) for key, group in AUDIT_ACTION_CATEGORIES.items()],
+        ]
+        self.fields["actor"].queryset = (
+            RecruitmentUser.objects.exclude(role=RecruitmentUser.Role.APPLICANT)
+            .order_by("last_name", "first_name", "username")
         )
         self._apply_bootstrap()
 

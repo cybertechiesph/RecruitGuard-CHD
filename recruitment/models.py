@@ -3860,6 +3860,10 @@ class AuditLog(TimestampedModel):
     description = models.TextField()
     metadata = models.JSONField(default=dict, blank=True)
     is_sensitive_access = models.BooleanField(default=False)
+    # REV-F: hashed tag of the browser session that produced this entry. Every
+    # entry stamped with the same tag belongs to the same sign-in, which is
+    # what the audit "session view" groups on. Never the raw session key.
+    session_tag = models.CharField(max_length=32, blank=True, default="", db_index=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -3986,6 +3990,128 @@ def audit_action_label(action):
     if not action:
         return "Record Updated"
     return AUDIT_ACTION_DISPLAY_LABELS.get(action, str(action).replace("_", " ").title())
+
+
+# REV-F: an auditor thinks in categories, not in ~70 internal event names.
+# Every action maps to exactly one plain-language category; the filter
+# dropdown and the summary strip both read from this map.
+AUDIT_ACTION_CATEGORIES = {
+    "security": {
+        "label": "Sign-ins & security",
+        "actions": [
+            AuditLog.Action.INTERNAL_LOGIN,
+            AuditLog.Action.INTERNAL_LOGIN_FAILED,
+            AuditLog.Action.INTERNAL_LOGIN_LOCKED,
+            AuditLog.Action.INTERNAL_LOGIN_ALERT_SENT,
+            AuditLog.Action.INTERNAL_LOGIN_ALERT_FAILED,
+            AuditLog.Action.INTERNAL_LOGOUT,
+            AuditLog.Action.INTERNAL_MFA_SENT,
+            AuditLog.Action.INTERNAL_MFA_RESENT,
+            AuditLog.Action.INTERNAL_MFA_VERIFIED,
+            AuditLog.Action.INTERNAL_MFA_FAILED,
+            AuditLog.Action.INTERNAL_MFA_EXPIRED,
+            AuditLog.Action.INTERNAL_MFA_LOCKED,
+            AuditLog.Action.PASSWORD_CHANGED,
+            AuditLog.Action.PASSWORD_RESET_REQUESTED,
+            AuditLog.Action.PASSWORD_RESET_COMPLETED,
+            AuditLog.Action.APPLICATION_OTP_SENT,
+            AuditLog.Action.APPLICATION_OTP_FAILED,
+            AuditLog.Action.APPLICATION_OTP_LOCKED,
+            AuditLog.Action.APPLICATION_OTP_VERIFIED,
+            AuditLog.Action.OVERRIDE_GRANTED,
+            AuditLog.Action.OVERRIDE_USED,
+            AuditLog.Action.PROTECTED_RECORD_VIEWED,
+            AuditLog.Action.EVIDENCE_VAULT_VIEWED,
+            AuditLog.Action.EVIDENCE_ACCESS_DENIED,
+            AuditLog.Action.AUDIT_LOG_VIEWED,
+        ],
+    },
+    "case": {
+        "label": "Case activity",
+        "actions": [
+            AuditLog.Action.APPLICATION_CREATED,
+            AuditLog.Action.APPLICATION_UPDATED,
+            AuditLog.Action.APPLICATION_SUBMITTED,
+            AuditLog.Action.CASE_CREATED,
+            AuditLog.Action.CASE_REOPENED,
+            AuditLog.Action.ROUTED,
+            AuditLog.Action.SCREENING_RECORDED,
+            AuditLog.Action.SCREENING_FINALIZED,
+            AuditLog.Action.EXAM_SCHEDULED,
+            AuditLog.Action.EXAM_RECORDED,
+            AuditLog.Action.EXAM_FINALIZED,
+            AuditLog.Action.INTERVIEW_SCHEDULED,
+            AuditLog.Action.INTERVIEW_FINALIZED,
+            AuditLog.Action.INTERVIEW_RATING_RECORDED,
+            AuditLog.Action.INTERVIEW_FALLBACK_UPLOADED,
+            AuditLog.Action.DELIBERATION_RECORDED,
+            AuditLog.Action.DELIBERATION_FINALIZED,
+            AuditLog.Action.CAR_GENERATED,
+            AuditLog.Action.CAR_FINALIZED,
+            AuditLog.Action.CAR_RETURNED,
+            AuditLog.Action.DECISION_RECORDED,
+            AuditLog.Action.APPLICANT_DISQUALIFIED,
+            AuditLog.Action.COMPLETION_RECORDED,
+            AuditLog.Action.CASE_CLOSED,
+        ],
+    },
+    "files": {
+        "label": "Documents & files",
+        "actions": [
+            AuditLog.Action.EVIDENCE_UPLOADED,
+            AuditLog.Action.EVIDENCE_DOWNLOADED,
+            AuditLog.Action.EVIDENCE_ARCHIVED,
+            AuditLog.Action.EVIDENCE_RESTORED,
+        ],
+    },
+    "emails": {
+        "label": "Emails",
+        "actions": [
+            AuditLog.Action.NOTIFICATION_SENT,
+            AuditLog.Action.NOTIFICATION_FAILED,
+        ],
+    },
+    "accounts": {
+        "label": "Accounts & configuration",
+        "actions": [
+            AuditLog.Action.INTERNAL_ACCOUNT_CREATED,
+            AuditLog.Action.INTERNAL_ACCOUNT_UPDATED,
+            AuditLog.Action.INTERNAL_EMAIL_CHANGE_REQUESTED,
+            AuditLog.Action.INTERNAL_EMAIL_CHANGE_VERIFIED,
+            AuditLog.Action.INTERNAL_EMAIL_CHANGE_FAILED,
+            AuditLog.Action.INTERNAL_ACCOUNT_ACTIVATED,
+            AuditLog.Action.INTERNAL_ACCOUNT_DEACTIVATED,
+            AuditLog.Action.INTERNAL_ROLE_CHANGED,
+            AuditLog.Action.ASSESSMENT_WEIGHTS_UPDATED,
+            AuditLog.Action.POSITION_CREATED,
+            AuditLog.Action.POSITION_UPDATED,
+            AuditLog.Action.RECRUITMENT_ENTRY_CREATED,
+            AuditLog.Action.RECRUITMENT_ENTRY_UPDATED,
+            AuditLog.Action.RECRUITMENT_ENTRY_STATUS_CHANGED,
+            AuditLog.Action.RECRUITMENT_ENTRY_DEADLINE_CHANGED,
+        ],
+    },
+    "exports": {
+        "label": "Exports & archives",
+        "actions": [
+            AuditLog.Action.EXPORT_GENERATED,
+            AuditLog.Action.EXPORT_DENIED,
+            AuditLog.Action.AUDIT_LOG_ARCHIVED,
+            AuditLog.Action.AUDIT_ARCHIVE_DOWNLOADED,
+        ],
+    },
+}
+
+AUDIT_CATEGORY_BY_ACTION = {
+    action: key
+    for key, group in AUDIT_ACTION_CATEGORIES.items()
+    for action in group["actions"]
+}
+
+
+def audit_actions_for_category(category_key):
+    group = AUDIT_ACTION_CATEGORIES.get(category_key)
+    return list(group["actions"]) if group else []
 
 
 def audit_action_codes_matching(query):

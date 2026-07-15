@@ -66,6 +66,9 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # REV-F: exposes the request to the audit layer so every entry is stamped
+    # with the sign-in (session tag) that produced it.
+    "recruitment.request_context.AuditRequestContextMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -276,7 +279,11 @@ CSRF_COOKIE_HTTPONLY = True
 SESSION_INACTIVITY_TIMEOUT_SECONDS = env_int("SESSION_INACTIVITY_TIMEOUT_SECONDS", 30 * 60)
 SESSION_COOKIE_AGE = SESSION_INACTIVITY_TIMEOUT_SECONDS
 SESSION_SAVE_EVERY_REQUEST = env_bool("SESSION_SAVE_EVERY_REQUEST", True)
-SESSION_EXPIRE_AT_BROWSER_CLOSE = env_bool("SESSION_EXPIRE_AT_BROWSER_CLOSE", False)
+# REV-F: best-effort kiosk hardening for shared office PCs — closing the
+# browser discards the sign-in cookie. The 30-minute inactivity timeout above
+# remains the real guarantee (browsers with "continue where you left off"
+# keep session cookies).
+SESSION_EXPIRE_AT_BROWSER_CLOSE = env_bool("SESSION_EXPIRE_AT_BROWSER_CLOSE", True)
 SESSION_COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
 CSRF_COOKIE_SAMESITE = os.getenv("CSRF_COOKIE_SAMESITE", "Lax")
 SESSION_COOKIE_SECURE = True if not DEBUG else env_bool("SESSION_COOKIE_SECURE", False)

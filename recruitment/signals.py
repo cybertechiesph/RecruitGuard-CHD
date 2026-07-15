@@ -23,11 +23,19 @@ def configure_sqlite_connection(sender, connection, **kwargs):
 @receiver(user_logged_in, dispatch_uid="recruitguard_internal_login_audit")
 def audit_internal_login(sender, request, user, **kwargs):
     if getattr(user, "is_internal_user", False):
+        # REV-F: the sign-in entry anchors the audit session view, so it
+        # carries the device facts an investigator asks for first.
+        from .services import _request_ip_address, _request_user_agent
+
         record_system_audit_event(
             actor=user,
             action=AuditLog.Action.INTERNAL_LOGIN,
             description="Internal user logged in.",
-            metadata={"user_id": user.id},
+            metadata={
+                "user_id": user.id,
+                "ip_address": _request_ip_address(request) or "",
+                "user_agent": _request_user_agent(request),
+            },
         )
 
 

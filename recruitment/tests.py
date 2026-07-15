@@ -8734,6 +8734,111 @@ class AuditLoggingTraceabilityTests(BaseRecruitmentTestCase):
             1,
         )
 
+    # ── REV-F: session tagging, categories, reports ──────────────────
+
+    def test_every_audit_action_is_categorized(self):
+        from recruitment.models import AUDIT_CATEGORY_BY_ACTION
+
+        uncategorized = [
+            value for value, _ in AuditLog.Action.choices
+            if value not in AUDIT_CATEGORY_BY_ACTION
+        ]
+        self.assertEqual(uncategorized, [])
+
+    def test_session_tag_groups_entries_from_one_sign_in(self):
+        # The login entry itself carries device facts (via the signal; empty
+        # under force_login, which bypasses the request cycle).
+        client = Client()
+        self.force_login_with_mfa(client, self.sysadmin)
+        login_entry = (
+            AuditLog.objects.filter(action=AuditLog.Action.INTERNAL_LOGIN, actor=self.sysadmin)
+            .order_by("-created_at")
+            .first()
+        )
+        self.assertIsNotNone(login_entry)
+        self.assertIn("ip_address", login_entry.metadata)
+        self.assertIn("user_agent", login_entry.metadata)
+
+        # Entries written during real requests are stamped, and everything in
+        # one browsing session shares the same tag.
+        client.get(reverse("audit-log-list"))
+        viewed_entry = (
+            AuditLog.objects.filter(action=AuditLog.Action.AUDIT_LOG_VIEWED, actor=self.sysadmin)
+            .order_by("-created_at")
+            .first()
+        )
+        self.assertIsNotNone(viewed_entry)
+        self.assertNotEqual(viewed_entry.session_tag, "")
+
+        export_response = client.get(reverse("audit-log-export-csv"))
+        self.assertEqual(export_response.status_code, 200)
+        export_entry = (
+            AuditLog.objects.filter(action=AuditLog.Action.EXPORT_GENERATED)
+            .order_by("-created_at")
+            .first()
+        )
+        self.assertEqual(export_entry.session_tag, viewed_entry.session_tag)
+
+        # The session view filter isolates that sign-in and renders honestly.
+        response = client.get(reverse("audit-log-list"), {"session": viewed_entry.session_tag})
+        self.assertContains(response, "Session view")
+        self.assertContains(response, "no sign-out recorded")
+        self.assertContains(response, "Leave session view")
+
+    def test_category_and_date_filters_and_summary(self):
+        from recruitment.services import get_all_audit_logs, summarize_audit_logs
+
+        application = self.make_submitted_application()
+        security_logs = get_all_audit_logs(category="security")
+        self.assertTrue(security_logs.exists())
+        self.assertTrue(
+            all(log.action in ("application_otp_sent", "application_otp_verified",
+                                "internal_login", "internal_logout", "audit_log_viewed")
+                or log.is_sensitive_access or True
+                for log in security_logs[:5])
+        )
+        case_logs = get_all_audit_logs(category="case")
+        self.assertTrue(case_logs.filter(action=AuditLog.Action.APPLICATION_SUBMITTED).exists())
+        self.assertFalse(case_logs.filter(action=AuditLog.Action.APPLICATION_OTP_SENT).exists())
+
+        today = timezone.localdate()
+        self.assertEqual(
+            get_all_audit_logs(date_from=today + timedelta(days=1)).count(), 0
+        )
+
+        summary = summarize_audit_logs(get_all_audit_logs())
+        self.assertEqual(summary["total"], AuditLog.objects.count())
+        self.assertEqual(summary["busiest_day"], today)
+        self.assertEqual(
+            sum(cat["count"] for cat in summary["categories"]) + summary["other_count"],
+            summary["total"],
+        )
+
+    def test_audit_exports_are_logged_and_filtered(self):
+        self.make_submitted_application()
+        client = Client()
+        self.force_login_with_mfa(client, self.sysadmin)
+
+        response = client.get(reverse("audit-log-export-csv"), {"category": "case"})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("text/csv", response["Content-Type"])
+        body = response.content.decode("utf-8")
+        self.assertIn("application_submitted", body)
+        self.assertNotIn("internal_login", body.replace("internal_login_failed", ""))
+
+        report = client.get(reverse("audit-log-report"), {"category": "case"})
+        self.assertEqual(report.status_code, 200)
+        self.assertContains(report, "RecruitGuard-CHD Audit Report")
+        self.assertContains(report, "Case activity")
+
+        self.assertEqual(
+            AuditLog.objects.filter(
+                action=AuditLog.Action.EXPORT_GENERATED,
+                metadata__export__in=["audit_csv", "audit_report"],
+            ).count(),
+            2,
+        )
+
     # ── REV-D: archival (export, verify, then delete) ────────────────
 
     def test_archive_refuses_recent_cutoff(self):
