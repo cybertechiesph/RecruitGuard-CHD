@@ -7,8 +7,8 @@
 {% block content %}
 <div class="rg-pub-wrap" style="max-width:580px; padding-top:2.5rem;">
 
-    {# REV-E: print-only official heading — the printout reads as a document,
-       not a screenshot of a web page. #}
+    {% comment %} REV-E: print-only official heading — the printout reads as a document,
+       not a screenshot of a web page. {% endcomment %}
     <div class="rg-receipt-print-head" aria-hidden="true">
         <div class="rg-receipt-print-head__office">
             Department of Health &mdash; Center for Health Development CALABARZON
@@ -31,9 +31,9 @@
         </p>
     </div>
 
-    {# Receipt card — the two identifiers have different jobs: the tracking
+    {% comment %} Receipt card — the two identifiers have different jobs: the tracking
        code is the applicant's private key to online status checking; the case
-       number is the public reference safe to quote to the office. #}
+       number is the public reference safe to quote to the office. {% endcomment %}
     <div class="rg-pub-receipt-card">
         <p style="font-size:0.8125rem; font-weight:600; color:#5f6c78; margin-bottom:0.35rem; text-transform:uppercase; letter-spacing:0.08em;">
             Your Tracking Code <span style="text-transform:none; letter-spacing:0; font-weight:500;">(keep private)</span>

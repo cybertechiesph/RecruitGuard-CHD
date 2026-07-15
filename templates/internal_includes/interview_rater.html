@@ -331,9 +331,9 @@
                 <div class="rg-scr-modal-summary">
                     <div class="rg-scr-modal-summary__row">
                         <span class="rg-scr-modal-summary__label">Candidate</span>
-                        {# REV-B exception: the interview is face-to-face, so the live
+                        {% comment %} REV-B exception: the interview is face-to-face, so the live
                            rating sheet shows code AND name — correct attribution
-                           outranks symbolic blinding here. #}
+                           outranks symbolic blinding here. {% endcomment %}
                         <span class="rg-scr-modal-summary__value">{{ application.candidate_code_label }} &mdash; {{ application.applicant_display_name }}</span>
                     </div>
                     <div class="rg-scr-modal-summary__row">

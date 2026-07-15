@@ -33,10 +33,10 @@
 {% include "internal_includes/case_pipeline.html" %}
 
 
-{# Applicant profile and submission context, available on every tab.
+{% comment %} Applicant profile and submission context, available on every tab.
    REV-B: hidden from HRMPSB members — panel evaluation is blinded, and this
    panel carries the applicant's name, contact details, and self-written text.
-   The rating context they need lives in the interview and CAR sections. #}
+   The rating context they need lives in the interview and CAR sections. {% endcomment %}
 {% if request.user.role != "hrmpsb_member" %}
 <details class="rg-applicant-panel" open>
     <summary class="rg-applicant-panel__summary">
