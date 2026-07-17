@@ -410,7 +410,6 @@ class BaseRecruitmentTestCase(TestCase):
         self,
         application,
         actor,
-        completeness_status=ScreeningRecord.CompletenessStatus.COMPLETE,
         qualification_outcome=ScreeningRecord.QualificationOutcome.QUALIFIED,
         completeness_notes="All required screening documents were reviewed.",
         screening_notes="Qualification screening completed.",
@@ -419,11 +418,11 @@ class BaseRecruitmentTestCase(TestCase):
         experience_score=None,
         document_review_score=None,
     ):
+        # RD-1: completeness is derived from the document review, not supplied.
         return save_screening_review(
             application=application,
             actor=actor,
             cleaned_data={
-                "completeness_status": completeness_status,
                 "completeness_notes": completeness_notes,
                 "qualification_outcome": qualification_outcome,
                 "education_score": education_score,
@@ -5455,62 +5454,33 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
             r'(?s)rg-pipeline__stage is-current">.*?<span class="rg-pipeline__label">Exam</span>',
         )
 
-    def test_failed_screening_keeps_disposition_inside_screening_stage(self):
+    def test_not_qualified_screening_closes_the_case_at_level_two(self):
+        # RD-1: Not Qualified IS the definitive cut — a reviewer who wants the
+        # applicant to fix documents returns them from step 2 instead. So the
+        # old "finalized as failed, but parked at screening awaiting a
+        # reject-or-return choice" state no longer exists: the case closes.
         application = self.make_application(self.level2_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
         self.finalize_screening_for_current_stage(
             application,
             self.hrm_chief,
-            completeness_status=ScreeningRecord.CompletenessStatus.INCOMPLETE,
             qualification_outcome=ScreeningRecord.QualificationOutcome.NOT_QUALIFIED,
-            completeness_notes="Missing required documents.",
-            screening_notes="Applicant does not meet the screening requirements.",
+            screening_notes="Applicant does not meet the Qualification Standards.",
         )
 
-        client = Client()
-        self.force_login_with_mfa(client, self.hrm_chief)
-        response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'rg-cws-stage-titlebar__title">Qualification Screening</span>')
-        self.assertContains(response, "Return to Applicant")
-        self.assertContains(response, "Reject Application")
-        self.assertNotContains(response, "Endorse to HRMPSB")
-        self.assertNotContains(response, 'data-section="cws-exam"')
-        content = response.content.decode()
-        self.assertRegex(
-            content,
-            r'(?s)rg-pipeline__stage is-current">.*?<span class="rg-pipeline__label">Screening</span>',
-        )
-
-    def test_failed_screening_can_be_rejected_from_screening_stage(self):
-        application = self.make_application(self.level2_position)
-        self.verify_application_for_submission(application)
-        submit_application(application, self.applicant)
-        self.finalize_screening_for_current_stage(
-            application,
-            self.hrm_chief,
-            completeness_status=ScreeningRecord.CompletenessStatus.INCOMPLETE,
-            qualification_outcome=ScreeningRecord.QualificationOutcome.NOT_QUALIFIED,
-            completeness_notes="Missing required documents.",
-            screening_notes="Applicant does not meet the screening requirements.",
-        )
-
-        client = Client()
-        self.force_login_with_mfa(client, self.hrm_chief)
-        response = client.post(
-            reverse("workflow-action", kwargs={"pk": application.pk}),
-            {"action": "reject", "remarks": "Rejected directly from screening."},
-            follow=True,
-        )
-
-        self.assertEqual(response.status_code, 200)
         application.refresh_from_db()
         application.case.refresh_from_db()
         self.assertEqual(application.status, RecruitmentApplication.Status.REJECTED)
         self.assertEqual(application.case.case_status, RecruitmentCase.CaseStatus.REJECTED)
         self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.CLOSED)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Endorse to HRMPSB")
+        self.assertNotContains(response, 'data-section="cws-exam"')
 
     def test_definitive_not_qualified_screening_auto_rejects_and_notifies(self):
         application = self.make_application(self.level1_position)
@@ -5522,7 +5492,6 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
             self.finalize_screening_for_current_stage(
                 application,
                 self.secretariat,
-                completeness_status=ScreeningRecord.CompletenessStatus.COMPLETE,
                 qualification_outcome=ScreeningRecord.QualificationOutcome.NOT_QUALIFIED,
                 screening_notes="Does not meet the education requirement under the QS.",
             )
@@ -5577,8 +5546,8 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
 
 class ScreeningRecordTests(BaseRecruitmentTestCase):
     def screening_payload(self, **overrides):
+        # RD-1: completeness is derived from the document rows, never posted.
         payload = {
-            "completeness_status": ScreeningRecord.CompletenessStatus.COMPLETE,
             "completeness_notes": "All required application documents were reviewed.",
             "qualification_outcome": ScreeningRecord.QualificationOutcome.QUALIFIED,
             "screening_notes": "Applicant satisfies the documented qualification basis.",
@@ -5787,7 +5756,143 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         self.assertContains(response, "Add the instruction the applicant should follow")
         self.assertFalse(ScreeningRecord.objects.filter(application=application, is_finalized=True).exists())
 
-    def test_screening_view_blocks_complete_when_required_document_flagged(self):
+    def test_completeness_is_derived_from_the_document_review(self):
+        # RD-1: the reviewer never answers "are the documents complete?" — the
+        # value is computed from the rows and stored so the CAR, exports, locked
+        # views, and audit keep reading it.
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        first_requirement = get_applicant_document_requirements(application.branch)[0]
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        # A flagged document derives INCOMPLETE, with no completeness input posted.
+        client.post(
+            reverse("screening-review", kwargs={"pk": application.pk}),
+            {
+                **self.screening_payload(qualification_outcome=""),
+                **self.screening_document_status_payload(
+                    application,
+                    overrides={
+                        first_requirement.code: (
+                            ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
+                        ),
+                    },
+                ),
+                f"document_remarks__{first_requirement.code}": "Upload a readable copy.",
+                "operation": "save",
+            },
+        )
+        record = ScreeningRecord.objects.get(application=application)
+        self.assertEqual(
+            record.completeness_status, ScreeningRecord.CompletenessStatus.INCOMPLETE
+        )
+
+        # Clearing the flag derives COMPLETE.
+        client.post(
+            reverse("screening-review", kwargs={"pk": application.pk}),
+            {
+                **self.screening_payload(qualification_outcome=""),
+                **self.screening_document_status_payload(application),
+                "operation": "save",
+            },
+        )
+        record.refresh_from_db()
+        self.assertEqual(
+            record.completeness_status, ScreeningRecord.CompletenessStatus.COMPLETE
+        )
+
+    def test_return_to_applicant_is_one_atomic_decision(self):
+        # RD-1: returning flagged documents saves the review AND sends the case
+        # back in a single action — no finalize, no invented verdict.
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        first_requirement = get_applicant_document_requirements(application.branch)[0]
+        mail.outbox.clear()
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = client.post(
+                reverse("screening-review", kwargs={"pk": application.pk}),
+                {
+                    **self.screening_payload(qualification_outcome=""),
+                    **self.screening_document_status_payload(
+                        application,
+                        overrides={
+                            first_requirement.code: (
+                                ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
+                            ),
+                        },
+                    ),
+                    f"document_remarks__{first_requirement.code}": "Upload a signed copy.",
+                    "return_remarks": "Please re-upload the signed application letter.",
+                    "operation": "return_to_applicant",
+                },
+                follow=True,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        record = ScreeningRecord.objects.get(application=application)
+        # The flags persisted, but screening was NOT finalized.
+        self.assertFalse(record.is_finalized)
+        self.assertEqual(
+            record.document_reviews.get(document_key=first_requirement.code).status,
+            ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION,
+        )
+        # ...and the case went back to the applicant in the same action.
+        self.assertIsNotNone(record.resubmission_deadline)
+        application.case.refresh_from_db()
+        self.assertEqual(
+            application.case.case_status,
+            RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION,
+        )
+        self.assertTrue(mail.outbox)
+
+    def test_not_qualified_with_flags_sends_only_the_rejection(self):
+        # RD-1: Not Qualified is available even with flags (they become moot),
+        # and the applicant gets exactly one message — no resubmission email.
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        first_requirement = get_applicant_document_requirements(application.branch)[0]
+        mail.outbox.clear()
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = client.post(
+                reverse("screening-review", kwargs={"pk": application.pk}),
+                {
+                    **self.screening_payload(
+                        qualification_outcome=ScreeningRecord.QualificationOutcome.NOT_QUALIFIED,
+                        screening_notes="Eligibility does not cover this position.",
+                    ),
+                    **self.screening_document_status_payload(
+                        application,
+                        overrides={
+                            first_requirement.code: (
+                                ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
+                            ),
+                        },
+                    ),
+                    f"document_remarks__{first_requirement.code}": "Blurry scan.",
+                    "operation": "finalize",
+                },
+                follow=True,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        application.refresh_from_db()
+        self.assertEqual(application.status, RecruitmentApplication.Status.REJECTED)
+        bodies = " ".join(message.body for message in mail.outbox)
+        self.assertNotIn("resubmission", bodies.lower())
+
+    def test_screening_view_blocks_qualified_while_a_document_is_flagged(self):
+        # RD-1 asymmetric gate, server-enforced: an applicant is never passed on
+        # evidence that has not been verified.
         application = self.make_application(self.level1_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
@@ -5814,31 +5919,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Required documents must be marked Complied before using Complete")
-        self.assertFalse(ScreeningRecord.objects.filter(application=application, is_finalized=True).exists())
-
-    def test_screening_view_blocks_qualified_when_completeness_is_incomplete(self):
-        application = self.make_application(self.level1_position)
-        self.verify_application_for_submission(application)
-        submit_application(application, self.applicant)
-
-        client = Client()
-        self.force_login_with_mfa(client, self.secretariat)
-        response = client.post(
-            reverse("screening-review", kwargs={"pk": application.pk}),
-            {
-                **self.screening_payload(
-                    completeness_status=ScreeningRecord.CompletenessStatus.INCOMPLETE,
-                    completeness_notes="Missing or deficient document detected.",
-                ),
-                **self.screening_document_status_payload(application),
-                "operation": "finalize",
-            },
-            follow=True,
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "cannot be marked Qualified")
+        self.assertContains(response, "before this applicant can be marked Qualified")
         self.assertFalse(ScreeningRecord.objects.filter(application=application, is_finalized=True).exists())
 
     def test_document_review_score_uses_policy_component_weights(self):

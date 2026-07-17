@@ -9,14 +9,9 @@
             <span class="rg-scr-steprail__label">Documents</span>
         </button>
         <span class="rg-scr-steprail__line" aria-hidden="true"></span>
-        <button type="button" class="rg-scr-steprail__item" data-scr-rail="completeness" aria-current="false">
-            <span class="rg-scr-steprail__num">2</span>
-            <span class="rg-scr-steprail__label">Completeness</span>
-        </button>
-        <span class="rg-scr-steprail__line" aria-hidden="true"></span>
         <button type="button" class="rg-scr-steprail__item" data-scr-rail="qualification" aria-current="false">
-            <span class="rg-scr-steprail__num">3</span>
-            <span class="rg-scr-steprail__label">Qualification</span>
+            <span class="rg-scr-steprail__num">2</span>
+            <span class="rg-scr-steprail__label">Decide</span>
         </button>
     </div>
 
@@ -48,8 +43,8 @@
             </svg>
             <div class="rg-scr-resub-notice__copy">
                 <strong><span id="scr-resub-count">0</span> document<span id="scr-resub-plural">s</span> flagged for resubmission.</strong>
-                To actually notify the applicant, finish this screening and then choose
-                <strong>Return to Applicant</strong>.
+                Send them back from <strong>Step 2 &mdash; Decide</strong>. Screening is not
+                finalized, and the case stays in your queue awaiting the applicant.
             </div>
         </div>
 
@@ -156,72 +151,50 @@
         </div>
     </section>
 
-    {# ── Step 2: Completeness ───────────────────────────────────── #}
-    <section class="rg-scr-panel rg-scr-step" data-scr-step="completeness" hidden
-             role="group" aria-label="Step 2: Completeness">
-        <div class="rg-scr-panel__header">
-            <div>
-                <h2 class="rg-scr-panel__title">Step 2 &mdash; Is the application complete?</h2>
-                <p class="rg-scr-panel__subtitle">Record whether all required documents were submitted and acceptable.</p>
-            </div>
-        </div>
-
-        <div class="rg-field mb-3">
-            <span class="form-label fw-semibold" id="scr-completeness-label">
-                Are all required documents complete?
-                <span class="text-danger ms-1" aria-hidden="true">*</span>
-            </span>
-            <div class="rg-scr-choice-strip" id="scr-completeness-strip"
-                 role="radiogroup" aria-labelledby="scr-completeness-label">
-                <button type="button"
-                        class="rg-scr-choice-btn js-scr-choice"
-                        role="radio" aria-checked="false"
-                        data-target="id_completeness_status"
-                        data-value="complete"
-                        data-theme="success">
-                    Yes &mdash; Complete
-                </button>
-                <button type="button"
-                        class="rg-scr-choice-btn js-scr-choice"
-                        role="radio" aria-checked="false"
-                        data-target="id_completeness_status"
-                        data-value="incomplete"
-                        data-theme="warning">
-                    No &mdash; Incomplete
-                </button>
-            </div>
-            <div class="form-text" id="scr-completeness-blocked-hint" hidden>
-                Some required documents are missing or flagged, so this application cannot be marked Complete.
-            </div>
-            <div class="visually-hidden">
-                {{ screening_form.completeness_status }}
-            </div>
-            {% for error in screening_form.completeness_status.errors %}
-                <div class="invalid-feedback d-block">{{ error }}</div>
-            {% endfor %}
-        </div>
-
-        <div class="rg-field">
-            <label class="form-label fw-semibold" for="{{ screening_form.completeness_notes.id_for_label }}">
-                Notes &mdash; what is missing or wrong
-                <span class="text-danger ms-1" data-cs-required aria-hidden="true" hidden>*</span>
-            </label>
-            {{ screening_form.completeness_notes }}
-            <div class="form-text">Required if you choose Incomplete.</div>
-            {% for error in screening_form.completeness_notes.errors %}
-                <div class="invalid-feedback d-block">{{ error }}</div>
-            {% endfor %}
-        </div>
-    </section>
-
-    {# ── Step 3: Qualification ──────────────────────────────────── #}
+    {% comment %} ── Step 2: Decide ─────────────────────────────────────────────
+       RD-1: completeness is computed from the table above and shown as a
+       banner — never asked. The reviewer's only job here is the decision. {% endcomment %}
     <section class="rg-scr-panel rg-scr-step" data-scr-step="qualification" hidden
-             role="group" aria-label="Step 3: Qualification">
+             role="group" aria-label="Step 2: Decide">
         <div class="rg-scr-panel__header">
             <div>
-                <h2 class="rg-scr-panel__title">Step 3 &mdash; Is the applicant qualified?</h2>
-                <p class="rg-scr-panel__subtitle">Compare the application against the minimum qualifications, then finalize.</p>
+                <h2 class="rg-scr-panel__title">Step 2 &mdash; Decide</h2>
+                <p class="rg-scr-panel__subtitle">Compare the application against the Qualification Standards, then record the outcome.</p>
             </div>
+        </div>
+
+        {# Computed completeness banner — live-updated by JS as statuses change. #}
+        <div class="rg-scr-doccheck" id="scr-doccheck" data-complete="{% if screening_documents_complete %}true{% else %}false{% endif %}">
+            <span class="rg-scr-doccheck__icon" aria-hidden="true"></span>
+            <span class="rg-scr-doccheck__text" id="scr-doccheck-text">
+                {% if screening_documents_complete %}
+                    All {{ screening_required_count }} required document{{ screening_required_count|pluralize }} complied.
+                {% else %}
+                    {{ screening_pending_count }} required document{{ screening_pending_count|pluralize }} still need{{ screening_pending_count|pluralize:"s," }} a status or a resubmission.
+                {% endif %}
+            </span>
+        </div>
+
+        {# The return decision — offered whenever anything is flagged. #}
+        <div class="rg-scr-return-card" id="scr-return-card" {% if not screening_flagged_now_count %}hidden{% endif %}>
+            <div class="rg-scr-return-card__body">
+                <strong><span id="scr-return-count">{{ screening_flagged_now_count }}</span>
+                document<span id="scr-return-plural">{{ screening_flagged_now_count|pluralize }}</span>
+                flagged for resubmission.</strong>
+                Send them back so the applicant can re-upload. The case stays in your
+                queue as awaiting resubmission, and screening is not finalized.
+            </div>
+            <div class="rg-field">
+                <label class="form-label" for="scr-return-remarks">
+                    Message to the applicant <span class="rg-imeta">(optional)</span>
+                </label>
+                <textarea class="form-control" id="scr-return-remarks" name="return_remarks" rows="2"
+                          placeholder="Anything the applicant should know beyond the per-document notes."></textarea>
+            </div>
+            <button type="submit" class="btn btn-warning" name="operation" value="return_to_applicant"
+                    id="scr-return-btn">
+                Return to applicant for resubmission
+            </button>
         </div>
 
         {% with reference=application.position.position_reference %}
@@ -286,7 +259,10 @@
                 </button>
             </div>
             <div class="form-text" id="scr-outcome-blocked-hint" hidden>
-                An incomplete application cannot be marked Qualified. Fix the completeness finding first.
+                Qualified is unavailable while a required document is unreviewed or flagged &mdash;
+                an applicant is never passed on evidence that has not been verified. Return the
+                flagged documents, or record Not qualified with the basis if they cannot qualify
+                regardless.
             </div>
             <div class="visually-hidden">
                 {{ screening_form.qualification_outcome }}
@@ -302,7 +278,7 @@
                 <span class="text-danger ms-1" data-qo-required aria-hidden="true" hidden>*</span>
             </label>
             {{ screening_form.screening_notes }}
-            <div class="form-text">Required if you choose Not qualified.</div>
+            <div class="form-text">Required if you choose Not qualified &mdash; state the basis against the QS.</div>
             {% for error in screening_form.screening_notes.errors %}
                 <div class="invalid-feedback d-block">{{ error }}</div>
             {% endfor %}
@@ -444,7 +420,6 @@ function rgInitScreeningDocDrawer() {}
     if (!form) return;
 
     var opField = document.getElementById("scr-op-field");
-    var csField = document.getElementById("id_completeness_status");
     var csNotes = document.getElementById("id_completeness_notes");
     var qoField = document.getElementById("id_qualification_outcome");
     var qoNotes = document.getElementById("id_screening_notes");
@@ -455,8 +430,8 @@ function rgInitScreeningDocDrawer() {}
     var saveBtn = document.getElementById("scr-save-btn");
     var stepError = document.getElementById("scr-step-error");
 
-    var STEPS = ["documents", "completeness", "qualification"];
-    var NEXT_LABEL = { documents: "Completeness", completeness: "Qualification" };
+    var STEPS = ["documents", "qualification"];
+    var NEXT_LABEL = { documents: "Decide" };
     var currentStep = "documents";
 
     var sections = {};
@@ -517,22 +492,6 @@ function rgInitScreeningDocDrawer() {}
         });
         return problems;
     }
-    function completenessProblems() {
-        var problems = [];
-        if (!csField || !csField.value) {
-            problems.push({
-                field: document.querySelector("#scr-completeness-strip .js-scr-choice"),
-                anchor: document.getElementById("scr-completeness-strip"),
-                msg: "Choose whether the application is Complete or Incomplete."
-            });
-        } else if (csField.value === "incomplete" && csNotes && csNotes.value.trim() === "") {
-            problems.push({
-                field: csNotes,
-                msg: "Add a note explaining what is missing or wrong."
-            });
-        }
-        return problems;
-    }
     function qualificationProblems() {
         var problems = [];
         if (!qoField || !qoField.value) {
@@ -551,7 +510,6 @@ function rgInitScreeningDocDrawer() {}
     }
     function stepProblems(name) {
         if (name === "documents") return documentsProblems();
-        if (name === "completeness") return completenessProblems();
         return qualificationProblems();
     }
     function stepValid(name) {
@@ -658,38 +616,62 @@ function rgInitScreeningDocDrawer() {}
         });
     }
 
-    /* ── Contradiction guards (input validation) ─────────────────── */
+    /* ── RD-1: computed completeness + the asymmetric verdict gate ───
+       Completeness is read straight off the document table (never asked), and
+       drives the banner. "Qualified" is disabled while any required row is
+       undecided or flagged — you cannot pass someone on unverified evidence.
+       "Not qualified" always stays available: a valid document can be a
+       definitive disqualifier, and making an applicant fix paperwork only to
+       be rejected is pointless. The server enforces the same rule. */
+    function pendingRequiredCount() {
+        return docStatusFields().filter(function (f) {
+            var row = f.closest("[data-document-row]");
+            if (!row || row.getAttribute("data-required") !== "true") return false;
+            return !f.value || BLOCKING_STATUSES[f.value];
+        }).length;
+    }
+    function updateDocCheckBanner() {
+        var banner = document.getElementById("scr-doccheck");
+        var text = document.getElementById("scr-doccheck-text");
+        if (!banner || !text) return;
+        var pending = pendingRequiredCount();
+        var required = docStatusFields().filter(function (f) {
+            var row = f.closest("[data-document-row]");
+            return row && row.getAttribute("data-required") === "true";
+        }).length;
+        banner.setAttribute("data-complete", pending === 0 ? "true" : "false");
+        text.textContent = pending === 0
+            ? "All " + required + " required document" + (required === 1 ? "" : "s") + " complied."
+            : pending + " required document" + (pending === 1 ? "" : "s") +
+              (pending === 1 ? " still needs" : " still need") + " a status or a resubmission.";
+    }
     function updateContradictions() {
-        var completeBtn = document.querySelector(
-            '.js-scr-choice[data-target="id_completeness_status"][data-value="complete"]'
-        );
-        var blockedHint = document.getElementById("scr-completeness-blocked-hint");
-        if (completeBtn) {
-            var block = docsBlockCompleteness();
-            completeBtn.disabled = block;
-            completeBtn.classList.toggle("is-disabled", block);
-            if (blockedHint) blockedHint.hidden = !block;
-            if (block && csField && csField.value === "complete") {
-                csField.value = "";
-            }
-        }
+        updateDocCheckBanner();
         var qualifiedBtn = document.getElementById("scr-qualified-choice");
         var outcomeHint = document.getElementById("scr-outcome-blocked-hint");
         if (qualifiedBtn) {
-            var qblock = csField && csField.value === "incomplete";
-            qualifiedBtn.disabled = Boolean(qblock);
-            qualifiedBtn.classList.toggle("is-disabled", Boolean(qblock));
+            var qblock = pendingRequiredCount() > 0;
+            qualifiedBtn.disabled = qblock;
+            qualifiedBtn.classList.toggle("is-disabled", qblock);
             if (outcomeHint) outcomeHint.hidden = !qblock;
             if (qblock && qoField && qoField.value === "qualified") {
                 qoField.value = "";
             }
         }
+        /* The return decision appears exactly when something is flagged. */
+        var returnCard = document.getElementById("scr-return-card");
+        if (returnCard) {
+            var flagged = resubmissionCount();
+            returnCard.hidden = flagged === 0;
+            var rc = document.getElementById("scr-return-count");
+            var rp = document.getElementById("scr-return-plural");
+            if (rc) rc.textContent = String(flagged);
+            if (rp) rp.textContent = flagged === 1 ? "" : "s";
+        }
     }
 
     /* ── Required-note markers ───────────────────────────────────── */
     function updateRequiredMarkers() {
-        var csMark = document.querySelector("[data-cs-required]");
-        if (csMark) csMark.hidden = !(csField && csField.value === "incomplete");
         var qoMark = document.querySelector("[data-qo-required]");
         if (qoMark) qoMark.hidden = !(qoField && qoField.value === "not_qualified");
     }
@@ -729,7 +711,6 @@ function rgInitScreeningDocDrawer() {}
         updateContradictions();
         updateRequiredMarkers();
         updateResubmissionNotice();
-        syncChoiceStrip(document.getElementById("scr-completeness-strip"));
         syncChoiceStrip(document.getElementById("scr-outcome-strip"));
         // Keep rail "done" ticks current.
         var idx = STEPS.indexOf(currentStep);
@@ -816,7 +797,11 @@ function rgInitScreeningDocDrawer() {}
         var qoEl = document.getElementById("modal-scr-outcome");
         var resubRow = document.getElementById("modal-scr-resub-row");
         var resubEl = document.getElementById("modal-scr-resub");
-        if (csEl) csEl.textContent = fieldLabel(csField) || "Not recorded";
+        if (csEl) {
+            csEl.textContent = pendingRequiredCount() === 0
+                ? "Complete (all required documents complied)"
+                : "Incomplete (" + pendingRequiredCount() + " pending)";
+        }
         if (qoEl) qoEl.textContent = fieldLabel(qoField) || "Not recorded";
         var count = resubmissionCount();
         if (resubRow) resubRow.hidden = count === 0;
@@ -876,7 +861,7 @@ function rgInitScreeningDocDrawer() {}
     docStatusFields().forEach(function (f) {
         f.addEventListener("change", refresh);
     });
-    [csField, qoField].forEach(function (f) {
+    [qoField].forEach(function (f) {
         if (f) f.addEventListener("change", refresh);
     });
     // Clear all inline errors the moment the user resumes editing anything
@@ -973,8 +958,6 @@ function rgInitScreeningDocDrawer() {}
                     sel.dispatchEvent(new Event("change", { bubbles: true }));
                     applied++;
                 }
-                setField(document.querySelector('[name="completeness_status"]'),
-                         priorCard.getAttribute("data-prior-completeness"));
                 setField(document.querySelector('[name="qualification_outcome"]'),
                          priorCard.getAttribute("data-prior-qualification"));
                 priorCard.querySelectorAll("[data-prior-doc-key]").forEach(function (row) {

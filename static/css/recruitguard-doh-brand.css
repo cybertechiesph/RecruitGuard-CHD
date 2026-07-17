@@ -1039,6 +1039,73 @@ body.applicant-portal-body {
 }
 .rg-scr-resub-notice__copy strong { color: #5a4106; }
 
+/* RD-1: computed completeness banner on step 2 — states what the document
+   table already determined, so the reviewer is never asked to re-answer it. */
+.rg-scr-doccheck {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    border-radius: 6px;
+    padding: 0.65rem 0.9rem;
+    margin-bottom: 1rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    line-height: 1.5;
+}
+.rg-scr-doccheck__icon {
+    flex-shrink: 0;
+    width: 1.05rem;
+    height: 1.05rem;
+    border-radius: 50%;
+    display: inline-block;
+    position: relative;
+}
+.rg-scr-doccheck__icon::after {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #fff;
+}
+.rg-scr-doccheck[data-complete="true"] {
+    background: #eef7e9;
+    border: 1px solid #cfe0c0;
+    border-left: 3px solid var(--rg-brand-green);
+    color: #1e5c2d;
+}
+.rg-scr-doccheck[data-complete="true"] .rg-scr-doccheck__icon { background: var(--rg-brand-green); }
+.rg-scr-doccheck[data-complete="true"] .rg-scr-doccheck__icon::after { content: "\2713"; }
+.rg-scr-doccheck[data-complete="false"] {
+    background: var(--rg-brand-gold-soft);
+    border: 1px solid #ffdf88;
+    border-left: 3px solid var(--rg-brand-gold);
+    color: #6f5108;
+}
+.rg-scr-doccheck[data-complete="false"] .rg-scr-doccheck__icon { background: var(--rg-brand-gold-strong); }
+.rg-scr-doccheck[data-complete="false"] .rg-scr-doccheck__icon::after { content: "!"; }
+
+/* RD-1: the return-to-applicant decision, surfaced whenever a document is
+   flagged. One action: saves the review and sends the documents back. */
+.rg-scr-return-card {
+    background: var(--rg-brand-gold-soft);
+    border: 1px solid #ffdf88;
+    border-left: 3px solid var(--rg-brand-gold);
+    border-radius: 6px;
+    padding: 0.85rem 1rem;
+    margin-bottom: 1.1rem;
+}
+.rg-scr-return-card__body {
+    color: #6f5108;
+    font-size: 0.82rem;
+    line-height: 1.55;
+    margin-bottom: 0.7rem;
+}
+.rg-scr-return-card__body strong { color: #5a4106; }
+.rg-scr-return-card .rg-field { margin-bottom: 0.7rem; }
+
 /* Row-level treatment for documents flagged Request Resubmission.
    Trimmed to a single signal: a thin gold left-border. The amber status
    pill already names the state, so no background tint or inline tag.

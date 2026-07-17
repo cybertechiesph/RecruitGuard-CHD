@@ -1761,3 +1761,20 @@ html[data-theme="dark"] [style*="background: #fef2f2"] { background-color: rgba(
 html[data-theme="dark"] [style*="background-color:#fef2f2"] { background-color: rgba(236,111,104,0.15) !important; }
 html[data-theme="dark"] [style*="background-color: #fef2f2"] { background-color: rgba(236,111,104,0.15) !important; }
 }
+
+/* RD-1: computed completeness banner + return-to-applicant decision card. */
+html[data-theme="dark"] .rg-scr-doccheck[data-complete="true"] {
+    background: rgba(122, 186, 74, 0.10);
+    border-color: rgba(122, 186, 74, 0.32);
+    border-left-color: #a9dd76;
+    color: #a9dd76;
+}
+html[data-theme="dark"] .rg-scr-doccheck[data-complete="false"],
+html[data-theme="dark"] .rg-scr-return-card {
+    background: rgba(240, 198, 97, 0.10);
+    border-color: rgba(240, 198, 97, 0.32);
+    border-left-color: #f0c661;
+    color: #f0c661;
+}
+html[data-theme="dark"] .rg-scr-return-card__body,
+html[data-theme="dark"] .rg-scr-return-card__body strong { color: #f0c661; }

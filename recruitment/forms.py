@@ -1550,8 +1550,12 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
 
     class Meta:
         model = ScreeningRecord
+        # RD-1: completeness_status is NOT an input. Intake guarantees every
+        # required file is uploaded and step 1 determines each file's validity,
+        # so completeness is derived from the document review and shown as a
+        # computed banner. The model field still persists (CAR/exports/locked
+        # views/audit read it) — see derive_completeness_status.
         fields = [
-            "completeness_status",
             "completeness_notes",
             "qualification_outcome",
             "education_score",
@@ -1575,8 +1579,11 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
         self.document_review_fields = []
         self._document_review_field_metadata = []
         super().__init__(*args, **kwargs)
-        self.fields["completeness_status"].label = "Completeness Finding"
         self.fields["completeness_notes"].label = "Completeness Observations"
+        self.fields["completeness_notes"].required = False
+        self.fields["completeness_notes"].help_text = (
+            "Optional. Note anything about the submitted documents worth recording."
+        )
         self.fields["qualification_outcome"].label = "Qualification Outcome"
         self.fields["education_score"].label = "Education Score"
         self.fields["training_score"].label = "Training Score"
@@ -1813,9 +1820,7 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
                 "document_review_score",
                 "Record all three component scores, or leave them blank and use only the official document review score.",
             )
-        completeness_status = cleaned_data.get("completeness_status")
         qualification_outcome = cleaned_data.get("qualification_outcome")
-        completeness_notes = (cleaned_data.get("completeness_notes") or "").strip()
         screening_notes = (cleaned_data.get("screening_notes") or "").strip()
         blocking_reviews = [
             review
@@ -1823,33 +1828,24 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
             if review["is_required"]
             and review["status"] in self.COMPLETENESS_BLOCKING_DOCUMENT_STATUSES
         ]
+        # RD-1 asymmetric gate, enforced server-side (never hidden-buttons only):
+        # "Qualified" needs every required document Complied — an applicant is
+        # never passed on evidence that has not been validated. "Not Qualified"
+        # stays available at any time: a valid document can be a definitive
+        # disqualifier, and making someone fix paperwork just to be rejected is
+        # pointless.
         if (
-            completeness_status == ScreeningRecord.CompletenessStatus.COMPLETE
+            qualification_outcome == ScreeningRecord.QualificationOutcome.QUALIFIED
             and blocking_reviews
         ):
             blocking_labels = "; ".join(
                 review["requirement_title"] for review in blocking_reviews
             )
             self.add_error(
-                "completeness_status",
-                "Required documents must be marked Complied before using Complete: "
-                f"{blocking_labels}.",
-            )
-        if (
-            completeness_status == ScreeningRecord.CompletenessStatus.INCOMPLETE
-            and not completeness_notes
-        ):
-            self.add_error(
-                "completeness_notes",
-                "Record the missing documents or discrepancies before marking this incomplete.",
-            )
-        if (
-            completeness_status == ScreeningRecord.CompletenessStatus.INCOMPLETE
-            and qualification_outcome == ScreeningRecord.QualificationOutcome.QUALIFIED
-        ):
-            self.add_error(
                 "qualification_outcome",
-                "An applicant with incomplete documents cannot be marked Qualified.",
+                "Every required document must be marked Complied before this applicant "
+                f"can be marked Qualified. Still pending: {blocking_labels}. Return the "
+                "flagged documents to the applicant, or record Not Qualified with the basis.",
             )
         if (
             qualification_outcome == ScreeningRecord.QualificationOutcome.NOT_QUALIFIED

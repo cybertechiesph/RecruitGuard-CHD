@@ -1282,16 +1282,11 @@ class ScreeningRecord(TimestampedModel):
             errors["document_review_score"] = (
                 "Record education, training, and experience scores together, or use only the official document review score."
             )
-        if (
-            self.completeness_status == self.CompletenessStatus.INCOMPLETE
-            and not (self.completeness_notes or "").strip()
-        ):
-            errors["completeness_notes"] = "Record completeness observations for incomplete applications."
-        if (
-            self.completeness_status == self.CompletenessStatus.INCOMPLETE
-            and self.qualification_outcome == self.QualificationOutcome.QUALIFIED
-        ):
-            errors["qualification_outcome"] = "Applicants with incomplete documents cannot be marked qualified."
+        # RD-1: completeness is derived from the document review, not answered by
+        # a reviewer, so the old "observations required when incomplete" rule is
+        # gone. The Qualified-needs-complete-documents rule is enforced against
+        # the document rows themselves (ScreeningReviewForm / save_screening_review),
+        # since completeness_status is now an output of those rows.
         if (
             self.qualification_outcome == self.QualificationOutcome.NOT_QUALIFIED
             and not (self.screening_notes or "").strip()
@@ -1364,6 +1359,35 @@ class ScreeningRecord(TimestampedModel):
         calculated_score = self.calculate_policy_document_review_score()
         if calculated_score is not None:
             self.document_review_score = calculated_score
+
+    # RD-1: completeness is computed from the document review, never asked. A
+    # required row that is still unreviewed, flagged for resubmission, or not
+    # submitted blocks completeness; Complied and Not Applicable do not.
+    COMPLETENESS_BLOCKING_DOCUMENT_STATUSES = (
+        "not_reviewed",
+        "return_for_resubmission",
+        "not_submitted",
+    )
+
+    @staticmethod
+    def derive_completeness_status(document_reviews):
+        """Completeness for a set of document-review rows.
+
+        ``document_reviews`` accepts either ScreeningDocumentReview instances or
+        the plain dicts the screening services pass around (keys: is_required,
+        status).
+        """
+        blocking = ScreeningRecord.COMPLETENESS_BLOCKING_DOCUMENT_STATUSES
+        for review in document_reviews:
+            if isinstance(review, dict):
+                is_required = review.get("is_required")
+                status = review.get("status")
+            else:
+                is_required = review.is_required
+                status = review.status
+            if is_required and status in blocking:
+                return ScreeningRecord.CompletenessStatus.INCOMPLETE
+        return ScreeningRecord.CompletenessStatus.COMPLETE
 
     def __str__(self):
         return f"{self.application.reference_label} {self.review_stage}"

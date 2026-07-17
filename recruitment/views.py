@@ -60,6 +60,7 @@ from .models import (
     RecruitmentCase,
     RecruitmentUser,
     ScreeningDocumentReview,
+    ScreeningRecord,
 )
 from .notification_services import (
     get_recent_notifications,
@@ -155,6 +156,7 @@ from .services import (
     save_interview_rating,
     save_interview_session,
     save_screening_review,
+    return_screening_documents_to_applicant,
     screening_requires_disposition_for_current_stage,
     user_can_close_case,
     user_can_manage_comparative_assessment_report,
@@ -692,6 +694,34 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
         context["screening_disposition_required"] = (
             screening_requires_disposition_for_current_stage(application)
         )
+        # RD-1: completeness is computed for the banner (never asked), and the
+        # flag count drives which decision the reviewer is offered.
+        if context.get("screening_form") is not None:
+            review_items = context["screening_form"].document_review_fields
+            required_items = [i for i in review_items if i["is_required_for_completeness"]]
+            flagged = [
+                i
+                for i in review_items
+                if i["field"].value()
+                == ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
+            ]
+            pending = [
+                i
+                for i in required_items
+                if i["field"].value()
+                in ScreeningRecord.COMPLETENESS_BLOCKING_DOCUMENT_STATUSES
+                or not i["field"].value()
+            ]
+            context["screening_required_count"] = len(required_items)
+            context["screening_flagged_now_count"] = len(flagged)
+            context["screening_pending_count"] = len(pending)
+            context["screening_documents_complete"] = not pending
+            # The QS the verdict is judged against, so step 2 reads as a
+            # comparison rather than a floating question.
+            context["screening_qualification_reference"] = (
+                application.position.qualification_reference or ""
+            )
+            context["screening_position_reference"] = application.position.position_reference
         if user_can_manage_exam(user, application):
             exam_record = context["current_exam_record"]
             exam_schedule = get_exam_schedule(application)
@@ -1995,17 +2025,31 @@ class ScreeningReviewView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, Vi
         operation = request.POST.get("operation", "save")
         is_autosave = _is_autosave_request(request) and operation != "finalize"
         is_finalize = operation == "finalize"
-        form = ScreeningReviewForm(request.POST, application=application, draft=not is_finalize)
+        # RD-1: returning the flagged documents is a decision on this screen, not
+        # something bolted on after a finalize. It never finalizes the record and
+        # never asks for a verdict on evidence the reviewer just flagged.
+        is_return = operation == "return_to_applicant"
+        form = ScreeningReviewForm(
+            request.POST, application=application, draft=not is_finalize
+        )
         if form.is_valid():
             try:
-                screening_record = save_screening_review(
-                    application=application,
-                    actor=request.user,
-                    cleaned_data=form.cleaned_data,
-                    finalize=is_finalize,
-                    allow_partial=not is_finalize,
-                    record_audit=not is_autosave,
-                )
+                if is_return:
+                    screening_record = return_screening_documents_to_applicant(
+                        application=application,
+                        actor=request.user,
+                        cleaned_data=form.cleaned_data,
+                        remarks=request.POST.get("return_remarks", ""),
+                    )
+                else:
+                    screening_record = save_screening_review(
+                        application=application,
+                        actor=request.user,
+                        cleaned_data=form.cleaned_data,
+                        finalize=is_finalize,
+                        allow_partial=not is_finalize,
+                        record_audit=not is_autosave,
+                    )
             except (ValueError, ValidationError) as exc:
                 if is_autosave:
                     return _autosave_response(False)
@@ -2013,7 +2057,13 @@ class ScreeningReviewView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, Vi
             else:
                 if is_autosave:
                     return _autosave_response()
-                if screening_record.is_finalized:
+                if is_return:
+                    messages.success(
+                        request,
+                        "Flagged documents returned to the applicant. The case stays in "
+                        "your queue as awaiting resubmission.",
+                    )
+                elif screening_record.is_finalized:
                     messages.success(request, "Screening finalized and locked.")
                 else:
                     messages.success(request, "Screening draft saved.")

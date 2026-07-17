@@ -4203,22 +4203,10 @@ def _screening_document_review_rows(
 
 def _validate_screening_review_consistency(
     *,
-    completeness_status,
-    completeness_notes,
     qualification_outcome,
     screening_notes,
     document_reviews,
 ):
-    if (
-        completeness_status == ScreeningRecord.CompletenessStatus.INCOMPLETE
-        and not (completeness_notes or "").strip()
-    ):
-        raise ValueError("Record completeness observations before marking this application incomplete.")
-    if (
-        completeness_status == ScreeningRecord.CompletenessStatus.INCOMPLETE
-        and qualification_outcome == ScreeningRecord.QualificationOutcome.QUALIFIED
-    ):
-        raise ValueError("Applicants with incomplete documents cannot be marked qualified.")
     if (
         qualification_outcome == ScreeningRecord.QualificationOutcome.NOT_QUALIFIED
         and not (screening_notes or "").strip()
@@ -4231,14 +4219,16 @@ def _validate_screening_review_consistency(
         if row["is_required"]
         and row["status"] in SCREENING_COMPLETENESS_BLOCKING_DOCUMENT_STATUSES
     ]
+    # RD-1 asymmetric gate (service-layer mirror of the form rule): Qualified
+    # requires every required document Complied; Not Qualified is always allowed.
     if (
-        completeness_status == ScreeningRecord.CompletenessStatus.COMPLETE
+        qualification_outcome == ScreeningRecord.QualificationOutcome.QUALIFIED
         and blocking_reviews
     ):
         blocking_labels = "; ".join(row["requirement_title"] for row in blocking_reviews)
         raise ValueError(
-            "Required documents must be marked Complied before using Complete: "
-            f"{blocking_labels}."
+            "Every required document must be marked Complied before this applicant can be "
+            f"marked Qualified. Still pending: {blocking_labels}."
         )
     for row in document_reviews:
         if (
@@ -4328,8 +4318,6 @@ def save_screening_review(
     )
     if not allow_partial:
         _validate_screening_review_consistency(
-            completeness_status=cleaned_data["completeness_status"],
-            completeness_notes=cleaned_data["completeness_notes"],
             qualification_outcome=cleaned_data["qualification_outcome"],
             screening_notes=cleaned_data["screening_notes"],
             document_reviews=document_reviews,
@@ -4337,7 +4325,11 @@ def save_screening_review(
 
     screening_record.recruitment_case = application.case
     screening_record.reviewed_by = actor
-    screening_record.completeness_status = cleaned_data["completeness_status"]
+    # RD-1: completeness is an output of the document review, not a reviewer's
+    # answer. Stored so the CAR, exports, locked views, and audit keep reading it.
+    screening_record.completeness_status = ScreeningRecord.derive_completeness_status(
+        document_reviews
+    )
     screening_record.completeness_notes = cleaned_data["completeness_notes"]
     screening_record.qualification_outcome = cleaned_data["qualification_outcome"]
     screening_record.education_score = _optional_decimal(cleaned_data.get("education_score"))
@@ -4405,14 +4397,15 @@ def save_screening_review(
         # requested, the handler keeps the reject-or-return choice (both of which notify
         # the applicant), so we do not auto-reject. The rejection notice uses
         # screening-specific wording because the reject fires from a screening stage.
+        # RD-1: Not Qualified IS the definitive cut. A reviewer who wants the
+        # applicant to fix documents chooses "Return to applicant" instead, so
+        # reaching finalize with Not Qualified means the QS failure stands
+        # regardless of any flags — those become moot. The applicant therefore
+        # receives exactly one message (the rejection): no resubmission email is
+        # sent, because request_document_resubmission is never called on this path.
         is_definitive_screening_cut = (
             screening_record.qualification_outcome
             == ScreeningRecord.QualificationOutcome.NOT_QUALIFIED
-            and screening_record.completeness_status
-            == ScreeningRecord.CompletenessStatus.COMPLETE
-            and not screening_record.document_reviews.filter(
-                status=ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
-            ).exists()
         )
         if is_definitive_screening_cut:
             process_workflow_action(
@@ -4422,6 +4415,38 @@ def save_screening_review(
                 screening_record.screening_notes
                 or "Did not meet the Qualification Standards at screening.",
             )
+    return screening_record
+
+
+@transaction.atomic
+def return_screening_documents_to_applicant(application, actor, cleaned_data, remarks=""):
+    """RD-1: the reviewer's "Return to applicant" decision — one atomic action.
+
+    Screening no longer has to be finalized (with a verdict invented on evidence
+    the reviewer just flagged) before documents can go back. This saves the
+    in-progress screening — flags and remarks, record NOT finalized — and fires
+    the existing resubmission request (deadline, applicant email, Track
+    Application re-upload page) inside a single transaction, so a failure in
+    either half leaves no in-between state.
+
+    The case stays with the reviewing role as "awaiting resubmission" (the
+    vacancy's exam batch stays parked) exactly as before; only the entry point
+    changed.
+    """
+    screening_record = save_screening_review(
+        application=application,
+        actor=actor,
+        cleaned_data=cleaned_data,
+        finalize=False,
+        allow_partial=True,
+    )
+    request_document_resubmission(
+        application,
+        actor,
+        (remarks or "").strip()
+        or "Return the flagged documents through the Track Application page.",
+    )
+    screening_record.refresh_from_db()
     return screening_record
 
 
