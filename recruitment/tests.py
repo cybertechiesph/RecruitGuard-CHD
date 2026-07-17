@@ -247,16 +247,20 @@ class BaseRecruitmentTestCase(TestCase):
             intake_mode=PositionPosting.IntakeMode.POOLING,
             status=PositionPosting.EntryStatus.ACTIVE,
         )
+    @property
+    def cos_continuous_position(self):
         # RD-2: only CONTINUOUS COS intake keeps the per-case exam editor (no
-        # pool). Pooling/fixed-period/opening-based COS are scored in the batch
-        # console. This fixture is for the per-case exam tests.
-        self.cos_continuous_position = PositionPosting.objects.create(
-            position_reference=self.project_assistant_position,
-            branch=PositionPosting.Branch.COS,
-            level=PositionPosting.Level.LEVEL_1,
-            intake_mode=PositionPosting.IntakeMode.CONTINUOUS,
-            status=PositionPosting.EntryStatus.ACTIVE,
-        )
+        # pool). Created lazily so it does not bump the shared COS entry-code
+        # sequence other tests assert on.
+        if not hasattr(self, "_cos_continuous_position"):
+            self._cos_continuous_position = PositionPosting.objects.create(
+                position_reference=self.project_assistant_position,
+                branch=PositionPosting.Branch.COS,
+                level=PositionPosting.Level.LEVEL_1,
+                intake_mode=PositionPosting.IntakeMode.CONTINUOUS,
+                status=PositionPosting.EntryStatus.ACTIVE,
+            )
+        return self._cos_continuous_position
 
     def force_login_with_mfa(self, client, user):
         client.force_login(user)
@@ -5717,7 +5721,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
                     },
                 ),
                 f"document_remarks__{first_requirement.code}": "Upload a signed and readable copy.",
-                "operation": "finalize",
+                "operation": "save",
             },
             follow=True,
         )
@@ -6999,9 +7003,8 @@ class BatchScreeningGateTests(BaseRecruitmentTestCase):
         client.post(
             reverse("screening-review", kwargs={"pk": application.pk}),
             {
-                "completeness_status": ScreeningRecord.CompletenessStatus.INCOMPLETE,
                 "completeness_notes": "A document needs correcting.",
-                "qualification_outcome": ScreeningRecord.QualificationOutcome.NOT_QUALIFIED,
+                "qualification_outcome": "",
                 "screening_notes": "Pending resubmission.",
                 **self.screening_document_status_payload(
                     application,
@@ -7012,7 +7015,7 @@ class BatchScreeningGateTests(BaseRecruitmentTestCase):
                     },
                 ),
                 f"document_remarks__{first_requirement.code}": "Upload a clearer copy.",
-                "operation": "finalize",
+                "operation": "save",
             },
             follow=True,
         )
@@ -7387,7 +7390,7 @@ class VacancyBatchInterviewTests(BaseRecruitmentTestCase):
             save_vacancy_exam_scores(
                 self.cos_position,
                 self.secretariat,
-                {first.case.id: {"general_score": "82"}, second.case.id: {"general_score": "78"}},
+                {first.case.id: {"general_score": "82", "technical_score": "80"}, second.case.id: {"general_score": "78", "technical_score": "74"}},
                 finalize=True,
             )
         # COS re-screens + re-exams at HRM Chief before the interview section opens.
@@ -9557,9 +9560,8 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         response = client.post(
             reverse("screening-review", kwargs={"pk": application.pk}),
             {
-                "completeness_status": ScreeningRecord.CompletenessStatus.INCOMPLETE,
                 "completeness_notes": "A corrected document is required.",
-                "qualification_outcome": ScreeningRecord.QualificationOutcome.NOT_QUALIFIED,
+                "qualification_outcome": "",
                 "screening_notes": "Screening cannot continue until the document is corrected.",
                 **self.screening_document_status_payload(
                     application,
@@ -9570,7 +9572,7 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
                     },
                 ),
                 f"document_remarks__{first_requirement.code}": "Upload a signed and readable copy.",
-                "operation": "finalize",
+                "operation": "save",
             },
             follow=True,
         )
@@ -9623,7 +9625,7 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
                     },
                 ),
                 f"document_remarks__{requirement.code}": "Upload a signed and readable copy.",
-                "operation": "finalize",
+                "operation": "save",
             },
             follow=True,
         )
@@ -9811,7 +9813,7 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
                     },
                 ),
                 f"document_remarks__{first_requirement.code}": "Upload a signed and readable copy.",
-                "operation": "finalize",
+                "operation": "save",
             },
             follow=True,
         )
