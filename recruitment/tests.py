@@ -4014,6 +4014,37 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertRedirects(response, reverse("applicant-portal"))
         self.assertContains(response, "This receipt link is no longer available.")
 
+    def test_submitted_application_receipt_downloads_as_pdf(self):
+        # Panel revision: the application receipt must download as a real PDF
+        # file (not only browser-print). Same token gate as the receipt page.
+        client = Client()
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        application.refresh_from_db()
+
+        response = client.get(
+            reverse("applicant-receipt-pdf", kwargs={"token": application.public_token})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertIn("attachment", response["Content-Disposition"])
+        self.assertIn(".pdf", response["Content-Disposition"])
+        self.assertTrue(response.getvalue().startswith(b"%PDF-"))
+
+    def test_stale_applicant_receipt_pdf_link_redirects_to_portal(self):
+        client = Client()
+        stale_token = uuid.uuid4()
+
+        response = client.get(
+            reverse("applicant-receipt-pdf", kwargs={"token": stale_token}),
+            follow=True,
+        )
+
+        self.assertRedirects(response, reverse("applicant-portal"))
+        self.assertContains(response, "This receipt link is no longer available.")
+
     def test_portal_intake_requires_requirement_coded_documents(self):
         client = Client()
         missing_requirement = get_required_applicant_document_requirements(

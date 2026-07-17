@@ -105,10 +105,16 @@
         </p>
     </div>
 
-    {# Action buttons — REV-E: printing is a first-class action, not fine print. #}
+    {% comment %} Action buttons. Download (a real PDF file the applicant keeps)
+       is the primary receipt action per the panel revision; Print stays for
+       anyone at a counter with a printer. {% endcomment %}
     <div style="display:flex; flex-wrap:wrap; gap:0.75rem; justify-content:center; margin-bottom:1.25rem;">
-        <a href="{% url 'applicant-status-link' application.public_token %}"
+        <a href="{% url 'applicant-receipt-pdf' application.public_token %}"
            class="btn btn-rg-primary btn-lg">
+            Download Receipt (PDF)
+        </a>
+        <a href="{% url 'applicant-status-link' application.public_token %}"
+           class="btn btn-outline-secondary btn-lg">
             Track My Application
         </a>
         <button type="button" class="btn btn-outline-secondary btn-lg" onclick="window.print()">

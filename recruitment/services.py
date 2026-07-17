@@ -26,7 +26,9 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
+from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
+from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 
 from .email_branding import email_branding_context
@@ -8973,6 +8975,245 @@ def _build_application_pdf(application, *, actor=None, generated_at=None):
         lines,
         document_title=application.reference_number or "DOH-CHD CALABARZON Export",
     )
+
+
+# Applicant-facing receipt PDF (panel revision, Sir Joshua Napila: the
+# application ID must be downloadable as a real file, not only browser-print).
+# Brand palette mirrors static/css/recruitguard-doh-brand.css so the paper copy
+# matches the portal. Unlike the plain controlled-export summary above, this is
+# a designed document an applicant keeps.
+_RECEIPT_GREEN = colors.HexColor("#1e5c2d")
+_RECEIPT_GREEN_INK = colors.HexColor("#0e2f14")
+_RECEIPT_GREEN_SOFT = colors.HexColor("#e6f0dc")
+_RECEIPT_GOLD = colors.HexColor("#fdb813")
+_RECEIPT_INK = colors.HexColor("#1f2933")
+_RECEIPT_MUTE = colors.HexColor("#5f6c78")
+_RECEIPT_HAIRLINE = colors.HexColor("#d7dee4")
+
+
+def _brand_seal_reader():
+    """The CHD CALABARZON seal as a reportlab ImageReader, or None if the asset
+    is missing (the PDF then renders without it rather than erroring)."""
+    seal_path = settings.BASE_DIR / "static" / "img" / "brand" / "chd-calabarzon-seal.png"
+    if not seal_path.exists():
+        return None
+    try:
+        return ImageReader(str(seal_path))
+    except Exception:  # pragma: no cover - corrupt/unreadable asset
+        return None
+
+
+def _build_application_receipt_pdf(application, *, generated_at=None):
+    generated_at = generated_at or timezone.now()
+    branch_value = getattr(application, "branch", "")
+    engagement = (
+        "Permanent (Plantilla)"
+        if branch_value == PositionPosting.Branch.PLANTILLA
+        else "Contract of Service"
+    )
+    submitted_at = application.submitted_at
+    document_count = get_current_applicant_document_items(application).count()
+
+    buffer = BytesIO()
+    page_width, page_height = A4
+    pdf = canvas.Canvas(buffer, pagesize=A4)
+    pdf.setTitle(f"Application Receipt — {application.case_number_short or application.reference_number}")
+
+    left = 52
+    right = page_width - 52
+    content_width = right - left
+
+    # ── Official header: seal + office identity, gold rule beneath ──────
+    top = page_height - 54
+    seal = _brand_seal_reader()
+    text_x = left
+    if seal is not None:
+        seal_size = 56
+        pdf.drawImage(
+            seal,
+            left,
+            top - seal_size + 6,
+            width=seal_size,
+            height=seal_size,
+            preserveAspectRatio=True,
+            mask="auto",
+        )
+        text_x = left + seal_size + 16
+
+    pdf.setFillColor(_RECEIPT_MUTE)
+    pdf.setFont("Helvetica", 8.5)
+    pdf.drawString(text_x, top - 6, "REPUBLIC OF THE PHILIPPINES")
+    pdf.setFillColor(_RECEIPT_GREEN_INK)
+    pdf.setFont("Helvetica-Bold", 13)
+    pdf.drawString(text_x, top - 22, "Department of Health")
+    pdf.setFont("Helvetica", 9.5)
+    pdf.setFillColor(_RECEIPT_INK)
+    pdf.drawString(text_x, top - 36, "Center for Health Development — CALABARZON")
+    pdf.setFont("Helvetica", 8.5)
+    pdf.setFillColor(_RECEIPT_MUTE)
+    pdf.drawString(text_x, top - 49, "Recruitment, Selection and Placement Office")
+
+    rule_y = top - 62
+    pdf.setStrokeColor(_RECEIPT_GOLD)
+    pdf.setLineWidth(2.4)
+    pdf.line(left, rule_y, right, rule_y)
+    pdf.setStrokeColor(_RECEIPT_GREEN)
+    pdf.setLineWidth(0.8)
+    pdf.line(left, rule_y - 3, right, rule_y - 3)
+
+    # ── Document title ─────────────────────────────────────────────────
+    title_y = rule_y - 32
+    pdf.setFillColor(_RECEIPT_GREEN_INK)
+    pdf.setFont("Helvetica-Bold", 17)
+    pdf.drawCentredString(page_width / 2, title_y, "Application Submission Receipt")
+    pdf.setFont("Helvetica", 9.5)
+    pdf.setFillColor(_RECEIPT_MUTE)
+    pdf.drawCentredString(
+        page_width / 2,
+        title_y - 15,
+        "Official proof of a received application. Please keep this copy.",
+    )
+
+    # ── Identifier panel: tracking code + case reference ───────────────
+    panel_top = title_y - 34
+    panel_height = 96
+    panel_bottom = panel_top - panel_height
+    pdf.setFillColor(_RECEIPT_GREEN_SOFT)
+    pdf.setStrokeColor(_RECEIPT_GREEN)
+    pdf.setLineWidth(1.1)
+    pdf.roundRect(left, panel_bottom, content_width, panel_height, 8, stroke=1, fill=1)
+
+    mid_x = left + content_width / 2
+    pdf.setStrokeColor(colors.HexColor("#bcd3a8"))
+    pdf.setLineWidth(0.8)
+    pdf.line(mid_x, panel_bottom + 14, mid_x, panel_top - 14)
+
+    col_l = left + 22
+    col_r = mid_x + 22
+    label_y = panel_top - 22
+    pdf.setFont("Helvetica-Bold", 8.5)
+    pdf.setFillColor(_RECEIPT_GREEN_INK)
+    pdf.drawString(col_l, label_y, "TRACKING CODE  (keep private)")
+    pdf.drawString(col_r, label_y, "CASE REFERENCE")
+
+    pdf.setFont("Helvetica-Bold", 20)
+    pdf.setFillColor(_RECEIPT_GREEN_INK)
+    pdf.drawString(col_l, label_y - 27, application.tracking_code or "—")
+    pdf.drawString(col_r, label_y - 27, f"No. {application.case_number_short or '—'}")
+
+    pdf.setFont("Helvetica", 8)
+    pdf.setFillColor(_RECEIPT_MUTE)
+    pdf.drawString(col_l, label_y - 44, "Use with your email to track online.")
+    pdf.drawString(col_r, label_y - 44, "Quote this when you contact the office.")
+
+    # ── Details table ──────────────────────────────────────────────────
+    rows = [
+        ("Applicant", application.applicant_display_name or "—"),
+        ("Position", application.position.title),
+        ("Reference / Job Code", application.position.job_code),
+        ("Engagement", engagement),
+        (
+            "Date Submitted",
+            f"{submitted_at:%B %d, %Y at %I:%M %p}" if submitted_at else "—",
+        ),
+        ("Registered Email", application.applicant_email or "—"),
+        ("Documents Submitted", f"{document_count} file{'' if document_count == 1 else 's'}"),
+    ]
+    row_height = 23
+    table_top = panel_bottom - 26
+    pdf.setFont("Helvetica-Bold", 10.5)
+    pdf.setFillColor(_RECEIPT_GREEN_INK)
+    pdf.drawString(left, table_top, "Application Details")
+    table_top -= 8
+
+    y = table_top
+    for index, (label, value) in enumerate(rows):
+        row_bottom = y - row_height
+        if index % 2 == 0:
+            pdf.setFillColor(colors.HexColor("#f5f8f2"))
+            pdf.rect(left, row_bottom, content_width, row_height, stroke=0, fill=1)
+        pdf.setFont("Helvetica-Bold", 9)
+        pdf.setFillColor(_RECEIPT_MUTE)
+        pdf.drawString(left + 10, row_bottom + 8, label)
+        pdf.setFont("Helvetica", 9.5)
+        pdf.setFillColor(_RECEIPT_INK)
+        value_lines = textwrap.wrap(str(value), width=52) or [""]
+        pdf.drawString(left + 190, row_bottom + 8, value_lines[0])
+        y = row_bottom
+    pdf.setStrokeColor(_RECEIPT_HAIRLINE)
+    pdf.setLineWidth(0.8)
+    pdf.rect(left, y, content_width, table_top - y, stroke=1, fill=0)
+
+    # ── What happens next ──────────────────────────────────────────────
+    next_top = y - 30
+    pdf.setFont("Helvetica-Bold", 10.5)
+    pdf.setFillColor(_RECEIPT_GREEN_INK)
+    pdf.drawString(left, next_top, "What Happens Next")
+    steps = [
+        "Your application will be reviewed by the recruitment team.",
+        "You may be contacted by email or phone for updates or additional requirements.",
+        "Check your application status anytime using your Tracking Code and email.",
+    ]
+    pdf.setFont("Helvetica", 9.5)
+    step_y = next_top - 16
+    for number, step in enumerate(steps, start=1):
+        pdf.setFillColor(_RECEIPT_GREEN)
+        pdf.setFont("Helvetica-Bold", 9.5)
+        pdf.drawString(left + 4, step_y, f"{number}.")
+        pdf.setFillColor(_RECEIPT_INK)
+        pdf.setFont("Helvetica", 9.5)
+        for wrapped in textwrap.wrap(step, width=92):
+            pdf.drawString(left + 20, step_y, wrapped)
+            step_y -= 13
+        step_y -= 4
+
+    # ── Reminder callout (carries the receipt page's privacy warning) ──
+    reminder_top = step_y - 16
+    reminder_height = 62
+    reminder_bottom = reminder_top - reminder_height
+    pdf.setFillColor(colors.HexColor("#fff4d6"))
+    pdf.setStrokeColor(_RECEIPT_GOLD)
+    pdf.setLineWidth(1)
+    pdf.roundRect(left, reminder_bottom, content_width, reminder_height, 6, stroke=1, fill=1)
+    pdf.setStrokeColor(_RECEIPT_GOLD)
+    pdf.setLineWidth(3)
+    pdf.line(left + 1.5, reminder_bottom + 5, left + 1.5, reminder_top - 5)
+    pdf.setFillColor(colors.HexColor("#8a5a00"))
+    pdf.setFont("Helvetica-Bold", 9.5)
+    pdf.drawString(left + 16, reminder_top - 18, "Keep this receipt and your Tracking Code safe.")
+    pdf.setFont("Helvetica", 9)
+    pdf.setFillColor(_RECEIPT_INK)
+    reminder_text = (
+        f"You will need your Tracking Code to check your status online. A confirmation was also "
+        f"sent to {application.applicant_email or 'your registered email'}."
+    )
+    text_y = reminder_top - 34
+    for wrapped in textwrap.wrap(reminder_text, width=98):
+        pdf.drawString(left + 16, text_y, wrapped)
+        text_y -= 12
+
+    # ── Footer ─────────────────────────────────────────────────────────
+    footer_y = 64
+    pdf.setStrokeColor(_RECEIPT_HAIRLINE)
+    pdf.setLineWidth(0.8)
+    pdf.line(left, footer_y, right, footer_y)
+    pdf.setFont("Helvetica", 7.5)
+    pdf.setFillColor(_RECEIPT_MUTE)
+    pdf.drawString(
+        left,
+        footer_y - 14,
+        f"Generated {generated_at:%B %d, %Y at %I:%M %p}. This is a system-generated receipt and needs no signature.",
+    )
+    pdf.drawString(
+        left,
+        footer_y - 25,
+        "Keep your Tracking Code private — treat it like a password.",
+    )
+
+    pdf.showPage()
+    pdf.save()
+    buffer.seek(0)
+    return buffer.getvalue()
 
 
 def _build_comparative_assessment_report_pdf(

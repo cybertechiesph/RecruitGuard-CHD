@@ -5,6 +5,7 @@ from .portal_views import (
     ApplicantOTPView,
     ApplicantPortalIntakeView,
     ApplicantPortalView,
+    ApplicantReceiptPdfView,
     ApplicantReceiptView,
     ApplicantResubmissionView,
     ApplicantStatusLinkView,
@@ -21,6 +22,7 @@ urlpatterns = [
     path("entries/<int:pk>/apply/", ApplicantPortalIntakeView.as_view(), name="applicant-intake"),
     path("<uuid:token>/otp/", ApplicantOTPView.as_view(), name="applicant-otp"),
     path("<uuid:token>/receipt/", ApplicantReceiptView.as_view(), name="applicant-receipt"),
+    path("<uuid:token>/receipt/download/", ApplicantReceiptPdfView.as_view(), name="applicant-receipt-pdf"),
     path("<uuid:token>/status/", ApplicantStatusLinkView.as_view(), name="applicant-status-link"),
     path("<uuid:token>/resubmit/", ApplicantResubmissionView.as_view(), name="applicant-resubmit"),
 ]

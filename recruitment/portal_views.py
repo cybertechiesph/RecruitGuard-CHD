@@ -3,8 +3,10 @@ from datetime import datetime, timedelta
 from django.conf import settings
 from django.contrib import messages
 from django.db import OperationalError
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
+from django.utils.text import slugify
+from django.views import View
 from django.utils import timezone
 from django.views.generic import FormView, TemplateView
 
@@ -20,6 +22,7 @@ from .requirements import PERFORMANCE_RATING, get_applicant_document_requirement
 from .services import (
     ApplicationOTPDeliveryError,
     create_public_application_draft,
+    _build_application_receipt_pdf,
     get_current_applicant_document_items,
     get_public_recruitment_entries,
     get_resubmission_request,
@@ -431,6 +434,32 @@ class ApplicantReceiptView(TemplateView):
             get_current_applicant_document_items(application).count()
         )
         return context
+
+
+class ApplicantReceiptPdfView(View):
+    """Downloadable PDF of the submission receipt (panel revision: the
+    application ID must be a real file, not only browser-print). Same gate as
+    the receipt page — possessing the public token proves access; no login."""
+
+    def get(self, request, *args, **kwargs):
+        application = (
+            RecruitmentApplication.objects.select_related("position")
+            .filter(public_token=self.kwargs["token"], submitted_at__isnull=False)
+            .first()
+        )
+        if application is None:
+            messages.error(
+                request,
+                "This receipt link is no longer available. If you already submitted, use Track Application with your Tracking Code and email.",
+            )
+            return redirect("applicant-portal")
+
+        pdf_bytes = _build_application_receipt_pdf(application)
+        reference = application.case_number_short or application.reference_number or "application"
+        filename = f"DOH-CHD-Receipt-{slugify(reference) or 'application'}.pdf"
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
 
 
 STATUS_OTP_PENDING_SESSION_KEY = "status_lookup_pending_application"
