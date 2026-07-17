@@ -5696,6 +5696,9 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         )
 
     def test_screening_view_persists_document_resubmission_request_and_remarks(self):
+        # RD-1: flagging a document and returning it is one atomic action
+        # (operation=return_to_applicant). It persists the flag + remarks and
+        # returns the case WITHOUT finalizing the screening.
         application = self.make_application(self.level1_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
@@ -5707,9 +5710,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
             reverse("screening-review", kwargs={"pk": application.pk}),
             {
                 **self.screening_payload(
-                    completeness_status=ScreeningRecord.CompletenessStatus.INCOMPLETE,
-                    completeness_notes="A corrected document is required.",
-                    qualification_outcome=ScreeningRecord.QualificationOutcome.NOT_QUALIFIED,
+                    qualification_outcome="",
                     screening_notes="Qualification cannot proceed until the corrected document is submitted.",
                 ),
                 **self.screening_document_status_payload(
@@ -5721,14 +5722,16 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
                     },
                 ),
                 f"document_remarks__{first_requirement.code}": "Upload a signed and readable copy.",
-                "operation": "save",
+                "return_remarks": "Please upload a signed and readable copy.",
+                "operation": "return_to_applicant",
             },
             follow=True,
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Screening finalized and locked.")
+        self.assertContains(response, "Flagged documents returned to the applicant")
         screening_record = ScreeningRecord.objects.get(application=application)
+        self.assertFalse(screening_record.is_finalized)
         document_review = screening_record.document_reviews.get(document_key=first_requirement.code)
         self.assertEqual(
             document_review.status,
