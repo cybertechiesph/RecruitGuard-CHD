@@ -157,6 +157,7 @@ from .services import (
     save_interview_session,
     save_screening_review,
     return_screening_documents_to_applicant,
+    vacancy_uses_batch_exam,
     screening_requires_disposition_for_current_stage,
     user_can_close_case,
     user_can_manage_comparative_assessment_report,
@@ -728,6 +729,14 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
             context["current_exam_schedule"] = exam_schedule
             if exam_record and exam_record.is_finalized:
                 context["exam_locked"] = True
+            elif vacancy_uses_batch_exam(application.position):
+                # RD-2: one door. This vacancy's pool is scheduled, scored, and
+                # finalized together in the batch console, so the per-case screen
+                # is a read-only summary — no exam_form, no schedule form.
+                context["exam_batch_managed"] = True
+                context["exam_batch_url"] = reverse(
+                    "vacancy-batch-exam", kwargs={"pk": application.position.pk}
+                )
             else:
                 context["exam_form"] = ExamRecordForm(
                     instance=exam_record,
@@ -1566,6 +1575,7 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
                     "application": application,
                     "case_id": application.case.id,
                     "exam_record": exam_record,
+                    "exam_status": exam_record.exam_status if exam_record else "",
                     "general_score": exam_record.general_score if exam_record else None,
                     "technical_score": exam_record.technical_score if exam_record else None,
                     "schedule": get_exam_schedule(application),
@@ -1663,14 +1673,29 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
                     row["general_score"] = general
                 if technical:
                     row["technical_score"] = technical
+                # RD-2: Absent / Waived is chosen here — the per-case exam screen
+                # is read-only for a pooled vacancy, so this is the only door.
+                outcome = (request.POST.get(f"outcome_{case_id}", "") or "").strip()
+                if outcome:
+                    row["exam_status"] = outcome
                 if row:
                     rows[case_id] = row
+            # The pool sat one exam, so one validity window covers the batch.
+            valid_from = (request.POST.get("valid_from", "") or "").strip() or None
+            valid_until = (request.POST.get("valid_until", "") or "").strip() or None
             # Capture the pre-finalize handler role so the toast can tell "routed to a new
             # office" apart from "same office, next step". The pool moves in lockstep, so one
             # representative role is enough.
             handler_before_finalize = pool[0].current_handler_role if pool else ""
             try:
-                saved = save_vacancy_exam_scores(entry, request.user, rows, finalize=finalize)
+                saved = save_vacancy_exam_scores(
+                    entry,
+                    request.user,
+                    rows,
+                    finalize=finalize,
+                    valid_from=valid_from,
+                    valid_until=valid_until,
+                )
             except (ValueError, ValidationError) as exc:
                 messages.error(request, str(exc))
                 return redirect("vacancy-batch-exam", pk=entry.pk)
@@ -2090,6 +2115,16 @@ class ExaminationRecordView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, 
         application = get_object_or_404(RecruitmentApplication, pk=pk)
         if not user_can_manage_exam(request.user, application):
             raise PermissionDenied
+        # RD-2: one door. A pooled vacancy is scored only in the batch exam
+        # console, so this per-case endpoint refuses writes server-side — a
+        # forced POST cannot create a second, conflicting score.
+        if vacancy_uses_batch_exam(application.position):
+            messages.error(
+                request,
+                "Exam scores for this vacancy are recorded in the batch exam console, "
+                "where the whole qualified pool is scored together.",
+            )
+            return redirect("vacancy-batch-exam", pk=application.position.pk)
 
         operation = request.POST.get("operation", "save")
         is_autosave = _is_autosave_request(request) and operation != "finalize"
@@ -2163,6 +2198,13 @@ class ExamScheduleView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View)
         application = get_object_or_404(RecruitmentApplication, pk=pk)
         if not user_can_manage_exam(request.user, application):
             raise PermissionDenied
+        # RD-2: the whole pool is scheduled together in the batch console.
+        if vacancy_uses_batch_exam(application.position):
+            messages.error(
+                request,
+                "This vacancy's exam is scheduled for the whole pool in the batch exam console.",
+            )
+            return redirect("vacancy-batch-exam", pk=application.position.pk)
 
         form = ExamScheduleForm(
             request.POST,

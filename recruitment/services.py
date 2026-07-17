@@ -4698,10 +4698,27 @@ def save_exam_record(
     return exam_record
 
 
+def vacancy_uses_batch_exam(posting):
+    """RD-2: does this vacancy's pool sit the exam together?
+
+    A vacancy forms a pool when its applicants are examined as a group: Plantilla
+    (always fixed-period), and COS whose intake is fixed-period, opening-based, or
+    pooling (the very word means a pool of candidates is formed). Those vacancies
+    are scored ONLY in the batch exam console, so the per-case exam screen is a
+    read-only summary and refuses writes — one door, one story.
+
+    Only CONTINUOUS COS intake is genuinely individual — applicants trickle in and
+    are hired as needed — so its per-case editor stays fully functional.
+    """
+    if posting.branch == PositionPosting.Branch.PLANTILLA:
+        return True
+    return posting.intake_mode != PositionPosting.IntakeMode.CONTINUOUS
+
+
 def vacancy_exam_pool(posting):
     """The vacancy's exam-ready applications: screening done (current section is 'exam') and the
     exam not yet finalized, at the vacancy's screening stage. The qualified pool that sits the
-    exam together. Branch-agnostic (Plantilla two-score and COS single end-user score)."""
+    exam together. Branch-agnostic — every candidate takes General + Technical (RD-2)."""
     stage = _vacancy_screening_stage(posting)
     cases = (
         RecruitmentCase.objects.filter(
@@ -4740,12 +4757,15 @@ def save_vacancy_exam_schedule(posting, actor, cleaned_data):
 
 
 @transaction.atomic
-def save_vacancy_exam_scores(posting, actor, scores_by_case_id, *, finalize=False):
+def save_vacancy_exam_scores(
+    posting, actor, scores_by_case_id, *, finalize=False, valid_from=None, valid_until=None
+):
     """Record (and optionally finalize) the exam scores for the whole vacancy's pool in one go,
-    looping the per-case save_exam_record. Plantilla candidates take General + Technical (the
-    overall is auto-computed from the per-vacancy weights); COS candidates take a single end-user
-    score. Finalize is all-or-nothing (atomic): every candidate must have the required score(s),
-    and on finalize each case auto-advances together."""
+    looping the per-case save_exam_record. Every candidate takes General Ability + Technical;
+    the overall is auto-computed from the per-vacancy weights (RD-2 — COS scores the same way
+    Plantilla does; ASSUMPTION pending client confirmation, flipped via the weights, not here).
+    Finalize is all-or-nothing (atomic): every candidate must have the required scores, and on
+    finalize each case auto-advances together."""
     if not vacancy_screening_batch_status(posting).is_ready:
         raise ValueError(vacancy_screening_batch_block_message(posting))
     pool = vacancy_exam_pool(posting)
@@ -4766,48 +4786,63 @@ def save_vacancy_exam_scores(posting, actor, scores_by_case_id, *, finalize=Fals
     for application in pool:
         row = scores_by_case_id.get(application.case.id) or {}
         general = row.get("general_score")
-        technical = row.get("technical_score") if is_plantilla else None
+        technical = row.get("technical_score")
         has_general = general not in (None, "")
         has_technical = technical not in (None, "")
         # Judgment item A: a candidate already marked Absent/Waived (per-case exam screen)
         # is exempt from the score requirement. On finalize their record locks as-is and
         # save_exam_record routes them to the terminal do-not-proceed handling.
         existing_record = get_exam_record(application)
-        existing_status = existing_record.exam_status if existing_record else ""
-        if (
-            existing_status
-            in {ExamRecord.ExamStatus.ABSENT, ExamRecord.ExamStatus.WAIVED}
-            and not has_general
-            and not has_technical
-        ):
-            if finalize:
-                save_exam_record(
-                    application=application,
-                    actor=actor,
-                    cleaned_data={
-                        "exam_type": existing_record.exam_type or exam_type,
-                        "exam_status": existing_status,
-                        "exam_result": existing_record.exam_result,
-                        "technical_score": None,
-                        "technical_result": existing_record.technical_result,
-                        "general_score": None,
-                        "general_result": existing_record.general_result,
-                        "exam_date": existing_record.exam_date,
-                        "administered_by": existing_record.administered_by or administered_by,
-                        "valid_from": None,
-                        "valid_until": None,
-                        "exam_notes": existing_record.exam_notes,
-                    },
-                    finalize=True,
-                    allow_partial=False,
-                )
-                saved.append(application)
+        # RD-2: the console owns the per-candidate outcome, because the per-case
+        # exam screen is read-only for a pooled vacancy. An outcome posted for
+        # this row wins; otherwise keep whatever the record already carries.
+        outcome = row.get("exam_status") or (
+            existing_record.exam_status if existing_record else ""
+        )
+        if outcome in {ExamRecord.ExamStatus.ABSENT, ExamRecord.ExamStatus.WAIVED}:
+            # Absent/Waived candidates are exempt from the score requirement;
+            # their record locks as-is on finalize and save_exam_record routes
+            # them to the terminal do-not-proceed handling.
+            save_exam_record(
+                application=application,
+                actor=actor,
+                cleaned_data={
+                    "exam_type": (existing_record.exam_type if existing_record else "")
+                    or exam_type,
+                    "exam_status": outcome,
+                    "exam_result": existing_record.exam_result if existing_record else "",
+                    "technical_score": None,
+                    "technical_result": (
+                        existing_record.technical_result if existing_record else ""
+                    ),
+                    "general_score": None,
+                    "general_result": (
+                        existing_record.general_result if existing_record else ""
+                    ),
+                    "exam_date": (
+                        existing_record.exam_date
+                        if existing_record and existing_record.exam_date
+                        else timezone.localdate()
+                    ),
+                    "administered_by": (
+                        existing_record.administered_by if existing_record else ""
+                    )
+                    or administered_by,
+                    "valid_from": None,
+                    "valid_until": None,
+                    "exam_notes": existing_record.exam_notes if existing_record else "",
+                },
+                finalize=finalize,
+                allow_partial=not finalize,
+            )
+            saved.append(application)
             continue
         if finalize:
-            if not has_general or (is_plantilla and not has_technical):
+            # RD-2: both components are required for every branch.
+            if not has_general or not has_technical:
                 raise ValueError(
-                    "Enter every candidate's score before finalizing the exam batch "
-                    f"(missing: {application.reference_label})."
+                    "Enter every candidate's General Ability and Technical scores before "
+                    f"finalizing the exam batch (missing: {application.reference_label})."
                 )
         elif not has_general and not has_technical:
             continue  # nothing to record for this candidate yet (draft)
@@ -4831,8 +4866,10 @@ def save_vacancy_exam_scores(posting, actor, scores_by_case_id, *, finalize=Fals
                 "general_result": "",
                 "exam_date": exam_date,
                 "administered_by": administered_by,
-                "valid_from": None,
-                "valid_until": None,
+                # RD-2: the pool sat one exam on one day, so the validity window
+                # is the batch's, applied to every candidate alike.
+                "valid_from": valid_from,
+                "valid_until": valid_until,
                 "exam_notes": "",
             },
             finalize=finalize,

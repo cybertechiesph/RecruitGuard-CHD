@@ -247,6 +247,16 @@ class BaseRecruitmentTestCase(TestCase):
             intake_mode=PositionPosting.IntakeMode.POOLING,
             status=PositionPosting.EntryStatus.ACTIVE,
         )
+        # RD-2: only CONTINUOUS COS intake keeps the per-case exam editor (no
+        # pool). Pooling/fixed-period/opening-based COS are scored in the batch
+        # console. This fixture is for the per-case exam tests.
+        self.cos_continuous_position = PositionPosting.objects.create(
+            position_reference=self.project_assistant_position,
+            branch=PositionPosting.Branch.COS,
+            level=PositionPosting.Level.LEVEL_1,
+            intake_mode=PositionPosting.IntakeMode.CONTINUOUS,
+            status=PositionPosting.EntryStatus.ACTIVE,
+        )
 
     def force_login_with_mfa(self, client, user):
         client.force_login(user)
@@ -6071,7 +6081,9 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         )
 
     def test_exam_wizard_reveals_conditional_fields_for_outcome_validation(self):
-        application = self.make_application(self.level1_position)
+        # RD-2: the per-case exam editor lives on un-pooled (pooling /
+        # continuous) COS intake; pooled vacancies score in the batch console.
+        application = self.make_application(self.cos_continuous_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
         self.finalize_screening_for_current_stage(application, self.secretariat)
@@ -6442,7 +6454,9 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         self.assertFalse(ExamRecord.objects.filter(application=application).exists())
 
     def test_exam_view_invalid_scores_show_readable_message_and_do_not_finalize(self):
-        application = self.make_application(self.level1_position)
+        # RD-2: the per-case exam editor lives on un-pooled (pooling /
+        # continuous) COS intake; pooled vacancies score in the batch console.
+        application = self.make_application(self.cos_continuous_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
         self.finalize_screening_for_current_stage(application, self.secretariat)
@@ -6470,7 +6484,9 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         self.assertFalse(ExamRecord.objects.filter(application=application).exists())
 
     def test_exam_autosave_accepts_partial_draft_without_audit_or_evidence(self):
-        application = self.make_application(self.level1_position)
+        # RD-2: the per-case exam editor lives on un-pooled (pooling /
+        # continuous) COS intake; pooled vacancies score in the batch console.
+        application = self.make_application(self.cos_continuous_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
         self.finalize_screening_for_current_stage(application, self.secretariat)
@@ -6480,7 +6496,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         response = client.post(
             reverse("exam-review", kwargs={"pk": application.pk}),
             {
-                "exam_type": ExamRecord.ExamType.TECHNICAL_PRACTICAL,
+                "exam_type": ExamRecord.ExamType.END_USER_ASSESSMENT,
                 "exam_status": ExamRecord.ExamStatus.COMPLETED,
                 "exam_score": "",
                 "exam_result": "",
@@ -6489,7 +6505,7 @@ class ExamRecordTests(BaseRecruitmentTestCase):
                 "general_score": "",
                 "general_result": "",
                 "exam_date": "",
-                "administered_by": ExamRecord.AdministeredBy.HRMS,
+                "administered_by": ExamRecord.AdministeredBy.END_USER,
                 "valid_from": "",
                 "valid_until": "",
                 "exam_notes": "Autosave captured a partial exam draft.",
@@ -6525,7 +6541,9 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         )
 
     def test_exam_autosave_rejects_invalid_scores_without_creating_record(self):
-        application = self.make_application(self.level1_position)
+        # RD-2: the per-case exam editor lives on un-pooled (pooling /
+        # continuous) COS intake; pooled vacancies score in the batch console.
+        application = self.make_application(self.cos_continuous_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
         self.finalize_screening_for_current_stage(application, self.secretariat)
@@ -6545,7 +6563,9 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         self.assertFalse(ExamRecord.objects.filter(application=application).exists())
 
     def test_exam_finalize_rerenders_wizard_with_bound_field_errors(self):
-        application = self.make_application(self.level1_position)
+        # RD-2: the per-case exam editor lives on un-pooled (pooling /
+        # continuous) COS intake; pooled vacancies score in the batch console.
+        application = self.make_application(self.cos_continuous_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
         self.finalize_screening_for_current_stage(application, self.secretariat)
@@ -6570,7 +6590,9 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         self.assertFalse(ExamRecord.objects.filter(application=application).exists())
 
     def test_waived_exam_clears_hidden_score_and_validity_values(self):
-        application = self.make_application(self.level1_position)
+        # RD-2: the per-case exam editor lives on un-pooled (pooling /
+        # continuous) COS intake; pooled vacancies score in the batch console.
+        application = self.make_application(self.cos_continuous_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
         self.finalize_screening_for_current_stage(application, self.secretariat)
@@ -6582,6 +6604,8 @@ class ExamRecordTests(BaseRecruitmentTestCase):
             reverse("exam-review", kwargs={"pk": application.pk}),
             {
                 **self.exam_payload(
+                    exam_type=ExamRecord.ExamType.END_USER_ASSESSMENT,
+                    administered_by=ExamRecord.AdministeredBy.END_USER,
                     exam_status=ExamRecord.ExamStatus.WAIVED,
                     exam_notes="Waived by authorized office control.",
                 ),
@@ -7153,17 +7177,30 @@ class BatchExamTests(BaseRecruitmentTestCase):
             ).exists()
         )
 
-    def test_cos_batch_exam_uses_a_single_end_user_score(self):
+    def test_cos_batch_exam_uses_two_weighted_components(self):
+        # RD-2: COS scores the same way Plantilla does — General Ability and
+        # Technical, combined by the vacancy's weights (default 60/40). The
+        # batch requires both components before it can finalize.
         first, second = self._two_qualified(self.cos_position)
         with self.captureOnCommitCallbacks(execute=True):
             save_vacancy_exam_schedule(self.cos_position, self.secretariat, self._schedule_payload())
+
+        # One component is not enough to finalize.
+        with self.assertRaisesMessage(ValueError, "General Ability and Technical"):
+            save_vacancy_exam_scores(
+                self.cos_position,
+                self.secretariat,
+                {first.case.id: {"general_score": "82"}},
+                finalize=True,
+            )
+
         with self.captureOnCommitCallbacks(execute=True):
             save_vacancy_exam_scores(
                 self.cos_position,
                 self.secretariat,
                 {
-                    first.case.id: {"general_score": "82"},
-                    second.case.id: {"general_score": "77"},
+                    first.case.id: {"general_score": "80", "technical_score": "90"},
+                    second.case.id: {"general_score": "70", "technical_score": "80"},
                 },
                 finalize=True,
             )
@@ -7171,7 +7208,37 @@ class BatchExamTests(BaseRecruitmentTestCase):
         first_exam = first.exam_records.get(review_stage=RecruitmentCase.Stage.SECRETARIAT_REVIEW)
         self.assertTrue(first_exam.is_finalized)
         self.assertEqual(first_exam.exam_type, ExamRecord.ExamType.END_USER_ASSESSMENT)
-        self.assertEqual(first_exam.exam_score, Decimal("82.00"))
+        self.assertEqual(first_exam.general_score, Decimal("80.00"))
+        self.assertEqual(first_exam.technical_score, Decimal("90.00"))
+        # 80*0.60 + 90*0.40 = 84.00
+        self.assertEqual(first_exam.exam_score, Decimal("84.00"))
+
+    def test_per_case_exam_post_refused_for_pooled_vacancy(self):
+        # RD-2 "one door", server-enforced (PT-03 lesson): a pooled vacancy's
+        # per-case exam endpoint refuses writes so a forced POST can't create a
+        # second, conflicting score. level1_position is Plantilla (fixed-period).
+        first, _second = self._two_qualified(self.level1_position)
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+
+        response = client.post(
+            reverse("exam-review", kwargs={"pk": first.pk}),
+            {
+                "exam_type": ExamRecord.ExamType.TECHNICAL_PRACTICAL,
+                "exam_status": ExamRecord.ExamStatus.COMPLETED,
+                "general_score": "88",
+                "technical_score": "82",
+                "administered_by": ExamRecord.AdministeredBy.HRMS,
+                "operation": "finalize",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(
+            reverse("vacancy-batch-exam", args=[self.level1_position.pk]),
+            response.headers["Location"],
+        )
+        # No exam record was written by the refused POST.
+        self.assertFalse(first.exam_records.exists())
 
     def test_batch_exam_blocked_when_screening_batch_not_ready(self):
         first = self._submit(self.make_application(self.level1_position), self.applicant)

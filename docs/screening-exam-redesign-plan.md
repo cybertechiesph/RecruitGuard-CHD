@@ -98,8 +98,10 @@ Ability + Technical, combined by the vacancy's weights (default 60/40)** via
 1. **COS two-component everywhere**: the batch console's COS table gets
    General | Technical columns with the auto-computed overall (matching the
    per-case wizard); the demo seeder writes both components for COS.
-2. **One door for pooled vacancies** (Plantilla fixed-period; COS with a
-   closing date): the per-case exam tab becomes a READ-ONLY summary (schedule,
+2. **One door for pooled vacancies** (Plantilla always; COS whose intake is
+   fixed-period, opening-based, or **pooling** — corrected 2026-07-18 with the
+   team: "pooling" forms a pool, so it batches; only CONTINUOUS COS stays
+   per-case): the per-case exam tab becomes a READ-ONLY summary (schedule,
    outcome, scores) with "Scores are managed in the batch exam console."
    Server-enforced: the per-case exam POST is refused for pooled vacancies
    (PT-03 lesson — never client-side-only). Scheduling, scoring, finalize

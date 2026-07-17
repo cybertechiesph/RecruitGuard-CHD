@@ -1906,7 +1906,10 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
         # Defaults (60/40) apply when there is no application or no weights row yet.
         self.exam_general_weight_label = "60"
         self.exam_technical_weight_label = "40"
-        if self.application and self.application.branch == PositionPosting.Branch.PLANTILLA:
+        # RD-2: every branch scores General + Technical against the vacancy's own
+        # weights (COS included — assumption pending client confirmation, which a
+        # weights change would satisfy without touching this code).
+        if self.application:
             exam_weights = self.application.position.assessment_weights_or_default
             self.exam_general_weight_label = format_weight_percentage(exam_weights.exam_general_weight)
             self.exam_technical_weight_label = format_weight_percentage(exam_weights.exam_technical_weight)

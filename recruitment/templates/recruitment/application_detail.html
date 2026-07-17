@@ -175,6 +175,10 @@
 
                     {% include "internal_includes/exam_locked_body.html" %}
 
+                {% elif exam_batch_managed %}
+
+                    {% include "internal_includes/exam_batch_managed_body.html" %}
+
                 {% elif exam_batch_block_message %}
 
                     {% include "internal_includes/state_empty.html" with title="Exam batch on hold" copy=exam_batch_block_message %}

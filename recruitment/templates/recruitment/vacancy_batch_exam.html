@@ -82,11 +82,9 @@
 <div class="card p-4 mb-3">
     <h2 class="h6 mb-1">2 — Record exam scores</h2>
     <p class="rg-note mb-3">
-        {% if is_plantilla %}
-            Enter each candidate's General Ability and Technical scores (0–100). The overall is computed from the weights above.
-        {% else %}
-            Enter each candidate's end-user assessment score (0–100), as encoded by the HRMO.
-        {% endif %}
+        Enter each candidate's General Ability and Technical scores (0–100). The overall is
+        computed from the weights above.
+        {% if not is_plantilla %}COS scores are encoded by the HRMO.{% endif %}
     </p>
     <form method="post" id="examScoreForm" novalidate>
         {% csrf_token %}
@@ -96,12 +94,9 @@
                     <thead>
                         <tr>
                             <th>Candidate</th>
-                            {% if is_plantilla %}
-                                <th>General Ability</th>
-                                <th>Technical</th>
-                            {% else %}
-                                <th>End-user score</th>
-                            {% endif %}
+                            <th>Outcome</th>
+                            <th>General Ability</th>
+                            <th>Technical</th>
                             <th>Current</th>
                         </tr>
                     </thead>
@@ -113,17 +108,28 @@
                                     <div class="rg-imeta mt-1">{{ candidate.application.reference_label }}</div>
                                 </td>
                                 <td>
-                                    <input type="number" step="0.01" min="0" max="100" class="form-control"
+                                    {# RD-2: Absent/Waived lives here now — the per-case exam
+                                       screen is read-only for a pooled vacancy. #}
+                                    <select class="form-select js-exam-outcome"
+                                            name="outcome_{{ candidate.case_id }}"
+                                            data-case-id="{{ candidate.case_id }}">
+                                        <option value="completed"{% if candidate.exam_status != "absent" and candidate.exam_status != "waived" %} selected{% endif %}>Completed</option>
+                                        <option value="absent"{% if candidate.exam_status == "absent" %} selected{% endif %}>Absent</option>
+                                        <option value="waived"{% if candidate.exam_status == "waived" %} selected{% endif %}>Waived</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <input type="number" step="0.01" min="0" max="100" class="form-control js-exam-score"
+                                           data-case-id="{{ candidate.case_id }}"
                                            name="general_score_{{ candidate.case_id }}"
                                            value="{{ candidate.general_score|default_if_none:'' }}">
                                 </td>
-                                {% if is_plantilla %}
-                                    <td>
-                                        <input type="number" step="0.01" min="0" max="100" class="form-control"
-                                               name="technical_score_{{ candidate.case_id }}"
-                                               value="{{ candidate.technical_score|default_if_none:'' }}">
-                                    </td>
-                                {% endif %}
+                                <td>
+                                    <input type="number" step="0.01" min="0" max="100" class="form-control js-exam-score"
+                                           data-case-id="{{ candidate.case_id }}"
+                                           name="technical_score_{{ candidate.case_id }}"
+                                           value="{{ candidate.technical_score|default_if_none:'' }}">
+                                </td>
                                 <td>
                                     {% if candidate.exam_record and candidate.exam_record.is_finalized %}
                                         <span class="rg-pill rg-pill--success rg-pill--sm">Finalized: {{ candidate.exam_record.exam_score }}</span>
@@ -144,6 +150,26 @@
         {# WF-16(b): no d-block here — the hint stays hidden until a score is actually invalid. #}
         <div class="invalid-feedback mt-2" id="examScoreError" hidden>
             Scores must be between 0 and 100.
+        </div>
+
+        {% comment %} RD-2: the pool sat one exam on one day, so one validity window
+        covers the batch rather than being retyped per candidate. {% endcomment %}
+        <div class="row g-3 mt-1">
+            <div class="col-md-4">
+                <label class="form-label" for="batch_valid_from" style="font-size:0.8125rem; font-weight:600;">
+                    Exam validity start <span class="rg-imeta">(optional)</span>
+                </label>
+                <input type="date" class="form-control" id="batch_valid_from" name="valid_from">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="batch_valid_until" style="font-size:0.8125rem; font-weight:600;">
+                    Exam validity end <span class="rg-imeta">(optional)</span>
+                </label>
+                <input type="date" class="form-control" id="batch_valid_until" name="valid_until">
+            </div>
+            <div class="col-12">
+                <div class="rg-imeta">Applied to every candidate in this batch.</div>
+            </div>
         </div>
         {% if not schedule_sent %}
             <div class="alert alert-info mt-3 mb-0" role="status">
@@ -196,6 +222,27 @@
             errorLine.hidden = true;
             errorLine.classList.remove("d-block");
         }
+    });
+})();
+
+(function () {
+    "use strict";
+    /* RD-2: a candidate who was Absent or Waived has no scores to record, so
+       their score cells are cleared and disabled — the same rule the service
+       enforces (non-Completed rows are exempt from the score requirement). */
+    function syncRow(select) {
+        var caseId = select.getAttribute("data-case-id");
+        var blocked = select.value === "absent" || select.value === "waived";
+        document.querySelectorAll('.js-exam-score[data-case-id="' + caseId + '"]').forEach(
+            function (input) {
+                input.disabled = blocked;
+                if (blocked) { input.value = ""; }
+            }
+        );
+    }
+    document.querySelectorAll(".js-exam-outcome").forEach(function (select) {
+        select.addEventListener("change", function () { syncRow(select); });
+        syncRow(select);
     });
 })();
 </script>

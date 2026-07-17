@@ -1,0 +1,61 @@
+{% load recruitment_ui %}
+{% comment %}
+RD-2 "one door": this vacancy's qualified pool sits the exam together, so the
+schedule and scores are recorded once in the batch exam console. This screen is
+a read-only summary of what the console holds for this candidate — the writes
+are refused server-side too, so a forced POST cannot create a second,
+conflicting score. Evidence upload stays available below: adding a file can't
+conflict with anything.
+{% endcomment %}
+<div class="rg-icard">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">Examination</h3>
+            <p class="rg-icard__subtitle">
+                The whole qualified pool for this vacancy sits the exam together, so the
+                schedule and scores are recorded in the batch exam console.
+            </p>
+        </div>
+        <a href="{{ exam_batch_url }}" class="btn btn-rg-primary btn-sm">Open batch exam console</a>
+    </div>
+
+    <div class="rg-int-readout-grid">
+        <div>
+            <span class="rg-int-readout-grid__label">Schedule</span>
+            <strong>
+                {% if current_exam_schedule and current_exam_schedule.scheduled_for %}
+                    {{ current_exam_schedule.scheduled_for|date:"M d, Y" }}
+                    at {{ current_exam_schedule.scheduled_for|date:"H:i" }}
+                {% else %}
+                    Not yet scheduled
+                {% endif %}
+            </strong>
+        </div>
+        <div>
+            <span class="rg-int-readout-grid__label">Venue</span>
+            <strong>{{ current_exam_schedule.venue|default:"—" }}</strong>
+        </div>
+        <div>
+            <span class="rg-int-readout-grid__label">Outcome</span>
+            <strong>
+                {% if current_exam_record and current_exam_record.exam_status %}
+                    {{ current_exam_record.get_exam_status_display }}
+                {% else %}
+                    Not yet recorded
+                {% endif %}
+            </strong>
+        </div>
+        <div>
+            <span class="rg-int-readout-grid__label">General Ability</span>
+            <strong>{{ current_exam_record.general_score|default_if_none:"—" }}</strong>
+        </div>
+        <div>
+            <span class="rg-int-readout-grid__label">Technical</span>
+            <strong>{{ current_exam_record.technical_score|default_if_none:"—" }}</strong>
+        </div>
+        <div>
+            <span class="rg-int-readout-grid__label">Overall</span>
+            <strong>{{ current_exam_record.exam_score|default_if_none:"—" }}</strong>
+        </div>
+    </div>
+</div>

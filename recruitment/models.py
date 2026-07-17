@@ -1834,10 +1834,13 @@ class ExamRecord(TimestampedModel):
 
     @property
     def required_score_fields(self):
-        if self.exam_type == self.ExamType.TECHNICAL_PRACTICAL:
+        # RD-2: both exam types score General Ability + Technical (COS scores the
+        # same way Plantilla does; the composition weights carry the difference).
+        if self.exam_type in {
+            self.ExamType.TECHNICAL_PRACTICAL,
+            self.ExamType.END_USER_ASSESSMENT,
+        }:
             return ("technical_score", "general_score")
-        if self.exam_type == self.ExamType.END_USER_ASSESSMENT:
-            return ("general_score",)
         return ()
 
     @property
@@ -1859,20 +1862,21 @@ class ExamRecord(TimestampedModel):
 
     @property
     def component_weight_display(self):
-        if self.exam_type == self.ExamType.TECHNICAL_PRACTICAL:
-            weights = self._resolve_assessment_weights()
-            return (
-                "Overall is computed automatically: "
-                f"General Ability {format_weight_percentage(weights.exam_general_weight)}% + "
-                f"Technical {format_weight_percentage(weights.exam_technical_weight)}%."
-            )
-        return "End-user assessment score is used as the overall."
+        weights = self._resolve_assessment_weights()
+        return (
+            "Overall is computed automatically: "
+            f"General Ability {format_weight_percentage(weights.exam_general_weight)}% + "
+            f"Technical {format_weight_percentage(weights.exam_technical_weight)}%."
+        )
 
     def calculate_policy_score(self):
-        if self.exam_type == self.ExamType.END_USER_ASSESSMENT:
-            return self.general_score
+        # RD-2: every exam type combines General Ability + Technical using the
+        # vacancy's weights (default 60/40). COS scores the same way Plantilla
+        # does — a client decision to score COS differently is a weights change,
+        # not a code change.
         if (
-            self.exam_type == self.ExamType.TECHNICAL_PRACTICAL
+            self.exam_type
+            in {self.ExamType.TECHNICAL_PRACTICAL, self.ExamType.END_USER_ASSESSMENT}
             and self.technical_score is not None
             and self.general_score is not None
         ):
