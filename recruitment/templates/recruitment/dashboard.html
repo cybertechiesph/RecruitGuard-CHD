@@ -7,31 +7,142 @@
 This dashboard renders for System Administrator only. Workflow roles
 (Secretariat, HRM Chief, HRMPSB Member, Appointing Authority) are
 redirected by DashboardView.get() straight to their queue — that is
-their home. Keeping this template free of the workflow-role branch
-removes a class of "dead template code" bugs.
+their home.
+
+Panel revision (Chavez, "improve dashboard"): the admin home is now an
+oversight console — recruitment pipeline, audit activity, and security
+watch at a glance — assembled entirely from data the system already
+tracks (SLA thresholds, the REV-F audit summary engine, REV-D archives).
 {% endcomment %}
 
 {% block content %}
 <div class="rg-page-header">
     <div>
+        <p class="rg-eyebrow">System oversight</p>
         <h1 class="rg-page-title">Dashboard</h1>
+        <p class="rg-page-copy">Recruitment pipeline, audit activity, and security signals at a glance.</p>
     </div>
 </div>
 
+{# ── Row 1: recruitment pipeline ─────────────────────────────── #}
 <div class="row g-3">
-    <div class="col-12">
-        <div class="rg-icard rg-icard--hero h-100">
+    <div class="col-lg-7">
+        <div class="rg-icard h-100">
             <div class="rg-icard__header">
                 <div>
-                    <h2 class="rg-icard__title">Recent identity events</h2>
+                    <h2 class="rg-icard__title">Recruitment at a glance</h2>
+                    <p class="rg-icard__subtitle">Open cases by workflow step.</p>
+                </div>
+                <div class="rg-icard__actions">
+                    <a href="{% url 'recruitment-entry-list' %}" class="btn btn-outline-secondary btn-sm">Entries</a>
+                </div>
+            </div>
+            <div class="rg-istat-row" style="margin-bottom:1rem;">
+                <div class="rg-istat">
+                    <span class="rg-istat__value">{{ active_vacancy_count }}</span>
+                    <span class="rg-istat__label">Active vacancies</span>
+                </div>
+                <div class="rg-istat-row__divider"></div>
+                <div class="rg-istat">
+                    <span class="rg-istat__value">{{ closing_soon_count }}</span>
+                    <span class="rg-istat__label">Closing within 7 days</span>
+                </div>
+                <div class="rg-istat-row__divider"></div>
+                <div class="rg-istat">
+                    <span class="rg-istat__value">{{ open_case_count }}</span>
+                    <span class="rg-istat__label">Open cases</span>
+                </div>
+                <div class="rg-istat-row__divider"></div>
+                <div class="rg-istat">
+                    <span class="rg-istat__value{% if overdue_case_count %} text-danger{% endif %}">{{ overdue_case_count }}</span>
+                    <span class="rg-istat__label">Over the 7-day step target</span>
+                </div>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                {% for stage in case_stage_counts %}
+                    <span class="rg-pill {% if stage.count %}rg-pill--info{% else %}rg-pill--neutral{% endif %}">
+                        {{ stage.label }}: {{ stage.count }}
+                    </span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="rg-icard h-100">
+            <div class="rg-icard__header">
+                <div>
+                    <h2 class="rg-icard__title">Security watch</h2>
+                    <p class="rg-icard__subtitle">Since {{ audit_week_start|date:"M d" }} — failed sign-ins, lockouts, and denied access.</p>
+                </div>
+                <div class="rg-icard__actions">
+                    <a href="{% url 'audit-log-list' %}?sensitive_only=on" class="btn btn-outline-secondary btn-sm">Review</a>
+                </div>
+            </div>
+            <div class="rg-istat-row" style="margin-bottom:1rem;">
+                <div class="rg-istat">
+                    <span class="rg-istat__value{% if security_event_count %} text-danger{% endif %}">{{ security_event_count }}</span>
+                    <span class="rg-istat__label">Failed / locked attempts</span>
+                </div>
+                <div class="rg-istat-row__divider"></div>
+                <div class="rg-istat">
+                    <span class="rg-istat__value">{{ sensitive_event_count }}</span>
+                    <span class="rg-istat__label">Sensitive-access events</span>
+                </div>
+            </div>
+            <p class="rg-imeta mb-0">
+                {% if latest_audit_archive %}
+                    {{ audit_archive_count }} audit archive{{ audit_archive_count|pluralize }} —
+                    latest {{ latest_audit_archive.created_at|date:"M d, Y" }}
+                    ({{ latest_audit_archive.entry_count }} entries).
+                {% else %}
+                    No audit archives yet — entries older than six months can be
+                    archived from the audit log.
+                {% endif %}
+            </p>
+        </div>
+    </div>
+</div>
+
+{# ── Row 2: audit activity + accounts ────────────────────────── #}
+<div class="row g-3 mt-0">
+    <div class="col-lg-7">
+        <div class="rg-icard h-100">
+            <div class="rg-icard__header">
+                <div>
+                    <h2 class="rg-icard__title">Audit activity — last 7 days</h2>
+                    <p class="rg-icard__subtitle">What the trail recorded, by category.</p>
+                </div>
+                <div class="rg-icard__actions">
+                    <a href="{% url 'audit-log-list' %}" class="btn btn-outline-secondary btn-sm">Audit log</a>
+                    <a href="{% url 'audit-log-report' %}?date_from={{ audit_week_start|date:'Y-m-d' }}"
+                       class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener">Printable report</a>
+                </div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                <span class="rg-pill rg-pill--neutral"><strong>{{ audit_week_summary.total }}</strong>&nbsp;action{{ audit_week_summary.total|pluralize }}</span>
+                {% for cat in audit_week_summary.categories %}
+                    <span class="rg-pill rg-pill--info">{{ cat.label }}: {{ cat.count }}</span>
+                {% endfor %}
+                {% if audit_week_summary.busiest_day and audit_week_summary.total %}
+                    <span class="rg-pill rg-pill--neutral">Busiest: {{ audit_week_summary.busiest_day|date:"M d" }} ({{ audit_week_summary.busiest_day_count }})</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="rg-icard h-100">
+            <div class="rg-icard__header">
+                <div>
+                    <h2 class="rg-icard__title">Accounts &amp; identity</h2>
                     <p class="rg-icard__subtitle">Account creation, role changes, and activation events.</p>
                 </div>
                 <div class="rg-icard__actions">
                     <a href="{% url 'internal-user-list' %}" class="btn btn-outline-secondary btn-sm">User directory</a>
                 </div>
             </div>
-
-            <div class="rg-istat-row" style="margin-bottom:1.25rem;">
+            <div class="rg-istat-row" style="margin-bottom:1rem;">
                 <div class="rg-istat">
                     <span class="rg-istat__value">{{ internal_user_count }}</span>
                     <span class="rg-istat__label">Accounts</span>
@@ -41,13 +152,7 @@ removes a class of "dead template code" bugs.
                     <span class="rg-istat__value">{{ active_internal_user_count }}</span>
                     <span class="rg-istat__label">Active</span>
                 </div>
-                <div class="rg-istat-row__divider"></div>
-                <div class="rg-istat">
-                    <span class="rg-istat__value">{{ open_entry_count }}</span>
-                    <span class="rg-istat__label">Open entries</span>
-                </div>
             </div>
-
             {% if recent_identity_logs %}
                 {% for entry in recent_identity_logs %}
                     <div class="rg-dash-sysad-event">

@@ -46,6 +46,7 @@ from .forms import (
 )
 from .models import (
     AUDIT_ACTION_CATEGORIES,
+    STAGE_SLA_OVERDUE_THRESHOLD,
     AUDIT_CATEGORY_BY_ACTION,
     AuditLog,
     AuditLogArchive,
@@ -193,7 +194,7 @@ from .services import (
     user_is_interview_rating_support_encoder,
 )
 from .templatetags.recruitment_ui import QUEUE_TASK_LABELS
-from django.db.models import Q
+from django.db.models import Count, Q
 
 
 EXAM_FIELD_LABELS = {
@@ -330,6 +331,17 @@ class DashboardView(LoginRequiredMixin, InternalUserRequiredMixin, TemplateView)
             return redirect("vacancy-batches")
         return super().get(request, *args, **kwargs)
 
+    # Failed/locked authentication events surfaced on the security card.
+    SECURITY_WATCH_ACTIONS = [
+        AuditLog.Action.INTERNAL_LOGIN_FAILED,
+        AuditLog.Action.INTERNAL_LOGIN_LOCKED,
+        AuditLog.Action.INTERNAL_MFA_FAILED,
+        AuditLog.Action.INTERNAL_MFA_LOCKED,
+        AuditLog.Action.APPLICATION_OTP_FAILED,
+        AuditLog.Action.APPLICATION_OTP_LOCKED,
+        AuditLog.Action.EVIDENCE_ACCESS_DENIED,
+    ]
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
@@ -347,6 +359,50 @@ class DashboardView(LoginRequiredMixin, InternalUserRequiredMixin, TemplateView)
                     AuditLog.Action.INTERNAL_ROLE_CHANGED,
                 ]
             )[:5]
+
+            # Panel revision (Chavez, "improve dashboard"): the admin home is an
+            # oversight console, assembled from data the system already tracks.
+            today = timezone.localdate()
+            week_ago = today - timedelta(days=6)
+
+            active_postings = PositionPosting.objects.filter(
+                status=PositionPosting.EntryStatus.ACTIVE
+            )
+            context["active_vacancy_count"] = active_postings.count()
+            context["closing_soon_count"] = active_postings.filter(
+                closing_date__gte=today, closing_date__lte=today + timedelta(days=7)
+            ).count()
+
+            open_cases = RecruitmentCase.objects.exclude(
+                current_stage=RecruitmentCase.Stage.CLOSED
+            )
+            context["open_case_count"] = open_cases.count()
+            stage_counts = {
+                row["current_stage"]: row["n"]
+                for row in open_cases.values("current_stage").annotate(n=Count("id"))
+            }
+            context["case_stage_counts"] = [
+                {"label": label, "count": stage_counts.get(value, 0)}
+                for value, label in RecruitmentCase.Stage.choices
+                if value != RecruitmentCase.Stage.CLOSED
+            ]
+            context["overdue_case_count"] = open_cases.filter(
+                stage_entered_at__lt=timezone.now() - STAGE_SLA_OVERDUE_THRESHOLD
+            ).count()
+
+            context["audit_week_summary"] = summarize_audit_logs(
+                get_all_audit_logs(date_from=week_ago)
+            )
+            context["audit_week_start"] = week_ago
+            week_events = AuditLog.objects.filter(created_at__date__gte=week_ago)
+            context["security_event_count"] = week_events.filter(
+                action__in=self.SECURITY_WATCH_ACTIONS
+            ).count()
+            context["sensitive_event_count"] = week_events.filter(
+                is_sensitive_access=True
+            ).count()
+            context["audit_archive_count"] = AuditLogArchive.objects.count()
+            context["latest_audit_archive"] = AuditLogArchive.objects.first()
         else:
             context["queue"] = get_queue_for_user(user)
         return context
