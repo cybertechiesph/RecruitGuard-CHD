@@ -24,7 +24,7 @@
 
 {% if next_batch_case %}
 <div class="alert alert-info d-flex flex-wrap align-items-center gap-2 mt-2 mb-0" role="status">
-    <span>Next in this batch: <strong>{{ next_batch_case.applicant_display_name }}</strong></span>
+    <span>Next in this batch: <strong>{% if request.user.role == "hrmpsb_member" %}Candidate {{ next_batch_case.candidate_code_label }}{% else %}Case No. {{ next_batch_case.case_number_short }}{% endif %}</strong></span>
     <a class="btn btn-rg-primary btn-sm" href="{% url 'application-detail' next_batch_case.pk %}">Open next case</a>
 </div>
 {% endif %}

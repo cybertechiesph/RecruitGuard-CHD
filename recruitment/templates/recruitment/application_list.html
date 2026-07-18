@@ -107,13 +107,12 @@
                                 <div class="fw-bold" style="font-family:ui-monospace,SFMono-Regular,'Cascadia Mono',Consolas,Menlo,monospace;font-size:0.78rem;color:#5f6c78;">
                                     {{ application.reference_label }}
                                 </div>
-                                <div class="rg-imeta mt-1">
-                                    {% if request.user.role == "hrmpsb_member" %}
-                                        Candidate {{ application.candidate_code_label }}
-                                    {% else %}
-                                        {{ application.applicant_display_name }}
-                                    {% endif %}
-                                </div>
+                                {% comment %} Ronel revision: the case number is the identifier;
+                                   the applicant's name is not shown on the queue to reduce
+                                   selection bias (HRMPSB keep their candidate code). {% endcomment %}
+                                {% if request.user.role == "hrmpsb_member" %}
+                                    <div class="rg-imeta mt-1">Candidate {{ application.candidate_code_label }}</div>
+                                {% endif %}
                             </td>
                             <td>
                                 <div style="font-size:0.8125rem;font-weight:600;color:#111827;">

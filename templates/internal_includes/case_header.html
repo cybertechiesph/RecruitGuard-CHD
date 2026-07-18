@@ -8,8 +8,11 @@
             <div class="rg-cws-header__ref">{{ application.position.job_code }}</div>
             <h1 class="rg-cws-header__title">Candidate {{ application.candidate_code_label }}</h1>
         {% else %}
-            <div class="rg-cws-header__ref">{{ application.reference_label }}</div>
-            <h1 class="rg-cws-header__title">{{ application.applicant_display_name }}</h1>
+            {% comment %} Ronel revision: identify the case by its number, not the applicant's
+               name, to reduce selection bias. The name stays in the applicant profile panel
+               below for the secretariat's contact and document verification. {% endcomment %}
+            <div class="rg-cws-header__ref">{{ application.position.job_code }}</div>
+            <h1 class="rg-cws-header__title">Case No. {{ application.case_number_short }}</h1>
         {% endif %}
         <div class="rg-cws-header__meta">
             {{ application.position.title }}

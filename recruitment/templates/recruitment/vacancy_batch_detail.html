@@ -92,10 +92,11 @@
                 {% for application in applications %}
                     <tr>
                         <td class="col-ref">
+                            {% comment %} Ronel revision: case number only — no applicant name
+                               on the batch list, to reduce selection bias. {% endcomment %}
                             <div class="fw-bold" style="font-family:ui-monospace,SFMono-Regular,'Cascadia Mono',Consolas,Menlo,monospace;font-size:0.78rem;color:#5f6c78;">
                                 {{ application.reference_label }}
                             </div>
-                            <div class="rg-imeta mt-1">{{ application.applicant_display_name }}</div>
                         </td>
                         <td>
                             {% queue_task_theme application as task_theme %}

@@ -104,8 +104,9 @@
                         {% for candidate in candidates %}
                             <tr>
                                 <td>
-                                    <div class="fw-bold" style="font-size:0.8rem;">{{ candidate.application.applicant_display_name }}</div>
-                                    <div class="rg-imeta mt-1">{{ candidate.application.reference_label }}</div>
+                                    {% comment %} Ronel revision: identify candidates by case
+                                       number, not name, to reduce selection bias. {% endcomment %}
+                                    <div class="fw-bold" style="font-size:0.8rem;">{{ candidate.application.reference_label }}</div>
                                 </td>
                                 <td>
                                     {# RD-2: Absent/Waived lives here now — the per-case exam
