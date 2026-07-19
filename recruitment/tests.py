@@ -5804,6 +5804,63 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         self.assertContains(response, "Add the instruction the applicant should follow")
         self.assertFalse(ScreeningRecord.objects.filter(application=application, is_finalized=True).exists())
 
+    def test_returned_application_resubmit_reopens_finalized_screening(self):
+        # RD-6 integrity: a generic return (no flagged documents) hands the whole
+        # application back. When the applicant resubmits, the finalized screening
+        # must reopen so the edited documents are re-verified — a finalized
+        # screening over the old files would otherwise pass the endorse gate.
+        from recruitment.services import get_screening_record
+
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        self.finalize_screening_for_current_stage(application, self.secretariat)
+
+        stage = RecruitmentCase.Stage.SECRETARIAT_REVIEW
+        before = get_screening_record(application, stage=stage)
+        self.assertTrue(before.is_finalized)
+
+        # Simulate the generic whole-application return: the case is handed back
+        # to the applicant with the screening still finalized. (Reaching the
+        # post-exam actions section per case requires a multi-candidate batch to
+        # avoid auto-advance; the reopen logic under test is stage-based and does
+        # not depend on the return mechanism.)
+        application.refresh_from_db()
+        case = application.case
+        application.status = RecruitmentApplication.Status.RETURNED_TO_APPLICANT
+        application.current_handler_role = RecruitmentUser.Role.APPLICANT
+        application.save(update_fields=["status", "current_handler_role", "updated_at"])
+        case.case_status = RecruitmentCase.CaseStatus.RETURNED_TO_APPLICANT
+        case.current_handler_role = RecruitmentUser.Role.APPLICANT
+        case.save(update_fields=["case_status", "current_handler_role", "updated_at"])
+
+        # Applicant edits and resubmits.
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(application, self.applicant)
+        application.refresh_from_db()
+
+        record = get_screening_record(application, stage=stage)
+        self.assertFalse(record.is_finalized)
+        self.assertIsNone(record.finalized_by_id)
+        self.assertIsNotNone(record.reopened_for_resubmission_at)
+        self.assertEqual(
+            record.completeness_status, ScreeningRecord.CompletenessStatus.INCOMPLETE
+        )
+        self.assertTrue(
+            all(
+                row.status == ScreeningDocumentReview.ReviewStatus.NOT_REVIEWED
+                for row in record.document_reviews.all()
+            )
+        )
+        self.assertTrue(
+            AuditLog.objects.filter(
+                application=application, action=AuditLog.Action.SCREENING_REOPENED
+            ).exists()
+        )
+        # Endorse is blocked until the reviewer re-finalizes the screening.
+        with self.assertRaises(ValueError):
+            process_workflow_action(application, self.secretariat, "endorse", "premature")
+
     def test_completeness_is_derived_from_the_document_review(self):
         # RD-1: the reviewer never answers "are the documents complete?" — the
         # value is computed from the rows and stored so the CAR, exports, locked

@@ -6339,6 +6339,59 @@ def save_completion_tracking(application, actor, cleaned_data, requirement_forms
     return completion_record
 
 
+def _reopen_screening_after_resubmission(application, actor, stage):
+    """RD-6: a whole-application return (no flagged documents) was resubmitted with
+    edited documents. Reopen the stage's finalized screening record so the reviewer
+    must re-verify the new evidence before the case can be endorsed again — a
+    finalized screening over the OLD documents would otherwise pass the endorse gate
+    immediately, letting edited evidence move forward with nobody re-checking it.
+
+    The flagged-document resubmission path (submit_document_resubmission) is separate
+    and already reopens exactly the flagged rows; this covers the generic return.
+    The exam record for the stage is left untouched — the documents changed, the
+    examination result did not; re-finalizing screening is the gate that matters.
+    """
+    screening_record = get_screening_record(application, stage=stage)
+    if not screening_record or not screening_record.is_finalized:
+        return
+    screening_record.is_finalized = False
+    screening_record.finalized_by = None
+    screening_record.finalized_at = None
+    screening_record.finalized_by_role = ""
+    screening_record.reopened_for_resubmission_at = timezone.now()
+    # Every document row returns to Not Reviewed — the reviewer confirms each one
+    # against the resubmitted files. Remarks are kept for context.
+    screening_record.document_reviews.all().update(
+        status=ScreeningDocumentReview.ReviewStatus.NOT_REVIEWED,
+        updated_at=timezone.now(),
+    )
+    screening_record.completeness_status = ScreeningRecord.derive_completeness_status(
+        screening_record.document_reviews.all()
+    )
+    screening_record.full_clean()
+    screening_record.save(
+        update_fields=[
+            "is_finalized",
+            "finalized_by",
+            "finalized_at",
+            "finalized_by_role",
+            "reopened_for_resubmission_at",
+            "completeness_status",
+            "updated_at",
+        ]
+    )
+    record_audit_event(
+        application=application,
+        actor=actor,
+        action=AuditLog.Action.SCREENING_REOPENED,
+        description=(
+            "Screening reopened for re-verification after the applicant resubmitted "
+            "a returned application."
+        ),
+        metadata={"stage": stage, "screening_record_id": screening_record.id},
+    )
+
+
 def _upsert_recruitment_case_for_submission(application, actor, next_role, next_status):
     next_stage = _review_stage_from_application_status(next_status)
     if not next_stage:
@@ -6382,6 +6435,9 @@ def _upsert_recruitment_case_for_submission(application, actor, next_role, next_
                 "updated_at",
             ]
         )
+        # RD-6: the case re-enters at the screening stage — reopen its finalized
+        # screening so the edited documents are re-verified before endorsement.
+        _reopen_screening_after_resubmission(application, actor, next_stage)
     if created:
         _emit_case_assignment_notification(
             application,

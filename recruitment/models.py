@@ -1238,6 +1238,10 @@ class ScreeningRecord(TimestampedModel):
     # visible as "awaiting resubmission" until the applicant re-uploads or the deadline passes.
     resubmission_requested_at = models.DateTimeField(blank=True, null=True)
     resubmission_deadline = models.DateField(blank=True, null=True)
+    # RD-6: set when a whole-application return is resubmitted and this finalized
+    # record is reopened for re-verification over the edited documents. Cleared is
+    # the normal state; a set value with is_finalized False means "re-verify".
+    reopened_for_resubmission_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         ordering = ["review_stage", "created_at"]
@@ -3810,6 +3814,7 @@ class AuditLog(TimestampedModel):
         ROUTED = "routed", "Application Routed"
         SCREENING_RECORDED = "screening_recorded", "Screening Recorded"
         SCREENING_FINALIZED = "screening_finalized", "Screening Finalized"
+        SCREENING_REOPENED = "screening_reopened", "Screening Reopened"
         EXAM_SCHEDULED = "exam_scheduled", "Exam Scheduled"
         EXAM_RECORDED = "exam_recorded", "Exam Recorded"
         EXAM_FINALIZED = "exam_finalized", "Exam Finalized"
@@ -3983,6 +3988,7 @@ AUDIT_ACTION_DISPLAY_LABELS = {
     AuditLog.Action.ROUTED: "Case Assigned",
     AuditLog.Action.SCREENING_RECORDED: "Screening Saved",
     AuditLog.Action.SCREENING_FINALIZED: "Screening Finalized",
+    AuditLog.Action.SCREENING_REOPENED: "Screening Reopened for Re-verification",
     AuditLog.Action.EXAM_RECORDED: "Exam Saved",
     AuditLog.Action.EXAM_FINALIZED: "Exam Finalized",
     AuditLog.Action.INTERVIEW_SCHEDULED: "Interview Scheduled",
@@ -4065,6 +4071,7 @@ AUDIT_ACTION_CATEGORIES = {
             AuditLog.Action.ROUTED,
             AuditLog.Action.SCREENING_RECORDED,
             AuditLog.Action.SCREENING_FINALIZED,
+            AuditLog.Action.SCREENING_REOPENED,
             AuditLog.Action.EXAM_SCHEDULED,
             AuditLog.Action.EXAM_RECORDED,
             AuditLog.Action.EXAM_FINALIZED,
