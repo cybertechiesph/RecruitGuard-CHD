@@ -196,11 +196,15 @@
                 {% include "internal_includes/stage_titlebar.html" with title="Interview / Rating" locked=interview_session_locked %}
 
                 {% if interview_session_locked and current_interview_session %}
-                    
+
                     {% include "internal_includes/interview_locked_body.html" %}
 
+                {% elif interview_session_batch_managed or interview_rating_batch_managed %}
+
+                    {% include "internal_includes/interview_batch_managed_body.html" %}
+
                 {% elif interview_session_form or interview_rating_form or interview_rating_requires_session or interview_rating_requires_sheet or interview_fallback_form or interview_fallback_requires_session %}
-                    
+
                     {% include "internal_includes/interview_body.html" %}
 
                 {% else %}

@@ -1,0 +1,96 @@
+{% load recruitment_ui %}
+{% comment %}
+RD-4 "one door": this vacancy's pool is interviewed together, so the interview
+session (schedule + finalize) and, for COS, the single score are recorded once
+in the batch interview console. This screen is a read-only summary of what the
+console holds for this candidate — the per-case writes are refused server-side
+too, so a forced POST cannot break the pool's lock-step. The Plantilla per-rater
+competency sheet stays on its own screen (it is each rater's own sheet); the
+fallback upload below is additive and cannot conflict with anything.
+{% endcomment %}
+<div class="rg-icard">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">Interview session</h3>
+            <p class="rg-icard__subtitle">
+                The whole pool for this vacancy is interviewed together, so the schedule
+                {% if interview_rating_batch_managed %}and score {% endif %}are recorded
+                in the batch interview console.
+            </p>
+        </div>
+        <a href="{{ interview_batch_url }}" class="btn btn-rg-primary btn-sm">Open batch interview console</a>
+    </div>
+
+    <div class="rg-int-readout-grid">
+        <div>
+            <span class="rg-int-readout-grid__label">Date &amp; time</span>
+            <strong>
+                {% if current_interview_session and current_interview_session.scheduled_for %}
+                    {{ current_interview_session.scheduled_for|date:"M d, Y" }}
+                    at {{ current_interview_session.scheduled_for|date:"H:i" }}
+                {% else %}
+                    Not yet scheduled
+                {% endif %}
+            </strong>
+        </div>
+        <div>
+            <span class="rg-int-readout-grid__label">Where</span>
+            <strong>{{ current_interview_session.location|default:"—" }}</strong>
+        </div>
+        {% if interview_rating_batch_managed %}
+        <div>
+            <span class="rg-int-readout-grid__label">Score</span>
+            <strong>
+                {% if current_user_interview_rating %}
+                    {{ current_user_interview_rating.rating_score|default_if_none:"—" }}
+                {% else %}
+                    Not yet recorded
+                {% endif %}
+            </strong>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if interview_fallback_form %}
+<div class="rg-icard" id="int-fallback-section">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">Fallback rating sheet</h3>
+            <p class="rg-icard__subtitle">
+                Upload a scanned paper rating sheet when digital encoding isn't the primary record.
+            </p>
+        </div>
+    </div>
+    <form method="post"
+          action="{% url 'interview-fallback-upload' application.pk %}"
+          enctype="multipart/form-data"
+          novalidate>
+        {% csrf_token %}
+        <div class="rg-field">
+            <label class="form-label" for="{{ interview_fallback_form.file.id_for_label }}">
+                {{ interview_fallback_form.file.label }}
+                <span class="text-danger" aria-hidden="true">*</span>
+            </label>
+            {{ interview_fallback_form.file }}
+            {% for error in interview_fallback_form.file.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+        <div class="rg-field">
+            <label class="form-label" for="{{ interview_fallback_form.remarks.id_for_label }}">
+                {{ interview_fallback_form.remarks.label }}
+            </label>
+            {{ interview_fallback_form.remarks }}
+            {% for error in interview_fallback_form.remarks.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+        <div class="rg-int-fallback-actions">
+            <button type="submit" class="btn btn-sm btn-outline-secondary">
+                Upload fallback sheet
+            </button>
+        </div>
+    </form>
+</div>
+{% endif %}

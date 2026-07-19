@@ -7523,21 +7523,22 @@ def get_available_actions(application, user):
     current_section = get_current_workflow_section(application)
     current_stage = case.current_stage if case else _review_stage_from_application_status(application.status)
 
+    # RD-4: an applicant awaiting resubmission (typically past the deadline) can be
+    # removed from the batch — a disqualification with a reason that unblocks the
+    # batch screening gate. The old return/reject offerings that sat here were gated
+    # on screening_requires_disposition_for_current_stage, which post-RD-1 can never
+    # be true (a finalized Not-Qualified screening auto-closes the case; INCOMPLETE
+    # finalized records no longer occur) — so those two were dead, and the same gate
+    # was also (wrongly) suppressing this removal offer, since an awaiting-resubmission
+    # case's screening is never finalized. Removal is offered on the case status alone.
     if (
         current_section == "screening"
-        and screening_requires_disposition_for_current_stage(application)
         and effective_role in SCREENING_REVIEW_ROLES
         and current_stage in SCREENING_STAGES
+        and case
+        and case.case_status == RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION
     ):
-        actions = [
-            ("return_to_applicant", "Return to Applicant"),
-            ("reject", "Reject Application"),
-        ]
-        # An applicant who is awaiting resubmission (typically past the deadline) can be removed
-        # from the batch (disqualified with a reason), which unblocks the batch screening gate.
-        if case and case.case_status == RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION:
-            actions.append(("remove_applicant", "Remove from Batch"))
-        return actions
+        return [("remove_applicant", "Remove from Batch")]
 
     if (
         current_section == "decision"

@@ -7088,6 +7088,19 @@ class BatchScreeningGateTests(BaseRecruitmentTestCase):
         with self.assertRaises(ValueError):
             remove_applicant_from_batch(application, self.secretariat, "   ")
 
+    def test_awaiting_resubmission_case_offers_remove_from_batch(self):
+        # RD-4: the Remove-from-Batch action must actually be offered on an
+        # awaiting-resubmission case. It previously sat behind the disposition
+        # gate (screening_requires_disposition_for_current_stage), which post-RD-1
+        # is never true for a returned case (its screening is not finalized), so
+        # the offer was silently dead. It is now keyed on the case status alone.
+        application = self._submit(self.make_application(self.level1_position), self.applicant)
+        self._make_awaiting_case(application)
+        actions = {value for value, _label in get_available_actions(application, self.secretariat)}
+        self.assertIn("remove_applicant", actions)
+        self.assertNotIn("reject", actions)
+        self.assertNotIn("return_to_applicant", actions)
+
     def test_removing_awaiting_sibling_unblocks_the_batch(self):
         qualified = self._submit(self.make_application(self.level1_position), self.applicant)
         self.finalize_screening_for_current_stage(qualified, self.secretariat)
@@ -11070,7 +11083,9 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
         self.assertEqual(str(interview_rating.rating_score), "60.00")
 
     def test_cos_interview_rating_view_posts_a_simple_score(self):
-        application = self.make_application(self.cos_position)
+        # RD-4: the per-case simple-score editor lives on continuous COS intake;
+        # a pooled COS vacancy is scored in the batch interview console.
+        application = self.make_application(self.cos_continuous_position)
         self.move_application_to_hrm_chief_review(application)
         self.finalize_screening_for_current_stage(application, self.hrm_chief)
         self.finalize_exam_for_current_stage(application, self.hrm_chief)
@@ -11103,6 +11118,77 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
         self.assertIsNotNone(interview_rating)
         self.assertEqual(str(interview_rating.rating_score), "82.50")
         self.assertEqual(interview_rating.competency_scores.count(), 0)
+
+    def test_pooled_interview_tab_renders_read_only_console_link(self):
+        # RD-4: the per-case interview tab for a pooled vacancy is a read-only
+        # summary pointing at the batch console — no editable session form, and
+        # no literal Django comments leak into the page.
+        application = self.make_application(self.cos_position)
+        self.move_application_to_hrm_chief_review(application)
+        self.finalize_screening_for_current_stage(application, self.hrm_chief)
+        self.finalize_exam_for_current_stage(application, self.hrm_chief)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        response = client.get(
+            reverse("application-detail", kwargs={"pk": application.pk}) + "?tab=interview"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Open batch interview console")
+        self.assertContains(
+            response, reverse("vacancy-batch-interview", args=[self.cos_position.pk])
+        )
+        self.assertNotContains(response, 'action="' + reverse("interview-session", kwargs={"pk": application.pk}))
+        self.assertNotContains(response, "{#")
+
+    def test_per_case_interview_session_post_refused_for_pooled_vacancy(self):
+        # RD-4 "one door", server-enforced (PT-03): a pooled vacancy's per-case
+        # interview session endpoint refuses writes so a forced POST can't break
+        # the pool's lock-step. cos_position is POOLING (pooled).
+        application = self.make_application(self.cos_position)
+        self.move_application_to_hrm_chief_review(application)
+        self.finalize_screening_for_current_stage(application, self.hrm_chief)
+        self.finalize_exam_for_current_stage(application, self.hrm_chief)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        response = client.post(
+            reverse("interview-session", kwargs={"pk": application.pk}),
+            self.session_payload(),
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(
+            reverse("vacancy-batch-interview", args=[self.cos_position.pk]),
+            response.headers["Location"],
+        )
+        self.assertEqual(application.interview_sessions.count(), 0)
+
+    def test_per_case_cos_interview_rating_post_refused_for_pooled_vacancy(self):
+        # RD-4: a pooled COS single interview score is recorded in the console;
+        # the per-case rating endpoint refuses it server-side.
+        application = self.make_application(self.cos_position)
+        self.move_application_to_hrm_chief_review(application)
+        self.finalize_screening_for_current_stage(application, self.hrm_chief)
+        self.finalize_exam_for_current_stage(application, self.hrm_chief)
+        save_interview_session(
+            application=application,
+            actor=self.hrm_chief,
+            cleaned_data=self.session_payload(),
+            finalize=False,
+        )
+
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        response = client.post(
+            reverse("interview-rating", kwargs={"pk": application.pk}),
+            {"rating_score": "82.50", "rating_notes": "forced", "justification": ""},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(
+            reverse("vacancy-batch-interview", args=[self.cos_position.pk]),
+            response.headers["Location"],
+        )
+        self.assertEqual(application.interview_ratings.count(), 0)
 
     def test_finalized_interview_session_blocks_session_rating_and_fallback_changes(self):
         application = self.make_application(self.cos_position)

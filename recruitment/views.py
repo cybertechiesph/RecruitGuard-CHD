@@ -752,10 +752,20 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
             batch_block = vacancy_screening_batch_block_message(application.position)
             if batch_block:
                 context["exam_batch_block_message"] = batch_block
+        interview_is_batch_managed = vacancy_uses_batch_exam(application.position)
+        if interview_is_batch_managed:
+            context["interview_batch_url"] = reverse(
+                "vacancy-batch-interview", kwargs={"pk": application.position.pk}
+            )
         if user_can_manage_interview_session(user, application):
             interview_session = context["current_interview_session"]
             if interview_session and interview_session.is_finalized:
                 context["interview_session_locked"] = True
+            elif interview_is_batch_managed:
+                # RD-4: one door. This vacancy's pool is scheduled and finalized
+                # together in the batch interview console, so the per-case screen
+                # is a read-only summary — no editable session form.
+                context["interview_session_batch_managed"] = True
             else:
                 context["interview_session_form"] = InterviewSessionForm(instance=interview_session)
         if user_can_manage_interview_rating(user, application):
@@ -767,15 +777,19 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
             elif application.branch == PositionPosting.Branch.COS:
                 # COS interviews are scored with a single end-user / HRMS number,
                 # not the competency rating sheet (spec §6.2).
-                existing_rating = context["current_user_interview_rating"]
-                context["interview_rating_is_simple"] = True
-                context["interview_rating_form"] = SimpleInterviewRatingForm(
-                    initial={
-                        "rating_score": existing_rating.rating_score if existing_rating else None,
-                        "rating_notes": existing_rating.rating_notes if existing_rating else "",
-                        "justification": existing_rating.justification if existing_rating else "",
-                    }
-                )
+                if interview_is_batch_managed:
+                    # RD-4: a pooled COS single score is recorded in the console.
+                    context["interview_rating_batch_managed"] = True
+                else:
+                    existing_rating = context["current_user_interview_rating"]
+                    context["interview_rating_is_simple"] = True
+                    context["interview_rating_form"] = SimpleInterviewRatingForm(
+                        initial={
+                            "rating_score": existing_rating.rating_score if existing_rating else None,
+                            "rating_notes": existing_rating.rating_notes if existing_rating else "",
+                            "justification": existing_rating.justification if existing_rating else "",
+                        }
+                    )
             else:
                 rating_template = get_published_competency_rating_template(application.position)
                 if rating_template is None:
@@ -2240,6 +2254,17 @@ class InterviewSessionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
         application = get_object_or_404(RecruitmentApplication, pk=pk)
         if not user_can_manage_interview_session(request.user, application):
             raise PermissionDenied
+        # RD-4: one door. A pooled vacancy's interview session is scheduled and
+        # finalized once for the whole pool in the batch interview console, so
+        # this per-case endpoint refuses writes server-side (PT-03) — a forced
+        # POST cannot break the pool's lock-step or send a conflicting notice.
+        if vacancy_uses_batch_exam(application.position):
+            messages.error(
+                request,
+                "This vacancy's interview is scheduled and finalized for the whole "
+                "pool in the batch interview console.",
+            )
+            return redirect("vacancy-batch-interview", pk=application.position.pk)
 
         operation = request.POST.get("operation", "save")
         is_autosave = _is_autosave_request(request) and operation != "finalize"
@@ -2501,6 +2526,22 @@ class InterviewRatingView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, Vi
         application = get_object_or_404(RecruitmentApplication, pk=pk)
         if not user_can_manage_interview_rating(request.user, application):
             raise PermissionDenied
+
+        # RD-4: a pooled COS vacancy's single interview score is recorded in the
+        # batch console, so this per-case endpoint refuses it server-side. The
+        # Plantilla per-rater competency sheet stays per-case (each rater's own
+        # sheet — the console cannot host N raters' parallel entries), and a
+        # continuous-COS vacancy keeps its per-case simple score.
+        if (
+            application.branch == PositionPosting.Branch.COS
+            and vacancy_uses_batch_exam(application.position)
+        ):
+            messages.error(
+                request,
+                "This vacancy's interview scores are recorded in the batch "
+                "interview console, where the whole pool is scored together.",
+            )
+            return redirect("vacancy-batch-interview", pk=application.position.pk)
 
         if application.branch == PositionPosting.Branch.COS:
             # COS interviews use a simple end-user / HRMS score, not the sheet (spec §6.2).
