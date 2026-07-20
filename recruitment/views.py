@@ -52,6 +52,7 @@ from .models import (
     AuditLogArchive,
     CompetencyDefinition,
     CompletionRecord,
+    CompletionRequirement,
     EvidenceVaultItem,
     ExamRecord,
     Notification,
@@ -978,8 +979,27 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
             context["reopen_form"] = WorkflowReopenForm()
         if user_can_send_requirement_checklist_notification(user, application):
             context["checklist_notification_form"] = RequirementChecklistNotificationForm()
+            # RD-8: the dialog previews what will actually be emailed — the
+            # record's pending rows and the record's deadline (one source).
+            completion_record = context.get("completion_record")
+            context["checklist_preview_requirements"] = (
+                list(
+                    completion_record.requirements.filter(
+                        status=CompletionRequirement.RequirementStatus.PENDING
+                    ).order_by("display_order", "created_at")
+                )
+                if completion_record
+                else []
+            )
         if user_can_send_reminder_notification(user, application):
-            context["reminder_notification_form"] = ReminderNotificationForm()
+            reminder_initial = {}
+            completion_record = context.get("completion_record")
+            if completion_record and completion_record.deadline:
+                # RD-8: reminders default to the deadline the office tracks.
+                reminder_initial["deadline"] = completion_record.deadline
+            context["reminder_notification_form"] = ReminderNotificationForm(
+                initial=reminder_initial
+            )
         context["can_export"] = user_can_export_application(user, application)
         record_protected_record_access(
             application=application,
@@ -2972,8 +2992,6 @@ class RequirementChecklistNotificationView(LoginRequiredMixin, InternalUserRequi
                 send_requirement_checklist_notification(
                     application=application,
                     actor=request.user,
-                    checklist_items=form.cleaned_data["checklist_items"],
-                    deadline=form.cleaned_data["deadline"],
                     additional_message=form.cleaned_data["additional_message"],
                 )
             except ValueError as exc:

@@ -15,6 +15,7 @@ from .email_branding import (
 )
 from .models import (
     AuditLog,
+    CompletionRequirement,
     Notification,
     NotificationLog,
     RecruitmentApplication,
@@ -69,8 +70,8 @@ NOTIFICATION_MANAGER_ROLES = {
 IN_APP_NOTIFICATION_RETENTION_DAYS = 90
 # Post-selection "memo" submission window: the successful applicant has two weeks to
 # submit the hard-copy requirements (per HRMPSB Secretariat interviews). Used as the
-# default deadline when the handler does not set one, so the memo always carries a date.
-REQUIREMENT_CHECKLIST_DEFAULT_DEADLINE_DAYS = 14
+# RD-8: the checklist email reads the completion record's deadline (one source);
+# the two-week default now lives on the completion tracking form itself.
 
 
 def _truncate(value, limit):
@@ -1036,10 +1037,15 @@ def send_requirement_checklist_notification(
     application,
     actor,
     *,
-    checklist_items,
-    deadline=None,
     additional_message="",
 ):
+    """RD-8: the emailed checklist is built from the completion record's
+    requirement rows and the record's deadline — one source of truth. The
+    handler no longer re-types the list (the old free-text path let the email
+    and the tracked rows silently disagree) and the applicant is told the same
+    deadline the office tracks. Pending rows only: the email is an ask, not an
+    inventory of what was already received.
+    """
     case = getattr(application, "case", None)
     if actor.role not in NOTIFICATION_MANAGER_ROLES:
         raise ValueError("Only Secretariat or HRM Chief may send the requirement checklist.")
@@ -1054,11 +1060,34 @@ def send_requirement_checklist_notification(
     if case.current_handler_role != actor.role:
         raise ValueError("Only the office assigned to completion may send the requirement checklist.")
 
-    if deadline is None:
-        deadline = timezone.localdate() + timedelta(
-            days=REQUIREMENT_CHECKLIST_DEFAULT_DEADLINE_DAYS
+    completion_record = getattr(application, "completion_record", None)
+    if completion_record is None:
+        raise ValueError(
+            "Record the completion tracking details (with the requirement checklist) "
+            "before sending the checklist email."
+        )
+    pending_requirements = list(
+        completion_record.requirements.filter(
+            status=CompletionRequirement.RequirementStatus.PENDING
+        ).order_by("display_order", "created_at")
+    )
+    if not completion_record.requirements.exists():
+        raise ValueError(
+            "Add at least one completion requirement item before sending the checklist email."
+        )
+    if not pending_requirements:
+        raise ValueError(
+            "Every requirement is already resolved — there is nothing to ask the applicant for."
+        )
+    deadline = completion_record.deadline
+    if not deadline:
+        raise ValueError(
+            "Set the completion deadline on the tracking form before sending the checklist email."
         )
 
+    checklist_items = "\n".join(
+        f"• {requirement.item_label}" for requirement in pending_requirements
+    )
     subject, body = _build_requirement_checklist_notification(
         application=application,
         checklist_items=checklist_items,
@@ -1077,6 +1106,7 @@ def send_requirement_checklist_notification(
             "checklist_items": checklist_items.strip(),
             "additional_message": (additional_message or "").strip(),
             "completion_label": _completion_label(application),
+            "completion_record_id": completion_record.id,
             "status_link": build_applicant_status_url(application),
         },
     )

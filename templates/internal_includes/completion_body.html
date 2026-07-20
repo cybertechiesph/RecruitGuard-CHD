@@ -172,6 +172,17 @@ Bootstrap Icons CSS).
                     {% endif %}
                 </div>
 
+                {% if completion_record.is_overdue %}
+                    {% comment %} RD-8: the tracked deadline has passed with requirements
+                       still pending. Surfacing only — the consequence of a missed
+                       deadline is an office-policy question. {% endcomment %}
+                    <div class="alert alert-warning" role="status" style="margin:0.5rem 0;">
+                        <strong>Deadline passed {{ completion_record.deadline|date:"F d, Y" }}.</strong>
+                        {{ completion_record.pending_requirement_count|default:"Some" }} requirement{{ completion_record.pending_requirement_count|pluralize }}
+                        still pending from the applicant.
+                    </div>
+                {% endif %}
+
                 {% if completion_record and completion_record.total_requirement_count %}
                     {% with total=completion_record.total_requirement_count done=completion_record.completed_requirement_count %}
                     <div class="rg-cmp-req-progress" role="progressbar"

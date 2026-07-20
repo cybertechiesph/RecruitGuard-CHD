@@ -51,7 +51,6 @@ from .models import (
     ScreeningRecord,
     VacancyAssessmentWeights,
 )
-from .notification_services import REQUIREMENT_CHECKLIST_DEFAULT_DEADLINE_DAYS
 from .requirements import (
     APPLICANT_DOCUMENT_REQUIREMENTS_BY_BRANCH,
     MIN_REQUIRED_DOCUMENT_CODES,
@@ -1201,14 +1200,8 @@ class WorkflowReopenForm(BootstrapFormMixin, forms.Form):
 
 
 class RequirementChecklistNotificationForm(BootstrapFormMixin, forms.Form):
-    checklist_items = forms.CharField(
-        widget=forms.Textarea(attrs={"rows": 5}),
-        help_text="List the appointment or contract requirements to email to the applicant.",
-    )
-    deadline = forms.DateField(
-        required=False,
-        widget=forms.DateInput(attrs={"type": "date"}),
-    )
+    # RD-8: the checklist items and the deadline come from the completion
+    # record (one source of truth) — the send dialog only adds a message.
     additional_message = forms.CharField(
         required=False,
         widget=forms.Textarea(attrs={"rows": 3}),
@@ -1216,22 +1209,8 @@ class RequirementChecklistNotificationForm(BootstrapFormMixin, forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["checklist_items"].label = "Requirement Checklist"
         self.fields["additional_message"].label = "Additional Instructions"
-        self.fields["deadline"].label = "Submission Deadline"
-        self.fields["deadline"].initial = timezone.localdate() + timedelta(
-            days=REQUIREMENT_CHECKLIST_DEFAULT_DEADLINE_DAYS
-        )
-        self.fields["deadline"].help_text = (
-            "Defaults to two weeks from today; adjust if the office set a different window."
-        )
         self._apply_bootstrap()
-
-    def clean_deadline(self):
-        deadline = self.cleaned_data["deadline"]
-        if deadline and deadline < timezone.localdate():
-            raise forms.ValidationError("Deadline cannot be earlier than today.")
-        return deadline
 
 
 class ReminderNotificationForm(BootstrapFormMixin, forms.Form):
@@ -1300,6 +1279,14 @@ class CompletionTrackingForm(BootstrapFormMixin, forms.ModelForm):
         self.fields["completion_reference"].required = False
         self.fields["completion_date"].required = False
         self.fields["deadline"].required = False
+        # RD-8: the record's deadline is the one source the checklist email and
+        # reminders read, so the client-confirmed two-week default lives here
+        # (it used to sit on the email dialog, letting the two dates diverge).
+        if not self.instance.pk or not self.instance.deadline:
+            self.fields["deadline"].initial = timezone.localdate() + timedelta(days=14)
+            self.fields["deadline"].help_text = (
+                "Defaults to two weeks from today; adjust if the office set a different window."
+            )
         self.fields["remarks"].required = False
         self._apply_bootstrap()
 

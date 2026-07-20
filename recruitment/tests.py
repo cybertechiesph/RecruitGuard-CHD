@@ -10012,8 +10012,41 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
             mail.outbox[0].body,
         )
 
+    def _record_completion_tracking(self, application, actor, *, deadline=None, items=None):
+        # RD-8 test helper: give the completion-stage case a tracked record with
+        # requirement rows — the single source the checklist email reads.
+        record = CompletionRecord.objects.create(
+            application=application,
+            recruitment_case=application.case,
+            tracked_by=actor,
+            branch=application.branch,
+            level=application.level,
+            deadline=deadline,
+        )
+        for index, (label, status) in enumerate(
+            items or [("Signed contract", CompletionRequirement.RequirementStatus.PENDING)]
+        ):
+            CompletionRequirement.objects.create(
+                completion_record=record,
+                item_label=label,
+                status=status,
+                display_order=index,
+            )
+        return record
+
     def test_secretariat_can_send_requirement_checklist_notification_for_level1_completion(self):
         application = self.make_approved_cos_application()
+        deadline = timezone.localdate() + timedelta(days=7)
+        self._record_completion_tracking(
+            application,
+            self.secretariat,
+            deadline=deadline,
+            items=[
+                ("Signed contract", CompletionRequirement.RequirementStatus.PENDING),
+                ("Government-issued ID", CompletionRequirement.RequirementStatus.PENDING),
+                ("Medical certificate", CompletionRequirement.RequirementStatus.COMPLETED),
+            ],
+        )
         mail.outbox.clear()
         client = Client()
         self.force_login_with_mfa(client, self.secretariat)
@@ -10021,11 +10054,7 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         with self.captureOnCommitCallbacks(execute=True):
             response = client.post(
                 reverse("notification-checklist", kwargs={"pk": application.pk}),
-                {
-                    "checklist_items": "- Signed contract\n- Government-issued ID",
-                    "deadline": (timezone.localdate() + timedelta(days=7)).isoformat(),
-                    "additional_message": "Bring original copies during submission.",
-                },
+                {"additional_message": "Bring original copies during submission."},
                 follow=True,
             )
 
@@ -10037,38 +10066,90 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         self.assertEqual(notification.delivery_status, NotificationLog.DeliveryStatus.SENT)
         self.assertEqual(notification.triggered_by, self.secretariat)
         self.assertEqual(len(mail.outbox), 1)
-        self.assertEqual(mail.outbox[0].subject, notification.subject)
-        self.assertIn(
-            reverse("applicant-status-link", kwargs={"token": application.public_token}),
-            mail.outbox[0].body,
-        )
+        # RD-8: the email carries the record's PENDING rows and the record's
+        # deadline — never a re-typed list or an independently computed date.
+        body = mail.outbox[0].body
+        self.assertIn("Signed contract", body)
+        self.assertIn("Government-issued ID", body)
+        self.assertNotIn("Medical certificate", body)
+        self.assertEqual(notification.metadata["deadline"], deadline.isoformat())
         self.assertContains(response, "Send Requirement Checklist")
+        # The dialog previews exactly what the email carries (record rows + deadline).
+        self.assertContains(response, "Will be emailed")
+        self.assertNotContains(response, "{#")
 
-    def test_requirement_checklist_without_deadline_defaults_to_two_weeks(self):
+    def test_requirement_checklist_requires_record_deadline_and_rows(self):
+        # RD-8: the send is refused with a readable message when the record,
+        # its rows, or its deadline are missing — the email never invents them.
         application = self.make_approved_cos_application()
-        mail.outbox.clear()
         client = Client()
         self.force_login_with_mfa(client, self.secretariat)
 
-        with self.captureOnCommitCallbacks(execute=True):
-            response = client.post(
-                reverse("notification-checklist", kwargs={"pk": application.pk}),
-                {
-                    "checklist_items": "- Signed contract\n- Government-issued ID",
-                    "deadline": "",
-                    "additional_message": "",
-                },
-                follow=True,
-            )
+        # No completion record at all.
+        response = client.post(
+            reverse("notification-checklist", kwargs={"pk": application.pk}),
+            {"additional_message": ""},
+            follow=True,
+        )
+        self.assertContains(response, "Record the completion tracking details")
 
+        # Record with rows but no deadline.
+        record = self._record_completion_tracking(application, self.secretariat, deadline=None)
+        response = client.post(
+            reverse("notification-checklist", kwargs={"pk": application.pk}),
+            {"additional_message": ""},
+            follow=True,
+        )
+        self.assertContains(response, "Set the completion deadline")
+
+        # Deadline set but every row already resolved.
+        record.deadline = timezone.localdate() + timedelta(days=7)
+        record.save(update_fields=["deadline", "updated_at"])
+        record.requirements.update(
+            status=CompletionRequirement.RequirementStatus.COMPLETED
+        )
+        response = client.post(
+            reverse("notification-checklist", kwargs={"pk": application.pk}),
+            {"additional_message": ""},
+            follow=True,
+        )
+        self.assertContains(response, "Every requirement is already resolved")
+        self.assertFalse(
+            NotificationLog.objects.filter(
+                application=application,
+                notification_type=NotificationLog.NotificationType.REQUIREMENT_CHECKLIST,
+            ).exists()
+        )
+
+    def test_completion_overdue_property_truth_table(self):
+        application = self.make_approved_cos_application()
+        record = self._record_completion_tracking(application, self.secretariat, deadline=None)
+        # No deadline -> not overdue.
+        self.assertFalse(record.is_overdue)
+        # Future deadline -> not overdue.
+        record.deadline = timezone.localdate() + timedelta(days=3)
+        record.save(update_fields=["deadline", "updated_at"])
+        self.assertFalse(record.is_overdue)
+        # Past deadline with a pending row -> overdue.
+        record.deadline = timezone.localdate() - timedelta(days=1)
+        record.save(update_fields=["deadline", "updated_at"])
+        self.assertTrue(record.is_overdue)
+        # Past deadline, everything resolved -> not overdue.
+        record.requirements.update(
+            status=CompletionRequirement.RequirementStatus.COMPLETED
+        )
+        self.assertFalse(record.is_overdue)
+
+    def test_reminder_form_defaults_deadline_from_completion_record(self):
+        application = self.make_approved_cos_application()
+        deadline = timezone.localdate() + timedelta(days=9)
+        self._record_completion_tracking(application, self.secretariat, deadline=deadline)
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
         self.assertEqual(response.status_code, 200)
-        notification = NotificationLog.objects.filter(
-            application=application,
-            notification_type=NotificationLog.NotificationType.REQUIREMENT_CHECKLIST,
-        ).latest("created_at")
-        expected_deadline = timezone.localdate() + timedelta(days=14)
-        self.assertEqual(notification.metadata["deadline"], expected_deadline.isoformat())
-        self.assertIn("Submission deadline", notification.body)
+        # RD-8: the reminder dialog defaults to the deadline the office tracks.
+        self.assertContains(response, f'value="{deadline.isoformat()}"')
 
     def test_secretariat_cannot_send_requirement_checklist_before_selection(self):
         application = self.make_submitted_application()
@@ -10077,11 +10158,7 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
 
         response = client.post(
             reverse("notification-checklist", kwargs={"pk": application.pk}),
-            {
-                "checklist_items": "- Any requirement",
-                "deadline": (timezone.localdate() + timedelta(days=5)).isoformat(),
-                "additional_message": "",
-            },
+            {"additional_message": ""},
         )
 
         self.assertEqual(response.status_code, 403)

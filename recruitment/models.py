@@ -3446,6 +3446,17 @@ class CompletionRecord(TimestampedModel):
         return self.requirements.exists() and not self.has_pending_requirements
 
     @property
+    def is_overdue(self):
+        """RD-8: the tracked deadline has passed with requirements still pending.
+        Surfacing only — what happens on a missed deadline is an office-policy
+        question and deliberately not automated."""
+        return bool(
+            self.deadline
+            and self.deadline < timezone.localdate()
+            and self.has_pending_requirements
+        )
+
+    @property
     def has_completion_reference_for_closure(self):
         return bool((self.completion_reference or "").strip())
 
@@ -3486,6 +3497,12 @@ class CompletionRecord(TimestampedModel):
     @property
     def total_requirement_count(self):
         return self.requirements.count()
+
+    @property
+    def pending_requirement_count(self):
+        return self.requirements.filter(
+            status=CompletionRequirement.RequirementStatus.PENDING
+        ).count()
 
     def __str__(self):
         return f"{self.completion_label} completion for {self.application.reference_label}"

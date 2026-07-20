@@ -149,6 +149,13 @@
                                     {{ task_label }}
                                 </span>
                                 {% include "internal_includes/stage_sla_badge.html" with recruitment_case=application.case variant="sm" %}
+                                {% if application.completion_record.is_overdue %}
+                                    {% comment %} RD-8: the tracked completion deadline has
+                                       passed with requirements still pending. {% endcomment %}
+                                    <span class="rg-pill rg-pill--danger rg-pill--sm">
+                                        Deadline passed {{ application.completion_record.deadline|date:"M j" }}
+                                    </span>
+                                {% endif %}
                                 {% queue_waiting_on_car application as waiting_on_car %}
                                 {% if waiting_on_car %}
                                     <div class="rg-imeta mt-1">Waiting on CAR preparation</div>

@@ -4,10 +4,39 @@
             <div>
                 <h3 class="rg-icard__title">Send Requirement Checklist</h3>
                 <p class="rg-icard__subtitle">
-                    Email the selected applicant the requirements and deadline, if any.
+                    Emails the applicant the pending requirements and the deadline from the
+                    completion tracking above &mdash; edit them there, not here.
                 </p>
             </div>
         </div>
+        {% comment %} RD-8: read-only preview of exactly what the email will carry —
+           the record's pending rows and the record's deadline (one source of
+           truth). The dialog only adds an optional message. {% endcomment %}
+        {% if checklist_preview_requirements %}
+            <div class="rg-cmp-checklist" style="margin-bottom:0.75rem;">
+                <div class="rg-cmp-checklist__header">
+                    <span class="rg-cmp-checklist__title">Will be emailed</span>
+                </div>
+                <ul style="margin:0.25rem 0 0.5rem; padding-left:1.25rem; font-size:0.875rem;">
+                    {% for requirement in checklist_preview_requirements %}
+                        <li>{{ requirement.item_label }}</li>
+                    {% endfor %}
+                </ul>
+                <p class="rg-imeta" style="margin:0;">
+                    Submission deadline:
+                    {% if completion_record.deadline %}
+                        <strong>{{ completion_record.deadline|date:"F d, Y" }}</strong>
+                    {% else %}
+                        <strong>not set</strong> &mdash; set it on the tracking form before sending.
+                    {% endif %}
+                </p>
+            </div>
+        {% else %}
+            <p class="rg-imeta" style="margin-bottom:0.75rem;">
+                No pending requirement items to email. Record them on the completion
+                tracking form above first.
+            </p>
+        {% endif %}
         <form method="post" action="{% url 'notification-checklist' application.pk %}">
             {% csrf_token %}
             <div class="rg-form-grid">
