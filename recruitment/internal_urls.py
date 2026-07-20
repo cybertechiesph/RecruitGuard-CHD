@@ -59,6 +59,7 @@ from .views import (
     NotificationReadView,
     NotificationUnreadCountView,
     PositionListView,
+    NotificationResendView,
     ReminderNotificationView,
     RequirementChecklistNotificationView,
     ScreeningReviewView,
@@ -193,6 +194,11 @@ urlpatterns = [
         "applications/<int:pk>/notifications/checklist/",
         RequirementChecklistNotificationView.as_view(),
         name="notification-checklist",
+    ),
+    path(
+        "applications/<int:pk>/notifications/<int:log_id>/resend/",
+        NotificationResendView.as_view(),
+        name="notification-resend",
     ),
     path(
         "applications/<int:pk>/notifications/reminder/",

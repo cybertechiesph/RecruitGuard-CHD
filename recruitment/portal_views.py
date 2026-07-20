@@ -67,7 +67,13 @@ def _build_applicant_upcoming_schedules(application):
             }
         )
     interview_session = (
-        application.interview_sessions.filter(scheduled_for__gte=now)
+        # RD-9: only announced interviews reach the applicant's status page —
+        # a drafted, never-notified session must not leak (parity with the
+        # exam filter above).
+        application.interview_sessions.filter(
+            applicant_notified_at__isnull=False,
+            scheduled_for__gte=now,
+        )
         .order_by("scheduled_for")
         .first()
     )
@@ -93,12 +99,26 @@ def _build_applicant_status_context(application):
     awaiting_resubmission = bool(
         case and case.case_status == RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION
     )
+    resubmission_deadline = None
+    if awaiting_resubmission:
+        # RD-9 (moved from RD-6 item d): show the applicant the same deadline
+        # the office tracks, right next to the Resubmit button.
+        screening_record = (
+            application.screening_records.filter(
+                resubmission_deadline__isnull=False
+            )
+            .order_by("-updated_at")
+            .first()
+        )
+        if screening_record:
+            resubmission_deadline = screening_record.resubmission_deadline
     return {
         "application": application,
         "status_label": status_label,
         "status_variant": status_variant,
         "status_description": status_description,
         "awaiting_resubmission": awaiting_resubmission,
+        "resubmission_deadline": resubmission_deadline,
         "upcoming_schedules": _build_applicant_upcoming_schedules(application),
     }
 

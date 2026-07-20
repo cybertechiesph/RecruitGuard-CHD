@@ -1,0 +1,68 @@
+{% if notification_log_entries %}
+    {% comment %} RD-9: delivery state where work happens. Every applicant email
+       for this case, newest first, with a re-delivery action — a FAILED send
+       has no other recovery path (nothing retries automatically, and re-saving
+       a schedule deliberately doesn't re-notify). Never rendered for HRMPSB:
+       the subjects carry applicant names (REV-B blinding). {% endcomment %}
+    <div class="rg-icard">
+        <div class="rg-icard__header">
+            <div>
+                <h3 class="rg-icard__title">Notifications sent</h3>
+                <p class="rg-icard__subtitle">
+                    Every email queued to this applicant, and whether it was delivered.
+                </p>
+            </div>
+        </div>
+        <div class="rg-itbl">
+            <div class="table-responsive">
+                <table class="table align-middle" style="font-size:0.8125rem;">
+                    <thead>
+                        <tr>
+                            <th>Email</th>
+                            <th>Status</th>
+                            <th>When</th>
+                            <th><span class="visually-hidden">Actions</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in notification_log_entries %}
+                            <tr>
+                                <td>
+                                    {{ log.get_notification_type_display }}
+                                    {% if log.metadata.resent_from %}
+                                        <span class="rg-imeta">(re-delivery)</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if log.delivery_status == "sent" %}
+                                        <span class="rg-pill rg-pill--success rg-pill--sm">Sent</span>
+                                    {% elif log.delivery_status == "failed" %}
+                                        <span class="rg-pill rg-pill--danger rg-pill--sm">Failed</span>
+                                        {% if log.failure_details %}
+                                            <div class="rg-imeta mt-1">{{ log.failure_details|truncatechars:80 }}</div>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="rg-pill rg-pill--neutral rg-pill--sm">Pending</span>
+                                    {% endif %}
+                                </td>
+                                <td class="rg-imeta">
+                                    {{ log.created_at|date:"M d, Y H:i" }}
+                                </td>
+                                <td>
+                                    <form method="post"
+                                          action="{% url 'notification-resend' application.pk log.pk %}">
+                                        {% csrf_token %}
+                                        <button type="submit"
+                                                class="btn btn-sm {% if log.delivery_status == 'failed' %}btn-rg-primary{% else %}btn-outline-secondary{% endif %}">
+                                            {% if log.delivery_status == "failed" %}Resend{% else %}Send again{% endif %}
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+{% endif %}

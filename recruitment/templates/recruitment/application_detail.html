@@ -360,7 +360,13 @@
             </div>
             {% endif %}
 
-            
+            {% comment %} RD-9: delivery state where work happens — rendered on
+               EVERY tab (an exam invite that failed must surface at the exam
+               stage, not only after it). Context is set for the sending roles
+               only, never HRMPSB (subjects carry applicant names). {% endcomment %}
+            {% include "internal_includes/notifications_sent_panel.html" %}
+
+
             {% if request.user.role == "system_admin" %}
             <details class="rg-cws-disclosure" id="cws-evidence">
                 <summary class="rg-cws-disclosure__summary">Secured files (evidence)</summary>

@@ -56,6 +56,7 @@ from .models import (
     EvidenceVaultItem,
     ExamRecord,
     Notification,
+    NotificationLog,
     PositionPosting,
     RecruitmentApplication,
     RecruitmentCase,
@@ -64,10 +65,12 @@ from .models import (
     ScreeningRecord,
 )
 from .notification_services import (
+    NOTIFICATION_MANAGER_ROLES,
     get_recent_notifications,
     get_unread_count,
     mark_all_notifications_read,
     mark_notification_read,
+    resend_notification,
     send_reminder_notification,
     send_requirement_checklist_notification,
     user_can_send_reminder_notification,
@@ -999,6 +1002,14 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
                 reminder_initial["deadline"] = completion_record.deadline
             context["reminder_notification_form"] = ReminderNotificationForm(
                 initial=reminder_initial
+            )
+        if user.role in NOTIFICATION_MANAGER_ROLES:
+            # RD-9: delivery state visible where work happens. NOT shown to
+            # HRMPSB — the log's subjects carry applicant names (blinding).
+            context["notification_log_entries"] = list(
+                application.notifications.select_related("triggered_by").order_by(
+                    "-created_at"
+                )[:25]
             )
         context["can_export"] = user_can_export_application(user, application)
         record_protected_record_access(
@@ -3066,6 +3077,33 @@ class ReminderNotificationView(LoginRequiredMixin, InternalUserRequiredMixin, Vi
             messages.error(
                 request,
                 "; ".join(error for errors in form.errors.values() for error in errors),
+            )
+        return redirect("application-detail", pk=pk)
+
+
+class NotificationResendView(LoginRequiredMixin, InternalUserRequiredMixin, View):
+    """RD-9: re-deliver a previously queued applicant email, verbatim. The one
+    recovery path for a FAILED send (and for a lost email) — nothing retries
+    automatically, and re-saving a schedule deliberately doesn't re-notify."""
+
+    def post(self, request, pk, log_id):
+        application = get_object_or_404(RecruitmentApplication, pk=pk)
+        if not (
+            user_can_view_application(request.user, application)
+            and request.user.role in NOTIFICATION_MANAGER_ROLES
+        ):
+            raise PermissionDenied
+        notification_log = get_object_or_404(
+            NotificationLog, pk=log_id, application=application
+        )
+        try:
+            resend_notification(notification_log, request.user)
+        except (ValueError, ValidationError) as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(
+                request,
+                f"{notification_log.get_notification_type_display()} queued for re-delivery.",
             )
         return redirect("application-detail", pk=pk)
 

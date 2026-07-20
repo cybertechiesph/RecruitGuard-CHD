@@ -2103,6 +2103,10 @@ class InterviewSession(TimestampedModel):
     scheduled_for = models.DateTimeField()
     location = models.CharField(max_length=255)
     session_notes = models.TextField(blank=True)
+    # RD-9: stamped when the applicant interview notice is sent — the applicant
+    # status page shows only schedules the office actually announced (parity
+    # with ExamSchedule.applicant_notified_at).
+    applicant_notified_at = models.DateTimeField(blank=True, null=True)
     is_finalized = models.BooleanField(default=False)
     finalized_at = models.DateTimeField(blank=True, null=True)
     finalized_by = models.ForeignKey(
@@ -3333,7 +3337,12 @@ class Notification(TimestampedModel):
         RESUBMISSION_RECEIVED = "resubmission_received", "Resubmission received"
         INTERVIEW_SCHEDULED = "interview_scheduled", "Interview session scheduled"
         INTERVIEW_FINALIZED = "interview_finalized", "Interview session finalized"
+        # RD-9: exam finalize previously advanced the pool silently in-app.
+        EXAM_FINALIZED = "exam_finalized", "Exam finalized"
         DEADLINE_APPROACHING = "deadline_approaching", "Deadline approaching"
+        # RD-9: an applicant email failed to send — the handler must know, or the
+        # office believes the applicant was told when they never were.
+        NOTIFICATION_FAILED = "notification_failed", "Applicant email failed to send"
 
     recipient = models.ForeignKey(
         RecruitmentUser,
@@ -3850,6 +3859,7 @@ class AuditLog(TimestampedModel):
         CASE_CLOSED = "case_closed", "Case Closed"
         NOTIFICATION_SENT = "notification_sent", "Notification Sent"
         NOTIFICATION_FAILED = "notification_failed", "Notification Failed"
+        NOTIFICATION_RESENT = "notification_resent", "Notification Resent"
         OVERRIDE_GRANTED = "override_granted", "Override Granted"
         OVERRIDE_USED = "override_used", "Override Used"
         EVIDENCE_UPLOADED = "evidence_uploaded", "Evidence Uploaded"
@@ -4021,6 +4031,7 @@ AUDIT_ACTION_DISPLAY_LABELS = {
     AuditLog.Action.CASE_CLOSED: "Case Closed",
     AuditLog.Action.NOTIFICATION_SENT: "Notification Sent",
     AuditLog.Action.NOTIFICATION_FAILED: "Notification Failed",
+    AuditLog.Action.NOTIFICATION_RESENT: "Notification Resent",
     AuditLog.Action.OVERRIDE_GRANTED: "Special Authorization Recorded",
     AuditLog.Action.OVERRIDE_USED: "Special Authorization Used",
     AuditLog.Action.EVIDENCE_UPLOADED: "File Uploaded",
@@ -4121,6 +4132,7 @@ AUDIT_ACTION_CATEGORIES = {
         "actions": [
             AuditLog.Action.NOTIFICATION_SENT,
             AuditLog.Action.NOTIFICATION_FAILED,
+            AuditLog.Action.NOTIFICATION_RESENT,
         ],
     },
     "accounts": {

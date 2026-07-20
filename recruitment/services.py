@@ -2288,6 +2288,55 @@ def _emit_interview_finalized_in_app_notifications(application, recipients):
     )
 
 
+def _emit_exam_finalized_in_app_notification(application, actor):
+    """RD-9: exam finalize previously advanced the pool silently in-app —
+    mirror the interview-finalized bell for the current handler role."""
+    case = getattr(application, "case", None)
+    if not case or not case.current_handler_role:
+        return []
+    recipients = [
+        recipient
+        for recipient in _active_users_with_application_access(
+            application, role=case.current_handler_role
+        )
+        if recipient != actor
+    ]
+    return _notify_application_users(
+        application,
+        recipients,
+        kind=Notification.Kind.EXAM_FINALIZED,
+        title=f"{application.reference_label} exam finalized",
+        body="The examination record is locked; the case moves to its next step.",
+        tab="exam",
+    )
+
+
+def emit_notification_failed_in_app_alert(notification_log):
+    """RD-9: an applicant email failed to send. Raise an in-app bell to the
+    case's current-handler users — otherwise the office believes the applicant
+    was told (an exam invite, a resubmission request) when they never were.
+    Called from notification_services via a local import (that module cannot
+    import services at module level)."""
+    application = notification_log.application
+    case = getattr(application, "case", None)
+    if not case or not case.current_handler_role:
+        return []
+    recipients = _active_users_with_application_access(
+        application, role=case.current_handler_role
+    )
+    return _notify_application_users(
+        application,
+        recipients,
+        kind=Notification.Kind.NOTIFICATION_FAILED,
+        title=(
+            f"{application.reference_label} applicant email failed: "
+            f"{notification_log.get_notification_type_display()}"
+        ),
+        body="The applicant did NOT receive this email. Open the case to resend it.",
+        tab="overview",
+    )
+
+
 def emit_deadline_approaching_notifications(now=None):
     now = now or timezone.now()
     today = timezone.localdate(now)
@@ -4697,6 +4746,9 @@ def save_exam_record(
                 # split this exam (and the downstream CAR) was computed against cannot change.
                 lock_vacancy_assessment_weights(application.position)
             _auto_advance_after_exam_finalized(application, actor, review_stage)
+            # RD-9: bell for the handler now holding the case (post-advance).
+            application.refresh_from_db()
+            _emit_exam_finalized_in_app_notification(application, actor)
     return exam_record
 
 
@@ -5020,6 +5072,10 @@ def save_interview_session(
             interview_session,
             actor=actor,
         )
+        # RD-9: record that the applicant was actually told — the status page
+        # shows only announced schedules (parity with the exam rule).
+        interview_session.applicant_notified_at = timezone.now()
+        interview_session.save(update_fields=["applicant_notified_at", "updated_at"])
     if finalize and unsubmitted_panel_recipients:
         _emit_interview_finalized_in_app_notifications(
             application,

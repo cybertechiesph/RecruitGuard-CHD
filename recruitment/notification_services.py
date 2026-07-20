@@ -571,6 +571,20 @@ def _mark_notification_failed(notification, reason):
             "reason": reason,
         },
     )
+    # RD-9: surface the failure where work happens — an in-app bell for the
+    # current handler. Local import: services imports this module at module
+    # level, so the reverse import must stay inside the function.
+    try:
+        from .services import emit_notification_failed_in_app_alert
+
+        emit_notification_failed_in_app_alert(notification)
+    except Exception:
+        # The bell is best-effort; a failure to alert must never mask the
+        # already-recorded delivery failure.
+        logger.exception(
+            "Failed to emit the in-app alert for failed notification %s.",
+            notification.id,
+        )
     return notification
 
 
@@ -688,6 +702,61 @@ def queue_notification(
 
     transaction.on_commit(lambda: _deliver_notification(notification.id))
     return notification
+
+
+def resend_notification(notification_log, actor):
+    """RD-9: re-deliver a previously queued applicant email, verbatim.
+
+    A resend is a redelivery, not a re-render — the stored subject/body are
+    the content the office believes was sent (the footer is already baked in,
+    so this deliberately bypasses queue_notification). The recipient email is
+    re-resolved from the application so a corrected address store takes
+    effect; it falls back to the original address. A deliberate act, so it is
+    audited (REV-D's no-routine-send-rows rule is about automatic sends).
+    """
+    if actor.role not in NOTIFICATION_MANAGER_ROLES:
+        raise ValueError("Only Secretariat or HRM Chief may resend applicant emails.")
+    application = notification_log.application
+    recipient_email = (
+        (_recipient_email(application) or "").strip().lower()
+        or notification_log.recipient_email
+    )
+    resent = NotificationLog.objects.create(
+        application=application,
+        recruitment_case=getattr(application, "case", None),
+        triggered_by=actor,
+        triggered_by_role=getattr(actor, "role", ""),
+        notification_type=notification_log.notification_type,
+        delivery_channel=NotificationLog.DeliveryChannel.EMAIL,
+        delivery_status=NotificationLog.DeliveryStatus.PENDING,
+        related_status=application.status,
+        recipient_name=notification_log.recipient_name,
+        recipient_email=recipient_email or "missing-email@invalid.local",
+        subject=notification_log.subject,
+        body=notification_log.body,
+        metadata={**(notification_log.metadata or {}), "resent_from": notification_log.id},
+    )
+    _record_notification_audit(
+        application=application,
+        actor=actor,
+        action=AuditLog.Action.NOTIFICATION_RESENT,
+        description=(
+            f"Resent {notification_log.get_notification_type_display().lower()} "
+            "to the applicant."
+        ),
+        metadata={
+            "notification_id": resent.id,
+            "resent_from": notification_log.id,
+            "notification_type": notification_log.notification_type,
+        },
+    )
+    if not recipient_email:
+        return _mark_notification_failed(
+            resent,
+            "No recipient email address is available for this notification.",
+        )
+    transaction.on_commit(lambda: _deliver_notification(resent.id))
+    return resent
 
 
 def queue_submission_acknowledgment_notification(application, actor=None):

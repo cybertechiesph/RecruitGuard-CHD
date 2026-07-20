@@ -10219,6 +10219,154 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
 
         self.assertEqual(response.status_code, 403)
 
+    def test_notifications_panel_renders_for_secretariat_not_hrmpsb(self):
+        # RD-9: delivery state is visible where work happens — but never to
+        # HRMPSB, whose blinded view must not meet subjects carrying names.
+        application = self.make_submitted_application()
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Notifications sent")
+        self.assertNotContains(response, "{#")
+
+        hrmpsb_case = self.make_application(self.level2_position)
+        self.move_application_to_hrmpsb_review(hrmpsb_case)
+        hrmpsb_client = Client()
+        self.force_login_with_mfa(hrmpsb_client, self.hrmpsb)
+        response = hrmpsb_client.get(
+            reverse("application-detail", kwargs={"pk": hrmpsb_case.pk})
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Notifications sent")
+
+    def test_resend_redelivers_the_stored_email_verbatim(self):
+        application = self.make_submitted_application()
+        original = NotificationLog.objects.filter(
+            application=application,
+            notification_type=NotificationLog.NotificationType.SUBMISSION_ACKNOWLEDGMENT,
+        ).latest("created_at")
+        mail.outbox.clear()
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = client.post(
+                reverse(
+                    "notification-resend",
+                    kwargs={"pk": application.pk, "log_id": original.pk},
+                ),
+                follow=True,
+            )
+        self.assertEqual(response.status_code, 200)
+
+        resent = NotificationLog.objects.filter(
+            application=application, metadata__resent_from=original.pk
+        ).latest("created_at")
+        # Verbatim redelivery: the stored subject/body, not a re-render.
+        self.assertEqual(resent.subject, original.subject)
+        self.assertEqual(resent.body, original.body)
+        self.assertEqual(resent.delivery_status, NotificationLog.DeliveryStatus.SENT)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertTrue(
+            AuditLog.objects.filter(
+                application=application, action=AuditLog.Action.NOTIFICATION_RESENT
+            ).exists()
+        )
+
+    def test_resend_refused_for_hrmpsb_member(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        original = NotificationLog.objects.filter(application=application).latest("created_at")
+        client = Client()
+        self.force_login_with_mfa(client, self.hrmpsb)
+        response = client.post(
+            reverse(
+                "notification-resend",
+                kwargs={"pk": application.pk, "log_id": original.pk},
+            )
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_failed_send_raises_in_app_bell_for_current_handler(self):
+        # RD-9: a failed applicant email must reach the handler's bell —
+        # otherwise the office believes the applicant was told.
+        application = self.make_submitted_application()
+        Notification.objects.filter(application=application).delete()
+        # Blank the applicant email so the queue path fails deterministically.
+        application.applicant_email = ""
+        application.save(update_fields=["applicant_email", "updated_at"])
+        application.applicant.email = ""
+        application.applicant.save(update_fields=["email"])
+
+        from recruitment.notification_services import queue_submission_acknowledgment_notification
+
+        log = queue_submission_acknowledgment_notification(application, actor=self.secretariat)
+        self.assertEqual(log.delivery_status, NotificationLog.DeliveryStatus.FAILED)
+        bell = Notification.objects.filter(
+            application=application,
+            kind=Notification.Kind.NOTIFICATION_FAILED,
+            recipient=self.secretariat,
+        ).first()
+        self.assertIsNotNone(bell)
+        self.assertIn("did NOT receive", bell.body)
+
+    def test_status_page_hides_unannounced_interview_sessions(self):
+        # RD-9: only announced interviews reach the applicant status page
+        # (parity with the exam rule).
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        save_interview_session(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data={
+                "scheduled_for": timezone.now() + timedelta(days=2),
+                "location": "Panel Room A",
+                "session_notes": "Drafted, not yet announced.",
+            },
+            finalize=False,
+        )
+        client = Client()
+        response = client.get(
+            reverse("applicant-status-link", kwargs={"token": application.public_token})
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Panel Room A")
+
+        # Announcing it puts it on the page.
+        with self.captureOnCommitCallbacks(execute=True):
+            save_interview_session(
+                application=application,
+                actor=self.secretariat,
+                cleaned_data={
+                    "scheduled_for": timezone.now() + timedelta(days=2),
+                    "location": "Panel Room A",
+                    "session_notes": "Announced.",
+                },
+                finalize=False,
+                notify_applicant=True,
+            )
+        response = client.get(
+            reverse("applicant-status-link", kwargs={"token": application.public_token})
+        )
+        self.assertContains(response, "Panel Room A")
+
+    def test_exam_finalize_emits_in_app_bell(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(application, self.applicant)
+        self.finalize_screening_for_current_stage(application, self.secretariat)
+        Notification.objects.all().delete()
+        with self.captureOnCommitCallbacks(execute=True):
+            self.finalize_exam_for_current_stage(application, self.secretariat)
+        application.refresh_from_db()
+        self.assertTrue(
+            Notification.objects.filter(
+                application=application, kind=Notification.Kind.EXAM_FINALIZED
+            ).exists()
+        )
+
     def test_hrm_chief_can_send_reminder_notification_for_level2_completion(self):
         application = self.make_approved_level2_plantilla_application()
         mail.outbox.clear()

@@ -238,6 +238,10 @@
                 <p class="rg-ta-action-card__copy">
                     Some of your documents need to be corrected and re-uploaded. Tap
                     Resubmit documents to see which ones and why.
+                    {% if resubmission_deadline %}
+                        Please resubmit on or before
+                        <strong>{{ resubmission_deadline|date:"F d, Y" }}</strong>.
+                    {% endif %}
                 </p>
                 <a href="{% url 'applicant-resubmit' token=application.public_token %}"
                    class="btn btn-rg-primary">Resubmit documents</a>
