@@ -9675,14 +9675,24 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         self.assertIn("handed off", notification.title)
 
     def test_resubmission_resets_stage_clock_and_notifies_next_handler(self):
+        # RD-6b removed the generic whole-application return, so the
+        # submit_application resubmit branch (case_status RETURNED_TO_APPLICANT)
+        # is now a defensive net rather than a UI-reachable flow. Construct the
+        # returned state directly to exercise its stage-clock reset + handler
+        # notification (the flagged-document return uses a separate re-upload
+        # path, covered by the other resubmission tests).
         application = self.make_submitted_application()
-        with self.captureOnCommitCallbacks(execute=True):
-            process_workflow_action(
-                application,
-                self.secretariat,
-                "return_to_applicant",
-                "Please update your application before resubmitting.",
-            )
+        application.status = RecruitmentApplication.Status.RETURNED_TO_APPLICANT
+        application.current_handler_role = RecruitmentUser.Role.APPLICANT
+        application.save(
+            update_fields=["status", "current_handler_role", "updated_at"]
+        )
+        case = application.case
+        case.case_status = RecruitmentCase.CaseStatus.RETURNED_TO_APPLICANT
+        case.current_handler_role = RecruitmentUser.Role.APPLICANT
+        case.save(
+            update_fields=["case_status", "current_handler_role", "updated_at"]
+        )
         application.refresh_from_db()
         application.case.refresh_from_db()
         Notification.objects.filter(application=application).delete()
@@ -10181,11 +10191,18 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
             )
         )
 
-    def test_return_to_applicant_without_flagged_documents_sends_generic_return_notification(self):
+    def test_generic_whole_application_return_is_refused(self):
+        # RD-6b (Option A): the generic whole-application return is removed. A
+        # return with no flagged documents is refused server-side — it never had
+        # a working applicant path and contradicted RD-1's doctrine. Returns
+        # flag documents (the resubmission request path); unsuitable applicants
+        # are Rejected.
         application = self.make_submitted_application()
         mail.outbox.clear()
 
-        with self.captureOnCommitCallbacks(execute=True):
+        with self.assertRaisesMessage(
+            ValueError, "Returning the whole application is no longer available"
+        ):
             process_workflow_action(
                 application,
                 self.secretariat,
@@ -10194,33 +10211,16 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
             )
 
         application.refresh_from_db()
-        notification = NotificationLog.objects.get(
-            application=application,
-            notification_type=NotificationLog.NotificationType.APPLICATION_RETURNED_TO_APPLICANT,
-        )
-        self.assertEqual(application.status, RecruitmentApplication.Status.RETURNED_TO_APPLICANT)
-        self.assertEqual(notification.delivery_status, NotificationLog.DeliveryStatus.SENT)
-        self.assertEqual(notification.triggered_by, self.secretariat)
-        self.assertEqual(
-            notification.metadata["workflow_remarks"],
-            "Please update your submitted information before resubmitting.",
+        self.assertNotEqual(
+            application.status, RecruitmentApplication.Status.RETURNED_TO_APPLICANT
         )
         self.assertFalse(
             NotificationLog.objects.filter(
                 application=application,
-                notification_type=NotificationLog.NotificationType.DOCUMENT_RESUBMISSION_REQUEST,
+                notification_type=NotificationLog.NotificationType.APPLICATION_RETURNED_TO_APPLICANT,
             ).exists()
         )
-        self.assertEqual(len(mail.outbox), 1)
-        self.assertIn("application returned", mail.outbox[0].subject.lower())
-        self.assertIn(
-            "Please update your submitted information before resubmitting.",
-            mail.outbox[0].body,
-        )
-        self.assertIn(
-            reverse("applicant-status-link", kwargs={"token": application.public_token}),
-            mail.outbox[0].body,
-        )
+        self.assertEqual(len(mail.outbox), 0)
 
     def _record_completion_tracking(self, application, actor, *, deadline=None, items=None):
         # RD-8 test helper: give the completion-stage case a tracked record with
@@ -13734,6 +13734,24 @@ class BusinessLogicBypassHardeningTests(BaseRecruitmentTestCase):
         return self._submit(application, applicant)
 
     # ---- PT-007: forced workflow action / stage skipping -------------------------------------
+
+    def test_generic_whole_application_return_not_offered_or_accepted(self):
+        # RD-6b (Option A): the generic whole-application return is removed. It
+        # is never offered, and a forced POST is rejected at the form (the
+        # action is not in the available set) and refused at the service.
+        application = self._submit(self.make_application(self.level1_position))
+        available = {
+            value for value, _label in get_available_actions(application, self.secretariat)
+        }
+        self.assertNotIn("return_to_applicant", available)
+
+        form = WorkflowActionForm(
+            {"action": "return_to_applicant", "remarks": "Forced whole-application return."},
+            application=application,
+            user=self.secretariat,
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("action", form.errors)
 
     def test_pt007_forced_later_stage_action_is_rejected(self):
         application = self._submit(self.make_application(self.level1_position))

@@ -7686,9 +7686,11 @@ def get_available_actions(application, user):
             if application.branch == PositionPosting.Branch.PLANTILLA
             else "Endorse to HRM Chief"
         )
+        # RD-6b (Option A): no generic whole-application return. A return is a
+        # document-resubmission request (flag the documents on the screening
+        # review); an unsuitable applicant is Rejected.
         return [
             ("endorse", endorse_label),
-            ("return_to_applicant", "Return to Applicant"),
             ("reject", "Reject Application"),
         ]
     if effective_role == RecruitmentUser.Role.HRM_CHIEF and current_stage == RecruitmentCase.Stage.HRM_CHIEF_REVIEW:
@@ -7697,7 +7699,6 @@ def get_available_actions(application, user):
         endorse_label = "Endorse to HRMPSB"
         return [
             ("endorse", endorse_label),
-            ("return_to_applicant", "Return to Applicant"),
             ("reject", "Reject Application"),
         ]
     if effective_role == RecruitmentUser.Role.HRMPSB_MEMBER and current_stage == RecruitmentCase.Stage.HRMPSB_REVIEW:
@@ -7731,8 +7732,6 @@ def _transition_target(application, effective_role, action):
                 RecruitmentApplication.Status.HRM_CHIEF_REVIEW,
                 "COS application endorsed to HRM Chief by Secretariat.",
             )
-        if action == "return_to_applicant":
-            return RecruitmentUser.Role.APPLICANT, RecruitmentApplication.Status.RETURNED_TO_APPLICANT, "Returned by Secretariat."
         if action == "reject":
             return "", RecruitmentApplication.Status.REJECTED, "Rejected by Secretariat."
     if effective_role == RecruitmentUser.Role.HRM_CHIEF:
@@ -7742,8 +7741,6 @@ def _transition_target(application, effective_role, action):
             if application.branch == PositionPosting.Branch.COS:
                 raise ValueError("COS selection is recorded by HRM Chief from the decision step.")
             return RecruitmentUser.Role.HRMPSB_MEMBER, RecruitmentApplication.Status.HRMPSB_REVIEW, "Plantilla application endorsed to HRMPSB."
-        if action == "return_to_applicant":
-            return RecruitmentUser.Role.APPLICANT, RecruitmentApplication.Status.RETURNED_TO_APPLICANT, "Returned by HRM Chief."
         if action == "reject":
             return "", RecruitmentApplication.Status.REJECTED, "Rejected by HRM Chief."
     if effective_role == RecruitmentUser.Role.HRMPSB_MEMBER:
@@ -8051,10 +8048,9 @@ def process_workflow_action(application, actor, action, remarks):
             )
         raise ValueError("This case is not currently assigned to you.")
     current_section = get_current_workflow_section(application)
-    # A return that flags specific documents is a RESUBMISSION request: the case must stay
-    # visible in the reviewing role's batch as "awaiting resubmission" rather than being handed
-    # off to the applicant and dropped from the workflow (§4.2). A return with no flagged
-    # documents keeps the old generic return-to-applicant behavior below.
+    # A return that flags specific documents is a RESUBMISSION request: the case stays
+    # visible in the reviewing role's batch as "awaiting resubmission" and the applicant
+    # re-uploads the flagged files from Track Application (§4.2).
     if action == "remove_applicant":
         return remove_applicant_from_batch(application, actor, remarks)
     if action == "return_to_applicant":
@@ -8063,6 +8059,17 @@ def process_workflow_action(application, actor, action, remarks):
         )
         if _flagged:
             return request_document_resubmission(application, actor, remarks)
+        # RD-6b (Option A): there is no generic "hand the whole application back"
+        # return. It never had a working applicant path (the Track Application
+        # resubmission page only exposes flagged documents), it was barely
+        # reachable (auto-advance skips the post-exam actions window), and it
+        # contradicted RD-1's doctrine — a return is a document-resubmission
+        # request; an unsuitable applicant is Not Qualified / Rejected.
+        raise ValueError(
+            "Returning the whole application is no longer available. Flag the "
+            "specific documents to return on the screening review, or record "
+            "Not Qualified / Reject the application."
+        )
     if (
         effective_role == RecruitmentUser.Role.APPOINTING_AUTHORITY
         and action == "return_car_for_reassessment"
