@@ -110,8 +110,9 @@
                                     <div class="fw-bold" style="font-size:0.8rem;">{{ candidate.application.reference_label }}</div>
                                 </td>
                                 <td>
-                                    {# RD-2: Absent/Waived lives here now — the per-case exam
-                                       screen is read-only for a pooled vacancy. #}
+                                    {% comment %} RD-2: Absent/Waived lives here now — the
+                                       per-case exam screen is read-only for a pooled
+                                       vacancy. {% endcomment %}
                                     <select class="form-select js-exam-outcome"
                                             name="outcome_{{ candidate.case_id }}"
                                             data-case-id="{{ candidate.case_id }}">

@@ -7552,6 +7552,9 @@ class BatchExamTests(BaseRecruitmentTestCase):
         response = client.get(reverse("vacancy-batch-exam", args=[self.level1_position.pk]))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Batch Exam")
+        # Guard: multi-line {# #} Django comments render literally (browser
+        # verification caught one on this very page).
+        self.assertNotContains(response, "{#")
 
     def test_batch_exam_view_404s_for_a_non_reviewing_role(self):
         # The HRM Chief does not handle a Level-1 vacancy's screening/exam (FRS scoping).
