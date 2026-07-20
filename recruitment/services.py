@@ -8912,6 +8912,30 @@ def reopen_recruitment_case(application, actor, reason):
         raise ValueError("Only the HRM Chief can reopen a finalized case.")
     if not case.is_stage_locked or not case.locked_stage:
         raise ValueError("Only finalized cases can be reopened.")
+    # RD-7: once the vacancy's selection is recorded, a NON-selected sibling
+    # (already closed by pool resolution and emailed "not selected") must not
+    # come back to an active review stage — pool queries filter on ACTIVE, so a
+    # reopened sibling would re-enter batch logic for a decided vacancy. The
+    # WINNER's own case stays reopenable: completion corrections are the
+    # legitimate use of this path.
+    vacancy_is_decided = False
+    winner_application_ids = set()
+    plantilla_selection = get_final_selection_for_entry(application.position)
+    if plantilla_selection:
+        vacancy_is_decided = True
+        winner_application_ids.add(plantilla_selection.selected_application_id)
+    cos_selected = FinalDecision.objects.filter(
+        recruitment_entry=application.position,
+        decision_outcome=FinalDecision.Outcome.SELECTED,
+    ).values_list("application_id", flat=True)
+    if cos_selected:
+        vacancy_is_decided = True
+        winner_application_ids.update(cos_selected)
+    if vacancy_is_decided and application.id not in winner_application_ids:
+        raise ValueError(
+            "This vacancy's selection is already recorded. A non-selected case "
+            "can't be reopened while the selection stands."
+        )
 
     previous_stage = case.current_stage
     previous_role = application.current_handler_role

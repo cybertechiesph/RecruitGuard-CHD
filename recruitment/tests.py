@@ -2650,6 +2650,40 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
             ).exists()
         )
 
+    def test_closed_vacancy_deadline_extension_blocked_until_reopened(self):
+        # RD-7: a manual Close is a deliberate stop. Extending the deadline must
+        # not silently undo it — is_open_for_intake requires ACTIVE, so the
+        # public page would announce "Deadline extended" while intake stays
+        # shut. The edit is refused until the vacancy is reopened.
+        entry = self._lapsed_cos_entry()
+        entry.status = PositionPosting.EntryStatus.CLOSED
+        entry.save(update_fields=["status", "updated_at"])
+        previous_closing = entry.closing_date
+        new_closing = timezone.localdate() + timedelta(days=7)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("recruitment-entry-update", kwargs={"pk": entry.pk}),
+            self._entry_edit_payload(entry, closing_date=new_closing.isoformat()),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Reopen it (set it Active) before")
+        entry.refresh_from_db()
+        self.assertEqual(entry.closing_date, previous_closing)
+
+        # Reopen first, then the extension goes through (REV-A behavior intact).
+        entry.status = PositionPosting.EntryStatus.ACTIVE
+        entry.save(update_fields=["status", "updated_at"])
+        response = client.post(
+            reverse("recruitment-entry-update", kwargs={"pk": entry.pk}),
+            self._entry_edit_payload(entry, closing_date=new_closing.isoformat()),
+        )
+        self.assertEqual(response.status_code, 302)
+        entry.refresh_from_db()
+        self.assertEqual(entry.closing_date, new_closing)
+        self.assertTrue(entry.is_open_for_intake)
+
     def test_entry_update_rejects_year_drift_when_generated_code_would_change(self):
         entry = PositionPosting.objects.create(
             position_reference=self.project_assistant_position,
@@ -5372,6 +5406,89 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
                 action=AuditLog.Action.CASE_REOPENED,
             ).exists()
         )
+
+    def test_reopen_refused_for_non_selected_case_in_decided_vacancy(self):
+        # RD-7: once the vacancy's selection stands, a pool-resolved sibling
+        # (already emailed "not selected") must not return to an active stage —
+        # pool queries filter on ACTIVE, so a reopened sibling would re-enter
+        # batch logic for a decided vacancy. The winner's case stays reopenable
+        # (completion corrections — covered by the closed-case reopen test).
+        from recruitment.services import reopen_recruitment_case
+
+        winner = self.make_application(self.cos_position)
+        self.verify_application_for_submission(winner)
+        submit_application(winner, self.applicant)
+
+        # Vacancy decided: the winner holds a SELECTED final decision; the
+        # sibling was closed by pool resolution (locked at its review stage).
+        # The sibling is ORM-constructed — the guard reads only the vacancy's
+        # decision state and the case lock, not how the pool got there.
+        FinalDecision.objects.create(
+            application=winner,
+            recruitment_case=winner.case,
+            recruitment_entry=winner.position,
+            review_stage=RecruitmentCase.Stage.HRM_CHIEF_REVIEW,
+            decided_by=self.hrm_chief,
+            branch=winner.branch,
+            level=winner.level,
+            decision_outcome=FinalDecision.Outcome.SELECTED,
+            decision_notes="Selected for the COS engagement.",
+        )
+        sibling_user = RecruitmentUser.objects.create_user(
+            username="rd7-sibling",
+            password="StrongPass!234",
+            role=RecruitmentUser.Role.APPLICANT,
+            email="rd7-sibling@example.com",
+        )
+        sibling = RecruitmentApplication.objects.create(
+            applicant=sibling_user,
+            position=self.cos_position,
+            applicant_first_name="Pool",
+            applicant_last_name="Sibling",
+            applicant_email="rd7-sibling@example.com",
+            status=RecruitmentApplication.Status.REJECTED,
+            performance_rating_applicability=(
+                RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
+            ),
+        )
+        RecruitmentCase.objects.create(
+            application=sibling,
+            branch=sibling.branch,
+            current_stage=RecruitmentCase.Stage.CLOSED,
+            current_handler_role="",
+            case_status=RecruitmentCase.CaseStatus.REJECTED,
+            is_stage_locked=True,
+            locked_stage=RecruitmentCase.Stage.SECRETARIAT_REVIEW,
+        )
+        sibling.refresh_from_db()
+
+        with self.assertRaisesMessage(
+            ValueError, "selection is already recorded"
+        ):
+            reopen_recruitment_case(
+                application=sibling,
+                actor=self.hrm_chief,
+                reason="Trying to revive a resolved sibling.",
+            )
+
+        # An undecided vacancy's locked case reopens exactly as before.
+        undecided = self.make_application(self.level1_position)
+        self.verify_application_for_submission(undecided)
+        submit_application(undecided, self.applicant)
+        undecided_case = undecided.case
+        undecided_case.case_status = RecruitmentCase.CaseStatus.REJECTED
+        undecided_case.is_stage_locked = True
+        undecided_case.locked_stage = RecruitmentCase.Stage.SECRETARIAT_REVIEW
+        undecided_case.save(
+            update_fields=["case_status", "is_stage_locked", "locked_stage", "updated_at"]
+        )
+        reopen_recruitment_case(
+            application=undecided,
+            actor=self.hrm_chief,
+            reason="Legitimate correction on an undecided vacancy.",
+        )
+        undecided_case.refresh_from_db()
+        self.assertFalse(undecided_case.is_stage_locked)
 
     def test_case_timeline_is_visible_on_application_detail(self):
         application = self.make_application(self.level1_position)

@@ -2784,5 +2784,22 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
                     "The closing date cannot be set to a past date. To close a "
                     "posting, set its status to Closed instead.",
                 )
+            # RD-7: a manual Close is a deliberate stop — extending the deadline
+            # must not silently undo it (is_open_for_intake requires ACTIVE, so
+            # the public page would show "Deadline extended" while intake stays
+            # shut: extended-but-closed, a silent contradiction). Reopen first.
+            if (
+                self.instance.pk
+                and effective_closing_date != original_closing_date
+                and PositionPosting.objects.filter(pk=self.instance.pk)
+                .values_list("status", flat=True)
+                .first()
+                == PositionPosting.EntryStatus.CLOSED
+            ):
+                self.add_error(
+                    "closing_date",
+                    "This vacancy is closed. Reopen it (set it Active) before "
+                    "extending the deadline.",
+                )
 
         return cleaned_data
