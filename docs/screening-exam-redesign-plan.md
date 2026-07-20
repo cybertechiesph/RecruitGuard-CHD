@@ -241,20 +241,20 @@ integrity half: resubmit reopens the stage's finalized screening (rows reset
 to Not Reviewed, completeness re-derived, reopened_for_resubmission_at
 stamped, SCREENING_REOPENED audited, endorse blocked until re-finalized).
 
-**RD-6b DEFERRED (needs its own design pass — decided with the team).**
-Implementation found the plan's assumption wrong: there is NO existing edit
-path for RETURNED applications to extend (ApplicantOTPView redirects any
-submitted app to the receipt; the intake view loads drafts only and blocks
-when the vacancy is no longer open). RD-6b is therefore a new
-returned-application edit-and-resubmit flow, with three decisions to lock
-first: (1) full-form re-edit vs documents-only; (2) behavior when the vacancy
-closed while the application sat returned; (3) whether re-submission
-re-verifies via OTP. Mitigations meanwhile: RD-6a closed the security hole,
-the generic return is narrowly reachable (auto-advance suppresses the
-actions-section return for most configurations), and the flagged-document
-path — which covers virtually all real returns — has a complete applicant
-journey. The status-card deadline display (old item d) ships with RD-9's
-status-page work instead.
+**RD-6b RESOLVED as Option A — DONE (commit 7be2df7, 2026-07-20).** After
+weighing three options with the team (A: remove the generic return; B: build
+a full applicant edit-and-resubmit flow; C: fold returns into the flagged
+path), chose A: DELETE the generic whole-application return. Rationale: it
+never had a working applicant path (the Track Application resubmission page
+only exposes flagged documents), was barely reachable (auto-advance skips the
+post-exam actions window), contradicted RD-1's doctrine (a return is a
+document-resubmission request; unsuitable = Reject), and nobody hit the dead
+path through demos/testing/defense. Not offered in get_available_actions;
+refused server-side in process_workflow_action (flagged branch kept); dead
+_transition_target mappings removed. INTERACTION: with the generic return
+gone, no UI path sets a RETURNED_TO_APPLICANT case status, so RD-6a's screening
+reopen (in submit_application's resubmit branch) becomes a DEFENSIVE net,
+deliberately kept. The status-card deadline (old item d) shipped with RD-9.
 
 ---
 
