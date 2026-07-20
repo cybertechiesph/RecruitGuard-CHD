@@ -6896,13 +6896,16 @@ class VacancyAssessmentWeightsTests(BaseRecruitmentTestCase):
         # Rejected — the stored weights stay at the seeded defaults.
         self.assertEqual(weights.exam_general_weight, Decimal("60.00"))
 
-    def test_cos_vacancy_weights_page_redirects_without_creating_a_row(self):
+    def test_cos_vacancy_weights_page_renders_and_edits(self):
+        # RD-5: post-RD-2 the COS exam overall is weight-computed too, so COS
+        # entries see and edit their weights (the old view hard-blocked them).
         client = Client()
         self.force_login_with_mfa(client, self.secretariat)
         url = reverse("vacancy-assessment-weights", args=[self.cos_position.pk])
         response = client.get(url)
-        self.assertEqual(response.status_code, 302)
-        self.assertFalse(
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Exam score split")
+        self.assertTrue(
             VacancyAssessmentWeights.objects.filter(
                 recruitment_entry=self.cos_position
             ).exists()
@@ -7319,6 +7322,37 @@ class BatchExamTests(BaseRecruitmentTestCase):
         self.assertEqual(first_exam.technical_score, Decimal("90.00"))
         # 80*0.60 + 90*0.40 = 84.00
         self.assertEqual(first_exam.exam_score, Decimal("84.00"))
+
+    def test_console_refused_for_continuous_vacancy(self):
+        # RD-5: one door in both directions — a continuous-intake vacancy is
+        # examined/interviewed per case, so its consoles refuse GET and POST.
+        application = self.make_application(self.cos_continuous_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        self.finalize_screening_for_current_stage(application, self.secretariat)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        for url_name in ("vacancy-batch-exam", "vacancy-batch-interview"):
+            url = reverse(url_name, args=[self.cos_continuous_position.pk])
+            response = client.get(url)
+            self.assertEqual(response.status_code, 302, url_name)
+            self.assertIn(
+                reverse("vacancy-batch-detail", args=[self.cos_continuous_position.pk]),
+                response.headers["Location"],
+                url_name,
+            )
+        # A forced console POST writes nothing.
+        response = client.post(
+            reverse("vacancy-batch-exam", args=[self.cos_continuous_position.pk]),
+            {
+                "operation": "save_scores",
+                f"general_score_{application.case.id}": "90",
+                f"technical_score_{application.case.id}": "85",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(application.exam_records.exists())
 
     def test_per_case_exam_post_refused_for_pooled_vacancy(self):
         # RD-2 "one door", server-enforced (PT-03 lesson): a pooled vacancy's
@@ -8394,6 +8428,28 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
             '{% include "internal_includes/banner.html" with variant="info" copy="No notices right now. Notices from the HRM Chief or administrators will appear here." %}',
         )
         self.assertNotContains(response, "{# Contextual banner partial.")
+
+    def test_hrmpsb_queue_leads_with_candidate_code_not_case_number(self):
+        # RD-5: REV-B's case-header rule applied to the queue — evaluators never
+        # see the sequential case number (it weakly leaks submission order);
+        # their rows lead with the vacancy code + candidate code.
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        application.refresh_from_db()
+        self.assertTrue(application.candidate_code)
+
+        # The notification bell also renders reference labels (separate, pre-
+        # existing surface) — clear it so the assertion targets the queue rows.
+        Notification.objects.filter(recipient=self.hrmpsb).delete()
+
+        client = Client()
+        self.force_login_with_mfa(client, self.hrmpsb)
+        response = client.get(reverse("workflow-queue"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f"Candidate {application.candidate_code}")
+        self.assertContains(response, application.position.job_code)
+        self.assertNotContains(response, application.reference_number)
+        self.assertNotContains(response, application.applicant_display_name)
 
     def test_workflow_queue_empty_state_renders_without_raw_include_tags(self):
         client = Client()

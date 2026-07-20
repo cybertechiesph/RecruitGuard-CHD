@@ -1653,6 +1653,16 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
 
     def get(self, request, pk):
         entry = get_object_or_404(PositionPosting, pk=pk)
+        # RD-5: one door in BOTH directions. A continuous-intake vacancy is
+        # examined per case, so its console is refused outright — otherwise the
+        # console URL reopens the two-door bug RD-2 closed, just mirrored.
+        if not vacancy_uses_batch_exam(entry):
+            messages.error(
+                request,
+                "This vacancy's exam is recorded per case — open the candidate's "
+                "case to schedule or score it.",
+            )
+            return redirect("vacancy-batch-detail", pk=entry.pk)
         pool = self._scoped_pool(request, entry)
         if not pool:
             raise Http404("No candidates are ready for the exam in this vacancy.")
@@ -1666,6 +1676,15 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
 
     def post(self, request, pk):
         entry = get_object_or_404(PositionPosting, pk=pk)
+        # RD-5: same refusal as GET — a forced POST must not write through the
+        # console for a per-case (continuous) vacancy.
+        if not vacancy_uses_batch_exam(entry):
+            messages.error(
+                request,
+                "This vacancy's exam is recorded per case — open the candidate's "
+                "case to schedule or score it.",
+            )
+            return redirect("vacancy-batch-detail", pk=entry.pk)
         pool = self._scoped_pool(request, entry)
         if not pool:
             raise Http404("No candidates are ready for the exam in this vacancy.")
@@ -1815,6 +1834,15 @@ class VacancyBatchInterviewView(LoginRequiredMixin, WorkflowProcessorRequiredMix
 
     def get(self, request, pk):
         entry = get_object_or_404(PositionPosting, pk=pk)
+        # RD-5: a continuous-intake vacancy is interviewed per case — its
+        # console is refused so the two-door bug can't reopen in reverse.
+        if not vacancy_uses_batch_exam(entry):
+            messages.error(
+                request,
+                "This vacancy's interview is recorded per case — open the "
+                "candidate's case to schedule or score it.",
+            )
+            return redirect("vacancy-batch-detail", pk=entry.pk)
         pool = self._scoped_pool(request, entry)
         if not pool:
             raise Http404("No candidates are ready for the interview in this vacancy.")
@@ -1822,6 +1850,14 @@ class VacancyBatchInterviewView(LoginRequiredMixin, WorkflowProcessorRequiredMix
 
     def post(self, request, pk):
         entry = get_object_or_404(PositionPosting, pk=pk)
+        # RD-5: same refusal as GET (server-side, PT-03).
+        if not vacancy_uses_batch_exam(entry):
+            messages.error(
+                request,
+                "This vacancy's interview is recorded per case — open the "
+                "candidate's case to schedule or score it.",
+            )
+            return redirect("vacancy-batch-detail", pk=entry.pk)
         pool = self._scoped_pool(request, entry)
         if not pool:
             raise Http404("No candidates are ready for the interview in this vacancy.")
@@ -2493,10 +2529,10 @@ class VacancyAssessmentWeightsView(LoginRequiredMixin, EntryManagerRequiredMixin
     template_name = "recruitment/vacancy_assessment_weights.html"
 
     def _get_entry(self, pk):
-        entry = get_object_or_404(PositionPosting, pk=pk)
-        if entry.branch != PositionPosting.Branch.PLANTILLA:
-            return None
-        return entry
+        # RD-5: both branches use the weights now — post-RD-2 the COS exam
+        # overall is computed from General/Technical exactly like Plantilla,
+        # so COS entries edit their weights here too.
+        return get_object_or_404(PositionPosting, pk=pk)
 
     def _context(self, entry, weights, form):
         return {
@@ -2508,18 +2544,12 @@ class VacancyAssessmentWeightsView(LoginRequiredMixin, EntryManagerRequiredMixin
 
     def get(self, request, pk):
         entry = self._get_entry(pk)
-        if entry is None:
-            messages.info(request, "COS vacancies do not use assessment weights.")
-            return redirect("recruitment-entry-list")
         weights = get_or_create_vacancy_assessment_weights(entry)
         form = VacancyAssessmentWeightsForm(instance=weights)
         return render(request, self.template_name, self._context(entry, weights, form))
 
     def post(self, request, pk):
         entry = self._get_entry(pk)
-        if entry is None:
-            messages.info(request, "COS vacancies do not use assessment weights.")
-            return redirect("recruitment-entry-list")
         weights = get_or_create_vacancy_assessment_weights(entry)
         if weights.is_locked:
             messages.error(

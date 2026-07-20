@@ -104,14 +104,20 @@
                     {% for application in applications %}
                         <tr data-queue-row data-branch="{{ application.branch }}">
                             <td class="col-ref">
-                                <div class="fw-bold" style="font-family:ui-monospace,SFMono-Regular,'Cascadia Mono',Consolas,Menlo,monospace;font-size:0.78rem;color:#5f6c78;">
-                                    {{ application.reference_label }}
-                                </div>
-                                {% comment %} Ronel revision: the case number is the identifier;
-                                   the applicant's name is not shown on the queue to reduce
-                                   selection bias (HRMPSB keep their candidate code). {% endcomment %}
+                                {% comment %} Ronel revision: the case number is the identifier and
+                                   the applicant's name is never shown on the queue. RD-5: HRMPSB
+                                   members don't see the sequential case number either — REV-B's
+                                   case-header rule (it weakly leaks submission order); their row
+                                   leads with the vacancy code + candidate code instead. {% endcomment %}
                                 {% if request.user.role == "hrmpsb_member" %}
+                                    <div class="fw-bold" style="font-family:ui-monospace,SFMono-Regular,'Cascadia Mono',Consolas,Menlo,monospace;font-size:0.78rem;color:#5f6c78;">
+                                        {{ application.position.job_code }}
+                                    </div>
                                     <div class="rg-imeta mt-1">Candidate {{ application.candidate_code_label }}</div>
+                                {% else %}
+                                    <div class="fw-bold" style="font-family:ui-monospace,SFMono-Regular,'Cascadia Mono',Consolas,Menlo,monospace;font-size:0.78rem;color:#5f6c78;">
+                                        {{ application.reference_label }}
+                                    </div>
                                 {% endif %}
                             </td>
                             <td>

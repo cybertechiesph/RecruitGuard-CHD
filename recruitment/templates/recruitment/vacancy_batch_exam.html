@@ -38,7 +38,9 @@
     </div>
 {% endif %}
 
-{% if is_plantilla %}
+{% comment %} RD-5: shown for BOTH branches — post-RD-2 the COS overall is also
+   computed from these weights, and the score note below refers to "the weights
+   above", which must point at something real. {% endcomment %}
 <div class="card p-3 mb-3" style="max-width:680px;">
     <h2 class="h6 mb-1">Exam weights</h2>
     <p class="rg-note mb-2">
@@ -55,7 +57,6 @@
         </div>
     {% endif %}
 </div>
-{% endif %}
 
 {# ── One schedule for the whole batch ─────────────────────────── #}
 <div class="card p-4 mb-3">
