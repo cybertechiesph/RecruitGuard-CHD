@@ -78,7 +78,6 @@ from .notification_services import (
     build_applicant_otp_url,
     create_in_app_notifications,
     queue_applicant_interview_notice_notification,
-    queue_application_returned_to_applicant_notification,
     queue_document_resubmission_request_notification,
     queue_exam_invitation_notification,
     queue_interview_batch_panel_digest_notifications,
@@ -8221,31 +8220,10 @@ def process_workflow_action(application, actor, action, remarks):
             actor=actor,
             cut_at_screening=case_transition["previous_stage"] in SCREENING_STAGES,
         )
-    elif next_status == RecruitmentApplication.Status.RETURNED_TO_APPLICANT:
-        screening_record = get_screening_record(
-            application,
-            stage=case_transition["previous_stage"],
-        )
-        requested_document_reviews = []
-        if screening_record is not None:
-            requested_document_reviews = list(
-                screening_record.document_reviews.filter(
-                    status=ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
-                ).order_by("display_order", "created_at")
-            )
-        if requested_document_reviews:
-            queue_document_resubmission_request_notification(
-                application,
-                actor=actor,
-                document_reviews=requested_document_reviews,
-                workflow_remarks=remarks,
-            )
-        else:
-            queue_application_returned_to_applicant_notification(
-                application,
-                actor=actor,
-                workflow_remarks=remarks,
-            )
+    # RD-6b cleanup: the RETURNED_TO_APPLICANT notification branch that lived
+    # here was reachable only through the removed generic return (the flagged
+    # path exits early via request_document_resubmission, which sends its own
+    # notice) — deleted rather than left as a dead branch.
     return application
 
 

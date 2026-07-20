@@ -68,10 +68,8 @@ NOTIFICATION_MANAGER_ROLES = {
     RecruitmentUser.Role.HRM_CHIEF,
 }
 IN_APP_NOTIFICATION_RETENTION_DAYS = 90
-# Post-selection "memo" submission window: the successful applicant has two weeks to
-# submit the hard-copy requirements (per HRMPSB Secretariat interviews). Used as the
 # RD-8: the checklist email reads the completion record's deadline (one source);
-# the two-week default now lives on the completion tracking form itself.
+# the client-confirmed two-week default lives on the completion tracking form.
 
 
 def _truncate(value, limit):
@@ -351,33 +349,6 @@ def _build_non_selected_notification(application, cut_at_screening=False, exam_s
     _append_status_link(lines, application)
     return (
         f"DOH–CHD CALABARZON Recruitment Portal application result: {application.position.title}",
-        "\n".join(lines),
-    )
-
-
-def _build_application_returned_to_applicant_notification(application, workflow_remarks=""):
-    lines = [
-        f"Dear {application.applicant_display_name},",
-        "",
-        (
-            f"Your application for {application.position.title} "
-            f"under {application.position.get_branch_display()} recruitment was returned for your action."
-        ),
-        f"Application ID: {application.reference_number}",
-        f"Current status: {application.get_status_display()}",
-    ]
-    remarks = (workflow_remarks or "").strip()
-    if remarks:
-        lines.extend(["", "Reason or remarks:", remarks])
-    _append_status_link(lines, application)
-    lines.extend(
-        [
-            "",
-            "Please check your application status and follow the instructions from the recruitment office.",
-        ]
-    )
-    return (
-        f"DOH–CHD CALABARZON Recruitment Portal application returned: {application.position.title}",
         "\n".join(lines),
     )
 
@@ -812,32 +783,6 @@ def queue_non_selected_applicant_notification(
             "branch": application.branch,
             "cut_at_screening": cut_at_screening,
             "exam_status": exam_status,
-            "status_link": build_applicant_status_url(application),
-        },
-    )
-
-
-def queue_application_returned_to_applicant_notification(
-    application,
-    actor=None,
-    *,
-    workflow_remarks="",
-):
-    subject, body = _build_application_returned_to_applicant_notification(
-        application,
-        workflow_remarks=workflow_remarks,
-    )
-    return queue_notification(
-        application,
-        notification_type=NotificationLog.NotificationType.APPLICATION_RETURNED_TO_APPLICANT,
-        actor=actor,
-        subject=subject,
-        body=body,
-        metadata={
-            "reference_number": application.reference_number,
-            "status": application.status,
-            "branch": application.branch,
-            "workflow_remarks": (workflow_remarks or "").strip(),
             "status_link": build_applicant_status_url(application),
         },
     )
