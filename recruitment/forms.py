@@ -1505,13 +1505,6 @@ class CaseClosureForm(BootstrapFormMixin, forms.Form):
 class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.ModelForm):
     DOCUMENT_STATUS_PREFIX = "document_status__"
     DOCUMENT_REMARKS_PREFIX = "document_remarks__"
-    SCORE_RANGE_MESSAGE = "Enter a score from 0 to 100."
-    SCORE_FIELD_NAMES = (
-        "education_score",
-        "training_score",
-        "experience_score",
-        "document_review_score",
-    )
     COMPLETENESS_BLOCKING_DOCUMENT_STATUSES = {
         ScreeningDocumentReview.ReviewStatus.NOT_REVIEWED,
         ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION,
@@ -1542,21 +1535,17 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
         # so completeness is derived from the document review and shown as a
         # computed banner. The model field still persists (CAR/exports/locked
         # views/audit read it) — see derive_completeness_status.
+        # RD-3: the ETE score inputs are gone — screening checks papers, the CAR
+        # gives grades. The model fields stay (historical records + the CAR read
+        # fallback), but new records never populate them; ApplicationETERating
+        # on the CAR screen is the only live source.
         fields = [
             "completeness_notes",
             "qualification_outcome",
-            "education_score",
-            "training_score",
-            "experience_score",
-            "document_review_score",
             "screening_notes",
         ]
         widgets = {
             "completeness_notes": forms.Textarea(attrs={"rows": 3}),
-            "education_score": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
-            "training_score": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
-            "experience_score": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
-            "document_review_score": forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
             "screening_notes": forms.Textarea(attrs={"rows": 4}),
         }
 
@@ -1572,30 +1561,7 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
             "Optional. Note anything about the submitted documents worth recording."
         )
         self.fields["qualification_outcome"].label = "Qualification Outcome"
-        self.fields["education_score"].label = "Education Score"
-        self.fields["training_score"].label = "Training Score"
-        self.fields["experience_score"].label = "Experience Score"
-        # WF-05: the per-component E/T/E scoring now lives on the CAR draft (ETE
-        # ratings with a basis per component); this score remains only as the
-        # fallback for records made before that change.
-        self.fields["document_review_score"].label = (
-            "Document review score (legacy — superseded by ETE ratings on the CAR)"
-        )
         self.fields["screening_notes"].label = "Screening Notes"
-        for field_name in self.SCORE_FIELD_NAMES:
-            self.fields[field_name].required = False
-            self.fields[field_name].widget.attrs.update(
-                {
-                    "min": "0",
-                    "max": "100",
-                    "data-score-limit": "true",
-                    "data-score-label": self.fields[field_name].label,
-                }
-            )
-        self.fields["document_review_score"].help_text = (
-            "Use an official overall document-review score when component scores are not encoded."
-        )
-        self.document_review_weight_display = self._document_review_weight_display()
         self._build_document_review_fields()
         self._apply_bootstrap()
         for field_meta in self._document_review_field_metadata:
@@ -1612,14 +1578,6 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
             # completeness/qualification requirements are enforced only on finalize.
             for field in self.fields.values():
                 field.required = False
-
-    def _document_review_weight_display(self):
-        level = getattr(self.application, "level", None)
-        if level is None and self.instance and self.instance.pk:
-            level = self.instance.level
-        if level == PositionPosting.Level.LEVEL_2:
-            return "Policy basis: education 30%, training 30%, experience 40%."
-        return "Policy basis: education 40%, training 30%, experience 30%."
 
     def _existing_document_reviews_by_key(self):
         if not self.instance or not self.instance.pk:
@@ -1786,27 +1744,11 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
     def clean(self):
         cleaned_data = super().clean()
         document_reviews = self._collect_document_reviews(cleaned_data)
-        for field_name in self.SCORE_FIELD_NAMES:
-            value = cleaned_data.get(field_name)
-            if value is not None and (value < 0 or value > 100):
-                self.add_error(field_name, self.SCORE_RANGE_MESSAGE)
         if self.draft:
             # Ranges/formats are validated above; completeness and cross-field
             # consistency are enforced only on finalize, so partial autosaves and
             # manual "Save draft" of an in-progress form are not rejected.
             return cleaned_data
-        component_values = [
-            cleaned_data.get("education_score"),
-            cleaned_data.get("training_score"),
-            cleaned_data.get("experience_score"),
-        ]
-        if any(value is not None for value in component_values) and not all(
-            value is not None for value in component_values
-        ):
-            self.add_error(
-                "document_review_score",
-                "Record all three component scores, or leave them blank and use only the official document review score.",
-            )
         qualification_outcome = cleaned_data.get("qualification_outcome")
         screening_notes = (cleaned_data.get("screening_notes") or "").strip()
         blocking_reviews = [

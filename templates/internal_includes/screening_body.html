@@ -284,29 +284,9 @@
             {% endfor %}
         </div>
 
-        <details class="rg-scr-disclosure">
-            <summary class="rg-scr-disclosure__summary">
-                <span class="rg-scr-disclosure__title">Add detailed scores</span>
-                <span class="rg-scr-disclosure__hint">Optional</span>
-                <svg class="rg-scr-disclosure__chevron" width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                    <path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-            </summary>
-            <div class="rg-field rg-scr-disclosure__body">
-                {# WF-05: E/T/E scoring moved to the CAR draft; only the legacy document review score remains here. #}
-                <div class="rg-scr-score-grid">
-                    <div>
-                        <label class="form-label" for="{{ screening_form.document_review_score.id_for_label }}">
-                            {{ screening_form.document_review_score.label }}
-                        </label>
-                        {{ screening_form.document_review_score }}
-                        {% for error in screening_form.document_review_score.errors %}
-                            <div class="invalid-feedback d-block">{{ error }}</div>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-        </details>
+        {% comment %} RD-3: the score boxes are gone — screening checks papers,
+           the CAR gives grades. The ETE component is entered once, at
+           comparative-assessment time, with the pool in view. {% endcomment %}
     </section>
 </form>
 

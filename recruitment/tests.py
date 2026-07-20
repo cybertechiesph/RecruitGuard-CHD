@@ -5861,6 +5861,40 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         with self.assertRaises(ValueError):
             process_workflow_action(application, self.secretariat, "endorse", "premature")
 
+    def test_screening_form_has_no_score_inputs_and_stores_null_scores(self):
+        # RD-3: screening checks papers, the CAR gives grades — the ETE score
+        # boxes are gone from the screening surface, and a finalized screening
+        # stores NULL scores (the model fields persist only for history).
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        page = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
+        self.assertEqual(page.status_code, 200)
+        self.assertNotContains(page, 'name="document_review_score"')
+        self.assertNotContains(page, 'name="education_score"')
+        self.assertNotContains(page, "Add detailed scores")
+        self.assertNotContains(page, "{#")
+
+        response = client.post(
+            reverse("screening-review", kwargs={"pk": application.pk}),
+            {
+                **self.screening_payload(),
+                **self.screening_document_status_payload(application),
+                "operation": "finalize",
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        screening_record = ScreeningRecord.objects.get(application=application)
+        self.assertTrue(screening_record.is_finalized)
+        self.assertIsNone(screening_record.education_score)
+        self.assertIsNone(screening_record.training_score)
+        self.assertIsNone(screening_record.experience_score)
+        self.assertIsNone(screening_record.document_review_score)
+
     def test_completeness_is_derived_from_the_document_review(self):
         # RD-1: the reviewer never answers "are the documents complete?" — the
         # value is computed from the rows and stored so the CAR, exports, locked
@@ -12306,6 +12340,39 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             report.consolidated_snapshot["assessment_weight_display"],
             "Document review 40%, exam 20%, interview 40%.",
         )
+
+    def test_car_ete_blank_until_rating_entered_for_new_records(self):
+        # RD-3: the screening form no longer collects ETE scores, so a fresh
+        # case reaches the CAR with no fallback value — the assessment score
+        # stays blank until the Secretariat enters the ETE rating there, and
+        # then computes. One source: the CAR grades, screening only verifies.
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb)
+        self.finalize_deliberation_for_current_stage(application, self.hrmpsb, ranking_position=1)
+        application.refresh_from_db()
+
+        screening_record = application.screening_records.latest("created_at")
+        self.assertIsNone(screening_record.document_review_score)
+
+        draft = generate_comparative_assessment_report(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data={"summary_notes": "Draft before any ETE rating."},
+            finalize=False,
+        )
+        item = draft.items.get(recruitment_case=application.case)
+        self.assertIsNone(item.assessment_score)
+
+        set_application_ete_rating(application, self.secretariat, Decimal("70"))
+        draft = generate_comparative_assessment_report(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data={"summary_notes": "Draft after the ETE rating."},
+            finalize=False,
+        )
+        item = draft.items.get(recruitment_case=application.case)
+        self.assertIsNotNone(item.assessment_score)
 
     def test_car_uses_manual_ete_rating_when_set(self):
         application = self.make_application(self.level1_position)
