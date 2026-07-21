@@ -1563,9 +1563,29 @@ class VacancyBatchConsoleView(LoginRequiredMixin, WorkflowProcessorRequiredMixin
 class VacancyBatchDetailView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, TemplateView):
     """The applicants of a single vacancy that are in the current user's scoped queue,
     each linking to the existing per-case detail. 404s when the user has no scoped
-    applications for the vacancy, so a Secretariat never sees a Level-2 batch."""
+    applications for the vacancy AND no closed-case access to it, so a Secretariat never
+    sees a Level-2 batch; a user whose own cases simply closed gets a note instead."""
 
     template_name = "recruitment/vacancy_batch_detail.html"
+
+    def get(self, request, *args, **kwargs):
+        pk = self.kwargs["pk"]
+        if get_queue_for_user(request.user).filter(position_id=pk).exists():
+            return super().get(request, *args, **kwargs)
+        # Nothing queued here, for one of two very different reasons: the vacancy's cases are
+        # all finished (this user worked them through to closure), or the vacancy was never
+        # theirs (FRS scoping — a Secretariat must not see a Level-2 batch). Only the first
+        # earns a friendly landing; the second keeps the 404 so a stale or guessed URL can
+        # never confirm that another role's batch exists. get_closed_cases_for_user mirrors
+        # the closed-access model exactly, so this cannot widen what the user may see.
+        if get_closed_cases_for_user(request.user).filter(position_id=pk).exists():
+            messages.info(
+                request,
+                "Every case you handled for this vacancy is closed, so its batch page is no "
+                "longer active. You can still look them up under Closed cases.",
+            )
+            return redirect("vacancy-batches")
+        raise Http404("No batch is available for this vacancy.")
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1576,6 +1596,7 @@ class VacancyBatchDetailView(LoginRequiredMixin, WorkflowProcessorRequiredMixin,
             if application.position_id == pk
         ]
         if not applications:
+            # Defensive net — get() already resolved the empty-queue case above.
             raise Http404("No batch is available for this vacancy.")
         entry = applications[0].position
         context["entry"] = entry
@@ -1594,6 +1615,24 @@ class VacancyBatchDetailView(LoginRequiredMixin, WorkflowProcessorRequiredMixin,
             for application in cos_deliberation_pool(entry)
         )
         return context
+
+
+def _batch_pool_empty_redirect(request, entry, message):
+    """A batch exam/interview console whose scoped pool is empty used to ``raise Http404``,
+    which surfaced as a bare "Page Not Found" right after finalizing: the finalized cases
+    leave that stage's pool, so a refresh, Back-button, or re-run of the same URL hit an
+    empty console. Send the reviewer back to the batch overview with a friendly note instead
+    of crashing.
+
+    An empty scoped pool has two causes, and only one is friendly: (a) the stage finished and
+    its cases moved on, or (b) the user has no business on this vacancy's batch at all (wrong
+    role — FRS scoping). Redirect only when the user still holds batch access for the vacancy
+    (the same queue check ``VacancyBatchDetailView`` enforces); otherwise keep the 404 so a
+    non-reviewing role can never probe another role's batch."""
+    if not get_queue_for_user(request.user).filter(position=entry).exists():
+        raise Http404("No batch is available for this vacancy.")
+    messages.info(request, message)
+    return redirect("vacancy-batch-detail", pk=entry.pk)
 
 
 class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
@@ -1676,7 +1715,13 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
             return redirect("vacancy-batch-detail", pk=entry.pk)
         pool = self._scoped_pool(request, entry)
         if not pool:
-            raise Http404("No candidates are ready for the exam in this vacancy.")
+            return _batch_pool_empty_redirect(
+                request,
+                entry,
+                "No candidates are at the exam step for this vacancy right now — they may "
+                "already have been examined and moved to the interview stage, or none are "
+                "ready yet.",
+            )
         # Batch gate (Phase-4): while any applicant is still pending screening or awaiting
         # resubmission, the exam screen must not be exposed at all — not even read-only. Send
         # the reviewer back to the batch detail so a forced URL cannot preview the exam stage.
@@ -1698,7 +1743,13 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
             return redirect("vacancy-batch-detail", pk=entry.pk)
         pool = self._scoped_pool(request, entry)
         if not pool:
-            raise Http404("No candidates are ready for the exam in this vacancy.")
+            return _batch_pool_empty_redirect(
+                request,
+                entry,
+                "No candidates are at the exam step for this vacancy right now — they may "
+                "already have been examined and moved to the interview stage, or none are "
+                "ready yet.",
+            )
         # Same batch gate as GET: refuse every exam operation (schedule/score/finalize) while
         # the screening batch is on hold. The exam services re-check this too, but blocking here
         # keeps a forced POST from re-rendering the read-only exam screen on a form error.
@@ -1785,6 +1836,15 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
                         f"Exam batch finalized — all {count} "
                         f"candidate{'' if count == 1 else 's'} moved to the next review step.",
                     )
+                # Continue straight to the interview console when this user is the one who
+                # runs the next step (Plantilla: the Secretariat / HRM Chief support the
+                # interview scheduling; COS interview belongs to the HRM Chief). Checked against
+                # the freshly-routed pool, which now sits in the interview section. If they are
+                # not the interview handler, fall back to the batch overview. Either way, a
+                # forced-empty interview console now shows a friendly note (see
+                # _batch_pool_empty_redirect) rather than a 404.
+                if saved and user_can_manage_interview_session(request.user, saved[0]):
+                    return redirect("vacancy-batch-interview", pk=entry.pk)
                 return redirect("vacancy-batches")
             messages.success(request, "Exam scores saved.")
             return redirect("vacancy-batch-exam", pk=entry.pk)
@@ -1856,7 +1916,13 @@ class VacancyBatchInterviewView(LoginRequiredMixin, WorkflowProcessorRequiredMix
             return redirect("vacancy-batch-detail", pk=entry.pk)
         pool = self._scoped_pool(request, entry)
         if not pool:
-            raise Http404("No candidates are ready for the interview in this vacancy.")
+            return _batch_pool_empty_redirect(
+                request,
+                entry,
+                "No candidates are at the interview step for this vacancy right now — they "
+                "may already have been interviewed and moved to the next stage, or none are "
+                "ready yet.",
+            )
         return render(request, self.template_name, self._context(request, entry, pool))
 
     def post(self, request, pk):
@@ -1871,7 +1937,13 @@ class VacancyBatchInterviewView(LoginRequiredMixin, WorkflowProcessorRequiredMix
             return redirect("vacancy-batch-detail", pk=entry.pk)
         pool = self._scoped_pool(request, entry)
         if not pool:
-            raise Http404("No candidates are ready for the interview in this vacancy.")
+            return _batch_pool_empty_redirect(
+                request,
+                entry,
+                "No candidates are at the interview step for this vacancy right now — they "
+                "may already have been interviewed and moved to the next stage, or none are "
+                "ready yet.",
+            )
         operation = request.POST.get("operation", "")
 
         if operation == "save_schedule":
@@ -1916,6 +1988,12 @@ class VacancyBatchInterviewView(LoginRequiredMixin, WorkflowProcessorRequiredMix
                 return redirect("vacancy-batch-interview", pk=entry.pk)
             if finalize:
                 messages.success(request, "Interview batch finalized — the pool moved on together.")
+                # Same forward as the exam console: for COS the next step is the deliberation
+                # pick, run by the same HRM Chief who just finalized the interview. Plantilla
+                # deliberately keeps the overview — its next step is the CAR, which belongs to
+                # the Secretariat, so there is no single next screen for this finalizer.
+                if user_can_manage_cos_deliberation(request.user, entry):
+                    return redirect("vacancy-batch-cos-deliberation", pk=entry.pk)
                 return redirect("vacancy-batches")
             messages.success(request, "Interview scores saved.")
             return redirect("vacancy-batch-interview", pk=entry.pk)

@@ -7146,6 +7146,43 @@ class VacancyBatchConsoleTests(BaseRecruitmentTestCase):
         response = client.get(reverse("vacancy-batch-detail", args=[self.level2_position.pk]))
         self.assertEqual(response.status_code, 404)
 
+    def test_detail_redirects_when_every_scoped_case_is_closed(self):
+        # Regression: once a vacancy's cases close they leave the queue, so a Back / refresh /
+        # bookmark on its batch page used to raise a bare 404 — the same dead end the exam
+        # console had. A user who actually worked the vacancy now lands on the batch overview
+        # with a note. The FRS 404 above still stands for a vacancy that was never theirs.
+        closed_applicant = User.objects.create_user(
+            username="closed-batch-applicant",
+            password="testpass123",
+            email="closed.batch@example.com",
+            role=RecruitmentUser.Role.APPLICANT,
+        )
+        application = RecruitmentApplication.objects.create(
+            applicant=closed_applicant,
+            position=self.level1_position,
+            applicant_first_name="Closed",
+            applicant_last_name="Batch",
+            applicant_email="closed.batch@example.com",
+            status=RecruitmentApplication.Status.REJECTED,
+            performance_rating_applicability=(
+                RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
+            ),
+        )
+        RecruitmentCase.objects.create(
+            application=application,
+            branch=application.branch,
+            current_stage=RecruitmentCase.Stage.CLOSED,
+            current_handler_role="",
+            case_status=RecruitmentCase.CaseStatus.REJECTED,
+            is_stage_locked=True,
+            locked_stage=RecruitmentCase.Stage.SECRETARIAT_REVIEW,
+        )
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(reverse("vacancy-batch-detail", args=[self.level1_position.pk]))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("vacancy-batches"), response.headers["Location"])
+
     def test_batch_exam_button_is_gated_on_the_exam_pool(self):
         application = self._submit(self.make_application(self.level1_position))
         self.finalize_screening_for_current_stage(application, self.secretariat)
@@ -7586,6 +7623,61 @@ class BatchExamTests(BaseRecruitmentTestCase):
         first.refresh_from_db()
         self.assertEqual(first.status, RecruitmentApplication.Status.HRMPSB_REVIEW)
 
+    def test_batch_exam_view_redirects_when_pool_empty_after_finalize(self):
+        # Regression: finalizing the exam batch empties the pool (cases move to the
+        # interview section), so a refresh / Back-button / re-run of the exam URL used to
+        # raise a bare Http404 ("Page Not Found") — the very error seen after finalizing.
+        # It must now redirect to the batch overview with a friendly note instead.
+        first, second = self._two_qualified(self.level1_position)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(self.level1_position, self.secretariat, self._schedule_payload())
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_scores(
+                self.level1_position,
+                self.secretariat,
+                {
+                    first.case.id: {"general_score": "90", "technical_score": "80"},
+                    second.case.id: {"general_score": "70", "technical_score": "60"},
+                },
+                finalize=True,
+            )
+        # The exam pool is now empty (the passers advanced to the interview section).
+        self.assertEqual(list(vacancy_exam_pool(self.level1_position)), [])
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(reverse("vacancy-batch-exam", args=[self.level1_position.pk]))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(
+            reverse("vacancy-batch-detail", args=[self.level1_position.pk]),
+            response.headers["Location"],
+        )
+
+    def test_batch_exam_finalize_forwards_to_the_interview_console(self):
+        # After finalizing the exam, the Secretariat (the Level-1 interview-support role)
+        # is carried straight to the interview console for the same pool instead of being
+        # dropped back on the batch overview to hunt for the next step.
+        first, second = self._two_qualified(self.level1_position)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(self.level1_position, self.secretariat, self._schedule_payload())
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = client.post(
+                reverse("vacancy-batch-exam", args=[self.level1_position.pk]),
+                {
+                    "operation": "finalize",
+                    f"general_score_{first.case.id}": "90",
+                    f"technical_score_{first.case.id}": "80",
+                    f"general_score_{second.case.id}": "70",
+                    f"technical_score_{second.case.id}": "60",
+                },
+            )
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(
+            reverse("vacancy-batch-interview", args=[self.level1_position.pk]),
+            response.headers["Location"],
+        )
+
 
 class VacancyBatchInterviewTests(BaseRecruitmentTestCase):
     """Batch interview over the per-case engine: one schedule for the pool, then a finalize.
@@ -7904,6 +7996,32 @@ class VacancyBatchInterviewTests(BaseRecruitmentTestCase):
         self.assertTrue(interview_is_finalized_for_current_stage(first))
         self.assertTrue(interview_is_finalized_for_current_stage(second))
         self.assertEqual(get_current_workflow_section(first), "deliberation")
+
+    def test_cos_interview_finalize_forwards_to_the_deliberation_console(self):
+        # The HRM Chief who finalizes a COS interview also runs the deliberation pick, so
+        # carry them straight there rather than dropping them on the batch overview to
+        # hunt for the next step (mirrors the exam -> interview forward).
+        first, second = self._two_cos_at_interview()
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_interview_schedule(
+                self.cos_position, self.hrm_chief, self._interview_schedule_payload()
+            )
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = client.post(
+                reverse("vacancy-batch-interview", args=[self.cos_position.pk]),
+                {
+                    "operation": "finalize",
+                    f"rating_score_{first.case.id}": "88",
+                    f"rating_score_{second.case.id}": "79",
+                },
+            )
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(
+            reverse("vacancy-batch-cos-deliberation", args=[self.cos_position.pk]),
+            response.headers["Location"],
+        )
 
 
 class ClampOriginalFilenameTests(SimpleTestCase):
