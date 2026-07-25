@@ -40,6 +40,7 @@ from .forms import (
     RequirementChecklistNotificationForm,
     ScreeningReviewForm,
     ApplicationWithdrawalForm,
+    FinalSelectionRescindForm,
     AttendanceAbsenceDecisionForm,
     AttendanceLetterOfIntentForm,
     InterviewAbsenceForm,
@@ -133,8 +134,11 @@ from .services import (
     mark_interview_absent,
     record_application_withdrawal,
     record_attendance_letter_of_intent,
+    rescind_final_selection,
     resolve_attendance_absence,
     user_can_record_withdrawal,
+    user_can_rescind_final_selection,
+    get_final_selection_history,
     get_latest_cos_selection_round,
     get_open_cos_selection_round,
     open_cos_selection_round,
@@ -661,6 +665,15 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
         # stage to whoever the case is assigned to.
         if user_can_record_withdrawal(user, application):
             context["withdrawal_form"] = ApplicationWithdrawalForm()
+        # SL-14: a recorded selection is strongly controlled but no longer a one-way door.
+        if application.branch == PositionPosting.Branch.PLANTILLA:
+            context["final_selection_history"] = get_final_selection_history(
+                application.position
+            )
+            if user_can_rescind_final_selection(
+                user, get_final_selection_for_application(application)
+            ):
+                context["final_selection_rescind_form"] = FinalSelectionRescindForm()
         context["current_user_interview_rating"] = get_interview_rating_for_user(application, user)
         context["interview_rating_is_support_encoding"] = user_is_interview_rating_support_encoder(
             user,
@@ -3021,6 +3034,37 @@ class InterviewAbsenceView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
                 request,
                 "Absence recorded. No score was written — file the applicant's letter of "
                 "intent if one arrives, then decide whether to reschedule.",
+            )
+        return redirect("application-detail", pk=pk)
+
+
+class FinalSelectionRescindView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
+    """SL-14: void a recorded final selection so the vacancy can be decided again."""
+
+    def post(self, request, pk):
+        application = get_object_or_404(RecruitmentApplication, pk=pk)
+        selection = get_final_selection_for_application(application)
+        if not user_can_rescind_final_selection(request.user, selection):
+            raise PermissionDenied
+        form = FinalSelectionRescindForm(request.POST)
+        if not form.is_valid():
+            messages.error(request, "Record why this selection is being rescinded.")
+            return redirect("application-detail", pk=pk)
+        try:
+            _selection, restored = rescind_final_selection(
+                selection,
+                request.user,
+                form.cleaned_data["reason"],
+                reference=form.cleaned_data.get("reference", ""),
+            )
+        except (ValueError, ValidationError) as exc:
+            messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
+        else:
+            messages.success(
+                request,
+                f"Selection rescinded. The original record is preserved, and "
+                f"{len(restored)} case(s) are back at the Appointing Authority step so a "
+                "replacement decision can be recorded.",
             )
         return redirect("application-detail", pk=pk)
 

@@ -2381,6 +2381,37 @@ class InterviewAbsenceForm(BootstrapFormMixin, forms.Form):
         return notes
 
 
+class FinalSelectionRescindForm(BootstrapFormMixin, forms.Form):
+    """SL-14: void a recorded selection so the vacancy can be decided again.
+
+    The original record is preserved untouched; this only supplies the reason and any
+    authority reference that go on the rescission."""
+
+    reason = forms.CharField(
+        label="Reason for rescinding this selection",
+        widget=forms.Textarea(attrs={"rows": 3}),
+        help_text=(
+            "Recorded permanently against the original selection, which is kept intact."
+        ),
+    )
+    reference = forms.CharField(
+        label="Supporting authority or reference",
+        required=False,
+        max_length=255,
+        help_text="Optional — e.g. the memorandum or letter authorising the correction.",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
+
+    def clean_reason(self):
+        reason = (self.cleaned_data.get("reason") or "").strip()
+        if not reason:
+            raise forms.ValidationError("Record why this selection is being rescinded.")
+        return reason
+
+
 class RecruitmentEntryCancellationForm(BootstrapFormMixin, forms.Form):
     """SL-11: cancelling a published vacancy closes live cases and emails their applicants,
     so it demands a stated reason rather than being another one-click status toggle."""

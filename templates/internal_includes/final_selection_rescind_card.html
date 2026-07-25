@@ -1,0 +1,80 @@
+{% comment %}
+SL-14 — Rescind a recorded final selection.
+
+A selection should be hard to change, but "impossible" turns a mis-click — or the selected
+person withdrawing before appointment — into the official truth forever. Rescinding never
+edits or deletes the original: it marks it rescinded, keeps every recorded value, and frees
+the vacancy so a replacement decision can be recorded as a new, linked record.
+
+The cutoff (how late a selection may be rescinded) and whether the matter returns to the
+board are office policy and are deliberately not encoded — the client has not settled them.
+
+Inputs:
+  final_selection_rescind_form : FinalSelectionRescindForm | None
+  final_selection_history      : iterable of FinalSelection
+{% endcomment %}
+{% if final_selection_rescind_form %}
+<details class="rg-icard mb-3" id="final-selection-rescind">
+    <summary class="rg-icard__title" style="cursor:pointer; padding:0.25rem 0;">
+        Rescind this selection
+    </summary>
+    <p class="rg-icard__subtitle">
+        Use this to correct a selection that was recorded in error, or when the selected
+        person withdraws before appointment. The original record is <strong>kept intact</strong>
+        and marked rescinded; the candidates it closed come back to this step so the vacancy
+        can be decided again.
+    </p>
+    <form method="post"
+          action="{% url 'final-selection-rescind' application.pk %}" novalidate>
+        {% csrf_token %}
+        <div class="rg-field">
+            <label class="form-label" for="{{ final_selection_rescind_form.reason.id_for_label }}">
+                {{ final_selection_rescind_form.reason.label }}
+                <span class="text-danger" aria-hidden="true">*</span>
+            </label>
+            {{ final_selection_rescind_form.reason }}
+            <div class="form-text">{{ final_selection_rescind_form.reason.help_text }}</div>
+        </div>
+        <div class="rg-field">
+            <label class="form-label" for="{{ final_selection_rescind_form.reference.id_for_label }}">
+                {{ final_selection_rescind_form.reference.label }}
+            </label>
+            {{ final_selection_rescind_form.reference }}
+            <div class="form-text">{{ final_selection_rescind_form.reference.help_text }}</div>
+        </div>
+        <button type="submit" class="btn btn-outline-danger btn-sm">
+            Rescind the selection
+        </button>
+    </form>
+</details>
+{% endif %}
+
+{% if final_selection_history %}
+{% for record in final_selection_history %}
+{% if record.is_rescinded %}
+<div class="rg-icard mb-3">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">Rescinded selection</h3>
+            <p class="rg-icard__subtitle">
+                {{ record.selected_application.applicant_display_name }} was selected on
+                {{ record.decided_at|date:"N j, Y" }} by
+                {{ record.decided_by.get_full_name|default:record.decided_by.username }},
+                and that selection was rescinded on
+                {{ record.rescinded_at|date:"N j, Y" }} by
+                {{ record.rescinded_by.get_full_name|default:record.rescinded_by.username }}.
+                The original record is preserved exactly as it was recorded.
+            </p>
+        </div>
+        <span class="rg-pill rg-pill--neutral rg-pill--sm">Rescinded</span>
+    </div>
+    <p class="rg-note mb-0">
+        {{ record.rescind_reason }}
+        {% if record.rescind_reference %}
+            <br><strong>Reference:</strong> {{ record.rescind_reference }}
+        {% endif %}
+    </p>
+</div>
+{% endif %}
+{% endfor %}
+{% endif %}

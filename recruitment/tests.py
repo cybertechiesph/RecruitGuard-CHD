@@ -117,6 +117,11 @@ from .services import (
     record_final_decision,
     user_can_record_final_decision,
     record_final_selection,
+    rescind_final_selection,
+    user_can_rescind_final_selection,
+    user_can_record_final_selection,
+    get_final_selection_for_entry,
+    get_final_selection_history,
     record_system_audit_event,
     remove_applicant_from_batch,
     save_cos_vacancy_deliberation,
@@ -15020,6 +15025,247 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
             {"operation": "finalize"},
         )
         self.assertEqual(response.status_code, 403)
+
+    def test_rescinding_a_selection_preserves_it_and_reopens_the_vacancy(self):
+        # SL-14: the correction is additive. The original selection keeps every value it
+        # was recorded with, the winner comes back out of completion, and the sibling it
+        # closed is in contention again — otherwise a mis-click is the official truth.
+        applications, report = self.prepare_ranked_level1_car(3)
+        winner = applications[0]
+        sibling = applications[1]
+        with self.captureOnCommitCallbacks(execute=True):
+            selection = record_final_selection(
+                application=winner,
+                actor=self.appointing,
+                cleaned_data={
+                    "selected_item": report.items.get(rank_order=1),
+                    "decision_notes": "Selected the board's recommended applicant.",
+                },
+            )
+        original_decided_at = selection.decided_at
+        original_snapshot = selection.car_snapshot
+
+        with self.captureOnCommitCallbacks(execute=True):
+            rescinded, restored = rescind_final_selection(
+                selection,
+                self.appointing,
+                "The selected applicant declined the appointment before assumption.",
+                reference="Letter dated 2026-07-20",
+            )
+
+        rescinded.refresh_from_db()
+        winner.refresh_from_db()
+        winner.case.refresh_from_db()
+        sibling.refresh_from_db()
+        sibling.case.refresh_from_db()
+
+        self.assertTrue(rescinded.is_rescinded)
+        self.assertEqual(rescinded.rescinded_by, self.appointing)
+        self.assertEqual(
+            rescinded.rescinded_by_role, RecruitmentUser.Role.APPOINTING_AUTHORITY
+        )
+        self.assertIn("declined the appointment", rescinded.rescind_reason)
+        self.assertEqual(rescinded.rescind_reference, "Letter dated 2026-07-20")
+        # Preserved, not rewritten.
+        self.assertEqual(rescinded.selected_application_id, winner.id)
+        self.assertEqual(rescinded.decided_by, self.appointing)
+        self.assertEqual(rescinded.decided_at, original_decided_at)
+        self.assertEqual(rescinded.car_snapshot, original_snapshot)
+
+        self.assertIn(winner.id, [a.id for a in restored])
+        self.assertIn(sibling.id, [a.id for a in restored])
+        for application in (winner, sibling):
+            self.assertEqual(
+                application.status,
+                RecruitmentApplication.Status.APPOINTING_AUTHORITY_REVIEW,
+            )
+            self.assertEqual(
+                application.case.current_stage,
+                RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW,
+            )
+            self.assertEqual(
+                application.case.case_status, RecruitmentCase.CaseStatus.ACTIVE
+            )
+            self.assertFalse(application.case.is_stage_locked)
+            self.assertIsNone(application.closed_at)
+
+        # The vacancy reads as undecided again, and the trail keeps the rescinded row.
+        self.assertIsNone(get_final_selection_for_entry(self.level1_position))
+        history = list(get_final_selection_history(self.level1_position))
+        self.assertEqual([record.id for record in history], [selection.id])
+        self.assertTrue(
+            AuditLog.objects.filter(
+                action=AuditLog.Action.FINAL_SELECTION_RESCINDED,
+                application=winner,
+            ).exists()
+        )
+
+    def test_a_replacement_selection_can_be_recorded_and_chains_to_the_rescinded_one(self):
+        # SL-14: reopening the vacancy is only useful if it can then be decided again, and
+        # the two rows have to read as one correction rather than two rival decisions.
+        applications, report = self.prepare_ranked_level1_car(3)
+        winner = applications[0]
+        replacement = applications[1]
+        with self.captureOnCommitCallbacks(execute=True):
+            selection = record_final_selection(
+                application=winner,
+                actor=self.appointing,
+                cleaned_data={
+                    "selected_item": report.items.get(rank_order=1),
+                    "decision_notes": "Selected the board's recommended applicant.",
+                },
+            )
+        with self.captureOnCommitCallbacks(execute=True):
+            rescind_final_selection(
+                selection, self.appointing, "Recorded against the wrong candidate."
+            )
+
+        replacement.refresh_from_db()
+        self.assertTrue(user_can_record_final_selection(self.appointing, replacement))
+
+        with self.captureOnCommitCallbacks(execute=True):
+            second = record_final_selection(
+                application=replacement,
+                actor=self.appointing,
+                cleaned_data={
+                    "selected_item": report.items.get(rank_order=2),
+                    "decision_notes": "Recorded the correct appointee.",
+                    "deep_selection_justification": (
+                        "The originally selected applicant declined; the next ranked "
+                        "applicant is appointed."
+                    ),
+                },
+            )
+
+        replacement.refresh_from_db()
+        replacement.case.refresh_from_db()
+        winner.refresh_from_db()
+        winner.case.refresh_from_db()
+
+        self.assertEqual(second.supersedes_id, selection.id)
+        self.assertEqual(get_final_selection_for_entry(self.level1_position), second)
+        self.assertEqual(replacement.status, RecruitmentApplication.Status.APPROVED)
+        self.assertEqual(
+            replacement.case.current_stage, RecruitmentCase.Stage.COMPLETION
+        )
+        self.assertEqual(winner.status, RecruitmentApplication.Status.REJECTED)
+        self.assertEqual(
+            FinalSelection.objects.filter(recruitment_entry=self.level1_position).count(),
+            2,
+        )
+
+    def test_rescinding_requires_the_appointing_authority_and_a_reason(self):
+        # SL-14: voiding the office's own appointment decision is not a routine edit — it
+        # is restricted to the role that recorded it and never accepted without a reason.
+        applications, report = self.prepare_ranked_level1_car(3)
+        with self.captureOnCommitCallbacks(execute=True):
+            selection = record_final_selection(
+                application=applications[0],
+                actor=self.appointing,
+                cleaned_data={
+                    "selected_item": report.items.get(rank_order=1),
+                    "decision_notes": "Selected the board's recommended applicant.",
+                },
+            )
+
+        for actor in (self.secretariat, self.hrm_chief, self.hrmpsb):
+            self.assertFalse(user_can_rescind_final_selection(actor, selection))
+        self.assertTrue(user_can_rescind_final_selection(self.appointing, selection))
+
+        with self.assertRaisesMessage(
+            ValueError, "Only the Appointing Authority may rescind"
+        ):
+            rescind_final_selection(selection, self.hrm_chief, "Not my call to make.")
+        with self.assertRaisesMessage(
+            ValueError, "Record why this selection is being rescinded."
+        ):
+            rescind_final_selection(selection, self.appointing, "   ")
+
+        selection.refresh_from_db()
+        self.assertFalse(selection.is_rescinded)
+        self.assertEqual(get_final_selection_for_entry(self.level1_position), selection)
+
+    def test_the_appointing_authority_can_rescind_from_the_case_surface(self):
+        # SL-14: the affordance has to exist where the decision was made, and it may not
+        # be reachable by anyone else.
+        applications, report = self.prepare_ranked_level1_car(3)
+        winner = applications[0]
+        with self.captureOnCommitCallbacks(execute=True):
+            record_final_selection(
+                application=winner,
+                actor=self.appointing,
+                cleaned_data={
+                    "selected_item": report.items.get(rank_order=1),
+                    "decision_notes": "Selected the board's recommended applicant.",
+                },
+            )
+
+        client = Client()
+        self.force_login_with_mfa(client, self.appointing)
+        detail = client.get(reverse("application-detail", kwargs={"pk": winner.pk}))
+        self.assertEqual(detail.status_code, 200)
+        self.assertContains(detail, "Rescind this selection")
+        self.assertNotContains(detail, "{#")
+
+        other_client = Client()
+        self.force_login_with_mfa(other_client, self.hrm_chief)
+        forbidden = other_client.post(
+            reverse("final-selection-rescind", kwargs={"pk": winner.pk}),
+            {"reason": "Trying to undo someone else's decision."},
+        )
+        self.assertEqual(forbidden.status_code, 403)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = client.post(
+                reverse("final-selection-rescind", kwargs={"pk": winner.pk}),
+                {
+                    "reason": "The appointment is not going ahead.",
+                    "reference": "Memo 2026-07-22",
+                },
+            )
+        self.assertEqual(response.status_code, 302)
+
+        self.assertIsNone(get_final_selection_for_entry(self.level1_position))
+        after = client.get(reverse("application-detail", kwargs={"pk": winner.pk}))
+        self.assertContains(after, "Rescinded selection")
+        self.assertContains(after, "The appointment is not going ahead.")
+        self.assertContains(after, "Memo 2026-07-22")
+        self.assertNotContains(after, "Rescind this selection")
+
+    def test_a_rescinded_selection_no_longer_blocks_cancelling_the_vacancy(self):
+        # SL-14 + SL-11: cancellation tells the canceller to rescind first, so a rescinded
+        # row must stop refusing them once they have.
+        applications, report = self.prepare_ranked_level1_car(3)
+        with self.captureOnCommitCallbacks(execute=True):
+            selection = record_final_selection(
+                application=applications[0],
+                actor=self.appointing,
+                cleaned_data={
+                    "selected_item": report.items.get(rank_order=1),
+                    "decision_notes": "Selected the board's recommended applicant.",
+                },
+            )
+
+        with self.assertRaisesMessage(
+            ValidationError, "A selection has already been recorded for this vacancy."
+        ):
+            cancel_recruitment_entry(
+                self.level1_position, self.secretariat, "Item withdrawn by the region."
+            )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            rescind_final_selection(
+                selection, self.appointing, "The appointment is not going ahead."
+            )
+        with self.captureOnCommitCallbacks(execute=True):
+            cancel_recruitment_entry(
+                self.level1_position, self.secretariat, "Item withdrawn by the region."
+            )
+
+        self.level1_position.refresh_from_db()
+        self.assertEqual(
+            self.level1_position.status, PositionPosting.EntryStatus.CANCELLED
+        )
 
 
 class E2ESeedCommandTests(BaseRecruitmentTestCase):

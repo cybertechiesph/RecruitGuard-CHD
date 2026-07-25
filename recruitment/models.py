@@ -3519,20 +3519,28 @@ class ComparativeAssessmentReportItem(TimestampedModel):
 
 
 class FinalSelection(TimestampedModel):
-    comparative_assessment_report = models.OneToOneField(
+    """The Appointing Authority's recorded selection from a finalized CAR.
+
+    SL-14: strongly controlled, but not immutable-with-no-way-back. A clerical mis-click,
+    or the selected person withdrawing before appointment, still needs a correction model —
+    "immutable with no superseding record" turns a mistake into the official truth. A
+    selection can therefore be *rescinded*: the original row is never edited or deleted,
+    and the replacement decision is a new row that links back to what it supersedes."""
+
+    comparative_assessment_report = models.ForeignKey(
         ComparativeAssessmentReport,
         on_delete=models.PROTECT,
-        related_name="final_selection",
+        related_name="final_selections",
     )
     recruitment_entry = models.ForeignKey(
         PositionPosting,
         on_delete=models.PROTECT,
         related_name="final_selections",
     )
-    selected_item = models.OneToOneField(
+    selected_item = models.ForeignKey(
         ComparativeAssessmentReportItem,
         on_delete=models.PROTECT,
-        related_name="final_selection",
+        related_name="final_selections",
     )
     selected_application = models.ForeignKey(
         RecruitmentApplication,
@@ -3555,12 +3563,36 @@ class FinalSelection(TimestampedModel):
     decision_notes = models.TextField()
     car_snapshot = models.JSONField(default=dict, blank=True)
     decided_at = models.DateTimeField(default=timezone.now)
+    # SL-14: rescission. The original values are never touched — only these fields are set,
+    # and the replacement decision is a separate row pointing back through ``supersedes``.
+    is_rescinded = models.BooleanField(default=False)
+    rescinded_at = models.DateTimeField(blank=True, null=True)
+    rescinded_by = models.ForeignKey(
+        RecruitmentUser,
+        on_delete=models.PROTECT,
+        related_name="rescinded_final_selections",
+        blank=True,
+        null=True,
+    )
+    rescinded_by_role = models.CharField(max_length=40, blank=True)
+    rescind_reason = models.TextField(blank=True)
+    rescind_reference = models.CharField(max_length=255, blank=True)
+    supersedes = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        related_name="superseded_by",
+        blank=True,
+        null=True,
+    )
 
     class Meta:
         ordering = ["-decided_at", "-created_at"]
         constraints = [
+            # SL-14: exactly one *currently effective* selection per vacancy. Rescinded
+            # rows stay in place as history, which is the whole point of the mechanism.
             models.UniqueConstraint(
                 fields=["recruitment_entry"],
+                condition=models.Q(is_rescinded=False),
                 name="unique_final_selection_per_entry",
             )
         ]
@@ -3636,6 +3668,17 @@ class FinalSelection(TimestampedModel):
             errors["decision_notes"] = "Decision notes are required."
         if not self.car_snapshot:
             errors["car_snapshot"] = "Final selection must preserve the CAR snapshot."
+        # SL-14: a rescission must carry its own reason and actor. Rescinding without a
+        # stated reason would be the same one-way door in the opposite direction.
+        if self.is_rescinded:
+            if not self.rescinded_by_id:
+                errors["rescinded_by"] = "A rescinded selection must record who rescinded it."
+            if not (self.rescind_reason or "").strip():
+                errors["rescind_reason"] = "Record why this selection is being rescinded."
+        elif self.rescinded_by_id or self.rescinded_at or self.rescind_reason:
+            errors["is_rescinded"] = (
+                "Rescission details require the selection to be marked rescinded."
+            )
         if errors:
             raise ValidationError(errors)
 
@@ -3647,10 +3690,22 @@ class FinalSelection(TimestampedModel):
             self.recruitment_entry = self.comparative_assessment_report.recruitment_entry
         if self.decided_by_id:
             self.decided_by_role = self.decided_by.role
+        if self.rescinded_by_id:
+            self.rescinded_by_role = self.rescinded_by.role
+        elif not self.is_rescinded:
+            self.rescinded_by_role = ""
         super().save(*args, **kwargs)
 
+    @property
+    def is_effective(self):
+        return not self.is_rescinded
+
     def __str__(self):
-        return f"{self.recruitment_entry.job_code} selected {self.selected_application.reference_label}"
+        state = " (rescinded)" if self.is_rescinded else ""
+        return (
+            f"{self.recruitment_entry.job_code} selected "
+            f"{self.selected_application.reference_label}{state}"
+        )
 
 
 class FinalDecision(TimestampedModel):
@@ -4477,6 +4532,7 @@ class AuditLog(TimestampedModel):
         APPLICATION_WITHDRAWN = "application_withdrawn", "Application Withdrawn"
         RECRUITMENT_ENTRY_CANCELLED = "recruitment_entry_cancelled", "Recruitment Entry Cancelled"
         COMPLETION_DEADLINE_CHANGED = "completion_deadline_changed", "Completion Deadline Changed"
+        FINAL_SELECTION_RESCINDED = "final_selection_rescinded", "Final Selection Rescinded"
         COMPLETION_RECORDED = "completion_recorded", "Completion Recorded"
         CASE_CLOSED = "case_closed", "Case Closed"
         NOTIFICATION_SENT = "notification_sent", "Notification Sent"
@@ -4499,6 +4555,9 @@ class AuditLog(TimestampedModel):
 
     SENSITIVE_ACTIONS = {
         Action.CASE_REOPENED,
+        # SL-11/SL-14: unwinding a published vacancy or a recorded appointment.
+        Action.RECRUITMENT_ENTRY_CANCELLED,
+        Action.FINAL_SELECTION_RESCINDED,
         Action.APPLICANT_DISQUALIFIED,
         Action.EXPORT_GENERATED,
         Action.EXPORT_DENIED,
@@ -4745,6 +4804,7 @@ AUDIT_ACTION_CATEGORIES = {
             AuditLog.Action.RECRUITMENT_ENTRY_CANCELLED,
             AuditLog.Action.COMPLETION_RECORDED,
             AuditLog.Action.COMPLETION_DEADLINE_CHANGED,
+            AuditLog.Action.FINAL_SELECTION_RESCINDED,
             AuditLog.Action.CASE_CLOSED,
         ],
     },

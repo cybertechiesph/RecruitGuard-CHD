@@ -4456,7 +4456,10 @@ def get_final_selection_for_entry(recruitment_entry):
             "decided_by",
             "recruitment_entry",
         )
-        .filter(recruitment_entry=recruitment_entry)
+        # SL-14: the vacancy's *currently effective* selection. A rescinded row stays as
+        # history and must not keep the vacancy frozen — reading it here is what would
+        # otherwise block re-selection, sibling reopen, and the AA's own form forever.
+        .filter(recruitment_entry=recruitment_entry, is_rescinded=False)
         .order_by("-decided_at", "-created_at")
         .first()
     )
@@ -4464,6 +4467,18 @@ def get_final_selection_for_entry(recruitment_entry):
 
 def get_final_selection_for_application(application):
     return get_final_selection_for_entry(application.position)
+
+
+def get_final_selection_history(recruitment_entry):
+    """SL-14: every selection ever recorded for this vacancy, newest first — including the
+    rescinded ones, which is the record the correction model exists to preserve."""
+    return (
+        FinalSelection.objects.select_related(
+            "selected_application", "decided_by", "rescinded_by", "supersedes"
+        )
+        .filter(recruitment_entry=recruitment_entry)
+        .order_by("-decided_at", "-created_at")
+    )
 
 
 def get_comparative_assessment_report_items_for_report(report):
@@ -9502,12 +9517,23 @@ def record_final_selection(application, actor, cleaned_data):
 
     report_items = _final_selection_items_are_ready(report)
     car_snapshot = build_car_selection_packet(report)
+    # SL-14: if this vacancy was decided before and that decision was rescinded, chain the
+    # replacement to it. Without the link the two rows read as unrelated decisions and the
+    # record no longer shows that one corrected the other.
+    superseded = (
+        FinalSelection.objects.filter(
+            recruitment_entry=report.recruitment_entry, is_rescinded=True
+        )
+        .order_by("-rescinded_at", "-id")
+        .first()
+    )
     selection = FinalSelection(
         comparative_assessment_report=report,
         recruitment_entry=report.recruitment_entry,
         selected_item=selected_item,
         selected_application=selected_item.application,
         selected_case=selected_item.recruitment_case,
+        supersedes=superseded,
         decided_by=actor,
         is_deep_selection=cleaned_data.get("is_deep_selection", False),
         deep_selection_justification=cleaned_data.get("deep_selection_justification", ""),
@@ -9632,6 +9658,122 @@ def record_final_selection(application, actor, cleaned_data):
             queue_non_selected_applicant_notification(target_application, actor=actor)
 
     return selection
+
+
+def user_can_rescind_final_selection(user, selection):
+    """SL-14: who may rescind a recorded Plantilla selection.
+
+    Default authorizer: the role that recorded it — the Appointing Authority. Flagged in
+    the Resolution Log as a default for the client to confirm or narrow. The cutoff (how
+    late a selection may be rescinded) and whether the matter returns to the board are
+    still client policy and are deliberately NOT encoded here."""
+    if selection is None or selection.is_rescinded:
+        return False
+    return user.role == RecruitmentUser.Role.APPOINTING_AUTHORITY
+
+
+@transaction.atomic
+def rescind_final_selection(selection, actor, reason, *, reference=""):
+    """SL-14: void a recorded final selection so the vacancy can be decided again.
+
+    A selection should be hard to change — but "impossible" turns a mis-click, or the
+    selected person withdrawing before appointment, into the official truth forever. The
+    original record is never edited or deleted: it is marked rescinded, keeping every value
+    it was recorded with, and the vacancy becomes selectable again so a replacement decision
+    can be recorded as a new, linked row.
+
+    Rescinding also unwinds what the selection did to the pool: the former winner comes back
+    out of completion to the Appointing Authority step, and the siblings it closed as not
+    selected are reopened there too, because they are once again in contention."""
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValueError("Record why this selection is being rescinded.")
+    if selection.is_rescinded:
+        raise ValueError("This selection has already been rescinded.")
+    if not user_can_rescind_final_selection(actor, selection):
+        raise ValueError(
+            "Only the Appointing Authority may rescind a recorded final selection."
+        )
+
+    entry = selection.recruitment_entry
+    report = selection.comparative_assessment_report
+    winner = selection.selected_application
+    closed_siblings = list(
+        RecruitmentApplication.objects.select_related("case", "position", "applicant")
+        .filter(
+            position=entry,
+            case__case_status=RecruitmentCase.CaseStatus.REJECTED,
+        )
+        .exclude(pk=winner.pk)
+    )
+
+    selection.is_rescinded = True
+    selection.rescinded_at = timezone.now()
+    selection.rescinded_by = actor
+    selection.rescind_reason = reason
+    selection.rescind_reference = reference or ""
+    selection.full_clean()
+    selection.save()
+
+    restored = []
+    for application in [winner, *closed_siblings]:
+        case = getattr(application, "case", None)
+        if case is None:
+            continue
+        previous_status = application.status
+        previous_case_status = case.case_status
+        _sync_case_after_workflow_action(
+            application=application,
+            actor=actor,
+            next_role=RecruitmentUser.Role.APPOINTING_AUTHORITY,
+            next_status=RecruitmentApplication.Status.APPOINTING_AUTHORITY_REVIEW,
+            remarks=f"Selection rescinded: {reason}",
+        )
+        application.current_handler_role = RecruitmentUser.Role.APPOINTING_AUTHORITY
+        application.status = RecruitmentApplication.Status.APPOINTING_AUTHORITY_REVIEW
+        application.closed_at = None
+        application.save(
+            update_fields=["current_handler_role", "status", "closed_at", "updated_at"]
+        )
+        record_audit_event(
+            application=application,
+            actor=actor,
+            action=AuditLog.Action.FINAL_SELECTION_RESCINDED,
+            description=(
+                "Returned to the Appointing Authority after the selection was rescinded."
+            ),
+            metadata={
+                "final_selection_id": selection.id,
+                "reason": reason,
+                "reference": selection.rescind_reference,
+                "was_selected": application.pk == winner.pk,
+                "from_status": previous_status,
+                "to_status": application.status,
+                "from_case_status": previous_case_status,
+                "to_case_status": case.case_status,
+            },
+        )
+        restored.append(application)
+
+    record_system_audit_event(
+        actor=actor,
+        action=AuditLog.Action.FINAL_SELECTION_RESCINDED,
+        description=(
+            f"Rescinded the final selection for {entry.job_code} "
+            f"({winner.reference_label})."
+        ),
+        metadata={
+            "entry_id": entry.id,
+            "entry_code": entry.job_code,
+            "final_selection_id": selection.id,
+            "report_id": report.id,
+            "previous_selected_application_id": winner.id,
+            "reason": reason,
+            "reference": selection.rescind_reference,
+            "restored_application_ids": sorted(a.id for a in restored),
+        },
+    )
+    return selection, restored
 
 
 def _close_cos_non_selected_pool(selected_application, actor, decision):
@@ -11474,7 +11616,9 @@ def cancel_recruitment_entry(entry, actor, reason):
         raise ValidationError("Record why this vacancy is being cancelled.")
     if entry.status == PositionPosting.EntryStatus.CANCELLED:
         raise ValidationError("This vacancy is already cancelled.")
-    if FinalSelection.objects.filter(recruitment_entry=entry).exists():
+    # SL-14: only an *effective* selection blocks cancellation — the message tells the
+    # canceller to rescind first, so a rescinded row must not keep refusing them.
+    if FinalSelection.objects.filter(recruitment_entry=entry, is_rescinded=False).exists():
         raise ValidationError(
             "A selection has already been recorded for this vacancy. Rescind the selection "
             "first if the appointment is not going ahead."
