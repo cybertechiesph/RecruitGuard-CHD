@@ -28,6 +28,33 @@ and COS responsibilities should be implemented.
 - No additional COS-specific actor is introduced beyond current internal roles
 - After HRM Chief deliberation, COS selection may be recorded by the HRM Chief and routed directly to completion tracking; Appointing Authority signing is not part of the COS path.
 
+### Level 1 COS is two-pass — this is the approved source (SL-05, 2026-07-26)
+
+An earlier audit prompt described Level 1 COS as "Secretariat screening/exam → HRM Chief
+interview", implying the Chief starts at interview. That was an oversimplification. The
+approved rule is:
+
+- **Level 1 COS is two-pass.** The Secretariat performs the first screening and examination
+  pass. Finalizing the Secretariat exam routes the case to HRM Chief Review, where the Chief
+  performs an **independent validation** of screening and examination before the interview.
+  The client's own account of the process is the basis: "kadalasan ako po ang initial review,
+  at siya po ang final approval lalo na sa higher-level positions."
+- **The passes are independent, not a re-keying exercise.** The Chief sees the Secretariat's
+  finalized results read-only as the first-pass basis (the "Earlier review — Secretariat"
+  card) and records their own findings. A one-click "Copy results from Secretariat review"
+  accelerator prefills the Chief's still-editable form; it is a convenience, never an
+  auto-accept.
+- **Rule for disagreement.** Each pass is a stage-local finalized record and neither
+  overwrites the other. The record finalized at the case's **current** stage is the operative
+  one for that stage and for everything downstream of it; the earlier pass is preserved
+  intact as the first-pass basis and remains visible and auditable. A disagreement is
+  therefore recorded as two attributable findings, never silently reconciled.
+- **One sitting, one schedule, one notice.** The Chief's validation never invents a second
+  examination schedule and never re-emails the applicant an invitation for an exam already
+  taken: a notified schedule from any prior review stage satisfies the schedule-before-record
+  guard (WF-12).
+- **Level 2 COS is unaffected** — it begins directly with HRM Chief screening and examination.
+
 ## Appointing Authority Selection Rules
 - Plantilla Appointing Authority selection is recorded from the finalized vacancy-level CAR.
 - Selection should be from the top five ranked CAR candidates where practicable.

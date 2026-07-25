@@ -20,8 +20,20 @@
              role="group" aria-label="Step 1: Document review">
         <div class="rg-scr-panel__header">
             <div>
-                <h2 class="rg-scr-panel__title">Step 1 &mdash; Review the documents</h2>
-                <p class="rg-scr-panel__subtitle">Open each file, then set its status. Do this for every required document.</p>
+                {# SL-05: at a second pass this is an independent validation, not a re-key —
+                   name it so the reviewer knows which of the two records they are creating. #}
+                <h2 class="rg-scr-panel__title">
+                    {% if prior_screening_record %}Step 1 &mdash; Validate the document review{% else %}Step 1 &mdash; Review the documents{% endif %}
+                </h2>
+                <p class="rg-scr-panel__subtitle">
+                    {% if prior_screening_record %}
+                        Independent validation of the Secretariat's pass. Open each file and set
+                        its status yourself &mdash; your findings are recorded separately and do
+                        not overwrite theirs.
+                    {% else %}
+                        Open each file, then set its status. Do this for every required document.
+                    {% endif %}
+                </p>
             </div>
             <div class="d-flex flex-wrap gap-2">
                 {% if prior_screening_record %}
