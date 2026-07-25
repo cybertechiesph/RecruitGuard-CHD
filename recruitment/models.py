@@ -3148,6 +3148,10 @@ class ApplicationETERating(TimestampedModel):
     education_basis = models.CharField(max_length=255, blank=True)
     training_basis = models.CharField(max_length=255, blank=True)
     experience_basis = models.CharField(max_length=255, blank=True)
+    # SL-08A: the QS and the candidate's screened credentials as they stood when this
+    # rating was given, so the basis of a past judgement cannot be rewritten by a later
+    # QS edit or document resubmission.
+    source_facts_snapshot = models.JSONField(default=dict, blank=True)
     recorded_by = models.ForeignKey(
         RecruitmentUser,
         on_delete=models.PROTECT,

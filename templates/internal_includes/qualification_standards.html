@@ -1,0 +1,44 @@
+{% comment %}
+The position's Qualification Standards. Extracted from the screening wizard so the CAR's
+ETE grid can carry the same block on its face — which is exactly what the office's own CAR
+spreadsheet does (SL-08A). Rendering it in one place keeps the two screens from drifting.
+
+Inputs (from context):
+  application — used for application.position.qualification_reference and its
+                position_reference's qs_* fields.
+{% endcomment %}
+{% with reference=application.position.position_reference %}
+{% if application.position.qualification_reference or reference and reference.qualification_summary %}
+<div class="rg-scr-qualification-reference">
+    <div class="rg-scr-kicker">Minimum qualifications for this position</div>
+    {% if application.position.qualification_reference %}
+        <div class="rg-scr-reference-note">{{ application.position.qualification_reference|linebreaksbr }}</div>
+    {% endif %}
+    {% if reference %}
+        <div class="rg-scr-reference-grid">
+            {% if reference.qs_education %}
+                <div><span>Education</span><strong>{{ reference.qs_education }}</strong></div>
+            {% endif %}
+            {% if reference.qs_training %}
+                <div><span>Training</span><strong>{{ reference.qs_training }}</strong></div>
+            {% endif %}
+            {% if reference.qs_experience %}
+                <div><span>Experience</span><strong>{{ reference.qs_experience }}</strong></div>
+            {% endif %}
+            {% if reference.qs_eligibility %}
+                <div><span>Eligibility</span><strong>{{ reference.qs_eligibility }}</strong></div>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+{% else %}
+{# WF-05: say explicitly when no QS is on file — never leave the instruction dangling. #}
+<div class="rg-scr-qualification-reference">
+    <div class="rg-scr-kicker">Minimum qualifications for this position</div>
+    <div class="rg-scr-reference-note">
+        No qualification standards are on file for this position reference.
+        Check the plantilla / QS issuance before recording the decision.
+    </div>
+</div>
+{% endif %}
+{% endwith %}

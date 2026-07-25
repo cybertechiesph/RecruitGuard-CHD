@@ -289,6 +289,15 @@ def dom_id(value, prefix=""):
 
 
 @register.filter
+def dict_get(mapping, key):
+    """Look a value up by a non-literal key. Django templates can only do
+    ``mapping.literal``, and the CAR's per-candidate facts are keyed by case id."""
+    if not hasattr(mapping, "get"):
+        return None
+    return mapping.get(key)
+
+
+@register.filter
 def roman_numeral(value):
     """Render small civil-service level numbers as Roman numerals (1 -> I, 2 -> II)."""
     numerals = {1: "I", 2: "II", 3: "III", 4: "IV", 5: "V", 6: "VI"}

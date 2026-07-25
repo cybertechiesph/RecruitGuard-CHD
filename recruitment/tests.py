@@ -13833,6 +13833,49 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             {first.case.id, second.case.id},
         )
 
+    def test_the_ete_grid_shows_the_qs_and_the_candidates_own_credentials(self):
+        # SL-08A: ETE is 40% of the CAR and the scorer was being asked for that verdict
+        # with nothing on screen but a candidate code and three empty boxes.
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb)
+        self.finalize_deliberation_for_current_stage(application, self.hrmpsb, ranking_position=1)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Minimum qualifications for this position")
+        self.assertContains(response, "credentials on file")
+        self.assertContains(response, application.qualification_summary)
+
+    def test_an_ete_rating_keeps_the_facts_it_was_judged_against(self):
+        # SL-08A AC#3: a later QS edit or resubmission must not rewrite the basis of a
+        # rating already given.
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb)
+        self.finalize_deliberation_for_current_stage(application, self.hrmpsb, ranking_position=1)
+
+        rating = set_application_ete_rating(application, self.secretariat, Decimal("88"))
+        snapshot = rating.source_facts_snapshot
+
+        self.assertIn("captured_at", snapshot)
+        self.assertEqual(
+            snapshot["qualification_summary"], application.qualification_summary
+        )
+        self.assertTrue(snapshot["documents"])
+
+        # Editing the position's QS afterwards leaves the recorded basis alone.
+        application.position.qualification_reference = "Revised QS text."
+        application.position.save(update_fields=["qualification_reference", "updated_at"])
+        rating.refresh_from_db()
+        self.assertNotEqual(
+            rating.source_facts_snapshot.get("qualification_reference"),
+            "Revised QS text.",
+        )
+
     def test_an_unscored_car_row_cannot_be_the_board_recommendation(self):
         # SL-03 AC#2: no rank, no recommendation, no route forward without a score.
         application = self.make_application(self.level1_position)

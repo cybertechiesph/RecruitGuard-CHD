@@ -115,7 +115,9 @@ from .services import (
     get_completion_requirements,
     decrypt_evidence_bytes,
     evidence_belongs_to_application_context,
+    ETE_COMPONENT_WEIGHTS_BY_BRANCH,
     get_attendance_exceptions,
+    get_car_candidate_fact_rows,
     get_cos_pick_for_case,
     get_cos_vacancy_deliberation,
     get_interview_fallback_ratings,
@@ -676,6 +678,20 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
         # SL-00: the CAR split is per-vacancy, so every CAR surface states the split its
         # scores were actually computed against instead of implying the office default.
         context["car_weights"] = application.position.assessment_weights_or_default
+        # SL-08A: the QS and each candidate's screened credentials, so the ETE verdict is
+        # made against the record rather than from memory.
+        context["car_candidate_facts"] = get_car_candidate_fact_rows(
+            comparative_assessment_items
+        )
+        ete_weights = ETE_COMPONENT_WEIGHTS_BY_BRANCH.get(
+            application.branch,
+            ETE_COMPONENT_WEIGHTS_BY_BRANCH[PositionPosting.Branch.PLANTILLA],
+        )
+        context["ete_component_weight_display"] = {
+            "education": int(ete_weights[0] * 100),
+            "training": int(ete_weights[1] * 100),
+            "experience": int(ete_weights[2] * 100),
+        }
         context["car_readiness"] = get_comparative_assessment_readiness(application)
         context["car_requires_deliberation"] = False
         context["car_requires_finalized_deliberation"] = False

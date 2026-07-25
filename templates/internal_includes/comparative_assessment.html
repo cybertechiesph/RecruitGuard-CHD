@@ -168,9 +168,20 @@ HRM Chief on COS). Two states:
             <div class="form-text">
                 Score each component 0&ndash;100 and record a one-line basis for each
                 (e.g. <em>"Master's degree; only Bachelor's required"</em>). The composition
-                inside the CAR's 40% is education 40%, training 30%, experience 30%.
+                inside the CAR's {{ car_weights.ete_weight|floatformat:"-1" }}% is
+                education {{ ete_component_weight_display.education }}%,
+                training {{ ete_component_weight_display.training }}%,
+                experience {{ ete_component_weight_display.experience }}%.
                 Press <strong>Update draft CAR</strong> to recompute the overall score and ranking.
             </div>
+
+            {% comment %}
+            SL-08A: the office's own CAR sheet carries the Qualification Standards on its
+            face, and this is the point of judgement for 40% of the score — so the QS and
+            each candidate's screened credentials belong here, not on another screen.
+            Only the preparer sees this grid; the board's read-only CAR stays blinded.
+            {% endcomment %}
+            {% include "internal_includes/qualification_standards.html" %}
             <div class="rg-car-ete-grid">
                 {% for item in current_comparative_assessment_report_items %}
                 {% with ete=item.application.ete_rating %}
@@ -181,9 +192,39 @@ HRM Chief on COS). Two states:
                             <span class="rg-pill rg-pill--info rg-pill--sm" title="Computed ETE rating on record">ETE {{ ete.rating }}</span>
                         {% endif %}
                     </div>
+                    {% with facts=car_candidate_facts|dict_get:item.recruitment_case_id %}
+                    {% if facts %}
+                    <details class="mb-2">
+                        <summary style="font-size:0.75rem;color:#4b5563;cursor:pointer;">
+                            This candidate's credentials on file
+                        </summary>
+                        <div style="font-size:0.78rem;color:#374151;padding:0.4rem 0 0 0.6rem;">
+                            {% if facts.qualification_summary %}
+                            <p class="mb-1"><em>{{ facts.qualification_summary }}</em></p>
+                            {% endif %}
+                            <ul class="list-unstyled mb-0">
+                                {% for document in facts.documents %}
+                                <li class="d-flex justify-content-between py-1"
+                                    style="border-bottom:1px solid #f1f5f9;">
+                                    <span>
+                                        {% if document.evidence_id %}
+                                            <a href="{% url 'evidence-download' item.application.pk document.evidence_id %}"
+                                               target="_blank" rel="noopener">{{ document.title }}</a>
+                                        {% else %}{{ document.title }}{% endif %}
+                                    </span>
+                                    <span class="rg-pill rg-pill--{{ document.status|status_theme }} rg-pill--sm">
+                                        {{ document.status|status_label }}
+                                    </span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </details>
+                    {% endif %}
+                    {% endwith %}
                     <div class="row g-2">
                         <div class="col-md-4">
-                            <label class="form-label" style="font-size:0.72rem;" for="ete-education-{{ item.recruitment_case_id }}">Education (40%)</label>
+                            <label class="form-label" style="font-size:0.72rem;" for="ete-education-{{ item.recruitment_case_id }}">Education ({{ ete_component_weight_display.education }}%)</label>
                             <input type="number" id="ete-education-{{ item.recruitment_case_id }}"
                                    class="rg-car-ete-input form-control form-control-sm"
                                    name="ete_education_{{ item.recruitment_case_id }}"
@@ -197,7 +238,7 @@ HRM Chief on COS). Two states:
                                    aria-label="Education basis for {{ item.candidate_label }}">
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label" style="font-size:0.72rem;" for="ete-training-{{ item.recruitment_case_id }}">Training (30%)</label>
+                            <label class="form-label" style="font-size:0.72rem;" for="ete-training-{{ item.recruitment_case_id }}">Training ({{ ete_component_weight_display.training }}%)</label>
                             <input type="number" id="ete-training-{{ item.recruitment_case_id }}"
                                    class="rg-car-ete-input form-control form-control-sm"
                                    name="ete_training_{{ item.recruitment_case_id }}"
@@ -211,7 +252,7 @@ HRM Chief on COS). Two states:
                                    aria-label="Training basis for {{ item.candidate_label }}">
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label" style="font-size:0.72rem;" for="ete-experience-{{ item.recruitment_case_id }}">Experience (30%)</label>
+                            <label class="form-label" style="font-size:0.72rem;" for="ete-experience-{{ item.recruitment_case_id }}">Experience ({{ ete_component_weight_display.experience }}%)</label>
                             <input type="number" id="ete-experience-{{ item.recruitment_case_id }}"
                                    class="rg-car-ete-input form-control form-control-sm"
                                    name="ete_experience_{{ item.recruitment_case_id }}"

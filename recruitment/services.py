@@ -6525,6 +6525,9 @@ def set_application_ete_rating(application, actor, rating, *, components=None):
         record.training_basis = components["training_basis"]
         record.experience_basis = components["experience_basis"]
     record.recorded_by = actor
+    # SL-08A: keep what this rating was judged against. A later QS edit or document
+    # resubmission must not silently rewrite the basis of a rating already given.
+    record.source_facts_snapshot = build_ete_source_facts_snapshot(application)
     record.full_clean()
     record.save()
     return record
@@ -7576,6 +7579,65 @@ def get_applicant_document_review_items(application):
             }
         )
     return review_items
+
+
+def get_car_candidate_fact_rows(items):
+    """SL-08A: the facts each ETE scoring row is judged against, keyed by case id.
+
+    ETE is 40% of the CAR, and the scorer was being asked for that verdict with nothing on
+    screen but a candidate code and three empty boxes — the position's Qualification
+    Standards and the candidate's own credentials both lived elsewhere. This returns, per
+    candidate, the qualification summary they submitted and the screened evidence rows
+    (requirement, status, evidence id) that back it, so the judgement is made against the
+    record rather than from memory.
+
+    Blinding note (REV-B): this is only ever rendered inside the editable ETE grid, which
+    belongs to the Secretariat preparing the CAR — the same office that screened these
+    documents. The board's read-only CAR stays blinded."""
+    rows = {}
+    for item in items:
+        application = item.application
+        rows[item.recruitment_case_id] = {
+            "qualification_summary": application.qualification_summary,
+            "documents": [
+                {
+                    "title": entry["requirement"].applicant_label,
+                    "status": entry["review_status"],
+                    "remarks": entry["review_remarks"],
+                    "evidence_id": entry["evidence"].id if entry["evidence"] else None,
+                }
+                for entry in get_applicant_document_review_items(application)
+                if entry["is_submitted"]
+            ],
+        }
+    return rows
+
+
+def build_ete_source_facts_snapshot(application):
+    """SL-08A: what the ETE rating was judged against, captured with the rating.
+
+    A QS edit or a document resubmission afterwards must not silently rewrite the basis of
+    a rating that has already been given."""
+    posting = application.position
+    reference = posting.position_reference
+    return {
+        "captured_at": timezone.now().isoformat(),
+        "qualification_reference": posting.qualification_reference or "",
+        "qs_education": getattr(reference, "qs_education", "") or "",
+        "qs_training": getattr(reference, "qs_training", "") or "",
+        "qs_experience": getattr(reference, "qs_experience", "") or "",
+        "qs_eligibility": getattr(reference, "qs_eligibility", "") or "",
+        "qualification_summary": application.qualification_summary or "",
+        "documents": [
+            {
+                "title": entry["requirement"].applicant_label,
+                "status": entry["review_status"],
+                "evidence_id": entry["evidence"].id if entry["evidence"] else None,
+            }
+            for entry in get_applicant_document_review_items(application)
+            if entry["is_submitted"]
+        ],
+    }
 
 
 def get_missing_required_applicant_document_requirements(application):
