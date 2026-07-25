@@ -770,6 +770,9 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
         elif (
             context.get("current_detail_tab", {}).get("key") == "exam"
             and user.role in {RecruitmentUser.Role.SECRETARIAT, RecruitmentUser.Role.HRM_CHIEF}
+            # SL-04: only a batch vacancy can be waiting on its batch. A continuous COS case
+            # is never on hold for a sibling, so it must not be told that it is.
+            and vacancy_uses_batch_exam(application.position)
         ):
             # The case's own screening is done (section is exam) but the vacancy's exam batch is
             # on hold because a sibling still needs a screening decision (§4.3).

@@ -12680,27 +12680,75 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             FinalDecision.Outcome.SELECTED,
         )
 
-    # ── SL-02: need-based COS selection rounds ────────────────────────────────
-    def _continuous_candidate(self, suffix):
-        """A continuous-COS candidate driven to the HRM Chief deliberation section."""
+    # ── SL-04: continuous COS is gated on its own screening ───────────────────
+    def test_a_continuous_cos_case_is_not_blocked_by_a_sibling_in_screening(self):
+        # SL-04: the audit's probe — a qualified continuous candidate could not reach the
+        # exam because an unrelated applicant was still screening, and the batch console
+        # refused them too, so there was no valid examination door at all.
+        ready = self._continuous_candidate_at_exam("ready")
+        pending = self._continuous_candidate_awaiting_screening("pending")
+
+        self.assertFalse(
+            vacancy_screening_batch_status(self.cos_continuous_position).is_ready
+        )
+        self.assertEqual(get_current_workflow_section(ready), "exam")
+        self.assertTrue(user_can_manage_exam(self.secretariat, ready))
+        # The sibling's own case is genuinely still at screening — only its own.
+        self.assertEqual(get_current_workflow_section(pending), "screening")
+
+        record = save_exam_record(
+            application=ready,
+            actor=self.secretariat,
+            cleaned_data={
+                "exam_type": ExamRecord.ExamType.END_USER_ASSESSMENT,
+                "exam_status": ExamRecord.ExamStatus.COMPLETED,
+                "exam_result": "",
+                "technical_score": "84.50",
+                "technical_result": "",
+                "general_score": "89.00",
+                "general_result": "",
+                "exam_date": timezone.localdate().isoformat(),
+                "administered_by": ExamRecord.AdministeredBy.HRMS,
+                "valid_from": timezone.localdate().isoformat(),
+                "valid_until": (timezone.localdate() + timedelta(days=365)).isoformat(),
+                "exam_notes": "Recorded per case for the continuous vacancy.",
+            },
+            finalize=False,
+        )
+        self.assertIsNotNone(record)
+
+    def test_a_batch_cos_vacancy_keeps_its_vacancy_wide_screening_gate(self):
+        # SL-04 AC#3: opening-based and pooling COS still move as one batch.
+        first, second = self._two_pooling_cos_candidates()
+        self.finalize_screening_for_current_stage(first, self.secretariat)
+        first.refresh_from_db()
+        self.assertEqual(get_current_workflow_section(first), "exam")
+        self.assertFalse(
+            vacancy_screening_batch_status(self.cos_position).is_ready
+        )
+        self.assertFalse(user_can_manage_exam(self.secretariat, first))
+        self.assertIsNotNone(second)
+
+    def _submitted_cos_application(self, position, suffix):
+        """A submitted COS application from its own applicant account."""
         applicant = RecruitmentUser.objects.create_user(
-            username=f"cont-applicant-{suffix}",
+            username=f"cos-applicant-{suffix}",
             password="testpass123",
-            email=f"cont.{suffix}@example.com",
+            email=f"cos.{suffix}@example.com",
             role=RecruitmentUser.Role.APPLICANT,
         )
         application = RecruitmentApplication.objects.create(
             applicant=applicant,
-            position=self.cos_continuous_position,
-            applicant_first_name=f"Cont{suffix}",
+            position=position,
+            applicant_first_name=f"Cos{suffix}",
             applicant_last_name="Applicant",
-            applicant_email=f"cont.{suffix}@example.com",
-            applicant_phone=f"091777700{suffix}",
+            applicant_email=f"cos.{suffix}@example.com",
+            applicant_phone="09177770001",
             checklist_privacy_consent=True,
             checklist_documents_complete=True,
             checklist_information_certified=True,
-            qualification_summary="Continuous COS pool candidate.",
-            cover_letter="Applying for the continuous vacancy.",
+            qualification_summary="COS pool candidate.",
+            cover_letter="Applying for the COS vacancy.",
             performance_rating_applicability=(
                 RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
             ),
@@ -12708,7 +12756,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         self.upload_required_applicant_documents(
             application,
             applicant,
-            content_prefix=f"cont-{suffix}",
+            content_prefix=f"cos-{suffix}",
             performance_rating_applicability=(
                 RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
             ),
@@ -12717,6 +12765,26 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         with self.captureOnCommitCallbacks(execute=True):
             submit_application(application, applicant)
         application.refresh_from_db()
+        return application
+
+    def _continuous_candidate_awaiting_screening(self, suffix):
+        return self._submitted_cos_application(self.cos_continuous_position, suffix)
+
+    def _continuous_candidate_at_exam(self, suffix):
+        application = self._submitted_cos_application(self.cos_continuous_position, suffix)
+        self.finalize_screening_for_current_stage(application, self.secretariat)
+        application.refresh_from_db()
+        return application
+
+    def _two_pooling_cos_candidates(self):
+        first = self._submitted_cos_application(self.cos_position, "pool-a")
+        second = self._submitted_cos_application(self.cos_position, "pool-b")
+        return first, second
+
+    # ── SL-02: need-based COS selection rounds ────────────────────────────────
+    def _continuous_candidate(self, suffix):
+        """A continuous-COS candidate driven to the HRM Chief deliberation section."""
+        application = self._submitted_cos_application(self.cos_continuous_position, suffix)
         self.finalize_screening_for_current_stage(application, self.secretariat)
         self.finalize_exam_for_current_stage(application, self.secretariat)
         application.refresh_from_db()

@@ -3114,8 +3114,15 @@ def user_can_manage_exam(user, application):
     # Batch screening gate (§4.3): the qualified pool moves to exam together, so exam stays
     # blocked while any application in the vacancy still has a pending screening decision.
     # A single-application vacancy auto-satisfies this once its own screening is finalized.
-    if not vacancy_screening_batch_status(application.position).is_ready:
-        return False
+    #
+    # SL-04: only where the vacancy actually examines as a batch. Continuous COS is
+    # deliberately per-case — candidates arrive and are processed one at a time — so a
+    # vacancy-wide "everyone must finish screening" gate has no stable completion point:
+    # a qualified candidate waited indefinitely because an unrelated applicant was still
+    # screening, while the batch console refused them too, leaving no valid exam door.
+    if vacancy_uses_batch_exam(application.position):
+        if not vacancy_screening_batch_status(application.position).is_ready:
+            return False
     return user_can_process_application(user, application)
 
 
