@@ -256,10 +256,9 @@
 </div>
 {% endif %}
 
-{# ── Fallback rating sheet ──────────────────────────────────── #}
-{% if interview_fallback_form %}
+{# ── Absence + fallback rating sheet ────────────────────────── #}
 {% include "internal_includes/interview_fallback_card.html" %}
-{% elif interview_fallback_requires_session %}
+{% if not interview_fallback_form and interview_fallback_requires_session %}
 <div class="rg-icard rg-int-banner rg-int-banner--warn">
     <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
         <circle cx="10" cy="10" r="8.5"/>

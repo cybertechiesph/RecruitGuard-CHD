@@ -50,6 +50,7 @@ from .forms import (
     WorkflowActionForm,
 )
 from .models import (
+    AttendanceException,
     ApplicationETERating,
     AuditLog,
     ComparativeAssessmentReport,
@@ -161,6 +162,10 @@ from .services import (
     update_recruitment_entry_status,
     upload_interview_fallback_rating,
     user_can_upload_interview_fallback,
+    mark_interview_absent,
+    get_pending_attendance_exception,
+    record_attendance_letter_of_intent,
+    resolve_attendance_absence,
     get_interview_fallback_evidence,
     get_interview_session,
     interview_session_rater_ids,
@@ -11681,6 +11686,193 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
             finalize=True,
         )
         self.assertTrue(session.is_finalized)
+
+    # ── SL-06: no-show has an outcome ─────────────────────────────────────────
+    def _cos_session_awaiting_ratings(self):
+        application = self.make_application(self.cos_position)
+        self.move_application_to_hrm_chief_review(application)
+        self.finalize_screening_for_current_stage(application, self.hrm_chief)
+        self.finalize_exam_for_current_stage(application, self.hrm_chief)
+        save_interview_session(
+            application=application,
+            actor=self.hrm_chief,
+            cleaned_data=self.session_payload(),
+            finalize=False,
+        )
+        return application
+
+    def test_an_interview_no_show_finalizes_without_a_fabricated_score(self):
+        # SL-06 AC#1/#3: the audit's probe — a session with "did not attend" and no rating
+        # was refused outright, so staff had to invent a number or a sheet to continue.
+        application = self._cos_session_awaiting_ratings()
+        session = mark_interview_absent(
+            application=application,
+            actor=self.hrm_chief,
+            notes="Did not attend the scheduled interview.",
+        )
+        self.assertTrue(session.is_finalized)
+        self.assertTrue(session.candidate_was_absent)
+        self.assertEqual(session.ratings.count(), 0)
+        self.assertEqual(session.fallback_ratings.count(), 0)
+        # No score was invented anywhere.
+        self.assertIsNone(_average_interview_rating(session))
+
+        absence = get_pending_attendance_exception(application)
+        self.assertIsNotNone(absence)
+        self.assertEqual(absence.assessment_stage, AttendanceException.Stage.INTERVIEW)
+        self.assertTrue(absence.is_pending)
+        self.assertTrue(
+            AuditLog.objects.filter(
+                application=application,
+                action=AuditLog.Action.ATTENDANCE_ABSENCE_RECORDED,
+            ).exists()
+        )
+
+    def test_an_absent_interview_cannot_also_carry_a_rating(self):
+        application = self._cos_session_awaiting_ratings()
+        save_interview_rating(
+            application=application,
+            actor=self.hrm_chief,
+            cleaned_data=self.rating_payload(application, level=3),
+        )
+        with self.assertRaisesMessage(ValueError, "already carries ratings"):
+            mark_interview_absent(
+                application=application,
+                actor=self.hrm_chief,
+                notes="Trying to record both.",
+            )
+
+    def test_the_office_can_reschedule_after_a_recorded_absence(self):
+        # SL-06 AC#4: reschedule records outcome, actor, timestamp and reason.
+        application = self._cos_session_awaiting_ratings()
+        mark_interview_absent(
+            application=application,
+            actor=self.hrm_chief,
+            notes="Did not attend.",
+        )
+        absence = get_pending_attendance_exception(application)
+        record_attendance_letter_of_intent(
+            absence,
+            self.hrm_chief,
+            SimpleUploadedFile("loi.pdf", b"%PDF-1.4 letter", content_type="application/pdf"),
+            notes="Sent the day after.",
+        )
+        absence.refresh_from_db()
+        self.assertIsNotNone(absence.letter_of_intent)
+        self.assertIsNotNone(absence.letter_received_at)
+
+        resolve_attendance_absence(
+            absence,
+            self.hrm_chief,
+            AttendanceException.Outcome.RESCHEDULED,
+            "Letter of intent accepted; a new sitting will be scheduled.",
+        )
+        absence.refresh_from_db()
+        application.refresh_from_db()
+        session = get_interview_session(application)
+
+        self.assertEqual(absence.outcome, AttendanceException.Outcome.RESCHEDULED)
+        self.assertEqual(absence.decided_by, self.hrm_chief)
+        self.assertIsNotNone(absence.decided_at)
+        self.assertIn("Letter of intent accepted", absence.decision_reason)
+        # The missed sitting is open again — no fabricated result was left behind.
+        self.assertFalse(session.is_finalized)
+        self.assertFalse(session.candidate_was_absent)
+        self.assertEqual(
+            application.case.case_status, RecruitmentCase.CaseStatus.ACTIVE
+        )
+
+    def test_the_office_can_end_the_application_after_a_recorded_absence(self):
+        application = self._cos_session_awaiting_ratings()
+        with self.captureOnCommitCallbacks(execute=True):
+            mark_interview_absent(
+                application=application,
+                actor=self.hrm_chief,
+                notes="Did not attend.",
+            )
+            absence = get_pending_attendance_exception(application)
+            resolve_attendance_absence(
+                absence,
+                self.hrm_chief,
+                AttendanceException.Outcome.TERMINAL,
+                "No letter of intent was received within the period.",
+            )
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+
+        self.assertEqual(application.status, RecruitmentApplication.Status.REJECTED)
+        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.CLOSED)
+        self.assertTrue(
+            NotificationLog.objects.filter(
+                application=application,
+                notification_type=NotificationLog.NotificationType.NON_SELECTED_APPLICANT,
+            ).exists()
+        )
+
+    def test_deciding_an_absence_needs_a_reason_and_a_real_outcome(self):
+        application = self._cos_session_awaiting_ratings()
+        mark_interview_absent(
+            application=application,
+            actor=self.hrm_chief,
+            notes="Did not attend.",
+        )
+        absence = get_pending_attendance_exception(application)
+        with self.assertRaisesMessage(ValueError, "Record why this absence"):
+            resolve_attendance_absence(
+                absence, self.hrm_chief, AttendanceException.Outcome.TERMINAL, "   "
+            )
+        with self.assertRaisesMessage(ValueError, "Choose whether the candidate"):
+            resolve_attendance_absence(
+                absence, self.hrm_chief, AttendanceException.Outcome.PENDING, "A reason."
+            )
+
+    def test_an_absent_exam_waits_for_the_office_instead_of_closing_itself(self):
+        # SL-06: the office promises a letter-of-intent route in every exam invitation.
+        # Absent therefore parks for a decision rather than closing the case on the spot.
+        application = self.make_application(self.cos_position)
+        self.move_application_to_hrm_chief_review(application)
+        self.finalize_screening_for_current_stage(application, self.hrm_chief)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_exam_schedule(
+                application=application,
+                actor=self.hrm_chief,
+                cleaned_data={
+                    "scheduled_for": timezone.now() + timedelta(hours=2),
+                    "venue": "CHD CALABARZON Examination Room",
+                    "instructions": "Bring a valid government ID.",
+                },
+            )
+        with self.captureOnCommitCallbacks(execute=True):
+            save_exam_record(
+                application=application,
+                actor=self.hrm_chief,
+                cleaned_data={
+                    "exam_type": ExamRecord.ExamType.END_USER_ASSESSMENT,
+                    "exam_status": ExamRecord.ExamStatus.ABSENT,
+                    "exam_result": "",
+                    "technical_score": "",
+                    "technical_result": "",
+                    "general_score": "",
+                    "general_result": "",
+                    "exam_date": timezone.localdate().isoformat(),
+                    "administered_by": ExamRecord.AdministeredBy.HRMS,
+                    "valid_from": "",
+                    "valid_until": "",
+                    "exam_notes": "Did not appear at the scheduled examination.",
+                },
+                finalize=True,
+            )
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+
+        absence = get_pending_attendance_exception(application)
+        self.assertIsNotNone(absence)
+        self.assertEqual(absence.assessment_stage, AttendanceException.Stage.EXAMINATION)
+        # The case is held, not closed — the office has not decided yet.
+        self.assertNotEqual(application.status, RecruitmentApplication.Status.REJECTED)
+        self.assertEqual(
+            application.case.case_status, RecruitmentCase.CaseStatus.ACTIVE
+        )
 
     # ── SL-03 / SL-07: attributable paper ratings ─────────────────────────────
     def _plantilla_session_awaiting_ratings(self):

@@ -38,6 +38,9 @@ from .forms import (
     SimpleInterviewRatingForm,
     RequirementChecklistNotificationForm,
     ScreeningReviewForm,
+    AttendanceAbsenceDecisionForm,
+    AttendanceLetterOfIntentForm,
+    InterviewAbsenceForm,
     VacancyAssessmentWeightsForm,
     VacancyAssessmentWeightsUnlockForm,
     WorkflowActionForm,
@@ -112,10 +115,15 @@ from .services import (
     get_completion_requirements,
     decrypt_evidence_bytes,
     evidence_belongs_to_application_context,
+    get_attendance_exceptions,
     get_cos_pick_for_case,
     get_cos_vacancy_deliberation,
     get_interview_fallback_ratings,
+    get_pending_attendance_exception,
     interview_fallback_panel_queryset,
+    mark_interview_absent,
+    record_attendance_letter_of_intent,
+    resolve_attendance_absence,
     get_latest_cos_selection_round,
     get_open_cos_selection_round,
     open_cos_selection_round,
@@ -631,6 +639,13 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
             if context["current_interview_session"]
             else []
         )
+        # SL-06: a recorded absence waiting on the office's reschedule-or-terminal decision.
+        pending_absence = get_pending_attendance_exception(application)
+        context["attendance_exceptions"] = get_attendance_exceptions(application)
+        context["pending_attendance_exception"] = pending_absence
+        if pending_absence and user_can_process_application(user, application):
+            context["attendance_letter_form"] = AttendanceLetterOfIntentForm()
+            context["attendance_decision_form"] = AttendanceAbsenceDecisionForm()
         context["current_user_interview_rating"] = get_interview_rating_for_user(application, user)
         context["interview_rating_is_support_encoding"] = user_is_interview_rating_support_encoder(
             user,
@@ -841,6 +856,16 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
                 context["interview_fallback_form"] = InterviewFallbackUploadForm(
                     panel_members=interview_fallback_panel_queryset(application),
                 )
+            if (
+                interview_session
+                and not interview_session.is_finalized
+                # A pooled interview records absence on the batch console, so the per-case
+                # screen stays the read-only summary the one-door rule intends.
+                and not vacancy_uses_batch_exam(application.position)
+                and user_can_manage_interview_session(user, application)
+            ):
+                # SL-06: recording a no-show must be as available as recording a score.
+                context["interview_absence_form"] = InterviewAbsenceForm()
         applicant_pool_is_blocked = (
             application_requires_finalized_applicant_pool(application)
             and not application_has_finalized_applicant_pool(application)
@@ -2832,6 +2857,85 @@ class InterviewRatingView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, Vi
                 messages.success(request, "Interview rating saved.")
         else:
             messages.error(request, "Complete the required interview rating fields before saving.")
+        return redirect("application-detail", pk=pk)
+
+
+class InterviewAbsenceView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
+    """SL-06: record that the candidate did not attend their scheduled interview."""
+
+    def post(self, request, pk):
+        application = get_object_or_404(RecruitmentApplication, pk=pk)
+        if not user_can_manage_interview_session(request.user, application):
+            raise PermissionDenied
+        form = InterviewAbsenceForm(request.POST)
+        if not form.is_valid():
+            messages.error(request, "Record what happened at the scheduled interview.")
+            return redirect("application-detail", pk=pk)
+        try:
+            mark_interview_absent(
+                application=application,
+                actor=request.user,
+                notes=form.cleaned_data["notes"],
+            )
+        except (ValueError, ValidationError) as exc:
+            messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
+        else:
+            messages.success(
+                request,
+                "Absence recorded. No score was written — file the applicant's letter of "
+                "intent if one arrives, then decide whether to reschedule.",
+            )
+        return redirect("application-detail", pk=pk)
+
+
+class AttendanceExceptionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
+    """SL-06: file the letter of intent against a recorded absence, or decide it."""
+
+    def post(self, request, pk, exception_pk):
+        application = get_object_or_404(RecruitmentApplication, pk=pk)
+        exception = get_object_or_404(
+            AttendanceException, pk=exception_pk, application=application
+        )
+        if not user_can_process_application(request.user, application):
+            raise PermissionDenied
+        operation = request.POST.get("operation", "")
+        if operation == "letter":
+            form = AttendanceLetterOfIntentForm(request.POST, request.FILES)
+            if not form.is_valid():
+                messages.error(request, "Attach the applicant's letter of intent.")
+                return redirect("application-detail", pk=pk)
+            service = record_attendance_letter_of_intent
+            kwargs = {
+                "uploaded_file": form.cleaned_data["file"],
+                "notes": form.cleaned_data.get("notes", ""),
+            }
+            success = "Letter of intent filed against the recorded absence."
+        elif operation == "decide":
+            form = AttendanceAbsenceDecisionForm(request.POST)
+            if not form.is_valid():
+                messages.error(
+                    request, "Choose an outcome and record why it was decided that way."
+                )
+                return redirect("application-detail", pk=pk)
+            service = resolve_attendance_absence
+            kwargs = {
+                "outcome": form.cleaned_data["outcome"],
+                "reason": form.cleaned_data["reason"],
+            }
+            success = (
+                "Candidate rescheduled — the missed sitting is open again."
+                if form.cleaned_data["outcome"] == AttendanceException.Outcome.RESCHEDULED
+                else "Recorded that the application does not proceed. The applicant was notified."
+            )
+        else:
+            messages.error(request, "This action is not available.")
+            return redirect("application-detail", pk=pk)
+        try:
+            service(exception, request.user, **kwargs)
+        except (ValueError, ValidationError) as exc:
+            messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
+        else:
+            messages.success(request, success)
         return redirect("application-detail", pk=pk)
 
 

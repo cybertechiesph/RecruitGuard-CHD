@@ -26,6 +26,7 @@ from .captcha import (
 )
 from .models import (
     AUDIT_ACTION_CATEGORIES,
+    AttendanceException,
     AuditLog,
     ComparativeAssessmentReport,
     ComparativeAssessmentReportItem,
@@ -2311,6 +2312,80 @@ class SimpleInterviewRatingForm(BootstrapFormMixin, forms.Form):
                 "Provide a justification when the interview score is below 75 or above 98.",
             )
         return cleaned
+
+
+class InterviewAbsenceForm(BootstrapFormMixin, forms.Form):
+    """SL-06: record that the candidate did not attend. No score field, deliberately."""
+
+    notes = forms.CharField(
+        label="What happened",
+        widget=forms.Textarea(attrs={"rows": 3}),
+        help_text="Recorded with the absence — no score is written for a no-show.",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
+
+    def clean_notes(self):
+        notes = (self.cleaned_data.get("notes") or "").strip()
+        if not notes:
+            raise forms.ValidationError("Record what happened at the scheduled interview.")
+        return notes
+
+
+class AttendanceLetterOfIntentForm(BootstrapFormMixin, forms.Form):
+    """SL-06: file the applicant's letter of intent against a recorded absence."""
+
+    file = forms.FileField(label="Letter of intent")
+    notes = forms.CharField(
+        label="Notes",
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 2}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
+
+    def clean_file(self):
+        uploaded_file = self.cleaned_data.get("file")
+        if uploaded_file:
+            try:
+                validate_applicant_document_upload(uploaded_file)
+            except ValueError as exc:
+                raise forms.ValidationError(str(exc)) from exc
+        return uploaded_file
+
+
+class AttendanceAbsenceDecisionForm(BootstrapFormMixin, forms.Form):
+    """SL-06: the office's decision on a recorded absence — reschedule, or terminal.
+
+    Both need a reason. Nothing here happens on a timer; a terminal outcome is always a
+    human decision."""
+
+    outcome = forms.ChoiceField(
+        label="Decision",
+        choices=(
+            (AttendanceException.Outcome.RESCHEDULED, "Reschedule the candidate"),
+            (AttendanceException.Outcome.TERMINAL, "The application does not proceed"),
+        ),
+        widget=forms.RadioSelect,
+    )
+    reason = forms.CharField(
+        label="Reason",
+        widget=forms.Textarea(attrs={"rows": 3}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
+
+    def clean_reason(self):
+        reason = (self.cleaned_data.get("reason") or "").strip()
+        if not reason:
+            raise forms.ValidationError("Record why this absence is being decided this way.")
+        return reason
 
 
 class InterviewFallbackUploadForm(BootstrapFormMixin, forms.Form):

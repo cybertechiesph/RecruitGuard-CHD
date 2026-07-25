@@ -10,6 +10,36 @@ Inputs:
   interview_fallback_form            : InterviewFallbackUploadForm
   current_interview_fallback_ratings : iterable of InterviewFallbackRating
 {% endcomment %}
+{% if interview_absence_form %}
+<div class="rg-icard" id="int-absence-section">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">Candidate did not attend</h3>
+            <p class="rg-icard__subtitle">
+                A no-show is an outcome, not a score of zero. Recording it finalizes this
+                interview with no rating and holds the case for the office's decision &mdash;
+                reschedule, or the application does not proceed.
+            </p>
+        </div>
+    </div>
+    <form method="post"
+          action="{% url 'interview-absence-record' application.pk %}" novalidate>
+        {% csrf_token %}
+        <div class="rg-field">
+            <label class="form-label" for="{{ interview_absence_form.notes.id_for_label }}">
+                {{ interview_absence_form.notes.label }}
+                <span class="text-danger" aria-hidden="true">*</span>
+            </label>
+            {{ interview_absence_form.notes }}
+            <div class="form-text">{{ interview_absence_form.notes.help_text }}</div>
+        </div>
+        <button type="submit" class="btn btn-outline-danger btn-sm">
+            Record the absence
+        </button>
+    </form>
+</div>
+{% endif %}
+
 {% if interview_fallback_form %}
 <div class="rg-icard" id="int-fallback-section">
     <div class="rg-icard__header">

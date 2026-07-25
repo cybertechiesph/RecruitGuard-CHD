@@ -1,0 +1,113 @@
+{% comment %}
+SL-06 — A recorded no-show, waiting on the office's decision.
+
+A candidate who did not sit a scheduled examination or interview has no score, and none is
+invented for them. The office already tells every applicant, in the exam invitation and the
+interview notice, that they may send a written letter of intent to reschedule before the
+scheduled date; this is where that letter lands, and where the resulting decision —
+reschedule, or the application does not proceed — is recorded with its reason.
+
+Inputs:
+  pending_attendance_exception : AttendanceException | None
+  attendance_letter_form       : AttendanceLetterOfIntentForm | None
+  attendance_decision_form     : AttendanceAbsenceDecisionForm | None
+  attendance_exceptions        : iterable of AttendanceException (history)
+{% endcomment %}
+{% if pending_attendance_exception %}
+{% with absence=pending_attendance_exception %}
+<div class="rg-icard mb-3" id="attendance-exception-card">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">
+                Absent at the scheduled {{ absence.get_assessment_stage_display|lower }}
+            </h3>
+            <p class="rg-icard__subtitle">
+                Recorded {{ absence.created_at|date:"N j, Y, g:i a" }} by
+                {{ absence.recorded_by.get_full_name|default:absence.recorded_by.username }}.
+                No score was written. The applicant may send a letter of intent to
+                reschedule; the office then decides.
+            </p>
+        </div>
+        <span class="rg-pill rg-pill--warning rg-pill--sm">Awaiting a decision</span>
+    </div>
+
+    {% if absence.absence_notes %}
+    <p class="rg-note">{{ absence.absence_notes }}</p>
+    {% endif %}
+
+    {% if absence.letter_of_intent %}
+        <div class="alert alert-light" role="status">
+            <strong>Letter of intent on file</strong> &mdash;
+            {{ absence.letter_of_intent.original_filename }}, received
+            {{ absence.letter_received_at|date:"N j, Y" }}.
+            {% if absence.letter_notes %}<div class="mt-1">{{ absence.letter_notes }}</div>{% endif %}
+        </div>
+    {% elif attendance_letter_form %}
+        <form method="post"
+              action="{% url 'attendance-exception-manage' application.pk absence.pk %}"
+              enctype="multipart/form-data" novalidate class="mb-3">
+            {% csrf_token %}
+            <input type="hidden" name="operation" value="letter">
+            <div class="rg-field">
+                <label class="form-label" for="{{ attendance_letter_form.file.id_for_label }}">
+                    {{ attendance_letter_form.file.label }}
+                </label>
+                {{ attendance_letter_form.file }}
+            </div>
+            <div class="rg-field">
+                <label class="form-label" for="{{ attendance_letter_form.notes.id_for_label }}">
+                    {{ attendance_letter_form.notes.label }}
+                </label>
+                {{ attendance_letter_form.notes }}
+            </div>
+            <button type="submit" class="btn btn-outline-secondary btn-sm">
+                File the letter of intent
+            </button>
+        </form>
+    {% endif %}
+
+    {% if attendance_decision_form %}
+    <form method="post"
+          action="{% url 'attendance-exception-manage' application.pk absence.pk %}"
+          novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="operation" value="decide">
+        <div class="rg-field">
+            <span class="form-label fw-semibold">{{ attendance_decision_form.outcome.label }}</span>
+            {{ attendance_decision_form.outcome }}
+        </div>
+        <div class="rg-field">
+            <label class="form-label" for="{{ attendance_decision_form.reason.id_for_label }}">
+                {{ attendance_decision_form.reason.label }}
+                <span class="text-danger" aria-hidden="true">*</span>
+            </label>
+            {{ attendance_decision_form.reason }}
+        </div>
+        <button type="submit" class="btn btn-rg-primary btn-sm">Record this decision</button>
+    </form>
+    {% endif %}
+</div>
+{% endwith %}
+{% endif %}
+
+{% if attendance_exceptions %}
+{% for absence in attendance_exceptions %}
+{% if not absence.is_pending %}
+<div class="rg-icard mb-3">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">
+                {{ absence.get_assessment_stage_display }} absence &mdash;
+                {{ absence.get_outcome_display|lower }}
+            </h3>
+            <p class="rg-icard__subtitle">
+                Decided {{ absence.decided_at|date:"N j, Y" }} by
+                {{ absence.decided_by.get_full_name|default:absence.decided_by.username }}.
+            </p>
+        </div>
+    </div>
+    <p class="rg-note mb-0">{{ absence.decision_reason }}</p>
+</div>
+{% endif %}
+{% endfor %}
+{% endif %}

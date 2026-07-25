@@ -48,6 +48,8 @@ from .models import (
     CompetencyScore,
     CompletionRecord,
     CompletionRequirement,
+    AttendanceException,
+    AttendanceOutcome,
     CosSelectionRound,
     CosSelectionRoundMember,
     CosVacancyDeliberation,
@@ -1881,6 +1883,229 @@ def _close_absent_or_waived_exam_application(application, actor, exam_record):
     )
     queue_non_selected_applicant_notification(
         application, actor=actor, exam_status=exam_record.exam_status
+    )
+    return application
+
+
+ARTIFACT_TYPE_LETTER_OF_INTENT = "letter_of_intent"
+
+
+def get_attendance_exceptions(application):
+    return application.attendance_exceptions.select_related(
+        "recorded_by", "decided_by", "letter_of_intent"
+    ).order_by("-created_at")
+
+
+def get_pending_attendance_exception(application, assessment_stage=None):
+    """The absence this case is still waiting for a decision on, if any."""
+    queryset = application.attendance_exceptions.select_related(
+        "recorded_by", "letter_of_intent"
+    ).filter(outcome=AttendanceException.Outcome.PENDING)
+    if assessment_stage:
+        queryset = queryset.filter(assessment_stage=assessment_stage)
+    return queryset.first()
+
+
+@transaction.atomic
+def record_attendance_absence(application, actor, assessment_stage, notes=""):
+    """SL-06: record that the candidate did not sit a scheduled assessment.
+
+    No score is written and none is implied. The case waits here for the office's decision
+    — reschedule or terminal — which is exactly the choice the applicant's letter of intent
+    is meant to inform. Recording an absence is never itself the terminal outcome."""
+    case = getattr(application, "case", None)
+    if case is None:
+        raise ValueError("A case must exist before an absence can be recorded.")
+    existing = get_pending_attendance_exception(application, assessment_stage)
+    if existing:
+        return existing
+    exception = AttendanceException(
+        application=application,
+        recruitment_case=case,
+        review_stage=case.current_stage,
+        assessment_stage=assessment_stage,
+        recorded_by=actor,
+        absence_notes=notes or "",
+    )
+    exception.full_clean()
+    exception.save()
+    record_audit_event(
+        application=application,
+        actor=actor,
+        action=AuditLog.Action.ATTENDANCE_ABSENCE_RECORDED,
+        description=(
+            f"Recorded absence at the scheduled {exception.get_assessment_stage_display().lower()}."
+        ),
+        metadata={
+            "attendance_exception_id": exception.id,
+            "assessment_stage": assessment_stage,
+            "review_stage": exception.review_stage,
+            "notes": exception.absence_notes,
+        },
+    )
+    return exception
+
+
+@transaction.atomic
+def record_attendance_letter_of_intent(exception, actor, uploaded_file, notes=""):
+    """File the applicant's letter of intent against a recorded absence.
+
+    The office already promises this route in every exam invitation and interview notice:
+    a written letter to the HRM Unit before the scheduled date. Until now there was nowhere
+    to put it."""
+    if not exception.is_pending:
+        raise ValueError(
+            "This absence has already been decided — the letter cannot change it."
+        )
+    application = exception.application
+    if not user_can_process_application(actor, application):
+        raise ValueError("This case is not currently assigned to you.")
+    validate_applicant_document_upload(uploaded_file)
+    evidence = upload_evidence_item(
+        application=application,
+        actor=actor,
+        label=f"Letter of Intent — {exception.get_assessment_stage_display()}",
+        uploaded_file=uploaded_file,
+        artifact_scope=EvidenceVaultItem.OwnerScope.CASE,
+        artifact_type=ARTIFACT_TYPE_LETTER_OF_INTENT,
+        document_key=f"{ARTIFACT_TYPE_LETTER_OF_INTENT}:{exception.id}",
+    )
+    exception.letter_of_intent = evidence
+    exception.letter_received_at = timezone.now()
+    exception.letter_notes = notes or ""
+    exception.full_clean()
+    exception.save()
+    record_audit_event(
+        application=application,
+        actor=actor,
+        action=AuditLog.Action.ATTENDANCE_LETTER_RECEIVED,
+        description="Filed the applicant's letter of intent against the recorded absence.",
+        metadata={
+            "attendance_exception_id": exception.id,
+            "assessment_stage": exception.assessment_stage,
+            "evidence_id": evidence.id,
+            "filename": evidence.original_filename,
+            "notes": exception.letter_notes,
+        },
+    )
+    return exception
+
+
+@transaction.atomic
+def resolve_attendance_absence(exception, actor, outcome, reason):
+    """SL-06: the office's decision on a recorded absence — reschedule, or terminal.
+
+    Reschedule reopens the missed sitting so the candidate can be scheduled again; terminal
+    closes the case with the absence as the stated reason and notifies the applicant. Either
+    way the record carries who decided, when, and why. Nothing here happens on a timer — a
+    terminal outcome is always a human decision."""
+    if not exception.is_pending:
+        raise ValueError("This absence has already been decided.")
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValueError("Record why this absence is being rescheduled or ended.")
+    if outcome not in {
+        AttendanceException.Outcome.RESCHEDULED,
+        AttendanceException.Outcome.TERMINAL,
+    }:
+        raise ValueError("Choose whether the candidate is rescheduled or does not proceed.")
+    application = exception.application
+    if not user_can_process_application(actor, application):
+        raise ValueError("This case is not currently assigned to you.")
+
+    exception.outcome = outcome
+    exception.decided_by = actor
+    exception.decided_at = timezone.now()
+    exception.decision_reason = reason
+    exception.full_clean()
+    exception.save()
+    record_audit_event(
+        application=application,
+        actor=actor,
+        action=AuditLog.Action.ATTENDANCE_ABSENCE_RESOLVED,
+        description=(
+            "Rescheduled the candidate after a recorded absence."
+            if outcome == AttendanceException.Outcome.RESCHEDULED
+            else "Closed the case after a recorded absence."
+        ),
+        metadata={
+            "attendance_exception_id": exception.id,
+            "assessment_stage": exception.assessment_stage,
+            "outcome": outcome,
+            "reason": reason,
+            "had_letter_of_intent": exception.has_letter_of_intent,
+        },
+    )
+
+    if outcome == AttendanceException.Outcome.RESCHEDULED:
+        _reopen_missed_sitting(exception, actor)
+        return exception
+
+    _close_after_attendance_absence(exception, actor)
+    return exception
+
+
+def _reopen_missed_sitting(exception, actor):
+    """Put the missed assessment back in a state where it can be scheduled again."""
+    application = exception.application
+    if exception.assessment_stage == AttendanceException.Stage.EXAMINATION:
+        record = get_exam_record(application, stage=exception.review_stage)
+        if record and record.is_finalized:
+            record.is_finalized = False
+            record.finalized_by = None
+            record.finalized_at = None
+            record.exam_status = ExamRecord.ExamStatus.COMPLETED
+            record.exam_result = ""
+            record.save()
+        return
+    session = get_interview_session(application, stage=exception.review_stage)
+    if session:
+        session.attendance_outcome = AttendanceOutcome.ATTENDED
+        session.is_finalized = False
+        session.finalized_by = None
+        session.finalized_at = None
+        session.save()
+
+
+def _close_after_attendance_absence(exception, actor):
+    application = exception.application
+    stage_label = exception.get_assessment_stage_display().lower()
+    reason = (
+        f"Did not sit the scheduled {stage_label} and the office decided the application "
+        "does not proceed."
+    )
+    previous_status = application.status
+    previous_case_status = application.case.case_status
+    _sync_case_after_workflow_action(
+        application=application,
+        actor=actor,
+        next_role="",
+        next_status=RecruitmentApplication.Status.REJECTED,
+        remarks=reason,
+    )
+    application.current_handler_role = ""
+    application.status = RecruitmentApplication.Status.REJECTED
+    application.closed_at = timezone.now()
+    application.save(
+        update_fields=["current_handler_role", "status", "closed_at", "updated_at"]
+    )
+    record_audit_event(
+        application=application,
+        actor=actor,
+        action=AuditLog.Action.APPLICANT_DISQUALIFIED,
+        description=f"Did not proceed after a recorded {stage_label} absence.",
+        metadata={
+            "reason": reason,
+            "attendance_exception_id": exception.id,
+            "decision_reason": exception.decision_reason,
+            "from_status": previous_status,
+            "to_status": application.status,
+            "from_case_status": previous_case_status,
+            "to_case_status": application.case.case_status,
+        },
+    )
+    queue_non_selected_applicant_notification(
+        application, actor=actor, exam_status=ExamRecord.ExamStatus.ABSENT
     )
     return application
 
@@ -5106,12 +5331,18 @@ def save_exam_record(
             },
         )
     if finalize:
-        if exam_record.exam_status in {
-            ExamRecord.ExamStatus.ABSENT,
-            ExamRecord.ExamStatus.WAIVED,
-        }:
-            # Judgment item A: Absent/Waived candidates do not advance — terminal close
-            # with the status as the reason + applicant notification (HARD rule).
+        if exam_record.exam_status == ExamRecord.ExamStatus.ABSENT:
+            # SL-06: an absence is recorded, not adjudicated. The office already invites
+            # every applicant to send a letter of intent to reschedule, so the case waits
+            # for that decision instead of closing itself the instant Absent is saved.
+            record_attendance_absence(
+                application,
+                actor,
+                AttendanceException.Stage.EXAMINATION,
+                notes=exam_record.exam_notes,
+            )
+        elif exam_record.exam_status == ExamRecord.ExamStatus.WAIVED:
+            # A waiver is already the office's decision, so it stays immediately terminal.
             _close_absent_or_waived_exam_application(application, actor, exam_record)
         else:
             if application.branch == PositionPosting.Branch.PLANTILLA:
@@ -5361,7 +5592,18 @@ def save_interview_session(
     distinct_rater_count = (
         len(interview_session_rater_ids(interview_session)) if interview_session.pk else 0
     )
-    if finalize:
+    # SL-06: an absent candidate has no ratings and needs none. The session finalizes on the
+    # recorded absence instead of demanding a fabricated score or a sheet that never existed,
+    # and one no-show no longer blocks the whole pooled finalize.
+    candidate_was_absent = (
+        interview_session.attendance_outcome == AttendanceOutcome.ABSENT
+    )
+    if finalize and candidate_was_absent:
+        if distinct_rater_count:
+            raise ValueError(
+                "An interview marked Absent cannot hold ratings — remove them before finalizing."
+            )
+    elif finalize:
         if application.branch == PositionPosting.Branch.PLANTILLA:
             if distinct_rater_count < MIN_INTERVIEW_RATINGS_PLANTILLA:
                 raise ValueError(
@@ -5457,12 +5699,53 @@ def save_interview_session(
         # shows only announced schedules (parity with the exam rule).
         interview_session.applicant_notified_at = timezone.now()
         interview_session.save(update_fields=["applicant_notified_at", "updated_at"])
-    if finalize and unsubmitted_panel_recipients:
+    if finalize and unsubmitted_panel_recipients and not candidate_was_absent:
         _emit_interview_finalized_in_app_notifications(
             application,
             unsubmitted_panel_recipients,
         )
+    if finalize and candidate_was_absent:
+        # SL-06: park the absence for the office's decision rather than advancing an
+        # unscored candidate into decision support.
+        record_attendance_absence(
+            application,
+            actor,
+            AttendanceException.Stage.INTERVIEW,
+            notes=interview_session.session_notes,
+        )
     return interview_session
+
+
+@transaction.atomic
+def mark_interview_absent(application, actor, notes=""):
+    """SL-06: record that the candidate did not attend their scheduled interview.
+
+    The session finalizes on the absence itself — no rating, no fabricated fallback sheet —
+    and the case waits for the office's reschedule-or-terminal decision."""
+    review_stage = get_current_review_stage(application)
+    session = get_interview_session(application, stage=review_stage)
+    if session is None:
+        raise ValueError("Schedule the interview before recording an absence.")
+    if session.is_finalized:
+        raise ValueError("Finalized interview records cannot be changed.")
+    if not user_can_manage_interview_session(actor, application):
+        raise ValueError("This case is not currently assigned to you for the interview.")
+    if session.ratings.exists() or session.fallback_ratings.exists():
+        raise ValueError(
+            "This interview already carries ratings — remove them before recording an absence."
+        )
+    session.attendance_outcome = AttendanceOutcome.ABSENT
+    session.save(update_fields=["attendance_outcome", "updated_at"])
+    return save_interview_session(
+        application=application,
+        actor=actor,
+        cleaned_data={
+            "scheduled_for": session.scheduled_for,
+            "location": session.location,
+            "session_notes": notes or session.session_notes,
+        },
+        finalize=True,
+    )
 
 
 @transaction.atomic
@@ -5780,8 +6063,10 @@ def finalize_vacancy_interview_batch(posting, actor, first_deliberation_note="")
 def save_vacancy_cos_interview_ratings(posting, actor, ratings_by_case_id, *, finalize=False):
     """Record (and optionally finalize) the simple end-user interview score + notes for the
     whole COS vacancy pool in one go, looping the per-case save_interview_rating (COS path).
-    Finalize is all-or-nothing (atomic): every candidate must have a score, then each
-    interview session is finalized and the pool moves on together."""
+    Finalize is all-or-nothing (atomic): every candidate must have a score OR a recorded
+    absence (SL-06), then each interview session is finalized and the pool moves on
+    together. One no-show no longer holds the whole batch hostage, and nobody has to invent
+    a number to get past it."""
     if posting.branch != PositionPosting.Branch.COS:
         raise ValueError("Simple interview ratings apply only to COS vacancies.")
     pool = vacancy_interview_pool(posting)
@@ -5792,10 +6077,23 @@ def save_vacancy_cos_interview_ratings(posting, actor, ratings_by_case_id, *, fi
         row = ratings_by_case_id.get(application.case.id) or {}
         score = row.get("rating_score")
         has_score = score not in (None, "")
+        marked_absent = str(row.get("attendance_outcome", "")) == AttendanceOutcome.ABSENT
+        if marked_absent:
+            if has_score:
+                raise ValueError(
+                    f"{application.reference_label} is marked Absent — an absence never "
+                    "carries a score."
+                )
+            session = get_interview_session(application)
+            if session is not None and not session.is_finalized:
+                session.attendance_outcome = AttendanceOutcome.ABSENT
+                session.save(update_fields=["attendance_outcome", "updated_at"])
+            continue
         if finalize:
             if not has_score:
                 raise ValueError(
-                    "Enter every candidate's interview score before finalizing the interview batch "
+                    "Enter every candidate's interview score, or mark them Absent, before "
+                    "finalizing the interview batch "
                     f"(missing: {application.reference_label})."
                 )
         elif not has_score:

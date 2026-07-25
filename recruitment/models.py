@@ -2092,7 +2092,17 @@ class ExamSchedule(TimestampedModel):
         return f"{self.application.reference_label} {self.review_stage} exam schedule"
 
 
+class AttendanceOutcome(models.TextChoices):
+    """SL-06 — whether a candidate sat a scheduled assessment. Mirrors the exam's existing
+    Completed/Absent vocabulary so both sides of the process say the same thing."""
+
+    ATTENDED = "attended", "Attended"
+    ABSENT = "absent", "Absent"
+
+
 class InterviewSession(TimestampedModel):
+    AttendanceOutcome = AttendanceOutcome
+
     application = models.ForeignKey(
         RecruitmentApplication,
         on_delete=models.CASCADE,
@@ -2128,6 +2138,14 @@ class InterviewSession(TimestampedModel):
     # status page shows only schedules the office actually announced (parity
     # with ExamSchedule.applicant_notified_at).
     applicant_notified_at = models.DateTimeField(blank=True, null=True)
+    # SL-06: whether the candidate actually sat this interview. An absence is an outcome in
+    # its own right — it must never be encoded as a rating of zero, and a session recorded
+    # as ABSENT finalizes with no ratings at all rather than blocking the whole pool.
+    attendance_outcome = models.CharField(
+        max_length=20,
+        choices=AttendanceOutcome.choices,
+        default=AttendanceOutcome.ATTENDED,
+    )
     is_finalized = models.BooleanField(default=False)
     finalized_at = models.DateTimeField(blank=True, null=True)
     finalized_by = models.ForeignKey(
@@ -2195,6 +2213,16 @@ class InterviewSession(TimestampedModel):
             errors["finalized_by"] = "Finalized interview sessions must record the finalizing user."
         if not self.is_finalized and (self.finalized_by_id or self.finalized_at):
             errors["finalized_at"] = "Draft interview sessions cannot include finalization details."
+        # SL-06: an absence is not a score. A session marked Absent must carry no ratings at
+        # all, so no fabricated number can reach the CAR or the deliberation.
+        if (
+            self.pk
+            and self.attendance_outcome == AttendanceOutcome.ABSENT
+            and (self.ratings.exists() or self.fallback_ratings.exists())
+        ):
+            errors["attendance_outcome"] = (
+                "An interview marked Absent cannot hold ratings — remove them first."
+            )
         if errors:
             raise ValidationError(errors)
 
@@ -2212,6 +2240,10 @@ class InterviewSession(TimestampedModel):
     @property
     def is_locked(self):
         return self.is_finalized
+
+    @property
+    def candidate_was_absent(self):
+        return self.attendance_outcome == AttendanceOutcome.ABSENT
 
     def __str__(self):
         return f"{self.application.reference_label} {self.review_stage} interview"
@@ -2332,6 +2364,120 @@ class InterviewRating(TimestampedModel):
 
     def __str__(self):
         return f"{self.application.reference_label} rating by {self.rated_by}"
+
+
+class AttendanceException(TimestampedModel):
+    """SL-06 — a candidate did not sit a scheduled examination or interview.
+
+    A no-show genuinely happens, and it is not a score of zero. Before this existed the
+    only ways forward were to invent a number (which then fed selection) or, on the exam
+    side, to have the system close the case automatically the moment Absent was recorded.
+    Neither matches the office, which already tells every applicant in writing that they may
+    submit a **letter of intent to reschedule** before the scheduled date. So Absent now
+    parks here: the absence is recorded with no number attached, the applicant's letter can
+    be filed against it as evidence, and the office decides — reschedule, or terminal. Who
+    decided, when, and why are all on the record.
+
+    A waived examination is not an absence: it is already an office decision, so it stays
+    immediately terminal and never creates one of these."""
+
+    class Stage(models.TextChoices):
+        EXAMINATION = "examination", "Examination"
+        INTERVIEW = "interview", "Interview"
+
+    class Outcome(models.TextChoices):
+        PENDING = "pending", "Awaiting the office's decision"
+        RESCHEDULED = "rescheduled", "Rescheduled"
+        TERMINAL = "terminal", "Did not proceed"
+
+    application = models.ForeignKey(
+        RecruitmentApplication,
+        on_delete=models.CASCADE,
+        related_name="attendance_exceptions",
+    )
+    recruitment_case = models.ForeignKey(
+        RecruitmentCase,
+        on_delete=models.CASCADE,
+        related_name="attendance_exceptions",
+    )
+    review_stage = models.CharField(max_length=40, choices=RecruitmentCase.Stage.choices)
+    assessment_stage = models.CharField(max_length=20, choices=Stage.choices)
+    outcome = models.CharField(
+        max_length=20, choices=Outcome.choices, default=Outcome.PENDING
+    )
+    recorded_by = models.ForeignKey(
+        RecruitmentUser,
+        on_delete=models.PROTECT,
+        related_name="recorded_attendance_exceptions",
+    )
+    recorded_by_role = models.CharField(max_length=40, blank=True)
+    absence_notes = models.TextField(blank=True)
+    letter_of_intent = models.ForeignKey(
+        "EvidenceVaultItem",
+        on_delete=models.PROTECT,
+        related_name="attendance_exceptions",
+        blank=True,
+        null=True,
+    )
+    letter_received_at = models.DateTimeField(blank=True, null=True)
+    letter_notes = models.TextField(blank=True)
+    decided_by = models.ForeignKey(
+        RecruitmentUser,
+        on_delete=models.PROTECT,
+        related_name="decided_attendance_exceptions",
+        blank=True,
+        null=True,
+    )
+    decided_by_role = models.CharField(max_length=40, blank=True)
+    decided_at = models.DateTimeField(blank=True, null=True)
+    decision_reason = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            # One open absence per case per assessment stage — a candidate cannot be
+            # awaiting two decisions about the same missed sitting.
+            models.UniqueConstraint(
+                fields=["recruitment_case", "assessment_stage"],
+                condition=models.Q(outcome="pending"),
+                name="one_pending_attendance_exception_per_case_stage",
+            ),
+        ]
+
+    def clean(self):
+        errors = {}
+        if self.outcome != self.Outcome.PENDING:
+            if not self.decided_by_id:
+                errors["decided_by"] = "A resolved absence must record who decided it."
+            if not (self.decision_reason or "").strip():
+                errors["decision_reason"] = "Record why this outcome was chosen."
+        elif self.decided_by_id or self.decided_at:
+            errors["decided_at"] = "A pending absence cannot carry decision details."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        if self.recorded_by_id:
+            self.recorded_by_role = self.recorded_by.role
+        if self.decided_by_id:
+            self.decided_by_role = self.decided_by.role
+        else:
+            self.decided_by_role = ""
+        super().save(*args, **kwargs)
+
+    @property
+    def is_pending(self):
+        return self.outcome == self.Outcome.PENDING
+
+    @property
+    def has_letter_of_intent(self):
+        return self.letter_of_intent_id is not None
+
+    def __str__(self):
+        return (
+            f"{self.application.reference_label} {self.get_assessment_stage_display()} "
+            f"absence ({self.get_outcome_display()})"
+        )
 
 
 class InterviewFallbackRating(TimestampedModel):
@@ -4173,6 +4319,9 @@ class AuditLog(TimestampedModel):
         DELIBERATION_FINALIZED = "deliberation_finalized", "Deliberation Finalized"
         COS_SELECTION_ROUND_OPENED = "cos_selection_round_opened", "COS Selection Round Opened"
         COS_SELECTION_ROUND_RESOLVED = "cos_selection_round_resolved", "COS Selection Round Resolved"
+        ATTENDANCE_ABSENCE_RECORDED = "attendance_absence_recorded", "Absence Recorded"
+        ATTENDANCE_LETTER_RECEIVED = "attendance_letter_received", "Letter of Intent Received"
+        ATTENDANCE_ABSENCE_RESOLVED = "attendance_absence_resolved", "Absence Resolved"
         CAR_GENERATED = "car_generated", "Comparative Assessment Report Generated"
         CAR_FINALIZED = "car_finalized", "Comparative Assessment Report Finalized"
         CAR_RETURNED = "car_returned", "Comparative Assessment Report Returned"
@@ -4434,6 +4583,9 @@ AUDIT_ACTION_CATEGORIES = {
             AuditLog.Action.DELIBERATION_FINALIZED,
             AuditLog.Action.COS_SELECTION_ROUND_OPENED,
             AuditLog.Action.COS_SELECTION_ROUND_RESOLVED,
+            AuditLog.Action.ATTENDANCE_ABSENCE_RECORDED,
+            AuditLog.Action.ATTENDANCE_LETTER_RECEIVED,
+            AuditLog.Action.ATTENDANCE_ABSENCE_RESOLVED,
             AuditLog.Action.CAR_GENERATED,
             AuditLog.Action.CAR_FINALIZED,
             AuditLog.Action.CAR_RETURNED,

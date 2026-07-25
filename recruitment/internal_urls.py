@@ -48,6 +48,8 @@ from .views import (
     ExamScheduleView,
     ExportApplicationBundleView,
     FinalSelectionView,
+    AttendanceExceptionView,
+    InterviewAbsenceView,
     InterviewFallbackUploadView,
     InterviewRatingSheetPrintView,
     InterviewRatingSheetView,
@@ -172,6 +174,16 @@ urlpatterns = [
         "applications/<int:pk>/interview/fallback/",
         InterviewFallbackUploadView.as_view(),
         name="interview-fallback-upload",
+    ),
+    path(
+        "applications/<int:pk>/interview/absent/",
+        InterviewAbsenceView.as_view(),
+        name="interview-absence-record",
+    ),
+    path(
+        "applications/<int:pk>/absence/<int:exception_pk>/",
+        AttendanceExceptionView.as_view(),
+        name="attendance-exception-manage",
     ),
     path("applications/<int:pk>/deliberation/", DeliberationRecordView.as_view(), name="deliberation-record"),
     path(
