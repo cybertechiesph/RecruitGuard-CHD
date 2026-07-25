@@ -127,6 +127,7 @@ from .services import (
     create_default_position_document_requirements,
     get_or_create_vacancy_assessment_weights,
     lock_vacancy_assessment_weights,
+    unlock_vacancy_assessment_weights,
     persist_recruitment_entry,
     get_competency_rating_template,
     get_missing_required_applicant_document_requirements,
@@ -7081,6 +7082,87 @@ class VacancyAssessmentWeightsTests(BaseRecruitmentTestCase):
         weights = VacancyAssessmentWeights.objects.get(recruitment_entry=self.level1_position)
         # Refused — scoring has started, so the weights stay at the defaults.
         self.assertEqual(weights.exam_general_weight, Decimal("60.00"))
+
+    def test_locked_weights_can_be_unlocked_with_an_audited_reason(self):
+        # SL-00: the lock is deliberate, but an encoding error in the split still has to be
+        # correctable — through a reason-bearing, audited unlock, never a quiet edit.
+        lock_vacancy_assessment_weights(self.level1_position)
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        url = reverse("vacancy-assessment-weights", args=[self.level1_position.pk])
+        response = client.post(
+            url,
+            {"operation": "unlock", "reason": "Exam weight was encoded as 20 instead of 30."},
+        )
+        self.assertEqual(response.status_code, 302)
+        weights = VacancyAssessmentWeights.objects.get(recruitment_entry=self.level1_position)
+        self.assertEqual(weights.status, VacancyAssessmentWeights.Status.DRAFT)
+        self.assertIsNone(weights.locked_at)
+        entry = AuditLog.objects.filter(
+            action=AuditLog.Action.ASSESSMENT_WEIGHTS_UNLOCKED,
+            actor=self.secretariat,
+        ).first()
+        self.assertIsNotNone(entry)
+        self.assertEqual(
+            entry.metadata["reason"],
+            "Exam weight was encoded as 20 instead of 30.",
+        )
+        # The split in force at the moment of the unlock is preserved on the audit entry.
+        self.assertEqual(entry.metadata["split_at_unlock"]["ete_weight"], "40.00")
+        # And the row is genuinely editable again.
+        response = client.post(
+            url,
+            {
+                "ete_weight": "40",
+                "exam_weight": "30",
+                "interview_weight": "30",
+                "exam_general_weight": "60",
+                "exam_technical_weight": "40",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        weights.refresh_from_db()
+        self.assertEqual(weights.exam_weight, Decimal("30.00"))
+
+    def test_unlocking_weights_without_a_reason_is_refused(self):
+        lock_vacancy_assessment_weights(self.level1_position)
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        url = reverse("vacancy-assessment-weights", args=[self.level1_position.pk])
+        response = client.post(url, {"operation": "unlock", "reason": "   "})
+        self.assertEqual(response.status_code, 200)
+        weights = VacancyAssessmentWeights.objects.get(recruitment_entry=self.level1_position)
+        self.assertEqual(weights.status, VacancyAssessmentWeights.Status.LOCKED)
+        self.assertFalse(
+            AuditLog.objects.filter(
+                action=AuditLog.Action.ASSESSMENT_WEIGHTS_UNLOCKED
+            ).exists()
+        )
+
+    def test_unlock_service_refuses_an_already_editable_row(self):
+        with self.assertRaises(ValidationError):
+            unlock_vacancy_assessment_weights(
+                self.level1_position,
+                self.secretariat,
+                "Nothing to correct.",
+            )
+
+    def test_weights_page_states_the_split_and_flags_a_non_standard_one(self):
+        # SL-00: a deviation from the office standard is legitimate but must be visible.
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        url = reverse("vacancy-assessment-weights", args=[self.level1_position.pk])
+        response = client.get(url)
+        self.assertContains(response, "ETE 40% / Examination 20% / Interview 40%")
+        self.assertContains(response, "This is the office standard.")
+        weights = get_or_create_vacancy_assessment_weights(self.level1_position)
+        weights.ete_weight = Decimal("50.00")
+        weights.exam_weight = Decimal("20.00")
+        weights.interview_weight = Decimal("30.00")
+        weights.save()
+        response = client.get(url)
+        self.assertContains(response, "ETE 50% / Examination 20% / Interview 30%")
+        self.assertContains(response, "not</strong> the office standard", html=False)
 
     def test_finalizing_an_exam_locks_the_vacancy_weights(self):
         application = self.make_application(self.level1_position)

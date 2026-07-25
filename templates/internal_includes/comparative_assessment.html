@@ -15,6 +15,18 @@ HRM Chief on COS). Two states:
                 Enter each candidate's ETE rating, prepare the draft from the finalized exam
                 and interview outputs, then finalize the ranked report.
             </p>
+            {% if car_weights %}
+            {# SL-00: the split is per-vacancy — state the one this CAR is computed against. #}
+            <p class="rg-icard__subtitle mb-0">
+                Overall split for this vacancy: <strong>{{ car_weights.car_split_display }}</strong>
+                {% if not car_weights.uses_office_default_car_split %}
+                    <span class="rg-pill rg-pill--warning rg-pill--sm"
+                          title="The office standard is ETE 40% / Examination 20% / Interview 40%">
+                        Non-standard split
+                    </span>
+                {% endif %}
+            </p>
+            {% endif %}
         </div>
         {% if current_comparative_assessment_report %}
         <div class="rg-del-car__version">
@@ -420,6 +432,13 @@ HRM Chief on COS). Two states:
                 {% endif %}.
                 The case proceeds to Final Selection / Decision.
             </p>
+            {% with snapshot_split=current_comparative_assessment_report.consolidated_snapshot.assessment_weight_display %}
+            {% if snapshot_split %}
+            {# SL-00: show the split this report was computed against, from its own snapshot —
+               the vacancy's live weights can since have been unlocked and corrected. #}
+            <p class="rg-icard__subtitle mb-0">Computed against: <strong>{{ snapshot_split }}</strong></p>
+            {% endif %}
+            {% endwith %}
         </div>
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:0.4rem;">
             <span class="rg-pill rg-pill--neutral rg-pill--sm rg-int-pill-lock">

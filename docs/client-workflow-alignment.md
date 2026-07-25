@@ -130,9 +130,13 @@ Target interpretation:
 - Secretariat/HRMS prepares or consolidates the CAR draft.
 - HRMPSB deliberates on the CAR draft and records recommendation, minutes, quorum/attendance, and ranking justification.
 - HRMPSB endorses the recommendation; Secretariat/HRMS finalizes the CAR after that endorsement.
-- The system may compute a preliminary assessment score and preliminary rank using confirmed policy weights:
-  Level 1 uses document review 20%, examination 40%, and interview/PSPT 40%;
-  Level 2 uses document review 40%, examination 20%, and interview/PSPT 40%.
+- The system may compute a preliminary assessment score and preliminary rank using the vacancy's
+  own assessment weights. **Superseded 2026-07-26 (SL-00):** the level-based splits described here
+  (Level 1 document review 20 / exam 40 / interview 40; Level 2 document review 40 / exam 20 /
+  interview 40) are no longer the rule. Weights are **per-vacancy**, seeded with the office default
+  **ETE 40% / Examination 20% / Interview 40%** regardless of level, editable until scoring starts,
+  then locked — reopenable only through an audited unlock-with-reason. See
+  `docs/system-logic-audit-findings.md` §1A and `docs/batch-workflow-redesign-spec.md` §8.
 - Preliminary rank is advisory only. HRMPSB ranking remains the official recommendation rank and may include notes or justification when the panel's ranking differs from the system order.
 - Finalized CAR artifacts are locked against ordinary editing.
 - Appointing Authority selects the appointee from the finalized CAR list.

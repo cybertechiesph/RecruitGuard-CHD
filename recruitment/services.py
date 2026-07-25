@@ -10168,6 +10168,48 @@ def lock_vacancy_assessment_weights(posting):
 
 
 @transaction.atomic
+def unlock_vacancy_assessment_weights(posting, actor, reason):
+    """SL-00: reopen a locked weight row so an encoding error in the split can be corrected.
+
+    The lock exists so a finalized score cannot silently shift under its weights, and that
+    stays true — unlocking is a deliberate, reason-bearing, audited act, not a quiet edit.
+    The audit entry preserves the split that was in force at the moment of the unlock, so
+    the record shows both what the finalized scores were computed against and why it was
+    reopened. Any subsequent edit is separately audited by
+    ``update_vacancy_assessment_weights``."""
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValidationError("Record why the assessment weights are being unlocked.")
+    weights = get_or_create_vacancy_assessment_weights(posting)
+    if not weights.is_locked:
+        raise ValidationError("These assessment weights are already editable.")
+    locked_at = weights.locked_at
+    weights.status = VacancyAssessmentWeights.Status.DRAFT
+    weights.locked_at = None
+    weights.updated_by = actor
+    weights.save(update_fields=["status", "locked_at", "updated_by", "updated_at"])
+    record_system_audit_event(
+        actor=actor,
+        action=AuditLog.Action.ASSESSMENT_WEIGHTS_UNLOCKED,
+        description=f"Unlocked assessment weights for {posting.job_code} for correction.",
+        metadata={
+            "entry_id": posting.id,
+            "entry_code": posting.job_code,
+            "reason": reason,
+            "locked_at": locked_at.isoformat() if locked_at else "",
+            "split_at_unlock": {
+                "exam_general_weight": str(weights.exam_general_weight),
+                "exam_technical_weight": str(weights.exam_technical_weight),
+                "ete_weight": str(weights.ete_weight),
+                "exam_weight": str(weights.exam_weight),
+                "interview_weight": str(weights.interview_weight),
+            },
+        },
+    )
+    return weights
+
+
+@transaction.atomic
 def update_vacancy_assessment_weights(posting, weights_form, actor):
     """Persist edits to a Plantilla vacancy's assessment weights and audit the change.
     Refuses once the weights are locked (scoring has started). The form has already validated

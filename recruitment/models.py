@@ -1624,6 +1624,27 @@ class VacancyAssessmentWeights(TimestampedModel):
     def interview_fraction(self):
         return (self.interview_weight or Decimal("0")) / Decimal("100")
 
+    @property
+    def car_split_display(self):
+        """The CAR split as one printable label, e.g. "ETE 40% / Examination 20% /
+        Interview 40%". SL-00: the split is per-vacancy, so every CAR surface has to
+        state the split it was actually computed against rather than assume 40/20/40."""
+        return (
+            f"ETE {format_weight_percentage(self.ete_weight)}% / "
+            f"Examination {format_weight_percentage(self.exam_weight)}% / "
+            f"Interview {format_weight_percentage(self.interview_weight)}%"
+        )
+
+    @property
+    def uses_office_default_car_split(self):
+        """True when the CAR split still matches the office's standard 40/20/40. A
+        vacancy that deviates is legitimate but must be visibly identified on the CAR."""
+        return (
+            self.ete_weight == self.DEFAULT_ETE_WEIGHT
+            and self.exam_weight == self.DEFAULT_EXAM_WEIGHT
+            and self.interview_weight == self.DEFAULT_INTERVIEW_WEIGHT
+        )
+
     def __str__(self):
         return f"Assessment weights for {self.recruitment_entry.job_code}"
 
@@ -3822,6 +3843,7 @@ class AuditLog(TimestampedModel):
         INTERNAL_ACCOUNT_DEACTIVATED = "internal_account_deactivated", "Internal Account Deactivated"
         INTERNAL_ROLE_CHANGED = "internal_role_changed", "Internal Role Changed"
         ASSESSMENT_WEIGHTS_UPDATED = "assessment_weights_updated", "Assessment Weights Updated"
+        ASSESSMENT_WEIGHTS_UNLOCKED = "assessment_weights_unlocked", "Assessment Weights Unlocked"
         POSITION_CREATED = "position_created", "Position Created"
         POSITION_UPDATED = "position_updated", "Position Updated"
         RECRUITMENT_ENTRY_CREATED = "recruitment_entry_created", "Recruitment Entry Created"
@@ -4147,6 +4169,7 @@ AUDIT_ACTION_CATEGORIES = {
             AuditLog.Action.INTERNAL_ACCOUNT_DEACTIVATED,
             AuditLog.Action.INTERNAL_ROLE_CHANGED,
             AuditLog.Action.ASSESSMENT_WEIGHTS_UPDATED,
+            AuditLog.Action.ASSESSMENT_WEIGHTS_UNLOCKED,
             AuditLog.Action.POSITION_CREATED,
             AuditLog.Action.POSITION_UPDATED,
             AuditLog.Action.RECRUITMENT_ENTRY_CREATED,

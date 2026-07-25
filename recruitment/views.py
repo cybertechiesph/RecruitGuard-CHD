@@ -40,6 +40,7 @@ from .forms import (
     RequirementChecklistNotificationForm,
     ScreeningReviewForm,
     VacancyAssessmentWeightsForm,
+    VacancyAssessmentWeightsUnlockForm,
     WorkflowActionForm,
     WorkflowOverrideForm,
     WorkflowReopenForm,
@@ -179,6 +180,7 @@ from .services import (
     get_published_competency_rating_template,
     save_competency_rating_sheet,
     get_or_create_vacancy_assessment_weights,
+    unlock_vacancy_assessment_weights,
     update_vacancy_assessment_weights,
     user_can_manage_interview_session,
     user_can_manage_screening,
@@ -641,6 +643,9 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
         context["car_all_rows_scored"] = bool(comparative_assessment_items) and all(
             item.assessment_score is not None for item in comparative_assessment_items
         )
+        # SL-00: the CAR split is per-vacancy, so every CAR surface states the split its
+        # scores were actually computed against instead of implying the office default.
+        context["car_weights"] = application.position.assessment_weights_or_default
         context["car_readiness"] = get_comparative_assessment_readiness(application)
         context["car_requires_deliberation"] = False
         context["car_requires_finalized_deliberation"] = False
@@ -2623,12 +2628,13 @@ class VacancyAssessmentWeightsView(LoginRequiredMixin, EntryManagerRequiredMixin
         # so COS entries edit their weights here too.
         return get_object_or_404(PositionPosting, pk=pk)
 
-    def _context(self, entry, weights, form):
+    def _context(self, entry, weights, form, unlock_form=None):
         return {
             "entry": entry,
             "weights": weights,
             "form": form,
             "is_locked": weights.is_locked,
+            "unlock_form": unlock_form or VacancyAssessmentWeightsUnlockForm(),
         }
 
     def get(self, request, pk):
@@ -2637,13 +2643,44 @@ class VacancyAssessmentWeightsView(LoginRequiredMixin, EntryManagerRequiredMixin
         form = VacancyAssessmentWeightsForm(instance=weights)
         return render(request, self.template_name, self._context(entry, weights, form))
 
+    def _unlock(self, request, entry, weights):
+        """SL-00: reopen a locked split for correction, with a mandatory audited reason."""
+        unlock_form = VacancyAssessmentWeightsUnlockForm(request.POST)
+        if unlock_form.is_valid():
+            try:
+                unlock_vacancy_assessment_weights(
+                    entry,
+                    request.user,
+                    unlock_form.cleaned_data["reason"],
+                )
+            except (ValueError, ValidationError) as exc:
+                messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
+            else:
+                messages.success(
+                    request,
+                    "Assessment weights unlocked for correction. The reason is recorded in "
+                    "the audit trail.",
+                )
+                return redirect("vacancy-assessment-weights", pk=entry.pk)
+        else:
+            messages.error(request, "Record why the assessment weights are being unlocked.")
+        form = VacancyAssessmentWeightsForm(instance=weights)
+        return render(
+            request,
+            self.template_name,
+            self._context(entry, weights, form, unlock_form=unlock_form),
+        )
+
     def post(self, request, pk):
         entry = self._get_entry(pk)
         weights = get_or_create_vacancy_assessment_weights(entry)
+        if request.POST.get("operation") == "unlock":
+            return self._unlock(request, entry, weights)
         if weights.is_locked:
             messages.error(
                 request,
-                "Assessment weights are locked because scoring has started for this vacancy.",
+                "Assessment weights are locked because scoring has started for this vacancy. "
+                "Unlock them for correction if the split was encoded wrongly.",
             )
             return redirect("vacancy-assessment-weights", pk=entry.pk)
         form = VacancyAssessmentWeightsForm(request.POST, instance=weights)

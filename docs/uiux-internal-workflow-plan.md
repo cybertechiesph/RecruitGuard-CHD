@@ -7,12 +7,20 @@ _Scope source: `docs/uiux-internal-workflow-review-prompt.md`. Produced 2026-07-
 RecruitGuard-CHD is a Django app for DOH–CHD CALABARZON running the HRMPSB hiring process at `/internal/`. Four workflow roles: **Secretariat** (central operator, heaviest user), **HRM Chief**, **HRMPSB Member** (interview rating + deliberation), **Appointing Authority** (final Plantilla decision). Out of scope: System Administrator, applicant portal.
 
 **The two flows** (as implemented and verified live):
-- **Plantilla:** Secretariat screening → batch exam (schedule + general/technical scores, weights editable per vacancy) → auto-route to HRMPSB → Secretariat schedules batch interviews (applicant + panel notified) and publishes the competency rating sheet → HRMPSB members rate digitally (private until deliberation) → Secretariat/HRM Chief prepares the draft CAR (per-candidate ETE input; ETE 40 / Exam 20 / Interview 40) → CAR finalize records the board's recommended applicant + quorum info → Appointing Authority picks from the ranked list (deep-selection justification required only for rank > 5) → non-selected auto-rejected + notified; selected moves to completion (free-text requirements, 2-week default deadline).
+- **Plantilla:** Secretariat screening → batch exam (schedule + general/technical scores, weights editable per vacancy) → auto-route to HRMPSB → Secretariat schedules batch interviews (applicant + panel notified) and publishes the competency rating sheet → HRMPSB members rate digitally (private until deliberation) → Secretariat/HRM Chief prepares the draft CAR (per-candidate ETE input; the vacancy's own split, default ETE 40 / Exam 20 / Interview 40) → CAR finalize records the board's recommended applicant + quorum info → Appointing Authority picks from the ranked list (deep-selection justification required only for rank > 5) → non-selected auto-rejected + notified; selected moves to completion (free-text requirements, 2-week default deadline).
 - **COS:** Secretariat screening + exam → auto-route to HRM Chief, who re-validates screening/exam (two-pass model, with the merged "Copy results from Secretariat" one-click prefill), runs the interview (single 0–100 score, no competency sheet), records the per-vacancy **deliberation pick** ("the pick is the COS decision — no CAR, no appointing authority"), then records the Selected decision per case → completion.
 
 **Run and seed:** `.venv\Scripts\python.exe manage.py runserver 127.0.0.1:8058` with `DJANGO_DEBUG=True`, `SECURE_SSL_REDIRECT=False`, console email backend (launch config `recruitguard-uxreview-nomfa` in `.claude/launch.json` sets all of it). DB gotcha: `.env` points at local Postgres `recruitguard_chd`; empty-string `POSTGRES_*` (not unset) falls back to stale sqlite — use Postgres. Seed with `manage.py seed_demo_data` (creates Plantilla and COS vacancies with applicants). **Test accounts** (password `UxReview!2026`): `ux_secretariat`, `ux_hrmchief`, `ux_hrmpsb`, `ux_hrmpsb2`, `ux_appointing`.
 
-**Fixed constraints — re-present, never remove:** CAR formula ETE 40/Exam 20/Interview 40 and HRMPSB order; quorum 3–5 for deliberation; full audit trail; the board deliberates off-system and the Secretariat encodes on its behalf; CAR and rating-sheet templates are Secretariat-editable; completion requirements are free text with an auto 2-week deadline; the exam is scored, never pass/fail.
+> **Erratum (2026-07-26, SL-00).** This plan previously described the CAR formula as a fixed
+> ETE 40/Exam 20/Interview 40. That was a team assumption reverse-engineered from the office's
+> CAR Excel template, never a confirmed CSC mandate. The governing rule is: **default
+> 40/20/40, per-vacancy editable before scoring starts, then locked** — with an audited
+> unlock-with-reason for corrections. The split is printed on the CAR (and flagged when it is
+> not the office standard), so a deviation is always visible on the filed document. See
+> `docs/system-logic-audit-findings.md` §1A.
+
+**Fixed constraints — re-present, never remove:** CAR formula default ETE 40/Exam 20/Interview 40 (per-vacancy editable pre-scoring, then locked) and HRMPSB order; quorum 3–5 for deliberation; full audit trail; the board deliberates off-system and the Secretariat encodes on its behalf; CAR and rating-sheet templates are Secretariat-editable; completion requirements are free text with an auto 2-week deadline; the exam is scored, never pass/fail.
 
 ---
 

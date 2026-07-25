@@ -18,11 +18,38 @@
     </div>
 </div>
 
+<div class="alert {% if weights.uses_office_default_car_split %}alert-light{% else %}alert-warning{% endif %}" role="status">
+    Current CAR split: <strong>{{ weights.car_split_display }}</strong>.
+    {% if weights.uses_office_default_car_split %}
+        This is the office standard.
+    {% else %}
+        This is <strong>not</strong> the office standard (ETE 40% / Examination 20% /
+        Interview 40%). The split is printed on the CAR so the deviation is visible on the
+        filed document.
+    {% endif %}
+</div>
+
 {% if is_locked %}
 <div class="alert alert-secondary" role="status">
-    These weights are <strong>locked</strong> because scoring has started for this vacancy.
-    They can no longer be changed, so the split that finalized scores were computed against
-    stays fixed.
+    <p class="mb-2">
+        These weights are <strong>locked</strong> because scoring has started for this vacancy,
+        so the split that finalized scores were computed against cannot shift under them.
+    </p>
+    <p class="rg-note mb-2">
+        If the split itself was encoded wrongly, unlock it for correction. The reason is
+        recorded in the audit trail together with the split in force right now, and any edit
+        you then make is audited separately.
+    </p>
+    <form method="post" novalidate class="mt-2">
+        {% csrf_token %}
+        <input type="hidden" name="operation" value="unlock">
+        <div style="max-width:520px;">
+            {% include "recruitment/includes/form_field.html" with field=unlock_form.reason %}
+        </div>
+        <button type="submit" class="btn btn-outline-danger btn-sm mt-2">
+            Unlock weights for correction
+        </button>
+    </form>
 </div>
 {% endif %}
 

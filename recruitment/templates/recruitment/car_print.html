@@ -130,6 +130,19 @@
         {% endif %}
 
         <p class="blind-note">
+            Overall score = ETE &times; {{ weights.ete_weight|floatformat:"-1" }}%
+            + Examination &times; {{ weights.exam_weight|floatformat:"-1" }}%
+            + Interview &times; {{ weights.interview_weight|floatformat:"-1" }}%.
+            {% if not weights.uses_office_default_car_split %}
+                <strong>This vacancy uses a non-standard split</strong> — the office standard is
+                ETE 40% / Examination 20% / Interview 40%.
+            {% endif %}
+            The examination component is itself General Ability
+            {{ weights.exam_general_weight|floatformat:"-1" }}% + Technical
+            {{ weights.exam_technical_weight|floatformat:"-1" }}%.
+        </p>
+
+        <p class="blind-note">
             ETE: Education, Training and Experience. Candidates are identified by their
             assigned candidate codes; the office form lists surnames here — this system
             deliberately blinds the deliberation copy, and the code-to-person mapping is

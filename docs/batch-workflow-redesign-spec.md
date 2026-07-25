@@ -171,6 +171,12 @@ exam score, interview result, and records the deliberation pick.
 - **Seed defaults** on a new vacancy (exam 60/40, CAR 40/20/40, interview defaults), editable
   **until scoring starts**, then **lock + snapshot** (existing "lock once scoring begins" +
   snapshot-on-finalize rules).
+- **This is the governing rule** (SL-00, resolved 2026-07-26): the CAR split is a *default* of
+  40/20/40 that each vacancy may edit before scoring, not a fixed constant. A locked row can be
+  reopened only through the audited unlock-with-reason. Every CAR surface — the on-screen card
+  and the printed sheet — states the split it was computed against and flags a non-standard one.
+  The exam General/Technical 60/40 split is confirmed by the office's own template formula
+  `=(Gen×0.6)+(Tech×0.4)`.
 - Touch-points to migrate off the global config: `ExamRecord.calculate_policy_score`,
   `component_weight_display`, the CAR computation (`_calculate_preliminary_assessment_score` /
   `_assessment_weight_display`), and the settings view/form.

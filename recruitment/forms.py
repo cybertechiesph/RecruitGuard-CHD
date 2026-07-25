@@ -1474,6 +1474,31 @@ class VacancyAssessmentWeightsForm(BootstrapFormMixin, forms.ModelForm):
         )
         self._apply_bootstrap()
 
+
+class VacancyAssessmentWeightsUnlockForm(BootstrapFormMixin, forms.Form):
+    """SL-00: the reason that accompanies reopening a locked weight row for correction.
+    The lock is deliberate, so the only way past it is a stated, audited reason."""
+
+    reason = forms.CharField(
+        label="Reason for unlocking",
+        widget=forms.Textarea(attrs={"rows": 3}),
+        max_length=1000,
+        help_text=(
+            "Explain the correction being made — this is recorded in the audit trail "
+            "alongside the split that finalized scores were computed against."
+        ),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
+
+    def clean_reason(self):
+        reason = (self.cleaned_data.get("reason") or "").strip()
+        if not reason:
+            raise forms.ValidationError("Record why the assessment weights are being unlocked.")
+        return reason
+
     def clean(self):
         cleaned = super().clean()
         ete = cleaned.get("ete_weight")
