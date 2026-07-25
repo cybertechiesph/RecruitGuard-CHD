@@ -171,6 +171,7 @@ from .services import (
     user_can_manage_deliberation,
     save_deliberation_record,
     cancel_recruitment_entry,
+    get_completion_record,
     get_pending_attendance_exception,
     record_attendance_letter_of_intent,
     resolve_attendance_absence,
@@ -10962,6 +10963,133 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
 
 
 class CompletionTrackingTests(BaseRecruitmentTestCase):
+    # ── SL-13: a historical deadline is evidence, not invalid data ────────────
+    def test_a_past_deadline_can_be_left_alone_while_a_late_item_is_completed(self):
+        # SL-13: the audit's probe — the only way to mark a late-but-valid requirement
+        # complete was to move the deadline forward, erasing the evidence of lateness.
+        application = self.make_selected_application(self.cos_position)
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        client.post(
+            reverse("completion-tracking", kwargs={"pk": application.pk}),
+            self.completion_payload(
+                [
+                    {
+                        "item_label": "Signed contract",
+                        "status": CompletionRequirement.RequirementStatus.PENDING,
+                        "notes": "Awaiting the applicant.",
+                    },
+                ]
+            ),
+        )
+        record = get_completion_record(application)
+        # Age the deadline the way the calendar would.
+        past = timezone.localdate() - timedelta(days=3)
+        CompletionRecord.objects.filter(pk=record.pk).update(deadline=past)
+        record.refresh_from_db()
+        self.assertTrue(record.is_overdue)
+        self.assertEqual(record.days_overdue, 3)
+
+        # Resubmitting the SAME historical deadline is accepted, and the late item can be
+        # marked complete without rewriting history.
+        response = client.post(
+            reverse("completion-tracking", kwargs={"pk": application.pk}),
+            self.completion_payload(
+                [
+                    {
+                        "item_label": "Signed contract",
+                        "status": CompletionRequirement.RequirementStatus.COMPLETED,
+                        "notes": "Received late but valid.",
+                    },
+                ],
+                deadline=past.isoformat(),
+            ),
+        )
+        self.assertEqual(response.status_code, 302)
+        record.refresh_from_db()
+        requirement = record.requirements.get()
+
+        self.assertEqual(record.deadline, past, "the original deadline must survive")
+        self.assertEqual(
+            requirement.status, CompletionRequirement.RequirementStatus.COMPLETED
+        )
+        self.assertEqual(requirement.completed_on, timezone.localdate())
+        self.assertTrue(requirement.was_completed_late)
+        self.assertFalse(record.deadline_changes.exists())
+
+    def test_changing_the_deadline_is_an_audited_extension(self):
+        # SL-13 AC#2: old value, new value, actor, reason and time, on an immutable trail.
+        application = self.make_selected_application(self.cos_position)
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        client.post(
+            reverse("completion-tracking", kwargs={"pk": application.pk}),
+            self.completion_payload(
+                [
+                    {
+                        "item_label": "Signed contract",
+                        "status": CompletionRequirement.RequirementStatus.PENDING,
+                        "notes": "Awaiting.",
+                    },
+                ]
+            ),
+        )
+        record = get_completion_record(application)
+        original = record.deadline
+        extended = original + timedelta(days=7)
+
+        # Without a reason the change is refused.
+        response = client.post(
+            reverse("completion-tracking", kwargs={"pk": application.pk}),
+            self.completion_payload(
+                [
+                    {
+                        "item_label": "Signed contract",
+                        "status": CompletionRequirement.RequirementStatus.PENDING,
+                        "notes": "Awaiting.",
+                    },
+                ],
+                deadline=extended.isoformat(),
+            ),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Record why the completion deadline is being changed.")
+        record.refresh_from_db()
+        self.assertEqual(record.deadline, original)
+
+        response = client.post(
+            reverse("completion-tracking", kwargs={"pk": application.pk}),
+            self.completion_payload(
+                [
+                    {
+                        "item_label": "Signed contract",
+                        "status": CompletionRequirement.RequirementStatus.PENDING,
+                        "notes": "Awaiting.",
+                    },
+                ],
+                deadline=extended.isoformat(),
+                deadline_change_reason="Applicant's PSA copy is delayed at the registry.",
+            ),
+        )
+        self.assertEqual(response.status_code, 302)
+        record.refresh_from_db()
+        change = record.deadline_changes.get()
+
+        self.assertEqual(record.deadline, extended)
+        self.assertEqual(change.previous_deadline, original)
+        self.assertEqual(change.new_deadline, extended)
+        self.assertEqual(change.changed_by, self.secretariat)
+        self.assertTrue(change.is_extension)
+        self.assertIn("PSA copy", change.reason)
+        entry = AuditLog.objects.filter(
+            application=application,
+            action=AuditLog.Action.COMPLETION_DEADLINE_CHANGED,
+        ).first()
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.metadata["previous_deadline"], original.isoformat())
+        self.assertEqual(entry.metadata["new_deadline"], extended.isoformat())
+        self.assertTrue(entry.metadata["is_extension"])
+
     def completion_payload(self, items, **overrides):
         payload = {
             "completion_reference": "COMP-001",
@@ -11094,7 +11222,10 @@ class CompletionTrackingTests(BaseRecruitmentTestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Completion deadline cannot be earlier than today.")
+        # SL-13: a brand-new deadline still cannot be back-dated.
+        self.assertContains(
+            response, "A new completion deadline cannot be earlier than today."
+        )
         self.assertContains(response, 'id="completion-form"')
         self.assertContains(response, "Requirement checklist")
         self.assertFalse(CompletionRecord.objects.filter(application=application).exists())

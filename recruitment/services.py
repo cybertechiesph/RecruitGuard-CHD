@@ -51,6 +51,7 @@ from .models import (
     TOP_FIVE_SELECTION_LIMIT,
     AttendanceException,
     AttendanceOutcome,
+    CompletionDeadlineChange,
     CosSelectionRound,
     CosSelectionRoundMember,
     CosVacancyDeliberation,
@@ -7261,6 +7262,15 @@ def save_completion_tracking(application, actor, cleaned_data, requirement_forms
             tracked_by=actor,
         )
 
+    # SL-13: capture the deadline as it stands BEFORE this save, so an extension can be
+    # recorded as its own audited fact rather than silently replacing the original.
+    previous_deadline = None if created else completion_record.deadline
+    submitted_deadline = cleaned_data.get("deadline")
+    deadline_changed = not created and submitted_deadline != previous_deadline
+    deadline_change_reason = (cleaned_data.get("deadline_change_reason") or "").strip()
+    if deadline_changed and not deadline_change_reason:
+        raise ValueError("Record why the completion deadline is being changed.")
+
     completion_record.recruitment_case = application.case
     completion_record.tracked_by = actor
     completion_record.branch = application.branch
@@ -7277,6 +7287,40 @@ def save_completion_tracking(application, actor, cleaned_data, requirement_forms
         completion_record.announcement_date = None
     completion_record.full_clean()
     completion_record.save()
+
+    if deadline_changed:
+        # SL-13: an immutable extension trail. The original deadline survives every later
+        # edit, which is what makes "this was completed late" provable afterwards.
+        change = CompletionDeadlineChange(
+            completion_record=completion_record,
+            previous_deadline=previous_deadline,
+            new_deadline=submitted_deadline,
+            changed_by=actor,
+            reason=deadline_change_reason,
+        )
+        change.full_clean()
+        change.save()
+        record_audit_event(
+            application=application,
+            actor=actor,
+            action=AuditLog.Action.COMPLETION_DEADLINE_CHANGED,
+            description=(
+                "Extended the completion deadline."
+                if change.is_extension
+                else "Changed the completion deadline."
+            ),
+            metadata={
+                "completion_record_id": completion_record.id,
+                "previous_deadline": (
+                    previous_deadline.isoformat() if previous_deadline else ""
+                ),
+                "new_deadline": (
+                    submitted_deadline.isoformat() if submitted_deadline else ""
+                ),
+                "is_extension": change.is_extension,
+                "reason": deadline_change_reason,
+            },
+        )
 
     active_requirement_ids = []
     requirement_count = 0

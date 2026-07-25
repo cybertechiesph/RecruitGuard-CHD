@@ -1290,13 +1290,59 @@ class CompletionTrackingForm(BootstrapFormMixin, forms.ModelForm):
                 "Defaults to two weeks from today; adjust if the office set a different window."
             )
         self.fields["remarks"].required = False
+        # SL-13: moving a deadline is a deliberate act, so it asks for a reason. Required
+        # only when the submitted date actually differs from the stored one — resubmitting
+        # an unchanged historical deadline is an ordinary edit, not an extension.
+        self.fields["deadline_change_reason"].required = False
         self._apply_bootstrap()
+
+    deadline_change_reason = forms.CharField(
+        label="Reason for changing the deadline",
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 2}),
+        help_text=(
+            "Required only when you change the deadline. Recorded with the old and new "
+            "dates, who changed it, and when."
+        ),
+    )
+
+    @property
+    def stored_deadline(self):
+        """The deadline as it stands in the database, not as bound to this form."""
+        if not self.instance.pk:
+            return None
+        return (
+            type(self.instance)
+            .objects.filter(pk=self.instance.pk)
+            .values_list("deadline", flat=True)
+            .first()
+        )
 
     def clean_deadline(self):
         deadline = self.cleaned_data["deadline"]
-        if deadline and deadline < timezone.localdate():
-            raise forms.ValidationError("Completion deadline cannot be earlier than today.")
+        # SL-13: an elapsed deadline is historical evidence of lateness, not invalid data.
+        # The old rule rejected it on every later edit, so marking a late-but-valid
+        # requirement complete forced staff to move the deadline forward and erase the
+        # evidence. The "not earlier than today" rule now applies only to a deadline that
+        # is actually being set or changed.
+        if deadline and deadline < timezone.localdate() and deadline != self.stored_deadline:
+            raise forms.ValidationError(
+                "A new completion deadline cannot be earlier than today. An existing "
+                "deadline that has already passed can be left as it is."
+            )
         return deadline
+
+    def clean(self):
+        cleaned = super().clean()
+        stored = self.stored_deadline
+        submitted = cleaned.get("deadline")
+        if self.instance.pk and submitted != stored:
+            if not (cleaned.get("deadline_change_reason") or "").strip():
+                self.add_error(
+                    "deadline_change_reason",
+                    "Record why the completion deadline is being changed.",
+                )
+        return cleaned
 
 
 class CompletionRequirementForm(BootstrapFormMixin, forms.ModelForm):

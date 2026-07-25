@@ -3980,12 +3980,32 @@ class CompletionRecord(TimestampedModel):
     def is_overdue(self):
         """RD-8: the tracked deadline has passed with requirements still pending.
         Surfacing only — what happens on a missed deadline is an office-policy
-        question and deliberately not automated."""
+        question and deliberately not automated. SL-13 keeps it that way: the system
+        never forfeits a candidate by timer."""
         return bool(
             self.deadline
             and self.deadline < timezone.localdate()
             and self.has_pending_requirements
         )
+
+    @property
+    def days_overdue(self):
+        """SL-13: how far past the deadline this record is, so lateness can be stated
+        loudly rather than inferred from two dates."""
+        if not self.deadline:
+            return 0
+        elapsed = (timezone.localdate() - self.deadline).days
+        return elapsed if elapsed > 0 else 0
+
+    @property
+    def deadline_is_historical(self):
+        """SL-13: the deadline has passed. An elapsed deadline is evidence of lateness,
+        not invalid data — it must stay submittable unchanged."""
+        return bool(self.deadline and self.deadline < timezone.localdate())
+
+    @property
+    def has_been_extended(self):
+        return self.deadline_changes.exists()
 
     @property
     def has_completion_reference_for_closure(self):
@@ -4039,6 +4059,56 @@ class CompletionRecord(TimestampedModel):
         return f"{self.completion_label} completion for {self.application.reference_label}"
 
 
+class CompletionDeadlineChange(TimestampedModel):
+    """SL-13 — the immutable trail of completion-deadline extensions.
+
+    Moving a deadline is a deliberate act with consequences for the record, so it is kept
+    as its own row rather than folded into the completion record's current value: old date,
+    new date, who moved it, when, and why. The original deadline therefore survives every
+    later edit, which is what makes "this was completed late" provable."""
+
+    completion_record = models.ForeignKey(
+        CompletionRecord,
+        on_delete=models.CASCADE,
+        related_name="deadline_changes",
+    )
+    previous_deadline = models.DateField(blank=True, null=True)
+    new_deadline = models.DateField(blank=True, null=True)
+    changed_by = models.ForeignKey(
+        RecruitmentUser,
+        on_delete=models.PROTECT,
+        related_name="completion_deadline_changes",
+    )
+    changed_by_role = models.CharField(max_length=40, blank=True)
+    reason = models.TextField()
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def clean(self):
+        if not (self.reason or "").strip():
+            raise ValidationError({"reason": "Record why the deadline is being changed."})
+
+    def save(self, *args, **kwargs):
+        if self.changed_by_id:
+            self.changed_by_role = self.changed_by.role
+        super().save(*args, **kwargs)
+
+    @property
+    def is_extension(self):
+        return bool(
+            self.previous_deadline
+            and self.new_deadline
+            and self.new_deadline > self.previous_deadline
+        )
+
+    def __str__(self):
+        return (
+            f"{self.completion_record} deadline "
+            f"{self.previous_deadline} -> {self.new_deadline}"
+        )
+
+
 class CompletionRequirement(TimestampedModel):
     class RequirementStatus(models.TextChoices):
         PENDING = "pending", "Pending"
@@ -4058,6 +4128,10 @@ class CompletionRequirement(TimestampedModel):
     )
     notes = models.TextField(blank=True)
     display_order = models.PositiveSmallIntegerField(default=0)
+    # SL-13: when the item was actually satisfied. Recorded so a late-but-valid submission
+    # can be marked complete against the ORIGINAL deadline — the previous shape forced
+    # staff to move the deadline forward, erasing the evidence that it was late.
+    completed_on = models.DateField(blank=True, null=True)
 
     class Meta:
         ordering = ["display_order", "created_at"]
@@ -4068,7 +4142,24 @@ class CompletionRequirement(TimestampedModel):
 
     def save(self, *args, **kwargs):
         self.item_label = self.item_label.strip()
+        # Stamp the completion date the first time the item is marked complete, and clear
+        # it if the item goes back to pending, so the date always means what it says.
+        if self.status == self.RequirementStatus.COMPLETED and not self.completed_on:
+            self.completed_on = timezone.localdate()
+        elif self.status == self.RequirementStatus.PENDING:
+            self.completed_on = None
         super().save(*args, **kwargs)
+
+    @property
+    def was_completed_late(self):
+        """SL-13: satisfied after the deadline that was in force. Derived, so it survives
+        any later extension of the deadline."""
+        deadline = self.completion_record.deadline
+        return bool(
+            self.completed_on
+            and deadline
+            and self.completed_on > deadline
+        )
 
     def __str__(self):
         return f"{self.item_label} ({self.get_status_display()})"
@@ -4385,6 +4476,7 @@ class AuditLog(TimestampedModel):
         APPLICANT_DISQUALIFIED = "applicant_disqualified", "Applicant Disqualified"
         APPLICATION_WITHDRAWN = "application_withdrawn", "Application Withdrawn"
         RECRUITMENT_ENTRY_CANCELLED = "recruitment_entry_cancelled", "Recruitment Entry Cancelled"
+        COMPLETION_DEADLINE_CHANGED = "completion_deadline_changed", "Completion Deadline Changed"
         COMPLETION_RECORDED = "completion_recorded", "Completion Recorded"
         CASE_CLOSED = "case_closed", "Case Closed"
         NOTIFICATION_SENT = "notification_sent", "Notification Sent"
@@ -4652,6 +4744,7 @@ AUDIT_ACTION_CATEGORIES = {
             AuditLog.Action.APPLICATION_WITHDRAWN,
             AuditLog.Action.RECRUITMENT_ENTRY_CANCELLED,
             AuditLog.Action.COMPLETION_RECORDED,
+            AuditLog.Action.COMPLETION_DEADLINE_CHANGED,
             AuditLog.Action.CASE_CLOSED,
         ],
     },

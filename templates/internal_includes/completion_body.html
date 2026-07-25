@@ -128,6 +128,22 @@ Bootstrap Icons CSS).
                     {% for error in completion_form.deadline.errors %}
                         <div class="invalid-feedback d-block">{{ error }}</div>
                     {% endfor %}
+                    {% if completion_record %}
+                    {% comment %}
+                    SL-13: an existing deadline may be left exactly as it is, including one
+                    that has already passed. Changing it is an extension, and extensions are
+                    recorded with their reason.
+                    {% endcomment %}
+                    <label class="form-label fw-semibold mt-2"
+                           for="{{ completion_form.deadline_change_reason.id_for_label }}">
+                        {{ completion_form.deadline_change_reason.label }}
+                    </label>
+                    {{ completion_form.deadline_change_reason }}
+                    <div class="form-text">{{ completion_form.deadline_change_reason.help_text }}</div>
+                    {% for error in completion_form.deadline_change_reason.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                    {% endif %}
                 </div>
                 {% if completion_form.announcement_reference.field.widget.is_hidden == False %}
                     <div class="col-sm-6">
@@ -173,14 +189,47 @@ Bootstrap Icons CSS).
                 </div>
 
                 {% if completion_record.is_overdue %}
-                    {% comment %} RD-8: the tracked deadline has passed with requirements
-                       still pending. Surfacing only — the consequence of a missed
-                       deadline is an office-policy question. {% endcomment %}
+                    {% comment %}
+                    RD-8: the tracked deadline has passed with requirements still pending.
+                    Surfacing only — the consequence of a missed deadline is an
+                    office-policy question. SL-13 keeps it that way: nothing here forfeits
+                    the candidate on a timer, and the count of days is stated plainly so
+                    lateness is visible rather than inferred from two dates.
+                    {% endcomment %}
                     <div class="alert alert-warning" role="status" style="margin:0.5rem 0;">
-                        <strong>Deadline passed {{ completion_record.deadline|date:"F d, Y" }}.</strong>
+                        <strong>
+                            Deadline passed {{ completion_record.deadline|date:"F d, Y" }}
+                            &mdash; {{ completion_record.days_overdue }}
+                            day{{ completion_record.days_overdue|pluralize }} overdue.
+                        </strong>
                         {{ completion_record.pending_requirement_count|default:"Some" }} requirement{{ completion_record.pending_requirement_count|pluralize }}
-                        still pending from the applicant.
+                        still pending from the applicant. A late-but-valid item can be marked
+                        complete without moving this date &mdash; the original deadline stays
+                        on the record, and the completion date shows that it was late.
                     </div>
+                {% endif %}
+
+                {% if completion_record.deadline_changes.exists %}
+                    {% comment %}
+                    SL-13: extensions are deliberate and visible, never a silent overwrite.
+                    {% endcomment %}
+                    <details style="margin:0.5rem 0;">
+                        <summary style="font-size:0.8125rem;cursor:pointer;">
+                            Deadline history
+                            ({{ completion_record.deadline_changes.count }} change{{ completion_record.deadline_changes.count|pluralize }})
+                        </summary>
+                        <ul class="list-unstyled mb-0 mt-2" style="font-size:0.8125rem;">
+                            {% for change in completion_record.deadline_changes.all %}
+                            <li class="py-1" style="border-bottom:1px solid #eef1f4;">
+                                {{ change.previous_deadline|date:"M d, Y"|default:"—" }}
+                                &rarr; <strong>{{ change.new_deadline|date:"M d, Y"|default:"—" }}</strong>
+                                &middot; {{ change.changed_by.get_full_name|default:change.changed_by.username }}
+                                &middot; {{ change.created_at|date:"M d, Y" }}
+                                <div class="text-muted">{{ change.reason }}</div>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </details>
                 {% endif %}
 
                 {% if completion_record and completion_record.total_requirement_count %}
