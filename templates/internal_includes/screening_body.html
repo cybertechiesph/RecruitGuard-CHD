@@ -20,8 +20,10 @@
              role="group" aria-label="Step 1: Document review">
         <div class="rg-scr-panel__header">
             <div>
-                {# SL-05: at a second pass this is an independent validation, not a re-key —
-                   name it so the reviewer knows which of the two records they are creating. #}
+                {% comment %}
+                SL-05: at a second pass this is an independent validation, not a re-key —
+                name it so the reviewer knows which of the two records they are creating.
+                {% endcomment %}
                 <h2 class="rg-scr-panel__title">
                     {% if prior_screening_record %}Step 1 &mdash; Validate the document review{% else %}Step 1 &mdash; Review the documents{% endif %}
                 </h2>

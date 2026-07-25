@@ -1,0 +1,110 @@
+{% comment %}
+SL-03/SL-07 — Encode one HRMPSB member's paper rating sheet.
+
+A fallback is a rating, not just a scan: it names the member who signed the sheet and
+carries their score, so it counts as one rater toward the 3–5 quorum and feeds the
+interview average. Sheets already encoded are listed so the encoder can see who is on
+record and who is still outstanding.
+
+Inputs:
+  interview_fallback_form            : InterviewFallbackUploadForm
+  current_interview_fallback_ratings : iterable of InterviewFallbackRating
+{% endcomment %}
+{% if interview_fallback_form %}
+<div class="rg-icard" id="int-fallback-section">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">Paper rating sheet</h3>
+            <p class="rg-icard__subtitle">
+                When a panel member rated on paper, encode their sheet here: name the member,
+                record their score, and attach the scan. Each encoded sheet counts as one
+                rater toward the 3&ndash;5 HRMPSB quorum &mdash; the scan on its own does not.
+            </p>
+        </div>
+    </div>
+
+    {% if current_interview_fallback_ratings %}
+    <ul class="list-unstyled mb-3">
+        {% for fallback in current_interview_fallback_ratings %}
+        <li class="d-flex justify-content-between align-items-center py-1"
+            style="border-bottom:1px solid #eef1f4; font-size:0.8125rem;">
+            <span>
+                <strong>{{ fallback.rated_by.get_full_name|default:fallback.rated_by.username }}</strong>
+                <span class="text-muted">
+                    &mdash; encoded by {{ fallback.encoded_by.get_full_name|default:fallback.encoded_by.username }}
+                </span>
+            </span>
+            <span><strong>{{ fallback.rating_score }}</strong></span>
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <form method="post"
+          action="{% url 'interview-fallback-upload' application.pk %}"
+          enctype="multipart/form-data"
+          novalidate>
+        {% csrf_token %}
+        <div class="row g-2">
+            <div class="col-md-7">
+                <div class="rg-field">
+                    <label class="form-label" for="{{ interview_fallback_form.rated_by.id_for_label }}">
+                        {{ interview_fallback_form.rated_by.label }}
+                        <span class="text-danger" aria-hidden="true">*</span>
+                    </label>
+                    {{ interview_fallback_form.rated_by }}
+                    {% for error in interview_fallback_form.rated_by.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="col-md-5">
+                <div class="rg-field">
+                    <label class="form-label" for="{{ interview_fallback_form.rating_score.id_for_label }}">
+                        {{ interview_fallback_form.rating_score.label }}
+                        <span class="text-danger" aria-hidden="true">*</span>
+                    </label>
+                    {{ interview_fallback_form.rating_score }}
+                    {% for error in interview_fallback_form.rating_score.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        <div class="rg-field">
+            <label class="form-label" for="{{ interview_fallback_form.file.id_for_label }}">
+                {{ interview_fallback_form.file.label }}
+                <span class="text-danger" aria-hidden="true">*</span>
+            </label>
+            {{ interview_fallback_form.file }}
+            {% for error in interview_fallback_form.file.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+        <div class="rg-field">
+            <label class="form-label" for="{{ interview_fallback_form.justification.id_for_label }}">
+                {{ interview_fallback_form.justification.label }}
+            </label>
+            {{ interview_fallback_form.justification }}
+            <div class="form-text">{{ interview_fallback_form.justification.help_text }}</div>
+            {% for error in interview_fallback_form.justification.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+        <div class="rg-field">
+            <label class="form-label" for="{{ interview_fallback_form.remarks.id_for_label }}">
+                {{ interview_fallback_form.remarks.label }}
+            </label>
+            {{ interview_fallback_form.remarks }}
+            {% for error in interview_fallback_form.remarks.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+        <div class="rg-int-fallback-actions">
+            <button type="submit" class="btn btn-sm btn-outline-secondary">
+                Encode this rating sheet
+            </button>
+        </div>
+    </form>
+</div>
+{% endif %}

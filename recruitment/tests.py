@@ -5,7 +5,7 @@ import re
 import urllib.parse
 import uuid
 import zipfile
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from datetime import date, timedelta
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -24,7 +24,7 @@ from django.core.management import call_command
 from django.db import transaction
 from django.test import Client, RequestFactory, SimpleTestCase, TestCase, override_settings
 from django.template.loader import render_to_string
-from django.urls import reverse
+from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 
 from .admin import ExamRecordAdmin, ScreeningRecordAdmin
@@ -114,13 +114,22 @@ from .services import (
     process_workflow_action,
     repair_auto_advance_workflow_boundaries,
     record_final_decision,
+    user_can_record_final_decision,
     record_final_selection,
     record_system_audit_event,
     remove_applicant_from_batch,
     save_deliberation_record,
     save_cos_vacancy_deliberation,
     get_cos_vacancy_deliberation,
+    get_latest_final_decision,
+    get_comparative_assessment_readiness,
+    get_cos_pick_for_case,
+    get_latest_cos_selection_round,
+    get_open_cos_selection_round,
+    open_cos_selection_round,
+    user_can_open_cos_selection_round,
     cos_deliberation_pool,
+    cos_eligible_pool,
     save_exam_record,
     save_exam_schedule,
     create_competency_rating_template,
@@ -151,6 +160,11 @@ from .services import (
     vacancy_screening_batch_status,
     update_recruitment_entry_status,
     upload_interview_fallback_rating,
+    user_can_upload_interview_fallback,
+    get_interview_fallback_evidence,
+    get_interview_session,
+    interview_session_rater_ids,
+    _average_interview_rating,
     upload_evidence_item,
     user_can_manage_comparative_assessment_report,
     user_can_view_application,
@@ -756,6 +770,26 @@ class BaseRecruitmentTestCase(TestCase):
             finalize=True,
         )
 
+    def ensure_ete_ratings_for_pool(self, application, rating="88.00"):
+        """Give every active Plantilla candidate in this vacancy an ETE rating.
+
+        SL-03 blocks CAR finalization while any candidate is missing a formula component,
+        and screening no longer captures ETE, so the Secretariat's manual rating is the
+        only source. Fixtures that finalize a CAR need it for the whole pool, not just the
+        application under test."""
+        cases = RecruitmentCase.objects.filter(
+            application__position=application.position,
+            application__branch=PositionPosting.Branch.PLANTILLA,
+            case_status=RecruitmentCase.CaseStatus.ACTIVE,
+        ).select_related("application")
+        for case in cases:
+            if getattr(case.application, "ete_rating", None) is None:
+                set_application_ete_rating(
+                    case.application,
+                    self.secretariat,
+                    Decimal(rating),
+                )
+
     def finalize_car_for_current_stage(
         self,
         application,
@@ -771,6 +805,10 @@ class BaseRecruitmentTestCase(TestCase):
         ):
             # WF-04 (client decision): the Secretariat prepares the CAR for BOTH levels.
             car_actor = self.secretariat
+        # SL-03: a CAR can no longer be finalized while a candidate's ETE is blank, so the
+        # shared fixture supplies one for every candidate in the pool the way the
+        # Secretariat would before finalizing.
+        self.ensure_ete_ratings_for_pool(application)
         return generate_comparative_assessment_report(
             application=application,
             actor=car_actor,
@@ -836,6 +874,12 @@ class BaseRecruitmentTestCase(TestCase):
                 actor=actor,
                 cleaned_data=cleaned_data,
             )
+        # SL-01: finalizing the COS vacancy deliberation pick IS the selection, so by the
+        # time a COS case reaches this point the decision already exists. Return it rather
+        # than recording a second, contradicting one.
+        existing = get_latest_final_decision(application)
+        if existing:
+            return existing
         return record_final_decision(
             application=application,
             actor=actor,
@@ -5223,7 +5267,6 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         self.finalize_screening_for_current_stage(application, self.hrm_chief)
         self.finalize_exam_for_current_stage(application, self.hrm_chief)
         self.finalize_interview_for_current_stage(application, self.hrm_chief)
-        self.finalize_deliberation_for_current_stage(application, self.hrm_chief)
         application.refresh_from_db()
         self.assertEqual(application.current_handler_role, RecruitmentUser.Role.HRM_CHIEF)
         self.assertEqual(application.status, RecruitmentApplication.Status.HRM_CHIEF_REVIEW)
@@ -5233,16 +5276,17 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
             get_available_actions(application, self.hrm_chief),
         )
 
-        with self.assertRaisesMessage(ValueError, "Complete the current workflow task before proceeding."):
+        with self.assertRaisesMessage(
+            ValueError, "Finalize the deliberation record before endorsing this COS application."
+        ):
             process_workflow_action(application, self.hrm_chief, "endorse", "COS endorsed.")
 
+        # SL-01: finalizing the vacancy deliberation pick IS the COS selection — the case
+        # goes straight from HRM Chief Review to completion, never via HRMPSB or the
+        # Appointing Authority.
         with self.captureOnCommitCallbacks(execute=True):
-            decision = self.record_final_decision_for_current_stage(
-                application,
-                self.hrm_chief,
-                decision_outcome=FinalDecision.Outcome.SELECTED,
-                decision_notes="COS selected after HRM Chief deliberation.",
-            )
+            self.finalize_deliberation_for_current_stage(application, self.hrm_chief)
+        decision = get_latest_final_decision(application)
         application.refresh_from_db()
         self.assertEqual(decision.decided_by, self.hrm_chief)
         self.assertEqual(decision.review_stage, RecruitmentCase.Stage.HRM_CHIEF_REVIEW)
@@ -7972,9 +8016,109 @@ class VacancyBatchInterviewTests(BaseRecruitmentTestCase):
             # COS moves to the deliberation section at HRM Chief.
             self.assertEqual(get_current_workflow_section(application), "deliberation")
 
+    def _cos_pool_ready_for_the_pick(self):
+        first, second = self._two_cos_at_interview()
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_interview_schedule(
+                self.cos_position, self.hrm_chief, self._interview_schedule_payload()
+            )
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_cos_interview_ratings(
+                self.cos_position,
+                self.hrm_chief,
+                {
+                    first.case.id: {"rating_score": "88.00"},
+                    second.case.id: {"rating_score": "79.00"},
+                },
+                finalize=True,
+            )
+        first.refresh_from_db()
+        second.refresh_from_db()
+        return first, second
+
+    def test_a_case_the_pick_does_not_name_cannot_be_recorded_as_selected(self):
+        # SL-01 AC#1: with the pick naming A, no predicate or service call can record B.
+        # This is the probe the audit reproduced — it used to succeed, leaving the audit
+        # trail holding two incompatible official facts.
+        winner, loser = self._cos_pool_ready_for_the_pick()
+        with self.captureOnCommitCallbacks(execute=True):
+            save_cos_vacancy_deliberation(
+                self.cos_position,
+                self.hrm_chief,
+                winner.case.id,
+                "A is the pick.",
+                finalize=True,
+            )
+        winner.refresh_from_db()
+        loser.refresh_from_db()
+
+        self.assertFalse(user_can_record_final_decision(self.hrm_chief, loser))
+        with self.assertRaisesMessage(
+            ValueError,
+            "This applicant is not the one named in the finalized COS deliberation pick.",
+        ):
+            record_final_decision(
+                application=loser,
+                actor=self.hrm_chief,
+                cleaned_data={
+                    "decision_outcome": FinalDecision.Outcome.SELECTED,
+                    "decision_notes": "Trying to select the other candidate instead.",
+                },
+            )
+        # SL-01 AC#3: pick, recorded outcome, notified applicant and completion case all
+        # identify the same application.
+        pick = get_cos_vacancy_deliberation(self.cos_position)
+        decision = get_latest_final_decision(winner)
+        self.assertEqual(pick.chosen_case_id, winner.case.id)
+        self.assertEqual(decision.recruitment_case_id, winner.case.id)
+        self.assertEqual(decision.decision_outcome, FinalDecision.Outcome.SELECTED)
+        self.assertEqual(winner.case.current_stage, RecruitmentCase.Stage.COMPLETION)
+        self.assertEqual(FinalDecision.objects.filter(application=loser).count(), 0)
+        self.assertTrue(
+            NotificationLog.objects.filter(
+                application=winner,
+                notification_type=NotificationLog.NotificationType.SELECTED_APPLICANT,
+            ).exists()
+        )
+
+    def test_the_pick_does_not_close_candidates_it_never_deliberated(self):
+        # SL-01/SL-02 AC#1: a sibling still in screening was never in the comparison and
+        # must not receive a "not selected" outcome or notice.
+        winner, loser = self._cos_pool_ready_for_the_pick()
+        pending = self._extra_submitted_application(self.cos_position, "pending")
+        pending.refresh_from_db()
+        self.assertEqual(
+            pending.case.current_stage, RecruitmentCase.Stage.SECRETARIAT_REVIEW
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            save_cos_vacancy_deliberation(
+                self.cos_position,
+                self.hrm_chief,
+                winner.case.id,
+                "Chosen from the deliberated pool.",
+                finalize=True,
+            )
+        pending.refresh_from_db()
+        pending.case.refresh_from_db()
+        loser.refresh_from_db()
+
+        self.assertEqual(loser.status, RecruitmentApplication.Status.REJECTED)
+        self.assertEqual(pending.case.case_status, RecruitmentCase.CaseStatus.ACTIVE)
+        self.assertEqual(
+            pending.case.current_stage, RecruitmentCase.Stage.SECRETARIAT_REVIEW
+        )
+        self.assertNotEqual(pending.status, RecruitmentApplication.Status.REJECTED)
+        self.assertFalse(
+            NotificationLog.objects.filter(
+                application=pending,
+                notification_type=NotificationLog.NotificationType.NON_SELECTED_APPLICANT,
+            ).exists()
+        )
+
     def test_cos_selected_decision_resolves_the_rest_of_the_pool(self):
         # WF-10: recording the COS Selected decision closes the sibling cases as not
         # selected and notifies each — mirroring Plantilla instead of stranding them.
+        # SL-01: that now happens as part of finalizing the pick, not as a separate act.
         first, second = self._two_cos_at_interview()
         with self.captureOnCommitCallbacks(execute=True):
             save_vacancy_interview_schedule(
@@ -8000,19 +8144,6 @@ class VacancyBatchInterviewTests(BaseRecruitmentTestCase):
                 "Most qualified per the deliberation.",
                 finalize=True,
             )
-        first.refresh_from_db()
-        second.refresh_from_db()
-
-        with self.captureOnCommitCallbacks(execute=True):
-            record_final_decision(
-                application=first,
-                actor=self.hrm_chief,
-                cleaned_data={
-                    "decision_outcome": FinalDecision.Outcome.SELECTED,
-                    "decision_notes": "Selected after the COS deliberation pick.",
-                },
-            )
-
         first.refresh_from_db()
         second.refresh_from_db()
         second.case.refresh_from_db()
@@ -9282,14 +9413,16 @@ class IdorObjectAccessRegressionTests(BaseRecruitmentTestCase):
 
         self.assertEqual(response.status_code, 403)
 
-    def test_secretariat_cannot_post_final_decision_for_level2_case(self):
+    def test_secretariat_cannot_post_final_selection_for_level2_case(self):
+        # SL-01 removed the per-case COS decision endpoint (the pick is the selection);
+        # the equivalent unauthorized-output probe is now the Plantilla selection route.
         application = self._submit(self.level2_position)
 
         client = Client()
         self.force_login_with_mfa(client, self.secretariat)
         response = client.post(
-            reverse("final-decision-record", kwargs={"pk": application.pk}),
-            {"decision_outcome": "approved", "decision_remarks": "unauthorized probe"},
+            reverse("final-selection-record", kwargs={"pk": application.pk}),
+            {"selected_item": "1", "decision_notes": "unauthorized probe"},
         )
 
         self.assertEqual(response.status_code, 403)
@@ -10027,15 +10160,11 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         self.finalize_screening_for_current_stage(application, self.hrm_chief)
         self.finalize_exam_for_current_stage(application, self.hrm_chief)
         self.finalize_interview_for_current_stage(application, self.hrm_chief)
-        self.finalize_deliberation_for_current_stage(application, self.hrm_chief)
 
+        # SL-01: the selection (and its applicant notice) happens when the vacancy
+        # deliberation pick is finalized.
         with self.captureOnCommitCallbacks(execute=True):
-            self.record_final_decision_for_current_stage(
-                application,
-                self.hrm_chief,
-                decision_outcome=FinalDecision.Outcome.SELECTED,
-                decision_notes="Approved.",
-            )
+            self.finalize_deliberation_for_current_stage(application, self.hrm_chief)
 
         application.refresh_from_db()
         notification = NotificationLog.objects.get(
@@ -11553,6 +11682,224 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
         )
         self.assertTrue(session.is_finalized)
 
+    # ── SL-03 / SL-07: attributable paper ratings ─────────────────────────────
+    def _plantilla_session_awaiting_ratings(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        save_interview_session(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data=self.session_payload(),
+            finalize=False,
+        )
+        return application
+
+    def test_support_role_can_encode_a_paper_rating_sheet(self):
+        # SL-07: the rendered fallback form belongs to the Secretariat, but the generic
+        # evidence uploader used to refuse them because HRMPSB owns the case at this stage —
+        # the action was visible and unusable. It now authorizes against its own predicate.
+        application = self._plantilla_session_awaiting_ratings()
+        self.assertTrue(user_can_upload_interview_fallback(self.secretariat, application))
+
+        fallback = upload_interview_fallback_rating(
+            application=application,
+            actor=self.secretariat,
+            uploaded_file=SimpleUploadedFile(
+                "sheet.pdf", b"%PDF-1.4 sheet", content_type="application/pdf"
+            ),
+            remarks="Chairperson rated on paper.",
+            rated_by=self.hrmpsb,
+            rating_score=Decimal("91.00"),
+        )
+
+        self.assertEqual(fallback.rated_by, self.hrmpsb)
+        self.assertEqual(fallback.encoded_by, self.secretariat)
+        self.assertEqual(fallback.rating_score, Decimal("91.00"))
+        self.assertIsNotNone(fallback.evidence_item)
+        self.assertEqual(
+            get_interview_fallback_evidence(application).count(),
+            1,
+        )
+
+    def test_a_paper_sheet_without_a_rater_or_score_is_refused(self):
+        application = self._plantilla_session_awaiting_ratings()
+        with self.assertRaisesMessage(ValueError, "Name the panel member who signed"):
+            upload_interview_fallback_rating(
+                application=application,
+                actor=self.secretariat,
+                uploaded_file=SimpleUploadedFile(
+                    "sheet.pdf", b"%PDF-1.4 sheet", content_type="application/pdf"
+                ),
+                remarks="Anonymous sheet.",
+                rating_score=Decimal("91.00"),
+            )
+        with self.assertRaisesMessage(ValueError, "Record the numeric rating from the sheet."):
+            upload_interview_fallback_rating(
+                application=application,
+                actor=self.secretariat,
+                uploaded_file=SimpleUploadedFile(
+                    "sheet.pdf", b"%PDF-1.4 sheet", content_type="application/pdf"
+                ),
+                remarks="No score.",
+                rated_by=self.hrmpsb,
+            )
+
+    def test_three_versions_of_one_sheet_are_not_three_panel_members(self):
+        # SL-03: the audit's injected-state probe. Three evidence versions used to satisfy
+        # the quorum with zero attributable ratings, and the CAR then ranked a blank.
+        application = self._plantilla_session_awaiting_ratings()
+        for index in range(3):
+            upload_interview_fallback_rating(
+                application=application,
+                actor=self.secretariat,
+                uploaded_file=SimpleUploadedFile(
+                    f"sheet{index}.pdf", b"%PDF-1.4 sheet", content_type="application/pdf"
+                ),
+                remarks=f"Rescan {index}.",
+                rated_by=self.hrmpsb,
+                rating_score=Decimal("91.00"),
+            )
+        session = get_interview_session(application)
+        self.assertEqual(session.fallback_ratings.count(), 1)
+        self.assertEqual(len(interview_session_rater_ids(session)), 1)
+        with self.assertRaisesMessage(
+            ValueError,
+            "This interview needs ratings from at least 3 HRMPSB members before it can be finalized (currently 1).",
+        ):
+            save_interview_session(
+                application=application,
+                actor=self.secretariat,
+                cleaned_data=self.session_payload(),
+                finalize=True,
+            )
+
+    def test_paper_and_digital_ratings_together_meet_the_quorum_and_the_average(self):
+        application = self._plantilla_session_awaiting_ratings()
+        second_rater, third_rater = self.extra_plantilla_panel_raters(exclude=self.hrmpsb)
+        save_interview_rating(
+            application=application,
+            actor=self.hrmpsb,
+            cleaned_data=self.rating_payload(application, level=3),
+        )
+        save_interview_rating(
+            application=application,
+            actor=second_rater,
+            cleaned_data=self.rating_payload(application, level=3),
+        )
+        upload_interview_fallback_rating(
+            application=application,
+            actor=self.secretariat,
+            uploaded_file=SimpleUploadedFile(
+                "sheet.pdf", b"%PDF-1.4 sheet", content_type="application/pdf"
+            ),
+            remarks="Third member rated on paper.",
+            rated_by=third_rater,
+            rating_score=Decimal("70.00"),
+            justification="Below the usual band; recorded from the signed sheet.",
+        )
+        session = save_interview_session(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data=self.session_payload(),
+            finalize=True,
+        )
+        self.assertTrue(session.is_finalized)
+        # SL-03: one average across the digital and encoded-paper ratings alike.
+        average = _average_interview_rating(session)
+        self.assertIsNotNone(average)
+        digital = [r.rating_score for r in session.ratings.all()]
+        expected = (sum(digital) + Decimal("70.00")) / Decimal(3)
+        self.assertEqual(
+            average,
+            expected.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+        )
+
+    def test_more_than_five_raters_is_refused(self):
+        application = self._plantilla_session_awaiting_ratings()
+        raters = [self.hrmpsb, *self.extra_plantilla_panel_raters(exclude=self.hrmpsb, count=3)]
+        for rater in raters:
+            save_interview_rating(
+                application=application,
+                actor=rater,
+                cleaned_data=self.rating_payload(application, level=3),
+            )
+        extra = RecruitmentUser.objects.create_user(
+            username="hrmpsb-rater-overflow",
+            password="testpass123",
+            email="hrmpsb.overflow@example.com",
+            role=RecruitmentUser.Role.HRMPSB_MEMBER,
+        )
+        save_interview_rating(
+            application=application,
+            actor=extra,
+            cleaned_data=self.rating_payload(application, level=3),
+        )
+        sixth = RecruitmentUser.objects.create_user(
+            username="hrmpsb-rater-sixth",
+            password="testpass123",
+            email="hrmpsb.sixth@example.com",
+            role=RecruitmentUser.Role.HRMPSB_MEMBER,
+        )
+        save_interview_rating(
+            application=application,
+            actor=sixth,
+            cleaned_data=self.rating_payload(application, level=3),
+        )
+        with self.assertRaisesMessage(ValueError, "The HRMPSB is 3–5 members"):
+            save_interview_session(
+                application=application,
+                actor=self.secretariat,
+                cleaned_data=self.session_payload(),
+                finalize=True,
+            )
+
+    def test_the_rendered_fallback_form_reaches_the_service(self):
+        # SL-07 AC#4: template -> URL -> view -> predicate -> persisted structured fallback.
+        application = self._plantilla_session_awaiting_ratings()
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        detail = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
+        self.assertContains(detail, "Panel member who signed the sheet")
+
+        response = client.post(
+            reverse("interview-fallback-upload", kwargs={"pk": application.pk}),
+            {
+                "rated_by": self.hrmpsb.pk,
+                "rating_score": "89.50",
+                "remarks": "Encoded from the signed sheet.",
+                "justification": "",
+                "file": SimpleUploadedFile(
+                    "sheet.pdf", b"%PDF-1.4 sheet", content_type="application/pdf"
+                ),
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        session = get_interview_session(application)
+        self.assertEqual(session.fallback_ratings.count(), 1)
+        self.assertEqual(session.fallback_ratings.first().rated_by, self.hrmpsb)
+
+    def test_a_wrong_stage_fallback_post_is_still_refused(self):
+        # SL-07 AC#2: reopening the door does not widen it.
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(application, self.applicant)
+        application.refresh_from_db()
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("interview-fallback-upload", kwargs={"pk": application.pk}),
+            {
+                "rated_by": self.hrmpsb.pk,
+                "rating_score": "89.50",
+                "remarks": "Too early.",
+                "file": SimpleUploadedFile(
+                    "sheet.pdf", b"%PDF-1.4 sheet", content_type="application/pdf"
+                ),
+            },
+        )
+        self.assertEqual(response.status_code, 403)
+
     def test_hrmpsb_member_cannot_schedule_plantilla_interview_session(self):
         application = self.make_application(self.level1_position)
         self.move_application_to_hrmpsb_review(application)
@@ -11948,6 +12295,8 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
             upload_interview_fallback_rating(
                 application=application,
                 actor=self.hrm_chief,
+                rated_by=self.hrm_chief,
+                rating_score=Decimal("88.00"),
                 uploaded_file=SimpleUploadedFile(
                     "fallback.html",
                     b"<html><script>alert(1)</script></html>",
@@ -12262,7 +12611,13 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         # The finalized pick is one per vacancy and gates the decision section.
         self.assertEqual(get_cos_vacancy_deliberation(self.cos_position).pk, pick.pk)
         application.refresh_from_db()
-        self.assertEqual(get_current_workflow_section(application), "decision")
+        # SL-01: finalizing the pick IS the selection — the chosen applicant is recorded
+        # as selected and routed straight to completion, with no second decision step.
+        self.assertEqual(get_current_workflow_section(application), "completion")
+        decision = get_latest_final_decision(application)
+        self.assertIsNotNone(decision)
+        self.assertEqual(decision.decision_outcome, FinalDecision.Outcome.SELECTED)
+        self.assertEqual(decision.recruitment_case_id, pick.chosen_case_id)
         # The submission packet now reads the per-vacancy pick.
         packet = build_submission_packet(application)
         self.assertTrue(packet["summary"]["has_cos_deliberation_pick"])
@@ -12318,7 +12673,254 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         self.assertTrue(pick.is_finalized)
         self.assertEqual(pick.chosen_case_id, application.case.id)
         application.refresh_from_db()
-        self.assertEqual(get_current_workflow_section(application), "decision")
+        # SL-01: the console finalize is the selection act.
+        self.assertEqual(get_current_workflow_section(application), "completion")
+        self.assertEqual(
+            get_latest_final_decision(application).decision_outcome,
+            FinalDecision.Outcome.SELECTED,
+        )
+
+    # ── SL-02: need-based COS selection rounds ────────────────────────────────
+    def _continuous_candidate(self, suffix):
+        """A continuous-COS candidate driven to the HRM Chief deliberation section."""
+        applicant = RecruitmentUser.objects.create_user(
+            username=f"cont-applicant-{suffix}",
+            password="testpass123",
+            email=f"cont.{suffix}@example.com",
+            role=RecruitmentUser.Role.APPLICANT,
+        )
+        application = RecruitmentApplication.objects.create(
+            applicant=applicant,
+            position=self.cos_continuous_position,
+            applicant_first_name=f"Cont{suffix}",
+            applicant_last_name="Applicant",
+            applicant_email=f"cont.{suffix}@example.com",
+            applicant_phone=f"091777700{suffix}",
+            checklist_privacy_consent=True,
+            checklist_documents_complete=True,
+            checklist_information_certified=True,
+            qualification_summary="Continuous COS pool candidate.",
+            cover_letter="Applying for the continuous vacancy.",
+            performance_rating_applicability=(
+                RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
+            ),
+        )
+        self.upload_required_applicant_documents(
+            application,
+            applicant,
+            content_prefix=f"cont-{suffix}",
+            performance_rating_applicability=(
+                RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
+            ),
+        )
+        self.verify_application_for_submission(application)
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(application, applicant)
+        application.refresh_from_db()
+        self.finalize_screening_for_current_stage(application, self.secretariat)
+        self.finalize_exam_for_current_stage(application, self.secretariat)
+        application.refresh_from_db()
+        self.finalize_screening_for_current_stage(application, self.hrm_chief)
+        self.finalize_exam_for_current_stage(application, self.hrm_chief)
+        self.finalize_interview_for_current_stage(application, self.hrm_chief)
+        application.refresh_from_db()
+        return application
+
+    def test_continuous_cos_needs_an_open_round_before_a_pick(self):
+        application = self._continuous_candidate("a")
+        self.assertEqual(get_current_workflow_section(application), "deliberation")
+        self.assertEqual(cos_deliberation_pool(self.cos_continuous_position), [])
+        with self.assertRaisesMessage(
+            ValueError, "Open a selection round before recording a pick"
+        ):
+            save_cos_vacancy_deliberation(
+                self.cos_continuous_position,
+                self.hrm_chief,
+                application.case.id,
+                "Picking without a round.",
+                finalize=True,
+            )
+
+    def test_opening_a_round_snapshots_the_candidates_eligible_at_that_moment(self):
+        first = self._continuous_candidate("a")
+        selection_round = open_cos_selection_round(
+            self.cos_continuous_position,
+            self.hrm_chief,
+            slot_count=1,
+            notes="One slot opened in Finance.",
+        )
+        # A candidate who becomes eligible AFTER the round opened is not in it.
+        later = self._continuous_candidate("b")
+
+        self.assertEqual(selection_round.round_number, 1)
+        member_case_ids = set(
+            selection_round.members.values_list("recruitment_case_id", flat=True)
+        )
+        self.assertEqual(member_case_ids, {first.case.id})
+        self.assertNotIn(later.case.id, member_case_ids)
+        pool_ids = {a.pk for a in cos_deliberation_pool(self.cos_continuous_position)}
+        self.assertEqual(pool_ids, {first.pk})
+        # SL-02: the later candidate cannot be picked in a round they never joined.
+        with self.assertRaisesMessage(
+            ValueError, "The chosen applicant must be one of this vacancy's candidates."
+        ):
+            save_cos_vacancy_deliberation(
+                self.cos_continuous_position,
+                self.hrm_chief,
+                later.case.id,
+                "Wrong round.",
+                finalize=True,
+            )
+
+    def test_unpicked_continuous_candidates_stay_in_the_pool_for_the_next_round(self):
+        # SL-02: the client keeps unpicked candidates on file and calls them when a slot
+        # opens. Losing a round is not a rejection.
+        first = self._continuous_candidate("a")
+        second = self._continuous_candidate("b")
+        open_cos_selection_round(self.cos_continuous_position, self.hrm_chief, slot_count=1)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_cos_vacancy_deliberation(
+                self.cos_continuous_position,
+                self.hrm_chief,
+                first.case.id,
+                "First hire.",
+                finalize=True,
+            )
+        first.refresh_from_db()
+        second.refresh_from_db()
+
+        self.assertEqual(first.status, RecruitmentApplication.Status.APPROVED)
+        self.assertEqual(first.case.current_stage, RecruitmentCase.Stage.COMPLETION)
+        # The unpicked candidate is untouched — still active, still at deliberation.
+        self.assertNotEqual(second.status, RecruitmentApplication.Status.REJECTED)
+        self.assertEqual(second.case.case_status, RecruitmentCase.CaseStatus.ACTIVE)
+        self.assertEqual(get_current_workflow_section(second), "deliberation")
+        self.assertFalse(
+            NotificationLog.objects.filter(
+                application=second,
+                notification_type=NotificationLog.NotificationType.NON_SELECTED_APPLICANT,
+            ).exists()
+        )
+        self.assertIsNone(get_open_cos_selection_round(self.cos_continuous_position))
+        self.assertEqual(
+            {a.pk for a in cos_eligible_pool(self.cos_continuous_position)}, {second.pk}
+        )
+
+    def test_a_later_candidate_enters_a_new_round_and_can_be_hired(self):
+        # SL-02 AC#2: a later continuous candidate joins a NEW cycle rather than
+        # inheriting the outcome of one they never took part in.
+        first = self._continuous_candidate("a")
+        open_cos_selection_round(self.cos_continuous_position, self.hrm_chief, slot_count=1)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_cos_vacancy_deliberation(
+                self.cos_continuous_position,
+                self.hrm_chief,
+                first.case.id,
+                "First hire.",
+                finalize=True,
+            )
+        later = self._continuous_candidate("b")
+        later.refresh_from_db()
+        # The old pick does not push the later candidate to a decision.
+        self.assertEqual(get_current_workflow_section(later), "deliberation")
+        self.assertFalse(user_can_record_final_decision(self.hrm_chief, later))
+
+        second_round = open_cos_selection_round(
+            self.cos_continuous_position, self.hrm_chief, slot_count=1
+        )
+        self.assertEqual(second_round.round_number, 2)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_cos_vacancy_deliberation(
+                self.cos_continuous_position,
+                self.hrm_chief,
+                later.case.id,
+                "Second hire.",
+                finalize=True,
+            )
+        later.refresh_from_db()
+        self.assertEqual(later.status, RecruitmentApplication.Status.APPROVED)
+        self.assertEqual(
+            get_cos_pick_for_case(later.case).selection_round_id, second_round.id
+        )
+
+    def test_a_multi_slot_round_fills_every_slot_before_it_resolves(self):
+        first = self._continuous_candidate("a")
+        second = self._continuous_candidate("b")
+        third = self._continuous_candidate("c")
+        selection_round = open_cos_selection_round(
+            self.cos_continuous_position, self.hrm_chief, slot_count=2
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            save_cos_vacancy_deliberation(
+                self.cos_continuous_position,
+                self.hrm_chief,
+                first.case.id,
+                "Hire one.",
+                finalize=True,
+            )
+        selection_round.refresh_from_db()
+        self.assertTrue(selection_round.is_open)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_cos_vacancy_deliberation(
+                self.cos_continuous_position,
+                self.hrm_chief,
+                second.case.id,
+                "Hire two.",
+                finalize=True,
+            )
+        selection_round.refresh_from_db()
+        first.refresh_from_db()
+        second.refresh_from_db()
+        third.refresh_from_db()
+
+        self.assertTrue(selection_round.is_resolved)
+        self.assertEqual(first.status, RecruitmentApplication.Status.APPROVED)
+        self.assertEqual(second.status, RecruitmentApplication.Status.APPROVED)
+        self.assertEqual(get_current_workflow_section(third), "deliberation")
+
+    def test_a_round_cannot_exceed_its_slot_count(self):
+        first = self._continuous_candidate("a")
+        second = self._continuous_candidate("b")
+        open_cos_selection_round(self.cos_continuous_position, self.hrm_chief, slot_count=1)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_cos_vacancy_deliberation(
+                self.cos_continuous_position,
+                self.hrm_chief,
+                first.case.id,
+                "Only hire.",
+                finalize=True,
+            )
+        with self.assertRaisesMessage(
+            ValueError, "Open a selection round before recording a pick"
+        ):
+            save_cos_vacancy_deliberation(
+                self.cos_continuous_position,
+                self.hrm_chief,
+                second.case.id,
+                "One too many.",
+                finalize=True,
+            )
+
+    def test_single_batch_cos_still_closes_the_unpicked_pool_once(self):
+        # SL-02: opening/pooling COS keeps single-batch behaviour — one round, and the
+        # candidates it does not pick are closed as not selected.
+        application = self._cos_case_at_deliberation()
+        with self.captureOnCommitCallbacks(execute=True):
+            save_cos_vacancy_deliberation(
+                self.cos_position,
+                self.hrm_chief,
+                application.case.id,
+                "The single-batch pick.",
+                finalize=True,
+            )
+        selection_round = get_latest_cos_selection_round(self.cos_position)
+        self.assertIsNotNone(selection_round)
+        self.assertEqual(selection_round.round_number, 1)
+        self.assertTrue(selection_round.is_resolved)
+        self.assertIsNone(get_open_cos_selection_round(self.cos_position))
+        self.assertFalse(
+            user_can_open_cos_selection_round(self.hrm_chief, self.cos_position)
+        )
 
     def test_user_full_name_falls_back_to_username_for_display(self):
         self.assertEqual(self.applicant.get_full_name(), self.applicant.username)
@@ -12341,7 +12943,21 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         self.assertEqual(draft_report.version_number, 1)
         self.assertIsNone(draft_item.deliberation_record)
         self.assertEqual(str(draft_item.interview_average_score), "100.00")
-        self.assertEqual(draft_item.rank_order, 1)
+        # SL-03: no ETE yet, so no computed score — and therefore no rank. A draft may be
+        # incomplete; what it may not do is imply a merit ordering it cannot support.
+        self.assertIsNone(draft_item.assessment_score)
+        self.assertIsNone(draft_item.rank_order)
+
+        set_application_ete_rating(application, self.secretariat, Decimal("90"))
+        ranked_report = generate_comparative_assessment_report(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data={"summary_notes": "Draft CAR with the ETE rating entered."},
+            finalize=False,
+        )
+        ranked_item = ranked_report.items.get(recruitment_case=application.case)
+        self.assertIsNotNone(ranked_item.assessment_score)
+        self.assertEqual(ranked_item.rank_order, 1)
 
     def test_car_autosave_does_not_generate_report_versions_or_files(self):
         application = self.make_application(self.level1_position)
@@ -12452,6 +13068,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         self.assertTrue(user_can_manage_comparative_assessment_report(self.secretariat, application))
         self.assertFalse(user_can_manage_comparative_assessment_report(self.hrmpsb, application))
         self.assertTrue(get_queue_for_user(self.secretariat).filter(pk=application.pk).exists())
+        self.ensure_ete_ratings_for_pool(application)
 
         report = generate_comparative_assessment_report(
             application=application,
@@ -12512,6 +13129,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
                 finalize=False,
             )
 
+        self.ensure_ete_ratings_for_pool(application)
         report = generate_comparative_assessment_report(
             application=application,
             actor=self.secretariat,
@@ -12807,6 +13425,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         self.move_application_to_hrmpsb_review(application)
         self.finalize_interview_for_current_stage(application, self.hrmpsb)
         self.finalize_deliberation_for_current_stage(application, self.hrmpsb, ranking_position=1)
+        self.ensure_ete_ratings_for_pool(application)
 
         report = generate_comparative_assessment_report(
             application=application,
@@ -12824,11 +13443,83 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         self.assertIs(report.quorum_met, True)
         self.assertEqual(report.members_present, 5)
 
+    def test_car_cannot_finalize_with_a_blank_formula_component(self):
+        # SL-03: the audit's probe — a candidate with no ETE finalized at rank 1 and was
+        # recommended to the Appointing Authority with nothing behind 40% of the formula.
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb)
+        self.finalize_deliberation_for_current_stage(application, self.hrmpsb, ranking_position=1)
+
+        readiness = get_comparative_assessment_readiness(application)
+        self.assertFalse(readiness["can_finalize"])
+        self.assertIn("#DIV/0!", readiness["finalize_block_message"])
+        self.assertIn(application.reference_label, readiness["finalize_block_message"])
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "Every candidate needs a complete score before the CAR can be finalized",
+        ):
+            generate_comparative_assessment_report(
+                application=application,
+                actor=self.secretariat,
+                cleaned_data={
+                    "summary_notes": "Finalizing without an ETE rating.",
+                    "quorum_met": True,
+                    "members_present": 4,
+                    "recommended_case_id": application.case.id,
+                },
+                finalize=True,
+            )
+        self.assertFalse(
+            ComparativeAssessmentReport.objects.filter(
+                recruitment_entry=application.position, is_finalized=True
+            ).exists()
+        )
+        self.assertEqual(
+            application.case.current_stage, RecruitmentCase.Stage.HRMPSB_REVIEW
+        )
+
+        # With the ETE entered the same finalize succeeds and the case routes forward.
+        self.ensure_ete_ratings_for_pool(application)
+        self.assertTrue(
+            get_comparative_assessment_readiness(application)["can_finalize"]
+        )
+        report = generate_comparative_assessment_report(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data={
+                "summary_notes": "Complete CAR.",
+                "quorum_met": True,
+                "members_present": 4,
+                "recommended_case_id": application.case.id,
+            },
+            finalize=True,
+        )
+        item = report.items.get(recruitment_case=application.case)
+        self.assertIsNotNone(item.assessment_score)
+        self.assertEqual(item.rank_order, 1)
+
+    def test_an_unscored_car_row_cannot_be_the_board_recommendation(self):
+        # SL-03 AC#2: no rank, no recommendation, no route forward without a score.
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb)
+        self.finalize_deliberation_for_current_stage(application, self.hrmpsb, ranking_position=1)
+
+        draft = ComparativeAssessmentReport.objects.filter(
+            recruitment_entry=application.position, is_finalized=False
+        ).first()
+        item = draft.items.get(recruitment_case=application.case)
+        self.assertIsNone(item.assessment_score)
+        self.assertIsNone(item.rank_order)
+
     def test_car_finalize_requires_a_recommended_applicant(self):
         application = self.make_application(self.level1_position)
         self.move_application_to_hrmpsb_review(application)
         self.finalize_interview_for_current_stage(application, self.hrmpsb)
         self.finalize_deliberation_for_current_stage(application, self.hrmpsb, ranking_position=1)
+        self.ensure_ete_ratings_for_pool(application)
 
         with self.assertRaisesMessage(
             ValueError,
@@ -12856,6 +13547,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         self.move_application_to_hrmpsb_review(application)
         self.finalize_interview_for_current_stage(application, self.hrmpsb)
         self.finalize_deliberation_for_current_stage(application, self.hrmpsb, ranking_position=1)
+        self.ensure_ete_ratings_for_pool(application)
 
         report = generate_comparative_assessment_report(
             application=application,
@@ -12879,6 +13571,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         self.move_application_to_hrmpsb_review(application)
         self.finalize_interview_for_current_stage(application, self.hrmpsb)
         self.finalize_deliberation_for_current_stage(application, self.hrmpsb, ranking_position=1)
+        self.ensure_ete_ratings_for_pool(application)
         # A case from a different vacancy is not a valid recommendation.
         other = self.make_application(self.level2_position)
         self.move_application_to_hrmpsb_review(other)
@@ -12987,6 +13680,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             review_stage=RecruitmentCase.Stage.HRMPSB_REVIEW,
             is_finalized=False,
         )
+        self.ensure_ete_ratings_for_pool(primary_application)
         finalized_report = generate_comparative_assessment_report(
             application=secondary_application,
             actor=self.secretariat,
@@ -13458,51 +14152,49 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.COMPLETION)
         self.assertEqual(application.current_handler_role, RecruitmentUser.Role.HRM_CHIEF)
 
-    def test_not_selected_final_decision_closes_case_and_locks_it(self):
+    def test_a_selection_cannot_be_recorded_before_the_pick_is_finalized(self):
         application = self.make_application(self.cos_position)
-        self.move_application_to_appointing_review(application)
-
-        decision = self.record_final_decision_for_current_stage(
-            application,
-            self.hrm_chief,
-            decision_outcome=FinalDecision.Outcome.NOT_SELECTED,
-            decision_notes="Not selected after reviewing final records.",
-        )
+        self.move_application_to_hrm_chief_review(application)
+        self.finalize_screening_for_current_stage(application, self.hrm_chief)
+        self.finalize_exam_for_current_stage(application, self.hrm_chief)
+        self.finalize_interview_for_current_stage(application, self.hrm_chief)
         application.refresh_from_db()
-        application.case.refresh_from_db()
 
-        self.assertEqual(decision.decision_outcome, FinalDecision.Outcome.NOT_SELECTED)
-        self.assertEqual(decision.decided_by, self.hrm_chief)
-        self.assertEqual(decision.review_stage, RecruitmentCase.Stage.HRM_CHIEF_REVIEW)
-        self.assertEqual(application.status, RecruitmentApplication.Status.REJECTED)
-        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.CLOSED)
-        self.assertTrue(application.case.is_stage_locked)
-        self.assertTrue(
-            NotificationLog.objects.filter(
+        with self.assertRaisesMessage(
+            ValueError,
+            "Finalize the COS vacancy deliberation pick before recording the selection.",
+        ):
+            record_final_decision(
                 application=application,
-                notification_type=NotificationLog.NotificationType.NON_SELECTED_APPLICANT,
-            ).exists()
-        )
+                actor=self.hrm_chief,
+                cleaned_data={
+                    "decision_outcome": FinalDecision.Outcome.SELECTED,
+                    "decision_notes": "Skipping the deliberation.",
+                },
+            )
 
     def test_appointing_authority_cannot_record_cos_selection(self):
         application = self.make_application(self.cos_position)
         self.move_application_to_appointing_review(application)
+        application.refresh_from_db()
 
         with self.assertRaisesMessage(
             ValueError,
             "Only the HRM Chief may record the final decision at the current step.",
         ):
-            self.record_final_decision_for_current_stage(
-                application,
-                self.appointing,
-                decision_outcome=FinalDecision.Outcome.SELECTED,
-                decision_notes="COS should not require Appointing Authority signing.",
+            record_final_decision(
+                application=application,
+                actor=self.appointing,
+                cleaned_data={
+                    "decision_outcome": FinalDecision.Outcome.SELECTED,
+                    "decision_notes": "COS should not require Appointing Authority signing.",
+                },
             )
 
-        self.assertFalse(FinalDecision.objects.filter(application=application).exists())
-        application.refresh_from_db()
-        self.assertEqual(application.status, RecruitmentApplication.Status.HRM_CHIEF_REVIEW)
-        self.assertEqual(application.current_handler_role, RecruitmentUser.Role.HRM_CHIEF)
+        # The only decision on record is the one the HRM Chief's finalized pick produced.
+        decisions = FinalDecision.objects.filter(application=application)
+        self.assertEqual(decisions.count(), 1)
+        self.assertEqual(decisions.first().decided_by, self.hrm_chief)
 
     def test_application_detail_exposes_decision_packet_sections(self):
         application = self.make_application(self.level1_position)
@@ -13524,7 +14216,9 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         packet = build_submission_packet(application)
         self.assertTrue(packet["summary"]["has_comparative_assessment_report"])
 
-    def test_cos_application_detail_exposes_decision_wizard(self):
+    def test_cos_decision_surface_displays_the_authoritative_pick(self):
+        # SL-01 AC#2: the case's Decision surface shows the vacancy pick and its notes —
+        # it never asks the HRM Chief to choose the person a second time.
         application = self.make_application(self.cos_position)
         self.move_application_to_appointing_review(application)
 
@@ -13533,10 +14227,10 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'rg-cws-stage-titlebar__title">COS Selection</span>')
-        self.assertContains(response, "Review the submission packet")
-        self.assertContains(response, "Record your decision")
-        self.assertContains(response, reverse("final-decision-record", kwargs={"pk": application.pk}))
+        self.assertContains(response, "COS vacancy deliberation pick")
+        self.assertContains(response, "recorded once on the")
+        self.assertContains(response, "This applicant")
+        self.assertNotContains(response, "Record your decision")
         self.assertNotContains(response, "Pick the appointee")
 
     def test_submission_packet_marks_missing_evaluation_records(self):
@@ -13553,24 +14247,10 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         self.assertIn("Finalized interview session", packet["summary"]["missing_components"])
         self.assertIn("Finalized COS deliberation pick", packet["summary"]["missing_components"])
 
-    def test_final_decision_invalid_post_rerenders_bound_wizard_form(self):
-        application = self.make_application(self.cos_position)
-        self.move_application_to_appointing_review(application)
-
-        client = Client()
-        self.force_login_with_mfa(client, self.hrm_chief)
-        response = client.post(
-            reverse("final-decision-record", kwargs={"pk": application.pk}),
-            {
-                "decision_outcome": "",
-                "decision_notes": "",
-            },
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Choose the final outcome and provide the decision remarks.")
-        self.assertContains(response, "This field is required.")
-        self.assertContains(response, 'data-decision-step="decide"')
+    def test_the_per_case_cos_decision_endpoint_no_longer_exists(self):
+        # SL-01: the second door is gone — the pick on the console is the only one.
+        with self.assertRaises(NoReverseMatch):
+            reverse("final-decision-record", kwargs={"pk": 1})
 
 
 class E2ESeedCommandTests(BaseRecruitmentTestCase):
@@ -13619,7 +14299,12 @@ class E2ESeedCommandTests(BaseRecruitmentTestCase):
 
         cos_decision = RecruitmentApplication.objects.get(reference_number="RG-COS-test-decision")
         self.assertEqual(cos_decision.case.current_stage, RecruitmentCase.Stage.HRM_CHIEF_REVIEW)
-        self.assertEqual(get_current_workflow_section(cos_decision), "decision")
+        # SL-01: the COS decision is made by finalizing the vacancy pick, so the case that
+        # still awaits a decision is one whose pick is saved but not yet finalized.
+        self.assertEqual(get_current_workflow_section(cos_decision), "deliberation")
+        pick = get_cos_vacancy_deliberation(cos_decision.position)
+        self.assertIsNotNone(pick)
+        self.assertFalse(pick.is_finalized)
 
         final_selection = RecruitmentApplication.objects.get(
             reference_number="RG-PLT-test-final-selection"

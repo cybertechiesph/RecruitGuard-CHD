@@ -2334,6 +2334,132 @@ class InterviewRating(TimestampedModel):
         return f"{self.application.reference_label} rating by {self.rated_by}"
 
 
+class InterviewFallbackRating(TimestampedModel):
+    """SL-03/SL-07 — one HRMPSB member's paper rating, encoded by the support office.
+
+    A board that rated on paper still rated: each sheet belongs to a named member and
+    carries a number. Storing only the scan made three versions of one sheet look like
+    three panel members and left the interview average blank, so a candidate could be
+    ranked and recommended with no score behind 40% of the CAR. This row is the encoded
+    equivalent of an ``InterviewRating`` — same rater identity, same numeric result, same
+    0-100 and justification rules — with the retained scan attached as evidence."""
+
+    interview_session = models.ForeignKey(
+        InterviewSession,
+        on_delete=models.CASCADE,
+        related_name="fallback_ratings",
+    )
+    application = models.ForeignKey(
+        RecruitmentApplication,
+        on_delete=models.CASCADE,
+        related_name="interview_fallback_ratings",
+    )
+    recruitment_case = models.ForeignKey(
+        RecruitmentCase,
+        on_delete=models.CASCADE,
+        related_name="interview_fallback_ratings",
+        blank=True,
+        null=True,
+    )
+    review_stage = models.CharField(max_length=40, choices=RecruitmentCase.Stage.choices)
+    rated_by = models.ForeignKey(
+        RecruitmentUser,
+        on_delete=models.PROTECT,
+        related_name="fallback_interview_ratings",
+    )
+    rated_by_role = models.CharField(max_length=40, blank=True)
+    encoded_by = models.ForeignKey(
+        RecruitmentUser,
+        on_delete=models.PROTECT,
+        related_name="encoded_fallback_interview_ratings",
+    )
+    encoded_by_role = models.CharField(max_length=40, blank=True)
+    branch = models.CharField(max_length=20, choices=PositionPosting.Branch.choices)
+    level = models.PositiveSmallIntegerField(choices=PositionPosting.Level.choices)
+    rating_score = models.DecimalField(max_digits=5, decimal_places=2)
+    rating_notes = models.TextField(blank=True)
+    justification = models.TextField(blank=True)
+    remarks = models.TextField(blank=True)
+    evidence_item = models.ForeignKey(
+        "EvidenceVaultItem",
+        on_delete=models.PROTECT,
+        related_name="interview_fallback_ratings",
+        blank=True,
+        null=True,
+    )
+
+    class Meta:
+        ordering = ["created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["interview_session", "rated_by"],
+                name="unique_fallback_rating_per_session_rater",
+            )
+        ]
+
+    def clean(self):
+        errors = {}
+        allowed_roles = {
+            RecruitmentCase.Stage.HRM_CHIEF_REVIEW: RecruitmentUser.Role.HRM_CHIEF,
+            RecruitmentCase.Stage.HRMPSB_REVIEW: RecruitmentUser.Role.HRMPSB_MEMBER,
+        }
+        if self.interview_session_id and self.interview_session.is_finalized:
+            errors["interview_session"] = (
+                "Finalized interview sessions cannot accept additional rating changes."
+            )
+        if self.review_stage not in allowed_roles:
+            errors["review_stage"] = (
+                "Fallback interview ratings are only supported during HRM Chief or HRMPSB "
+                "review stages."
+            )
+        elif self.rated_by.role != allowed_roles[self.review_stage]:
+            errors["rated_by"] = (
+                "A fallback rating must name the actual panel member who signed the sheet."
+            )
+        # The same member cannot rate twice through two doors: one digital rating and one
+        # paper sheet would count as two raters toward the quorum.
+        if (
+            self.interview_session_id
+            and self.rated_by_id
+            and InterviewRating.objects.filter(
+                interview_session_id=self.interview_session_id,
+                rated_by_id=self.rated_by_id,
+            ).exists()
+        ):
+            errors["rated_by"] = (
+                "This member already recorded a rating for this interview online."
+            )
+        try:
+            score = Decimal(str(self.rating_score))
+        except (InvalidOperation, TypeError):
+            score = None
+        if score is None or score < 0 or score > 100:
+            errors["rating_score"] = "Interview ratings must be between 0 and 100."
+        if (
+            score is not None
+            and (score < Decimal("75") or score > Decimal("98"))
+            and not self.justification
+        ):
+            errors["justification"] = (
+                "Provide a justification when the interview rating is below 75 or above 98."
+            )
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.application = self.interview_session.application
+        self.recruitment_case = self.interview_session.recruitment_case
+        self.review_stage = self.interview_session.review_stage
+        self.branch = self.interview_session.branch
+        self.level = self.interview_session.level
+        self.rated_by_role = self.rated_by.role
+        self.encoded_by_role = self.encoded_by.role
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.application.reference_label} paper rating by {self.rated_by}"
+
+
 class CompetencyRatingTemplate(TimestampedModel):
     """Per-vacancy interview rating sheet the Secretariat composes at the interview
     stage. Holds the scale and the competencies (Core / Organizational / Technical)
@@ -2633,16 +2759,147 @@ class DeliberationRecord(TimestampedModel):
         return f"{self.application.reference_label} {self.review_stage} deliberation"
 
 
-class CosVacancyDeliberation(TimestampedModel):
-    """The COS decision: one deliberation per vacancy (spec §6.3). The end-user + HRMO
-    deliberate off-system and the HRM Chief records the chosen applicant + notes here.
-    Replaces the per-application DeliberationRecord for the COS branch — the recorded
-    pick gates the COS decision step for the whole qualified pool."""
+class CosSelectionRound(TimestampedModel):
+    """SL-02 — one need-based COS selection cycle.
 
-    recruitment_entry = models.OneToOneField(
+    A continuous COS vacancy accumulates candidates: people apply, are screened and
+    examined per case, and wait. When the office actually needs to hire, it opens a
+    *round*: the then-eligible candidates are snapshotted as its members, the round may
+    fill ``slot_count`` positions, and resolving it touches only that snapshot. Candidates
+    the round did not pick stay in the pool for the next one — the client's own practice
+    ("tine-take namin for pooling para matawagan sila kapag may nag-open na slot"), and the
+    reason one permanent pick must not be allowed to decide people who applied later.
+
+    Opening/pooling/fixed-period COS vacancies are a single batch: they get exactly one
+    round, and the candidates it does not pick are closed as not selected, as before.
+    """
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        RESOLVED = "resolved", "Resolved"
+
+    recruitment_entry = models.ForeignKey(
         PositionPosting,
         on_delete=models.CASCADE,
-        related_name="cos_vacancy_deliberation",
+        related_name="cos_selection_rounds",
+    )
+    round_number = models.PositiveIntegerField(default=1)
+    slot_count = models.PositiveSmallIntegerField(default=1)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.OPEN)
+    opened_by = models.ForeignKey(
+        RecruitmentUser,
+        on_delete=models.PROTECT,
+        related_name="opened_cos_selection_rounds",
+    )
+    opened_by_role = models.CharField(max_length=40, blank=True)
+    resolved_at = models.DateTimeField(blank=True, null=True)
+    resolved_by = models.ForeignKey(
+        RecruitmentUser,
+        on_delete=models.PROTECT,
+        related_name="resolved_cos_selection_rounds",
+        blank=True,
+        null=True,
+    )
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["recruitment_entry_id", "-round_number"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["recruitment_entry", "round_number"],
+                name="unique_cos_selection_round_per_entry",
+            ),
+            models.UniqueConstraint(
+                fields=["recruitment_entry"],
+                condition=models.Q(status="open"),
+                name="one_open_cos_selection_round_per_entry",
+            ),
+        ]
+
+    def clean(self):
+        if self.recruitment_entry.branch != PositionPosting.Branch.COS:
+            raise ValidationError(
+                {"recruitment_entry": "COS selection rounds are only for COS vacancies."}
+            )
+        if not self.slot_count:
+            raise ValidationError({"slot_count": "A round must be able to fill at least one slot."})
+
+    def save(self, *args, **kwargs):
+        if self.opened_by_id:
+            self.opened_by_role = self.opened_by.role
+        super().save(*args, **kwargs)
+
+    @property
+    def is_open(self):
+        return self.status == self.Status.OPEN
+
+    @property
+    def is_resolved(self):
+        return self.status == self.Status.RESOLVED
+
+    @property
+    def label(self):
+        return f"Round {self.round_number}"
+
+    def __str__(self):
+        return f"{self.recruitment_entry.job_code} COS selection round {self.round_number}"
+
+
+class CosSelectionRoundMember(TimestampedModel):
+    """SL-02 — the frozen membership of one COS selection round.
+
+    Snapshotted when the round opens, so the population a pick resolves is a recorded fact
+    rather than a query re-run later against a moving pool. ``snapshot`` keeps the scores
+    the candidate carried at that moment, for the record."""
+
+    selection_round = models.ForeignKey(
+        CosSelectionRound,
+        on_delete=models.CASCADE,
+        related_name="members",
+    )
+    recruitment_case = models.ForeignKey(
+        "RecruitmentCase",
+        on_delete=models.PROTECT,
+        related_name="cos_selection_round_memberships",
+    )
+    snapshot = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["selection_round_id", "recruitment_case_id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["selection_round", "recruitment_case"],
+                name="unique_cos_round_member",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.selection_round} member {self.recruitment_case_id}"
+
+
+class CosVacancyDeliberation(TimestampedModel):
+    """The COS decision: the deliberation pick for one selection round (spec §6.3). The
+    end-user + HRMO deliberate off-system and the HRM Chief records the chosen applicant +
+    notes here. Replaces the per-application DeliberationRecord for the COS branch.
+
+    SL-01: finalizing the pick IS the COS selection — the chosen applicant is recorded as
+    selected there and then.
+    SL-02: the pick belongs to a ``CosSelectionRound`` rather than to the vacancy as a
+    whole, so a continuous vacancy can hire more than once and each pick resolves only the
+    candidates its own round snapshotted. A round with several slots carries one pick row
+    per slot."""
+
+    selection_round = models.ForeignKey(
+        CosSelectionRound,
+        on_delete=models.CASCADE,
+        related_name="picks",
+        blank=True,
+        null=True,
+    )
+    recruitment_entry = models.ForeignKey(
+        PositionPosting,
+        on_delete=models.CASCADE,
+        related_name="cos_vacancy_deliberations",
     )
     chosen_case = models.ForeignKey(
         "RecruitmentCase",
@@ -2681,8 +2938,25 @@ class CosVacancyDeliberation(TimestampedModel):
             errors["finalized_by"] = "Finalized COS deliberation picks must record the finalizing user."
         if not self.is_finalized and (self.finalized_by_id or self.finalized_at):
             errors["finalized_at"] = "Draft COS deliberation picks cannot include finalization details."
+        if (
+            self.selection_round_id
+            and self.recruitment_entry_id
+            and self.selection_round.recruitment_entry_id != self.recruitment_entry_id
+        ):
+            errors["selection_round"] = "The selection round must belong to the same vacancy."
         if errors:
             raise ValidationError(errors)
+
+    class Meta:
+        ordering = ["recruitment_entry_id", "-created_at"]
+        constraints = [
+            # SL-02: one pick per candidate per round. A multi-slot round holds several
+            # picks; it can never hold the same candidate twice.
+            models.UniqueConstraint(
+                fields=["selection_round", "chosen_case"],
+                name="unique_cos_pick_per_round_case",
+            ),
+        ]
 
     def save(self, *args, **kwargs):
         if self.recorded_by_id:
@@ -2962,7 +3236,9 @@ class ComparativeAssessmentReportItem(TimestampedModel):
         blank=True,
         null=True,
     )
-    rank_order = models.PositiveIntegerField()
+    # SL-03: an unscored candidate carries no rank. Nullable so a draft can hold a row
+    # that is still waiting for its ETE rating without the row pretending to be ranked.
+    rank_order = models.PositiveIntegerField(blank=True, null=True)
     qualification_outcome = models.CharField(max_length=40, blank=True)
     document_review_score = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True)
     ete_rating = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True)
@@ -2984,6 +3260,7 @@ class ComparativeAssessmentReportItem(TimestampedModel):
             ),
             models.UniqueConstraint(
                 fields=["report", "rank_order"],
+                condition=models.Q(rank_order__isnull=False),
                 name="unique_car_rank_per_report",
             ),
         ]
@@ -3006,7 +3283,7 @@ class ComparativeAssessmentReportItem(TimestampedModel):
             errors["deliberation_record"] = (
                 "CAR items must stay linked to the same recruitment case as the deliberation record."
             )
-        if self.rank_order < 1:
+        if self.rank_order is not None and self.rank_order < 1:
             errors["rank_order"] = "CAR rank order must be a positive whole number."
         if self.preliminary_rank_order is not None and self.preliminary_rank_order < 1:
             errors["preliminary_rank_order"] = "Preliminary rank must be a positive whole number."
@@ -3019,6 +3296,28 @@ class ComparativeAssessmentReportItem(TimestampedModel):
         for field_name, value in score_fields.items():
             if value is not None and (value < 0 or value > 100):
                 errors[field_name] = "CAR assessment scores must be between 0 and 100."
+        # SL-03: a rank is a claim about merit, so it needs a score behind it, and a
+        # finalized report must carry every component of the formula for every row.
+        if self.rank_order is not None and self.assessment_score is None:
+            errors["rank_order"] = (
+                "A candidate with no computed assessment score cannot be ranked."
+            )
+        if self.report_id and self.report.is_finalized:
+            missing = [
+                label
+                for value, label in (
+                    (self.ete_rating or self.document_review_score, "ETE"),
+                    (self.exam_score, "examination"),
+                    (self.interview_average_score, "interview"),
+                    (self.assessment_score, "overall score"),
+                )
+                if value is None
+            ]
+            if missing:
+                errors["assessment_score"] = (
+                    "A finalized CAR row must carry every component of the formula. "
+                    f"Missing: {', '.join(missing)}."
+                )
         if errors:
             raise ValidationError(errors)
 
@@ -3872,6 +4171,8 @@ class AuditLog(TimestampedModel):
         INTERVIEW_FALLBACK_UPLOADED = "interview_fallback_uploaded", "Interview Fallback Uploaded"
         DELIBERATION_RECORDED = "deliberation_recorded", "Deliberation Recorded"
         DELIBERATION_FINALIZED = "deliberation_finalized", "Deliberation Finalized"
+        COS_SELECTION_ROUND_OPENED = "cos_selection_round_opened", "COS Selection Round Opened"
+        COS_SELECTION_ROUND_RESOLVED = "cos_selection_round_resolved", "COS Selection Round Resolved"
         CAR_GENERATED = "car_generated", "Comparative Assessment Report Generated"
         CAR_FINALIZED = "car_finalized", "Comparative Assessment Report Finalized"
         CAR_RETURNED = "car_returned", "Comparative Assessment Report Returned"
@@ -4131,6 +4432,8 @@ AUDIT_ACTION_CATEGORIES = {
             AuditLog.Action.INTERVIEW_FALLBACK_UPLOADED,
             AuditLog.Action.DELIBERATION_RECORDED,
             AuditLog.Action.DELIBERATION_FINALIZED,
+            AuditLog.Action.COS_SELECTION_ROUND_OPENED,
+            AuditLog.Action.COS_SELECTION_ROUND_RESOLVED,
             AuditLog.Action.CAR_GENERATED,
             AuditLog.Action.CAR_FINALIZED,
             AuditLog.Action.CAR_RETURNED,

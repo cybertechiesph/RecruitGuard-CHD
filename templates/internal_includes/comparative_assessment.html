@@ -61,6 +61,15 @@ HRM Chief on COS). Two states:
                 Rankings appear once every candidate has an ETE rating and the draft is updated.
             </div>
         {% endif %}
+        {% if car_finalize_block_message %}
+            {% comment %}
+            SL-03: the server refuses to finalize a CAR that computes from a blank — say so
+            here rather than letting the click fail.
+            {% endcomment %}
+            <div class="alert alert-warning" role="alert" style="font-size:0.8125rem;">
+                {{ car_finalize_block_message }}
+            </div>
+        {% endif %}
         <ul class="rg-del-car-list">
             {% for item in current_comparative_assessment_report_items %}
             <li class="rg-del-car-item">
@@ -434,8 +443,10 @@ HRM Chief on COS). Two states:
             </p>
             {% with snapshot_split=current_comparative_assessment_report.consolidated_snapshot.assessment_weight_display %}
             {% if snapshot_split %}
-            {# SL-00: show the split this report was computed against, from its own snapshot —
-               the vacancy's live weights can since have been unlocked and corrected. #}
+            {% comment %}
+            SL-00: show the split this report was computed against, from its own snapshot —
+            the vacancy's live weights can since have been unlocked and corrected.
+            {% endcomment %}
             <p class="rg-icard__subtitle mb-0">Computed against: <strong>{{ snapshot_split }}</strong></p>
             {% endif %}
             {% endwith %}

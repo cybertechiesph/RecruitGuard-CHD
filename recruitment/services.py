@@ -48,7 +48,10 @@ from .models import (
     CompetencyScore,
     CompletionRecord,
     CompletionRequirement,
+    CosSelectionRound,
+    CosSelectionRoundMember,
     CosVacancyDeliberation,
+    InterviewFallbackRating,
     DeliberationRecord,
     ExamRecord,
     ExamSchedule,
@@ -150,9 +153,13 @@ INTERVIEW_RATING_ROLES_BY_STAGE = {
 # COS interviews are conducted by the HRM Chief alone — one rating locks the session.
 MIN_INTERVIEW_OUTPUTS_TO_FINALIZE = 1
 # Plantilla interview sessions feed 40% of the CAR: the HRMPSB panel minimum (3 members)
-# must be on record before the session can lock (WF-01). A fallback rating sheet has no
-# rater-count metadata, so each uploaded sheet counts as one rater toward the minimum.
+# must be on record before the session can lock (WF-01), and the board is 3-5 members, so
+# more than five attributable ratings means something is wrong with the record.
+# SL-03: what is counted is DISTINCT RATERS, not outputs. A paper sheet counts because it
+# now names its member and carries their score (InterviewFallbackRating); scans of the same
+# sheet never do — three versions of one document are not three panel members.
 MIN_INTERVIEW_RATINGS_PLANTILLA = 3
+MAX_INTERVIEW_RATINGS_PLANTILLA = 5
 # Default window the applicant has to re-upload flagged documents before the secretariat
 # may remove them from the batch (the "Incomplete shall not be entertained" final outcome).
 DOCUMENT_RESUBMISSION_DEADLINE_DAYS = 14
@@ -2954,9 +2961,11 @@ def interview_is_finalized_for_current_stage(application):
 
 def deliberation_is_finalized_for_current_stage(application):
     if application.branch == PositionPosting.Branch.COS:
-        # COS uses one per-vacancy deliberation pick (spec §6.3), not a per-application record.
-        pick = get_cos_vacancy_deliberation(application.position)
-        return bool(pick and pick.is_finalized)
+        # COS uses a per-vacancy deliberation pick (spec §6.3), not a per-application record.
+        # SL-02: deliberation is finalized for a case only when a pick actually named THAT
+        # case. A candidate a round did not pick — or one who applied after a round closed —
+        # has not been deliberated to a conclusion and stays at the deliberation section.
+        return bool(get_cos_pick_for_case(getattr(application, "case", None)))
     deliberation_record = get_deliberation_record(application)
     return bool(deliberation_record and deliberation_record.is_finalized)
 
@@ -3169,10 +3178,29 @@ def get_interview_fallback_evidence(application, stage=None):
         artifact_scope=EvidenceVaultItem.OwnerScope.CASE,
         artifact_type=ARTIFACT_TYPE_INTERVIEW_FALLBACK,
         recruitment_case=case,
+        # SL-03: superseded scans of the same sheet are history, not extra sheets. Counting
+        # them is how three versions of one document passed for three panel members.
+        is_current_version=True,
+        is_archived=False,
     )
     if stage:
         queryset = queryset.filter(stage=stage)
     return queryset.order_by("created_at")
+
+
+def get_interview_fallback_ratings(interview_session):
+    """The structured paper ratings encoded for this session — one per HRMPSB member."""
+    return interview_session.fallback_ratings.select_related(
+        "rated_by", "encoded_by", "evidence_item"
+    ).order_by("created_at")
+
+
+def interview_session_rater_ids(interview_session):
+    """SL-03: the distinct members who rated this interview, however their sheet reached
+    the system. This — not a count of outputs — is what the quorum rule measures."""
+    digital = set(interview_session.ratings.values_list("rated_by_id", flat=True))
+    paper = set(interview_session.fallback_ratings.values_list("rated_by_id", flat=True))
+    return digital | paper
 
 
 def user_can_manage_interview_session(user, application):
@@ -3231,6 +3259,17 @@ def user_can_upload_interview_fallback(user, application):
     ):
         return False
     return user_can_process_application(user, application)
+
+
+def interview_fallback_panel_queryset(application):
+    """SL-03: the members whose paper sheet may be encoded for this interview — the same
+    panel that could have rated it online. A fallback rating has to name one of them."""
+    stage = get_current_review_stage(application)
+    roles = INTERVIEW_RATING_ROLES_BY_STAGE.get(stage, set())
+    return RecruitmentUser.objects.filter(
+        is_active=True,
+        role__in=roles,
+    ).order_by("last_name", "first_name", "username")
 
 
 def get_interview_schedule_notification_recipients(application):
@@ -3305,11 +3344,14 @@ def _assessment_weight_display(posting):
 
 
 def _average_interview_rating(interview_session):
-    ratings = list(interview_session.ratings.all())
-    if not ratings:
+    # SL-03: one average across every valid rating, digital or encoded from paper. Reading
+    # only the digital rows is what left a paper-rated session with a blank 40% component.
+    scores = [rating.rating_score for rating in interview_session.ratings.all()]
+    scores += [rating.rating_score for rating in interview_session.fallback_ratings.all()]
+    if not scores:
         return None
-    total = sum((rating.rating_score for rating in ratings), Decimal("0"))
-    return (total / Decimal(len(ratings))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    total = sum(scores, Decimal("0"))
+    return (total / Decimal(len(scores))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def _deliberation_snapshot_for_screening(screening_record):
@@ -3456,20 +3498,71 @@ def get_deliberation_record(application, stage=None):
     ).filter(review_stage=review_stage).first()
 
 
-def get_cos_vacancy_deliberation(posting):
-    """The vacancy's COS deliberation pick (one per COS vacancy), or None."""
+def vacancy_uses_cos_selection_rounds(posting):
+    """SL-02: whether this COS vacancy hires in repeated, need-based rounds.
+
+    Only continuous intake does. A continuous vacancy accumulates candidates and the office
+    opens a round when it actually needs to hire. Opening-based, pooling and fixed-period
+    COS vacancies are a single batch: one implicit round, resolved once."""
     return (
-        CosVacancyDeliberation.objects.select_related(
-            "chosen_case", "chosen_case__application", "recorded_by", "finalized_by"
-        )
-        .filter(recruitment_entry=posting)
+        posting.branch == PositionPosting.Branch.COS
+        and posting.intake_mode == PositionPosting.IntakeMode.CONTINUOUS
+    )
+
+
+def get_open_cos_selection_round(posting):
+    """The vacancy's currently open selection round, or None."""
+    return (
+        CosSelectionRound.objects.select_related("opened_by")
+        .filter(recruitment_entry=posting, status=CosSelectionRound.Status.OPEN)
         .first()
     )
 
 
-def cos_deliberation_pool(posting):
-    """The COS vacancy's applications at the HRM Chief deliberation section — the qualified
-    pool the per-vacancy pick is chosen from. The pick gates the decision for all of them."""
+def get_latest_cos_selection_round(posting):
+    return (
+        CosSelectionRound.objects.select_related("opened_by", "resolved_by")
+        .filter(recruitment_entry=posting)
+        .order_by("-round_number")
+        .first()
+    )
+
+
+def get_cos_vacancy_deliberation(posting):
+    """The vacancy's most recent COS deliberation pick, or None. SL-02: a vacancy can hold
+    several picks over several rounds; callers that need a specific case's pick should use
+    ``get_cos_pick_for_case``."""
+    return (
+        CosVacancyDeliberation.objects.select_related(
+            "chosen_case", "chosen_case__application", "recorded_by", "finalized_by",
+            "selection_round",
+        )
+        .filter(recruitment_entry=posting)
+        .order_by("-created_at", "-id")
+        .first()
+    )
+
+
+def get_cos_pick_for_case(case):
+    """The finalized COS pick that names this case, or None. SL-01/SL-02: this — not "does
+    the vacancy have any finalized pick" — is what decides whether a given candidate has
+    been selected."""
+    if case is None:
+        return None
+    return (
+        CosVacancyDeliberation.objects.select_related("selection_round")
+        .filter(chosen_case=case, is_finalized=True)
+        .first()
+    )
+
+
+def cos_eligible_pool(posting):
+    """The COS vacancy's candidates who could join a selection round: everyone standing at
+    the HRM Chief deliberation section with an active, unlocked case.
+
+    SL-02: for a continuous vacancy this is the *accumulating* pool — candidates a round did
+    not pick stay here for the next one (the client keeps them on file for about a year),
+    which is why a resolved round must not close them."""
     cases = (
         RecruitmentCase.objects.filter(
             application__position=posting,
@@ -3487,15 +3580,140 @@ def cos_deliberation_pool(posting):
     ]
 
 
+def cos_selection_round_pool(selection_round):
+    """The frozen membership of an open round — the only candidates its pick may resolve."""
+    applications = [
+        member.recruitment_case.application
+        for member in selection_round.members.select_related(
+            "recruitment_case",
+            "recruitment_case__application",
+            "recruitment_case__application__applicant",
+            "recruitment_case__application__position",
+        )
+    ]
+    return sorted(
+        applications,
+        key=lambda application: (application.reference_number or "", application.id),
+    )
+
+
+def cos_deliberation_pool(posting):
+    """The candidates the vacancy's next COS pick is chosen from.
+
+    SL-02: for a continuous vacancy that is the frozen membership of the open round (nothing
+    until one is opened — the office decides when it is hiring). For a single-batch COS
+    vacancy it is the live eligible pool, exactly as before."""
+    if vacancy_uses_cos_selection_rounds(posting):
+        open_round = get_open_cos_selection_round(posting)
+        if not open_round:
+            return []
+        return [
+            application
+            for application in cos_selection_round_pool(open_round)
+            if application.case.case_status == RecruitmentCase.CaseStatus.ACTIVE
+            and not application.case.is_stage_locked
+        ]
+    return cos_eligible_pool(posting)
+
+
+@transaction.atomic
+def open_cos_selection_round(posting, actor, *, slot_count=1, notes=""):
+    """SL-02: open a need-based selection round on a continuous COS vacancy.
+
+    Snapshots the candidates eligible right now as the round's members. Only they can be
+    picked, and only they are resolved when the round closes — a candidate who applies
+    afterwards belongs to a later round, and one who is not picked stays in the pool."""
+    if not vacancy_uses_cos_selection_rounds(posting):
+        raise ValueError(
+            "Selection rounds are for continuous COS vacancies. This vacancy hires as a "
+            "single batch."
+        )
+    if actor.role != RecruitmentUser.Role.HRM_CHIEF:
+        raise ValueError("Only the HRM Chief opens a COS selection round.")
+    if get_open_cos_selection_round(posting):
+        raise ValueError("This vacancy already has an open selection round.")
+    try:
+        slot_count = int(slot_count)
+    except (TypeError, ValueError):
+        slot_count = 0
+    if slot_count < 1:
+        raise ValueError("Record how many positions this round is filling (at least one).")
+    eligible = cos_eligible_pool(posting)
+    if not eligible:
+        raise ValueError(
+            "No candidates are ready for a selection round in this vacancy yet."
+        )
+    latest = get_latest_cos_selection_round(posting)
+    selection_round = CosSelectionRound(
+        recruitment_entry=posting,
+        round_number=(latest.round_number + 1) if latest else 1,
+        slot_count=slot_count,
+        opened_by=actor,
+        notes=notes or "",
+    )
+    selection_round.full_clean()
+    selection_round.save()
+    for application in eligible:
+        exam_record = get_exam_record(application)
+        interview_rating = get_interview_ratings(application).first()
+        CosSelectionRoundMember.objects.create(
+            selection_round=selection_round,
+            recruitment_case=application.case,
+            snapshot={
+                "application_id": application.id,
+                "reference_number": application.reference_number,
+                "exam_score": _decimal_string(exam_record.exam_score) if exam_record else "",
+                "interview_score": (
+                    _decimal_string(interview_rating.rating_score) if interview_rating else ""
+                ),
+            },
+        )
+    record_system_audit_event(
+        actor=actor,
+        action=AuditLog.Action.COS_SELECTION_ROUND_OPENED,
+        description=(
+            f"Opened COS selection round {selection_round.round_number} for "
+            f"{posting.job_code} ({slot_count} slot{'s' if slot_count != 1 else ''})."
+        ),
+        metadata={
+            "entry_id": posting.id,
+            "entry_code": posting.job_code,
+            "round_number": selection_round.round_number,
+            "slot_count": slot_count,
+            "member_case_ids": sorted(
+                application.case.id for application in eligible
+            ),
+        },
+    )
+    return selection_round
+
+
 @transaction.atomic
 def save_cos_vacancy_deliberation(posting, actor, chosen_case_id, notes, *, finalize=False):
     """Record (and optionally finalize) the one per-vacancy COS deliberation pick — the chosen
-    applicant + notes the end-user and HRM Chief agreed on off-system (spec §6.3). Finalizing
-    completes the deliberation section for the whole COS pool, advancing each to the decision."""
+    applicant + notes the end-user and HRM Chief agreed on off-system (spec §6.3).
+
+    SL-01: finalizing IS the COS selection. There is no second, independent per-case choice
+    that could name a different person — the moment the pick is finalized the chosen
+    applicant is recorded as Selected and routed to completion, and the rest of the
+    deliberated pool is closed as not selected and notified. One authoritative act, one
+    official fact."""
     if posting.branch != PositionPosting.Branch.COS:
         raise ValueError("COS deliberation picks are only for COS vacancies.")
     if actor.role != RecruitmentUser.Role.HRM_CHIEF:
         raise ValueError("Only the HRM Chief records the COS deliberation pick.")
+
+    selection_round = get_open_cos_selection_round(posting)
+    if selection_round is None:
+        if vacancy_uses_cos_selection_rounds(posting):
+            raise ValueError(
+                "Open a selection round before recording a pick — a continuous vacancy "
+                "hires round by round."
+            )
+        # SL-02: a single-batch COS vacancy still gets a round, opened implicitly here, so
+        # its membership is recorded rather than re-derived later against a moved pool.
+        selection_round = _open_implicit_cos_selection_round(posting, actor)
+
     pool = cos_deliberation_pool(posting)
     if not pool:
         raise ValueError("No candidates are ready for the COS deliberation in this vacancy.")
@@ -3507,11 +3725,23 @@ def save_cos_vacancy_deliberation(posting, actor, chosen_case_id, notes, *, fina
     if chosen_case_id not in pool_case_ids:
         raise ValueError("The chosen applicant must be one of this vacancy's candidates.")
 
-    pick = get_cos_vacancy_deliberation(posting)
-    if pick and pick.is_finalized:
-        raise ValueError("The COS deliberation pick is finalized and can no longer be edited.")
+    finalized_picks = list(
+        selection_round.picks.filter(is_finalized=True).order_by("created_at")
+    )
+    if len(finalized_picks) >= selection_round.slot_count:
+        raise ValueError(
+            f"Round {selection_round.round_number} has already filled all "
+            f"{selection_round.slot_count} of its slots."
+        )
+    if any(pick.chosen_case_id == chosen_case_id for pick in finalized_picks):
+        raise ValueError("This applicant has already been picked in this round.")
+
+    pick = selection_round.picks.filter(is_finalized=False).first()
     if pick is None:
-        pick = CosVacancyDeliberation(recruitment_entry=posting)
+        pick = CosVacancyDeliberation(
+            recruitment_entry=posting,
+            selection_round=selection_round,
+        )
     pick.chosen_case_id = chosen_case_id
     pick.notes = notes or ""
     pick.recorded_by = actor
@@ -3534,18 +3764,126 @@ def save_cos_vacancy_deliberation(posting, actor, chosen_case_id, notes, *, fina
             else AuditLog.Action.DELIBERATION_RECORDED
         ),
         description=(
-            "Finalized the COS vacancy deliberation pick."
+            f"Finalized the COS deliberation pick for round {selection_round.round_number}."
             if finalize
-            else "Saved the COS vacancy deliberation pick."
+            else f"Saved the COS deliberation pick for round {selection_round.round_number}."
         ),
         metadata={
             "recruitment_entry_id": posting.id,
             "chosen_case_id": pick.chosen_case_id,
             "is_finalized": pick.is_finalized,
+            "selection_round_id": selection_round.id,
+            "round_number": selection_round.round_number,
+            "slot_count": selection_round.slot_count,
             "pool_size": len(pool),
+            # SL-01/SL-02: name the candidates actually deliberated in this round, so the
+            # record shows the population this pick resolved.
+            "deliberated_case_ids": sorted(pool_case_ids),
         },
     )
+
+    if finalize:
+        # SL-01: the pick is the selection. Record it now, against the applicant the pick
+        # names, while the case is still at HRM Chief Review.
+        record_final_decision(
+            pick.chosen_case.application,
+            actor,
+            {
+                "decision_outcome": FinalDecision.Outcome.SELECTED,
+                "decision_notes": pick.notes,
+            },
+        )
+        if len(finalized_picks) + 1 >= selection_round.slot_count:
+            _resolve_cos_selection_round(selection_round, actor)
     return pick
+
+
+def _open_implicit_cos_selection_round(posting, actor):
+    """The single round a non-continuous COS vacancy runs, created at the moment its first
+    pick is recorded so the deliberated membership is captured as a fact."""
+    eligible = cos_eligible_pool(posting)
+    latest = get_latest_cos_selection_round(posting)
+    if latest is not None:
+        raise ValueError(
+            "This vacancy's selection round is already complete. It hires as a single "
+            "batch, so there is no second round."
+        )
+    selection_round = CosSelectionRound(
+        recruitment_entry=posting,
+        round_number=1,
+        slot_count=1,
+        opened_by=actor,
+    )
+    selection_round.full_clean()
+    selection_round.save()
+    for application in eligible:
+        CosSelectionRoundMember.objects.create(
+            selection_round=selection_round,
+            recruitment_case=application.case,
+            snapshot={
+                "application_id": application.id,
+                "reference_number": application.reference_number,
+            },
+        )
+    return selection_round
+
+
+def _resolve_cos_selection_round(selection_round, actor):
+    """Close a round once its slots are filled.
+
+    SL-02: what happens to the members this round did not pick depends on how the vacancy
+    hires. A single-batch vacancy has finished competing, so they are closed as not selected
+    and notified. A continuous vacancy has not — they go back into the pool and remain
+    available for the next round, which is exactly what the office does with them today."""
+    posting = selection_round.recruitment_entry
+    selection_round.status = CosSelectionRound.Status.RESOLVED
+    selection_round.resolved_at = timezone.now()
+    selection_round.resolved_by = actor
+    selection_round.save(
+        update_fields=["status", "resolved_at", "resolved_by", "updated_at"]
+    )
+    chosen_case_ids = set(
+        selection_round.picks.filter(is_finalized=True).values_list(
+            "chosen_case_id", flat=True
+        )
+    )
+    unpicked = [
+        member.recruitment_case.application
+        for member in selection_round.members.select_related(
+            "recruitment_case", "recruitment_case__application"
+        )
+        if member.recruitment_case_id not in chosen_case_ids
+    ]
+    retained = []
+    if vacancy_uses_cos_selection_rounds(posting):
+        retained = [
+            application
+            for application in unpicked
+            if application.case.case_status == RecruitmentCase.CaseStatus.ACTIVE
+            and not application.case.is_stage_locked
+        ]
+    record_system_audit_event(
+        actor=actor,
+        action=AuditLog.Action.COS_SELECTION_ROUND_RESOLVED,
+        description=(
+            f"Resolved COS selection round {selection_round.round_number} for "
+            f"{posting.job_code}."
+        ),
+        metadata={
+            "entry_id": posting.id,
+            "entry_code": posting.job_code,
+            "round_number": selection_round.round_number,
+            "chosen_case_ids": sorted(chosen_case_ids),
+            "unpicked_case_ids": sorted(
+                application.case.id for application in unpicked
+            ),
+            "retained_in_pool": sorted(
+                application.case.id for application in retained
+            ),
+            "closes_unpicked": not vacancy_uses_cos_selection_rounds(posting),
+        },
+    )
+    return selection_round
 
 
 def get_deliberation_records(application):
@@ -3586,16 +3924,38 @@ def user_can_manage_deliberation(user, application):
 
 
 def user_can_manage_cos_deliberation(user, posting):
-    """Whether the user may record the per-vacancy COS deliberation pick: the HRM Chief,
-    while the vacancy's COS pool is at the HRM Chief deliberation section and not yet locked."""
+    """Whether the user may record a COS deliberation pick: the HRM Chief, while the
+    vacancy's current selection round still has an unfilled slot and candidates in it.
+
+    SL-02: a continuous vacancy can run round after round, so "a pick already exists" no
+    longer ends the chief's ability to hire again — an unfilled slot in an open round does.
+    A single-batch vacancy still gets exactly one round."""
     if posting.branch != PositionPosting.Branch.COS:
         return False
     if user.role != RecruitmentUser.Role.HRM_CHIEF:
         return False
-    pick = get_cos_vacancy_deliberation(posting)
-    if pick and pick.is_finalized:
+    selection_round = get_open_cos_selection_round(posting)
+    if selection_round is None:
+        if vacancy_uses_cos_selection_rounds(posting):
+            return False
+        if get_latest_cos_selection_round(posting) is not None:
+            return False
+        return bool(cos_eligible_pool(posting))
+    if selection_round.picks.filter(is_finalized=True).count() >= selection_round.slot_count:
         return False
     return bool(cos_deliberation_pool(posting))
+
+
+def user_can_open_cos_selection_round(user, posting):
+    """SL-02: the HRM Chief may open the next need-based round on a continuous COS vacancy
+    when none is open and someone is waiting in the pool."""
+    if not vacancy_uses_cos_selection_rounds(posting):
+        return False
+    if user.role != RecruitmentUser.Role.HRM_CHIEF:
+        return False
+    if get_open_cos_selection_round(posting) is not None:
+        return False
+    return bool(cos_eligible_pool(posting))
 
 
 def get_comparative_assessment_report(application, stage=None, include_returned=False):
@@ -3722,6 +4082,11 @@ def user_can_record_final_decision(user, application):
     ):
         return False
     if user.role != expected_role:
+        return False
+    # SL-01: the COS selection is the finalized vacancy deliberation pick. Only the
+    # applicant that pick names can be the subject of the selection record — a sibling
+    # who lost the deliberation is never a candidate for a second, contradicting outcome.
+    if not get_cos_pick_for_case(getattr(application, "case", None)):
         return False
     return user_can_process_application(user, application)
 
@@ -4076,12 +4441,14 @@ def build_submission_packet(application):
         ).prefetch_related("ratings").order_by("created_at")
     )
     deliberation_record = get_latest_finalized_deliberation_record(application)
+    # SL-02: the packet asks whether THIS candidate was picked, not merely whether the
+    # vacancy has some finalized pick somewhere — otherwise every sibling reads as ready.
     cos_deliberation_pick = (
-        get_cos_vacancy_deliberation(application.position)
+        get_cos_pick_for_case(case)
         if application.branch == PositionPosting.Branch.COS
         else None
     )
-    has_cos_pick = bool(cos_deliberation_pick and cos_deliberation_pick.is_finalized)
+    has_cos_pick = bool(cos_deliberation_pick)
     comparative_assessment_report = get_latest_finalized_comparative_assessment_report(application)
     evidence_items = list(get_evidence_items_for_application_context(application))
 
@@ -4983,22 +5350,29 @@ def save_interview_session(
 
     existing_rating_count = interview_session.ratings.count() if interview_session.pk else 0
     fallback_count = get_interview_fallback_evidence(application, stage=review_stage).count()
-    min_required_outputs = (
-        MIN_INTERVIEW_RATINGS_PLANTILLA
-        if application.branch == PositionPosting.Branch.PLANTILLA
-        else MIN_INTERVIEW_OUTPUTS_TO_FINALIZE
+    # SL-03: count the distinct members who rated, not the number of artifacts on file.
+    distinct_rater_count = (
+        len(interview_session_rater_ids(interview_session)) if interview_session.pk else 0
     )
-    if finalize and existing_rating_count + fallback_count < min_required_outputs:
+    if finalize:
         if application.branch == PositionPosting.Branch.PLANTILLA:
+            if distinct_rater_count < MIN_INTERVIEW_RATINGS_PLANTILLA:
+                raise ValueError(
+                    "This interview needs ratings from at least "
+                    f"{MIN_INTERVIEW_RATINGS_PLANTILLA} HRMPSB members before it can be "
+                    f"finalized (currently {distinct_rater_count}). A paper sheet counts "
+                    "once it is encoded with the member who signed it and their score."
+                )
+            if distinct_rater_count > MAX_INTERVIEW_RATINGS_PLANTILLA:
+                raise ValueError(
+                    "The HRMPSB is 3–5 members, but this interview carries ratings from "
+                    f"{distinct_rater_count}. Remove the ratings that do not belong to the "
+                    "board that sat for this interview."
+                )
+        elif distinct_rater_count < MIN_INTERVIEW_OUTPUTS_TO_FINALIZE:
             raise ValueError(
-                "This interview needs ratings from at least "
-                f"{MIN_INTERVIEW_RATINGS_PLANTILLA} HRMPSB members before it can be finalized "
-                f"(currently {existing_rating_count + fallback_count}). Each uploaded fallback "
-                "rating sheet counts as one rater."
+                "Record at least one interview rating or encode a fallback rating sheet before finalizing the interview session."
             )
-        raise ValueError(
-            "Record at least one interview rating or upload a fallback rating sheet before finalizing the interview session."
-        )
     schedule_notification_recipients = (
         get_interview_schedule_notification_recipients(application)
         if notify_panel
@@ -5048,6 +5422,7 @@ def save_interview_session(
             "location": interview_session.location,
             "rating_count": existing_rating_count,
             "fallback_count": fallback_count,
+            "distinct_rater_count": distinct_rater_count,
             "is_finalized": interview_session.is_finalized,
         },
     )
@@ -5354,9 +5729,10 @@ def save_vacancy_interview_schedule(posting, actor, cleaned_data):
 @transaction.atomic
 def finalize_vacancy_interview_batch(posting, actor, first_deliberation_note=""):
     """Finalize the interview session for every candidate in the vacancy's interview pool
-    together. Each must already have at least one rating or a fallback sheet (the per-case
-    save_interview_session enforces that). An optional first-deliberation note ("held on X,
-    members present N") is written to each case's history for the two-touchpoint record."""
+    together. Each must already carry the required number of distinct attributable raters —
+    3–5 HRMPSB members for Plantilla, one for COS — which the per-case save_interview_session
+    enforces (SL-03). An optional first-deliberation note ("held on X, members present N") is
+    written to each case's history for the two-touchpoint record."""
     pool = vacancy_interview_pool(posting)
     if not pool:
         raise ValueError("No candidates are ready to finalize the interview in this vacancy.")
@@ -5514,7 +5890,26 @@ def save_competency_rating_sheet(template, template_form, formset, publish=False
 
 
 @transaction.atomic
-def upload_interview_fallback_rating(application, actor, uploaded_file, remarks):
+@transaction.atomic
+def upload_interview_fallback_rating(
+    application,
+    actor,
+    uploaded_file,
+    remarks,
+    *,
+    rated_by=None,
+    rating_score=None,
+    justification="",
+):
+    """Encode one HRMPSB member's paper rating sheet.
+
+    SL-03: a fallback is a rating, not just a file. It names the member who signed the
+    sheet and carries their number, so it can count as one rater toward the quorum and
+    feed the interview average. The scan is retained as the evidence behind it.
+    SL-07: the write authorizes against the fallback-specific predicate, which is what the
+    rendered form already checks. Previously the generic evidence uploader re-checked
+    "are you the assigned handler" and refused the support office outright, so the action
+    was visible but unusable — a paper-rated session could not be finalized legitimately."""
     if not hasattr(application, "case"):
         raise ValueError("A case must exist before fallback interview ratings can be uploaded.")
 
@@ -5528,6 +5923,13 @@ def upload_interview_fallback_rating(application, actor, uploaded_file, remarks)
         )
     if not interview_session:
         raise ValueError("Schedule the interview session before uploading a fallback rating sheet.")
+    if rated_by is None:
+        raise ValueError(
+            "Name the panel member who signed this rating sheet — a fallback sheet is one "
+            "member's rating, not an anonymous document."
+        )
+    if rating_score in (None, ""):
+        raise ValueError("Record the numeric rating from the sheet.")
 
     validate_applicant_document_upload(uploaded_file)
 
@@ -5538,21 +5940,59 @@ def upload_interview_fallback_rating(application, actor, uploaded_file, remarks)
         uploaded_file=uploaded_file,
         artifact_scope=EvidenceVaultItem.OwnerScope.CASE,
         artifact_type=ARTIFACT_TYPE_INTERVIEW_FALLBACK,
+        # One version family per rater: without this every member's sheet would chain as a
+        # new version of the previous one, and only the last would read as current.
+        document_key=f"{ARTIFACT_TYPE_INTERVIEW_FALLBACK}:{review_stage}:{rated_by.id}",
+        # SL-07: already authorized above by the fallback-specific predicate.
+        permission_checked=True,
     )
+
+    fallback_rating = (
+        InterviewFallbackRating.objects.filter(
+            interview_session=interview_session,
+            rated_by=rated_by,
+        ).first()
+        or InterviewFallbackRating(
+            interview_session=interview_session,
+            application=application,
+            recruitment_case=application.case,
+            review_stage=review_stage,
+            rated_by=rated_by,
+            branch=application.branch,
+            level=application.level,
+        )
+    )
+    fallback_rating.encoded_by = actor
+    fallback_rating.rating_score = rating_score
+    fallback_rating.justification = justification or ""
+    fallback_rating.remarks = remarks or ""
+    fallback_rating.evidence_item = evidence
+    fallback_rating.full_clean()
+    fallback_rating.save()
+
     record_audit_event(
         application=application,
         actor=actor,
         action=AuditLog.Action.INTERVIEW_FALLBACK_UPLOADED,
-        description="Uploaded fallback interview rating sheet.",
+        description=(
+            f"Encoded {rated_by.get_full_name() or rated_by.username}'s paper interview "
+            "rating sheet."
+        ),
         metadata={
             "interview_session_id": interview_session.id,
+            "fallback_rating_id": fallback_rating.id,
             "evidence_id": evidence.id,
             "review_stage": review_stage,
+            "rated_by_id": rated_by.id,
+            "rated_by_role": rated_by.role,
+            "encoded_by_id": actor.id,
+            "encoded_by_role": actor.role,
+            "rating_score": str(fallback_rating.rating_score),
             "remarks": remarks,
             "filename": evidence.original_filename,
         },
     )
-    return evidence
+    return fallback_rating
 
 
 def _finalized_deliberation_queryset_for_entry(recruitment_entry, review_stage):
@@ -5891,7 +6331,10 @@ def _car_candidate_rows(recruitment_entry, review_stage, required_draft=None):
     # rows are the same computed-and-ranked rows as the draft. ``required_draft`` is
     # accepted for call-site compatibility; the draft's existence is enforced by the
     # caller before finalizing.
-    return _car_draft_candidate_rows(recruitment_entry, review_stage)
+    rows = _car_draft_candidate_rows(recruitment_entry, review_stage)
+    # SL-03: unlike the draft, the finalized report must be arithmetically defensible.
+    _assert_car_rows_are_complete(rows)
+    return rows
 
 
 def _active_plantilla_cases_for_entry(recruitment_entry, review_stage):
@@ -5991,9 +6434,58 @@ def _car_draft_candidate_rows(recruitment_entry, review_stage):
             row["application"].reference_number or row["application"].reference_label,
         ),
     )
-    for index, row in enumerate(ordered_rows, start=1):
-        row["rank_order"] = row["preliminary_rank_order"] or index
+    for row in ordered_rows:
+        # SL-03: a row with no computed assessment score gets no rank. Handing an ordinal
+        # to an unscored candidate is what let one appear as rank 1 and be recommended to
+        # the Appointing Authority with nothing behind 40% of the formula.
+        row["rank_order"] = row["preliminary_rank_order"]
     return ordered_rows
+
+
+CAR_COMPONENT_LABELS = (
+    ("ete_component", "ETE"),
+    ("exam_score", "examination"),
+    ("interview_average_score", "interview"),
+    ("assessment_score", "overall score"),
+)
+
+
+def _car_row_missing_components(row):
+    """Which parts of the CAR formula this candidate is missing, in reading order."""
+    values = {
+        "ete_component": row.get("ete_rating") or row.get("document_review_score"),
+        "exam_score": row.get("exam_score"),
+        "interview_average_score": row.get("interview_average_score"),
+        "assessment_score": row.get("assessment_score"),
+    }
+    return [
+        label
+        for key, label in CAR_COMPONENT_LABELS
+        if values[key] in (None, "")
+    ]
+
+
+def _assert_car_rows_are_complete(rows):
+    """SL-03: refuse to finalize a CAR that computes from a blank.
+
+    The office's own CAR spreadsheet fails loudly here — ``AVERAGE()`` over an empty rater
+    range returns #DIV/0! and poisons the overall — so this restores paper behaviour rather
+    than inventing a rule. Drafts stay permissive; only finalization is gated."""
+    problems = []
+    for row in rows:
+        missing = _car_row_missing_components(row)
+        if missing:
+            problems.append(
+                f"{row['application'].reference_label} is missing the "
+                f"{', '.join(missing)}"
+            )
+    if problems:
+        raise ValueError(
+            "Every candidate needs a complete score before the CAR can be finalized — "
+            "the office's own CAR sheet would show #DIV/0! here. "
+            + "; ".join(problems)
+            + "."
+        )
 
 
 def get_comparative_assessment_readiness(application):
@@ -7364,8 +7856,14 @@ def upload_evidence_item(
     artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
     artifact_type="",
     stage=None,
+    permission_checked=False,
 ):
-    if not user_can_upload_evidence(actor, application):
+    # SL-07: ``permission_checked`` is for the few writes whose authority is a narrower,
+    # action-specific predicate rather than "you are the assigned handler" — the Plantilla
+    # paper-rating fallback, where the support office is deliberately allowed to file for a
+    # board that owns the case. Every other caller leaves it alone and keeps the generic
+    # check. Widening user_can_upload_evidence itself would silently widen every uploader.
+    if not permission_checked and not user_can_upload_evidence(actor, application):
         raise ValueError("You cannot upload files for this application.")
     if artifact_scope == EvidenceVaultItem.OwnerScope.CASE and not hasattr(application, "case"):
         raise ValueError("A case must exist before case files can be uploaded.")
@@ -8562,19 +9060,33 @@ def record_final_selection(application, actor, cleaned_data):
 
 
 def _close_cos_non_selected_pool(selected_application, actor, decision):
-    """WF-10: recording the COS Selected decision resolves the rest of the vacancy pool —
-    every other ACTIVE case closes as not selected and its applicant is notified,
+    """WF-10: recording the COS Selected decision resolves the rest of the deliberated pool —
+    every other deliberated case closes as not selected and its applicant is notified,
     mirroring the Plantilla final-selection behavior. Manually recorded Not-selected
-    decisions on individual cases are untouched (their cases are no longer ACTIVE)."""
-    siblings = (
-        RecruitmentApplication.objects.select_related("case", "position", "applicant")
-        .filter(
-            position=selected_application.position,
-            case__case_status=RecruitmentCase.CaseStatus.ACTIVE,
-            case__is_stage_locked=False,
-        )
-        .exclude(pk=selected_application.pk)
-    )
+    decisions on individual cases are untouched (their cases are no longer ACTIVE).
+
+    SL-01/SL-02: the population is the membership snapshot of the round this pick belongs
+    to, not every active case in the posting. A candidate still in screening, awaiting
+    resubmission, or created after the round opened keeps their case — losing a competition
+    you were not entered in is not an outcome the office can defend, and the applicant would
+    have received a "not selected" notice for it.
+
+    A continuous vacancy closes nobody here: its unpicked candidates stay in the pool for
+    the next round."""
+    posting = selected_application.position
+    if vacancy_uses_cos_selection_rounds(posting):
+        return []
+    pick = get_cos_pick_for_case(selected_application.case)
+    selection_round = pick.selection_round if pick else None
+    if selection_round is None:
+        return []
+    siblings = [
+        application
+        for application in cos_selection_round_pool(selection_round)
+        if application.pk != selected_application.pk
+        and application.case.case_status == RecruitmentCase.CaseStatus.ACTIVE
+        and not application.case.is_stage_locked
+    ]
     closed = []
     for sibling in siblings:
         previous_role = sibling.current_handler_role
@@ -8600,10 +9112,16 @@ def _close_cos_non_selected_pool(selected_application, actor, decision):
             application=sibling,
             actor=actor,
             action=AuditLog.Action.DECISION_RECORDED,
-            description="Closed as not selected after the COS selection was recorded for another applicant.",
+            description=(
+                "Closed as not selected after the COS selection was recorded for another "
+                f"applicant in round {selection_round.round_number}."
+            ),
             metadata={
                 "final_decision_id": decision.id,
                 "selected_application_id": selected_application.id,
+                # SL-02 AC#3: name the cycle this application was actually considered in.
+                "selection_round_id": selection_round.id,
+                "round_number": selection_round.round_number,
                 "decision_outcome": FinalDecision.Outcome.NOT_SELECTED,
                 "from_status": previous_status,
                 "to_status": sibling.status,
@@ -8641,9 +9159,35 @@ def record_final_decision(application, actor, cleaned_data):
         raise ValueError("Plantilla final selection must be recorded from the finalized CAR.")
     if not hasattr(application, "case"):
         raise ValueError("A case must exist before a final decision can be recorded.")
+    # SL-01: the COS selection has exactly one source of truth — the finalized vacancy
+    # deliberation pick. This service records that fact; it does not accept a different
+    # applicant, and it does not accept a different outcome for the applicant it names.
+    # Checked first, ahead of the lock and stage gates, so an attempt to select the wrong
+    # person is told exactly why it was refused.
+    pick = get_cos_pick_for_case(application.case)
+    if pick is None:
+        if CosVacancyDeliberation.objects.filter(
+            recruitment_entry=application.position, is_finalized=True
+        ).exists():
+            raise ValueError(
+                "This applicant is not the one named in the finalized COS deliberation "
+                "pick. The pick is the selection — it cannot be overridden case by case."
+            )
+        raise ValueError(
+            "Finalize the COS vacancy deliberation pick before recording the selection."
+        )
     if application.case.is_stage_locked:
         raise ValueError("This case is final and cannot be edited unless it is reopened with authorization.")
     expected_stage, expected_role = _final_decision_stage_and_role(application)
+    cleaned_data = {
+        **cleaned_data,
+        "decision_outcome": FinalDecision.Outcome.SELECTED,
+        "decision_notes": (
+            cleaned_data.get("decision_notes")
+            or pick.notes
+            or "Selected as this vacancy's COS deliberation pick."
+        ),
+    }
     if not user_can_record_final_decision(actor, application):
         expected_role_label = RecruitmentUser.Role(expected_role).label
         raise ValueError(

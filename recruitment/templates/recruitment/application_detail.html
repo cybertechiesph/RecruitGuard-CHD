@@ -123,6 +123,7 @@
         <div class="rg-cws-main">
 
             {% include "internal_includes/prior_stage_summary.html" %}
+            {% include "internal_includes/cos_authoritative_pick.html" %}
 
             {% comment %}
             The original "Overview" tab rendered an Applicant Snapshot card.
@@ -246,10 +247,6 @@
                 {% if final_selection_form %}
                     
                     {% include "internal_includes/final_selection_body.html" %}
-
-                {% elif final_decision_form %}
-                    
-                    {% include "internal_includes/decision_body.html" %}
 
                 {% elif latest_final_selection %}
                     

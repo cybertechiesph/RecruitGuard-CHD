@@ -128,15 +128,22 @@
                 </div>
             </div>
 
-            {% if current_interview_fallback_evidence %}
+            {% if current_interview_fallback_ratings %}
+            {% comment %}
+            SL-03: a paper sheet is on record as a named member's rating, so show who and
+            what — a bare sheet count told the reader nothing about the score.
+            {% endcomment %}
             <div class="rg-exam-locked-field">
-                <div class="rg-exam-locked-field__label">Fallback sheets</div>
+                <div class="rg-exam-locked-field__label">Encoded paper ratings</div>
                 <div class="rg-exam-locked-field__value">
-                    <span class="rg-pill rg-pill--neutral rg-pill--sm">
-                        {{ current_interview_fallback_evidence|length }}
-                        sheet{{ current_interview_fallback_evidence|length|pluralize }}
-                        uploaded
-                    </span>
+                    <ul class="list-unstyled mb-0">
+                        {% for fallback in current_interview_fallback_ratings %}
+                        <li>
+                            {{ fallback.rated_by.get_full_name|default:fallback.rated_by.username }}
+                            &mdash; <strong>{{ fallback.rating_score }}</strong>
+                        </li>
+                        {% endfor %}
+                    </ul>
                 </div>
             </div>
             {% endif %}

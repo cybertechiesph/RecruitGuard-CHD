@@ -258,50 +258,7 @@
 
 {# ── Fallback rating sheet ──────────────────────────────────── #}
 {% if interview_fallback_form %}
-<div class="rg-icard" id="int-fallback-section">
-    <div class="rg-icard__header">
-        <div>
-            <h3 class="rg-icard__title">Fallback rating sheet</h3>
-            <p class="rg-icard__subtitle">
-                Upload a scanned paper rating sheet when digital encoding isn't the primary record.
-            </p>
-        </div>
-    </div>
-    <form method="post"
-          action="{% url 'interview-fallback-upload' application.pk %}"
-          enctype="multipart/form-data"
-          id="int-fallback-form"
-          novalidate>
-        {% csrf_token %}
-        <div class="rg-field">
-            <label class="form-label" for="{{ interview_fallback_form.file.id_for_label }}">
-                {{ interview_fallback_form.file.label }}
-                <span class="text-danger" aria-hidden="true">*</span>
-            </label>
-            {{ interview_fallback_form.file }}
-            {% for error in interview_fallback_form.file.errors %}
-                <div class="invalid-feedback d-block">{{ error }}</div>
-            {% endfor %}
-        </div>
-        <div class="rg-field">
-            <label class="form-label" for="{{ interview_fallback_form.remarks.id_for_label }}">
-                {{ interview_fallback_form.remarks.label }}
-            </label>
-            {{ interview_fallback_form.remarks }}
-            {% for error in interview_fallback_form.remarks.errors %}
-                <div class="invalid-feedback d-block">{{ error }}</div>
-            {% endfor %}
-        </div>
-        <div class="rg-int-fallback-actions">
-            <div class="invalid-feedback" id="int-fallback-error" style="display:none;">
-                Choose a file before uploading.
-            </div>
-            <button type="submit" class="btn btn-sm btn-outline-secondary" id="int-fallback-submit">
-                Upload fallback sheet
-            </button>
-        </div>
-    </form>
-</div>
+{% include "internal_includes/interview_fallback_card.html" %}
 {% elif interview_fallback_requires_session %}
 <div class="rg-icard rg-int-banner rg-int-banner--warn">
     <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
@@ -321,10 +278,10 @@
         <path d="M4 6V4.5a2 2 0 0 1 4 0V6" stroke="#9aa4af" stroke-width="1.5" stroke-linecap="round"/>
     </svg>
     <div>
-        Fallback uploads are closed because the session is finalized.
-        {% if current_interview_fallback_evidence %}
-            {{ current_interview_fallback_evidence|length }}
-            sheet{{ current_interview_fallback_evidence|length|pluralize }} on record.
+        Paper-sheet encoding is closed because the session is finalized.
+        {% if current_interview_fallback_ratings %}
+            {{ current_interview_fallback_ratings|length }}
+            sheet{{ current_interview_fallback_ratings|length|pluralize }} on record.
         {% endif %}
     </div>
 </div>
@@ -387,10 +344,10 @@
                         <span class="rg-scr-modal-summary__label">Ratings on record</span>
                         <span class="rg-scr-modal-summary__value">
                             {{ current_interview_ratings|length }}
-                            {% if current_interview_fallback_evidence %}
-                                + {{ current_interview_fallback_evidence|length }} fallback
+                            {% if current_interview_fallback_ratings %}
+                                + {{ current_interview_fallback_ratings|length }} encoded paper
                             {% endif %}
-                            {% if application.branch == "plantilla" %}(3 required){% endif %}
+                            {% if application.branch == "plantilla" %}(3&ndash;5 required){% endif %}
                         </span>
                     </div>
                 </div>
@@ -428,8 +385,10 @@
         var confirmBtn = document.getElementById("modal-int-session-confirm");
 
         var totalRatings = {{ current_interview_ratings|length|default:0 }};
-        var hasFallback = {% if current_interview_fallback_evidence %}true{% else %}false{% endif %};
-        var fallbackCount = {{ current_interview_fallback_evidence|length|default:0 }};
+        var hasFallback = {% if current_interview_fallback_ratings %}true{% else %}false{% endif %};
+        /* SL-03: an encoded paper sheet names one member, so it counts as a rater. A bare
+           scan does not, and neither do superseded versions of the same sheet. */
+        var fallbackCount = {{ current_interview_fallback_ratings|length|default:0 }};
         // WF-01 courtesy mirror of the server rule: 3 for Plantilla HRMPSB panels, 1 for COS.
         var minRequiredOutputs = {% if application.branch == "plantilla" %}3{% else %}1{% endif %};
 
@@ -483,12 +442,19 @@
         function validateForFinalize() {
             var probs = collectSaveProblems();
             var totalOutputs = totalRatings + fallbackCount;
+            if (maxRequiredOutputs && totalOutputs > maxRequiredOutputs) {
+                revealProblems([
+                    "The HRMPSB is 3–5 members, but this interview carries ratings from " +
+                    totalOutputs + "."
+                ]);
+                return false;
+            }
             if (totalOutputs < minRequiredOutputs) {
                 // No field to attach to — route to the summary box.
                 var msg = minRequiredOutputs > 1
                     ? ("This interview needs ratings from at least " + minRequiredOutputs +
                        " HRMPSB members before it can be finalized (currently " + totalOutputs + ").")
-                    : "Record at least one panel rating or upload a fallback sheet before finalizing.";
+                    : "Record at least one panel rating or encode a fallback sheet before finalizing.";
                 probs.push({ field: null, summaryOnly: true, msg: msg });
             }
             if (probs.length) { revealProblems(probs); return false; }

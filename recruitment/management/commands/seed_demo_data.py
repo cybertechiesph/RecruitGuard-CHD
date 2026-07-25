@@ -30,6 +30,7 @@ database, NEVER one with real applicant submissions.
 
 from contextlib import nullcontext
 from datetime import timedelta
+from decimal import Decimal
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -43,6 +44,7 @@ from recruitment.models import (
     ComparativeAssessmentReport,
     ComparativeAssessmentReportItem,
     CompetencyRatingTemplate,
+    CosSelectionRound,
     CosVacancyDeliberation,
     DeliberationRecord,
     EvidenceVaultItem,
@@ -70,6 +72,7 @@ from recruitment.services import (
     save_interview_rating,
     save_interview_session,
     save_screening_review,
+    set_application_ete_rating,
     submit_application,
     upload_evidence_item,
 )
@@ -279,6 +282,8 @@ class Command(BaseCommand):
         ComparativeAssessmentReportItem.objects.all().delete()
         DeliberationRecord.objects.all().delete()
         CosVacancyDeliberation.objects.all().delete()
+        # SL-02: the selection-round membership snapshot PROTECTs its cases.
+        CosSelectionRound.objects.all().delete()
         ComparativeAssessmentReport.objects.all().delete()
         EvidenceVaultItem.objects.all().delete()
 
@@ -582,10 +587,17 @@ class Command(BaseCommand):
             applications.append(application)
 
         self._close_entry_pool(entry)
-        for application in applications:
+        for offset, application in enumerate(applications):
             application.refresh_from_db()
             application.case.refresh_from_db()
             application.position.refresh_from_db()
+            # SL-03: a CAR cannot finalize while a candidate's ETE is blank, so the demo
+            # data carries the Secretariat's rating the way a real prepared CAR would.
+            set_application_ete_rating(
+                application,
+                actors["secretariat"],
+                Decimal(f"{92 - offset * 3}.00"),
+            )
 
         # Draft then finalize the CAR; recommend the top-ranked (first) applicant.
         generate_comparative_assessment_report(

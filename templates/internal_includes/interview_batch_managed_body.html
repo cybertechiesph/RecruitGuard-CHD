@@ -52,45 +52,4 @@ fallback upload below is additive and cannot conflict with anything.
     </div>
 </div>
 
-{% if interview_fallback_form %}
-<div class="rg-icard" id="int-fallback-section">
-    <div class="rg-icard__header">
-        <div>
-            <h3 class="rg-icard__title">Fallback rating sheet</h3>
-            <p class="rg-icard__subtitle">
-                Upload a scanned paper rating sheet when digital encoding isn't the primary record.
-            </p>
-        </div>
-    </div>
-    <form method="post"
-          action="{% url 'interview-fallback-upload' application.pk %}"
-          enctype="multipart/form-data"
-          novalidate>
-        {% csrf_token %}
-        <div class="rg-field">
-            <label class="form-label" for="{{ interview_fallback_form.file.id_for_label }}">
-                {{ interview_fallback_form.file.label }}
-                <span class="text-danger" aria-hidden="true">*</span>
-            </label>
-            {{ interview_fallback_form.file }}
-            {% for error in interview_fallback_form.file.errors %}
-                <div class="invalid-feedback d-block">{{ error }}</div>
-            {% endfor %}
-        </div>
-        <div class="rg-field">
-            <label class="form-label" for="{{ interview_fallback_form.remarks.id_for_label }}">
-                {{ interview_fallback_form.remarks.label }}
-            </label>
-            {{ interview_fallback_form.remarks }}
-            {% for error in interview_fallback_form.remarks.errors %}
-                <div class="invalid-feedback d-block">{{ error }}</div>
-            {% endfor %}
-        </div>
-        <div class="rg-int-fallback-actions">
-            <button type="submit" class="btn btn-sm btn-outline-secondary">
-                Upload fallback sheet
-            </button>
-        </div>
-    </form>
-</div>
-{% endif %}
+{% include "internal_includes/interview_fallback_card.html" %}

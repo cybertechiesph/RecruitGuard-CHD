@@ -28,7 +28,6 @@ from .forms import (
     ExamRecordForm,
     ExamScheduleForm,
     EvidenceUploadForm,
-    FinalDecisionForm,
     FinalSelectionForm,
     InterviewFallbackUploadForm,
     InterviewRatingForm,
@@ -113,7 +112,16 @@ from .services import (
     get_completion_requirements,
     decrypt_evidence_bytes,
     evidence_belongs_to_application_context,
+    get_cos_pick_for_case,
     get_cos_vacancy_deliberation,
+    get_interview_fallback_ratings,
+    interview_fallback_panel_queryset,
+    get_latest_cos_selection_round,
+    get_open_cos_selection_round,
+    open_cos_selection_round,
+    user_can_open_cos_selection_round,
+    vacancy_uses_cos_selection_rounds,
+    cos_eligible_pool,
     cos_deliberation_pool,
     save_cos_vacancy_deliberation,
     user_can_manage_cos_deliberation,
@@ -616,6 +624,13 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
         context["current_interview_session"] = get_interview_session(application)
         context["current_interview_ratings"] = get_interview_ratings(application)
         context["current_interview_fallback_evidence"] = get_interview_fallback_evidence(application)
+        # SL-03: the encoded paper ratings — the rows that actually count toward the quorum
+        # and the interview average. The evidence list above is the retained scans.
+        context["current_interview_fallback_ratings"] = (
+            get_interview_fallback_ratings(context["current_interview_session"])
+            if context["current_interview_session"]
+            else []
+        )
         context["current_user_interview_rating"] = get_interview_rating_for_user(application, user)
         context["interview_rating_is_support_encoding"] = user_is_interview_rating_support_encoder(
             user,
@@ -818,7 +833,11 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
             elif interview_session.is_finalized:
                 context["interview_fallback_locked"] = True
             else:
-                context["interview_fallback_form"] = InterviewFallbackUploadForm()
+                # SL-03: the encoder picks the member whose sheet they are encoding, from
+                # the panel that was actually invited to this interview.
+                context["interview_fallback_form"] = InterviewFallbackUploadForm(
+                    panel_members=interview_fallback_panel_queryset(application),
+                )
         applicant_pool_is_blocked = (
             application_requires_finalized_applicant_pool(application)
             and not application_has_finalized_applicant_pool(application)
@@ -933,20 +952,18 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
                     context["next_batch_case"] = next(
                         (c for c in scoped_batch if c.pk != application.pk), None
                     )
-        if user_can_record_final_decision(user, application):
-            context["final_decision_form"] = FinalDecisionForm()
-            if application.branch == PositionPosting.Branch.COS:
-                # WF-10: a COS Selected decision resolves the rest of the pool — tell
-                # the chief how many siblings will be closed + notified.
-                context["cos_pool_sibling_count"] = (
-                    RecruitmentApplication.objects.filter(
-                        position=application.position,
-                        case__case_status=RecruitmentCase.CaseStatus.ACTIVE,
-                        case__is_stage_locked=False,
-                    )
-                    .exclude(pk=application.pk)
-                    .count()
-                )
+        if application.branch == PositionPosting.Branch.COS:
+            # SL-01: the COS selection is made once, on the deliberation console. The case's
+            # Decision surface shows that authoritative pick — it never offers a second,
+            # independent choice.
+            # SL-02: show the pick from the round THIS case was actually considered in —
+            # a candidate the pool is still holding has not been decided by anyone's round.
+            pick = get_cos_pick_for_case(application.case) or get_cos_vacancy_deliberation(
+                application.position
+            )
+            if pick and pick.is_finalized:
+                context["cos_authoritative_pick"] = pick
+                context["cos_pick_is_this_case"] = pick.chosen_case_id == application.case.id
         if user_can_record_final_selection(user, application):
             report = context["current_comparative_assessment_report"]
             context["final_selection_report"] = report
@@ -2031,8 +2048,11 @@ class VacancyBatchInterviewView(LoginRequiredMixin, WorkflowProcessorRequiredMix
 
 class VacancyBatchCosDeliberationView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
     """The COS decision: one per-vacancy deliberation pick (spec §6.3). The HRM Chief records
-    the chosen applicant + notes for the whole pool; finalizing it advances the pool to the
-    decision step together."""
+    the chosen applicant + notes for the whole pool.
+
+    SL-01: finalizing the pick IS the COS selection — it records the chosen applicant as
+    selected, routes them to completion, and closes the rest of the deliberated pool. There
+    is no second per-case decision screen that could name someone else."""
 
     template_name = "recruitment/vacancy_batch_cos_deliberation.html"
 
@@ -2045,6 +2065,8 @@ class VacancyBatchCosDeliberationView(LoginRequiredMixin, WorkflowProcessorRequi
 
     def _context(self, request, entry, pool):
         pick = get_cos_vacancy_deliberation(entry)
+        selection_round = get_open_cos_selection_round(entry)
+        latest_round = selection_round or get_latest_cos_selection_round(entry)
         # WF-09: the pick asks the chief to name "the most qualified applicant" — show the
         # finalized comparative data (exam, interview, screening) next to each radio so the
         # decision doesn't rely on recall. Strongest interview scores first; choice stays free.
@@ -2069,12 +2091,27 @@ class VacancyBatchCosDeliberationView(LoginRequiredMixin, WorkflowProcessorRequi
         candidates.sort(
             key=lambda c: (c["interview_score"] is None, -(c["interview_score"] or 0))
         )
+        # SL-02: a continuous COS vacancy hires in need-based rounds, so the console has to
+        # say which round is open, how many slots it fills, and who is waiting in the pool.
+        eligible_pool = cos_eligible_pool(entry)
         return {
             "entry": entry,
             "candidates": candidates,
             "candidate_count": len(candidates),
             "pick": pick,
             "can_manage": user_can_manage_cos_deliberation(request.user, entry),
+            "uses_selection_rounds": vacancy_uses_cos_selection_rounds(entry),
+            "selection_round": selection_round,
+            "latest_round": latest_round,
+            "round_picks": (
+                list(latest_round.picks.filter(is_finalized=True).select_related(
+                    "chosen_case", "chosen_case__application"
+                ))
+                if latest_round
+                else []
+            ),
+            "can_open_round": user_can_open_cos_selection_round(request.user, entry),
+            "eligible_pool_count": len(eligible_pool),
         }
 
     def get(self, request, pk):
@@ -2083,15 +2120,41 @@ class VacancyBatchCosDeliberationView(LoginRequiredMixin, WorkflowProcessorRequi
             raise Http404("The COS deliberation pick is only for COS vacancies.")
         pool = self._scoped_pool(request, entry)
         pick = get_cos_vacancy_deliberation(entry)
-        if not pool and not (pick and pick.is_finalized):
+        if (
+            not pool
+            and not (pick and pick.is_finalized)
+            and not user_can_open_cos_selection_round(request.user, entry)
+        ):
             raise Http404("No COS deliberation is available for this vacancy.")
         return render(request, self.template_name, self._context(request, entry, pool))
 
     def post(self, request, pk):
         entry = get_object_or_404(PositionPosting, pk=pk)
+        operation = request.POST.get("operation", "")
+        if operation == "open_round":
+            # SL-02: the office decides when it is hiring; opening the round freezes the
+            # candidates it will consider.
+            if not user_can_open_cos_selection_round(request.user, entry):
+                raise PermissionDenied
+            try:
+                selection_round = open_cos_selection_round(
+                    entry,
+                    request.user,
+                    slot_count=request.POST.get("slot_count", "1"),
+                    notes=request.POST.get("round_notes", ""),
+                )
+            except (ValueError, ValidationError) as exc:
+                messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
+            else:
+                messages.success(
+                    request,
+                    f"Selection round {selection_round.round_number} opened with "
+                    f"{selection_round.members.count()} candidate(s) and "
+                    f"{selection_round.slot_count} slot(s).",
+                )
+            return redirect("vacancy-batch-cos-deliberation", pk=entry.pk)
         if not user_can_manage_cos_deliberation(request.user, entry):
             raise PermissionDenied
-        operation = request.POST.get("operation", "")
         finalize = operation == "finalize"
         if operation not in {"save", "finalize"}:
             messages.error(request, "This action is not available.")
@@ -2108,7 +2171,23 @@ class VacancyBatchCosDeliberationView(LoginRequiredMixin, WorkflowProcessorRequi
             messages.error(request, str(exc))
             return redirect("vacancy-batch-cos-deliberation", pk=entry.pk)
         if finalize:
-            messages.success(request, "COS deliberation pick finalized — the pool moved to the decision.")
+            # SL-01: finalizing IS the selection — say so, because it is the last
+            # reversible moment. SL-02: what happens to the rest depends on how the
+            # vacancy hires, so do not promise the wrong one.
+            if vacancy_uses_cos_selection_rounds(entry):
+                messages.success(
+                    request,
+                    "COS deliberation pick finalized. The chosen applicant is recorded as "
+                    "selected and routed to completion; the candidates this round did not "
+                    "pick stay in the pool for the next round.",
+                )
+            else:
+                messages.success(
+                    request,
+                    "COS deliberation pick finalized. The chosen applicant is recorded as "
+                    "selected and routed to completion; the rest of the deliberated pool "
+                    "is closed as not selected and notified.",
+                )
             return redirect("vacancy-batches")
         messages.success(request, "COS deliberation pick saved.")
         return redirect("vacancy-batch-cos-deliberation", pk=entry.pk)
@@ -2759,7 +2838,11 @@ class InterviewFallbackUploadView(LoginRequiredMixin, WorkflowProcessorRequiredM
         if not user_can_upload_interview_fallback(request.user, application):
             raise PermissionDenied
 
-        form = InterviewFallbackUploadForm(request.POST, request.FILES)
+        form = InterviewFallbackUploadForm(
+            request.POST,
+            request.FILES,
+            panel_members=interview_fallback_panel_queryset(application),
+        )
         if form.is_valid():
             try:
                 upload_interview_fallback_rating(
@@ -2767,13 +2850,23 @@ class InterviewFallbackUploadView(LoginRequiredMixin, WorkflowProcessorRequiredM
                     actor=request.user,
                     uploaded_file=form.cleaned_data["file"],
                     remarks=form.cleaned_data["remarks"],
+                    rated_by=form.cleaned_data["rated_by"],
+                    rating_score=form.cleaned_data["rating_score"],
+                    justification=form.cleaned_data.get("justification", ""),
                 )
-            except ValueError as exc:
-                messages.error(request, str(exc))
+            except (ValueError, ValidationError) as exc:
+                messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
             else:
-                messages.success(request, "Fallback rating sheet saved with secured files.")
+                messages.success(
+                    request,
+                    "Paper rating sheet encoded — the panel member and their score are on "
+                    "record, and the scan is retained with the secured files.",
+                )
         else:
-            messages.error(request, "Provide the scanned fallback rating sheet and upload remarks.")
+            messages.error(
+                request,
+                "Name the panel member, record their score, and attach the scanned sheet.",
+            )
         return redirect("application-detail", pk=pk)
 
 
@@ -2941,53 +3034,6 @@ class FinalSelectionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, Vie
                     "Choose the selected appointee and provide decision remarks.",
                 ),
             )
-
-
-class FinalDecisionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
-    def _render_with_bound_form(self, request, application, form, message):
-        if not form.errors:
-            form.add_error("decision_outcome", message)
-        messages.error(request, message)
-        return _render_application_detail_with_overrides(
-            request,
-            application,
-            final_decision_form=form,
-        )
-
-    def post(self, request, pk):
-        application = get_object_or_404(RecruitmentApplication, pk=pk)
-        if not user_can_record_final_decision(request.user, application):
-            raise PermissionDenied
-
-        form = FinalDecisionForm(request.POST)
-        if form.is_valid():
-            try:
-                decision = record_final_decision(
-                    application=application,
-                    actor=request.user,
-                    cleaned_data=form.cleaned_data,
-                )
-            except (ValueError, ValidationError) as exc:
-                return self._render_with_bound_form(
-                    request,
-                    application,
-                    form,
-                    str(exc),
-                )
-            else:
-                messages.success(
-                    request,
-                    "Final decision recorded as "
-                    f"{decision.get_decision_outcome_display().lower()}.",
-                )
-        else:
-            return self._render_with_bound_form(
-                request,
-                application,
-                form,
-                "Choose the final outcome and provide the decision remarks.",
-            )
-        return redirect("application-detail", pk=pk)
 
 
 class CompletionTrackingView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):

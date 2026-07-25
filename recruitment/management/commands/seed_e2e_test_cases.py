@@ -1,5 +1,6 @@
 from contextlib import nullcontext
 from datetime import timedelta
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -11,6 +12,7 @@ from django.utils import timezone
 
 from recruitment.models import (
     ComparativeAssessmentReport,
+    CosSelectionRound,
     CosVacancyDeliberation,
     ComparativeAssessmentReportItem,
     CompetencyRatingTemplate,
@@ -36,14 +38,15 @@ from recruitment.services import (
     get_competency_rating_template,
     get_current_workflow_section,
     get_published_competency_rating_template,
+    MIN_INTERVIEW_RATINGS_PLANTILLA,
     record_final_selection,
-    save_deliberation_record,
     save_cos_vacancy_deliberation,
     save_exam_record,
     save_exam_schedule,
     save_interview_rating,
     save_interview_session,
     save_screening_review,
+    set_application_ete_rating,
     submit_application,
     upload_evidence_item,
 )
@@ -177,6 +180,9 @@ class Command(BaseCommand):
         DeliberationRecord.objects.filter(recruitment_entry__in=entries).delete()
         # The per-vacancy COS pick PROTECTs its chosen case; clear it before deleting cases.
         CosVacancyDeliberation.objects.filter(recruitment_entry__in=entries).delete()
+        # SL-02: a selection round's membership snapshot PROTECTs its cases for the same
+        # reason, so the rounds go before the cases they froze.
+        CosSelectionRound.objects.filter(recruitment_entry__in=entries).delete()
         ComparativeAssessmentReport.objects.filter(recruitment_entry__in=entries).delete()
         EvidenceVaultItem.objects.filter(recruitment_entry__in=entries).delete()
         applications.delete()
@@ -186,16 +192,52 @@ class Command(BaseCommand):
         User.objects.filter(username__startswith=SEED_USER_PREFIX).delete()
 
     def _resolve_users(self):
+        # A Plantilla interview needs ratings from MIN_INTERVIEW_RATINGS_PLANTILLA distinct
+        # HRMPSB members before it can be finalized, so the seeder resolves a whole panel,
+        # not one member. Seeding a single rating is what made the documented dry-run roll
+        # back with "This interview needs ratings from at least 3 HRMPSB members".
+        panel = self._resolve_hrmpsb_panel(MIN_INTERVIEW_RATINGS_PLANTILLA)
         return {
             "secretariat": self._get_role_user(RecruitmentUser.Role.SECRETARIAT, "secretariat"),
             "hrm_chief": self._get_role_user(RecruitmentUser.Role.HRM_CHIEF, "hrm_chief"),
-            "hrmpsb": self._get_role_user(RecruitmentUser.Role.HRMPSB_MEMBER, "hrmpsb_member", "hrmpsb"),
+            "hrmpsb": panel[0],
+            "hrmpsb_panel": panel,
             "appointing": self._get_role_user(
                 RecruitmentUser.Role.APPOINTING_AUTHORITY,
                 "appointing_authority",
                 "appointing",
             ),
         }
+
+    def _resolve_hrmpsb_panel(self, count):
+        """`count` distinct active HRMPSB members â€” real accounts first, topped up with
+        disposable seed members so a finalized Plantilla interview meets the quorum. The
+        top-up accounts carry SEED_USER_PREFIX, so `_reset_seed_data` clears them."""
+        User = get_user_model()
+        members = list(
+            User.objects.filter(
+                role=RecruitmentUser.Role.HRMPSB_MEMBER, is_active=True
+            )
+            .exclude(username__startswith=SEED_USER_PREFIX)
+            .order_by("id")[:count]
+        )
+        seq = 0
+        while len(members) < count:
+            seq += 1
+            username = f"{SEED_USER_PREFIX}hrmpsb_panel_{seq}"
+            member, _created = User.objects.get_or_create(
+                username=username,
+                defaults={
+                    "role": RecruitmentUser.Role.HRMPSB_MEMBER,
+                    "first_name": "E2E",
+                    "last_name": f"HRMPSB Member {seq}",
+                    "email": f"{username}@example.invalid",
+                    "is_active": True,
+                    "is_staff": False,
+                },
+            )
+            members.append(member)
+        return members
 
     def _get_role_user(self, role, *preferred_usernames):
         User = get_user_model()
@@ -457,7 +499,7 @@ class Command(BaseCommand):
         template.save(update_fields=["status", "published_at", "updated_at"])
         return template
 
-    def _finalize_interview(self, application, *, session_actor, rating_actor, score=3):
+    def _finalize_interview(self, application, *, session_actor, rating_actors, score=3):
         scheduled_for = timezone.now() + timedelta(days=2)
         save_interview_session(
             application=application,
@@ -474,7 +516,7 @@ class Command(BaseCommand):
             # sheet (spec §6.2).
             save_interview_rating(
                 application=application,
-                actor=rating_actor,
+                actor=rating_actors[0],
                 cleaned_data={
                     "rating_score": str(score),
                     "rating_notes": "E2E COS interview rating recorded.",
@@ -487,15 +529,17 @@ class Command(BaseCommand):
             competency_scores = {
                 competency: level for competency in template.competencies.all()
             }
-            save_interview_rating(
-                application=application,
-                actor=rating_actor,
-                cleaned_data={
-                    "competency_scores": competency_scores,
-                    "rating_notes": "E2E interview rating recorded.",
-                    "justification": "Consistent competency performance across the panel sheet.",
-                },
-            )
+            # One rating per panel member â€” the quorum rule counts distinct HRMPSB raters.
+            for rating_actor in rating_actors:
+                save_interview_rating(
+                    application=application,
+                    actor=rating_actor,
+                    cleaned_data={
+                        "competency_scores": competency_scores,
+                        "rating_notes": "E2E interview rating recorded.",
+                        "justification": "Consistent competency performance across the panel sheet.",
+                    },
+                )
         return save_interview_session(
             application=application,
             actor=session_actor,
@@ -503,23 +547,6 @@ class Command(BaseCommand):
                 "scheduled_for": scheduled_for,
                 "location": "E2E Verification Room",
                 "session_notes": "E2E interview session finalized.",
-            },
-            finalize=True,
-        )
-
-    def _finalize_deliberation(self, application, actor, rank):
-        return save_deliberation_record(
-            application=application,
-            actor=actor,
-            cleaned_data={
-                "deliberated_at": timezone.now(),
-                "deliberation_minutes": "E2E panel deliberation minutes.",
-                "recommendation": f"Recommended for CAR rank {rank}.",
-                "decision_support_summary": f"E2E decision-support summary for rank {rank}.",
-                "quorum_status": DeliberationRecord.QuorumStatus.MET,
-                "attendance_notes": "E2E HRMPSB quorum met.",
-                "ranking_position": rank,
-                "ranking_notes": f"E2E ranking basis for rank {rank}.",
             },
             finalize=True,
         )
@@ -574,7 +601,7 @@ class Command(BaseCommand):
             self._finalize_interview(
                 application,
                 session_actor=users["secretariat"],
-                rating_actor=users["hrmpsb"],
+                rating_actors=users["hrmpsb_panel"],
                 score=score,
             )
             applications.append(application)
@@ -584,6 +611,13 @@ class Command(BaseCommand):
             application.refresh_from_db()
             application.case.refresh_from_db()
             application.position.refresh_from_db()
+            # SL-03: a CAR cannot finalize while a candidate's ETE is blank, so the seeded
+            # cases carry the Secretariat's rating the way a real prepared CAR would.
+            set_application_ete_rating(
+                application,
+                users["secretariat"],
+                Decimal("88.00"),
+            )
         draft = generate_comparative_assessment_report(
             application=applications[0],
             actor=users["secretariat"],
@@ -596,6 +630,9 @@ class Command(BaseCommand):
                 actor=users["secretariat"],
                 cleaned_data={
                     "summary_notes": f"E2E finalized CAR for {code}.",
+                    # WF-02: the board's quorum attestation is required at finalize.
+                    "quorum_met": True,
+                    "members_present": MIN_INTERVIEW_RATINGS_PLANTILLA,
                     "recommended_case_id": applications[0].case.id,
                     "recommendation_notes": "HRMPSB recommends the top-ranked applicant.",
                 },
@@ -699,7 +736,7 @@ class Command(BaseCommand):
         self._finalize_interview(
             application,
             session_actor=users["secretariat"],
-            rating_actor=users["hrmpsb"],
+            rating_actors=users["hrmpsb_panel"],
         )
         self._close_entry_pool(entry)
         application.refresh_from_db()
@@ -746,16 +783,19 @@ class Command(BaseCommand):
         self._finalize_interview(
             application,
             session_actor=users["hrm_chief"],
-            rating_actor=users["hrm_chief"],
+            rating_actors=[users["hrm_chief"]],
             score="91.00",
         )
-        # COS records one per-vacancy deliberation pick (spec §6.3).
+        # COS records one per-vacancy deliberation pick (spec §6.3). SL-01: finalizing the
+        # pick IS the selection and sends the case to completion, so this verification case
+        # is left with the pick SAVED but not finalized — that is the state a reviewer needs
+        # in order to see a COS decision still pending.
         save_cos_vacancy_deliberation(
             application.position,
             users["hrm_chief"],
             application.case.id,
             "E2E COS deliberation: HRM Chief and end-user selected this applicant.",
-            finalize=True,
+            finalize=False,
         )
 
     def _seed_final_selection_case(self, users, applicants):

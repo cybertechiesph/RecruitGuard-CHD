@@ -30,21 +30,93 @@
     </div>
 </div>
 
+{% if uses_selection_rounds %}
+{% comment %}
+SL-02: continuous COS hires in need-based rounds. The pool accumulates; a round freezes who
+is being considered right now and how many positions it fills.
+{% endcomment %}
+<div class="card p-4 mb-3">
+    <h2 class="h6 mb-1">Selection rounds</h2>
+    <p class="rg-note mb-3">
+        This vacancy has continuous intake, so candidates accumulate in a pool. When the
+        office needs to hire, open a round: the candidates eligible at that moment become
+        its members, and only they can be picked. Anyone the round does not pick stays in
+        the pool for the next one.
+    </p>
+
+    {% if selection_round %}
+        <div class="alert alert-info" role="status">
+            <strong>Round {{ selection_round.round_number }} is open</strong> &mdash;
+            {{ candidate_count }} candidate{{ candidate_count|pluralize }} snapshotted,
+            {{ round_picks|length }} of {{ selection_round.slot_count }}
+            slot{{ selection_round.slot_count|pluralize }} filled.
+            {% if selection_round.notes %}<div class="mt-1">{{ selection_round.notes }}</div>{% endif %}
+        </div>
+    {% elif latest_round %}
+        <div class="alert alert-secondary" role="status">
+            Round {{ latest_round.round_number }} is resolved.
+            {{ eligible_pool_count }} candidate{{ eligible_pool_count|pluralize }}
+            {{ eligible_pool_count|pluralize:"is,are" }} waiting in the pool.
+        </div>
+    {% endif %}
+
+    {% if can_open_round %}
+        <form method="post" class="mt-2">
+            {% csrf_token %}
+            <input type="hidden" name="operation" value="open_round">
+            <div class="row g-2 align-items-end" style="max-width:640px;">
+                <div class="col-auto">
+                    <label class="form-label" for="cos-round-slots">Positions to fill</label>
+                    <input type="number" id="cos-round-slots" name="slot_count" value="1"
+                           min="1" max="20" step="1" class="form-control form-control-sm"
+                           style="max-width:120px;">
+                </div>
+                <div class="col">
+                    <label class="form-label" for="cos-round-notes">Why this round is being opened</label>
+                    <input type="text" id="cos-round-notes" name="round_notes"
+                           class="form-control form-control-sm"
+                           placeholder="e.g. one bookkeeper slot opened in Finance">
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-rg-primary btn-sm">
+                        Open round with {{ eligible_pool_count }} candidate{{ eligible_pool_count|pluralize }}
+                    </button>
+                </div>
+            </div>
+        </form>
+    {% endif %}
+</div>
+{% endif %}
+
 <div class="card p-4 mb-3">
     <h2 class="h6 mb-1">Record the deliberation pick</h2>
     <p class="rg-note mb-3">
         The end-user and HRM Chief deliberate off-system and identify the most qualified applicant.
         Record the chosen applicant + notes here — the pick is the COS decision (no CAR, no
-        appointing authority). Finalizing moves the whole pool to the decision step.
+        appointing authority). <strong>Finalizing is the selection:</strong> the chosen applicant
+        is recorded as selected and routed to completion.
+        {% if uses_selection_rounds %}
+            Candidates this round does not pick stay in the pool.
+        {% else %}
+            The rest of the deliberated pool is closed as not selected and notified.
+        {% endif %}
     </p>
 
-    {% if pick and pick.is_finalized %}
+    {% if round_picks %}
         <div class="alert alert-success" role="status">
-            Deliberation pick finalized &mdash;
-            <strong>{{ pick.chosen_case.application.applicant_display_name }}</strong> was selected.
-            {% if pick.notes %}<div class="mt-1">{{ pick.notes }}</div>{% endif %}
+            <strong>Selected{% if latest_round %} in round {{ latest_round.round_number }}{% endif %}:</strong>
+            <ul class="mb-0 mt-1">
+                {% for round_pick in round_picks %}
+                <li>
+                    {{ round_pick.chosen_case.application.applicant_display_name }}
+                    {% if round_pick.notes %}&mdash; {{ round_pick.notes }}{% endif %}
+                </li>
+                {% endfor %}
+            </ul>
         </div>
-    {% elif can_manage %}
+    {% endif %}
+
+    {% if can_manage %}
         <form method="post" id="cosDelibForm">
             {% csrf_token %}
             <div class="rg-itbl mb-3">
@@ -125,9 +197,18 @@
                     </div>
                     <div class="modal-body">
                         <p class="mb-0 rg-modal-confirm__body-copy">
-                            This records <strong id="cosDelibChosenName">the chosen applicant</strong> as the board's
-                            pick and moves all {{ candidate_count }} candidate{{ candidate_count|pluralize }} to the
-                            decision step. It can't be changed without an authorized reopen.
+                            This selects <strong id="cosDelibChosenName">the chosen applicant</strong> and routes
+                            them to completion.
+                            {% if uses_selection_rounds %}
+                                The other {{ candidate_count|add:"-1" }}
+                                candidate{{ candidate_count|add:"-1"|pluralize }} in this round stay in the pool
+                                for the next round.
+                            {% else %}
+                                The other {{ candidate_count|add:"-1" }}
+                                candidate{{ candidate_count|add:"-1"|pluralize }} in this round are closed as not
+                                selected and notified.
+                            {% endif %}
+                            It can't be changed without an authorized reopen.
                         </p>
                     </div>
                     <div class="modal-footer">
@@ -167,6 +248,11 @@
             });
         })();
         </script>
+    {% elif uses_selection_rounds and not selection_round %}
+        <div class="alert alert-info" role="status">
+            No selection round is open. Open one above when the office is ready to hire —
+            the candidates eligible at that moment become the round's members.
+        </div>
     {% else %}
         <div class="alert alert-info" role="status">
             The COS deliberation pick is recorded by the HRM Chief once the pool reaches this step.

@@ -151,6 +151,23 @@ Shared screening (§4) is **identical** to Plantilla. Then it diverges and is **
   vacancy** (today `DeliberationRecord` is per-application; simplify to per-vacancy for COS).
 - **No CAR. No appointing authority.** The recorded pick *is* the decision.
 
+**Amended 2026-07-26 (SL-01, SL-02).** Two things this section left implicit turned out to be
+load-bearing:
+
+- **The pick is the selection, literally** (SL-01). Finalizing the pick performs the selection
+  transition: the chosen applicant is recorded as Selected and routed to completion there and
+  then. There is no separate per-case Decision screen that records the outcome again — that
+  second door let the HRM Chief select a person the deliberation had not chosen, and the
+  audit trail then held two incompatible official facts. The case's Decision surface now
+  *displays* the pick; it never re-asks it.
+- **"One deliberation per vacancy" is one deliberation per selection round** (SL-02). A
+  continuous COS vacancy accumulates candidates and the office hires from that pool whenever
+  a slot opens. So a round is opened when the office needs to hire, it snapshots the
+  then-eligible candidates as its members, it may fill N slots, and resolving it touches only
+  that snapshot. Candidates it did not pick stay in the pool for the next round — they are
+  **not** rejected. Opening-based, pooling and fixed-period COS vacancies are unchanged: one
+  round, and the candidates it does not pick are closed as not selected and notified.
+
 ### 6.4 Inform
 - Email notice of selection + pre-employment checklist within deadline; non-selected notified.
 

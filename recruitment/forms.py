@@ -2314,14 +2314,39 @@ class SimpleInterviewRatingForm(BootstrapFormMixin, forms.Form):
 
 
 class InterviewFallbackUploadForm(BootstrapFormMixin, forms.Form):
+    """SL-03: encoding a paper rating sheet asks the same three things the online form
+    does — whose rating, what score, and why if it falls outside 75–98 — plus the scan.
+    A sheet with no member and no number is a document, not a rating, and the quorum rule
+    cannot count it."""
+
+    rated_by = forms.ModelChoiceField(
+        label="Panel member who signed the sheet",
+        queryset=RecruitmentUser.objects.none(),
+        empty_label="— Select the HRMPSB member —",
+    )
+    rating_score = forms.DecimalField(
+        label="Rating from the sheet",
+        max_digits=5,
+        decimal_places=2,
+        min_value=Decimal("0"),
+        max_value=Decimal("100"),
+    )
     file = forms.FileField(label="Scanned Fallback Rating Sheet")
+    justification = forms.CharField(
+        label="Justification",
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3}),
+        help_text="Required when the rating is below 75 or above 98.",
+    )
     remarks = forms.CharField(
         label="Upload Remarks",
         widget=forms.Textarea(attrs={"rows": 3}),
     )
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, panel_members=None, **kwargs):
         super().__init__(*args, **kwargs)
+        if panel_members is not None:
+            self.fields["rated_by"].queryset = panel_members
         self._apply_bootstrap()
 
     def clean_file(self):
@@ -2332,6 +2357,21 @@ class InterviewFallbackUploadForm(BootstrapFormMixin, forms.Form):
             except ValueError as exc:
                 raise forms.ValidationError(str(exc)) from exc
         return uploaded_file
+
+    def clean(self):
+        cleaned = super().clean()
+        score = cleaned.get("rating_score")
+        justification = (cleaned.get("justification") or "").strip()
+        if (
+            score is not None
+            and (score < Decimal("75") or score > Decimal("98"))
+            and not justification
+        ):
+            self.add_error(
+                "justification",
+                "Provide a justification when the interview rating is below 75 or above 98.",
+            )
+        return cleaned
 
 
 class DeliberationRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.ModelForm):
@@ -2436,24 +2476,6 @@ class ComparativeAssessmentReportForm(DeferredModelValidationMixin, BootstrapFor
         if value == "no":
             return False
         return None
-
-
-class FinalDecisionForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.ModelForm):
-    class Meta:
-        model = FinalDecision
-        fields = [
-            "decision_outcome",
-            "decision_notes",
-        ]
-        widgets = {
-            "decision_notes": forms.Textarea(attrs={"rows": 4}),
-        }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["decision_outcome"].label = "Final Outcome"
-        self.fields["decision_notes"].label = "Decision Notes / Remarks"
-        self._apply_bootstrap()
 
 
 class CARItemChoiceField(forms.ModelChoiceField):
