@@ -48,6 +48,7 @@ from .models import (
     CompetencyScore,
     CompletionRecord,
     CompletionRequirement,
+    TOP_FIVE_SELECTION_LIMIT,
     AttendanceException,
     AttendanceOutcome,
     CosSelectionRound,
@@ -180,7 +181,25 @@ DELIBERATION_ROLES_BY_BRANCH = {
     PositionPosting.Branch.PLANTILLA: {RecruitmentUser.Role.HRMPSB_MEMBER},
 }
 CAR_REVIEW_STAGE = RecruitmentCase.Stage.HRMPSB_REVIEW
-TOP_FIVE_SELECTION_LIMIT = 5
+
+
+def car_item_is_within_top_five(item):
+    """SL-08: whether this candidate is inside the top five for deep-selection purposes.
+
+    Under competition ranking a tied band shares one ordinal, so a tie that straddles fifth
+    place (…4, 5, 5, 7) leaves every member of the band at rank 5 — inside. Comparing the
+    ordinal is therefore the whole rule; no separate band arithmetic is needed. An unranked
+    row (no computed score) is never inside."""
+    rank = getattr(item, "rank_order", None)
+    return rank is not None and rank <= TOP_FIVE_SELECTION_LIMIT
+
+
+def car_top_rank_case_ids(report):
+    """Every case sharing the CAR's top computed rank. SL-08: a tie at rank 1 has more than
+    one, and picking any of them is not a deviation from the board's ordering."""
+    return set(
+        report.items.filter(rank_order=1).values_list("recruitment_case_id", flat=True)
+    )
 # WF-04 (client decision): the Secretariat generates the CAR for BOTH levels. If the client
 # wants the HRM Chief to retain Level-2 access too, make Level 2 the union
 # {SECRETARIAT, HRM_CHIEF} — and mirror it in ComparativeAssessmentReport.clean().
@@ -4271,7 +4290,9 @@ def get_comparative_assessment_report_items_for_report(report):
         "recruitment_case",
         "recruitment_case__application",
         "deliberation_record",
-    ).order_by("rank_order", "created_at")
+        # SL-08: tied rows share an ordinal, so the secondary key has to be deterministic.
+        # Case reference is display order only — it never changes the rank.
+    ).order_by("rank_order", "recruitment_case__application__reference_number", "id")
 
 
 def user_can_manage_comparative_assessment_report(user, application):
@@ -6728,8 +6749,24 @@ def _car_draft_candidate_rows(recruitment_entry, review_stage):
             row["application"].reference_number or row["application"].reference_label,
         ),
     )
+    # SL-08: competition ranking (1, 2, 2, 4). Equal totals are a tie, and a tie is what the
+    # scores say. Sorting by case reference stabilises the display order, but a case number
+    # is not a merit distinction — using it to break ties turned an arbitrary clerical fact
+    # into a ranking the CAR could not defend, and could push one of two equal candidates
+    # outside the top five.
+    previous_score = None
+    previous_rank = 0
     for index, row in enumerate(scored_rows, start=1):
-        row["preliminary_rank_order"] = index
+        if previous_score is not None and row["assessment_score"] == previous_score:
+            row["preliminary_rank_order"] = previous_rank
+        else:
+            row["preliminary_rank_order"] = index
+            previous_rank = index
+        previous_score = row["assessment_score"]
+        row["is_tied"] = False
+    scores = [row["assessment_score"] for row in scored_rows]
+    for row in scored_rows:
+        row["is_tied"] = scores.count(row["assessment_score"]) > 1
 
     ordered_rows = sorted(
         rows,
@@ -6977,6 +7014,9 @@ def generate_comparative_assessment_report(application, actor, cleaned_data, fin
             {
                 "rank_order": row["rank_order"],
                 "preliminary_rank_order": row["preliminary_rank_order"],
+                # SL-08: state the tie rather than leaving the reader to infer it from two
+                # rows sharing an ordinal.
+                "is_tied": bool(row.get("is_tied")),
                 "application_reference": row["application"].reference_number or "",
                 "applicant_name": row["application"].applicant_display_name,
                 "candidate_code": row["application"].candidate_code or "",
@@ -9198,9 +9238,8 @@ def record_final_selection(application, actor, cleaned_data):
     )
     if not selected_item:
         raise ValueError("Select an applicant from the finalized CAR.")
-    if (
-        selected_item.rank_order > TOP_FIVE_SELECTION_LIMIT
-        and not cleaned_data.get("is_deep_selection")
+    if not car_item_is_within_top_five(selected_item) and not cleaned_data.get(
+        "is_deep_selection"
     ):
         raise ValueError(
             "Selecting outside the top five requires deep selection documentation."
@@ -9213,16 +9252,16 @@ def record_final_selection(application, actor, cleaned_data):
         )
     # WF-03: deviating from the board's recommendation (rank #1 fallback when none was
     # recorded) requires a written justification — HARD rule, mirrored in FinalSelection.clean.
-    recommended_case_id = report.recommended_case_id
-    if recommended_case_id is None:
-        recommended_case_id = (
-            report.items.filter(rank_order=1)
-            .values_list("recruitment_case_id", flat=True)
-            .first()
-        )
+    # SL-08: with no recorded recommendation the fallback is the top computed rank, which a
+    # tie can share. Picking any member of that band is not a deviation.
+    recommended_case_ids = (
+        {report.recommended_case_id}
+        if report.recommended_case_id
+        else car_top_rank_case_ids(report)
+    )
     if (
-        recommended_case_id
-        and selected_item.recruitment_case_id != recommended_case_id
+        recommended_case_ids
+        and selected_item.recruitment_case_id not in recommended_case_ids
         and not (cleaned_data.get("deep_selection_justification") or "").strip()
     ):
         raise ValueError(
@@ -10212,7 +10251,11 @@ def _build_comparative_assessment_report_pdf(
         lines.extend(
             [
                 (
-                    f"Final Rank {row['rank_order']} | Preliminary Rank {row['preliminary_rank_order'] or 'N/A'} | "
+                    # SL-08: the archived sheet says "tied" in words, so the equal score and
+                    # the equal rank both survive in the filed copy.
+                    f"Final Rank {row['rank_order'] or 'Unranked'}"
+                    f"{' (tied)' if row.get('is_tied') else ''} | "
+                    f"Preliminary Rank {row['preliminary_rank_order'] or 'N/A'} | "
                     f"{row['application'].reference_number} | "
                     f"{row['application'].applicant_display_name}"
                 ),

@@ -74,7 +74,10 @@ HRM Chief on COS). Two states:
             {% for item in current_comparative_assessment_report_items %}
             <li class="rg-del-car-item">
                 {% if car_all_rows_scored %}
-                    <div class="rg-del-rank-badge">#{{ item.rank_order }}</div>
+                    <div class="rg-del-rank-badge"
+                         {% if item.shares_rank %}title="Tied — this candidate's total equals another's"{% endif %}>
+                        #{{ item.rank_order }}{% if item.shares_rank %}<span style="font-size:0.6em;"> =</span>{% endif %}
+                    </div>
                 {% else %}
                     <div class="rg-del-rank-badge" title="Unranked until every candidate has a score" aria-hidden="true">&mdash;</div>
                 {% endif %}

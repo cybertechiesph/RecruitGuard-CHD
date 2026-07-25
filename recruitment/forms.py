@@ -60,6 +60,7 @@ from .requirements import (
     get_applicant_document_requirements,
 )
 from .services import (
+    TOP_FIVE_SELECTION_LIMIT,
     compute_competency_rating_score,
     get_available_actions,
     get_case_handoff_options,
@@ -2598,17 +2599,17 @@ class FinalSelectionForm(BootstrapFormMixin, forms.Form):
             raise forms.ValidationError("Select an applicant from the finalized CAR.")
         return selected_item
 
-    def _recommended_case_id(self):
-        """The board's recommended case, falling back to the CAR's rank #1 when no
-        recommendation was recorded (legacy reports)."""
+    def _recommended_case_ids(self):
+        """The board's recommended case, falling back to the CAR's top computed rank when
+        no recommendation was recorded (legacy reports). SL-08: a tie can put more than one
+        candidate at rank 1, and picking any of them is not a deviation."""
         if self.report is None:
-            return None
+            return set()
         if self.report.recommended_case_id:
-            return self.report.recommended_case_id
-        return (
+            return {self.report.recommended_case_id}
+        return set(
             self.report.items.filter(rank_order=1)
             .values_list("recruitment_case_id", flat=True)
-            .first()
         )
 
     def clean(self):
@@ -2616,7 +2617,14 @@ class FinalSelectionForm(BootstrapFormMixin, forms.Form):
         selected_item = cleaned_data.get("selected_item")
         is_deep_selection = cleaned_data.get("is_deep_selection")
         justification = (cleaned_data.get("deep_selection_justification") or "").strip()
-        if selected_item and selected_item.rank_order > 5 and not is_deep_selection:
+        # SL-08: a tied band shares one ordinal, so a tie straddling fifth place leaves
+        # every member of it inside the top five.
+        selected_rank = getattr(selected_item, "rank_order", None) if selected_item else None
+        if (
+            selected_item
+            and (selected_rank is None or selected_rank > TOP_FIVE_SELECTION_LIMIT)
+            and not is_deep_selection
+        ):
             self.add_error(
                 "is_deep_selection",
                 "Selecting outside the top five requires deep selection documentation.",
@@ -2627,11 +2635,11 @@ class FinalSelectionForm(BootstrapFormMixin, forms.Form):
                 "Record the deep-selection justification before finalizing this selection.",
             )
         # WF-03: a pick that deviates from the board's recommendation needs a justification.
-        recommended_case_id = self._recommended_case_id()
+        recommended_case_ids = self._recommended_case_ids()
         if (
             selected_item
-            and recommended_case_id
-            and selected_item.recruitment_case_id != recommended_case_id
+            and recommended_case_ids
+            and selected_item.recruitment_case_id not in recommended_case_ids
             and not justification
         ):
             self.add_error(

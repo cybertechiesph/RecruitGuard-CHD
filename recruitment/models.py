@@ -10,6 +10,11 @@ from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
+# The Appointing Authority should select from the top five ranked CAR candidates where
+# practicable; going outside it needs a recorded deep-selection justification. Defined here
+# so the model, the form and the service all enforce the same number (services re-exports it).
+TOP_FIVE_SELECTION_LIMIT = 5
+
 
 REFERENCE_LEVEL_TO_ROUTING_LEVEL = {
     "FIRST_LEVEL": 1,
@@ -3404,11 +3409,10 @@ class ComparativeAssessmentReportItem(TimestampedModel):
                 fields=["report", "recruitment_case"],
                 name="unique_car_item_per_report_case",
             ),
-            models.UniqueConstraint(
-                fields=["report", "rank_order"],
-                condition=models.Q(rank_order__isnull=False),
-                name="unique_car_rank_per_report",
-            ),
+            # SL-08: no unique constraint on rank_order. Under competition ranking equal
+            # assessment scores share a rank (1, 2, 2, 4), so two rows legitimately carry
+            # the same ordinal. Forcing uniqueness is what made an arbitrary case number
+            # the tie-breaker.
         ]
 
     def clean(self):
@@ -3475,6 +3479,20 @@ class ComparativeAssessmentReportItem(TimestampedModel):
     @property
     def application(self):
         return self.recruitment_case.application
+
+    @property
+    def shares_rank(self):
+        """SL-08: whether another candidate holds this same rank — i.e. their totals are
+        equal. Surfaced so a shared ordinal reads as the tie it is instead of looking like
+        a duplicate."""
+        if self.rank_order is None:
+            return False
+        return (
+            type(self)
+            .objects.filter(report_id=self.report_id, rank_order=self.rank_order)
+            .exclude(pk=self.pk)
+            .exists()
+        )
 
     def __str__(self):
         return f"{self.report} #{self.rank_order}"
@@ -3555,7 +3573,13 @@ class FinalSelection(TimestampedModel):
                 errors["selected_application"] = "Selected application must match the selected CAR item."
             if self.selected_case_id and self.selected_item.recruitment_case_id != self.selected_case_id:
                 errors["selected_case"] = "Selected case must match the selected CAR item."
-            if self.selected_item.rank_order > 5 and not self.is_deep_selection:
+            # SL-08: competition ranking already gives a tied band one shared ordinal, so a
+            # tie straddling fifth place leaves every member of it at rank 5 — inside.
+            selected_rank = self.selected_item.rank_order
+            if (
+                (selected_rank is None or selected_rank > TOP_FIVE_SELECTION_LIMIT)
+                and not self.is_deep_selection
+            ):
                 errors["is_deep_selection"] = (
                     "Selecting outside the top five requires deep selection documentation."
                 )
@@ -3567,15 +3591,19 @@ class FinalSelection(TimestampedModel):
         # no recommendation was recorded) requires a written justification for the record.
         if self.selected_item_id and self.comparative_assessment_report_id:
             recommended_case_id = self.comparative_assessment_report.recommended_case_id
-            if recommended_case_id is None:
-                recommended_case_id = (
+            # SL-08: with no recorded recommendation the fallback is the top computed rank,
+            # which a tie can share. Picking any member of that band is not a deviation.
+            recommended_case_ids = (
+                {recommended_case_id}
+                if recommended_case_id
+                else set(
                     self.comparative_assessment_report.items.filter(rank_order=1)
                     .values_list("recruitment_case_id", flat=True)
-                    .first()
                 )
+            )
             if (
-                recommended_case_id
-                and self.selected_item.recruitment_case_id != recommended_case_id
+                recommended_case_ids
+                and self.selected_item.recruitment_case_id not in recommended_case_ids
                 and not (self.deep_selection_justification or "").strip()
             ):
                 errors["deep_selection_justification"] = (

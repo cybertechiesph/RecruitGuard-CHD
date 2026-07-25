@@ -123,6 +123,8 @@ from .services import (
     save_cos_vacancy_deliberation,
     get_cos_vacancy_deliberation,
     get_latest_final_decision,
+    car_item_is_within_top_five,
+    car_top_rank_case_ids,
     get_comparative_assessment_readiness,
     get_cos_pick_for_case,
     get_latest_cos_selection_round,
@@ -13759,6 +13761,77 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         item = report.items.get(recruitment_case=application.case)
         self.assertIsNotNone(item.assessment_score)
         self.assertEqual(item.rank_order, 1)
+
+    def test_equal_totals_share_a_rank_and_stay_inside_the_top_five(self):
+        # SL-08: the audit's probe — two candidates with identical ETE, exam and interview
+        # totals were split 1 and 2 by their case reference, which is not a merit
+        # distinction and could push one of them outside the top five.
+        first = self.make_application(self.level1_position)
+        second_applicant = RecruitmentUser.objects.create_user(
+            username="tie-candidate",
+            password="testpass123",
+            email="tie.candidate@example.com",
+            role=RecruitmentUser.Role.APPLICANT,
+        )
+        second = RecruitmentApplication.objects.create(
+            applicant=second_applicant,
+            position=self.level1_position,
+            applicant_first_name="Tie",
+            applicant_last_name="Candidate",
+            applicant_email="tie.candidate@example.com",
+            applicant_phone="09179990333",
+            checklist_privacy_consent=True,
+            checklist_documents_complete=True,
+            checklist_information_certified=True,
+            qualification_summary="Equal-scoring applicant.",
+            cover_letter="Applying for the same vacancy.",
+        )
+        self.upload_required_applicant_documents(
+            second, second_applicant, content_prefix="tie-candidate"
+        )
+        self.verify_application_for_submission(second)
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(second, second_applicant)
+        self.verify_application_for_submission(first)
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(first, self.applicant)
+        first.refresh_from_db()
+        second.refresh_from_db()
+        # The batch screening gate holds the exam until every applicant has a decision.
+        self.finalize_screening_for_current_stage(first, self.secretariat)
+        self.finalize_screening_for_current_stage(second, self.secretariat)
+        self.finalize_exam_for_current_stage(first, self.secretariat)
+        self.finalize_exam_for_current_stage(second, self.secretariat)
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.finalize_interview_for_current_stage(first, self.hrmpsb, rating_score="90.00")
+        self.finalize_interview_for_current_stage(second, self.hrmpsb, rating_score="90.00")
+        self.finalize_applicant_pool_for_test(self.level1_position)
+        first.refresh_from_db()
+        second.refresh_from_db()
+
+        for application in (first, second):
+            set_application_ete_rating(application, self.secretariat, Decimal("90"))
+        report = generate_comparative_assessment_report(
+            application=first,
+            actor=self.secretariat,
+            cleaned_data={"summary_notes": "Draft with two equal candidates."},
+            finalize=False,
+        )
+        items = list(report.items.all())
+        self.assertEqual(len(items), 2)
+        scores = {item.assessment_score for item in items}
+        self.assertEqual(len(scores), 1, "fixture should produce equal totals")
+        self.assertEqual({item.rank_order for item in items}, {1})
+        for item in items:
+            self.assertTrue(item.shares_rank)
+            self.assertTrue(car_item_is_within_top_five(item))
+        # SL-08 AC#3: either member of a rank-1 tie is the board's ordering, so picking
+        # one is not a deviation needing deep-selection paperwork.
+        self.assertEqual(
+            car_top_rank_case_ids(report),
+            {first.case.id, second.case.id},
+        )
 
     def test_an_unscored_car_row_cannot_be_the_board_recommendation(self):
         # SL-03 AC#2: no rank, no recommendation, no route forward without a score.

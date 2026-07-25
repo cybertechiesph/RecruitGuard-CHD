@@ -101,7 +101,11 @@
             <tbody>
                 {% for item in items %}
                 <tr>
-                    <td class="num">{% if item.rank_order %}{{ item.rank_order }}{% else %}&mdash;{% endif %}</td>
+                    <td class="num">
+                        {% if item.rank_order %}
+                            {{ item.rank_order }}{% if item.shares_rank %}<br><span style="font-size:10px;color:#6b7280;">(tied)</span>{% endif %}
+                        {% else %}&mdash;{% endif %}
+                    </td>
                     <td><strong>{{ item.candidate_label }}</strong></td>
                     <td class="num">{{ item.document_review_score|default_if_none:"—" }}</td>
                     <td class="num">{{ item.ete_rating|default_if_none:"—" }}</td>
