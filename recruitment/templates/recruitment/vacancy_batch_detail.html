@@ -40,7 +40,18 @@
     in this vacancy's batch awaiting your action.
 </p>
 
-{% if interview_batch_ready %}
+{% if batch_pool_block_message %}
+    {% comment %}
+    SL-09: the vacancy-wide batch cannot start while the publication is still open — a
+    timely later applicant would miss the sitting. Say when it unlocks instead of offering
+    a link that bounces straight back.
+    {% endcomment %}
+    <div class="alert alert-warning" role="status">
+        {{ batch_pool_block_message }}
+    </div>
+{% endif %}
+
+{% if interview_batch_ready and not batch_pool_block_message %}
     <div class="alert alert-info" role="status">
         The qualified pool has reached the interview &mdash; schedule and score the whole batch together.
         <div class="mt-2">
@@ -63,9 +74,11 @@
         <div class="alert alert-success" role="status">
             Screening batch is complete &mdash; every applicant has a decision, so the qualified
             pool can proceed to the exam together.
+            {% if not batch_pool_block_message %}
             <div class="mt-2">
                 <a href="{% url 'vacancy-batch-exam' entry.pk %}" class="btn btn-rg-primary btn-sm">Open batch exam</a>
             </div>
+            {% endif %}
         </div>
     {% elif not screening_batch.is_ready %}
         <div class="alert alert-warning" role="status">

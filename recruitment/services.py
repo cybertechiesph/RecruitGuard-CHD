@@ -3193,6 +3193,47 @@ def vacancy_screening_batch_block_message(posting):
     )
 
 
+def vacancy_batch_pool_is_final(posting):
+    """SL-09: whether a Plantilla vacancy's applicant pool is settled enough to run its
+    single vacancy-wide batch.
+
+    For a fixed-period recruitment "everyone has been screened" cannot be known until the
+    last timely applicant can no longer apply. Starting the batch earlier silently creates
+    a second cohort the model has no name for, and a candidate who applied on time misses
+    the sitting they were entitled to.
+
+    Scoped to Plantilla deliberately. The finding is written for the fixed-period Plantilla
+    batch, and pooling/continuous COS vacancies have no closing date at all — applying the
+    same rule to them would lock their consoles permanently rather than temporarily."""
+    if posting.branch != PositionPosting.Branch.PLANTILLA:
+        return True
+    return posting.applicant_pool_is_finalized
+
+
+def vacancy_batch_pool_block_message(posting):
+    """Why the batch is locked and when it unlocks — a date, not just a refusal."""
+    if vacancy_batch_pool_is_final(posting):
+        return ""
+    closing_date = getattr(posting, "closing_date", None)
+    if closing_date:
+        return (
+            f"Publication is open until {closing_date:%B %d, %Y} — batch examination and "
+            "interview unlock when the applicant pool is final. Screening each applicant "
+            "can continue in the meantime."
+        )
+    return (
+        "Batch examination and interview unlock when the applicant pool is final. Close "
+        "the recruitment entry once the intake period is over. Screening each applicant "
+        "can continue in the meantime."
+    )
+
+
+def _require_final_batch_pool(posting):
+    message = vacancy_batch_pool_block_message(posting)
+    if message:
+        raise ValueError(message)
+
+
 def exam_is_finalized_for_current_stage(application):
     exam_record = get_exam_record(application)
     return bool(exam_record and exam_record.is_finalized)
@@ -5425,6 +5466,9 @@ def save_vacancy_exam_schedule(posting, actor, cleaned_data):
     """Apply ONE exam schedule (date/venue/instructions) to every candidate in the vacancy's
     exam pool and notify each — the batch sits the exam together. Loops the per-case
     save_exam_schedule so each application keeps its own ExamSchedule + notification."""
+    # SL-09: the single vacancy-wide batch cannot start before the pool it is meant to
+    # cover is settled.
+    _require_final_batch_pool(posting)
     if not vacancy_screening_batch_status(posting).is_ready:
         raise ValueError(vacancy_screening_batch_block_message(posting))
     pool = vacancy_exam_pool(posting)
@@ -5445,6 +5489,9 @@ def save_vacancy_exam_scores(
     Plantilla does; ASSUMPTION pending client confirmation, flipped via the weights, not here).
     Finalize is all-or-nothing (atomic): every candidate must have the required scores, and on
     finalize each case auto-advances together."""
+    # SL-09: the single vacancy-wide batch cannot start before the pool it is meant to
+    # cover is settled.
+    _require_final_batch_pool(posting)
     if not vacancy_screening_batch_status(posting).is_ready:
         raise ValueError(vacancy_screening_batch_block_message(posting))
     pool = vacancy_exam_pool(posting)
@@ -6003,6 +6050,8 @@ def save_vacancy_interview_schedule(posting, actor, cleaned_data):
     and candidate count, body lists the candidates + shared date/venue) instead of one
     near-identical email per candidate. Per-applicant notices and the per-case (single
     session) panel notice are unchanged."""
+    # SL-09: same rule as the batch exam — the interview batch is the same single cohort.
+    _require_final_batch_pool(posting)
     pool = vacancy_interview_pool(posting)
     if not pool:
         raise ValueError("No candidates are ready for the interview in this vacancy.")
@@ -6044,6 +6093,7 @@ def finalize_vacancy_interview_batch(posting, actor, first_deliberation_note="")
     3–5 HRMPSB members for Plantilla, one for COS — which the per-case save_interview_session
     enforces (SL-03). An optional first-deliberation note ("held on X, members present N") is
     written to each case's history for the two-touchpoint record."""
+    _require_final_batch_pool(posting)  # SL-09
     pool = vacancy_interview_pool(posting)
     if not pool:
         raise ValueError("No candidates are ready to finalize the interview in this vacancy.")
@@ -6090,6 +6140,7 @@ def save_vacancy_cos_interview_ratings(posting, actor, ratings_by_case_id, *, fi
     a number to get past it."""
     if posting.branch != PositionPosting.Branch.COS:
         raise ValueError("Simple interview ratings apply only to COS vacancies.")
+    _require_final_batch_pool(posting)  # SL-09 — a no-op for COS, kept for symmetry.
     pool = vacancy_interview_pool(posting)
     if not pool:
         raise ValueError("No candidates are ready for the interview in this vacancy.")

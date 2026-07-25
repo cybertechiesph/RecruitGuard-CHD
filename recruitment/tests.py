@@ -125,6 +125,8 @@ from .services import (
     get_latest_final_decision,
     car_item_is_within_top_five,
     car_top_rank_case_ids,
+    vacancy_batch_pool_block_message,
+    vacancy_batch_pool_is_final,
     get_comparative_assessment_readiness,
     get_cos_pick_for_case,
     get_latest_cos_selection_round,
@@ -7321,6 +7323,13 @@ class VacancyBatchConsoleTests(BaseRecruitmentTestCase):
         self.finalize_screening_for_current_stage(application, self.secretariat)
         client = Client()
         self.force_login_with_mfa(client, self.secretariat)
+        # SL-09: while publication is open the batch link is replaced by the reason and
+        # the date it unlocks, rather than a link that bounces straight back.
+        response = client.get(reverse("vacancy-batch-detail", args=[self.level1_position.pk]))
+        self.assertNotContains(response, "Open batch exam")
+        self.assertContains(response, "Publication is open until")
+
+        self.finalize_applicant_pool_for_test(self.level1_position)
         # Screened with the exam still pending -> the batch detail offers the exam.
         response = client.get(reverse("vacancy-batch-detail", args=[self.level1_position.pk]))
         self.assertContains(response, "Open batch exam")
@@ -7538,6 +7547,11 @@ class BatchExamTests(BaseRecruitmentTestCase):
         self.finalize_screening_for_current_stage(first, self.secretariat)
         second = self._extra_submitted_application(position, "x")
         self.finalize_screening_for_current_stage(second, self.secretariat)
+        # SL-09: a Plantilla vacancy's batch only opens once the applicant pool is final,
+        # which is exactly the point the office would start scheduling. COS keeps its
+        # intake open — the rule does not apply to it.
+        if position.branch == PositionPosting.Branch.PLANTILLA:
+            self.finalize_applicant_pool_for_test(position)
         first.refresh_from_db()
         second.refresh_from_db()
         return first, second
@@ -7548,6 +7562,64 @@ class BatchExamTests(BaseRecruitmentTestCase):
             "venue": "CHD CALABARZON Examination Room",
             "instructions": "Bring a valid government ID.",
         }
+
+    # ── SL-09: the batch waits for a final applicant pool ─────────────────────
+    def _two_qualified_pool_still_open(self, position):
+        first = self._submit(self.make_application(position), self.applicant)
+        self.finalize_screening_for_current_stage(first, self.secretariat)
+        second = self._extra_submitted_application(position, "x")
+        self.finalize_screening_for_current_stage(second, self.secretariat)
+        first.refresh_from_db()
+        second.refresh_from_db()
+        return first, second
+
+    def test_the_batch_exam_is_blocked_while_publication_is_still_open(self):
+        # SL-09: the audit's probe — every submitted case was screened, so the batch could
+        # be scheduled, but a timely later applicant could still submit afterwards and
+        # would miss the sitting.
+        self._two_qualified_pool_still_open(self.level1_position)
+        self.assertFalse(self.level1_position.applicant_pool_is_finalized)
+
+        with self.assertRaisesMessage(ValueError, "Publication is open until"):
+            save_vacancy_exam_schedule(
+                self.level1_position, self.secretariat, self._schedule_payload()
+            )
+        with self.assertRaisesMessage(ValueError, "Publication is open until"):
+            save_vacancy_exam_scores(
+                self.level1_position, self.secretariat, {}, finalize=False
+            )
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(
+            reverse("vacancy-batch-exam", args=[self.level1_position.pk])
+        )
+        self.assertEqual(response.status_code, 302)
+        response = client.post(
+            reverse("vacancy-batch-exam", args=[self.level1_position.pk]),
+            {"operation": "save_schedule"},
+        )
+        self.assertEqual(response.status_code, 302)
+
+        # Screening each applicant continues during the window — only the batch waits.
+        self.assertTrue(
+            vacancy_screening_batch_status(self.level1_position).is_ready
+        )
+
+        # Once the pool is final the batch opens exactly as before.
+        self.finalize_applicant_pool_for_test(self.level1_position)
+        with self.captureOnCommitCallbacks(execute=True):
+            pool = save_vacancy_exam_schedule(
+                self.level1_position, self.secretariat, self._schedule_payload()
+            )
+        self.assertEqual(len(pool), 2)
+
+    def test_a_pooling_cos_vacancy_is_not_locked_by_the_pool_rule(self):
+        # SL-09 AC#4 and the scope trap: pooling/continuous COS entries have no closing
+        # date, so a branch-agnostic rule would lock their consoles permanently.
+        self.assertFalse(self.cos_position.applicant_pool_is_finalized)
+        self.assertTrue(vacancy_batch_pool_is_final(self.cos_position))
+        self.assertEqual(vacancy_batch_pool_block_message(self.cos_position), "")
 
     def test_pool_lists_the_qualified_candidates(self):
         first, second = self._two_qualified(self.level1_position)
@@ -7863,6 +7935,10 @@ class VacancyBatchInterviewTests(BaseRecruitmentTestCase):
         self.finalize_screening_for_current_stage(first, reviewer)
         second = self._extra_submitted_application(position, "x")
         self.finalize_screening_for_current_stage(second, reviewer)
+        # SL-09: a Plantilla vacancy's batch only opens once the applicant pool is final.
+        # COS keeps its intake open — the rule does not apply to it.
+        if position.branch == PositionPosting.Branch.PLANTILLA:
+            self.finalize_applicant_pool_for_test(position)
         first.refresh_from_db()
         second.refresh_from_db()
         return first, second
@@ -15114,6 +15190,8 @@ class BusinessLogicBypassHardeningTests(BaseRecruitmentTestCase):
     def test_pt008_weights_lock_blocks_replayed_weight_edit(self):
         application = self._submit(self.make_application(self.level1_position))
         self.finalize_screening_for_current_stage(application, self.secretariat)
+        # SL-09: the batch waits for the applicant pool to be final.
+        self.finalize_applicant_pool_for_test(self.level1_position)
         # Single-applicant vacancy: the batch is ready, so scoring can start and lock the weights.
         with self.captureOnCommitCallbacks(execute=True):
             save_vacancy_exam_schedule(
@@ -15237,6 +15315,8 @@ class BusinessLogicBypassHardeningTests(BaseRecruitmentTestCase):
         sibling = self._extra_pending_application(self.level1_position, "ready")
         self.finalize_screening_for_current_stage(sibling, self.secretariat)
         self.assertTrue(vacancy_screening_batch_status(self.level1_position).is_ready)
+        # SL-09: the batch link appears once the applicant pool is final as well.
+        self.finalize_applicant_pool_for_test(self.level1_position)
 
         client = Client()
         self.force_login_with_mfa(client, self.secretariat)

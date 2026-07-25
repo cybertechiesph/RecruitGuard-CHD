@@ -116,6 +116,8 @@ from .services import (
     decrypt_evidence_bytes,
     evidence_belongs_to_application_context,
     ETE_COMPONENT_WEIGHTS_BY_BRANCH,
+    vacancy_batch_pool_block_message,
+    vacancy_batch_pool_is_final,
     get_attendance_exceptions,
     get_car_candidate_fact_rows,
     get_cos_pick_for_case,
@@ -1668,6 +1670,9 @@ class VacancyBatchDetailView(LoginRequiredMixin, WorkflowProcessorRequiredMixin,
         context["entry"] = entry
         context["applications"] = applications
         context["screening_batch"] = vacancy_screening_batch_status(entry)
+        # SL-09: the batch waits for a final applicant pool — say when it unlocks rather
+        # than offering a link that bounces straight back.
+        context["batch_pool_block_message"] = vacancy_batch_pool_block_message(entry)
         context["exam_batch_ready"] = any(
             user_can_view_application(self.request.user, application)
             for application in vacancy_exam_pool(entry)
@@ -1794,6 +1799,12 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
         if not vacancy_screening_batch_status(entry).is_ready:
             messages.error(request, vacancy_screening_batch_block_message(entry))
             return redirect("vacancy-batch-detail", pk=entry.pk)
+        # SL-09: and the batch itself cannot open until the pool it covers is final —
+        # otherwise a timely later applicant misses the sitting they were entitled to.
+        pool_block = vacancy_batch_pool_block_message(entry)
+        if pool_block:
+            messages.error(request, pool_block)
+            return redirect("vacancy-batch-detail", pk=entry.pk)
         return render(request, self.template_name, self._context(request, entry, pool))
 
     def post(self, request, pk):
@@ -1821,6 +1832,12 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
         # keeps a forced POST from re-rendering the read-only exam screen on a form error.
         if not vacancy_screening_batch_status(entry).is_ready:
             messages.error(request, vacancy_screening_batch_block_message(entry))
+            return redirect("vacancy-batch-detail", pk=entry.pk)
+        # SL-09: and the batch itself cannot open until the pool it covers is final —
+        # otherwise a timely later applicant misses the sitting they were entitled to.
+        pool_block = vacancy_batch_pool_block_message(entry)
+        if pool_block:
+            messages.error(request, pool_block)
             return redirect("vacancy-batch-detail", pk=entry.pk)
         operation = request.POST.get("operation", "")
 
@@ -1989,6 +2006,12 @@ class VacancyBatchInterviewView(LoginRequiredMixin, WorkflowProcessorRequiredMix
                 "may already have been interviewed and moved to the next stage, or none are "
                 "ready yet.",
             )
+        # SL-09: the interview batch is the same single cohort as the exam batch, so it
+        # waits for the same final pool.
+        pool_block = vacancy_batch_pool_block_message(entry)
+        if pool_block:
+            messages.error(request, pool_block)
+            return redirect("vacancy-batch-detail", pk=entry.pk)
         return render(request, self.template_name, self._context(request, entry, pool))
 
     def post(self, request, pk):
@@ -2010,6 +2033,12 @@ class VacancyBatchInterviewView(LoginRequiredMixin, WorkflowProcessorRequiredMix
                 "may already have been interviewed and moved to the next stage, or none are "
                 "ready yet.",
             )
+        # SL-09: the interview batch is the same single cohort as the exam batch, so it
+        # waits for the same final pool.
+        pool_block = vacancy_batch_pool_block_message(entry)
+        if pool_block:
+            messages.error(request, pool_block)
+            return redirect("vacancy-batch-detail", pk=entry.pk)
         operation = request.POST.get("operation", "")
 
         if operation == "save_schedule":
