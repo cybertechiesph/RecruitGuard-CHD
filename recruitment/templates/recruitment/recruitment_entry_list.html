@@ -124,6 +124,18 @@
                                            class="btn btn-outline-secondary btn-sm">Weights</a>
                                     {% endif %}
 
+                                    {% if entry.pk in filing_copy_entry_ids %}
+                                        {% comment %}
+                                        N1: the signed hard copy is printed after the CAR is
+                                        finalized — by which point every case has routed to the
+                                        Appointing Authority and the Secretariat can no longer
+                                        open them. The vacancy row is where they still are.
+                                        {% endcomment %}
+                                        <a href="{% url 'comparative-assessment-filing-copy' entry.pk %}"
+                                           class="btn btn-outline-secondary btn-sm"
+                                           target="_blank" rel="noopener">CAR filing copy</a>
+                                    {% endif %}
+
                                     {% if entry.status != "active" %}
                                         <form method="post" action="{% url 'recruitment-entry-status' entry.pk 'active' %}">
                                             {% csrf_token %}
@@ -167,6 +179,36 @@
                                             </button>
                                             {% include "internal_includes/modal_confirm.html" with modal_id=entry.pk|dom_id:"closeModal" variant="destructive" title="Close this recruitment entry?" body="Closing will stop accepting new applications for this entry and, for Plantilla vacancies, marks the applicant pool ready for HRMPSB deliberation/CAR. Existing cases in the workflow will not be affected." confirm_label="Close Entry" form_id=entry.pk|dom_id:"closeForm" %}
                                         {% endif %}
+                                    {% endif %}
+
+                                    {% if entry.status != "cancelled" and entry.status != "draft" %}
+                                        {% comment %}
+                                        SL-11: cancelling is not another status toggle — it closes
+                                        every live case and emails those applicants — so it asks
+                                        for a reason before it will run.
+                                        {% endcomment %}
+                                        <details class="d-inline-block">
+                                            <summary class="btn btn-outline-danger btn-sm">Cancel vacancy</summary>
+                                            <form method="post"
+                                                  action="{% url 'recruitment-entry-cancel' entry.pk %}"
+                                                  class="mt-2 p-2 border rounded" style="min-width:22rem;">
+                                                {% csrf_token %}
+                                                <label class="form-label" for="cancel-reason-{{ entry.pk }}">
+                                                    Reason for cancelling
+                                                </label>
+                                                <textarea class="form-control form-control-sm" rows="2"
+                                                          id="cancel-reason-{{ entry.pk }}" name="reason"
+                                                          placeholder="e.g. CSC disapproved the publication; the whole process must be repeated."></textarea>
+                                                <p class="rg-note mt-2 mb-2">
+                                                    Every in-flight application closes as
+                                                    <strong>vacancy cancelled</strong> &mdash; not rejected &mdash;
+                                                    and each applicant is told the vacancy was cancelled.
+                                                </p>
+                                                <button type="submit" class="btn btn-rg-destructive btn-sm">
+                                                    Cancel this vacancy
+                                                </button>
+                                            </form>
+                                        </details>
                                     {% endif %}
                                 </div>
                             </td>

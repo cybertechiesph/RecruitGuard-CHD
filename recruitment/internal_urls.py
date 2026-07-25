@@ -2,6 +2,7 @@ from django.contrib.auth import views as auth_views
 from django.urls import path
 
 from .entry_views import (
+    RecruitmentEntryCancelView,
     RecruitmentEntryCreateView,
     RecruitmentEntryListView,
     RecruitmentEntryStatusUpdateView,
@@ -48,7 +49,9 @@ from .views import (
     ExamScheduleView,
     ExportApplicationBundleView,
     FinalSelectionView,
+    ApplicationWithdrawalView,
     AttendanceExceptionView,
+    ComparativeAssessmentFilingCopyView,
     InterviewAbsenceView,
     InterviewFallbackUploadView,
     InterviewRatingSheetPrintView,
@@ -148,6 +151,16 @@ urlpatterns = [
         name="recruitment-entry-status",
     ),
     path(
+        "entries/<int:pk>/cancel/",
+        RecruitmentEntryCancelView.as_view(),
+        name="recruitment-entry-cancel",
+    ),
+    path(
+        "entries/<int:pk>/car/filing-copy/",
+        ComparativeAssessmentFilingCopyView.as_view(),
+        name="comparative-assessment-filing-copy",
+    ),
+    path(
         "entries/<int:pk>/weights/",
         VacancyAssessmentWeightsView.as_view(),
         name="vacancy-assessment-weights",
@@ -179,6 +192,11 @@ urlpatterns = [
         "applications/<int:pk>/interview/absent/",
         InterviewAbsenceView.as_view(),
         name="interview-absence-record",
+    ),
+    path(
+        "applications/<int:pk>/withdraw/",
+        ApplicationWithdrawalView.as_view(),
+        name="application-withdraw",
     ),
     path(
         "applications/<int:pk>/absence/<int:exception_pk>/",

@@ -788,6 +788,110 @@ def queue_non_selected_applicant_notification(
     )
 
 
+def _build_withdrawal_acknowledgement(application, reason=""):
+    """SL-10: confirm the applicant's own withdrawal.
+
+    This is not a rejection notice and must not read like one — the applicant left of
+    their own accord, and the copy says exactly that."""
+    lines = [
+        f"Dear {application.applicant_display_name},",
+        "",
+        (
+            f"We have recorded your withdrawal from the recruitment for "
+            f"{application.position.title} under "
+            f"{application.position.get_branch_display()} recruitment, as you requested."
+        ),
+        f"Application ID: {application.reference_number}",
+        "",
+        (
+            "No further action is needed from you for this application, and your record "
+            "is closed as withdrawn — not as a rejection."
+        ),
+        "",
+        (
+            "Thank you for your interest. You are welcome to apply for other open "
+            "positions that match your qualifications."
+        ),
+    ]
+    _append_status_link(lines, application)
+    return (
+        f"DOH–CHD CALABARZON Recruitment Portal: withdrawal recorded for {application.position.title}",
+        "\n".join(lines),
+    )
+
+
+def queue_withdrawal_acknowledgement_notification(application, actor=None, reason=""):
+    subject, body = _build_withdrawal_acknowledgement(application, reason=reason)
+    return queue_notification(
+        application,
+        notification_type=NotificationLog.NotificationType.WITHDRAWAL_ACKNOWLEDGEMENT,
+        actor=actor,
+        subject=subject,
+        body=body,
+        metadata={
+            "reference_number": application.reference_number,
+            "status": application.status,
+            "branch": application.branch,
+            "reason": reason,
+            "status_link": build_applicant_status_url(application),
+        },
+    )
+
+
+def _build_vacancy_cancellation_notice(application, reason=""):
+    """SL-11: the vacancy was cancelled. The applicant was never judged, and the notice
+    must not read as though they were."""
+    lines = [
+        f"Dear {application.applicant_display_name},",
+        "",
+        (
+            f"The recruitment for {application.position.title} under "
+            f"{application.position.get_branch_display()} recruitment has been cancelled "
+            "by the office, so your application will not proceed."
+        ),
+        f"Application ID: {application.reference_number}",
+        "",
+        (
+            "This is not an assessment of your qualifications — no candidate was selected "
+            "for this vacancy."
+        ),
+    ]
+    if reason:
+        lines.extend(["", f"Reason: {reason}"])
+    lines.extend(
+        [
+            "",
+            (
+                "Thank you for your interest. You are welcome to apply for other open "
+                "positions, including this one should it be published again."
+            ),
+        ]
+    )
+    _append_status_link(lines, application)
+    return (
+        f"DOH–CHD CALABARZON Recruitment Portal: {application.position.title} recruitment cancelled",
+        "\n".join(lines),
+    )
+
+
+def queue_vacancy_cancellation_notification(application, actor=None, reason=""):
+    subject, body = _build_vacancy_cancellation_notice(application, reason=reason)
+    return queue_notification(
+        application,
+        notification_type=NotificationLog.NotificationType.VACANCY_CANCELLED,
+        actor=actor,
+        subject=subject,
+        body=body,
+        metadata={
+            "reference_number": application.reference_number,
+            "status": application.status,
+            "branch": application.branch,
+            "reason": reason,
+            "status_link": build_applicant_status_url(application),
+        },
+    )
+
+
 def _build_interview_batch_panel_digest(posting, applications, interview_session, recipient):
     """WF-14: one digest per panel member per batch scheduling action — the whole pool
     shares the date/venue, so one email lists every candidate instead of N copies."""

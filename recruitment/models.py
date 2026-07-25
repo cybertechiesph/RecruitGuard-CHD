@@ -386,6 +386,12 @@ class PositionPosting(TimestampedModel):
         ACTIVE = "active", "Active"
         SUSPENDED = "suspended", "Suspended"
         CLOSED = "closed", "Closed"
+        # SL-11: "the office cancelled this vacancy" is not the same fact as "applications
+        # are temporarily paused" or "the intake period ended". Suspended lets the
+        # recruitment keep running underneath; Closed unlocks the ordinary pooled
+        # evaluation and eventual selection. Neither can express a cancellation, so staff
+        # had to misuse one of them and the applicants got no honest disposition.
+        CANCELLED = "cancelled", "Cancelled"
 
     ENTRY_CODE_BRANCH_SEGMENTS = {
         Branch.PLANTILLA: "PLT",
@@ -809,6 +815,9 @@ class RecruitmentApplication(TimestampedModel):
         APPROVED = "approved", "Approved"
         REJECTED = "rejected", "Rejected"
         WITHDRAWN = "withdrawn", "Withdrawn"
+        # SL-11: the vacancy was cancelled, so this application ended without any
+        # judgement of the candidate. Keeping it distinct from Rejected is the whole point.
+        VACANCY_CANCELLED = "vacancy_cancelled", "Vacancy Cancelled"
 
     class PerformanceRatingApplicability(models.TextChoices):
         APPLICABLE = "applicable", "I have a performance rating for the last rating period"
@@ -964,6 +973,13 @@ class RecruitmentCase(TimestampedModel):
         AWAITING_RESUBMISSION = "awaiting_resubmission", "Awaiting Resubmission"
         APPROVED = "approved", "Approved"
         REJECTED = "rejected", "Rejected"
+        # SL-10: an applicant who steps out of the competition has not been rejected, and
+        # the record must not say they were. RecruitmentApplication.Status already had
+        # WITHDRAWN with no case state to pair it with, so nothing could ever write it.
+        WITHDRAWN = "withdrawn", "Withdrawn"
+        # SL-11: the office cancelled the vacancy. Terminal, and explicitly not a merit
+        # outcome — the candidate was never assessed against anyone.
+        VACANCY_CANCELLED = "vacancy_cancelled", "Vacancy Cancelled"
 
     application = models.OneToOneField(
         RecruitmentApplication,
@@ -3740,6 +3756,14 @@ class NotificationLog(TimestampedModel):
         SUBMISSION_ACKNOWLEDGMENT = "submission_acknowledgment", "Submission Acknowledgment"
         SELECTED_APPLICANT = "selected_applicant", "Selected Applicant Notification"
         NON_SELECTED_APPLICANT = "non_selected_applicant", "Non-selected Applicant Notification"
+        # SL-10: a withdrawal is the applicant's own act. Confirming it with the
+        # non-selected template would tell them they were turned down.
+        WITHDRAWAL_ACKNOWLEDGEMENT = (
+            "withdrawal_acknowledgement",
+            "Withdrawal Acknowledgement",
+        )
+        # SL-11: the vacancy was cancelled — a neutral notice, not a rejection.
+        VACANCY_CANCELLED = "vacancy_cancelled", "Vacancy Cancellation Notice"
         DOCUMENT_RESUBMISSION_REQUEST = (
             "document_resubmission_request",
             "Document Resubmission Request",
@@ -4359,6 +4383,8 @@ class AuditLog(TimestampedModel):
         CAR_RETURNED = "car_returned", "Comparative Assessment Report Returned"
         DECISION_RECORDED = "decision_recorded", "Decision Recorded"
         APPLICANT_DISQUALIFIED = "applicant_disqualified", "Applicant Disqualified"
+        APPLICATION_WITHDRAWN = "application_withdrawn", "Application Withdrawn"
+        RECRUITMENT_ENTRY_CANCELLED = "recruitment_entry_cancelled", "Recruitment Entry Cancelled"
         COMPLETION_RECORDED = "completion_recorded", "Completion Recorded"
         CASE_CLOSED = "case_closed", "Case Closed"
         NOTIFICATION_SENT = "notification_sent", "Notification Sent"
@@ -4623,6 +4649,8 @@ AUDIT_ACTION_CATEGORIES = {
             AuditLog.Action.CAR_RETURNED,
             AuditLog.Action.DECISION_RECORDED,
             AuditLog.Action.APPLICANT_DISQUALIFIED,
+            AuditLog.Action.APPLICATION_WITHDRAWN,
+            AuditLog.Action.RECRUITMENT_ENTRY_CANCELLED,
             AuditLog.Action.COMPLETION_RECORDED,
             AuditLog.Action.CASE_CLOSED,
         ],

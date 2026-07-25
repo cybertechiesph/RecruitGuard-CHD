@@ -70,6 +70,31 @@ approved rule is:
 - Handoff between Secretariat and HRM Chief is handler reassignment; the case's official workflow stage remains universal
 - When a finalized output completes a handler-changing boundary, the workflow engine shall automatically route the case to the next designated handler
 
+## Exceptional but legitimate exits (SL-06, SL-10, SL-11, 2026-07-26)
+
+Three things happen in real recruitment that the workflow previously had no state for.
+Each is now a distinct, audited outcome — none of them is a rejection, and none of them
+may be recorded as one.
+
+- **The candidate did not attend** a scheduled examination or interview. Recorded as an
+  absence with no score attached, never as a zero. The applicant may send the letter of
+  intent the office already invites in every exam invitation and interview notice; it is
+  filed against the absence. The office then decides **reschedule** or **the application
+  does not proceed**, with a required reason. Nothing here is decided by a timer. A waived
+  examination is already an office decision and stays immediately terminal.
+- **The applicant withdrew.** Recorded by the office at the applicant's request, with the
+  request itself kept as evidence. The case closes as *withdrawn*, leaves every active
+  pool, and the applicant receives a confirmation that says so. Available at any stage
+  before selection; a selected appointee who withdraws needs the selection rescinded
+  instead.
+- **The office cancelled the vacancy.** One audited transition with a required reason. The
+  posting stops accepting anything, every in-flight application closes with a
+  *vacancy cancelled* disposition, and each applicant is told the recruitment was
+  cancelled and that this is not an assessment of their qualifications. Distinct from
+  Suspended (a temporary intake pause that leaves processing running) and from Closed (the
+  ordinary end of the intake period). Authorized by the roles that may close a posting —
+  a default the client may narrow.
+
 ## Scope Boundaries
 - Recruitment only
 - Full onboarding is out of scope

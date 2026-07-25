@@ -6,6 +6,7 @@ from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 import csv
 from datetime import date, timedelta
+from decimal import ROUND_HALF_UP, Decimal
 from io import StringIO
 
 from django.urls import reverse
@@ -38,6 +39,7 @@ from .forms import (
     SimpleInterviewRatingForm,
     RequirementChecklistNotificationForm,
     ScreeningReviewForm,
+    ApplicationWithdrawalForm,
     AttendanceAbsenceDecisionForm,
     AttendanceLetterOfIntentForm,
     InterviewAbsenceForm,
@@ -116,6 +118,9 @@ from .services import (
     decrypt_evidence_bytes,
     evidence_belongs_to_application_context,
     ETE_COMPONENT_WEIGHTS_BY_BRANCH,
+    record_system_audit_event,
+    get_entry_finalized_car,
+    user_can_generate_entry_car_filing_copy,
     vacancy_batch_pool_block_message,
     vacancy_batch_pool_is_final,
     get_attendance_exceptions,
@@ -126,8 +131,10 @@ from .services import (
     get_pending_attendance_exception,
     interview_fallback_panel_queryset,
     mark_interview_absent,
+    record_application_withdrawal,
     record_attendance_letter_of_intent,
     resolve_attendance_absence,
+    user_can_record_withdrawal,
     get_latest_cos_selection_round,
     get_open_cos_selection_round,
     open_cos_selection_round,
@@ -650,6 +657,10 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
         if pending_absence and user_can_process_application(user, application):
             context["attendance_letter_form"] = AttendanceLetterOfIntentForm()
             context["attendance_decision_form"] = AttendanceAbsenceDecisionForm()
+        # SL-10: a neutral exit from an active competition, available at every pre-selection
+        # stage to whoever the case is assigned to.
+        if user_can_record_withdrawal(user, application):
+            context["withdrawal_form"] = ApplicationWithdrawalForm()
         context["current_user_interview_rating"] = get_interview_rating_for_user(application, user)
         context["interview_rating_is_support_encoding"] = user_is_interview_rating_support_encoder(
             user,
@@ -694,6 +705,11 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
             "training": int(ete_weights[1] * 100),
             "experience": int(ete_weights[2] * 100),
         }
+        # N1: the named filing copy, offered wherever the preparer can still reach the case
+        # — in practice at Completion, where the appointment paperwork is assembled.
+        context["car_filing_copy_available"] = user_can_generate_entry_car_filing_copy(
+            user, application.position
+        )
         context["car_readiness"] = get_comparative_assessment_readiness(application)
         context["car_requires_deliberation"] = False
         context["car_requires_finalized_deliberation"] = False
@@ -2771,6 +2787,82 @@ class ComparativeAssessmentPrintView(LoginRequiredMixin, WorkflowProcessorRequir
         )
 
 
+class ComparativeAssessmentFilingCopyView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
+    """N1: the office's official filing copy of the finalized CAR.
+
+    The signed hard copy is still required, and the Secretariat has been re-typing this
+    exact sheet by hand. Generated here in the office's own one-page layout — QS block on
+    its face, candidates by name, per-component columns, Remarks, wet-ink signature blocks,
+    Date of Interview / Date of Deliberation.
+
+    Deliberately named. The on-screen CAR and the deliberation print stay blinded (REV-B)
+    because that is what the board deliberates against; this is the copy that gets signed
+    and filed, so it must identify people. Secretariat-only, and the generation is recorded
+    as an export in the case audit trail."""
+
+    def get(self, request, pk):
+        entry = get_object_or_404(PositionPosting, pk=pk)
+        if not user_can_generate_entry_car_filing_copy(request.user, entry):
+            raise PermissionDenied
+        report = get_entry_finalized_car(entry)
+        if report is None:
+            messages.error(
+                request,
+                "The filing copy is generated from the finalized CAR — finalize it first.",
+            )
+            return redirect("recruitment-entry-list")
+        weights = entry.assessment_weights_or_default
+        rows = []
+        for item in get_comparative_assessment_report_items_for_report(report):
+            candidate = item.application
+            eps = None
+            if item.ete_rating is not None:
+                eps = (item.ete_rating * weights.ete_fraction).quantize(
+                    Decimal("0.01"), rounding=ROUND_HALF_UP
+                )
+            rows.append(
+                {
+                    "item": item,
+                    # The office writes candidates as "Surname, First Name MI".
+                    "filing_name": (
+                        f"{candidate.applicant_last_name}, "
+                        f"{candidate.applicant_first_name}".strip(", ")
+                    ),
+                    "eps": eps,
+                    "is_recommended": item.recruitment_case_id == report.recommended_case_id,
+                }
+            )
+        record_system_audit_event(
+            actor=request.user,
+            action=AuditLog.Action.EXPORT_GENERATED,
+            description=(
+                f"Generated the official CAR filing copy (named) for {entry.job_code}."
+            ),
+            metadata={
+                "report_id": report.id,
+                "report_version": report.version_number,
+                "entry_id": entry.id,
+                "entry_code": entry.job_code,
+                "candidate_count": len(rows),
+                "blinded": False,
+            },
+        )
+        return render(
+            request,
+            "recruitment/car_filing_copy.html",
+            {
+                "entry": entry,
+                "reference": entry.position_reference,
+                "report": report,
+                "items": [row["item"] for row in rows],
+                "filing_rows": rows,
+                "weights": weights,
+                "printed_by": request.user,
+                "printed_at": timezone.now(),
+            },
+        )
+
+
 class VacancyAssessmentWeightsView(LoginRequiredMixin, EntryManagerRequiredMixin, View):
     template_name = "recruitment/vacancy_assessment_weights.html"
 
@@ -2929,6 +3021,37 @@ class InterviewAbsenceView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
                 request,
                 "Absence recorded. No score was written — file the applicant's letter of "
                 "intent if one arrives, then decide whether to reschedule.",
+            )
+        return redirect("application-detail", pk=pk)
+
+
+class ApplicationWithdrawalView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
+    """SL-10: record that the applicant has withdrawn from the competition."""
+
+    def post(self, request, pk):
+        application = get_object_or_404(RecruitmentApplication, pk=pk)
+        if not user_can_record_withdrawal(request.user, application):
+            raise PermissionDenied
+        form = ApplicationWithdrawalForm(request.POST, request.FILES)
+        if not form.is_valid():
+            messages.error(
+                request, "Record the reason and reference for this withdrawal."
+            )
+            return redirect("application-detail", pk=pk)
+        try:
+            record_application_withdrawal(
+                application=application,
+                actor=request.user,
+                reason=form.cleaned_data["reason"],
+                uploaded_file=form.cleaned_data.get("file"),
+            )
+        except (ValueError, ValidationError) as exc:
+            messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
+        else:
+            messages.success(
+                request,
+                "Withdrawal recorded. The case is closed as withdrawn — not as a "
+                "rejection — and the applicant has been sent a confirmation.",
             )
         return redirect("application-detail", pk=pk)
 

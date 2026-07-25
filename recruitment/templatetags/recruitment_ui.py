@@ -71,6 +71,10 @@ STATUS_THEMES = {
     RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION: "warning",
     RecruitmentCase.CaseStatus.APPROVED: "success",
     RecruitmentCase.CaseStatus.REJECTED: "danger",
+    # SL-10/SL-11: neutral exits, so they must not wear the rejection colour.
+    RecruitmentCase.CaseStatus.WITHDRAWN: "neutral",
+    RecruitmentCase.CaseStatus.VACANCY_CANCELLED: "neutral",
+    RecruitmentApplication.Status.VACANCY_CANCELLED: "neutral",
     ScreeningRecord.CompletenessStatus.COMPLETE: "success",
     ScreeningRecord.CompletenessStatus.INCOMPLETE: "warning",
     ScreeningRecord.QualificationOutcome.QUALIFIED: "success",

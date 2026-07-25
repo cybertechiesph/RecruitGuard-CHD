@@ -2335,6 +2335,69 @@ class InterviewAbsenceForm(BootstrapFormMixin, forms.Form):
         return notes
 
 
+class RecruitmentEntryCancellationForm(BootstrapFormMixin, forms.Form):
+    """SL-11: cancelling a published vacancy closes live cases and emails their applicants,
+    so it demands a stated reason rather than being another one-click status toggle."""
+
+    reason = forms.CharField(
+        label="Reason for cancelling this vacancy",
+        widget=forms.Textarea(attrs={"rows": 3}),
+        help_text=(
+            "Recorded on the vacancy, on every affected case, and in the notice each "
+            "applicant receives."
+        ),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
+
+    def clean_reason(self):
+        reason = (self.cleaned_data.get("reason") or "").strip()
+        if not reason:
+            raise forms.ValidationError("Record why this vacancy is being cancelled.")
+        return reason
+
+
+class ApplicationWithdrawalForm(BootstrapFormMixin, forms.Form):
+    """SL-10: record an applicant's withdrawal, with their request attached as evidence."""
+
+    reason = forms.CharField(
+        label="Reason and reference",
+        widget=forms.Textarea(attrs={"rows": 3}),
+        help_text=(
+            "What the applicant asked for and how it reached the office — e.g. the date "
+            "and sender of the email."
+        ),
+    )
+    file = forms.FileField(
+        label="The applicant's written request",
+        required=False,
+        help_text="Attach the email or letter. Strongly recommended for the record.",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
+
+    def clean_reason(self):
+        reason = (self.cleaned_data.get("reason") or "").strip()
+        if not reason:
+            raise forms.ValidationError(
+                "Record the reason and reference for this withdrawal."
+            )
+        return reason
+
+    def clean_file(self):
+        uploaded_file = self.cleaned_data.get("file")
+        if uploaded_file:
+            try:
+                validate_applicant_document_upload(uploaded_file)
+            except ValueError as exc:
+                raise forms.ValidationError(str(exc)) from exc
+        return uploaded_file
+
+
 class AttendanceLetterOfIntentForm(BootstrapFormMixin, forms.Form):
     """SL-06: file the applicant's letter of intent against a recorded absence."""
 

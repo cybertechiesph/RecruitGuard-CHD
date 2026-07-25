@@ -1,0 +1,49 @@
+{% comment %}
+SL-10 — Record that the applicant has withdrawn from this recruitment.
+
+Withdrawal is not rejection, disqualification, or non-selection. Before this existed, staff
+could only leave a withdrawn person active — still blocking batches and receiving schedules
+and notices — or file them as rejected, which the record would then assert forever.
+
+A selected appointee who changes their mind during completion does NOT come through here:
+that unwinds a recorded selection and belongs to the rescind path.
+
+Inputs:
+  withdrawal_form : ApplicationWithdrawalForm | None
+{% endcomment %}
+{% if withdrawal_form %}
+<details class="rg-icard mb-3" id="withdrawal-card">
+    <summary class="rg-icard__title" style="cursor:pointer; padding:0.25rem 0;">
+        Record an applicant withdrawal
+    </summary>
+    <p class="rg-icard__subtitle">
+        Use this when the applicant tells the office they are stepping out. The case closes
+        as <strong>withdrawn</strong> &mdash; a neutral exit, kept distinct from a rejection
+        in the record, the reports, and the email the applicant receives &mdash; and leaves
+        every active pool.
+    </p>
+    <form method="post"
+          action="{% url 'application-withdraw' application.pk %}"
+          enctype="multipart/form-data" novalidate>
+        {% csrf_token %}
+        <div class="rg-field">
+            <label class="form-label" for="{{ withdrawal_form.reason.id_for_label }}">
+                {{ withdrawal_form.reason.label }}
+                <span class="text-danger" aria-hidden="true">*</span>
+            </label>
+            {{ withdrawal_form.reason }}
+            <div class="form-text">{{ withdrawal_form.reason.help_text }}</div>
+        </div>
+        <div class="rg-field">
+            <label class="form-label" for="{{ withdrawal_form.file.id_for_label }}">
+                {{ withdrawal_form.file.label }}
+            </label>
+            {{ withdrawal_form.file }}
+            <div class="form-text">{{ withdrawal_form.file.help_text }}</div>
+        </div>
+        <button type="submit" class="btn btn-outline-danger btn-sm">
+            Record the withdrawal
+        </button>
+    </form>
+</details>
+{% endif %}

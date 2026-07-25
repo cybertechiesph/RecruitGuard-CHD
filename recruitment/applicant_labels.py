@@ -53,10 +53,23 @@ APPLICANT_STATUS_LABELS = {
         "Thank you for your interest. Unfortunately, your application was not selected for this position. "
         "You are welcome to apply for other open positions.",
     ),
+    # SL-10: the applicant left of their own accord — the status page should not present
+    # that with the same tone as a decision that went against them.
+    # SL-10: the applicant left of their own accord, so the label and the wording say that
+    # rather than implying a decision went against them. The variant stays "not-selected"
+    # because it only drives the status page's terminal-step styling, which is correct here.
     RecruitmentApplication.Status.WITHDRAWN: (
         "Withdrawn",
         "not-selected",
-        "This application has been withdrawn.",
+        "You withdrew this application and the office has recorded it. "
+        "No further action is needed.",
+    ),
+    # SL-11: the vacancy was cancelled. Nothing about the applicant was decided.
+    RecruitmentApplication.Status.VACANCY_CANCELLED: (
+        "Vacancy Cancelled",
+        "not-selected",
+        "The office cancelled this recruitment, so your application will not proceed. "
+        "This is not an assessment of your qualifications.",
     ),
 }
 

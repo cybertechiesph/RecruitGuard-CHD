@@ -9,16 +9,19 @@ from django.views.generic import CreateView, ListView, UpdateView
 
 from .forms import (
     PositionDocumentRequirementsForm,
+    RecruitmentEntryCancellationForm,
     RecruitmentEntryForm,
 )
 from .models import AuditLog, PositionPosting
 from .permissions import EntryManagerRequiredMixin
 from .services import (
+    cancel_recruitment_entry,
     get_manageable_recruitment_entries,
     persist_recruitment_entry,
     record_system_audit_event,
     set_position_document_requirements,
     update_recruitment_entry_status,
+    user_can_generate_entry_car_filing_copy,
 )
 
 
@@ -50,6 +53,13 @@ class RecruitmentEntryListView(LoginRequiredMixin, EntryManagerRequiredMixin, Li
             1 for e in entries
             if e.closing_date and 0 <= (e.closing_date - today).days <= 7
         )
+        # N1: the vacancy row is the last place the Secretariat still has the vacancy once
+        # its CAR is finalized and every case has routed to the Appointing Authority.
+        context["filing_copy_entry_ids"] = {
+            entry.pk
+            for entry in entries
+            if user_can_generate_entry_car_filing_copy(self.request.user, entry)
+        }
         return context
 
 
@@ -187,11 +197,49 @@ class RecruitmentEntryUpdateView(
         return response
 
 
+class RecruitmentEntryCancelView(LoginRequiredMixin, EntryManagerRequiredMixin, View):
+    """SL-11: cancel a published vacancy and resolve every in-flight application.
+
+    Kept off RecruitmentEntryStatusUpdateView deliberately — this is not another status
+    toggle. It closes live cases and emails their applicants, so it demands its own form
+    with a required reason rather than a one-click status link."""
+
+    def post(self, request, pk):
+        entry = get_object_or_404(PositionPosting, pk=pk)
+        form = RecruitmentEntryCancellationForm(request.POST)
+        if not form.is_valid():
+            messages.error(request, "Record why this vacancy is being cancelled.")
+            return redirect("recruitment-entry-list")
+        try:
+            _entry, affected = cancel_recruitment_entry(
+                entry, request.user, form.cleaned_data["reason"]
+            )
+        except ValidationError as error:
+            _add_validation_messages(request, error)
+            return redirect("recruitment-entry-list")
+        messages.success(
+            request,
+            f"{entry.job_code} cancelled. {len(affected)} in-flight "
+            f"application{'' if len(affected) == 1 else 's'} closed with a "
+            "vacancy-cancelled disposition and notified — none were recorded as rejected.",
+        )
+        return redirect("recruitment-entry-list")
+
+
 class RecruitmentEntryStatusUpdateView(LoginRequiredMixin, EntryManagerRequiredMixin, View):
     def post(self, request, pk, status):
         entry = get_object_or_404(PositionPosting, pk=pk)
         if status not in PositionPosting.EntryStatus.values:
             messages.error(request, "Invalid entry status.")
+            return redirect("recruitment-entry-list")
+        if status == PositionPosting.EntryStatus.CANCELLED:
+            # SL-11: cancellation resolves live cases and notifies their applicants, so it
+            # cannot be a status link — it goes through the form that demands a reason.
+            messages.error(
+                request,
+                "Cancelling a vacancy needs a recorded reason. Use the Cancel vacancy "
+                "action instead.",
+            )
             return redirect("recruitment-entry-list")
         try:
             update_recruitment_entry_status(entry, request.user, status)

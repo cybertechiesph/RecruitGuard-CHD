@@ -1,0 +1,32 @@
+{% comment %}
+N1 — The official filing copy of the finalized Comparative Assessment Report.
+
+Rendered independently of the CAR card on purpose. Finalizing the CAR routes every
+candidate straight to the Appointing Authority, so the CAR editing card — and the
+Secretariat's access to those cases — is gone by the time the sheet has to be printed for
+wet-ink signature. It comes back at Completion, where the appointment paperwork is
+assembled, which is where this card does its work. The vacancy row on the entries list
+carries the same link for as long as the vacancy is still listed.
+
+Input: car_filing_copy_available (bool)
+{% endcomment %}
+{% if car_filing_copy_available %}
+<div class="rg-icard mb-3">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">Comparative Assessment — official filing copy</h3>
+            <p class="rg-icard__subtitle">
+                The office's one-page sheet, generated from the finalized CAR: Qualification
+                Standards on its face, candidates by name, the per-component columns, remarks,
+                and the signature blocks. Print it for wet-ink signing and filing. The
+                on-screen and deliberation copies stay blinded; this one is named, and
+                generating it is recorded in the audit trail.
+            </p>
+        </div>
+        <a href="{% url 'comparative-assessment-filing-copy' application.position.pk %}"
+           class="btn btn-rg-primary btn-sm" target="_blank" rel="noopener">
+            Open filing copy
+        </a>
+    </div>
+</div>
+{% endif %}

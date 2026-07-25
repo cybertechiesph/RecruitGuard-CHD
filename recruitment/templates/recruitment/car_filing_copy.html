@@ -1,0 +1,184 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comparative Assessment (filing copy) — {{ entry.job_code }}</title>
+{% comment %}
+N1 — The official filing copy of the Comparative Assessment Report.
+
+The signed hard copy is still required, and the Secretariat has been re-typing this exact
+sheet by hand. This is the office's own one-page layout, generated from the finalized CAR:
+the QS block on its face, candidates by name in "(Surname, First Name MI)" form, the
+per-component columns, a Remarks column, the wet-ink signature blocks, and the Date of
+Interview / Date of Deliberation lines.
+
+Deliberately NOT blinded. The on-screen CAR and the deliberation print stay on candidate
+codes (REV-B) because that is what the board deliberates against; this is the named copy
+that gets signed and filed. Generating it is recorded in the case audit trail.
+{% endcomment %}
+<style>
+    * { box-sizing: border-box; }
+    body {
+        margin: 0; padding: 24px; background: #eef1f4; color: #111827;
+        font-family: Georgia, "Times New Roman", serif; font-size: 12.5px; line-height: 1.45;
+    }
+    .sheet { max-width: 1040px; margin: 0 auto; background: #fff; padding: 34px 40px; border: 1px solid #d7dde3; }
+    .toolbar { max-width: 1040px; margin: 0 auto 14px; display: flex; gap: 10px; font-family: Arial, Helvetica, sans-serif; }
+    .toolbar button, .toolbar a {
+        font-size: 14px; padding: 8px 18px; border-radius: 6px; cursor: pointer;
+        text-decoration: none; border: 1px solid #1e5c2d;
+    }
+    .toolbar button { background: #1e5c2d; color: #fff; font-weight: 700; }
+    .toolbar a { background: #fff; color: #1e5c2d; }
+    .doc-head { display: flex; align-items: center; gap: 14px; border-bottom: 3px double #1e5c2d; padding-bottom: 12px; }
+    .doc-head img { width: 52px; height: 52px; }
+    .doc-head .office { font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #374151; }
+    .doc-head h1 { font-size: 18px; margin: 2px 0 0; color: #1e5c2d; }
+    .doc-meta { display: flex; flex-wrap: wrap; gap: 3px 26px; margin: 12px 0 4px; font-size: 12px; }
+    .doc-meta div span { color: #6b7280; }
+    .qs { border: 1px solid #9aa4af; margin-top: 12px; }
+    .qs h2 {
+        margin: 0; padding: 5px 8px; background: #f1f5ef; font-family: Arial, Helvetica, sans-serif;
+        font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #9aa4af;
+    }
+    .qs .rows { display: grid; grid-template-columns: repeat(2, 1fr); }
+    .qs .rows div { padding: 5px 8px; border-bottom: 1px solid #e5e9ed; }
+    .qs .rows div span { color: #6b7280; display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; }
+    table.rank { width: 100%; border-collapse: collapse; margin-top: 14px; }
+    table.rank th, table.rank td { border: 1px solid #9aa4af; padding: 5px 7px; text-align: left; vertical-align: top; }
+    table.rank th { background: #f1f5ef; font-family: Arial, Helvetica, sans-serif; font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; }
+    table.rank td.num, table.rank th.num { text-align: right; }
+    .note { margin-top: 12px; font-size: 11px; color: #6b7280; }
+    .sig-label { margin-top: 22px; font-family: Arial, Helvetica, sans-serif; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: #374151; }
+    .sig-row { display: flex; gap: 40px; margin-top: 38px; }
+    .sig { flex: 1; text-align: center; }
+    .sig .line { border-top: 1px solid #111827; margin-bottom: 3px; padding-top: 4px; font-weight: 700; }
+    .sig .role { font-size: 11px; color: #6b7280; }
+    .print-meta { margin-top: 24px; font-size: 10px; color: #9aa4af; border-top: 1px solid #e5e9ed; padding-top: 8px; }
+    @media print {
+        body { background: #fff; padding: 0; font-size: 11px; }
+        .toolbar { display: none; }
+        .sheet { border: 0; max-width: none; padding: 0; }
+        @page { size: A4 landscape; margin: 12mm; }
+    }
+</style>
+</head>
+<body>
+    <div class="toolbar">
+        <button type="button" onclick="window.print()">Print the filing copy</button>
+        <a href="{% url 'recruitment-entry-list' %}">&larr; Back to entries</a>
+    </div>
+
+    <div class="sheet">
+        <div class="doc-head">
+            <img src="{% static 'img/brand/chd-calabarzon-seal.png' %}" alt="DOH–CHD CALABARZON seal">
+            <div>
+                <div class="office">Department of Health — Center for Health Development CALABARZON</div>
+                <h1>Comparative Assessment</h1>
+                <div class="office" style="letter-spacing:0.06em;">Promotion and Selection Board</div>
+            </div>
+        </div>
+
+        <div class="doc-meta">
+            <div><span>Position:</span> <strong>{{ entry.title }}</strong> ({{ entry.job_code }})</div>
+            {% if entry.position_reference.salary_grade %}<div><span>Salary Grade:</span> {{ entry.position_reference.salary_grade }}</div>{% endif %}
+            <div><span>Level:</span> {{ entry.get_level_display }}</div>
+            {% if entry.item_number %}<div><span>Plantilla Item Number:</span> {{ entry.item_number }}</div>{% endif %}
+            <div><span>Candidates assessed:</span> {{ items|length }}</div>
+            {% if report.members_present %}<div><span>Members present:</span> {{ report.members_present }}</div>{% endif %}
+        </div>
+
+        <div class="qs">
+            <h2>Qualification Standards</h2>
+            <div class="rows">
+                <div><span>Education</span>{{ reference.qs_education|default:"—" }}</div>
+                <div><span>Training</span>{{ reference.qs_training|default:"—" }}</div>
+                <div><span>Experience</span>{{ reference.qs_experience|default:"—" }}</div>
+                <div><span>Eligibility</span>{{ reference.qs_eligibility|default:"—" }}</div>
+            </div>
+            {% if entry.qualification_reference %}
+            <div style="padding:5px 8px; font-size:11.5px;">{{ entry.qualification_reference|linebreaksbr }}</div>
+            {% endif %}
+        </div>
+
+        <table class="rank">
+            <thead>
+                <tr>
+                    <th class="num" style="width:3.5rem;">Rank</th>
+                    <th>Candidates <span style="font-weight:400;">(Surname, First Name MI)</span></th>
+                    <th class="num">Rating</th>
+                    <th class="num">EPS<br><span style="font-weight:400;">(&times;{{ weights.ete_weight|floatformat:"-1" }}%)</span></th>
+                    <th class="num">Examination<br><span style="font-weight:400;">(&times;{{ weights.exam_weight|floatformat:"-1" }}%)</span></th>
+                    <th class="num">Interview<br><span style="font-weight:400;">(&times;{{ weights.interview_weight|floatformat:"-1" }}%)</span></th>
+                    <th class="num">Overall</th>
+                    <th style="width:14rem;">Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in filing_rows %}
+                <tr>
+                    <td class="num">
+                        {% if row.item.rank_order %}{{ row.item.rank_order }}{% if row.item.shares_rank %} (tied){% endif %}{% else %}&mdash;{% endif %}
+                    </td>
+                    <td><strong>{{ row.filing_name }}</strong></td>
+                    <td class="num">{{ row.item.ete_rating|default_if_none:"—" }}</td>
+                    <td class="num">{{ row.eps|default_if_none:"—" }}</td>
+                    <td class="num">{{ row.item.exam_score|default_if_none:"—" }}</td>
+                    <td class="num">{{ row.item.interview_average_score|default_if_none:"—" }}</td>
+                    <td class="num"><strong>{{ row.item.assessment_score|default_if_none:"—" }}</strong></td>
+                    <td>
+                        {% if row.is_recommended %}<strong>Recommended</strong>{% endif %}
+                        {{ row.item.recommendation }}
+                        {% if row.item.ranking_notes %} {{ row.item.ranking_notes }}{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <p class="note">
+            Overall = ETE &times; {{ weights.ete_weight|floatformat:"-1" }}%
+            + Examination &times; {{ weights.exam_weight|floatformat:"-1" }}%
+            + Interview &times; {{ weights.interview_weight|floatformat:"-1" }}%.
+            EPS is the ETE rating carried at its weight. The examination component is itself
+            General Ability {{ weights.exam_general_weight|floatformat:"-1" }}% + Technical
+            {{ weights.exam_technical_weight|floatformat:"-1" }}%.
+            {% if not weights.uses_office_default_car_split %}
+                <strong>This vacancy uses a non-standard split</strong> — the office standard
+                is ETE 40% / Examination 20% / Interview 40%.
+            {% endif %}
+        </p>
+
+        {% if report.recommendation_notes %}
+        <p class="note"><strong>Recommendation:</strong> {{ report.recommendation_notes|linebreaksbr }}</p>
+        {% endif %}
+
+        <div class="sig-label">Rated by:</div>
+        <div class="sig-row" style="margin-top:18px;">
+            <div class="sig"><div class="line">&nbsp;</div><div class="role">Chairperson</div></div>
+            <div class="sig"><div class="line">&nbsp;</div><div class="role">Vice-Chairperson</div></div>
+            <div class="sig"><div class="line">&nbsp;</div><div class="role">Admin Officer V / HRMO III</div></div>
+        </div>
+        <div class="sig-row" style="margin-top:30px;">
+            <div class="sig"><div class="line">&nbsp;</div><div class="role">RHEA 2nd Level Representative</div></div>
+            <div class="sig"><div class="line">&nbsp;</div><div class="role">Ad Hoc Member</div></div>
+            <div class="sig" style="visibility:hidden;"><div class="line">&nbsp;</div><div class="role">&nbsp;</div></div>
+        </div>
+
+        <div class="doc-meta" style="margin-top:22px;">
+            <div><span>Date of Interview:</span> ______________________</div>
+            <div><span>Date of Deliberation:</span> ______________________</div>
+        </div>
+
+        <div class="print-meta">
+            Official filing copy generated by
+            {{ printed_by.get_full_name|default:printed_by.username }} on
+            {{ printed_at|date:"F d, Y g:i A" }} from the finalized CAR
+            (v{{ report.version_number }}). This copy identifies candidates by name for
+            signature and filing; the on-screen and deliberation copies remain blinded.
+            Generation is recorded in the case audit trail.
+        </div>
+    </div>
+</body>
+</html>

@@ -91,6 +91,8 @@ from .notification_services import (
     queue_non_selected_applicant_notification,
     queue_selected_applicant_notification,
     queue_submission_acknowledgment_notification,
+    queue_vacancy_cancellation_notification,
+    queue_withdrawal_acknowledgement_notification,
 )
 from .permissions import WORKFLOW_PROCESSOR_ROLES
 from .requirements import (
@@ -2126,6 +2128,132 @@ def _close_after_attendance_absence(exception, actor):
     queue_non_selected_applicant_notification(
         application, actor=actor, exam_status=ExamRecord.ExamStatus.ABSENT
     )
+    return application
+
+
+ARTIFACT_TYPE_WITHDRAWAL_REQUEST = "withdrawal_request"
+
+
+def user_can_record_withdrawal(user, application):
+    """SL-10: who may record that an applicant has stepped out.
+
+    The handler the case is currently assigned to — the office already talking to that
+    applicant. Not available once the case is terminal, and not the route for a selected
+    appointee changing their mind during completion: that unwinds a recorded selection and
+    belongs to the rescind path (SL-14)."""
+    case = getattr(application, "case", None)
+    if case is None:
+        return False
+    if case.case_status in {
+        RecruitmentCase.CaseStatus.APPROVED,
+        RecruitmentCase.CaseStatus.REJECTED,
+        RecruitmentCase.CaseStatus.WITHDRAWN,
+    }:
+        return False
+    if case.current_stage in {
+        RecruitmentCase.Stage.COMPLETION,
+        RecruitmentCase.Stage.CLOSED,
+    }:
+        return False
+    return user_can_process_application(user, application)
+
+
+@transaction.atomic
+def record_application_withdrawal(
+    application, actor, reason, *, uploaded_file=None, request_notes=""
+):
+    """SL-10: record that the applicant has withdrawn from the competition.
+
+    Withdrawal is neither rejection, disqualification, nor non-selection, and until now the
+    office had no way to say so: ``Status.WITHDRAWN`` existed on the application with no
+    case state to pair with it and no action that could write it, so staff had to either
+    leave a withdrawn person active — still blocking batches and receiving schedules — or
+    misclassify them as rejected.
+
+    The applicant's request (typically an email) is attached as the evidence for it."""
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValueError("Record the reason and reference for this withdrawal.")
+    case = getattr(application, "case", None)
+    if case is None:
+        raise ValueError("A case must exist before a withdrawal can be recorded.")
+    if case.case_status == RecruitmentCase.CaseStatus.WITHDRAWN:
+        raise ValueError("This application is already recorded as withdrawn.")
+    if case.current_stage in {
+        RecruitmentCase.Stage.COMPLETION,
+        RecruitmentCase.Stage.CLOSED,
+    }:
+        raise ValueError(
+            "This case has already passed selection. A selected appointee who withdraws "
+            "needs the selection rescinded, not a withdrawal recorded against the "
+            "competition."
+        )
+    if not user_can_record_withdrawal(actor, application):
+        raise ValueError("This case is not currently assigned to you.")
+
+    evidence = None
+    if uploaded_file is not None:
+        validate_applicant_document_upload(uploaded_file)
+        evidence = upload_evidence_item(
+            application=application,
+            actor=actor,
+            label="Applicant withdrawal request",
+            uploaded_file=uploaded_file,
+            artifact_scope=EvidenceVaultItem.OwnerScope.CASE,
+            artifact_type=ARTIFACT_TYPE_WITHDRAWAL_REQUEST,
+        )
+
+    previous_status = application.status
+    previous_case_status = case.case_status
+    previous_stage = case.current_stage
+    previous_role = application.current_handler_role
+    case_transition = _sync_case_after_workflow_action(
+        application=application,
+        actor=actor,
+        next_role="",
+        next_status=RecruitmentApplication.Status.WITHDRAWN,
+        remarks=reason,
+    )
+    application.current_handler_role = ""
+    application.status = RecruitmentApplication.Status.WITHDRAWN
+    application.closed_at = timezone.now()
+    application.save(
+        update_fields=["current_handler_role", "status", "closed_at", "updated_at"]
+    )
+    record_audit_event(
+        application=application,
+        actor=actor,
+        action=AuditLog.Action.APPLICATION_WITHDRAWN,
+        description="Recorded the applicant's withdrawal from this recruitment.",
+        metadata={
+            "reason": reason,
+            "request_notes": request_notes,
+            "evidence_id": evidence.id if evidence else None,
+            "from_status": previous_status,
+            "to_status": application.status,
+            "from_role": previous_role,
+            "to_role": "",
+            "from_stage": previous_stage,
+            "to_stage": case.current_stage,
+            "from_case_status": previous_case_status,
+            "to_case_status": case.case_status,
+        },
+    )
+    record_routing_history_event(
+        application=application,
+        actor=actor,
+        route_type=RoutingHistory.RouteType.CLOSE,
+        description="Closed as withdrawn at the applicant's request.",
+        recruitment_case=case,
+        from_handler_role=previous_role,
+        to_handler_role="",
+        from_status=previous_status,
+        to_status=application.status,
+        from_stage=case_transition["previous_stage"],
+        to_stage=case.current_stage,
+        notes=reason,
+    )
+    queue_withdrawal_acknowledgement_notification(application, actor=actor, reason=reason)
     return application
 
 
@@ -4199,8 +4327,21 @@ def get_latest_finalized_deliberation_record(application):
 
 
 def user_can_manage_deliberation(user, application):
-    # COS now uses a single per-vacancy deliberation pick on the console (spec §6.3),
-    # not the per-application deliberation record handled here.
+    # SL-15: nothing may write a per-case DeliberationRecord any more.
+    #
+    # COS moved to a single per-vacancy pick on the console (spec §6.3). Plantilla dropped
+    # the separate in-system deliberation step entirely — the board deliberates off-system
+    # and the Secretariat encodes the recommendation on the CAR — so the Plantilla sequence
+    # (interview → CAR → actions) can no longer produce a "deliberation" section at all.
+    # The predicate was already unreachable for both branches; saying so here means a
+    # future stage-sequence change cannot quietly resurrect a second, competing source of
+    # the board's recommendation. Existing records stay readable and exportable.
+    return False
+
+
+def _legacy_deliberation_permission_shape(user, application):
+    """The pre-SL-15 predicate, kept only to document what the quarantined path required.
+    Never called — ``user_can_manage_deliberation`` refuses every branch now."""
     if application.branch == PositionPosting.Branch.COS:
         return False
     current_stage = get_current_review_stage(application)
@@ -4345,6 +4486,57 @@ def user_can_manage_comparative_assessment_report(user, application):
     if get_current_workflow_section(application) != "car":
         return False
     return user_can_prepare_plantilla_car(user, application)
+
+
+def get_entry_finalized_car(posting):
+    """N1: the vacancy's current finalized, non-returned CAR. The report is per vacancy, so
+    the filing copy is addressable by vacancy — which is also how the office asks for it."""
+    return (
+        ComparativeAssessmentReport.objects.select_related(
+            "generated_by", "finalized_by", "recommended_case", "recruitment_entry"
+        )
+        .filter(
+            recruitment_entry=posting,
+            review_stage=CAR_REVIEW_STAGE,
+            is_finalized=True,
+            is_returned=False,
+        )
+        .order_by("-version_number")
+        .first()
+    )
+
+
+def user_can_generate_entry_car_filing_copy(user, posting):
+    """N1: the role that prepares this vacancy's CAR may print its filing copy.
+
+    Deliberately entry-scoped and not gated on any individual case still being open to that
+    user. Finalizing the CAR routes every candidate straight to the Appointing Authority,
+    at which point the Secretariat can no longer open those cases at all — so a case-scoped
+    permission would hide the sheet exactly when it has to be printed and signed."""
+    if posting.branch != PositionPosting.Branch.PLANTILLA:
+        return False
+    if user.role not in PLANTILLA_CAR_PREPARATION_ROLES_BY_LEVEL.get(posting.level, set()):
+        return False
+    return bool(get_entry_finalized_car(posting))
+
+
+def user_can_generate_car_filing_copy(user, application):
+    """N1: who may generate the named filing copy of a finalized CAR.
+
+    The role that prepares the CAR for this vacancy's level — the Secretariat — but
+    deliberately NOT gated on the case still sitting at the CAR step or still being in that
+    user's queue. Finalizing the CAR routes every candidate straight to the Appointing
+    Authority, so by the moment the sheet needs printing for wet-ink signature the
+    Secretariat has already lost both the editing window and the case from their queue.
+    Gating on either would put the filing copy out of reach exactly when it is needed —
+    which is the re-typing this finding exists to stop."""
+    if application.branch != PositionPosting.Branch.PLANTILLA:
+        return False
+    if user.role not in PLANTILLA_CAR_PREPARATION_ROLES_BY_LEVEL.get(
+        application.level, set()
+    ):
+        return False
+    return bool(get_latest_finalized_comparative_assessment_report(application))
 
 
 def get_final_decision_history(application):
@@ -6396,153 +6588,17 @@ def save_deliberation_record(
     allow_partial=False,
     record_audit=True,
 ):
-    if not hasattr(application, "case"):
-        raise ValueError("A case must exist before deliberation details can be recorded.")
-    if (
-        application_requires_finalized_applicant_pool(application)
-        and not application_has_finalized_applicant_pool(application)
-    ):
-        raise ValueError(get_applicant_pool_finalization_block_message(application))
-    if not user_can_manage_deliberation(actor, application):
-        raise ValueError(
-            "This case is not currently assigned to you for deliberation."
-        )
-
-    review_stage = application.case.current_stage
-    expected_stage = DELIBERATION_STAGES_BY_BRANCH.get(application.branch, "")
-    if review_stage != expected_stage:
-        raise ValueError(
-            "Deliberation is available only during the proper decision-support step for this branch."
-        )
-    car_draft = None
-    if application.branch == PositionPosting.Branch.PLANTILLA:
-        car_draft = get_latest_draft_comparative_assessment_report(application, stage=review_stage)
-        if not car_draft:
-            raise ValueError("Prepare the CAR draft before recording HRMPSB deliberation.")
-
-    deliberation_record = get_deliberation_record(application, stage=review_stage)
-    if deliberation_record and deliberation_record.is_finalized:
-        raise ValueError("Finalized deliberation records cannot be edited.")
-
-    created = deliberation_record is None
-    if deliberation_record is None:
-        deliberation_record = DeliberationRecord(
-            application=application,
-            recruitment_case=application.case,
-            recruitment_entry=application.position,
-            review_stage=review_stage,
-            recorded_by=actor,
-            branch=application.branch,
-            level=application.level,
-        )
-
-    current_screening_record = get_screening_record(application, stage=review_stage)
-    current_exam_record = get_exam_record(application, stage=review_stage)
-    current_interview_session = get_interview_session(application, stage=review_stage)
-    if (
-        finalize
-        and review_stage in SCREENING_STAGES
-        and (not current_screening_record or not current_screening_record.is_finalized)
-    ):
-        raise ValueError("Finalize the screening record before finalizing the deliberation record.")
-    if finalize and current_exam_record and not current_exam_record.is_finalized:
-        raise ValueError("Finalize the examination record before finalizing the deliberation record.")
-    if finalize and current_interview_session and not current_interview_session.is_finalized:
-        raise ValueError("Finalize the interview session before finalizing the deliberation record.")
-
-    consolidated_snapshot = build_deliberation_consolidation(application)
-    consolidated_source_count = (
-        len(consolidated_snapshot["screening_records"])
-        + len(consolidated_snapshot["exam_records"])
-        + len(consolidated_snapshot["interview_sessions"])
+    # SL-15: the per-case deliberation record is quarantined. Plantilla's board recommendation
+    # is encoded on the CAR and COS uses the per-vacancy pick, so a second write path here
+    # would be a competing source of the same official fact — the audit found the route, view,
+    # service and model still live behind a section the sequence can no longer produce, one
+    # permission change away from reintroducing exactly that. Existing records stay readable.
+    raise ValueError(
+        "Per-case deliberation records are no longer recorded. Plantilla's board "
+        "recommendation is encoded on the Comparative Assessment Report, and COS uses the "
+        "per-vacancy deliberation pick."
     )
-    if finalize and consolidated_source_count == 0:
-        raise ValueError(
-            "Finalize at least one screening, examination, or interview output before finalizing deliberation."
-        )
-    if (
-        finalize
-        and application.branch == PositionPosting.Branch.PLANTILLA
-        and not cleaned_data.get("ranking_position")
-    ):
-        raise ValueError(
-            "Record the ranking position before finalizing the Plantilla deliberation record."
-        )
 
-    allow_partial = bool(allow_partial and not finalize)
-    deliberated_at = cleaned_data.get("deliberated_at")
-    if allow_partial and deliberated_at is None:
-        deliberated_at = getattr(deliberation_record, "deliberated_at", None) or timezone.now()
-
-    deliberation_record.recruitment_case = application.case
-    deliberation_record.recruitment_entry = application.position
-    deliberation_record.comparative_assessment_report = car_draft
-    deliberation_record.recorded_by = actor
-    deliberation_record.deliberated_at = deliberated_at
-    deliberation_record.deliberation_minutes = cleaned_data.get("deliberation_minutes") or ""
-    deliberation_record.recommendation = cleaned_data.get("recommendation", "") or ""
-    deliberation_record.decision_support_summary = cleaned_data.get("decision_support_summary") or ""
-    deliberation_record.quorum_status = cleaned_data.get(
-        "quorum_status",
-        DeliberationRecord.QuorumStatus.NOT_RECORDED,
-    ) or DeliberationRecord.QuorumStatus.NOT_RECORDED
-    deliberation_record.attendance_notes = cleaned_data.get("attendance_notes", "") or ""
-    deliberation_record.ranking_position = cleaned_data.get("ranking_position")
-    deliberation_record.ranking_notes = cleaned_data.get("ranking_notes", "") or ""
-    deliberation_record.consolidated_snapshot = consolidated_snapshot
-    deliberation_record.is_finalized = finalize
-    if finalize:
-        deliberation_record.finalized_by = actor
-        deliberation_record.finalized_at = timezone.now()
-    else:
-        deliberation_record.finalized_by = None
-        deliberation_record.finalized_at = None
-    validation_exclude = []
-    if allow_partial:
-        validation_exclude = [
-            "deliberation_minutes",
-            "decision_support_summary",
-        ]
-    deliberation_record.full_clean(exclude=validation_exclude)
-    deliberation_record.save()
-
-    if record_audit:
-        record_audit_event(
-            application=application,
-            actor=actor,
-            action=(
-                AuditLog.Action.DELIBERATION_FINALIZED
-                if finalize
-                else AuditLog.Action.DELIBERATION_RECORDED
-            ),
-            description=(
-                (
-                    "Finalized HRMPSB recommendation endorsement."
-                    if application.branch == PositionPosting.Branch.PLANTILLA
-                    else "Finalized deliberation and decision-support record."
-                )
-                if finalize
-                else (
-                    "Saved HRMPSB deliberation on the CAR draft."
-                    if application.branch == PositionPosting.Branch.PLANTILLA
-                    else "Saved deliberation and decision-support record."
-                )
-            ),
-            metadata={
-                "deliberation_record_id": deliberation_record.id,
-                "car_draft_id": car_draft.id if car_draft else "",
-                "created": created,
-                "review_stage": review_stage,
-                "recommendation_recorded": bool(deliberation_record.recommendation),
-                "quorum_status": deliberation_record.quorum_status,
-                "ranking_position": deliberation_record.ranking_position,
-                "finalized_screening_count": len(consolidated_snapshot["screening_records"]),
-                "finalized_exam_count": len(consolidated_snapshot["exam_records"]),
-                "finalized_interview_count": len(consolidated_snapshot["interview_sessions"]),
-                "is_finalized": deliberation_record.is_finalized,
-            },
-        )
-    return deliberation_record
 
 
 def get_application_ete_rating(application):
@@ -7452,6 +7508,24 @@ def _sync_case_after_workflow_action(application, actor, next_role, next_status,
     elif next_status == RecruitmentApplication.Status.REJECTED:
         _transition_case_stage(case, RecruitmentCase.Stage.CLOSED)
         case.case_status = RecruitmentCase.CaseStatus.REJECTED
+        case.current_handler_role = ""
+        case.is_stage_locked = True
+        case.locked_stage = previous_stage
+        case.closed_at = timezone.now()
+    elif next_status == RecruitmentApplication.Status.VACANCY_CANCELLED:
+        # SL-11: terminal, and explicitly not a merit outcome.
+        _transition_case_stage(case, RecruitmentCase.Stage.CLOSED)
+        case.case_status = RecruitmentCase.CaseStatus.VACANCY_CANCELLED
+        case.current_handler_role = ""
+        case.is_stage_locked = True
+        case.locked_stage = previous_stage
+        case.closed_at = timezone.now()
+    elif next_status == RecruitmentApplication.Status.WITHDRAWN:
+        # SL-10: terminal like a rejection in mechanics, distinct from it in meaning. The
+        # case leaves every active pool but the record never says the office turned this
+        # person down.
+        _transition_case_stage(case, RecruitmentCase.Stage.CLOSED)
+        case.case_status = RecruitmentCase.CaseStatus.WITHDRAWN
         case.current_handler_role = ""
         case.is_stage_locked = True
         case.locked_stage = previous_stage
@@ -11332,6 +11406,104 @@ def set_position_document_requirements(posting, selections, actor):
             "required_codes": sorted(code for code, required in desired.items() if required),
         },
     )
+
+
+@transaction.atomic
+def cancel_recruitment_entry(entry, actor, reason):
+    """SL-11: cancel a published vacancy and resolve every in-flight application.
+
+    Neither Suspended nor Closed can say this. Suspension only pauses intake — the exam
+    pool and scheduling ignore it entirely, so a cancelled recruitment kept running
+    underneath. Closed is the ordinary end of the intake period and unlocks pooled
+    evaluation and eventual selection. Staff had to misuse one of them, and the applicants
+    were left either active forever or filed as rejected for a competition that never
+    happened.
+
+    Cancellation is one audited transition with a required reason: the posting stops
+    accepting anything, every active case closes with a non-merit disposition, and each
+    applicant is told the vacancy was cancelled rather than that they were not selected.
+
+    The authorizer default is the roles that may already close a posting — flagged in the
+    Resolution Log for the client to narrow if they want it held higher."""
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValidationError("Record why this vacancy is being cancelled.")
+    if entry.status == PositionPosting.EntryStatus.CANCELLED:
+        raise ValidationError("This vacancy is already cancelled.")
+    if FinalSelection.objects.filter(recruitment_entry=entry).exists():
+        raise ValidationError(
+            "A selection has already been recorded for this vacancy. Rescind the selection "
+            "first if the appointment is not going ahead."
+        )
+
+    previous_status = entry.status
+    entry.status = PositionPosting.EntryStatus.CANCELLED
+    entry.updated_by = actor
+    entry.save()
+    entry.refresh_from_db()
+
+    affected = list(
+        RecruitmentApplication.objects.select_related("case", "position", "applicant")
+        .filter(position=entry, case__isnull=False)
+        .exclude(
+            case__case_status__in=[
+                RecruitmentCase.CaseStatus.APPROVED,
+                RecruitmentCase.CaseStatus.REJECTED,
+                RecruitmentCase.CaseStatus.WITHDRAWN,
+                RecruitmentCase.CaseStatus.VACANCY_CANCELLED,
+            ]
+        )
+    )
+    for application in affected:
+        previous_case_status = application.case.case_status
+        previous_application_status = application.status
+        previous_role = application.current_handler_role
+        _sync_case_after_workflow_action(
+            application=application,
+            actor=actor,
+            next_role="",
+            next_status=RecruitmentApplication.Status.VACANCY_CANCELLED,
+            remarks=reason,
+        )
+        application.current_handler_role = ""
+        application.status = RecruitmentApplication.Status.VACANCY_CANCELLED
+        application.closed_at = timezone.now()
+        application.save(
+            update_fields=["current_handler_role", "status", "closed_at", "updated_at"]
+        )
+        record_audit_event(
+            application=application,
+            actor=actor,
+            action=AuditLog.Action.RECRUITMENT_ENTRY_CANCELLED,
+            description="Closed because the vacancy was cancelled.",
+            metadata={
+                "entry_id": entry.id,
+                "entry_code": entry.job_code,
+                "reason": reason,
+                "from_status": previous_application_status,
+                "to_status": application.status,
+                "from_role": previous_role,
+                "to_role": "",
+                "from_case_status": previous_case_status,
+                "to_case_status": application.case.case_status,
+            },
+        )
+        queue_vacancy_cancellation_notification(application, actor=actor, reason=reason)
+
+    record_system_audit_event(
+        actor=actor,
+        action=AuditLog.Action.RECRUITMENT_ENTRY_CANCELLED,
+        description=f"Cancelled recruitment entry '{entry.job_code}'.",
+        metadata={
+            "entry_id": entry.id,
+            "entry_code": entry.job_code,
+            "reason": reason,
+            "previous_status": previous_status,
+            "affected_application_ids": sorted(a.id for a in affected),
+            "affected_count": len(affected),
+        },
+    )
+    return entry, affected
 
 
 def update_recruitment_entry_status(entry, actor, new_status):

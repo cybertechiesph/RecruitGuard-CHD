@@ -119,7 +119,6 @@ from .services import (
     record_final_selection,
     record_system_audit_event,
     remove_applicant_from_batch,
-    save_deliberation_record,
     save_cos_vacancy_deliberation,
     get_cos_vacancy_deliberation,
     get_latest_final_decision,
@@ -167,6 +166,11 @@ from .services import (
     upload_interview_fallback_rating,
     user_can_upload_interview_fallback,
     mark_interview_absent,
+    record_application_withdrawal,
+    user_can_record_withdrawal,
+    user_can_manage_deliberation,
+    save_deliberation_record,
+    cancel_recruitment_entry,
     get_pending_attendance_exception,
     record_attendance_letter_of_intent,
     resolve_attendance_absence,
@@ -763,20 +767,12 @@ class BaseRecruitmentTestCase(TestCase):
                 deliberation_minutes,
                 finalize=True,
             )
-        return save_deliberation_record(
-            application=application,
-            actor=actor,
-            cleaned_data={
-                "deliberated_at": deliberated_at or timezone.now(),
-                "deliberation_minutes": deliberation_minutes,
-                "recommendation": recommendation,
-                "decision_support_summary": decision_support_summary,
-                "quorum_status": quorum_status,
-                "attendance_notes": attendance_notes,
-                "ranking_position": ranking_position,
-                "ranking_notes": ranking_notes,
-            },
-            finalize=True,
+        # SL-15: there is no third branch, and the per-case deliberation record is
+        # quarantined — reaching here means the fixture was called for a case that has no
+        # deliberation step at all.
+        raise AssertionError(
+            f"No deliberation step exists for {application.reference_label} "
+            f"({application.branch})."
         )
 
     def ensure_ete_ratings_for_pool(self, application, rating="88.00"):
@@ -11765,6 +11761,169 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
         )
         self.assertTrue(session.is_finalized)
 
+    # ── SL-10: withdrawal is a neutral exit ───────────────────────────────────
+    def test_an_applicant_can_be_recorded_as_withdrawn(self):
+        # SL-10: the audit's probe — no workflow action produced Status.WITHDRAWN, so a
+        # withdrawn applicant had to be left active or misfiled as rejected.
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(application, self.applicant)
+        application.refresh_from_db()
+        self.assertTrue(user_can_record_withdrawal(self.secretariat, application))
+
+        with self.captureOnCommitCallbacks(execute=True):
+            record_application_withdrawal(
+                application=application,
+                actor=self.secretariat,
+                reason="Emailed the office on 2026-07-20 to withdraw; accepted another post.",
+                uploaded_file=SimpleUploadedFile(
+                    "withdrawal.pdf", b"%PDF-1.4 request", content_type="application/pdf"
+                ),
+            )
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+
+        self.assertEqual(application.status, RecruitmentApplication.Status.WITHDRAWN)
+        self.assertEqual(
+            application.case.case_status, RecruitmentCase.CaseStatus.WITHDRAWN
+        )
+        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.CLOSED)
+        self.assertTrue(application.case.is_stage_locked)
+        self.assertEqual(application.current_handler_role, "")
+        # SL-10 AC#2: gone from the active pools, so it cannot hold a batch or be scheduled.
+        self.assertNotIn(
+            application.pk,
+            {a.pk for a in vacancy_exam_pool(self.level1_position)},
+        )
+        self.assertTrue(
+            vacancy_screening_batch_status(self.level1_position).is_ready
+        )
+        # SL-10 AC#3: the applicant is told they withdrew, not that they were turned down.
+        self.assertFalse(
+            NotificationLog.objects.filter(
+                application=application,
+                notification_type=NotificationLog.NotificationType.NON_SELECTED_APPLICANT,
+            ).exists()
+        )
+        notice = NotificationLog.objects.get(
+            application=application,
+            notification_type=NotificationLog.NotificationType.WITHDRAWAL_ACKNOWLEDGEMENT,
+        )
+        self.assertIn("withdrawal", notice.subject.lower())
+        self.assertIn("not as a rejection", notice.body)
+        # SL-10 AC#4: actor, reason and the applicant's request are all auditable.
+        entry = AuditLog.objects.filter(
+            application=application, action=AuditLog.Action.APPLICATION_WITHDRAWN
+        ).first()
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.actor, self.secretariat)
+        self.assertIn("accepted another post", entry.metadata["reason"])
+        self.assertIsNotNone(entry.metadata["evidence_id"])
+
+    def test_a_withdrawal_needs_a_reason_and_cannot_repeat(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(application, self.applicant)
+        application.refresh_from_db()
+        with self.assertRaisesMessage(ValueError, "Record the reason and reference"):
+            record_application_withdrawal(application, self.secretariat, "   ")
+        with self.captureOnCommitCallbacks(execute=True):
+            record_application_withdrawal(
+                application, self.secretariat, "Withdrew by email."
+            )
+        application.refresh_from_db()
+        self.assertFalse(user_can_record_withdrawal(self.secretariat, application))
+        with self.assertRaisesMessage(ValueError, "already recorded as withdrawn"):
+            record_application_withdrawal(
+                application, self.secretariat, "Withdrew again."
+            )
+
+    def test_a_selected_appointee_cannot_be_withdrawn_through_this_path(self):
+        # SL-10: withdrawing after selection unwinds a recorded decision, which is the
+        # rescind path's job, not this one.
+        application = self.make_selected_application(self.level1_position)
+        application.refresh_from_db()
+        self.assertFalse(user_can_record_withdrawal(self.secretariat, application))
+        with self.assertRaisesMessage(ValueError, "needs the selection rescinded"):
+            record_application_withdrawal(
+                application, self.secretariat, "Changed their mind."
+            )
+
+    # ── SL-11: vacancy cancellation ───────────────────────────────────────────
+    def test_cancelling_a_vacancy_closes_its_cases_with_a_neutral_disposition(self):
+        # SL-11: the audit's probe — Suspended let the cancelled recruitment keep running
+        # and Closed unlocked ordinary evaluation, so staff had to misuse one of them.
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(application, self.applicant)
+        application.refresh_from_db()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            entry, affected = cancel_recruitment_entry(
+                self.level1_position,
+                self.secretariat,
+                "CSC disapproved the publication; the whole process must be repeated.",
+            )
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+
+        # SL-11 AC#1: distinguishable from Suspended and from an ordinary Closed.
+        self.assertEqual(entry.status, PositionPosting.EntryStatus.CANCELLED)
+        self.assertFalse(entry.is_active)
+        # SL-11 AC#2/#3: the case is out of every pool with a non-merit disposition.
+        self.assertEqual(len(affected), 1)
+        self.assertEqual(
+            application.status, RecruitmentApplication.Status.VACANCY_CANCELLED
+        )
+        self.assertEqual(
+            application.case.case_status, RecruitmentCase.CaseStatus.VACANCY_CANCELLED
+        )
+        self.assertNotEqual(application.status, RecruitmentApplication.Status.REJECTED)
+        self.assertTrue(application.case.is_stage_locked)
+        notice = NotificationLog.objects.get(
+            application=application,
+            notification_type=NotificationLog.NotificationType.VACANCY_CANCELLED,
+        )
+        self.assertIn("cancelled", notice.subject.lower())
+        self.assertIn("not an assessment of your qualifications", notice.body)
+        self.assertFalse(
+            NotificationLog.objects.filter(
+                application=application,
+                notification_type=NotificationLog.NotificationType.NON_SELECTED_APPLICANT,
+            ).exists()
+        )
+        # SL-11 AC#4: actor, reason, and the affected set are one auditable transition.
+        entry_log = AuditLog.objects.filter(
+            action=AuditLog.Action.RECRUITMENT_ENTRY_CANCELLED,
+            application__isnull=True,
+        ).first()
+        self.assertIsNotNone(entry_log)
+        self.assertEqual(entry_log.actor, self.secretariat)
+        self.assertIn("CSC disapproved", entry_log.metadata["reason"])
+        self.assertEqual(entry_log.metadata["affected_application_ids"], [application.id])
+
+    def test_cancelling_needs_a_reason_and_cannot_repeat(self):
+        with self.assertRaises(ValidationError):
+            cancel_recruitment_entry(self.level1_position, self.secretariat, "   ")
+        cancel_recruitment_entry(
+            self.level1_position, self.secretariat, "No longer funded."
+        )
+        with self.assertRaises(ValidationError):
+            cancel_recruitment_entry(
+                self.level1_position, self.secretariat, "Again."
+            )
+
+    def test_a_vacancy_with_a_recorded_selection_cannot_simply_be_cancelled(self):
+        # SL-11: unwinding an appointment is the rescind path's job, not cancellation's.
+        self.make_selected_application(self.level1_position)
+        with self.assertRaises(ValidationError):
+            cancel_recruitment_entry(
+                self.level1_position, self.secretariat, "Too late for this."
+            )
+
     # ── SL-06: no-show has an outcome ─────────────────────────────────────────
     def _cos_session_awaiting_ratings(self):
         application = self.make_application(self.cos_position)
@@ -14703,6 +14862,33 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         # SL-01: the second door is gone — the pick on the console is the only one.
         with self.assertRaises(NoReverseMatch):
             reverse("final-decision-record", kwargs={"pk": 1})
+
+    def test_the_legacy_per_case_deliberation_record_cannot_be_written(self):
+        # SL-15: the route, view, form and service were all still live behind a section
+        # the sequence can no longer produce — one permission change away from a second,
+        # competing source of the board's recommendation.
+        application = self.make_application(self.cos_position)
+        self.move_application_to_appointing_review(application)
+        application.refresh_from_db()
+
+        self.assertFalse(user_can_manage_deliberation(self.hrm_chief, application))
+        with self.assertRaisesMessage(
+            ValueError, "Per-case deliberation records are no longer recorded."
+        ):
+            save_deliberation_record(
+                application=application,
+                actor=self.hrm_chief,
+                cleaned_data={},
+                finalize=True,
+            )
+
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        response = client.post(
+            reverse("deliberation-record", kwargs={"pk": application.pk}),
+            {"operation": "finalize"},
+        )
+        self.assertEqual(response.status_code, 403)
 
 
 class E2ESeedCommandTests(BaseRecruitmentTestCase):
