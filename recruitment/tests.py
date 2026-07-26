@@ -155,6 +155,7 @@ from .services import (
     unlock_vacancy_assessment_weights,
     persist_recruitment_entry,
     get_competency_rating_template,
+    save_competency_rating_sheet,
     get_missing_required_applicant_document_requirements,
     set_position_document_requirements,
     get_published_competency_rating_template,
@@ -12644,6 +12645,70 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
             get_interview_fallback_evidence(application).count(),
             1,
         )
+
+    def test_encoding_a_paper_sheet_locks_the_rating_sheet(self):
+        # N2: the first recorded rating of EITHER kind freezes the sheet. A pool rated
+        # entirely on paper never reaches save_interview_rating, so this was the one path
+        # where a finalized interview — and a finalized CAR — could sit on a template the
+        # Secretariat could still reshape, silently diverging from the signed paper.
+        application = self._plantilla_session_awaiting_ratings()
+        template = self.publish_competency_rating_sheet(self.level1_position)
+        self.assertFalse(template.is_locked)
+
+        upload_interview_fallback_rating(
+            application=application,
+            actor=self.secretariat,
+            uploaded_file=SimpleUploadedFile(
+                "sheet.pdf", b"%PDF-1.4 sheet", content_type="application/pdf"
+            ),
+            remarks="Chairperson rated on paper.",
+            rated_by=self.hrmpsb,
+            rating_score=Decimal("91.00"),
+        )
+
+        template.refresh_from_db()
+        self.assertEqual(template.status, CompetencyRatingTemplate.Status.LOCKED)
+        self.assertIsNotNone(template.locked_at)
+
+        # And the lock is load-bearing: the sheet now refuses edits, exactly as it does
+        # once a digital score is in.
+        with self.assertRaisesMessage(
+            ValueError, "This rating sheet is locked because scoring has started."
+        ):
+            save_competency_rating_sheet(
+                template=template,
+                template_form=None,
+                formset=None,
+            )
+
+    def test_encoding_a_cos_paper_sheet_needs_no_rating_sheet(self):
+        # N2: COS interviews use a single end-user score, not the competency sheet, so the
+        # lock must not demand a template that was never meant to exist.
+        application = self.make_application(self.cos_position)
+        self.move_application_to_hrm_chief_review(application)
+        self.finalize_screening_for_current_stage(application, self.hrm_chief)
+        self.finalize_exam_for_current_stage(application, self.hrm_chief)
+        application.refresh_from_db()
+        save_interview_session(
+            application=application,
+            actor=self.hrm_chief,
+            cleaned_data=self.session_payload(),
+            finalize=False,
+        )
+
+        fallback = upload_interview_fallback_rating(
+            application=application,
+            actor=self.hrm_chief,
+            uploaded_file=SimpleUploadedFile(
+                "cos-sheet.pdf", b"%PDF-1.4 sheet", content_type="application/pdf"
+            ),
+            remarks="End-user rated on paper.",
+            rated_by=self.hrm_chief,
+            rating_score=Decimal("88.00"),
+        )
+
+        self.assertEqual(fallback.rating_score, Decimal("88.00"))
+        self.assertIsNone(get_competency_rating_template(self.cos_position))
 
     def test_a_paper_sheet_without_a_rater_or_score_is_refused(self):
         application = self._plantilla_session_awaiting_ratings()

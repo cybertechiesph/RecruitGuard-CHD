@@ -6556,6 +6556,17 @@ def upload_interview_fallback_rating(
     fallback_rating.full_clean()
     fallback_rating.save()
 
+    # N2: the first recorded rating of EITHER kind locks the sheet. The paper form the panel
+    # signed is a printout of this template, so by the time one signed sheet is being encoded
+    # its content is already immutable ink — leaving the template editable would let the sheet
+    # on file drift away from the paper in the case folder with nothing recording the change.
+    # A pool rated entirely on paper never reached save_interview_rating, so this was the one
+    # path where a finalized interview, and a finalized CAR, sat on an editable sheet.
+    if application.branch != PositionPosting.Branch.COS:
+        rating_template = get_published_competency_rating_template(application.position)
+        if rating_template is not None:
+            lock_competency_rating_template(rating_template)
+
     record_audit_event(
         application=application,
         actor=actor,

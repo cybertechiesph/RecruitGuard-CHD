@@ -146,6 +146,15 @@
             Scores recorded on paper must be encoded in the recruitment system (or uploaded
             via the fallback flow) to count toward the comparative assessment. Printed by
             {{ printed_by.get_full_name|default:printed_by.username }} on {{ printed_at|date:"F d, Y g:i A" }}.
+            {% comment %}
+            N2: the sheet can still be edited between publishing it and the first recorded
+            rating, so a printout taken during that window can go stale in the drawer.
+            Stamping the version this copy was rendered from makes that detectable — a
+            signed form whose stamp predates the sheet on file was rated on a different form.
+            {% endcomment %}
+            {% if rating_template.updated_at %}
+            Rating sheet version: {{ rating_template.updated_at|date:"Y-m-d H:i" }}.
+            {% endif %}
         </div>
     </div>
 </body>
