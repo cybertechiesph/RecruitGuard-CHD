@@ -1360,6 +1360,10 @@ def get_closed_cases_for_user(user):
         status__in=[
             RecruitmentApplication.Status.APPROVED,
             RecruitmentApplication.Status.REJECTED,
+            # SL-10: a withdrawal is a closed case too — records requests about a withdrawn
+            # applicant must find it, and the recorder must not lose sight of the record
+            # they just created.
+            RecruitmentApplication.Status.WITHDRAWN,
         ]
     )
     # Secretariat never sees Level 2 closed cases (helper's first guard).
@@ -1415,6 +1419,10 @@ def user_can_view_application(user, application):
     if application.status in {
         RecruitmentApplication.Status.APPROVED,
         RecruitmentApplication.Status.REJECTED,
+        # SL-10: withdrawn follows the same closed-case access as rejected — without this,
+        # a withdrawn case was viewable by NOBODY (the status fell outside both branches),
+        # which broke the post-withdrawal redirect and hid the record from audit retrieval.
+        RecruitmentApplication.Status.WITHDRAWN,
     }:
         return _user_has_closed_application_access(user, application)
     return False

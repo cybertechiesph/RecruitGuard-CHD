@@ -3113,7 +3113,13 @@ class ApplicationWithdrawalView(LoginRequiredMixin, WorkflowProcessorRequiredMix
                 "Withdrawal recorded. The case is closed as withdrawn — not as a "
                 "rejection — and the applicant has been sent a confirmation.",
             )
-        return redirect("application-detail", pk=pk)
+        # The case just left the active queue, so check retained (closed-case) access
+        # before sending the recorder back to it — same pattern as WorkflowActionView.
+        # Without this, an actor who loses view access on withdrawal (e.g. a Secretariat
+        # acting on a Level-2 override) would land their success message on a 404.
+        if user_can_view_application(request.user, application):
+            return redirect("application-detail", pk=pk)
+        return redirect("workflow-queue")
 
 
 class AttendanceExceptionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):

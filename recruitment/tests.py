@@ -12317,6 +12317,37 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
         self.assertIn("accepted another post", entry.metadata["reason"])
         self.assertIsNotNone(entry.metadata["evidence_id"])
 
+    def test_a_withdrawn_case_stays_visible_to_the_recorder(self):
+        # Final-review live-pass regression: recording a withdrawal used to land the
+        # success message on a 404 — WITHDRAWN fell outside the closed-case access branch
+        # (APPROVED/REJECTED only), so the case became viewable by NOBODY, hiding the
+        # record from audit retrieval the moment it was created.
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(application, self.applicant)
+        application.refresh_from_db()
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = client.post(
+                reverse("application-withdraw", args=[application.pk]),
+                {"reason": "Applicant emailed the office to withdraw."},
+                follow=True,
+            )
+        # The redirect chain must end on the (read-only) case detail, not a 404.
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Withdrawal recorded")
+        application.refresh_from_db()
+        self.assertEqual(application.status, RecruitmentApplication.Status.WITHDRAWN)
+        # And the closed-cases records surface lists it, like any other closed case.
+        from recruitment.services import get_closed_cases_for_user
+
+        self.assertIn(
+            application.pk,
+            {a.pk for a in get_closed_cases_for_user(self.secretariat)},
+        )
+
     def test_a_withdrawal_needs_a_reason_and_cannot_repeat(self):
         application = self.make_application(self.level1_position)
         self.verify_application_for_submission(application)
