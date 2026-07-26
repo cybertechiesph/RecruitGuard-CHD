@@ -109,9 +109,17 @@ Status meanings: **CONFIRMED-IMPLEMENT** = build as the finding proposes.
   Remarks, signature blocks, Date of Interview/Deliberation. Secretariat-only,
   audit-logged as an export. On-screen CAR stays blinded (REV-B); the export is the named
   filing copy. Kills the Secretariat's current re-typing of this exact sheet.
-- **N2 — Pin the competency-template version per interview session.** Rating templates
-  are Secretariat-editable; a session must permanently reference the version its raters
-  actually used, so historical sheets never silently change.
+- **N2 — Pin the competency-template version per interview session.**
+  **RESOLVED-NARROWED 2026-07-26** (decision log: `docs/n2-competency-template-versioning-brief.md`
+  §7): the template is per-vacancy (OneToOne) and already locks permanently on the first
+  digital rating with no unlock, so version pinning is redundant on the digital path. The
+  real defect is that the paper path (`upload_interview_fallback_rating`, SL-03/SL-07)
+  never locks the sheet, leaving a pure-paper vacancy's sheet of record editable forever
+  after the panel signed the printout. Fix: lock the template on the first encoded
+  fallback sheet, mirroring `save_interview_rating` — first recorded rating of either
+  kind locks the sheet. The publish-to-first-score edit window stays open by design
+  (typo-correction path; "published" is visible-not-yet-authoritative). Full versioning
+  returns only if the office adopts reusable cross-vacancy templates.
 - **N3 — Board recommendation on the CAR: CONFIRMED CORRECT, no change.** Ms. Marz's
   demo remark "we don't recommend" targeted the old per-applicant AA cards (per-card
   Recommendation/Ranking-note fields), not the vacancy-level CAR. The board deliberates
