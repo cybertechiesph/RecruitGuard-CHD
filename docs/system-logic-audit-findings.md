@@ -120,6 +120,12 @@ Status meanings: **CONFIRMED-IMPLEMENT** = build as the finding proposes.
   kind locks the sheet. The publish-to-first-score edit window stays open by design
   (typo-correction path; "published" is visible-not-yet-authoritative). Full versioning
   returns only if the office adopts reusable cross-vacancy templates.
+  **Shipped 4c58801** (lock on first encoded fallback + COS no-template test + print-footer
+  version stamp). **Standing constraint:** `CompetencyScore.competency` cascades on delete,
+  so on the digital path this lock is the only barrier between a template edit and
+  destroyed historical scores — never add an unlock for this template (unlike the SL-00
+  weights unlock); it would open a data-loss path, not just evidentiary drift. Warned in
+  `lock_competency_rating_template`'s docstring.
 - **N3 — Board recommendation on the CAR: CONFIRMED CORRECT, no change.** Ms. Marz's
   demo remark "we don't recommend" targeted the old per-applicant AA cards (per-card
   Recommendation/Ranking-note fields), not the vacancy-level CAR. The board deliberates

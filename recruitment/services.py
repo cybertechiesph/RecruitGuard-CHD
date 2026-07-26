@@ -6041,7 +6041,13 @@ def get_published_competency_rating_template(entry):
 
 def lock_competency_rating_template(template):
     """Lock the sheet once the first score is in, so its competencies/weights can no
-    longer be re-shaped under ratings that already exist."""
+    longer be re-shaped under ratings that already exist.
+
+    Do NOT add an unlock counterpart (the way SL-00 gave assessment weights one).
+    CompetencyScore.competency cascades on delete, so on the digital path this lock is
+    the only thing between a template edit and destroyed historical scores — an unlock
+    here opens a data-loss path, not just an evidentiary-drift path (N2 decision log:
+    docs/n2-competency-template-versioning-brief.md §7)."""
     if template.status != CompetencyRatingTemplate.Status.LOCKED:
         template.status = CompetencyRatingTemplate.Status.LOCKED
         if not template.locked_at:
