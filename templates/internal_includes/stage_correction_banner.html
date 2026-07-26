@@ -1,0 +1,37 @@
+{% comment %}
+SL-12 — "You are correcting a finalized record."
+
+Rendered above the screening/exam/interview form whenever the record being edited was
+reopened after finalization. Editing a decision that is already on file must never look
+like ordinary first-time data entry: the handler has to know they are replacing an answer
+the office already gave, and the values they are replacing must stay one click away.
+
+Input:
+  correction : StageRecordVersion | None  (the archived previous version)
+{% endcomment %}
+{% if correction %}
+<div class="rg-note rg-note--warn mb-3" role="status">
+    <p class="mb-1">
+        <strong>You are correcting a finalized {{ correction.record_type_label|lower }}.</strong>
+        It was reopened on {{ correction.reopened_at|date:"N j, Y" }} by
+        {{ correction.reopened_by.get_full_name|default:correction.reopened_by.username }}.
+        The values recorded before that reopen are preserved as version
+        {{ correction.version_number }} and are not changed by anything you save here.
+    </p>
+    {% if correction.reopen_reason %}
+    <p class="mb-1"><strong>Reason given:</strong> {{ correction.reopen_reason }}</p>
+    {% endif %}
+    {% if correction.summary_rows %}
+    <details>
+        <summary style="cursor:pointer;">
+            The values you are replacing (version {{ correction.version_number }})
+        </summary>
+        <div class="mt-1">
+            {% for row in correction.summary_rows %}
+            <div><strong>{{ row.label }}:</strong> {{ row.value }}</div>
+            {% endfor %}
+        </div>
+    </details>
+    {% endif %}
+</div>
+{% endif %}

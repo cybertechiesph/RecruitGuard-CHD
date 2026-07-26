@@ -81,6 +81,7 @@ from .models import (
     RoutingHistory,
     ScreeningDocumentReview,
     ScreeningRecord,
+    StageRecordVersion,
     VacancyAssessmentWeights,
     WorkflowOverride,
 )
@@ -105,6 +106,12 @@ from .services import (
     emit_deadline_approaching_notifications,
     generate_comparative_assessment_report,
     get_current_workflow_section,
+    get_screening_record,
+    get_exam_record,
+    get_stage_record_versions,
+    user_can_manage_screening,
+    reopen_recruitment_case,
+    _reopen_screening_after_resubmission,
     interview_is_finalized_for_current_stage,
     get_latest_finalized_comparative_assessment_report,
     get_available_actions,
@@ -5545,6 +5552,358 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
         )
         undecided_case.refresh_from_db()
         self.assertFalse(undecided_case.is_stage_locked)
+
+    def _close_case_after_not_qualified_screening(
+        self,
+        application,
+        screening_notes="Applicant does not meet the education requirement.",
+    ):
+        """Drive a case to the exact terminal state the SL-12 probe used: screening
+        finalized Not Qualified, which closes the case and locks it at the screening
+        stage. This is the construction the finding reproduced."""
+        if application.status == RecruitmentApplication.Status.DRAFT:
+            self.verify_application_for_submission(application)
+            with self.captureOnCommitCallbacks(execute=True):
+                submit_application(application, application.applicant)
+            application.refresh_from_db()
+        with self.captureOnCommitCallbacks(execute=True):
+            self.finalize_screening_for_current_stage(
+                application,
+                self.secretariat,
+                qualification_outcome=ScreeningRecord.QualificationOutcome.NOT_QUALIFIED,
+                screening_notes=screening_notes,
+            )
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+        self.assertTrue(application.case.is_stage_locked)
+        self.assertEqual(
+            application.case.locked_stage, RecruitmentCase.Stage.SECRETARIAT_REVIEW
+        )
+        return application
+
+    def test_reopening_a_finalized_screening_case_leaves_editable_work(self):
+        # SL-12 AC#1/#3/#4: the old reopen unlocked the envelope and nothing else — the
+        # finalized screening record kept refusing every write, so the handler got active
+        # workload with no legal move. Reopening must hand back something they can change.
+        application = self.make_application(self.level1_position)
+        self._close_case_after_not_qualified_screening(application)
+        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.CLOSED)
+
+        reopen_recruitment_case(
+            application=application,
+            actor=self.hrm_chief,
+            reason="Transcript was misread; the applicant does meet the requirement.",
+        )
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+
+        record = get_screening_record(application)
+        self.assertFalse(record.is_finalized)
+        self.assertIsNone(record.finalized_at)
+        self.assertIsNone(record.finalized_by)
+        self.assertEqual(record.correction_version, 2)
+        self.assertEqual(get_current_workflow_section(application), "screening")
+        self.assertTrue(user_can_manage_screening(self.secretariat, application))
+
+        # AC#3: the corrected decision saves and the case follows the normal route.
+        self.finalize_screening_for_current_stage(
+            application,
+            self.secretariat,
+            qualification_outcome=ScreeningRecord.QualificationOutcome.QUALIFIED,
+            screening_notes="Corrected after re-reading the transcript of records.",
+        )
+        application.refresh_from_db()
+        record.refresh_from_db()
+        self.assertTrue(record.is_finalized)
+        self.assertEqual(
+            record.qualification_outcome, ScreeningRecord.QualificationOutcome.QUALIFIED
+        )
+        self.assertEqual(get_current_workflow_section(application), "exam")
+
+    def test_a_reopened_record_keeps_its_previous_finalized_values(self):
+        # SL-12 AC#2: correcting in place is only acceptable if the answer being replaced
+        # survives, linked to who reopened it and why.
+        application = self.make_application(self.level1_position)
+        self._close_case_after_not_qualified_screening(application)
+        # The case is closed, so the record has to be fetched by its own stage rather than
+        # by the case's current one.
+        original = get_screening_record(
+            application, stage=RecruitmentCase.Stage.SECRETARIAT_REVIEW
+        )
+        original_finalized_at = original.finalized_at
+        original_document_count = original.document_reviews.count()
+
+        reopen_recruitment_case(
+            application=application,
+            actor=self.hrm_chief,
+            reason="Transcript was misread; the applicant does meet the requirement.",
+        )
+        application.refresh_from_db()
+        self.finalize_screening_for_current_stage(
+            application,
+            self.secretariat,
+            qualification_outcome=ScreeningRecord.QualificationOutcome.QUALIFIED,
+            screening_notes="Corrected after re-reading the transcript of records.",
+        )
+
+        versions = list(get_stage_record_versions(application))
+        self.assertEqual(len(versions), 1)
+        version = versions[0]
+        self.assertEqual(version.record_type, StageRecordVersion.RecordType.SCREENING)
+        self.assertEqual(version.record_id, original.id)
+        self.assertEqual(version.version_number, 1)
+        self.assertEqual(version.reopened_by, self.hrm_chief)
+        self.assertEqual(version.reopened_by_role, RecruitmentUser.Role.HRM_CHIEF)
+        self.assertIn("Transcript was misread", version.reopen_reason)
+        self.assertEqual(
+            version.trigger, StageRecordVersion.Trigger.AUTHORIZED_REOPEN
+        )
+        # The archived values are the ORIGINAL ones, not the corrected ones.
+        self.assertEqual(
+            version.snapshot["record"]["qualification_outcome"],
+            ScreeningRecord.QualificationOutcome.NOT_QUALIFIED,
+        )
+        self.assertTrue(version.snapshot["record"]["is_finalized"])
+        self.assertEqual(
+            version.snapshot["record"]["finalized_at"], original_finalized_at.isoformat()
+        )
+        self.assertIn(
+            "does not meet the education requirement",
+            version.snapshot["record"]["screening_notes"],
+        )
+        self.assertEqual(
+            len(version.snapshot["document_reviews"]), original_document_count
+        )
+        self.assertTrue(
+            AuditLog.objects.filter(
+                application=application,
+                action=AuditLog.Action.STAGE_RECORD_REOPENED,
+            ).exists()
+        )
+
+    def test_reopen_corrects_the_last_finalized_record_of_the_stage(self):
+        # SL-12: the record that terminalized the case is the one the handler came back to
+        # change. Reopening a case closed after the examination must not silently unlock
+        # the screening verdict that was already settled and is not in dispute.
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(application, application.applicant)
+        application.refresh_from_db()
+        self.finalize_screening_for_current_stage(application, self.secretariat)
+        application.refresh_from_db()
+        # An Absent examination keeps the case at the Secretariat stage with both records
+        # finalized — the construction where "the stage's last finalized record" matters.
+        with self.captureOnCommitCallbacks(execute=True):
+            self.finalize_exam_for_current_stage(
+                application,
+                self.secretariat,
+                exam_status=ExamRecord.ExamStatus.ABSENT,
+                exam_score=None,
+                technical_score=None,
+                general_score=None,
+            )
+        application.refresh_from_db()
+        with self.captureOnCommitCallbacks(execute=True):
+            process_workflow_action(
+                application=application,
+                actor=self.secretariat,
+                action="reject",
+                remarks="Closed after the applicant missed the examination.",
+            )
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+        self.assertTrue(application.case.is_stage_locked)
+        self.assertEqual(
+            application.case.locked_stage, RecruitmentCase.Stage.SECRETARIAT_REVIEW
+        )
+
+        reopen_recruitment_case(
+            application=application,
+            actor=self.hrm_chief,
+            reason="The applicant did sit the examination; the sheet was misfiled.",
+        )
+        application.refresh_from_db()
+
+        exam_record = get_exam_record(application)
+        screening_record = get_screening_record(application)
+        self.assertFalse(exam_record.is_finalized)
+        self.assertEqual(exam_record.correction_version, 2)
+        self.assertTrue(screening_record.is_finalized)
+        self.assertEqual(screening_record.correction_version, 1)
+        self.assertEqual(get_current_workflow_section(application), "exam")
+        versions = list(get_stage_record_versions(application))
+        self.assertEqual(len(versions), 1)
+        self.assertEqual(versions[0].record_type, StageRecordVersion.RecordType.EXAM)
+        self.assertEqual(
+            versions[0].snapshot["record"]["exam_status"], ExamRecord.ExamStatus.ABSENT
+        )
+
+    def test_correcting_the_same_record_twice_keeps_both_earlier_versions(self):
+        # SL-12: the trail is append-only, so two corrections read as two corrections.
+        application = self.make_application(self.level1_position)
+        self._close_case_after_not_qualified_screening(application)
+
+        for pass_number in (1, 2):
+            reopen_recruitment_case(
+                application=application,
+                actor=self.hrm_chief,
+                reason=f"Correction pass {pass_number}.",
+            )
+            application.refresh_from_db()
+            # Re-finalizing Not Qualified closes and re-locks the case, so the next pass
+            # starts from the same terminal state the first one did.
+            self._close_case_after_not_qualified_screening(
+                application,
+                screening_notes=f"Screening verdict after correction {pass_number}.",
+            )
+
+        record = get_screening_record(
+            application, stage=RecruitmentCase.Stage.SECRETARIAT_REVIEW
+        )
+        self.assertEqual(record.correction_version, 3)
+        versions = list(
+            get_stage_record_versions(application).order_by("version_number")
+        )
+        self.assertEqual([v.version_number for v in versions], [1, 2])
+        self.assertIn(
+            "does not meet the education requirement",
+            versions[0].snapshot["record"]["screening_notes"],
+        )
+        self.assertIn(
+            "after correction 1", versions[1].snapshot["record"]["screening_notes"]
+        )
+
+    def test_the_case_surface_says_the_record_is_being_corrected(self):
+        # SL-12: editing a decision that is already on file must not look like ordinary
+        # first-time data entry.
+        application = self.make_application(self.level1_position)
+        self._close_case_after_not_qualified_screening(application)
+        reopen_recruitment_case(
+            application=application,
+            actor=self.hrm_chief,
+            reason="Transcript was misread; the applicant does meet the requirement.",
+        )
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "You are correcting a finalized screening record.")
+        self.assertContains(response, "Transcript was misread")
+        self.assertContains(response, "Corrected records")
+        self.assertNotContains(response, "{#")
+        # The archive is only half the point — the answer that is being replaced has to be
+        # READABLE, or the correction trail names a version nobody can open.
+        self.assertContains(response, "Not Qualified")
+        self.assertContains(response, "Applicant does not meet the education requirement.")
+        self.assertContains(response, "Document review at the time")
+
+    def test_the_archived_values_render_for_each_record_type(self):
+        # SL-12: the exam and interview archives must be readable too, not just screening.
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(application, application.applicant)
+        application.refresh_from_db()
+        self.finalize_screening_for_current_stage(application, self.secretariat)
+        application.refresh_from_db()
+        with self.captureOnCommitCallbacks(execute=True):
+            self.finalize_exam_for_current_stage(
+                application,
+                self.secretariat,
+                exam_status=ExamRecord.ExamStatus.ABSENT,
+                exam_score=None,
+                technical_score=None,
+                general_score=None,
+                exam_notes="Applicant did not appear for the scheduled examination.",
+            )
+        application.refresh_from_db()
+        with self.captureOnCommitCallbacks(execute=True):
+            process_workflow_action(
+                application=application,
+                actor=self.secretariat,
+                action="reject",
+                remarks="Closed after the applicant missed the examination.",
+            )
+        application.refresh_from_db()
+        reopen_recruitment_case(
+            application=application,
+            actor=self.hrm_chief,
+            reason="The applicant did sit the examination; the sheet was misfiled.",
+        )
+
+        version = get_stage_record_versions(application).first()
+        rows = {row["label"]: row["value"] for row in version.summary_rows}
+        self.assertEqual(rows["Examination"], "Absent")
+        self.assertEqual(
+            rows["Notes"], "Applicant did not appear for the scheduled examination."
+        )
+        self.assertIn("Finalized", rows)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Examination Record &mdash; version 1", html=False)
+        self.assertContains(
+            response, "Applicant did not appear for the scheduled examination."
+        )
+        self.assertNotContains(response, "{#")
+
+    def test_applicant_resubmission_archives_the_first_verification_pass(self):
+        # SL-12: the RD-6 resubmission reopen used to unfinalize the record and blank its
+        # document rows in place. The reviewer's original verdict on the original files is
+        # the evidence that a re-verification was needed at all.
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(application, application.applicant)
+        application.refresh_from_db()
+        self.finalize_screening_for_current_stage(
+            application,
+            self.secretariat,
+            screening_notes="First verification pass over the submitted documents.",
+        )
+        application.refresh_from_db()
+        record = get_screening_record(application)
+        original_id = record.id
+
+        _reopen_screening_after_resubmission(
+            application,
+            self.secretariat,
+            RecruitmentCase.Stage.SECRETARIAT_REVIEW,
+        )
+
+        record.refresh_from_db()
+        self.assertFalse(record.is_finalized)
+        self.assertEqual(record.correction_version, 2)
+        self.assertIsNotNone(record.reopened_for_resubmission_at)
+        self.assertTrue(
+            all(
+                review.status == ScreeningDocumentReview.ReviewStatus.NOT_REVIEWED
+                for review in record.document_reviews.all()
+            )
+        )
+
+        versions = list(get_stage_record_versions(application))
+        self.assertEqual(len(versions), 1)
+        self.assertEqual(versions[0].record_id, original_id)
+        self.assertEqual(
+            versions[0].trigger, StageRecordVersion.Trigger.APPLICANT_RESUBMISSION
+        )
+        self.assertIn(
+            "First verification pass",
+            versions[0].snapshot["record"]["screening_notes"],
+        )
+        # The pre-reset document statuses survive in the archive.
+        self.assertTrue(
+            any(
+                row["status"] != ScreeningDocumentReview.ReviewStatus.NOT_REVIEWED
+                for row in versions[0].snapshot["document_reviews"]
+            )
+        )
 
     def test_case_timeline_is_visible_on_application_detail(self):
         application = self.make_application(self.level1_position)

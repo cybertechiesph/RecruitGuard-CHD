@@ -147,6 +147,8 @@
             <div class="rg-cws-stage-section" id="cws-screening">
                 {% include "internal_includes/stage_titlebar.html" with title="Qualification Screening" locked=screening_locked %}
 
+                {% include "internal_includes/stage_correction_banner.html" with correction=screening_correction %}
+
                 {% if screening_form %}
                     
                     {% include "internal_includes/screening_body.html" %}
@@ -169,6 +171,8 @@
             {% if current_detail_tab.key == "exam" %}
             <div class="rg-cws-stage-section" id="cws-exam">
                 {% include "internal_includes/stage_titlebar.html" with title="Examination" locked=exam_locked %}
+
+                {% include "internal_includes/stage_correction_banner.html" with correction=exam_correction %}
 
                 {% if exam_form %}
                     
@@ -199,6 +203,8 @@
             {% if current_detail_tab.key == "interview" %}
             <div class="rg-cws-stage-section" id="cws-interview">
                 {% include "internal_includes/stage_titlebar.html" with title="Interview / Rating" locked=interview_session_locked %}
+
+                {% include "internal_includes/stage_correction_banner.html" with correction=interview_correction %}
 
                 {% if interview_session_locked and current_interview_session %}
 
@@ -509,6 +515,8 @@
                         {% include "internal_includes/state_empty.html" with title="No case updates yet" copy="Case events and step changes will appear here." %}
                     {% endif %}
                 </div>
+
+                {% include "internal_includes/stage_correction_history.html" %}
             </details>
 
         </div>

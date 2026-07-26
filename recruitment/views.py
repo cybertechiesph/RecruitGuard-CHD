@@ -69,6 +69,7 @@ from .models import (
     RecruitmentUser,
     ScreeningDocumentReview,
     ScreeningRecord,
+    StageRecordVersion,
 )
 from .notification_services import (
     NOTIFICATION_MANAGER_ROLES,
@@ -129,6 +130,8 @@ from .services import (
     get_cos_pick_for_case,
     get_cos_vacancy_deliberation,
     get_interview_fallback_ratings,
+    get_stage_record_correction,
+    get_stage_record_versions,
     get_pending_attendance_exception,
     interview_fallback_panel_queryset,
     mark_interview_absent,
@@ -654,6 +657,19 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
             if context["current_interview_session"]
             else []
         )
+        # SL-12: when a reopen unlocked a finalized record for correction, say so on the
+        # section being corrected. Editing a decision that is already on file without any
+        # sign that it is a correction is how a second answer quietly becomes the first.
+        context["screening_correction"] = get_stage_record_correction(
+            context["current_screening_record"], StageRecordVersion.RecordType.SCREENING
+        )
+        context["exam_correction"] = get_stage_record_correction(
+            context["current_exam_record"], StageRecordVersion.RecordType.EXAM
+        )
+        context["interview_correction"] = get_stage_record_correction(
+            context["current_interview_session"], StageRecordVersion.RecordType.INTERVIEW
+        )
+        context["stage_record_versions"] = list(get_stage_record_versions(application))
         # SL-06: a recorded absence waiting on the office's reschedule-or-terminal decision.
         pending_absence = get_pending_attendance_exception(application)
         context["attendance_exceptions"] = get_attendance_exceptions(application)

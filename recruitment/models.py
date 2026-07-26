@@ -1,6 +1,6 @@
 import re
 import uuid
-from datetime import timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.conf import settings
@@ -1263,6 +1263,10 @@ class ScreeningRecord(TimestampedModel):
     # record is reopened for re-verification over the edited documents. Cleared is
     # the normal state; a set value with is_finalized False means "re-verify".
     reopened_for_resubmission_at = models.DateTimeField(blank=True, null=True)
+    # SL-12: which correction pass these values belong to. 1 is the original decision;
+    # every reopen archives the current values as a StageRecordVersion and increments this,
+    # so "corrected twice" is visible on the record itself and not only in the trail.
+    correction_version = models.PositiveIntegerField(default=1)
 
     class Meta:
         ordering = ["review_stage", "created_at"]
@@ -1779,6 +1783,8 @@ class ExamRecord(TimestampedModel):
         null=True,
     )
     finalized_by_role = models.CharField(max_length=40, blank=True)
+    # SL-12: see ScreeningRecord.correction_version.
+    correction_version = models.PositiveIntegerField(default=1)
 
     class Meta:
         ordering = ["review_stage", "created_at"]
@@ -2177,6 +2183,8 @@ class InterviewSession(TimestampedModel):
         null=True,
     )
     finalized_by_role = models.CharField(max_length=40, blank=True)
+    # SL-12: see ScreeningRecord.correction_version.
+    correction_version = models.PositiveIntegerField(default=1)
 
     class Meta:
         ordering = ["review_stage", "scheduled_for", "created_at"]
@@ -2768,6 +2776,193 @@ class CompetencyScore(TimestampedModel):
 
     def __str__(self):
         return f"{self.competency.name}: {self.score}"
+
+
+class StageRecordVersion(TimestampedModel):
+    """SL-12 — the finalized state of a stage record, kept before it is reopened for correction.
+
+    Reopening a case used to unlock the envelope and nothing else: the screening, exam, or
+    interview record that actually terminalized the case stayed finalized, and every write
+    service refused it. The case came back as active workload its handler could neither
+    change nor advance.
+
+    Correcting the record in place is now allowed, but never silently. The values as they
+    stood at finalization — including the document rows and rater scores that hang off them —
+    are copied here first, together with who reopened it and why. Nothing writes this row
+    again, so the corrected decision and the one it replaced are both readable, and the file
+    shows that a correction happened rather than quietly presenting the second answer as if
+    it had always been the first.
+    """
+
+    class RecordType(models.TextChoices):
+        SCREENING = "screening", "Screening Record"
+        EXAM = "exam", "Examination Record"
+        INTERVIEW = "interview", "Interview Session"
+
+    class Trigger(models.TextChoices):
+        AUTHORIZED_REOPEN = "authorized_reopen", "Authorized Case Reopen"
+        APPLICANT_RESUBMISSION = "applicant_resubmission", "Applicant Resubmission"
+
+    application = models.ForeignKey(
+        RecruitmentApplication,
+        on_delete=models.CASCADE,
+        related_name="stage_record_versions",
+    )
+    recruitment_case = models.ForeignKey(
+        RecruitmentCase,
+        on_delete=models.CASCADE,
+        related_name="stage_record_versions",
+        blank=True,
+        null=True,
+    )
+    record_type = models.CharField(max_length=20, choices=RecordType.choices)
+    review_stage = models.CharField(max_length=40, choices=RecruitmentCase.Stage.choices)
+    # Deliberately a plain id rather than a generic relation: this row must survive
+    # unchanged even if the record it describes is later deleted.
+    record_id = models.PositiveIntegerField()
+    version_number = models.PositiveIntegerField(default=1)
+    trigger = models.CharField(
+        max_length=30,
+        choices=Trigger.choices,
+        default=Trigger.AUTHORIZED_REOPEN,
+    )
+    reopened_by = models.ForeignKey(
+        RecruitmentUser,
+        on_delete=models.PROTECT,
+        related_name="stage_record_versions",
+    )
+    reopened_by_role = models.CharField(max_length=40, blank=True)
+    reopen_reason = models.TextField(blank=True)
+    reopened_at = models.DateTimeField(default=timezone.now)
+    snapshot = models.JSONField(default=dict)
+
+    class Meta:
+        ordering = ["-reopened_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["record_type", "record_id", "version_number"],
+                name="unique_stage_record_version",
+            )
+        ]
+
+    def clean(self):
+        errors = {}
+        if not self.snapshot:
+            errors["snapshot"] = "A stage record version must preserve the finalized values."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        if self.reopened_by_id and not self.reopened_by_role:
+            self.reopened_by_role = self.reopened_by.role
+        super().save(*args, **kwargs)
+
+    @property
+    def record_type_label(self):
+        return self.RecordType(self.record_type).label
+
+    # The snapshot fields a reviewer actually asks about, in reading order. Storing every
+    # field is right for the archive; showing every field would bury the verdict, so the
+    # surface is curated. (field, label, choices-enum-or-None)
+    SUMMARY_FIELDS = {
+        RecordType.SCREENING: (
+            ("qualification_outcome", "Qualification", ScreeningRecord.QualificationOutcome),
+            ("completeness_status", "Documents", ScreeningRecord.CompletenessStatus),
+            ("screening_notes", "Screening notes", None),
+            ("completeness_notes", "Document remarks", None),
+            ("finalized_at", "Finalized", None),
+        ),
+        RecordType.EXAM: (
+            ("exam_status", "Examination", ExamRecord.ExamStatus),
+            ("exam_result", "Result", ExamRecord.OverallResult),
+            ("exam_score", "Overall score", None),
+            ("general_score", "General", None),
+            ("technical_score", "Technical", None),
+            ("exam_date", "Examination date", None),
+            ("exam_notes", "Notes", None),
+            ("finalized_at", "Finalized", None),
+        ),
+        RecordType.INTERVIEW: (
+            ("attendance_outcome", "Attendance", AttendanceOutcome),
+            ("scheduled_for", "Scheduled for", None),
+            ("location", "Location", None),
+            ("session_notes", "Session notes", None),
+            ("finalized_at", "Finalized", None),
+        ),
+    }
+
+    @staticmethod
+    def _display_value(raw, choices_enum):
+        if raw in (None, ""):
+            return ""
+        if choices_enum is not None:
+            return dict(choices_enum.choices).get(raw, raw)
+        # Dates and timestamps are archived as ISO strings; render them the way the rest
+        # of the case file does rather than as machine text.
+        if isinstance(raw, str) and len(raw) >= 10 and raw[4] == "-" and raw[7] == "-":
+            try:
+                if len(raw) > 10:
+                    parsed = datetime.fromisoformat(raw)
+                    return timezone.localtime(parsed).strftime("%b %d, %Y %H:%M")
+                return date.fromisoformat(raw).strftime("%b %d, %Y")
+            except (ValueError, TypeError):
+                return raw
+        return raw
+
+    @property
+    def summary_rows(self):
+        """SL-12: the archived values, ready to render.
+
+        The archive is only half the point — an auditor has to be able to READ the answer
+        that was replaced, not just know that one existed. Without this the correction
+        trail names a version nobody can open."""
+        record = (self.snapshot or {}).get("record") or {}
+        rows = []
+        for field, label, choices_enum in self.SUMMARY_FIELDS.get(self.record_type, ()):
+            value = self._display_value(record.get(field), choices_enum)
+            if value not in (None, ""):
+                rows.append({"label": label, "value": value})
+        return rows
+
+    @property
+    def child_rows_label(self):
+        if self.record_type == self.RecordType.SCREENING:
+            return "Document review at the time"
+        if self.record_type == self.RecordType.INTERVIEW:
+            return "Panel ratings at the time"
+        return ""
+
+    @property
+    def child_rows(self):
+        """The document verdicts or rater scores the archived decision rested on."""
+        snapshot = self.snapshot or {}
+        if self.record_type == self.RecordType.SCREENING:
+            statuses = dict(ScreeningDocumentReview.ReviewStatus.choices)
+            return [
+                {
+                    "name": row.get("requirement_title") or row.get("document_key") or "",
+                    "value": statuses.get(row.get("status"), row.get("status") or ""),
+                    "note": row.get("remarks") or "",
+                }
+                for row in snapshot.get("document_reviews") or []
+            ]
+        if self.record_type == self.RecordType.INTERVIEW:
+            roles = dict(RecruitmentUser.Role.choices)
+            return [
+                {
+                    "name": roles.get(row.get("rated_by_role"), row.get("rated_by_role") or "Rater"),
+                    "value": row.get("rating_score") or "",
+                    "note": row.get("rating_notes") or "",
+                }
+                for row in snapshot.get("ratings") or []
+            ]
+        return []
+
+    def __str__(self):
+        return (
+            f"{self.record_type_label} v{self.version_number} for "
+            f"{self.application.reference_label}"
+        )
 
 
 class DeliberationRecord(TimestampedModel):
@@ -4506,6 +4701,7 @@ class AuditLog(TimestampedModel):
         APPLICATION_SUBMITTED = "application_submitted", "Application Submitted"
         CASE_CREATED = "case_created", "Case Created"
         CASE_REOPENED = "case_reopened", "Case Reopened"
+        STAGE_RECORD_REOPENED = "stage_record_reopened", "Stage Record Reopened for Correction"
         ROUTED = "routed", "Application Routed"
         SCREENING_RECORDED = "screening_recorded", "Screening Recorded"
         SCREENING_FINALIZED = "screening_finalized", "Screening Finalized"
@@ -4555,6 +4751,8 @@ class AuditLog(TimestampedModel):
 
     SENSITIVE_ACTIONS = {
         Action.CASE_REOPENED,
+        # SL-12: overwriting a finalized evaluation, even legitimately.
+        Action.STAGE_RECORD_REOPENED,
         # SL-11/SL-14: unwinding a published vacancy or a recorded appointment.
         Action.RECRUITMENT_ENTRY_CANCELLED,
         Action.FINAL_SELECTION_RESCINDED,
@@ -4777,6 +4975,7 @@ AUDIT_ACTION_CATEGORIES = {
             AuditLog.Action.APPLICATION_SUBMITTED,
             AuditLog.Action.CASE_CREATED,
             AuditLog.Action.CASE_REOPENED,
+            AuditLog.Action.STAGE_RECORD_REOPENED,
             AuditLog.Action.ROUTED,
             AuditLog.Action.SCREENING_RECORDED,
             AuditLog.Action.SCREENING_FINALIZED,

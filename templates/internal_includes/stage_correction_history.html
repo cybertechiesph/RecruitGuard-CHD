@@ -1,0 +1,68 @@
+{% load recruitment_ui %}
+{% comment %}
+SL-12 — the correction trail for this case.
+
+Every reopen of a finalized screening, exam, or interview record archives the values as
+they stood before it. This renders those archived values, not merely the fact that a
+correction happened: an auditor has to be able to READ the answer that was replaced, or
+the newest answer simply appears to have always been the answer.
+
+Input:
+  stage_record_versions : iterable of StageRecordVersion (newest first)
+{% endcomment %}
+{% if stage_record_versions %}
+<div class="rg-icard mt-3" id="cws-corrections">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">Corrected records</h3>
+            <p class="rg-icard__subtitle">
+                Finalized evaluations that were reopened for correction. Each entry shows the
+                values that were on file before that reopen; they are kept unchanged.
+            </p>
+        </div>
+    </div>
+    <div class="rg-timeline">
+        {% for version in stage_record_versions %}
+        <article class="rg-timeline__item">
+            <div class="rg-record">
+                <div class="rg-record__header">
+                    <strong>{{ version.record_type_label }} &mdash; version {{ version.version_number }}</strong>
+                    <span class="rg-note">{{ version.reopened_at|date:"M d, Y H:i" }}</span>
+                </div>
+                <p class="mb-1">
+                    Reopened at {{ version.review_stage|stage_label }} by
+                    {{ version.reopened_by.get_full_name|default:version.reopened_by.username }}
+                    ({{ version.reopened_by_role|role_label }}) &mdash;
+                    {{ version.get_trigger_display|lower }}.
+                </p>
+                {% if version.reopen_reason %}
+                <p class="mb-2 rg-note">{{ version.reopen_reason }}</p>
+                {% endif %}
+
+                {% for row in version.summary_rows %}
+                <div class="rg-record__meta">
+                    <strong>{{ row.label }}:</strong> {{ row.value }}
+                </div>
+                {% endfor %}
+
+                {% if version.child_rows %}
+                <details class="mt-2">
+                    <summary class="rg-record__meta" style="cursor:pointer;">
+                        {{ version.child_rows_label }} ({{ version.child_rows|length }})
+                    </summary>
+                    <ul class="rg-record__meta mb-0 mt-1">
+                        {% for row in version.child_rows %}
+                        <li>
+                            <strong>{{ row.name }}</strong> &mdash; {{ row.value }}
+                            {% if row.note %}<br>{{ row.note }}{% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </details>
+                {% endif %}
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
