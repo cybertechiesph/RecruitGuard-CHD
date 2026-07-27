@@ -4200,6 +4200,18 @@ def save_cos_vacancy_deliberation(posting, actor, chosen_case_id, notes, *, fina
             recruitment_entry=posting,
             selection_round=selection_round,
         )
+    if pick.supersedes_id is None:
+        # SL-14 (COS): if this round had a pick voided, the new pick is its correction —
+        # link them so the file reads as one decision superseding another, mirroring the
+        # Plantilla FinalSelection chain. Chained to the latest rescinded pick that no
+        # other pick has claimed yet, which keeps multi-slot rounds one-to-one.
+        pick.supersedes = (
+            selection_round.picks.filter(
+                is_rescinded=True, superseded_by__isnull=True
+            )
+            .order_by("-rescinded_at", "-id")
+            .first()
+        )
     pick.chosen_case_id = chosen_case_id
     pick.notes = notes or ""
     pick.recorded_by = actor

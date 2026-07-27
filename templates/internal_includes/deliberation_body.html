@@ -33,7 +33,12 @@ because it's a small read-only card.
             </p>
         </div>
     </div>
-    {% if cos_deliberation_pick and cos_deliberation_pick.is_finalized %}
+    {% comment %}
+    SL-14 (COS): is_effective, not is_finalized — a rescinded pick stays finalized (its
+    history is preserved), so the old test would announce a voided pick as "Selected"
+    while the round is open again awaiting the replacement.
+    {% endcomment %}
+    {% if cos_deliberation_pick and cos_deliberation_pick.is_effective %}
         <p class="rg-del-car__summary-notes">
             <strong>Selected:</strong>
             {{ cos_deliberation_pick.chosen_case.application.applicant_display_name }}

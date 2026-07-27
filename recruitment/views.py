@@ -1066,7 +1066,11 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
             pick = get_cos_pick_for_case(application.case) or get_cos_vacancy_deliberation(
                 application.position
             )
-            if pick and pick.is_finalized:
+            # SL-14 (COS): is_effective, not is_finalized — a rescinded pick keeps its
+            # finalization (that history is the point), so testing is_finalized here would
+            # present a voided pick as "the authoritative selection" during the exact
+            # window when the vacancy is undecided and awaiting its replacement.
+            if pick and pick.is_effective:
                 context["cos_authoritative_pick"] = pick
                 context["cos_pick_is_this_case"] = pick.chosen_case_id == application.case.id
         if user_can_record_final_selection(user, application):
@@ -2197,6 +2201,11 @@ class VacancyBatchCosDeliberationView(LoginRequiredMixin, WorkflowProcessorRequi
 
     def _context(self, request, entry, pool):
         pick = get_cos_vacancy_deliberation(entry)
+        # SL-14 (COS): never present a rescinded pick as the working state — the template
+        # pre-checks its candidate's radio and shows its notes, which would nudge the
+        # re-decision toward the person the office just voided.
+        if pick is not None and pick.is_rescinded:
+            pick = None
         selection_round = get_open_cos_selection_round(entry)
         latest_round = selection_round or get_latest_cos_selection_round(entry)
         # WF-09: the pick asks the chief to name "the most qualified applicant" — show the

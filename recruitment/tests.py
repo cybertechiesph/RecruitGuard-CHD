@@ -13770,6 +13770,9 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         self.assertFalse(replacement.is_rescinded)
         self.assertNotEqual(replacement.pk, pick.pk)
         self.assertEqual(replacement.chosen_case_id, sibling.case.id)
+        # The correction chain: the replacement points back at the pick it supersedes,
+        # so the file reads as one decision correcting another (Plantilla parity).
+        self.assertEqual(replacement.supersedes_id, pick.pk)
         # The replacement is the effective pick; the rescinded one is history.
         sibling.refresh_from_db()
         self.assertEqual(get_cos_pick_for_case(sibling.case).pk, replacement.pk)
@@ -13897,6 +13900,40 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
                 "Picking someone who never competed.",
                 finalize=True,
             )
+
+    def test_a_rescinded_pick_is_not_displayed_as_the_authoritative_selection(self):
+        # Review catch on the first implementation: the case surface fell back to "the
+        # vacancy's most recent pick" gated on is_finalized — which a rescinded pick
+        # deliberately keeps — so a voided pick was presented as "the authoritative
+        # selection" during the exact window when the vacancy is undecided.
+        pick, winner, sibling = self._cos_pick_with_a_closed_sibling()
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        with self.captureOnCommitCallbacks(execute=True):
+            rescind_cos_vacancy_deliberation(
+                pick, self.hrm_chief, "Chosen applicant declined."
+            )
+
+        response = client.get(reverse("application-detail", args=[winner.pk]))
+        self.assertEqual(response.status_code, 200)
+        # No authoritative-pick card, and the deliberation section says so honestly.
+        self.assertIsNone(response.context.get("cos_authoritative_pick"))
+        self.assertContains(response, "Not yet recorded")
+
+        # Once the replacement lands, IT is the authoritative pick everywhere.
+        sibling.refresh_from_db()
+        with self.captureOnCommitCallbacks(execute=True):
+            replacement = save_cos_vacancy_deliberation(
+                self.cos_position,
+                self.hrm_chief,
+                sibling.case.id,
+                "Replacement pick.",
+                finalize=True,
+            )
+        response = client.get(reverse("application-detail", args=[winner.pk]))
+        shown = response.context.get("cos_authoritative_pick")
+        self.assertIsNotNone(shown)
+        self.assertEqual(shown.pk, replacement.pk)
 
     def test_rescinding_a_cos_pick_requires_the_hrm_chief_and_a_reason(self):
         pick, _winner, _sibling = self._cos_pick_with_a_closed_sibling()
