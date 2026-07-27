@@ -1,0 +1,82 @@
+{% comment %}
+SL-14 (COS) — Rescind a recorded COS deliberation pick.
+
+The COS twin of final_selection_rescind_card. SL-01 made the finalized pick the COS
+selection itself, so voiding it is how a COS vacancy gets corrected: the pick is kept
+intact and marked rescinded, its round reopens, and the candidates it resolved come back
+to the HRM Chief's deliberation step so a replacement pick can be recorded.
+
+The cutoff (how late a pick may be rescinded) is office policy and is deliberately not
+encoded — the client has not settled it.
+
+Inputs:
+  cos_pick_rescind_form : CosVacancyDeliberationRescindForm | None
+  cos_rescinded_picks   : iterable of CosVacancyDeliberation (rescinded)
+{% endcomment %}
+{% if cos_pick_rescind_form %}
+<details class="rg-icard mb-3" id="cos-pick-rescind">
+    <summary class="rg-icard__title" style="cursor:pointer; padding:0.25rem 0;">
+        Rescind this deliberation pick
+    </summary>
+    <p class="rg-icard__subtitle">
+        Use this to correct a pick that was recorded in error, or when the chosen applicant
+        withdraws before the contract is issued. The original pick is <strong>kept intact</strong>
+        and marked rescinded; its round reopens and the candidates it resolved come back to
+        the deliberation step so this vacancy can be decided again.
+    </p>
+    <form method="post"
+          action="{% url 'cos-pick-rescind' application.pk %}" novalidate>
+        {% csrf_token %}
+        <div class="rg-field">
+            <label class="form-label" for="{{ cos_pick_rescind_form.reason.id_for_label }}">
+                {{ cos_pick_rescind_form.reason.label }}
+                <span class="text-danger" aria-hidden="true">*</span>
+            </label>
+            {{ cos_pick_rescind_form.reason }}
+            <div class="form-text">{{ cos_pick_rescind_form.reason.help_text }}</div>
+        </div>
+        <div class="rg-field">
+            <label class="form-label" for="{{ cos_pick_rescind_form.reference.id_for_label }}">
+                {{ cos_pick_rescind_form.reference.label }}
+            </label>
+            {{ cos_pick_rescind_form.reference }}
+            <div class="form-text">{{ cos_pick_rescind_form.reference.help_text }}</div>
+        </div>
+        <button type="submit" class="btn btn-outline-danger btn-sm">
+            Rescind the pick
+        </button>
+    </form>
+</details>
+{% endif %}
+
+{% if cos_rescinded_picks %}
+{% for record in cos_rescinded_picks %}
+<div class="rg-icard mb-3">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">Rescinded deliberation pick</h3>
+            <p class="rg-icard__subtitle">
+                {{ record.chosen_case.application.applicant_display_name }} was picked on
+                {{ record.finalized_at|date:"N j, Y" }}
+                {% if record.finalized_by %}
+                    by {{ record.finalized_by.get_full_name|default:record.finalized_by.username }},
+                {% endif %}
+                and that pick was rescinded on
+                {{ record.rescinded_at|date:"N j, Y" }}
+                {% if record.rescinded_by %}
+                    by {{ record.rescinded_by.get_full_name|default:record.rescinded_by.username }}.
+                {% endif %}
+                The original pick is preserved exactly as it was recorded.
+            </p>
+        </div>
+        <span class="rg-pill rg-pill--neutral rg-pill--sm">Rescinded</span>
+    </div>
+    <p class="rg-note mb-0">
+        {{ record.rescind_reason }}
+        {% if record.rescind_reference %}
+            <br><strong>Reference:</strong> {{ record.rescind_reference }}
+        {% endif %}
+    </p>
+</div>
+{% endfor %}
+{% endif %}

@@ -3974,15 +3974,31 @@ def get_cos_vacancy_deliberation(posting):
 
 
 def get_cos_pick_for_case(case):
-    """The finalized COS pick that names this case, or None. SL-01/SL-02: this — not "does
+    """The EFFECTIVE COS pick that names this case, or None. SL-01/SL-02: this — not "does
     the vacancy have any finalized pick" — is what decides whether a given candidate has
-    been selected."""
+    been selected.
+
+    SL-14 (COS): a rescinded pick is history, not a decision. Skipping it here is what makes
+    the vacancy decidable again — every downstream gate (whether deliberation is finished for
+    the case, whether the selection may be recorded) reads through this."""
     if case is None:
         return None
     return (
         CosVacancyDeliberation.objects.select_related("selection_round")
-        .filter(chosen_case=case, is_finalized=True)
+        .filter(chosen_case=case, is_finalized=True, is_rescinded=False)
         .first()
+    )
+
+
+def get_rescinded_cos_picks_for_case(case):
+    """SL-14 (COS): the voided picks that once named this case — preserved history, shown
+    beside the live state so a corrected decision reads as a correction."""
+    if case is None:
+        return CosVacancyDeliberation.objects.none()
+    return (
+        CosVacancyDeliberation.objects.select_related("rescinded_by", "selection_round")
+        .filter(chosen_case=case, is_rescinded=True)
+        .order_by("-rescinded_at", "-id")
     )
 
 
@@ -4032,17 +4048,25 @@ def cos_deliberation_pool(posting):
 
     SL-02: for a continuous vacancy that is the frozen membership of the open round (nothing
     until one is opened — the office decides when it is hiring). For a single-batch COS
-    vacancy it is the live eligible pool, exactly as before."""
-    if vacancy_uses_cos_selection_rounds(posting):
-        open_round = get_open_cos_selection_round(posting)
-        if not open_round:
-            return []
+    vacancy it is the live eligible pool.
+
+    SL-14 (COS): whenever a round is actually OPEN, its frozen membership is the pool for
+    both kinds of vacancy. This only bites on a single-batch round reopened by a rescission:
+    its members competed, so the replacement must come from them. Reading the live pool
+    there would let someone who reached the deliberation step afterwards win a competition
+    they were never entered in, and the pool-closing that follows a pick resolves the frozen
+    membership — so any newcomer would be left dangling in a round already decided."""
+    open_round = get_open_cos_selection_round(posting)
+    if open_round is not None:
         return [
             application
             for application in cos_selection_round_pool(open_round)
             if application.case.case_status == RecruitmentCase.CaseStatus.ACTIVE
             and not application.case.is_stage_locked
         ]
+    if vacancy_uses_cos_selection_rounds(posting):
+        # A continuous vacancy hires only through a round the office has opened.
+        return []
     return cos_eligible_pool(posting)
 
 
@@ -4155,8 +4179,12 @@ def save_cos_vacancy_deliberation(posting, actor, chosen_case_id, notes, *, fina
     if chosen_case_id not in pool_case_ids:
         raise ValueError("The chosen applicant must be one of this vacancy's candidates.")
 
+    # SL-14 (COS): rescinded picks free their slot again — otherwise a voided selection
+    # would keep the round "full" and there would be no way to record the replacement.
     finalized_picks = list(
-        selection_round.picks.filter(is_finalized=True).order_by("created_at")
+        selection_round.picks.filter(is_finalized=True, is_rescinded=False).order_by(
+            "created_at"
+        )
     )
     if len(finalized_picks) >= selection_round.slot_count:
         raise ValueError(
@@ -4273,7 +4301,7 @@ def _resolve_cos_selection_round(selection_round, actor):
         update_fields=["status", "resolved_at", "resolved_by", "updated_at"]
     )
     chosen_case_ids = set(
-        selection_round.picks.filter(is_finalized=True).values_list(
+        selection_round.picks.filter(is_finalized=True, is_rescinded=False).values_list(
             "chosen_case_id", flat=True
         )
     )
@@ -4384,7 +4412,10 @@ def user_can_manage_cos_deliberation(user, posting):
         if get_latest_cos_selection_round(posting) is not None:
             return False
         return bool(cos_eligible_pool(posting))
-    if selection_round.picks.filter(is_finalized=True).count() >= selection_round.slot_count:
+    if (
+        selection_round.picks.filter(is_finalized=True, is_rescinded=False).count()
+        >= selection_round.slot_count
+    ):
         return False
     return bool(cos_deliberation_pool(posting))
 
@@ -4573,7 +4604,13 @@ def get_final_decision_history(application):
 
 
 def get_latest_final_decision(application):
-    return get_final_decision_history(application).first()
+    """The decision currently in force for this case, or None.
+
+    SL-14 (COS): a rescinded decision is history, not the case's state — the full history
+    (rescinded rows included) stays available through get_final_decision_history. Filtering
+    here is what stops a restored case from still announcing "Final Decision Recorded —
+    Selected" on a page that is back at the deliberation step awaiting a replacement."""
+    return get_final_decision_history(application).filter(is_rescinded=False).first()
 
 
 def _final_decision_stage_and_role(application):
@@ -9805,6 +9842,195 @@ def rescind_final_selection(selection, actor, reason, *, reference=""):
     return selection, restored
 
 
+def user_can_rescind_cos_vacancy_deliberation(user, pick):
+    """SL-14 (COS): who may void a recorded COS selection.
+
+    Same principle as the Plantilla rescind: the role that records the decision. SL-01 made
+    the finalized deliberation pick the COS selection itself, and the HRM Chief records it at
+    both levels (see ``_final_decision_stage_and_role``), so the HRM Chief holds the
+    correction too. Flagged in the Resolution Log as a default for the client to confirm or
+    narrow. The cutoff — how late a selection may be voided, e.g. once a contract exists —
+    is office policy and is deliberately NOT encoded here."""
+    if pick is None or pick.is_rescinded or not pick.is_finalized:
+        return False
+    if pick.recruitment_entry.branch != PositionPosting.Branch.COS:
+        return False
+    return user.role == RecruitmentUser.Role.HRM_CHIEF
+
+
+@transaction.atomic
+def rescind_cos_vacancy_deliberation(pick, actor, reason, *, reference=""):
+    """SL-14 (COS): void a finalized COS deliberation pick so the round can be decided again.
+
+    The COS twin of ``rescind_final_selection``. SL-01 collapsed the COS pick and the COS
+    selection into one act, so voiding the pick has to unwind everything that act did:
+    the chosen applicant left the decision step for completion, and — on a single-batch
+    vacancy — the rest of the round was closed as not selected. Both come back.
+
+    Nothing is deleted or edited back to a draft. The pick keeps every value it was recorded
+    with and gains the rescission; the FinalDecision row it produced stays as the historical
+    fact that the decision was made, with the audit trail recording that it was later voided.
+
+    Where the pick's round is restored to differs from Plantilla by necessity: a Plantilla
+    rescind returns cases to the Appointing Authority holding a finalized CAR to re-pick
+    from, whereas the COS decision IS the pick, so its cases return to the HRM Chief at the
+    deliberation step — where the replacement pick is actually made."""
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValueError("Record why this COS deliberation pick is being rescinded.")
+    if pick.is_rescinded:
+        raise ValueError("This COS deliberation pick has already been rescinded.")
+    if not pick.is_finalized:
+        raise ValueError("Only a finalized COS deliberation pick can be rescinded.")
+    if not user_can_rescind_cos_vacancy_deliberation(actor, pick):
+        raise ValueError(
+            "Only the HRM Chief may rescind a recorded COS deliberation pick."
+        )
+
+    entry = pick.recruitment_entry
+    selection_round = pick.selection_round
+    winner = pick.chosen_case.application
+
+    # The population this pick resolved: its own round's members (SL-02), never the whole
+    # posting. Anyone the round never entered was not closed by this pick and must not be
+    # disturbed by voiding it.
+    round_siblings = []
+    if selection_round is not None:
+        round_siblings = [
+            application
+            for application in cos_selection_round_pool(selection_round)
+            if application.pk != winner.pk
+            and application.case.case_status == RecruitmentCase.CaseStatus.REJECTED
+        ]
+
+    rescinded_at = timezone.now()
+    pick.is_rescinded = True
+    pick.rescinded_at = rescinded_at
+    pick.rescinded_by = actor
+    pick.rescind_reason = reason
+    pick.rescind_reference = reference or ""
+    pick.full_clean()
+    pick.save()
+
+    # The pick is only half the record. Finalizing it recorded a FinalDecision(SELECTED)
+    # for the winner, and that row is what reopen_recruitment_case reads to decide whether
+    # the vacancy is decided and who won — leaving it unmarked would keep a rescinded
+    # winner reopenable and keep the real losers frozen. Marked, never deleted: the history
+    # still shows the decision was made, and get_final_decision_history still returns it.
+    rescinded_decisions = list(
+        FinalDecision.objects.filter(
+            application=winner,
+            recruitment_entry=entry,
+            decision_outcome=FinalDecision.Outcome.SELECTED,
+            is_rescinded=False,
+        )
+    )
+    for decision in rescinded_decisions:
+        decision.is_rescinded = True
+        decision.rescinded_at = rescinded_at
+        decision.save(update_fields=["is_rescinded", "rescinded_at", "updated_at"])
+
+    # A resolved round reopens: its slot is free again and the replacement pick belongs to
+    # the same round, not to a new one — nobody ran a second competition.
+    round_reopened = False
+    if (
+        selection_round is not None
+        and selection_round.status == CosSelectionRound.Status.RESOLVED
+    ):
+        selection_round.status = CosSelectionRound.Status.OPEN
+        selection_round.resolved_at = None
+        selection_round.resolved_by = None
+        selection_round.save(
+            update_fields=["status", "resolved_at", "resolved_by", "updated_at"]
+        )
+        round_reopened = True
+        # The round's own "resolved" event would otherwise stand unqualified in the trail.
+        record_system_audit_event(
+            actor=actor,
+            action=AuditLog.Action.COS_SELECTION_ROUND_OPENED,
+            description=(
+                f"Reopened COS selection round {selection_round.round_number} for "
+                f"{entry.job_code} after its pick was rescinded."
+            ),
+            metadata={
+                "entry_id": entry.id,
+                "entry_code": entry.job_code,
+                "round_number": selection_round.round_number,
+                "selection_round_id": selection_round.id,
+                "reopened_after_rescission": True,
+                "cos_deliberation_pick_id": pick.id,
+                "reason": reason,
+            },
+        )
+
+    restored = []
+    for application in [winner, *round_siblings]:
+        case = getattr(application, "case", None)
+        if case is None:
+            continue
+        previous_status = application.status
+        previous_case_status = case.case_status
+        _sync_case_after_workflow_action(
+            application=application,
+            actor=actor,
+            next_role=RecruitmentUser.Role.HRM_CHIEF,
+            next_status=RecruitmentApplication.Status.HRM_CHIEF_REVIEW,
+            remarks=f"COS deliberation pick rescinded: {reason}",
+        )
+        application.current_handler_role = RecruitmentUser.Role.HRM_CHIEF
+        application.status = RecruitmentApplication.Status.HRM_CHIEF_REVIEW
+        application.closed_at = None
+        application.save(
+            update_fields=["current_handler_role", "status", "closed_at", "updated_at"]
+        )
+        record_audit_event(
+            application=application,
+            actor=actor,
+            action=AuditLog.Action.FINAL_SELECTION_RESCINDED,
+            description=(
+                "Returned to the HRM Chief's deliberation step after the COS pick was "
+                "rescinded."
+            ),
+            metadata={
+                "cos_deliberation_pick_id": pick.id,
+                "selection_round_id": selection_round.id if selection_round else None,
+                "round_number": selection_round.round_number if selection_round else None,
+                "reason": reason,
+                "reference": pick.rescind_reference,
+                "was_selected": application.pk == winner.pk,
+                "from_status": previous_status,
+                "to_status": application.status,
+                "from_case_status": previous_case_status,
+                "to_case_status": case.case_status,
+            },
+        )
+        restored.append(application)
+
+    record_system_audit_event(
+        actor=actor,
+        action=AuditLog.Action.FINAL_SELECTION_RESCINDED,
+        description=(
+            f"Rescinded the COS deliberation pick for {entry.job_code} "
+            f"({winner.reference_label})."
+        ),
+        metadata={
+            "entry_id": entry.id,
+            "entry_code": entry.job_code,
+            "branch": entry.branch,
+            "cos_deliberation_pick_id": pick.id,
+            "selection_round_id": selection_round.id if selection_round else None,
+            "round_number": selection_round.round_number if selection_round else None,
+            "previous_selected_application_id": winner.id,
+            "reason": reason,
+            "reference": pick.rescind_reference,
+            "restored_application_ids": sorted(a.id for a in restored),
+            "rescinded_final_decision_ids": sorted(d.id for d in rescinded_decisions),
+            "selection_round_reopened": round_reopened,
+        },
+    )
+    return pick, restored
+
+
 def _close_cos_non_selected_pool(selected_application, actor, decision):
     """WF-10: recording the COS Selected decision resolves the rest of the deliberated pool —
     every other deliberated case closes as not selected and its applicant is notified,
@@ -9912,8 +10138,12 @@ def record_final_decision(application, actor, cleaned_data):
     # person is told exactly why it was refused.
     pick = get_cos_pick_for_case(application.case)
     if pick is None:
+        # SL-14 (COS): only a LIVE pick blocks another applicant here. Once a pick is
+        # rescinded the vacancy is undecided again, so the replacement must be recordable.
         if CosVacancyDeliberation.objects.filter(
-            recruitment_entry=application.position, is_finalized=True
+            recruitment_entry=application.position,
+            is_finalized=True,
+            is_rescinded=False,
         ).exists():
             raise ValueError(
                 "This applicant is not the one named in the finalized COS deliberation "
@@ -10488,9 +10718,16 @@ def reopen_recruitment_case(application, actor, reason):
     if plantilla_selection:
         vacancy_is_decided = True
         winner_application_ids.add(plantilla_selection.selected_application_id)
+    # SL-14 (COS): only a LIVE selection decides the vacancy. Counting a rescinded row here
+    # broke the RD-7 guard in both directions — it kept a rescinded winner in
+    # winner_application_ids (so the person who no longer holds the post stayed reopenable,
+    # the exact zombie this guard exists to stop) while leaving vacancy_is_decided True, so
+    # the siblings who genuinely lost could never be reopened even though nobody held the
+    # post any more.
     cos_selected = FinalDecision.objects.filter(
         recruitment_entry=application.position,
         decision_outcome=FinalDecision.Outcome.SELECTED,
+        is_rescinded=False,
     ).values_list("application_id", flat=True)
     if cos_selected:
         vacancy_is_decided = True

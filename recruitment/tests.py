@@ -56,6 +56,7 @@ from .models import (
     ComparativeAssessmentReport,
     ComparativeAssessmentReportItem,
     CompletionRecord,
+    CosSelectionRound,
     CompletionRequirement,
     DeliberationRecord,
     ExamRecord,
@@ -132,6 +133,11 @@ from .services import (
     record_system_audit_event,
     remove_applicant_from_batch,
     save_cos_vacancy_deliberation,
+    rescind_cos_vacancy_deliberation,
+    user_can_rescind_cos_vacancy_deliberation,
+    get_rescinded_cos_picks_for_case,
+    get_final_decision_history,
+    cos_selection_round_pool,
     get_cos_vacancy_deliberation,
     get_latest_final_decision,
     car_item_is_within_top_five,
@@ -13653,6 +13659,299 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         self.finalize_interview_for_current_stage(application, self.hrm_chief)
         application.refresh_from_db()
         return application
+
+    # ── SL-14 (COS): a recorded COS pick can be corrected ─────────────────────
+    def _cos_pick_with_a_closed_sibling(self):
+        """A finalized COS pick plus a sibling the pick closed as not selected."""
+        winner = self._cos_case_at_deliberation()
+        # Its own applicant account — one application per applicant per position — and
+        # already submitted, so this drives it from submission rather than re-submitting.
+        sibling = self._submitted_cos_application(self.cos_position, "rescind-sib")
+        if sibling.case.current_stage == RecruitmentCase.Stage.SECRETARIAT_REVIEW:
+            self.finalize_screening_for_current_stage(sibling, self.secretariat)
+            self.finalize_exam_for_current_stage(sibling, self.secretariat)
+            sibling.refresh_from_db()
+        self.finalize_screening_for_current_stage(sibling, self.hrm_chief)
+        self.finalize_exam_for_current_stage(sibling, self.hrm_chief)
+        self.finalize_interview_for_current_stage(sibling, self.hrm_chief)
+        sibling.refresh_from_db()
+        with self.captureOnCommitCallbacks(execute=True):
+            pick = save_cos_vacancy_deliberation(
+                self.cos_position,
+                self.hrm_chief,
+                winner.case.id,
+                "End-user and HRM Chief selected this applicant.",
+                finalize=True,
+            )
+        winner.refresh_from_db()
+        sibling.refresh_from_db()
+        return pick, winner, sibling
+
+    def test_rescinding_a_cos_pick_preserves_it_and_reopens_the_round(self):
+        # SL-14 (COS): SL-01 made the finalized pick the COS selection, so voiding it must
+        # unwind everything that act did — the winner left the decision step for completion
+        # and the rest of the round was closed as not selected.
+        pick, winner, sibling = self._cos_pick_with_a_closed_sibling()
+        self.assertEqual(get_current_workflow_section(winner), "completion")
+        self.assertEqual(sibling.case.case_status, RecruitmentCase.CaseStatus.REJECTED)
+        selection_round = pick.selection_round
+        self.assertEqual(selection_round.status, CosSelectionRound.Status.RESOLVED)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            rescinded, restored = rescind_cos_vacancy_deliberation(
+                pick,
+                self.hrm_chief,
+                "Chosen applicant declined before the contract was issued.",
+                reference="HRM Memo 2026-14",
+            )
+
+        # The pick is preserved, never edited back to a draft or deleted.
+        rescinded.refresh_from_db()
+        self.assertTrue(rescinded.is_rescinded)
+        self.assertTrue(rescinded.is_finalized, "the original finalization must survive")
+        self.assertIsNotNone(rescinded.finalized_at)
+        self.assertEqual(rescinded.rescinded_by, self.hrm_chief)
+        self.assertIn("declined", rescinded.rescind_reason)
+        self.assertEqual(rescinded.rescind_reference, "HRM Memo 2026-14")
+        self.assertFalse(rescinded.is_effective)
+
+        # The round reopens: its slot is free again for the replacement pick.
+        selection_round.refresh_from_db()
+        self.assertEqual(selection_round.status, CosSelectionRound.Status.OPEN)
+        self.assertIsNone(selection_round.resolved_at)
+
+        # Winner and the sibling it closed both come back to the deliberation step, which
+        # is where the replacement pick is actually made (the COS decision IS the pick).
+        self.assertEqual({a.pk for a in restored}, {winner.pk, sibling.pk})
+        for application in (winner, sibling):
+            application.refresh_from_db()
+            self.assertEqual(
+                application.status, RecruitmentApplication.Status.HRM_CHIEF_REVIEW
+            )
+            self.assertEqual(
+                application.current_handler_role, RecruitmentUser.Role.HRM_CHIEF
+            )
+            self.assertEqual(
+                application.case.case_status, RecruitmentCase.CaseStatus.ACTIVE
+            )
+            self.assertIsNone(application.closed_at)
+            self.assertEqual(get_current_workflow_section(application), "deliberation")
+
+        # Auditable: actor, reason and who was restored.
+        entry = AuditLog.objects.filter(
+            application=winner, action=AuditLog.Action.FINAL_SELECTION_RESCINDED
+        ).first()
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.actor, self.hrm_chief)
+        self.assertTrue(entry.metadata["was_selected"])
+        self.assertIn("declined", entry.metadata["reason"])
+
+    def test_a_replacement_cos_pick_can_be_recorded_after_a_rescind(self):
+        # The point of the correction: the vacancy must be decidable again. Every gate that
+        # reads "is there a finalized pick" has to skip the rescinded one, or the
+        # replacement is refused and the rescind achieved nothing.
+        pick, winner, sibling = self._cos_pick_with_a_closed_sibling()
+        with self.captureOnCommitCallbacks(execute=True):
+            rescind_cos_vacancy_deliberation(
+                pick, self.hrm_chief, "Recorded against the wrong applicant."
+            )
+        sibling.refresh_from_db()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            replacement = save_cos_vacancy_deliberation(
+                self.cos_position,
+                self.hrm_chief,
+                sibling.case.id,
+                "Replacement pick after the first was rescinded.",
+                finalize=True,
+            )
+
+        self.assertTrue(replacement.is_finalized)
+        self.assertFalse(replacement.is_rescinded)
+        self.assertNotEqual(replacement.pk, pick.pk)
+        self.assertEqual(replacement.chosen_case_id, sibling.case.id)
+        # The replacement is the effective pick; the rescinded one is history.
+        sibling.refresh_from_db()
+        self.assertEqual(get_cos_pick_for_case(sibling.case).pk, replacement.pk)
+        self.assertIsNone(get_cos_pick_for_case(winner.case))
+        self.assertEqual(
+            {p.pk for p in get_rescinded_cos_picks_for_case(winner.case)}, {pick.pk}
+        )
+        sibling.refresh_from_db()
+        self.assertEqual(get_current_workflow_section(sibling), "completion")
+
+    def test_the_same_candidate_can_be_re_picked_after_a_mistaken_rescind(self):
+        # The unique constraint is scoped to live picks, so a rescission recorded by
+        # mistake is itself correctable — re-picking the same person in the same round.
+        pick, winner, _sibling = self._cos_pick_with_a_closed_sibling()
+        with self.captureOnCommitCallbacks(execute=True):
+            rescind_cos_vacancy_deliberation(
+                pick, self.hrm_chief, "Rescinded in error."
+            )
+        winner.refresh_from_db()
+        with self.captureOnCommitCallbacks(execute=True):
+            replacement = save_cos_vacancy_deliberation(
+                self.cos_position,
+                self.hrm_chief,
+                winner.case.id,
+                "Re-picked: the rescission was a mistake.",
+                finalize=True,
+            )
+        self.assertNotEqual(replacement.pk, pick.pk)
+        self.assertEqual(replacement.chosen_case_id, winner.case.id)
+        winner.refresh_from_db()
+        self.assertEqual(get_current_workflow_section(winner), "completion")
+
+    def test_a_rescinded_cos_pick_stops_asserting_the_case_was_selected(self):
+        # A COS selection leaves TWO records — the pick and a FinalDecision row. Marking
+        # only the pick left the decision row still saying "Selected", which is not just a
+        # display lie: it drives the case-detail banner AND the RD-7 reopen guard.
+        pick, winner, sibling = self._cos_pick_with_a_closed_sibling()
+        decision = get_latest_final_decision(winner)
+        self.assertEqual(decision.decision_outcome, FinalDecision.Outcome.SELECTED)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            rescind_cos_vacancy_deliberation(
+                pick, self.hrm_chief, "Chosen applicant declined."
+            )
+
+        winner.refresh_from_db()
+        # The case no longer carries a decision in force...
+        self.assertIsNone(get_latest_final_decision(winner))
+        # ...but the decision remains in the history, marked, never deleted.
+        history = list(get_final_decision_history(winner))
+        self.assertEqual(len(history), 1)
+        self.assertTrue(history[0].is_rescinded)
+        self.assertIsNotNone(history[0].rescinded_at)
+
+        # RD-7 guard, direction 1: with nobody holding the post, a genuinely non-selected
+        # sibling is reopenable again instead of being frozen behind a void decision.
+        sibling.refresh_from_db()
+        self.assertEqual(
+            sibling.case.case_status, RecruitmentCase.CaseStatus.ACTIVE
+        )
+
+    def test_a_replaced_cos_winner_cannot_be_reopened_behind_the_new_selection(self):
+        # RD-7 guard, direction 2: after a replacement names someone else, the FIRST winner
+        # is an ordinary non-selected case. An unmarked decision row would have kept them in
+        # winner_application_ids — reopenable while another selection stands, the exact
+        # zombie the guard exists to prevent.
+        pick, winner, sibling = self._cos_pick_with_a_closed_sibling()
+        with self.captureOnCommitCallbacks(execute=True):
+            rescind_cos_vacancy_deliberation(
+                pick, self.hrm_chief, "Recorded against the wrong applicant."
+            )
+        sibling.refresh_from_db()
+        with self.captureOnCommitCallbacks(execute=True):
+            save_cos_vacancy_deliberation(
+                self.cos_position,
+                self.hrm_chief,
+                sibling.case.id,
+                "Replacement pick.",
+                finalize=True,
+            )
+        winner.refresh_from_db()
+        self.assertEqual(winner.case.case_status, RecruitmentCase.CaseStatus.REJECTED)
+        with self.assertRaisesMessage(
+            ValueError, "This vacancy's selection is already recorded"
+        ):
+            reopen_recruitment_case(
+                application=winner,
+                actor=self.hrm_chief,
+                reason="Trying to revive the replaced winner.",
+            )
+
+    def test_a_reopened_round_picks_only_from_the_candidates_who_competed(self):
+        # A rescission reopens the round, which is the one window where a single-batch
+        # vacancy's pool could drift. The replacement must come from the members who
+        # actually competed — a latecomer would otherwise win a competition they were never
+        # entered in, and the pool-closing that follows resolves the frozen membership, so
+        # every other latecomer would be left dangling in a round already decided.
+        pick, winner, sibling = self._cos_pick_with_a_closed_sibling()
+        round_member_ids = {a.pk for a in cos_selection_round_pool(pick.selection_round)}
+        with self.captureOnCommitCallbacks(execute=True):
+            rescind_cos_vacancy_deliberation(pick, self.hrm_chief, "Declined.")
+
+        # A candidate who only now reaches the deliberation step was never a member.
+        latecomer = self._submitted_cos_application(self.cos_position, "latecomer")
+        if latecomer.case.current_stage == RecruitmentCase.Stage.SECRETARIAT_REVIEW:
+            self.finalize_screening_for_current_stage(latecomer, self.secretariat)
+            self.finalize_exam_for_current_stage(latecomer, self.secretariat)
+            latecomer.refresh_from_db()
+        self.finalize_screening_for_current_stage(latecomer, self.hrm_chief)
+        self.finalize_exam_for_current_stage(latecomer, self.hrm_chief)
+        self.finalize_interview_for_current_stage(latecomer, self.hrm_chief)
+        latecomer.refresh_from_db()
+        self.assertNotIn(latecomer.pk, round_member_ids)
+
+        pool_ids = {a.pk for a in cos_deliberation_pool(self.cos_position)}
+        self.assertNotIn(latecomer.pk, pool_ids)
+        self.assertTrue(pool_ids <= round_member_ids)
+        with self.assertRaisesMessage(
+            ValueError, "The chosen applicant must be one of this vacancy's candidates."
+        ):
+            save_cos_vacancy_deliberation(
+                self.cos_position,
+                self.hrm_chief,
+                latecomer.case.id,
+                "Picking someone who never competed.",
+                finalize=True,
+            )
+
+    def test_rescinding_a_cos_pick_requires_the_hrm_chief_and_a_reason(self):
+        pick, _winner, _sibling = self._cos_pick_with_a_closed_sibling()
+        # The Secretariat handles COS screening/exam but does not decide it.
+        self.assertFalse(
+            user_can_rescind_cos_vacancy_deliberation(self.secretariat, pick)
+        )
+        with self.assertRaisesMessage(
+            ValueError, "Only the HRM Chief may rescind a recorded COS deliberation pick."
+        ):
+            rescind_cos_vacancy_deliberation(pick, self.secretariat, "No authority.")
+        with self.assertRaisesMessage(
+            ValueError, "Record why this COS deliberation pick is being rescinded."
+        ):
+            rescind_cos_vacancy_deliberation(pick, self.hrm_chief, "   ")
+        # And it cannot be rescinded twice.
+        with self.captureOnCommitCallbacks(execute=True):
+            rescind_cos_vacancy_deliberation(pick, self.hrm_chief, "Correcting an error.")
+        with self.assertRaisesMessage(
+            ValueError, "This COS deliberation pick has already been rescinded."
+        ):
+            rescind_cos_vacancy_deliberation(pick, self.hrm_chief, "Again.")
+
+    def test_the_hrm_chief_can_rescind_a_cos_pick_from_the_case_surface(self):
+        pick, winner, _sibling = self._cos_pick_with_a_closed_sibling()
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        # The card is offered on the winner's case.
+        response = client.get(reverse("application-detail", args=[winner.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNotNone(response.context.get("cos_pick_rescind_form"))
+        self.assertNotContains(response, "{#")
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = client.post(
+                reverse("cos-pick-rescind", args=[winner.pk]),
+                {"reason": "Chosen applicant declined the contract."},
+                follow=True,
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "COS deliberation pick rescinded")
+        pick.refresh_from_db()
+        self.assertTrue(pick.is_rescinded)
+
+    def test_the_cos_rescind_endpoint_refuses_a_role_that_cannot_decide(self):
+        pick, winner, _sibling = self._cos_pick_with_a_closed_sibling()
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("cos-pick-rescind", args=[winner.pk]),
+            {"reason": "Trying to void someone else's decision."},
+        )
+        self.assertEqual(response.status_code, 403)
+        pick.refresh_from_db()
+        self.assertFalse(pick.is_rescinded)
 
     def test_cos_deliberation_pick_requires_the_hrm_chief(self):
         application = self._cos_case_at_deliberation()

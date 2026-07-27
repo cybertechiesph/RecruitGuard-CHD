@@ -2381,6 +2381,31 @@ class InterviewAbsenceForm(BootstrapFormMixin, forms.Form):
         return notes
 
 
+class CosVacancyDeliberationRescindForm(BootstrapFormMixin, forms.Form):
+    """SL-14 (COS): void a recorded COS deliberation pick so the round can be decided again.
+
+    Same shape as the Plantilla rescission form — the pick is preserved untouched and this
+    only supplies the reason and any authority reference recorded against it."""
+
+    reason = forms.CharField(
+        label="Reason for rescinding this pick",
+        widget=forms.Textarea(attrs={"rows": 3}),
+        help_text=(
+            "Recorded permanently against the original pick, which is kept intact."
+        ),
+    )
+    reference = forms.CharField(
+        label="Supporting authority or reference",
+        required=False,
+        max_length=255,
+        help_text="Optional — e.g. the memorandum or letter authorising the correction.",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
+
+
 class FinalSelectionRescindForm(BootstrapFormMixin, forms.Form):
     """SL-14: void a recorded selection so the vacancy can be decided again.
 

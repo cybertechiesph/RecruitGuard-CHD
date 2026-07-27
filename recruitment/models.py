@@ -3285,6 +3285,31 @@ class CosVacancyDeliberation(TimestampedModel):
         null=True,
     )
     finalized_by_role = models.CharField(max_length=40, blank=True)
+    # SL-14 (COS): SL-01 made the finalized pick the COS selection itself, so voiding one
+    # needs the same additive correction model FinalSelection has on the Plantilla side.
+    # The pick is never edited back to a draft or deleted — un-finalizing would erase who
+    # decided and when (and clean() forbids it outright), so a rescission is a separate
+    # flag layered on top, and the replacement is a new pick pointing back through
+    # ``supersedes``.
+    is_rescinded = models.BooleanField(default=False)
+    rescinded_at = models.DateTimeField(blank=True, null=True)
+    rescinded_by = models.ForeignKey(
+        RecruitmentUser,
+        on_delete=models.PROTECT,
+        related_name="rescinded_cos_vacancy_deliberations",
+        blank=True,
+        null=True,
+    )
+    rescinded_by_role = models.CharField(max_length=40, blank=True)
+    rescind_reason = models.TextField(blank=True)
+    rescind_reference = models.CharField(max_length=255, blank=True)
+    supersedes = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        related_name="superseded_by",
+        blank=True,
+        null=True,
+    )
 
     def clean(self):
         errors = {}
@@ -3306,6 +3331,21 @@ class CosVacancyDeliberation(TimestampedModel):
             and self.selection_round.recruitment_entry_id != self.recruitment_entry_id
         ):
             errors["selection_round"] = "The selection round must belong to the same vacancy."
+        # SL-14 (COS): a rescission must say who voided it and why, and there must be a
+        # recorded selection to void in the first place.
+        if self.is_rescinded:
+            if not self.is_finalized:
+                errors["is_rescinded"] = (
+                    "Only a finalized COS deliberation pick can be rescinded."
+                )
+            if not self.rescinded_by_id:
+                errors["rescinded_by"] = "Record who rescinded this COS deliberation pick."
+            if not (self.rescind_reason or "").strip():
+                errors["rescind_reason"] = "Record why this COS deliberation pick was rescinded."
+        elif self.rescinded_by_id or self.rescinded_at or self.rescind_reason:
+            errors["is_rescinded"] = (
+                "Rescission details belong only on a rescinded COS deliberation pick."
+            )
         if errors:
             raise ValidationError(errors)
 
@@ -3314,8 +3354,13 @@ class CosVacancyDeliberation(TimestampedModel):
         constraints = [
             # SL-02: one pick per candidate per round. A multi-slot round holds several
             # picks; it can never hold the same candidate twice.
+            # SL-14 (COS): scoped to live picks, so a rescinded pick does not bar the same
+            # candidate from being picked again in that round — a rescission recorded by
+            # mistake has to be correctable, and re-picking the same person is the ordinary
+            # way to correct one.
             models.UniqueConstraint(
                 fields=["selection_round", "chosen_case"],
+                condition=models.Q(is_rescinded=False),
                 name="unique_cos_pick_per_round_case",
             ),
         ]
@@ -3327,14 +3372,26 @@ class CosVacancyDeliberation(TimestampedModel):
             self.finalized_by_role = self.finalized_by.role
         elif not self.is_finalized:
             self.finalized_by_role = ""
+        if self.rescinded_by_id:
+            self.rescinded_by_role = self.rescinded_by.role
+        elif not self.is_rescinded:
+            self.rescinded_by_role = ""
         super().save(*args, **kwargs)
 
     @property
+    def is_effective(self):
+        """SL-14 (COS): a pick that currently decides the vacancy — finalized and not voided."""
+        return self.is_finalized and not self.is_rescinded
+
+    @property
     def is_locked(self):
-        return self.is_finalized
+        # SL-14 (COS): a rescinded pick is no longer authoritative, so it no longer locks
+        # anything — the round it belonged to is open again.
+        return self.is_finalized and not self.is_rescinded
 
     def __str__(self):
-        return f"{self.recruitment_entry.job_code} COS deliberation pick"
+        state = " (rescinded)" if self.is_rescinded else ""
+        return f"{self.recruitment_entry.job_code} COS deliberation pick{state}"
 
 
 class ApplicationETERating(TimestampedModel):
@@ -3942,6 +3999,14 @@ class FinalDecision(TimestampedModel):
     decision_notes = models.TextField()
     submission_packet_snapshot = models.JSONField(default=dict, blank=True)
     decided_at = models.DateTimeField(default=timezone.now)
+    # SL-14 (COS): a COS selection leaves TWO records — the deliberation pick and this
+    # decision row — so marking only the pick would leave this one still asserting
+    # "Selected". That is not merely a display problem: reopen_recruitment_case reads SELECTED
+    # rows here to decide whether a vacancy is decided and who won, so an unmarked row
+    # keeps a rescinded winner reopenable and blocks the siblings who genuinely lost.
+    # The row is never edited or deleted; it is marked, exactly like the pick.
+    is_rescinded = models.BooleanField(default=False)
+    rescinded_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         ordering = ["-decided_at", "-created_at"]

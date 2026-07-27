@@ -40,6 +40,7 @@ from .forms import (
     RequirementChecklistNotificationForm,
     ScreeningReviewForm,
     ApplicationWithdrawalForm,
+    CosVacancyDeliberationRescindForm,
     FinalSelectionRescindForm,
     AttendanceAbsenceDecisionForm,
     AttendanceLetterOfIntentForm,
@@ -128,6 +129,7 @@ from .services import (
     get_attendance_exceptions,
     get_car_candidate_fact_rows,
     get_cos_pick_for_case,
+    get_rescinded_cos_picks_for_case,
     get_cos_vacancy_deliberation,
     get_interview_fallback_ratings,
     get_stage_record_correction,
@@ -137,9 +139,11 @@ from .services import (
     mark_interview_absent,
     record_application_withdrawal,
     record_attendance_letter_of_intent,
+    rescind_cos_vacancy_deliberation,
     rescind_final_selection,
     resolve_attendance_absence,
     user_can_record_withdrawal,
+    user_can_rescind_cos_vacancy_deliberation,
     user_can_rescind_final_selection,
     get_final_selection_history,
     get_latest_cos_selection_round,
@@ -690,6 +694,16 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
                 user, get_final_selection_for_application(application)
             ):
                 context["final_selection_rescind_form"] = FinalSelectionRescindForm()
+        else:
+            # SL-14 (COS): the same correction, on the record that carries the COS decision
+            # — SL-01 made the finalized deliberation pick the selection itself.
+            context["cos_rescinded_picks"] = get_rescinded_cos_picks_for_case(
+                getattr(application, "case", None)
+            )
+            if user_can_rescind_cos_vacancy_deliberation(
+                user, get_cos_pick_for_case(getattr(application, "case", None))
+            ):
+                context["cos_pick_rescind_form"] = CosVacancyDeliberationRescindForm()
         context["current_user_interview_rating"] = get_interview_rating_for_user(application, user)
         context["interview_rating_is_support_encoding"] = user_is_interview_rating_support_encoder(
             user,
@@ -2222,9 +2236,10 @@ class VacancyBatchCosDeliberationView(LoginRequiredMixin, WorkflowProcessorRequi
             "selection_round": selection_round,
             "latest_round": latest_round,
             "round_picks": (
-                list(latest_round.picks.filter(is_finalized=True).select_related(
-                    "chosen_case", "chosen_case__application"
-                ))
+                # SL-14 (COS): the round's LIVE picks — a rescinded one is not a filled slot.
+                list(latest_round.picks.filter(
+                    is_finalized=True, is_rescinded=False
+                ).select_related("chosen_case", "chosen_case__application"))
                 if latest_round
                 else []
             ),
@@ -3083,6 +3098,43 @@ class FinalSelectionRescindView(LoginRequiredMixin, WorkflowProcessorRequiredMix
                 "replacement decision can be recorded.",
             )
         return redirect("application-detail", pk=pk)
+
+
+class CosVacancyDeliberationRescindView(
+    LoginRequiredMixin, WorkflowProcessorRequiredMixin, View
+):
+    """SL-14 (COS): void a recorded COS deliberation pick so the round can be decided again."""
+
+    def post(self, request, pk):
+        application = get_object_or_404(RecruitmentApplication, pk=pk)
+        pick = get_cos_pick_for_case(getattr(application, "case", None))
+        if not user_can_rescind_cos_vacancy_deliberation(request.user, pick):
+            raise PermissionDenied
+        form = CosVacancyDeliberationRescindForm(request.POST)
+        if not form.is_valid():
+            messages.error(request, "Record why this COS deliberation pick is being rescinded.")
+            return redirect("application-detail", pk=pk)
+        try:
+            _pick, restored = rescind_cos_vacancy_deliberation(
+                pick,
+                request.user,
+                form.cleaned_data["reason"],
+                reference=form.cleaned_data.get("reference", ""),
+            )
+        except (ValueError, ValidationError) as exc:
+            messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
+        else:
+            messages.success(
+                request,
+                f"COS deliberation pick rescinded. The original pick is preserved, and "
+                f"{len(restored)} case(s) are back at the HRM Chief's deliberation step so "
+                "a replacement pick can be recorded.",
+            )
+        # The case may have left this user's view on the way in or out, so check retained
+        # access before sending them back to it (the WorkflowActionView pattern).
+        if user_can_view_application(request.user, application):
+            return redirect("application-detail", pk=pk)
+        return redirect("workflow-queue")
 
 
 class ApplicationWithdrawalView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
