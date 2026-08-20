@@ -2164,6 +2164,14 @@ class VacancyBatchInterviewView(LoginRequiredMixin, WorkflowProcessorRequiredMix
                     row["rating_notes"] = notes
                 if justification:
                     row["justification"] = justification
+                # SL-06: the console is the pooled vacancy's only interview door, so the
+                # no-show must be recordable HERE. The per-case absence form is hidden for
+                # pooled vacancies on the strength of exactly this control — without it,
+                # interview absence had no door at all (live E2E finding). The service
+                # already accepted the row key; the console just never offered it.
+                outcome = (request.POST.get(f"int_outcome_{case_id}", "") or "").strip()
+                if outcome:
+                    row["attendance_outcome"] = outcome
                 if row:
                     rows[case_id] = row
             try:

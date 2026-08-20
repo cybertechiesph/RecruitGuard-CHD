@@ -3261,6 +3261,37 @@ def _vacancy_screening_stage(posting):
     return RecruitmentCase.Stage.HRM_CHIEF_REVIEW
 
 
+def _vacancy_batch_stage(posting):
+    """The review stage the vacancy's pooled batch currently occupies.
+
+    The level derives the INTAKE stage, but a Level-1 COS batch takes a second,
+    independent pass at the HRM Chief stage (SL-05) — and the batch consoles have to
+    follow the pool there. Pinning them to the intake stage left the second-pass exam
+    with NO door at all: the console's pool was empty (wrong stage) while the per-case
+    exam form stays one-door-refused for a pooled vacancy (live E2E finding).
+
+    The pooled batch moves between stages in lockstep, so the active, unlocked review
+    cases sit at one stage at a time; if a transition ever left them split, the earlier
+    stage wins so the gate stays conservative. Falls back to the intake stage when no
+    active pool exists (nothing submitted yet, or everything terminal)."""
+    stages = set(
+        RecruitmentCase.objects.filter(
+            application__position=posting,
+            case_status=RecruitmentCase.CaseStatus.ACTIVE,
+            is_stage_locked=False,
+            current_stage__in=[
+                RecruitmentCase.Stage.SECRETARIAT_REVIEW,
+                RecruitmentCase.Stage.HRM_CHIEF_REVIEW,
+            ],
+        ).values_list("current_stage", flat=True)
+    )
+    if RecruitmentCase.Stage.SECRETARIAT_REVIEW in stages:
+        return RecruitmentCase.Stage.SECRETARIAT_REVIEW
+    if RecruitmentCase.Stage.HRM_CHIEF_REVIEW in stages:
+        return RecruitmentCase.Stage.HRM_CHIEF_REVIEW
+    return _vacancy_screening_stage(posting)
+
+
 def vacancy_screening_batch_status(posting):
     """Classify the screening state of every submitted application in a vacancy so the batch
     can move to exam only when no application is still pending. Screening is INDIVIDUAL but the
@@ -3270,7 +3301,7 @@ def vacancy_screening_batch_status(posting):
 
     DRAFT applications are excluded, so screening an early submitter before others have submitted
     does not deadlock the batch."""
-    stage = _vacancy_screening_stage(posting)
+    stage = _vacancy_batch_stage(posting)
     applications = list(
         RecruitmentApplication.objects.filter(position=posting)
         .exclude(status=RecruitmentApplication.Status.DRAFT)
@@ -4023,6 +4054,13 @@ def cos_eligible_pool(posting):
         case.application
         for case in cases
         if get_current_workflow_section(case.application) == "deliberation"
+        # SL-06: a no-show whose absence decision is still PENDING is not a candidate —
+        # the case is waiting for the reschedule-or-terminal call, and letting it into
+        # the pool would let the Chief pick (or the pool-close reject) someone the
+        # office has not finished deciding on (live E2E finding). Plantilla is guarded
+        # downstream by SL-03's blank-component CAR block; the COS pick has no numeric
+        # gate, so the pool boundary has to hold the case itself.
+        and get_pending_attendance_exception(case.application) is None
     ]
 
 
@@ -5705,7 +5743,7 @@ def vacancy_exam_pool(posting):
     """The vacancy's exam-ready applications: screening done (current section is 'exam') and the
     exam not yet finalized, at the vacancy's screening stage. The qualified pool that sits the
     exam together. Branch-agnostic — every candidate takes General + Technical (RD-2)."""
-    stage = _vacancy_screening_stage(posting)
+    stage = _vacancy_batch_stage(posting)
     cases = (
         RecruitmentCase.objects.filter(
             application__position=posting,

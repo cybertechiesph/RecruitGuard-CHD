@@ -160,6 +160,15 @@
                                     {% endif %}
                                 </td>
                                 <td style="max-width:130px;">
+                                    {% comment %} SL-06: the no-show is recorded HERE because this
+                                       console is the pooled vacancy's only interview door — the
+                                       per-case absence form is hidden for pooled vacancies on the
+                                       strength of this control. An absence never carries a score. {% endcomment %}
+                                    <select class="form-select form-select-sm mb-1"
+                                            name="int_outcome_{{ candidate.case_id }}">
+                                        <option value="">Scored</option>
+                                        <option value="absent"{% if candidate.session.attendance_outcome == "absent" %} selected{% endif %}>Absent</option>
+                                    </select>
                                     <input type="number" step="0.01" min="0" max="100" class="form-control"
                                            name="rating_score_{{ candidate.case_id }}"
                                            value="{{ candidate.rating.rating_score|default_if_none:'' }}">

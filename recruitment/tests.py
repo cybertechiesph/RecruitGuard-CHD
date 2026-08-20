@@ -8196,6 +8196,60 @@ class BatchExamTests(BaseRecruitmentTestCase):
         first.refresh_from_db()
         self.assertEqual(first.status, RecruitmentApplication.Status.HRMPSB_REVIEW)
 
+    def test_the_batch_console_serves_the_chief_stage_second_pass(self):
+        # Live COS E2E regression: the console's pool was pinned to the vacancy's INTAKE
+        # stage (Secretariat for Level 1), so after the batch handed off to the HRM Chief
+        # for the second-pass validation (SL-05), the chief-stage exam had NO door at all —
+        # the console showed "no candidates" while the per-case exam form stays
+        # one-door-refused for a pooled vacancy. The pool now follows the batch's stage.
+        first, second = self._two_qualified(self.cos_position)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(self.cos_position, self.secretariat, self._schedule_payload())
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_scores(
+                self.cos_position,
+                self.secretariat,
+                {
+                    first.case.id: {"general_score": "90", "technical_score": "80"},
+                    second.case.id: {"general_score": "70", "technical_score": "60"},
+                },
+                finalize=True,
+            )
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(first.case.current_stage, RecruitmentCase.Stage.HRM_CHIEF_REVIEW)
+        # Chief's second-pass screening for both.
+        self.finalize_screening_for_current_stage(first, self.hrm_chief)
+        self.finalize_screening_for_current_stage(second, self.hrm_chief)
+        first.refresh_from_db()
+        second.refresh_from_db()
+
+        # The pool follows the batch to the chief stage...
+        self.assertEqual(
+            {a.pk for a in vacancy_exam_pool(self.cos_position)},
+            {first.pk, second.pk},
+        )
+        # ...and the console serves it over HTTP instead of bouncing on an empty pool.
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        response = client.get(reverse("vacancy-batch-exam", args=[self.cos_position.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, first.reference_label)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(self.cos_position, self.hrm_chief, self._schedule_payload())
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_scores(
+                self.cos_position,
+                self.hrm_chief,
+                {
+                    first.case.id: {"general_score": "91", "technical_score": "82"},
+                    second.case.id: {"general_score": "72", "technical_score": "63"},
+                },
+                finalize=True,
+            )
+        first.refresh_from_db()
+        self.assertEqual(get_current_workflow_section(first), "interview")
+
     def test_batch_exam_view_redirects_when_pool_empty_after_finalize(self):
         # Regression: finalizing the exam batch empties the pool (cases move to the
         # interview section), so a refresh / Back-button / re-run of the exam URL used to
@@ -8355,12 +8409,70 @@ class VacancyBatchInterviewTests(BaseRecruitmentTestCase):
                 finalize=True,
             )
         # COS re-screens + re-exams at HRM Chief before the interview section opens.
+        # Screen BOTH before examining either: the batch gate (§4.3) follows the pool to
+        # the chief stage now, so the second-pass exam waits for every second-pass
+        # screening — exactly as the console enforces it.
         for application in (first, second):
             application.refresh_from_db()
             self.finalize_screening_for_current_stage(application, self.hrm_chief)
+        for application in (first, second):
+            application.refresh_from_db()
             self.finalize_exam_for_current_stage(application, self.hrm_chief)
             application.refresh_from_db()
         return first, second
+
+    def test_a_cos_interview_no_show_is_recorded_on_the_console_and_held_from_the_pick(self):
+        # Live COS E2E regression, two halves:
+        # (1) The per-case absence form is hidden for pooled vacancies on the promise that
+        #     "a pooled interview records absence on the batch console" — but the console
+        #     control was never built, so interview absence had NO door. The console now
+        #     posts int_outcome_<case> through to the service's attendance_outcome row.
+        # (2) A no-show whose absence decision is still PENDING sat in the deliberation
+        #     pool, pickable — and pool-closable — before the office decided their letter.
+        #     cos_eligible_pool now holds them out until the decision lands.
+        first, second = self._two_cos_at_interview()
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_interview_schedule(
+                self.cos_position, self.hrm_chief, self._interview_schedule_payload()
+            )
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = client.post(
+                reverse("vacancy-batch-interview", args=[self.cos_position.pk]),
+                {
+                    "operation": "finalize",
+                    f"rating_score_{first.case.id}": "88",
+                    f"int_outcome_{second.case.id}": "absent",
+                },
+                follow=True,
+            )
+        self.assertEqual(response.status_code, 200)
+        first.refresh_from_db()
+        second.refresh_from_db()
+        # The scored candidate reached deliberation; the no-show holds with a PENDING
+        # exception and no fabricated score.
+        self.assertEqual(get_current_workflow_section(first), "deliberation")
+        absence = get_pending_attendance_exception(second)
+        self.assertIsNotNone(absence)
+        self.assertEqual(absence.assessment_stage, AttendanceException.Stage.INTERVIEW)
+        # And the pick pool holds the undecided no-show out.
+        self.assertEqual(
+            {a.pk for a in cos_deliberation_pool(self.cos_position)}, {first.pk}
+        )
+        # Once the office decides the absence, the case resolves and stays out.
+        with self.captureOnCommitCallbacks(execute=True):
+            resolve_attendance_absence(
+                absence,
+                self.hrm_chief,
+                AttendanceException.Outcome.TERMINAL,
+                "Letter reviewed; the office will not reschedule.",
+            )
+        second.refresh_from_db()
+        self.assertEqual(second.case.case_status, RecruitmentCase.CaseStatus.REJECTED)
+        self.assertEqual(
+            {a.pk for a in cos_deliberation_pool(self.cos_position)}, {first.pk}
+        )
 
     def test_plantilla_pool_lists_candidates_at_the_hrmpsb_interview(self):
         first, second = self._two_plantilla_at_interview()
