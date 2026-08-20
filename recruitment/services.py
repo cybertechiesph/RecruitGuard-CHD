@@ -5822,7 +5822,13 @@ def save_vacancy_exam_scores(
                     or administered_by,
                     "valid_from": None,
                     "valid_until": None,
-                    "exam_notes": existing_record.exam_notes if existing_record else "",
+                    # The console is the only writable exam surface for a pooled vacancy
+                    # (RD-2 one door), so the remarks the absence/waiver REQUIRES must be
+                    # acceptable from it — otherwise a batch with one absent candidate can
+                    # never be finalized at all (E2E finding). Posted notes win; otherwise
+                    # keep whatever the record already carries.
+                    "exam_notes": (row.get("exam_notes") or "").strip()
+                    or (existing_record.exam_notes if existing_record else ""),
                 },
                 finalize=finalize,
                 allow_partial=not finalize,
@@ -9107,7 +9113,12 @@ def submit_document_resubmission(application, actor, uploaded_files):
         screening_record.finalized_at = None
     screening_record.resubmission_requested_at = None
     screening_record.resubmission_deadline = None
-    screening_record.full_clean()
+    # Mid-review guard, not full_clean: an RD-1 "Return to applicant" record deliberately
+    # carries NO qualification verdict (forcing one on flagged documents is the fake-verdict
+    # pattern RD-1 removed), and this save returns it to exactly that mid-review state.
+    # full_clean() would reject the blank outcome and 500 the applicant's resubmission —
+    # the finalize path still full_cleans, so the verdict stays required where it matters.
+    screening_record.validate_unique()
     screening_record.save()
     for row in flagged:
         row.status = ScreeningDocumentReview.ReviewStatus.NOT_REVIEWED
@@ -9776,11 +9787,19 @@ def rescind_final_selection(selection, actor, reason, *, reference=""):
     entry = selection.recruitment_entry
     report = selection.comparative_assessment_report
     winner = selection.selected_application
+    # Restore ONLY the candidates this selection actually closed: the CAR's own ranked
+    # candidates. A blanket "every rejected case on the posting" sweep resurrects people
+    # whose rejection had nothing to do with the selection — an absent examinee closed
+    # terminal after the letter-of-intent decision, a not-qualified screening — straight
+    # into the Appointing Authority step of a competition they were never in (E2E finding;
+    # the COS rescind was scoped to its round's membership for the same reason).
+    report_case_ids = set(report.items.values_list("recruitment_case_id", flat=True))
     closed_siblings = list(
         RecruitmentApplication.objects.select_related("case", "position", "applicant")
         .filter(
             position=entry,
             case__case_status=RecruitmentCase.CaseStatus.REJECTED,
+            case__id__in=report_case_ids,
         )
         .exclude(pk=winner.pk)
     )

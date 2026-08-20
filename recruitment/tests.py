@@ -10775,6 +10775,72 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("Please resubmit on or before", mail.outbox[0].body)
 
+    def test_resubmission_succeeds_after_an_rd1_return_with_no_verdict(self):
+        # Live E2E regression: the RD-1 "Return to applicant" decision deliberately saves
+        # the screening WITHOUT a qualification verdict (forcing one on flagged documents is
+        # the fake-verdict pattern RD-1 removed). The resubmission service then ran
+        # full_clean() on that record, and the blank outcome 500'd the applicant's
+        # resubmission POST. The old fixtures never caught it because they built the
+        # returned state with a verdict already filled in.
+        application = self.make_submitted_application()
+        first_requirement = get_applicant_document_requirements(application.branch)[0]
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = client.post(
+                reverse("screening-review", kwargs={"pk": application.pk}),
+                {
+                    "completeness_notes": "",
+                    # RD-1: no verdict — the reviewer is returning, not deciding.
+                    "qualification_outcome": "",
+                    "screening_notes": "",
+                    **self.screening_document_status_payload(
+                        application,
+                        overrides={
+                            first_requirement.code: (
+                                ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
+                            ),
+                        },
+                    ),
+                    f"document_remarks__{first_requirement.code}": "Incomplete pages.",
+                    "return_remarks": "Please upload the complete document.",
+                    "operation": "return_to_applicant",
+                },
+                follow=True,
+            )
+        self.assertEqual(response.status_code, 200)
+        application.refresh_from_db()
+        self.assertEqual(
+            application.case.case_status, RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION
+        )
+        screening_record = ScreeningRecord.objects.get(
+            application=application,
+            review_stage=RecruitmentCase.Stage.SECRETARIAT_REVIEW,
+        )
+        self.assertEqual(screening_record.qualification_outcome, "")
+
+        otp_code = issue_application_otp(application, actor=application.applicant)
+        verify_application_otp(application, otp_code, actor=application.applicant)
+        application.refresh_from_db()
+        uploaded_files = {
+            first_requirement.code: self.build_valid_applicant_document_upload(
+                first_requirement.code, content_prefix="rd1-resubmitted"
+            )
+        }
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_document_resubmission(application, self.applicant, uploaded_files)
+
+        application.refresh_from_db()
+        self.assertEqual(application.case.case_status, RecruitmentCase.CaseStatus.ACTIVE)
+        self.assertEqual(
+            application.status, RecruitmentApplication.Status.SECRETARIAT_REVIEW
+        )
+        # Still verdict-less — the reviewer decides on the corrected evidence, and the
+        # finalize path (which full_cleans) keeps requiring the verdict where it matters.
+        screening_record.refresh_from_db()
+        self.assertEqual(screening_record.qualification_outcome, "")
+        self.assertFalse(screening_record.is_finalized)
+
     def test_otp_can_be_issued_for_awaiting_resubmission_application(self):
         application = self.make_submitted_application()
         first_requirement = get_applicant_document_requirements(application.branch)[0]
@@ -12511,6 +12577,57 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
                 actor=self.hrm_chief,
                 notes="Trying to record both.",
             )
+
+    def test_the_absence_endpoint_files_the_letter_and_decides_over_http(self):
+        # Live E2E regression: AttendanceExceptionView referenced the AttendanceException
+        # model without importing it, so EVERY letter/decide POST raised NameError — the
+        # whole SL-06 surface was dead in the browser while the service-level tests below
+        # stayed green. This drives both operations through the real URL.
+        application = self._cos_session_awaiting_ratings()
+        with self.captureOnCommitCallbacks(execute=True):
+            mark_interview_absent(
+                application=application,
+                actor=self.hrm_chief,
+                notes="Did not attend.",
+            )
+        absence = get_pending_attendance_exception(application)
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        response = client.post(
+            reverse(
+                "attendance-exception-manage",
+                kwargs={"pk": application.pk, "exception_pk": absence.pk},
+            ),
+            {
+                "operation": "letter",
+                "file": SimpleUploadedFile(
+                    "loi.pdf", b"%PDF-1.4 letter", content_type="application/pdf"
+                ),
+                "notes": "Received by email.",
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Letter of intent filed")
+        absence.refresh_from_db()
+        self.assertIsNotNone(absence.letter_received_at)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = client.post(
+                reverse(
+                    "attendance-exception-manage",
+                    kwargs={"pk": application.pk, "exception_pk": absence.pk},
+                ),
+                {
+                    "operation": "decide",
+                    "outcome": AttendanceException.Outcome.TERMINAL,
+                    "reason": "Letter reviewed; the office will not reschedule.",
+                },
+                follow=True,
+            )
+        self.assertEqual(response.status_code, 200)
+        absence.refresh_from_db()
+        self.assertEqual(absence.outcome, AttendanceException.Outcome.TERMINAL)
 
     def test_the_office_can_reschedule_after_a_recorded_absence(self):
         # SL-06 AC#4: reschedule records outcome, actor, timestamp and reason.
@@ -15816,6 +15933,72 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
             {"operation": "finalize"},
         )
         self.assertEqual(response.status_code, 403)
+
+    def test_rescinding_restores_only_the_cars_own_candidates(self):
+        # Live E2E regression: the rescind's restore query swept EVERY rejected case on
+        # the posting, so a candidate closed for an unrelated reason — an absent examinee
+        # decided terminal after the letter of intent, a not-qualified screening — was
+        # resurrected straight into Appointing Authority Review, selectable in a
+        # competition they were never in. Restore is scoped to the CAR's ranked
+        # candidates: the population the selection actually closed.
+        applications, report = self.prepare_ranked_level1_car(2)
+        outsider_user = User.objects.create_user(
+            username="rescind-outsider",
+            password="testpass123",
+            email="rescind.outsider@example.com",
+            role=RecruitmentUser.Role.APPLICANT,
+        )
+        outsider = RecruitmentApplication.objects.create(
+            applicant=outsider_user,
+            position=self.level1_position,
+            applicant_first_name="Absent",
+            applicant_last_name="Outsider",
+            applicant_email="rescind.outsider@example.com",
+            status=RecruitmentApplication.Status.REJECTED,
+            performance_rating_applicability=(
+                RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
+            ),
+        )
+        RecruitmentCase.objects.create(
+            application=outsider,
+            branch=outsider.branch,
+            current_stage=RecruitmentCase.Stage.CLOSED,
+            current_handler_role="",
+            case_status=RecruitmentCase.CaseStatus.REJECTED,
+            is_stage_locked=True,
+            locked_stage=RecruitmentCase.Stage.SECRETARIAT_REVIEW,
+        )
+        self.assertFalse(
+            report.items.filter(recruitment_case=outsider.case).exists(),
+            "fixture: the outsider must not be a CAR candidate",
+        )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            selection = record_final_selection(
+                application=applications[0],
+                actor=self.appointing,
+                cleaned_data={
+                    "selected_item": report.items.get(rank_order=1),
+                    "decision_notes": "Selected the board's recommended applicant.",
+                },
+            )
+        with self.captureOnCommitCallbacks(execute=True):
+            _rescinded, restored = rescind_final_selection(
+                selection, self.appointing, "Appointee declined."
+            )
+
+        # The CAR's own candidates come back...
+        self.assertEqual(
+            {a.pk for a in restored}, {applications[0].pk, applications[1].pk}
+        )
+        # ...and the unrelated rejection stays exactly where the office left it.
+        outsider.refresh_from_db()
+        outsider.case.refresh_from_db()
+        self.assertEqual(outsider.status, RecruitmentApplication.Status.REJECTED)
+        self.assertEqual(
+            outsider.case.case_status, RecruitmentCase.CaseStatus.REJECTED
+        )
+        self.assertEqual(outsider.case.current_stage, RecruitmentCase.Stage.CLOSED)
 
     def test_rescinding_a_selection_preserves_it_and_reopens_the_vacancy(self):
         # SL-14: the correction is additive. The original selection keeps every value it

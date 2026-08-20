@@ -197,10 +197,11 @@
             {{ status_description }}
         </p>
 
-        {# ── Timeline expectation ─────────────────────────────────── #}
+        {# ── Contact expectation. No timeline estimate: the office asked for the      #}
+        {# "typically 4-6 weeks" line to be removed (demo feedback) — timelines they   #}
+        {# don't control become grounds for complaints when exceeded.                  #}
         {% if status_variant == "review" or status_variant == "evaluation" %}
         <p class="rg-ta-expectation">
-            Government recruitment for this position is typically 4&ndash;6 weeks.
             We will email you at <strong>{{ application.applicant_email }}</strong>
             when there is news.
         </p>

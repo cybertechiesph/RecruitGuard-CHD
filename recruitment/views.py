@@ -55,6 +55,7 @@ from .models import (
     AUDIT_ACTION_CATEGORIES,
     STAGE_SLA_OVERDUE_THRESHOLD,
     AUDIT_CATEGORY_BY_ACTION,
+    AttendanceException,
     AuditLog,
     AuditLogArchive,
     CompetencyDefinition,
@@ -1935,10 +1936,16 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
                 if technical:
                     row["technical_score"] = technical
                 # RD-2: Absent / Waived is chosen here — the per-case exam screen
-                # is read-only for a pooled vacancy, so this is the only door.
+                # is read-only for a pooled vacancy, so this is the only door. That
+                # makes it the only door for the remarks an absence/waiver REQUIRES,
+                # too — without this field a batch holding one absent candidate could
+                # never be finalized (E2E finding).
                 outcome = (request.POST.get(f"outcome_{case_id}", "") or "").strip()
                 if outcome:
                     row["exam_status"] = outcome
+                notes = (request.POST.get(f"notes_{case_id}", "") or "").strip()
+                if notes:
+                    row["exam_notes"] = notes
                 if row:
                     rows[case_id] = row
             # The pool sat one exam, so one validity window covers the batch.
@@ -1958,29 +1965,49 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
                     valid_until=valid_until,
                 )
             except (ValueError, ValidationError) as exc:
-                messages.error(request, str(exc))
+                # A ValidationError's str() is a raw Python dict — join its messages so the
+                # reviewer reads "Provide remarks explaining the waiver or absence." rather
+                # than "{'exam_notes': [...]}" (E2E finding).
+                messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
                 return redirect("vacancy-batch-exam", pk=entry.pk)
             if finalize:
-                count = len(saved)
+                # An Absent candidate did NOT advance — they hold at the exam awaiting the
+                # letter-of-intent decision (SL-06), and a Waived one closed terminally.
+                # Counting them as "advanced" told the reviewer something false (E2E finding).
+                held = [
+                    application
+                    for application in saved
+                    if (request.POST.get(f"outcome_{application.case.id}", "") or "").strip()
+                    in {ExamRecord.ExamStatus.ABSENT, ExamRecord.ExamStatus.WAIVED}
+                ]
+                count = len(saved) - len(held)
+                held_note = (
+                    f" {len(held)} candidate{'' if len(held) == 1 else 's'} did not sit the "
+                    "exam and awaits the absence decision instead."
+                    if held
+                    else ""
+                )
                 # save_exam_record mutates each routed application in place, so a changed
                 # handler role means the pool advanced to a new office. When it is unchanged
                 # (e.g. a COS batch the HRM Chief finalizes at their own review stage — the
                 # case only moves from the exam section to the interview section), don't claim
                 # a handoff that didn't happen.
-                next_role = saved[0].current_handler_role if saved else ""
+                advanced = [a for a in saved if a not in held]
+                next_role = advanced[0].current_handler_role if advanced else ""
                 if next_role and next_role != handler_before_finalize:
                     next_role_label = RecruitmentUser.Role(next_role).label
                     messages.success(
                         request,
-                        f"Exam batch finalized — all {count} "
+                        f"Exam batch finalized — {count} "
                         f"candidate{'' if count == 1 else 's'} advanced to "
-                        f"{next_role_label} review.",
+                        f"{next_role_label} review.{held_note}",
                     )
                 else:
                     messages.success(
                         request,
-                        f"Exam batch finalized — all {count} "
-                        f"candidate{'' if count == 1 else 's'} moved to the next review step.",
+                        f"Exam batch finalized — {count} "
+                        f"candidate{'' if count == 1 else 's'} moved to the next review "
+                        f"step.{held_note}",
                     )
                 # Continue straight to the interview console when this user is the one who
                 # runs the next step (Plantilla: the Secretariat / HRM Chief support the
