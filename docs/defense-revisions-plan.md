@@ -64,7 +64,7 @@ zero-padded sequences:
 
 | Identifier | Format | Example | Audience / job |
 |---|---|---|---|
-| Vacancy code | `VAC-<BRANCH>-<YYYY>-<3-digit seq>` | `VAC-PLT-2026-002` | Public + staff; branch-per-year sequence (replaces the legacy vendor-prefixed vacancy code) |
+| Vacancy code | `VAC-<BRANCH>-<YYYY>-<3-digit seq>` | `VAC-PLT-2026-002` | Public + staff; branch-per-year sequence (replaces `RG-PLT-2026-0002`) |
 | Case number | `CASE-<YYYY>-<4-digit seq>` | `CASE-2026-0147` | Staff, audit, printed documents; global per-year sequence; safe to display anywhere (label, not key) |
 | Tracking code | `TRK-XXXX-XXXX` | `TRK-7KQ4-M9X2` | Applicant-only credential; random; never shown on internal surfaces |
 | Candidate code | `C-<2-digit seq>` | `C-07` | Evaluator surfaces only (HRMPSB blinding alias); per-vacancy, assigned in randomized order |
@@ -88,7 +88,7 @@ zero-padded sequences:
 - **Padding is cosmetic, overflow is graceful:** sequence 10,000 simply
   prints wider (`CASE-2026-10000`); uniqueness holds. Same for candidate
   codes past `C-99`. Do not "fix" this — it is by design.
-- Replaces the old date-and-random-suffix application reference everywhere:
+- Replaces the old `RG-YYYYMMDD-6HEX` application reference everywhere:
   models, generation, status lookup, emails, receipt, internal templates,
   audit `case_reference`, seeders, tests, walkthrough docs.
 
