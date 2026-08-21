@@ -417,6 +417,7 @@ class ApplicantOTPView(TemplateView):
             except ValueError as exc:
                 messages.error(request, str(exc))
                 return redirect("applicant-otp", token=application.public_token)
+            _mark_status_otp_verified(request, application)
             messages.success(request, "Application submitted successfully.")
             return redirect("applicant-receipt", token=application.public_token)
 
@@ -494,12 +495,67 @@ def _masked_email(email):
     return f"{visible}{'•' * max(len(local) - 1, 2)}@{domain}"
 
 
+def _status_otp_verified_recently(request, application):
+    stamps = request.session.get(STATUS_OTP_VERIFIED_SESSION_KEY) or {}
+    raw = stamps.get(str(application.pk))
+    if not raw:
+        return False
+    try:
+        stamp = datetime.fromisoformat(raw)
+    except ValueError:
+        return False
+    window = timedelta(minutes=settings.STATUS_LOOKUP_SESSION_MINUTES)
+    return timezone.now() - stamp <= window
+
+
+def _mark_status_otp_verified(request, application):
+    stamps = request.session.get(STATUS_OTP_VERIFIED_SESSION_KEY) or {}
+    stamps[str(application.pk)] = timezone.now().isoformat()
+    request.session[STATUS_OTP_VERIFIED_SESSION_KEY] = stamps
+    request.session.pop(STATUS_OTP_PENDING_SESSION_KEY, None)
+
+
+def _pending_status_otp_application(request):
+    pk = request.session.get(STATUS_OTP_PENDING_SESSION_KEY)
+    if not pk:
+        return None
+    return (
+        RecruitmentApplication.objects.select_related("position")
+        .filter(pk=pk, submitted_at__isnull=False)
+        .first()
+    )
+
+
+def _build_status_otp_step_context(
+    request, application, *, otp_form=None, lookup_form=None
+):
+    request.session[STATUS_OTP_PENDING_SESSION_KEY] = application.pk
+    return {
+        "form": (
+            lookup_form
+            if lookup_form is not None
+            else ApplicantStatusLookupForm(request=request)
+        ),
+        "otp_step": True,
+        "otp_application": application,
+        "otp_form": otp_form if otp_form is not None else ApplicantOTPForm(),
+        "otp_masked_email": _masked_email(application.applicant_email),
+        "otp_validity_minutes": settings.APPLICATION_OTP_VALIDITY_MINUTES,
+    }
+
+
+def _build_verified_status_context(request, application):
+    return {
+        "form": ApplicantStatusLookupForm(request=request),
+        **_build_applicant_status_context(application),
+    }
+
+
 class ApplicantStatusLookupView(FormView):
     """Track Application: tracking code + email select the case, but the
     status renders only after an emailed one-time code proves inbox control
     (REV-I). One successful verification unlocks this browser for
-    STATUS_LOOKUP_SESSION_MINUTES; the tokened status link stays direct —
-    possessing it already proves inbox access."""
+    STATUS_LOOKUP_SESSION_MINUTES; the tokened status link uses the same gate."""
 
     template_name = "recruitment/applicant_status_lookup.html"
     form_class = ApplicantStatusLookupForm
@@ -510,51 +566,22 @@ class ApplicantStatusLookupView(FormView):
         return kwargs
 
     # ── REV-I session bookkeeping ────────────────────────────────────
-    def _verified_recently(self, application):
-        stamps = self.request.session.get(STATUS_OTP_VERIFIED_SESSION_KEY) or {}
-        raw = stamps.get(str(application.pk))
-        if not raw:
-            return False
-        try:
-            stamp = datetime.fromisoformat(raw)
-        except ValueError:
-            return False
-        window = timedelta(minutes=settings.STATUS_LOOKUP_SESSION_MINUTES)
-        return timezone.now() - stamp <= window
-
-    def _mark_verified(self, application):
-        stamps = self.request.session.get(STATUS_OTP_VERIFIED_SESSION_KEY) or {}
-        stamps[str(application.pk)] = timezone.now().isoformat()
-        self.request.session[STATUS_OTP_VERIFIED_SESSION_KEY] = stamps
-        self.request.session.pop(STATUS_OTP_PENDING_SESSION_KEY, None)
-
-    def _pending_application(self):
-        pk = self.request.session.get(STATUS_OTP_PENDING_SESSION_KEY)
-        if not pk:
-            return None
-        return (
-            RecruitmentApplication.objects.select_related("position")
-            .filter(pk=pk, submitted_at__isnull=False)
-            .first()
-        )
-
     def _render_otp_step(self, application, otp_form=None, lookup_form=None):
-        self.request.session[STATUS_OTP_PENDING_SESSION_KEY] = application.pk
         return self.render_to_response(
             self.get_context_data(
-                form=lookup_form or self.get_form(),
-                otp_step=True,
-                otp_application=application,
-                otp_form=otp_form or ApplicantOTPForm(),
-                otp_masked_email=_masked_email(application.applicant_email),
-                otp_validity_minutes=settings.APPLICATION_OTP_VALIDITY_MINUTES,
+                **_build_status_otp_step_context(
+                    self.request,
+                    application,
+                    otp_form=otp_form,
+                    lookup_form=lookup_form,
+                )
             )
         )
 
     def _render_status(self, application):
         return self.render_to_response(
             self.get_context_data(
-                form=self.get_form(), **_build_applicant_status_context(application)
+                **_build_verified_status_context(self.request, application)
             )
         )
 
@@ -568,7 +595,7 @@ class ApplicantStatusLookupView(FormView):
         return super().post(request, *args, **kwargs)
 
     def _handle_verify(self):
-        application = self._pending_application()
+        application = _pending_status_otp_application(self.request)
         if application is None:
             messages.error(
                 self.request,
@@ -584,12 +611,12 @@ class ApplicantStatusLookupView(FormView):
             except ValueError as exc:
                 otp_form.add_error("otp", str(exc))
             else:
-                self._mark_verified(application)
+                _mark_status_otp_verified(self.request, application)
                 return self._render_status(application)
         return self._render_otp_step(application, otp_form=otp_form)
 
     def _handle_resend(self):
-        application = self._pending_application()
+        application = _pending_status_otp_application(self.request)
         if application is None:
             messages.error(
                 self.request,
@@ -598,8 +625,11 @@ class ApplicantStatusLookupView(FormView):
             return redirect("applicant-status-lookup")
         try:
             issue_application_otp(
-            application, defer_delivery=False, enforce_cooldown=True, purpose="status_lookup"
-        )
+                application,
+                defer_delivery=False,
+                enforce_cooldown=True,
+                purpose="status_lookup",
+            )
         except ApplicationOTPDeliveryError as exc:
             messages.error(self.request, str(exc))
         except (OperationalError, ValueError) as exc:
@@ -656,12 +686,15 @@ class ApplicantStatusLookupView(FormView):
                 "Please check your Tracking Code and email address and try again.",
             )
             return self.form_invalid(form)
-        if self._verified_recently(application):
+        if _status_otp_verified_recently(self.request, application):
             return self._render_status(application)
         try:
             issue_application_otp(
-            application, defer_delivery=False, enforce_cooldown=True, purpose="status_lookup"
-        )
+                application,
+                defer_delivery=False,
+                enforce_cooldown=True,
+                purpose="status_lookup",
+            )
         except ApplicationOTPDeliveryError as exc:
             form.add_error(None, str(exc))
             return self.form_invalid(form)
@@ -710,22 +743,36 @@ class ApplicantStatusLinkView(TemplateView):
                 ),
             )
             return redirect("applicant-otp", token=self.application.public_token)
-        return super().get(request, *args, **kwargs)
+        if _status_otp_verified_recently(request, self.application):
+            return self.render_to_response(
+                self.get_context_data(
+                    **_build_verified_status_context(request, self.application)
+                )
+            )
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        application = getattr(self, "application", None) or self.get_application()
-        if application is None or application.submitted_at is None:
-            raise Http404
-        context["form"] = ApplicantStatusLookupForm(
-            request=self.request,
-            initial={
-                "tracking_code": application.tracking_code,
-                "email": application.applicant_email,
-            }
-        )
-        context.update(_build_applicant_status_context(application))
-        return context
+        otp_context = _build_status_otp_step_context(request, self.application)
+        try:
+            issue_application_otp(
+                self.application,
+                defer_delivery=False,
+                enforce_cooldown=True,
+                purpose="status_lookup",
+            )
+        except ApplicationOTPDeliveryError as exc:
+            messages.error(request, str(exc))
+        except OperationalError:
+            messages.error(
+                request,
+                "We could not send a verification code right now. Please try again in a few moments.",
+            )
+        except ValueError as exc:
+            messages.info(request, str(exc))
+        else:
+            messages.success(
+                request,
+                "We emailed a verification code to your address. Enter it below to view your status.",
+            )
+        return self.render_to_response(self.get_context_data(**otp_context))
 
 
 class ApplicantResubmissionView(TemplateView):

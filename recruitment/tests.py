@@ -3820,7 +3820,8 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         # lookup can send a fresh code immediately.
         application.otp_requested_at = timezone.now() - timedelta(minutes=5)
         application.save(update_fields=["otp_requested_at", "updated_at"])
-        status_response = client.post(
+        status_client = Client()
+        status_response = status_client.post(
             reverse("applicant-status-lookup"),
             {
                 "tracking_code": application.tracking_code,
@@ -3830,7 +3831,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertContains(status_response, "Check Your Email")
         self.assertNotContains(status_response, "Under Review")
 
-        verify_response = client.post(
+        verify_response = status_client.post(
             reverse("applicant-status-lookup"),
             {"action": "verify", "otp": self.extract_otp_from_last_email()},
         )
@@ -3839,7 +3840,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
 
         # Option A session: within the verified window, a repeat lookup skips
         # the code step entirely.
-        repeat_response = client.post(
+        repeat_response = status_client.post(
             reverse("applicant-status-lookup"),
             {
                 "tracking_code": application.tracking_code,
@@ -3867,9 +3868,9 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertContains(bad_verify, "invalid")
 
     def test_applicant_status_magic_link_renders_status_page(self):
-        client = Client()
+        submission_client = Client()
         self.post_portal_intake(
-            client,
+            submission_client,
             self.cos_position,
             self.portal_payload(position=self.cos_position, email="magic.status@example.com"),
             follow=True,
@@ -3878,24 +3879,124 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
             position=self.cos_position,
             applicant_email="magic.status@example.com",
         )
-        client.post(
+        submission_client.post(
             reverse("applicant-otp", kwargs={"token": application.public_token}),
             {"action": "verify", "otp": self.extract_otp_from_last_email()},
             follow=True,
         )
-        client.post(
+        submission_client.post(
             reverse("applicant-otp", kwargs={"token": application.public_token}),
             {"action": "finalize"},
             follow=True,
         )
         application.refresh_from_db()
+        application.otp_requested_at = timezone.now() - timedelta(
+            seconds=settings.APPLICATION_OTP_RESEND_COOLDOWN_SECONDS + 1
+        )
+        application.save(update_fields=["otp_requested_at", "updated_at"])
+        mail.outbox.clear()
 
-        response = client.get(reverse("applicant-status-link", kwargs={"token": application.public_token}))
+        link_client = Client()
+        status_link = reverse(
+            "applicant-status-link", kwargs={"token": application.public_token}
+        )
+        response = link_client.get(status_link)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["otp_step"])
+        self.assertContains(response, "Check Your Email")
+        self.assertNotContains(response, "Application details")
+        self.assertNotContains(response, application.tracking_code)
+        self.assertEqual(len(mail.outbox), 1)
+
+        verify_response = link_client.post(
+            reverse("applicant-status-lookup"),
+            {"action": "verify", "otp": self.extract_otp_from_last_email()},
+        )
+        self.assertContains(verify_response, application.case_number_short)
+        self.assertContains(verify_response, application.applicant_display_name)
+        self.assertContains(verify_response, "Application details")
+
+        mail_count = len(mail.outbox)
+        repeat_response = link_client.get(status_link)
+        self.assertEqual(repeat_response.status_code, 200)
+        self.assertContains(repeat_response, "Application details")
+        self.assertNotContains(repeat_response, "Check Your Email")
+        self.assertEqual(len(mail.outbox), mail_count)
+
+    def test_applicant_status_link_uses_existing_lookup_verification_window(self):
+        application = self.make_application(self.cos_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        application.refresh_from_db()
+        application.otp_requested_at = timezone.now() - timedelta(
+            seconds=settings.APPLICATION_OTP_RESEND_COOLDOWN_SECONDS + 1
+        )
+        application.save(update_fields=["otp_requested_at", "updated_at"])
+
+        client = Client()
+        client.post(
+            reverse("applicant-status-lookup"),
+            {
+                "tracking_code": application.tracking_code,
+                "email": application.applicant_email,
+            },
+        )
+        verify_response = client.post(
+            reverse("applicant-status-lookup"),
+            {"action": "verify", "otp": self.extract_otp_from_last_email()},
+        )
+        self.assertContains(verify_response, "Application details")
+
+        mail_count = len(mail.outbox)
+        response = client.get(
+            reverse("applicant-status-link", kwargs={"token": application.public_token})
+        )
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, application.case_number_short)
-        self.assertContains(response, application.applicant_display_name)
         self.assertContains(response, "Application details")
+        self.assertNotContains(response, "Check Your Email")
+        self.assertEqual(len(mail.outbox), mail_count)
+
+    def test_submission_finalize_stamps_status_lookup_session(self):
+        client = Client()
+        self.post_portal_intake(
+            client,
+            self.cos_position,
+            self.portal_payload(
+                position=self.cos_position,
+                email="finalize.status.session@example.com",
+            ),
+            follow=True,
+        )
+        application = RecruitmentApplication.objects.get(
+            position=self.cos_position,
+            applicant_email="finalize.status.session@example.com",
+        )
+        client.post(
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            {"action": "verify", "otp": self.extract_otp_from_last_email()},
+            follow=True,
+        )
+        finalize_response = client.post(
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            {"action": "finalize"},
+            follow=True,
+        )
+        self.assertContains(finalize_response, "Application submitted successfully")
+        application.refresh_from_db()
+
+        mail_count = len(mail.outbox)
+        response = client.get(
+            reverse("applicant-status-link", kwargs={"token": application.public_token})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, application.case_number_short)
+        self.assertContains(response, "Application details")
+        self.assertNotContains(response, "Check Your Email")
+        self.assertEqual(len(mail.outbox), mail_count)
 
     def test_unfinished_draft_status_link_redirects_to_otp(self):
         client = Client()
@@ -11439,6 +11540,21 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
             finalize=False,
         )
         client = Client()
+        application.otp_requested_at = timezone.now() - timedelta(
+            seconds=settings.APPLICATION_OTP_RESEND_COOLDOWN_SECONDS + 1
+        )
+        application.save(update_fields=["otp_requested_at", "updated_at"])
+        client.post(
+            reverse("applicant-status-lookup"),
+            {
+                "tracking_code": application.tracking_code,
+                "email": application.applicant_email,
+            },
+        )
+        client.post(
+            reverse("applicant-status-lookup"),
+            {"action": "verify", "otp": self.extract_otp_from_last_email()},
+        )
         response = client.get(
             reverse("applicant-status-link", kwargs={"token": application.public_token})
         )
