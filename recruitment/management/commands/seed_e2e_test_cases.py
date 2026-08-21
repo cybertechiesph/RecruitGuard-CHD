@@ -54,16 +54,16 @@ from recruitment.services import (
 
 SEED_DESCRIPTION_PREFIX = "E2E seed:"
 SEED_USER_PREFIX = "e2e_seed_applicant_"
-PRIMARY_REFERENCES = {
-    "cos_screening": "RG-COS-test-screening",
-    "exam": "RG-PLT-test-exam",
-    "interview": "RG-PLT-test-interview",
-    "deliberation": "RG-PLT-test-deliberation",
-    "cos_decision": "RG-COS-test-decision",
-    "final_selection": "RG-PLT-test-final-selection",
-    "aa_decision": "RG-PLT-test-aa-decision",
-    "aa_return": "RG-PLT-test-aa-return",
-    "completion": "RG-PLT-test-completion",
+SCENARIO_CODES = {
+    "cos_screening": "cos-screening",
+    "exam": "plantilla-exam",
+    "interview": "plantilla-interview",
+    "deliberation": "plantilla-deliberation",
+    "cos_decision": "cos-decision",
+    "final_selection": "plantilla-final-selection",
+    "aa_decision": "plantilla-aa-decision",
+    "aa_return": "plantilla-aa-return",
+    "completion": "plantilla-completion",
 }
 
 
@@ -163,16 +163,8 @@ class Command(BaseCommand):
         return seeded
 
     def _reset_seed_data(self):
-        reference_prefixes = tuple(PRIMARY_REFERENCES.values())
         entries = PositionPosting.objects.filter(description__startswith=SEED_DESCRIPTION_PREFIX)
         applications = RecruitmentApplication.objects.filter(position__in=entries)
-        for reference in reference_prefixes:
-            applications = applications | RecruitmentApplication.objects.filter(
-                reference_number__startswith=reference,
-            )
-        entries = entries | PositionPosting.objects.filter(applications__in=applications)
-        entries = entries.distinct()
-        applications = applications.distinct()
 
         FinalSelection.objects.filter(recruitment_entry__in=entries).delete()
         FinalDecision.objects.filter(recruitment_entry__in=entries).delete()
@@ -330,7 +322,9 @@ class Command(BaseCommand):
         create_default_position_document_requirements(entry)
         return entry
 
-    def _create_application(self, *, entry, applicant, reference, first_name, last_name, label):
+    def _create_application(
+        self, *, entry, applicant, scenario_code, first_name, last_name, label
+    ):
         performance_rating_applicability = (
             RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
             if entry.branch == PositionPosting.Branch.COS
@@ -354,10 +348,10 @@ class Command(BaseCommand):
             application,
             applicant,
             performance_rating_applicability=performance_rating_applicability,
-            content_prefix=reference,
+            content_prefix=scenario_code,
         )
         now = timezone.now()
-        application.otp_hash = f"e2e-seed-{reference}"
+        application.otp_hash = f"e2e-seed-{scenario_code}"
         application.otp_requested_at = now
         application.otp_verified_at = now
         application.otp_expires_at = now + timedelta(days=1)
@@ -372,7 +366,6 @@ class Command(BaseCommand):
         )
         submit_application(application, applicant)
         application.refresh_from_db()
-        self._set_reference(application, reference)
         return application
 
     def _upload_required_documents(
@@ -412,17 +405,6 @@ class Command(BaseCommand):
             raw_bytes,
             content_type="application/pdf",
         )
-
-    def _set_reference(self, application, reference):
-        if (
-            RecruitmentApplication.objects.exclude(pk=application.pk)
-            .filter(reference_number=reference)
-            .exists()
-        ):
-            raise CommandError(f"Reference number {reference} already exists.")
-        application.reference_number = reference
-        application.save(update_fields=["reference_number", "updated_at"])
-        application.refresh_from_db()
 
     def _finalize_screening(self, application, actor, score="91.00"):
         return save_screening_review(
@@ -583,18 +565,18 @@ class Command(BaseCommand):
         )
         applications = []
         for index in range(candidate_count):
-            reference = code if index == 0 else f"{code}-{index + 1:02d}"
+            scenario_code = code if index == 0 else f"{code}-{index + 1:02d}"
             application = self._create_application(
                 entry=entry,
                 applicant=applicants[index],
-                reference=reference,
+                scenario_code=scenario_code,
                 first_name="E2E",
                 last_name=(
                     "Deep Lock"
                     if index == candidate_count - 1 and candidate_count > 5
                     else f"CAR {index + 1:02d}"
                 ),
-                label=reference,
+                label=scenario_code,
             )
             score = f"{96 - index}.00"
             self._advance_to_hrmpsb(application, users, score=score)
@@ -646,7 +628,7 @@ class Command(BaseCommand):
 
     def _seed_exam_case(self, users, applicant):
         entry = self._create_entry(
-            code=PRIMARY_REFERENCES["exam"],
+            code=SCENARIO_CODES["exam"],
             branch=PositionPosting.Branch.PLANTILLA,
             level=PositionPosting.Level.LEVEL_2,
             reference_title="Medical Officer V",
@@ -655,10 +637,10 @@ class Command(BaseCommand):
         application = self._create_application(
             entry=entry,
             applicant=applicant,
-            reference=PRIMARY_REFERENCES["exam"],
+            scenario_code=SCENARIO_CODES["exam"],
             first_name="E2E",
             last_name="Exam",
-            label=PRIMARY_REFERENCES["exam"],
+            label=SCENARIO_CODES["exam"],
         )
         self._finalize_screening(application, users["hrm_chief"])
         application.refresh_from_db()
@@ -667,7 +649,7 @@ class Command(BaseCommand):
 
     def _seed_cos_screening_case(self, users, applicant):
         entry = self._create_entry(
-            code=PRIMARY_REFERENCES["cos_screening"],
+            code=SCENARIO_CODES["cos_screening"],
             branch=PositionPosting.Branch.COS,
             level=PositionPosting.Level.LEVEL_1,
             reference_title="Administrative Assistant I",
@@ -676,10 +658,10 @@ class Command(BaseCommand):
         application = self._create_application(
             entry=entry,
             applicant=applicant,
-            reference=PRIMARY_REFERENCES["cos_screening"],
+            scenario_code=SCENARIO_CODES["cos_screening"],
             first_name="E2E",
             last_name="COS Screening",
-            label=PRIMARY_REFERENCES["cos_screening"],
+            label=SCENARIO_CODES["cos_screening"],
         )
         application.refresh_from_db()
         application.case.refresh_from_db()
@@ -687,7 +669,7 @@ class Command(BaseCommand):
 
     def _seed_interview_case(self, users, applicant):
         entry = self._create_entry(
-            code=PRIMARY_REFERENCES["interview"],
+            code=SCENARIO_CODES["interview"],
             branch=PositionPosting.Branch.PLANTILLA,
             level=PositionPosting.Level.LEVEL_1,
             reference_title="Administrative Aide VI",
@@ -696,10 +678,10 @@ class Command(BaseCommand):
         application = self._create_application(
             entry=entry,
             applicant=applicant,
-            reference=PRIMARY_REFERENCES["interview"],
+            scenario_code=SCENARIO_CODES["interview"],
             first_name="E2E",
             last_name="Interview",
-            label=PRIMARY_REFERENCES["interview"],
+            label=SCENARIO_CODES["interview"],
         )
         self._advance_to_hrmpsb(application, users)
         save_interview_session(
@@ -718,7 +700,7 @@ class Command(BaseCommand):
 
     def _seed_deliberation_case(self, users, applicant):
         entry = self._create_entry(
-            code=PRIMARY_REFERENCES["deliberation"],
+            code=SCENARIO_CODES["deliberation"],
             branch=PositionPosting.Branch.PLANTILLA,
             level=PositionPosting.Level.LEVEL_1,
             reference_title="Administrative Aide VI",
@@ -727,10 +709,10 @@ class Command(BaseCommand):
         application = self._create_application(
             entry=entry,
             applicant=applicant,
-            reference=PRIMARY_REFERENCES["deliberation"],
+            scenario_code=SCENARIO_CODES["deliberation"],
             first_name="E2E",
             last_name="Deliberation",
-            label=PRIMARY_REFERENCES["deliberation"],
+            label=SCENARIO_CODES["deliberation"],
         )
         self._advance_to_hrmpsb(application, users)
         self._finalize_interview(
@@ -754,7 +736,7 @@ class Command(BaseCommand):
 
     def _seed_cos_decision_case(self, users, applicant):
         entry = self._create_entry(
-            code=PRIMARY_REFERENCES["cos_decision"],
+            code=SCENARIO_CODES["cos_decision"],
             branch=PositionPosting.Branch.COS,
             level=PositionPosting.Level.LEVEL_1,
             reference_title="Administrative Assistant I",
@@ -763,10 +745,10 @@ class Command(BaseCommand):
         application = self._create_application(
             entry=entry,
             applicant=applicant,
-            reference=PRIMARY_REFERENCES["cos_decision"],
+            scenario_code=SCENARIO_CODES["cos_decision"],
             first_name="E2E",
             last_name="COS Decision",
-            label=PRIMARY_REFERENCES["cos_decision"],
+            label=SCENARIO_CODES["cos_decision"],
         )
         self._advance_cos_to_hrm_chief_decision(application, users)
         application.refresh_from_db()
@@ -802,7 +784,7 @@ class Command(BaseCommand):
         applications, _report = self._prepare_plantilla_car_group(
             users=users,
             applicants=applicants,
-            code=PRIMARY_REFERENCES["final_selection"],
+            code=SCENARIO_CODES["final_selection"],
             candidate_count=6,
             finalize_car=True,
         )
@@ -812,7 +794,7 @@ class Command(BaseCommand):
         applications, _report = self._prepare_plantilla_car_group(
             users=users,
             applicants=applicants,
-            code=PRIMARY_REFERENCES["aa_decision"],
+            code=SCENARIO_CODES["aa_decision"],
             candidate_count=2,
             finalize_car=True,
         )
@@ -822,7 +804,7 @@ class Command(BaseCommand):
         applications, _report = self._prepare_plantilla_car_group(
             users=users,
             applicants=applicants,
-            code=PRIMARY_REFERENCES["aa_return"],
+            code=SCENARIO_CODES["aa_return"],
             candidate_count=2,
             finalize_car=True,
         )
@@ -832,7 +814,7 @@ class Command(BaseCommand):
         applications, report = self._prepare_plantilla_car_group(
             users=users,
             applicants=applicants,
-            code=PRIMARY_REFERENCES["completion"],
+            code=SCENARIO_CODES["completion"],
             candidate_count=2,
             finalize_car=True,
         )

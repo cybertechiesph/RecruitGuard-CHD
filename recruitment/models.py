@@ -885,7 +885,12 @@ class RecruitmentApplication(TimestampedModel):
             models.UniqueConstraint(
                 fields=["applicant", "position"],
                 name="unique_application_per_applicant_position",
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["position", "candidate_code"],
+                condition=~models.Q(candidate_code=""),
+                name="uniq_position_candidate_code",
+            ),
         ]
 
     def save(self, *args, **kwargs):

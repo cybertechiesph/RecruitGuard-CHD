@@ -22,11 +22,11 @@ suspicion that a case "may not be completable end‑to‑end" did not hold up: i
 
 | Field | Value |
 |---|---|
-| Reference | `RG-20260626-689980` (application pk 39) |
-| Vacancy | `RG-PLT-2026-0015` — Administrative Aide VI, Plantilla, Level 1 |
+| Reference | `CASE-2026-0039` (application pk 39) |
+| Vacancy | `VAC-PLT-2026-015` — Administrative Aide VI, Plantilla, Level 1 |
 | Final stage | `closed` · `case_status=approved` · `is_stage_locked=True` |
 | Completion | ref `APPT-0625174407`, date `2026-06-26`, requirement "Appointment papers" = completed |
-| Live server render | *"Administrative Aide VI · RG‑PLT‑2026‑0015 · Plantilla · Level 1 · **Closed** · Step 6 of 6 · Completion"* |
+| Live server render | *"Administrative Aide VI · VAC‑PLT‑2026‑015 · Plantilla · Level 1 · **Closed** · Step 6 of 6 · Completion"* |
 
 ---
 

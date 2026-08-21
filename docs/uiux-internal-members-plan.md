@@ -10,7 +10,7 @@ RecruitGuard-CHD is a Django app for DOH–CHD CALABARZON managing the HRMPSB hi
 
 - `.venv\Scripts\python.exe manage.py runserver 127.0.0.1:8058` with `DJANGO_DEBUG=True`, `SECURE_SSL_REDIRECT=False`, `INTERNAL_MFA_ENABLED=False` (allowed only in DEBUG).
 - **DB gotcha:** `config/settings.py` runs `load_dotenv(BASE_DIR/".env")` and `.env` points at local Postgres `recruitguard_chd` (the demo dataset). *Unsetting* `POSTGRES_*` (cmd `set VAR=`) still lands on Postgres via `.env`; setting them to *empty strings* (Git Bash `POSTGRES_DB= …`) falls back to the stale `db.sqlite3`. Use Postgres — that is where the demo volume lives. `.claude/launch.json` has a ready config `recruitguard-uxreview-nomfa` (port 8058) with all of this.
-- **Data:** the Postgres demo DB holds ~31 applications across 4 role stages. If lists look empty or you want a clean slate, run `manage.py seed_demo_data` (purges synthetic data and loads ~27 fresh applications). Note: this review advanced the “Administrative Assistant I (RG-COS-2026-0003)” batch through screening and exam — reseed if you need it back at screening.
+- **Data:** the Postgres demo DB holds ~31 applications across 4 role stages. If lists look empty or you want a clean slate, run `manage.py seed_demo_data` (purges synthetic data and loads ~27 fresh applications). Note: this review advanced the “Administrative Assistant I” COS batch through screening and exam — reseed if you need it back at screening.
 - **Test accounts** (already in the Postgres demo DB, password `UxReview!2026`): `ux_secretariat`, `ux_hrmchief`, `ux_hrmpsb`, `ux_appointing` — one per workflow role. Do not use `demo_seed_bot` (unusable password). Recreate via `manage.py shell` (`RecruitmentUser`, set `role`, `set_password`) if missing.
 
 **Intentional design decisions — do NOT undo:**
@@ -71,7 +71,7 @@ RecruitGuard-CHD is a Django app for DOH–CHD CALABARZON managing the HRMPSB hi
 2. `recruitment/views.py`, `WorkflowQueueView`:
    - `paginate_by = 25`.
    - Read `q` (search) and `step` (stage filter) from `request.GET`; filter the queryset with
-     `Q(applicant__first_name__icontains=q) | Q(applicant__last_name__icontains=q) | Q(reference_code__icontains=q) | Q(position__title__icontains=q)` (verify the reference field name — the UI shows `RG-20260701-…` via `reference_label`; grep the model for the underlying column) and `step` against the current-section key when set.
+     `Q(applicant__first_name__icontains=q) | Q(applicant__last_name__icontains=q) | Q(reference_number__icontains=q) | Q(position__title__icontains=q)` (the UI shows `CASE-2026-…` via `reference_label`) and `step` against the current-section key when set.
    - Pass a `querystring` context (GET params minus `page`) for pagination links, same pattern as the audit-log pagination item in `docs/uiux-improvement-plan.md` UX-02 (reuse `templates/internal_includes/pagination.html` if that plan landed; otherwise create it as specified there).
 3. `recruitment/templates/recruitment/application_list.html`:
    - Above the table, add a GET form: text input `q` labeled “Search applicant, reference, or position”, a `step` select built from `QUEUE_TASK_LABELS` (`recruitment/templatetags/recruitment_ui.py:387-396`), a “Apply” submit and a “Reset” link to the bare URL. Keep the existing branch chips working alongside (they are client-side; verify and keep).

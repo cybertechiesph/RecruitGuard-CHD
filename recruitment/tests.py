@@ -21,7 +21,7 @@ from django.contrib.admin.sites import AdminSite
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.test import Client, RequestFactory, SimpleTestCase, TestCase, override_settings
 from django.template.loader import render_to_string
 from django.urls import NoReverseMatch, reverse
@@ -102,6 +102,8 @@ from .requirements import (
     get_required_applicant_document_requirements,
 )
 from .services import (
+    IDENTIFIER_GENERATION_RETRIES,
+    assign_candidate_code,
     build_export_bundle,
     build_submission_packet,
     emit_deadline_approaching_notifications,
@@ -4990,6 +4992,97 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
                 for message in logs.output
             )
         )
+
+
+class CandidateCodeAllocationTests(BaseRecruitmentTestCase):
+    def make_candidate_application(self, applicant, position, *, candidate_code=""):
+        return RecruitmentApplication.objects.create(
+            applicant=applicant,
+            position=position,
+            applicant_email=applicant.email,
+            qualification_summary="Candidate-code constraint test.",
+            candidate_code=candidate_code,
+        )
+
+    def make_applicant_user(self, suffix):
+        return User.objects.create_user(
+            username=f"candidate-code-{suffix}",
+            email=f"candidate-code-{suffix}@example.com",
+            role=RecruitmentUser.Role.APPLICANT,
+        )
+
+    def test_candidate_code_is_unique_per_vacancy_when_non_blank(self):
+        self.make_candidate_application(
+            self.applicant,
+            self.level1_position,
+            candidate_code="C-07",
+        )
+        second_applicant = self.make_applicant_user("second")
+        duplicate = self.make_candidate_application(
+            second_applicant,
+            self.level1_position,
+        )
+
+        duplicate.candidate_code = "C-07"
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                duplicate.save(update_fields=["candidate_code", "updated_at"])
+
+        duplicate.refresh_from_db()
+        self.assertEqual(duplicate.candidate_code, "")
+        same_code_other_vacancy = self.make_candidate_application(
+            second_applicant,
+            self.level2_position,
+            candidate_code="C-07",
+        )
+        self.assertEqual(same_code_other_vacancy.candidate_code, "C-07")
+
+        third_applicant = self.make_applicant_user("third")
+        another_blank = self.make_candidate_application(
+            third_applicant,
+            self.level1_position,
+        )
+        self.assertEqual(another_blank.candidate_code, "")
+
+    def test_assign_candidate_code_retries_after_concurrent_collision(self):
+        target = self.make_candidate_application(self.applicant, self.level1_position)
+        contender = self.make_candidate_application(
+            self.make_applicant_user("contender"),
+            self.level1_position,
+        )
+        selected_codes = []
+
+        def collide_on_first_choice(candidates):
+            selected_code = candidates[0]
+            if not selected_codes:
+                RecruitmentApplication.objects.filter(pk=contender.pk).update(
+                    candidate_code=selected_code
+                )
+            selected_codes.append(selected_code)
+            return selected_code
+
+        with patch(
+            "recruitment.services.secrets.choice",
+            side_effect=collide_on_first_choice,
+        ):
+            assigned_code = assign_candidate_code(target)
+
+        target.refresh_from_db()
+        contender.refresh_from_db()
+        self.assertEqual(len(selected_codes), 2)
+        self.assertEqual(assigned_code, target.candidate_code)
+        self.assertNotEqual(target.candidate_code, contender.candidate_code)
+
+    def test_assign_candidate_code_stops_after_bounded_retries(self):
+        target = self.make_candidate_application(self.applicant, self.level1_position)
+        collision = IntegrityError("forced candidate-code collision")
+
+        with patch.object(target, "save", side_effect=collision) as save_mock:
+            with self.assertRaises(IntegrityError):
+                assign_candidate_code(target)
+
+        self.assertEqual(save_mock.call_count, IDENTIFIER_GENERATION_RETRIES)
+        self.assertEqual(target.candidate_code, "")
 
 
 class WorkflowRoutingTests(BaseRecruitmentTestCase):
@@ -16471,23 +16564,32 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
 
 
 class E2ESeedCommandTests(BaseRecruitmentTestCase):
+    def seeded_application(self, scenario_code):
+        application = (
+            RecruitmentApplication.objects.filter(
+                position__description__startswith=f"E2E seed: {scenario_code} "
+            )
+            .order_by("id")
+            .first()
+        )
+        self.assertIsNotNone(application)
+        return application
+
     def test_seed_e2e_test_cases_creates_verification_cases(self):
         out = io.StringIO()
         call_command("seed_e2e_test_cases", stdout=out, base_email="e2e@example.test")
 
-        cos_screening = RecruitmentApplication.objects.get(reference_number="RG-COS-test-screening")
+        cos_screening = self.seeded_application("cos-screening")
         self.assertEqual(cos_screening.case.current_stage, RecruitmentCase.Stage.SECRETARIAT_REVIEW)
         self.assertEqual(get_current_workflow_section(cos_screening), "screening")
         self.assertFalse(cos_screening.screening_records.filter(is_finalized=True).exists())
 
-        exam = RecruitmentApplication.objects.get(reference_number="RG-PLT-test-exam")
+        exam = self.seeded_application("plantilla-exam")
         self.assertEqual(exam.case.current_stage, RecruitmentCase.Stage.HRM_CHIEF_REVIEW)
         self.assertEqual(get_current_workflow_section(exam), "exam")
         self.assertTrue(exam.screening_records.filter(is_finalized=True).exists())
 
-        interview = RecruitmentApplication.objects.get(
-            reference_number="RG-PLT-test-interview"
-        )
+        interview = self.seeded_application("plantilla-interview")
         self.assertEqual(
             interview.case.current_stage,
             RecruitmentCase.Stage.HRMPSB_REVIEW,
@@ -16497,9 +16599,7 @@ class E2ESeedCommandTests(BaseRecruitmentTestCase):
             interview.interview_sessions.filter(is_finalized=True).exists()
         )
 
-        deliberation = RecruitmentApplication.objects.get(
-            reference_number="RG-PLT-test-deliberation"
-        )
+        deliberation = self.seeded_application("plantilla-deliberation")
         self.assertEqual(
             deliberation.case.current_stage,
             RecruitmentCase.Stage.HRMPSB_REVIEW,
@@ -16514,7 +16614,7 @@ class E2ESeedCommandTests(BaseRecruitmentTestCase):
             ).exists()
         )
 
-        cos_decision = RecruitmentApplication.objects.get(reference_number="RG-COS-test-decision")
+        cos_decision = self.seeded_application("cos-decision")
         self.assertEqual(cos_decision.case.current_stage, RecruitmentCase.Stage.HRM_CHIEF_REVIEW)
         # SL-01: the COS decision is made by finalizing the vacancy pick, so the case that
         # still awaits a decision is one whose pick is saved but not yet finalized.
@@ -16523,9 +16623,7 @@ class E2ESeedCommandTests(BaseRecruitmentTestCase):
         self.assertIsNotNone(pick)
         self.assertFalse(pick.is_finalized)
 
-        final_selection = RecruitmentApplication.objects.get(
-            reference_number="RG-PLT-test-final-selection"
-        )
+        final_selection = self.seeded_application("plantilla-final-selection")
         final_selection_report = get_latest_finalized_comparative_assessment_report(
             final_selection
         )
@@ -16534,38 +16632,48 @@ class E2ESeedCommandTests(BaseRecruitmentTestCase):
         self.assertEqual(final_selection_report.items.count(), 6)
         self.assertTrue(final_selection_report.items.filter(rank_order__gt=5).exists())
 
-        aa_decision = RecruitmentApplication.objects.get(reference_number="RG-PLT-test-aa-decision")
+        aa_decision = self.seeded_application("plantilla-aa-decision")
         self.assertEqual(aa_decision.case.current_stage, RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW)
         self.assertEqual(get_current_workflow_section(aa_decision), "decision")
         self.assertIsNotNone(get_latest_finalized_comparative_assessment_report(aa_decision))
         self.assertFalse(FinalSelection.objects.filter(recruitment_entry=aa_decision.position).exists())
 
-        aa_return = RecruitmentApplication.objects.get(reference_number="RG-PLT-test-aa-return")
+        aa_return = self.seeded_application("plantilla-aa-return")
         self.assertEqual(aa_return.case.current_stage, RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW)
         self.assertEqual(get_current_workflow_section(aa_return), "decision")
         self.assertIsNotNone(get_latest_finalized_comparative_assessment_report(aa_return))
         self.assertFalse(FinalSelection.objects.filter(recruitment_entry=aa_return.position).exists())
 
-        completion = RecruitmentApplication.objects.get(reference_number="RG-PLT-test-completion")
+        completion = self.seeded_application("plantilla-completion")
         self.assertEqual(completion.case.current_stage, RecruitmentCase.Stage.COMPLETION)
         self.assertEqual(get_current_workflow_section(completion), "completion")
         self.assertTrue(hasattr(completion, "completion_record"))
         self.assertEqual(completion.completion_record.requirements.count(), 1)
 
+        seeded_applications = RecruitmentApplication.objects.filter(
+            position__description__startswith="E2E seed:"
+        )
+        self.assertTrue(seeded_applications.exists())
+        for application in seeded_applications:
+            self.assertRegex(application.reference_number, r"^CASE-\d{4}-\d{4,}$")
+        self.assertNotIn("RG-", out.getvalue())
+
         call_command("seed_e2e_test_cases", stdout=io.StringIO(), base_email="e2e@example.test")
         self.assertEqual(
-            RecruitmentApplication.objects.filter(reference_number="RG-PLT-test-exam").count(),
-            1,
-        )
-        self.assertEqual(
-            RecruitmentApplication.objects.filter(
-                reference_number="RG-PLT-test-interview"
+            PositionPosting.objects.filter(
+                description__startswith="E2E seed: plantilla-exam "
             ).count(),
             1,
         )
         self.assertEqual(
-            RecruitmentApplication.objects.filter(
-                reference_number="RG-PLT-test-deliberation"
+            PositionPosting.objects.filter(
+                description__startswith="E2E seed: plantilla-interview "
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            PositionPosting.objects.filter(
+                description__startswith="E2E seed: plantilla-deliberation "
             ).count(),
             1,
         )

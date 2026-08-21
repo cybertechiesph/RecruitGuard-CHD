@@ -73,7 +73,7 @@ Actual office worker who screens or processes applications at DOH-CHD CALABARZON
 ### Pre-session setup
 - Pre-logged in as `secretariat` (the moderator does this before the participant sits down).
 - Workstation is at `http://localhost:8000/internal/workflow/queue/`.
-- Use seeded case `RG-COS-test-screening`. It should be visible in the queue at Secretariat screening stage, with documents uploaded.
+- Use the seeded `cos-screening` scenario (its vacancy description starts `E2E seed: cos-screening`). It should be visible in the queue at Secretariat screening stage, with documents uploaded; its generated case number uses `CASE-YYYY-NNNN`.
 - If the seeded case has been used in a prior session, re-seed via `python manage.py seed_e2e_test_cases`.
 
 ### Task statement *(read aloud)*
@@ -125,7 +125,7 @@ Someone with decision-making authority on appointments — the actual HRM Chief,
 
 ### Pre-session setup
 - Pre-logged in as `hrm_chief`.
-- A seeded case must be at HRM Chief Review with the earlier review steps already complete. For a clean run, use reference number `RG-COS-test-decision`. Do not rely on the app ID; it changes after each reseed.
+- A seeded case must be at HRM Chief Review with the earlier review steps already complete. For a clean run, use the `cos-decision` scenario (vacancy description `E2E seed: cos-decision …`). Do not rely on the generated case number or app ID; both can change after each reseed.
 - Workstation at `http://localhost:8000/internal/workflow/queue/`.
 
 ### Task statement *(read aloud)*

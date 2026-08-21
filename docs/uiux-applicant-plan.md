@@ -169,7 +169,7 @@ The applicant portal (`/apply/`, routes in `recruitment/applicant_urls.py`, view
 
 **Problem.** The portal painstakingly translates workflow states for applicants ("Under Review", "Contract of Service") — but the confirmation email says "**Current status: Secretariat Review**" and "**Recruitment type: COS**". To a first-time applicant, "Secretariat Review" is government-internal vocabulary (and reveals internal structure), and "COS" is an unexplained acronym. Violates: consistency; match with the applicant's language. Hurts reality #2.
 
-**Evidence.** Captured email: `Application ID: RG-20260702-8EF3BC / Position: Security Guard I / Recruitment type: COS / Current status: Secretariat Review` — versus the receipt page which correctly shows "Contract of Service", and the status page which shows "Under Review".
+**Evidence.** Captured pre-REV-G email (legacy reference omitted): `Position: Security Guard I / Recruitment type: COS / Current status: Secretariat Review` — versus the receipt page which correctly shows "Contract of Service", and the status page which shows "Under Review".
 
 **Change specification.**
 

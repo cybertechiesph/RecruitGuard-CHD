@@ -2431,22 +2431,38 @@ def assign_candidate_code(application):
     """Per-vacancy blinding alias (C-NN) for HRMPSB evaluation surfaces.
     Numbers are drawn at random from a pool comfortably larger than the
     vacancy's candidate count, so a code reveals nothing about application
-    order. Idempotent."""
+    order. Save under the per-vacancy unique constraint and re-read the pool
+    after a concurrent assignment collision. Idempotent."""
     if application.candidate_code:
         return application.candidate_code
-    taken = set(
-        RecruitmentApplication.objects.filter(position=application.position)
-        .exclude(candidate_code="")
-        .values_list("candidate_code", flat=True)
-    )
-    pool_size = max(
-        20,
-        RecruitmentApplication.objects.filter(position=application.position).count() * 2,
-    )
-    candidates = [f"C-{n:02d}" for n in range(1, pool_size + 1) if f"C-{n:02d}" not in taken]
-    application.candidate_code = secrets.choice(candidates)
-    application.save(update_fields=["candidate_code", "updated_at"])
-    return application.candidate_code
+
+    last_error = None
+    for _ in range(IDENTIFIER_GENERATION_RETRIES):
+        vacancy_applications = RecruitmentApplication.objects.filter(
+            position=application.position
+        )
+        taken = set(
+            vacancy_applications.exclude(candidate_code="").values_list(
+                "candidate_code", flat=True
+            )
+        )
+        pool_size = max(20, vacancy_applications.count() * 2)
+        candidates = [
+            f"C-{number:02d}"
+            for number in range(1, pool_size + 1)
+            if f"C-{number:02d}" not in taken
+        ]
+        application.candidate_code = secrets.choice(candidates)
+        try:
+            with transaction.atomic():
+                application.save(update_fields=["candidate_code", "updated_at"])
+        except IntegrityError as exc:
+            application.candidate_code = ""
+            last_error = exc
+            continue
+        return application.candidate_code
+
+    raise last_error
 
 
 def _review_stage_from_application_status(application_status):

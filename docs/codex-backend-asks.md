@@ -142,13 +142,13 @@ Index on `(recipient, read_at, created_at)` for the unread-count query.
 
 | Event | Recipient(s) | Title pattern |
 |---|---|---|
-| `route_case_between_secretariat_and_hrm_chief` succeeds | Target office's user(s) | *"RG-X handed off to you by Y"* |
+| `route_case_between_secretariat_and_hrm_chief` succeeds | Target office's user(s) | *"CASE-2026-0147 handed off to you by Y"* |
 | `process_workflow_action` with action `return_to_applicant` | Applicant *(if applicant accounts notify)* — and the role who'd next pick it up if/when re-submitted | *"Application returned to applicant"* |
-| `process_workflow_action` with `endorse` | Receiving role | *"RG-X endorsed to you for HRMPSB review"* |
-| Applicant resubmits documents (post-resubmission flow Codex already built) | Original Secretariat / Chief | *"RG-X applicant resubmitted N documents"* |
-| `save_interview_session` first save | All HRMPSB members of the case | *"Interview scheduled for RG-X on {date}"* |
+| `process_workflow_action` with `endorse` | Receiving role | *"CASE-2026-0147 endorsed to you for HRMPSB review"* |
+| Applicant resubmits documents (post-resubmission flow Codex already built) | Original Secretariat / Chief | *"CASE-2026-0147 applicant resubmitted N documents"* |
+| `save_interview_session` first save | All HRMPSB members of the case | *"Interview scheduled for CASE-2026-0147 on {date}"* |
 | Interview session finalized | Panel members who hadn't submitted | *"Interview session finalized — no further ratings"* |
-| Posting deadline ≤ 24 hours away (a daily cron) | Assigned handler | *"RG-X is closing in 24 hours"* |
+| Posting deadline ≤ 24 hours away (a daily cron) | Assigned handler | *"VAC-PLT-2026-002 is closing in 24 hours"* |
 
 **Query helpers.**
 
@@ -343,15 +343,15 @@ following UI surfaces still need a real-data live walk:
 prerequisite records already in place so the templates render with real
 data — not empty/default state. Concretely:
 
-| Case | Branch | Current stage | Required prior records |
+| Seed scenario | Branch | Current stage | Required prior records |
 |------|--------|---------------|------------------------|
-| RG-COS-test-screening | COS | secretariat_review | Submitted application with required documents uploaded; no finalized screening yet |
-| RG-PLT-test-exam | Plantilla | hrm_chief_review | Screening finalized (qualified, complete) |
-| RG-COS-test-decision | COS | hrm_chief_review | Screening finalized + (optional) exam record |
-| RG-PLT-test-final-selection | Plantilla | appointing_authority_review | Screening + exam + interview ratings (≥1 panel rating) + finalized deliberation + finalized CAR with at least 6 ranked items, and no final selection yet |
-| RG-PLT-test-aa-decision | Plantilla | appointing_authority_review | Finalized CAR with ranked items and no final selection yet; kept as a smaller Appointing Authority selection case |
-| RG-PLT-test-aa-return | Plantilla | appointing_authority_review | Finalized CAR with ranked items and no final selection yet; kept as a separate Appointing Authority CAR return/reassessment case |
-| RG-PLT-test-completion | Plantilla | completion | Plantilla final selection recorded + completion record initialized + at least one saved completion requirement and one blank slot |
+| `cos-screening` | COS | secretariat_review | Submitted application with required documents uploaded; no finalized screening yet |
+| `plantilla-exam` | Plantilla | hrm_chief_review | Screening finalized (qualified, complete) |
+| `cos-decision` | COS | hrm_chief_review | Screening finalized + (optional) exam record |
+| `plantilla-final-selection` | Plantilla | appointing_authority_review | Screening + exam + interview ratings (≥1 panel rating) + finalized deliberation + finalized CAR with at least 6 ranked items, and no final selection yet |
+| `plantilla-aa-decision` | Plantilla | appointing_authority_review | Finalized CAR with ranked items and no final selection yet; kept as a smaller Appointing Authority selection case |
+| `plantilla-aa-return` | Plantilla | appointing_authority_review | Finalized CAR with ranked items and no final selection yet; kept as a separate Appointing Authority CAR return/reassessment case |
+| `plantilla-completion` | Plantilla | completion | Plantilla final selection recorded + completion record initialized + at least one saved completion requirement and one blank slot |
 
 If a management command makes sense, a `seed_e2e_test_cases` would also
 let us reset the test bed cheaply.
