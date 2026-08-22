@@ -1,4 +1,6 @@
 import logging
+import smtplib
+import socket
 from datetime import timedelta
 
 from django.conf import settings
@@ -26,6 +28,35 @@ from .applicant_labels import applicant_branch_label, applicant_status_label
 
 
 logger = logging.getLogger(__name__)
+
+
+def summarize_delivery_failure(exc: Exception) -> str:
+    """Return a safe, fixed delivery-failure summary for persistent records."""
+    if isinstance(exc, smtplib.SMTPAuthenticationError):
+        summary = "Mail server rejected the sender credentials"
+    elif isinstance(exc, smtplib.SMTPRecipientsRefused):
+        summary = "Mail server refused the recipient address"
+    elif isinstance(
+        exc,
+        (
+            smtplib.SMTPConnectError,
+            ConnectionRefusedError,
+            socket.timeout,
+            TimeoutError,
+            OSError,
+        ),
+    ):
+        summary = "Could not reach the mail server"
+    elif isinstance(exc, smtplib.SMTPException):
+        summary = "Mail server returned an error"
+    elif (
+        isinstance(exc, RuntimeError)
+        and exc.args == ("Email backend did not confirm delivery.",)
+    ):
+        summary = "Email backend did not confirm delivery."
+    else:
+        summary = "Unexpected error while sending"
+    return f"{summary} ({type(exc).__name__})"
 
 # Each notification type maps to its branded HTML template (extends email/base.html).
 # Audience (below) drives both the HTML footer and the plain-text footer: applicant-facing
@@ -617,8 +648,12 @@ def _deliver_notification(notification_id):
         sent_count = email.send(fail_silently=False)
         if sent_count != 1:
             raise RuntimeError("Email backend did not confirm delivery.")
-    except Exception as exc:  # pragma: no cover - exercised via status update path
-        return _mark_notification_failed(notification, str(exc)[:1000])
+    except Exception as exc:
+        logger.exception("Failed to deliver notification %s.", notification.id)
+        return _mark_notification_failed(
+            notification,
+            summarize_delivery_failure(exc),
+        )
 
     notification.delivery_status = NotificationLog.DeliveryStatus.SENT
     notification.sent_at = timezone.now()

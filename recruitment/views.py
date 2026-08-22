@@ -1173,7 +1173,6 @@ class ApplicationAuditLogView(
             get_application_audit_logs(
                 application,
                 search_query=cleaned_data["q"],
-                action=cleaned_data["action"],
                 actor_role=cleaned_data["actor_role"],
                 sensitive_only=cleaned_data["sensitive_only"],
                 category=cleaned_data["category"],
@@ -1192,7 +1191,6 @@ class ApplicationAuditLogView(
                 actor=self.request.user,
                 application=application,
                 search_query=cleaned_data["q"],
-                action=cleaned_data["action"],
                 actor_role=cleaned_data["actor_role"],
                 sensitive_only=cleaned_data["sensitive_only"],
                 result_count=len(audit_logs),
@@ -1228,7 +1226,6 @@ class AuditLogListView(LoginRequiredMixin, SystemAdministratorRequiredMixin, Tem
         session_tag = (self.request.GET.get("session") or "").strip()
         audit_logs = get_all_audit_logs(
             search_query=cleaned_data["q"],
-            action=cleaned_data["action"],
             actor_role=cleaned_data["actor_role"],
             sensitive_only=cleaned_data["sensitive_only"],
             category=cleaned_data["category"],
@@ -1269,7 +1266,6 @@ class AuditLogListView(LoginRequiredMixin, SystemAdministratorRequiredMixin, Tem
             record_audit_log_review(
                 actor=self.request.user,
                 search_query=cleaned_data["q"],
-                action=cleaned_data["action"],
                 actor_role=cleaned_data["actor_role"],
                 sensitive_only=cleaned_data["sensitive_only"],
                 result_count=paginator.count,
@@ -1283,7 +1279,6 @@ def _audit_search_cleaned_data(search_form):
     return {
         "q": "",
         "category": "",
-        "action": "",
         "actor_role": "",
         "actor": None,
         "date_from": None,
@@ -1300,7 +1295,6 @@ def _filtered_audit_logs_from_request(request):
     session_tag = (request.GET.get("session") or "").strip()
     queryset = get_all_audit_logs(
         search_query=cleaned["q"],
-        action=cleaned["action"],
         actor_role=cleaned["actor_role"],
         sensitive_only=cleaned["sensitive_only"],
         category=cleaned["category"],
@@ -1320,8 +1314,6 @@ def _describe_audit_filters(cleaned, session_tag):
         parts.append(f'search "{cleaned["q"]}"')
     if cleaned["category"]:
         parts.append(f"category {AUDIT_ACTION_CATEGORIES[cleaned['category']]['label']}")
-    if cleaned["action"]:
-        parts.append(f"action {cleaned['action']}")
     if cleaned["actor"]:
         parts.append(f"user {cleaned['actor'].get_full_name() or cleaned['actor'].username}")
     if cleaned["actor_role"]:

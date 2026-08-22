@@ -102,52 +102,6 @@ def normalize_philippine_mobile_number(value):
     raise ValueError(APPLICANT_MOBILE_ERROR_MESSAGE)
 
 
-AUDIT_ACTION_CHOICE_LABELS = {
-    AuditLog.Action.INTERNAL_LOGIN_FAILED: "Internal Login Failed",
-    AuditLog.Action.INTERNAL_LOGIN_LOCKED: "Internal Login Locked",
-    AuditLog.Action.INTERNAL_LOGIN_ALERT_SENT: "Internal Login Alert Sent",
-    AuditLog.Action.INTERNAL_LOGIN_ALERT_FAILED: "Internal Login Alert Failed",
-    AuditLog.Action.INTERNAL_MFA_SENT: "Internal Verification Code Sent",
-    AuditLog.Action.INTERNAL_MFA_RESENT: "Internal Verification Code Resent",
-    AuditLog.Action.INTERNAL_MFA_VERIFIED: "Internal MFA Verified",
-    AuditLog.Action.INTERNAL_MFA_FAILED: "Internal MFA Failed",
-    AuditLog.Action.INTERNAL_MFA_EXPIRED: "Internal MFA Expired",
-    AuditLog.Action.INTERNAL_MFA_LOCKED: "Internal MFA Locked",
-    AuditLog.Action.PASSWORD_RESET_REQUESTED: "Password Reset Requested",
-    AuditLog.Action.PASSWORD_RESET_COMPLETED: "Password Reset Completed",
-    AuditLog.Action.INTERNAL_EMAIL_CHANGE_REQUESTED: "Internal Email Change Requested",
-    AuditLog.Action.INTERNAL_EMAIL_CHANGE_VERIFIED: "Internal Email Change Verified",
-    AuditLog.Action.INTERNAL_EMAIL_CHANGE_FAILED: "Internal Email Change Failed",
-    AuditLog.Action.APPLICATION_OTP_SENT: "Verification Code Sent",
-    AuditLog.Action.APPLICATION_OTP_FAILED: "Verification Code Failed",
-    AuditLog.Action.APPLICATION_OTP_LOCKED: "Verification Code Locked",
-    AuditLog.Action.APPLICATION_OTP_VERIFIED: "Email Verified",
-    AuditLog.Action.ROUTED: "Case Assigned",
-    AuditLog.Action.INTERVIEW_FALLBACK_UPLOADED: "Interview Rating File Uploaded",
-    AuditLog.Action.CAR_GENERATED: "Comparative Assessment Report Created",
-    AuditLog.Action.OVERRIDE_GRANTED: "Special Authorization Recorded",
-    AuditLog.Action.OVERRIDE_USED: "Special Authorization Used",
-    AuditLog.Action.EVIDENCE_UPLOADED: "File Uploaded",
-    AuditLog.Action.EVIDENCE_DOWNLOADED: "File Downloaded",
-    AuditLog.Action.EVIDENCE_ARCHIVED: "File Archived",
-    AuditLog.Action.EVIDENCE_RESTORED: "File Restored",
-    AuditLog.Action.EVIDENCE_ACCESS_DENIED: "File Access Denied",
-    AuditLog.Action.EVIDENCE_VAULT_VIEWED: "Secured Files Viewed",
-    AuditLog.Action.EXPORT_GENERATED: "Export Created",
-    AuditLog.Action.EXPORT_DENIED: "Export Denied",
-}
-
-
-def audit_action_choices():
-    return [
-        ("", "All actions"),
-        *[
-            (value, AUDIT_ACTION_CHOICE_LABELS.get(value, label))
-            for value, label in AuditLog.Action.choices
-        ],
-    ]
-
-
 class BootstrapFormMixin:
     def _apply_bootstrap(self):
         for field in self.fields.values():
@@ -1047,11 +1001,6 @@ class AuditLogSearchForm(BootstrapFormMixin, forms.Form):
         required=False,
         choices=[],
         label="Category",
-    )
-    action = forms.ChoiceField(
-        required=False,
-        choices=audit_action_choices(),
-        label="Action",
     )
     actor_role = forms.ChoiceField(
         required=False,

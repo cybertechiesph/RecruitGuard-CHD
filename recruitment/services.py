@@ -474,6 +474,10 @@ def record_internal_login_failure(username, request=None):
         try:
             alert_sent = _send_internal_login_lockout_alert(attempt)
         except Exception as exc:
+            logger.exception(
+                "Failed to send the internal login lockout alert for attempt %s.",
+                attempt.pk,
+            )
             record_system_audit_event(
                 actor=actor,
                 action=AuditLog.Action.INTERNAL_LOGIN_ALERT_FAILED,
@@ -481,7 +485,7 @@ def record_internal_login_failure(username, request=None):
                 metadata={
                     **metadata,
                     "locked_until": attempt.locked_until.isoformat(),
-                    "error": str(exc),
+                    "error": f"{type(exc).__name__}",
                 },
             )
         else:

@@ -2,6 +2,7 @@ import importlib
 import io
 import json
 import re
+import smtplib
 import urllib.parse
 import uuid
 import zipfile
@@ -50,6 +51,7 @@ from .forms import (
     WorkflowActionForm,
 )
 from .models import (
+    AUDIT_ACTION_CATEGORIES,
     AttendanceException,
     ApplicationETERating,
     AuditLog,
@@ -10347,11 +10349,9 @@ class AuditLoggingTraceabilityTests(BaseRecruitmentTestCase):
         application = self.make_submitted_application()
         security_logs = get_all_audit_logs(category="security")
         self.assertTrue(security_logs.exists())
+        security_actions = set(AUDIT_ACTION_CATEGORIES["security"]["actions"])
         self.assertTrue(
-            all(log.action in ("application_otp_sent", "application_otp_verified",
-                                "internal_login", "internal_logout", "audit_log_viewed")
-                or log.is_sensitive_access or True
-                for log in security_logs[:5])
+            all(log.action in security_actions for log in security_logs)
         )
         case_logs = get_all_audit_logs(category="case")
         self.assertTrue(case_logs.filter(action=AuditLog.Action.APPLICATION_SUBMITTED).exists())
@@ -10369,6 +10369,16 @@ class AuditLoggingTraceabilityTests(BaseRecruitmentTestCase):
             sum(cat["count"] for cat in summary["categories"]) + summary["other_count"],
             summary["total"],
         )
+
+    def test_audit_search_uses_category_without_raw_action_dropdown(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.sysadmin)
+
+        response = client.get(reverse("audit-log-list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, '<select name="action"')
+        self.assertContains(response, '<select name="category"')
 
     def test_audit_exports_are_logged_and_filtered(self):
         self.make_submitted_application()
@@ -10574,7 +10584,14 @@ class AuditLoggingTraceabilityTests(BaseRecruitmentTestCase):
         client = Client()
         self.force_login_with_mfa(client, self.sysadmin)
         # Generate an oversight "view" record whose metadata is filter state.
-        client.get(reverse("evidence-vault-list"))
+        evidence_response = client.get(reverse("evidence-vault-list"))
+        self.assertEqual(evidence_response.status_code, 200)
+        self.assertTrue(
+            AuditLog.objects.filter(
+                actor=self.sysadmin,
+                action=AuditLog.Action.EVIDENCE_VAULT_VIEWED,
+            ).exists()
+        )
 
         response = client.get(reverse("audit-log-list"))
 
@@ -10904,6 +10921,43 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
                 action=AuditLog.Action.NOTIFICATION_SENT,
             ).exists()
         )
+
+    def test_delivery_failure_redacts_raw_smtp_exception_text(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        mail.outbox.clear()
+
+        failure = smtplib.SMTPConnectError(
+            421,
+            b"secret-host.example refused applicant@example.com",
+        )
+        with patch(
+            "recruitment.notification_services.EmailMultiAlternatives.send",
+            side_effect=failure,
+        ), self.assertLogs("recruitment.notification_services", level="ERROR"):
+            with self.captureOnCommitCallbacks(execute=True):
+                submit_application(application, self.applicant)
+
+        notification = NotificationLog.objects.get(
+            application=application,
+            notification_type=NotificationLog.NotificationType.SUBMISSION_ACKNOWLEDGMENT,
+        )
+        self.assertEqual(
+            notification.failure_details,
+            "Could not reach the mail server (SMTPConnectError)",
+        )
+        self.assertEqual(
+            notification.delivery_status,
+            NotificationLog.DeliveryStatus.FAILED,
+        )
+        self.assertNotIn("secret-host", notification.failure_details)
+
+        failed_audit = AuditLog.objects.get(
+            application=application,
+            action=AuditLog.Action.NOTIFICATION_FAILED,
+        )
+        self.assertNotIn("secret-host", str(failed_audit.metadata))
+        self.assertEqual(failed_audit.metadata["notification_id"], notification.id)
 
     def test_approval_sends_selected_applicant_notification(self):
         application = self.make_application(self.cos_position)
