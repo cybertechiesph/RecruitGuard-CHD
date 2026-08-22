@@ -48,6 +48,7 @@ from .forms import (
     CaseHandoffForm,
     ExamRecordForm,
     InternalMFAOTPForm,
+    ScreeningReviewForm,
     WorkflowActionForm,
 )
 from .models import (
@@ -110,7 +111,9 @@ from .services import (
     build_submission_packet,
     emit_deadline_approaching_notifications,
     generate_comparative_assessment_report,
+    get_case_handoff_options,
     get_current_workflow_section,
+    get_resubmission_request,
     get_screening_record,
     get_exam_record,
     get_stage_record_versions,
@@ -126,6 +129,7 @@ from .services import (
     issue_application_otp,
     process_workflow_action,
     repair_auto_advance_workflow_boundaries,
+    route_case_between_secretariat_and_hrm_chief,
     record_final_decision,
     user_can_record_final_decision,
     record_final_selection,
@@ -5531,6 +5535,95 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         self.assertIn('type="hidden" name="target_role" value="hrm_chief"', content)
         self.assertNotIn('<select name="target_role"', content)
 
+    def test_handoff_is_hidden_and_refused_while_resubmission_is_pending(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        first_requirement = get_applicant_document_requirements(application)[0]
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        client.post(
+            reverse("screening-review", kwargs={"pk": application.pk}),
+            {
+                "completeness_notes": "A clearer document is required.",
+                "qualification_outcome": "",
+                "screening_notes": "Waiting for the corrected file.",
+                **self.screening_document_status_payload(
+                    application,
+                    overrides={
+                        first_requirement.code: (
+                            ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
+                        ),
+                    },
+                ),
+                f"document_remarks__{first_requirement.code}": "Upload a readable copy.",
+                "operation": "save",
+            },
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            process_workflow_action(
+                application,
+                self.secretariat,
+                "return_to_applicant",
+                "Please upload the corrected document.",
+            )
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+        requirements_before, deadline_before, remarks_before = get_resubmission_request(
+            application
+        )
+        self.assertEqual([item.code for item in requirements_before], [first_requirement.code])
+        self.assertIsNotNone(deadline_before)
+        self.assertIn(first_requirement.code, remarks_before)
+        self.assertEqual(get_case_handoff_options(application, self.secretariat), [])
+
+        refusal = (
+            "This case is waiting for the applicant's resubmission. Wait for it, or remove "
+            "the applicant from the batch, before sending the case."
+        )
+        with self.assertRaisesMessage(ValueError, refusal):
+            route_case_between_secretariat_and_hrm_chief(
+                application,
+                self.secretariat,
+                RecruitmentUser.Role.HRM_CHIEF,
+                "Attempted office handoff while waiting.",
+            )
+
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+        self.assertEqual(
+            application.case.case_status,
+            RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION,
+        )
+        requirements_after, deadline_after, remarks_after = get_resubmission_request(
+            application
+        )
+        self.assertEqual([item.code for item in requirements_after], [first_requirement.code])
+        self.assertEqual(deadline_after, deadline_before)
+        self.assertEqual(remarks_after, remarks_before)
+
+        otp_code = issue_application_otp(application, actor=self.applicant)
+        verify_application_otp(application, otp_code, actor=self.applicant)
+        application.refresh_from_db()
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_document_resubmission(
+                application,
+                self.applicant,
+                {
+                    first_requirement.code: self.build_valid_applicant_document_upload(
+                        first_requirement.code,
+                        content_prefix="handoff-guard-resubmission",
+                    )
+                },
+            )
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+        self.assertEqual(application.case.case_status, RecruitmentCase.CaseStatus.ACTIVE)
+        self.assertEqual(
+            application.current_handler_role,
+            RecruitmentUser.Role.SECRETARIAT,
+        )
+
     def test_case_handoff_form_collapses_single_authorized_target(self):
         application = self.make_application(self.level2_position)
         self.verify_application_for_submission(application)
@@ -5595,7 +5688,7 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         self.assertEqual(response.status_code, 404)
         self.assertFalse(WorkflowOverride.objects.filter(application=application).exists())
 
-    def test_override_allows_secretariat_processing_of_level2(self):
+    def test_level2_plantilla_override_exam_routes_through_chief_to_hrmpsb(self):
         application = self.make_application(self.level2_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
@@ -5626,23 +5719,111 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         )
         self.finalize_exam_for_current_stage(application, self.secretariat)
         application.refresh_from_db()
-        self.assertEqual(application.current_handler_role, RecruitmentUser.Role.HRM_CHIEF)
-        self.assertEqual(application.status, RecruitmentApplication.Status.HRM_CHIEF_REVIEW)
-        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.HRM_CHIEF_REVIEW)
+        application.case.refresh_from_db()
+        self.assertEqual(application.current_handler_role, RecruitmentUser.Role.HRMPSB_MEMBER)
+        self.assertEqual(application.status, RecruitmentApplication.Status.HRMPSB_REVIEW)
+        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.HRMPSB_REVIEW)
         self.assertFalse(WorkflowOverride.objects.filter(application=application, is_active=True).exists())
-        routing_events = list(application.routing_history.values_list("route_type", "to_handler_role"))
+        routing_events = list(
+            application.routing_history.values_list(
+                "route_type",
+                "from_handler_role",
+                "to_handler_role",
+            )
+        )
         self.assertEqual(
             routing_events,
             [
-                (RoutingHistory.RouteType.INITIAL, RecruitmentUser.Role.HRM_CHIEF),
-                (RoutingHistory.RouteType.OVERRIDE, RecruitmentUser.Role.SECRETARIAT),
-                (RoutingHistory.RouteType.FORWARD, RecruitmentUser.Role.HRM_CHIEF),
+                (RoutingHistory.RouteType.INITIAL, "", RecruitmentUser.Role.HRM_CHIEF),
+                (
+                    RoutingHistory.RouteType.OVERRIDE,
+                    RecruitmentUser.Role.HRM_CHIEF,
+                    RecruitmentUser.Role.SECRETARIAT,
+                ),
+                (
+                    RoutingHistory.RouteType.FORWARD,
+                    RecruitmentUser.Role.SECRETARIAT,
+                    RecruitmentUser.Role.HRM_CHIEF,
+                ),
+                (
+                    RoutingHistory.RouteType.FORWARD,
+                    RecruitmentUser.Role.HRM_CHIEF,
+                    RecruitmentUser.Role.HRMPSB_MEMBER,
+                ),
             ],
         )
-        self.assertTrue(
+        override_audits = AuditLog.objects.filter(
+            application=application,
+            action=AuditLog.Action.OVERRIDE_USED,
+        )
+        self.assertEqual(override_audits.count(), 1)
+        self.assertEqual(
+            override_audits.get().description,
+            "Level 2 Secretariat authorization ended after automatic case advancement.",
+        )
+        automatic_routes = list(
             AuditLog.objects.filter(
                 application=application,
-                action=AuditLog.Action.OVERRIDE_USED,
+                action=AuditLog.Action.ROUTED,
+                metadata__auto_routed=True,
+            )
+            .order_by("id")
+            .values_list("description", flat=True)
+        )
+        self.assertEqual(
+            automatic_routes,
+            [
+                "Automatically returned to HRM Chief after Plantilla examination was finalized by Secretariat.",
+                "Automatically routed to HRMPSB after Plantilla examination was finalized by Secretariat under HRM Chief authorization.",
+            ],
+        )
+
+    def test_level1_plantilla_exam_still_routes_directly_to_hrmpsb(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        self.finalize_screening_for_current_stage(application, self.secretariat)
+
+        self.finalize_exam_for_current_stage(application, self.secretariat)
+
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+        self.assertEqual(application.current_handler_role, RecruitmentUser.Role.HRMPSB_MEMBER)
+        self.assertEqual(application.status, RecruitmentApplication.Status.HRMPSB_REVIEW)
+        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.HRMPSB_REVIEW)
+
+    def test_level2_cos_override_exam_still_returns_to_hrm_chief(self):
+        cos_level2_position = PositionPosting.objects.create(
+            position_reference=self.medical_officer_position,
+            branch=PositionPosting.Branch.COS,
+            level=PositionPosting.Level.LEVEL_2,
+            intake_mode=PositionPosting.IntakeMode.CONTINUOUS,
+            status=PositionPosting.EntryStatus.ACTIVE,
+        )
+        application = self.make_application(cos_level2_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        route_case_between_secretariat_and_hrm_chief(
+            application,
+            self.hrm_chief,
+            RecruitmentUser.Role.SECRETARIAT,
+            "Secretariat will administer the authorized COS examination.",
+        )
+        self.finalize_screening_for_current_stage(application, self.secretariat)
+
+        self.finalize_exam_for_current_stage(application, self.secretariat)
+
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+        self.assertEqual(application.current_handler_role, RecruitmentUser.Role.HRM_CHIEF)
+        self.assertEqual(application.status, RecruitmentApplication.Status.HRM_CHIEF_REVIEW)
+        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.HRM_CHIEF_REVIEW)
+        self.assertFalse(
+            WorkflowOverride.objects.filter(application=application, is_active=True).exists()
+        )
+        self.assertFalse(
+            application.routing_history.filter(
+                to_handler_role=RecruitmentUser.Role.HRMPSB_MEMBER
             ).exists()
         )
 
@@ -6695,6 +6876,122 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         }
         payload.update(overrides)
         return payload
+
+    def _awaiting_resubmission_application(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        first_requirement = get_applicant_document_requirements(application)[0]
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = client.post(
+                reverse("screening-review", kwargs={"pk": application.pk}),
+                {
+                    **self.screening_payload(qualification_outcome=""),
+                    **self.screening_document_status_payload(
+                        application,
+                        overrides={
+                            first_requirement.code: (
+                                ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
+                            ),
+                        },
+                    ),
+                    f"document_remarks__{first_requirement.code}": "Upload a clearer copy.",
+                    "return_remarks": "Please upload the corrected document.",
+                    "operation": "return_to_applicant",
+                },
+            )
+        self.assertEqual(response.status_code, 302)
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+        self.assertEqual(
+            application.case.case_status,
+            RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION,
+        )
+        return application
+
+    def test_pending_resubmission_blocks_qualified_finalize_in_service_and_form(self):
+        application = self._awaiting_resubmission_application()
+        refusal = (
+            "The applicant's resubmission is still pending. Wait for the new documents "
+            "(or remove the applicant from the batch) before finalizing this screening "
+            "as Qualified."
+        )
+
+        with self.assertRaisesMessage(ValueError, refusal):
+            save_screening_review(
+                application=application,
+                actor=self.secretariat,
+                cleaned_data=self.screening_payload(),
+                finalize=True,
+            )
+
+        record = ScreeningRecord.objects.get(application=application)
+        self.assertFalse(record.is_finalized)
+        application.case.refresh_from_db()
+        self.assertEqual(
+            application.case.case_status,
+            RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION,
+        )
+
+        form = ScreeningReviewForm(
+            {
+                **self.screening_payload(),
+                **self.screening_document_status_payload(application),
+            },
+            instance=record,
+            application=application,
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn(refusal, form.errors["qualification_outcome"])
+
+    def test_pending_resubmission_still_allows_screening_draft_save(self):
+        application = self._awaiting_resubmission_application()
+
+        record = save_screening_review(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data=self.screening_payload(
+                qualification_outcome="",
+                screening_notes="Draft re-review notes while the corrected file is pending.",
+            ),
+            finalize=False,
+            allow_partial=True,
+        )
+
+        self.assertFalse(record.is_finalized)
+        application.case.refresh_from_db()
+        self.assertEqual(
+            application.case.case_status,
+            RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION,
+        )
+
+    def test_pending_resubmission_still_allows_not_qualified_finalize(self):
+        application = self._awaiting_resubmission_application()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            record = save_screening_review(
+                application=application,
+                actor=self.secretariat,
+                cleaned_data=self.screening_payload(
+                    qualification_outcome=(
+                        ScreeningRecord.QualificationOutcome.NOT_QUALIFIED
+                    ),
+                    screening_notes="The qualification requirement is not met.",
+                ),
+                finalize=True,
+            )
+
+        record.refresh_from_db()
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+        self.assertTrue(record.is_finalized)
+        self.assertEqual(application.status, RecruitmentApplication.Status.REJECTED)
+        self.assertEqual(
+            application.case.case_status,
+            RecruitmentCase.CaseStatus.REJECTED,
+        )
 
     def test_current_handler_can_save_and_finalize_screening_record(self):
         application = self.make_application(self.level1_position)

@@ -60,6 +60,7 @@ from .requirements import (
     get_applicant_document_requirements,
 )
 from .services import (
+    PENDING_RESUBMISSION_SCREENING_FINALIZE_MESSAGE,
     TOP_FIVE_SELECTION_LIMIT,
     compute_competency_rating_score,
     get_available_actions,
@@ -1773,6 +1774,18 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
             return cleaned_data
         qualification_outcome = cleaned_data.get("qualification_outcome")
         screening_notes = (cleaned_data.get("screening_notes") or "").strip()
+        if (
+            self.application is not None
+            and hasattr(self.application, "case")
+            and self.application.case.case_status
+            == RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION
+            and qualification_outcome
+            != ScreeningRecord.QualificationOutcome.NOT_QUALIFIED
+        ):
+            self.add_error(
+                "qualification_outcome",
+                PENDING_RESUBMISSION_SCREENING_FINALIZE_MESSAGE,
+            )
         blocking_reviews = [
             review
             for review in document_reviews

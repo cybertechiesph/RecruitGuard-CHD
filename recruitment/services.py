@@ -113,6 +113,16 @@ from .upload_validation import (
 logger = logging.getLogger(__name__)
 
 
+PENDING_RESUBMISSION_HANDOFF_MESSAGE = (
+    "This case is waiting for the applicant's resubmission. Wait for it, or remove the "
+    "applicant from the batch, before sending the case."
+)
+PENDING_RESUBMISSION_SCREENING_FINALIZE_MESSAGE = (
+    "The applicant's resubmission is still pending. Wait for the new documents (or remove "
+    "the applicant from the batch) before finalizing this screening as Qualified."
+)
+
+
 class ApplicationOTPDeliveryError(RuntimeError):
     pass
 
@@ -1563,6 +1573,8 @@ def get_case_handoff_options(application, user):
         return []
     if application.current_handler_role != user.role or case.current_handler_role != user.role:
         return []
+    if case.case_status == RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION:
+        return []
     if not user_can_process_application(user, application):
         return []
 
@@ -1603,6 +1615,8 @@ def route_case_between_secretariat_and_hrm_chief(application, actor, target_role
         raise ValueError("Final or closed cases cannot be sent.")
     if application.current_handler_role != actor.role or case.current_handler_role != actor.role:
         raise ValueError("Only the assigned office can send this case.")
+    if case.case_status == RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION:
+        raise ValueError(PENDING_RESUBMISSION_HANDOFF_MESSAGE)
     if not user_can_process_application(actor, application):
         if (
             actor.role == RecruitmentUser.Role.SECRETARIAT
@@ -1831,13 +1845,27 @@ def _auto_advance_after_exam_finalized(application, actor, review_stage):
             review_stage == RecruitmentCase.Stage.HRM_CHIEF_REVIEW
             and application.current_handler_role == RecruitmentUser.Role.SECRETARIAT
         ):
-            return _auto_route_application(
+            returned_to_hrm_chief = _auto_route_application(
                 application,
                 actor,
                 next_role=RecruitmentUser.Role.HRM_CHIEF,
                 next_status=RecruitmentApplication.Status.HRM_CHIEF_REVIEW,
                 description="Automatically returned to HRM Chief after Plantilla examination was finalized by Secretariat.",
                 remarks="Plantilla examination finalized by Secretariat; next assigned office is HRM Chief.",
+            )
+            if not returned_to_hrm_chief:
+                return False
+            onward_description = (
+                "Automatically routed to HRMPSB after Plantilla examination was finalized "
+                "by Secretariat under HRM Chief authorization."
+            )
+            return _auto_route_application(
+                application,
+                actor,
+                next_role=RecruitmentUser.Role.HRMPSB_MEMBER,
+                next_status=RecruitmentApplication.Status.HRMPSB_REVIEW,
+                description=onward_description,
+                remarks=onward_description,
             )
         return _auto_route_application(
             application,
@@ -5336,6 +5364,14 @@ def save_screening_review(
         raise ValueError("This case is not currently assigned to you for screening.")
     if review_stage not in SCREENING_STAGES:
         raise ValueError("Screening can only be edited while the case is assigned to Secretariat or HRM Chief review.")
+    if (
+        finalize
+        and application.case.case_status
+        == RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION
+        and cleaned_data.get("qualification_outcome")
+        != ScreeningRecord.QualificationOutcome.NOT_QUALIFIED
+    ):
+        raise ValueError(PENDING_RESUBMISSION_SCREENING_FINALIZE_MESSAGE)
 
     created = screening_record is None
     if screening_record is None:
