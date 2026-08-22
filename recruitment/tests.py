@@ -2657,6 +2657,12 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         payload.update(overrides)
         return payload
 
+    def _draft_cos_entry(self):
+        entry = self._lapsed_cos_entry(days_closed=-7)
+        entry.status = PositionPosting.EntryStatus.DRAFT
+        entry.save(update_fields=["status", "updated_at"])
+        return entry
+
     def test_entry_create_rejects_past_closing_date(self):
         client = Client()
         self.force_login_with_mfa(client, self.secretariat)
@@ -2675,6 +2681,92 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "The closing date cannot be set to a past date.")
+
+    def test_draft_deadline_move_is_not_an_extension_or_deadline_audit_event(self):
+        entry = self._draft_cos_entry()
+        new_closing = entry.closing_date + timedelta(days=7)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("recruitment-entry-update", kwargs={"pk": entry.pk}),
+            self._entry_edit_payload(entry, closing_date=new_closing.isoformat()),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        entry.refresh_from_db()
+        self.assertEqual(entry.closing_date, new_closing)
+        self.assertFalse(entry.deadline_extended)
+        self.assertFalse(
+            AuditLog.objects.filter(
+                action=AuditLog.Action.RECRUITMENT_ENTRY_DEADLINE_CHANGED,
+                metadata__recruitment_entry_id=entry.id,
+            ).exists()
+        )
+        message_text = " ".join(
+            message.message for message in get_messages(response.wsgi_request)
+        )
+        self.assertNotIn("Deadline extended", message_text)
+
+    def test_first_publication_with_later_deadline_is_not_an_extension(self):
+        entry = self._draft_cos_entry()
+        new_closing = entry.closing_date + timedelta(days=7)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("recruitment-entry-update", kwargs={"pk": entry.pk}),
+            self._entry_edit_payload(
+                entry,
+                status=PositionPosting.EntryStatus.ACTIVE,
+                closing_date=new_closing.isoformat(),
+            ),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        entry.refresh_from_db()
+        self.assertEqual(entry.status, PositionPosting.EntryStatus.ACTIVE)
+        self.assertEqual(entry.closing_date, new_closing)
+        self.assertFalse(entry.deadline_extended)
+        self.assertFalse(
+            AuditLog.objects.filter(
+                action=AuditLog.Action.RECRUITMENT_ENTRY_DEADLINE_CHANGED,
+                metadata__recruitment_entry_id=entry.id,
+            ).exists()
+        )
+
+    def test_suspended_posting_deadline_move_is_an_extension_with_warning(self):
+        entry = self._lapsed_cos_entry()
+        entry.status = PositionPosting.EntryStatus.SUSPENDED
+        entry.save(update_fields=["status", "updated_at"])
+        new_closing = timezone.localdate() + timedelta(days=7)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("recruitment-entry-update", kwargs={"pk": entry.pk}),
+            self._entry_edit_payload(entry, closing_date=new_closing.isoformat()),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        entry.refresh_from_db()
+        self.assertEqual(entry.closing_date, new_closing)
+        self.assertTrue(entry.deadline_extended)
+        log = AuditLog.objects.get(
+            action=AuditLog.Action.RECRUITMENT_ENTRY_DEADLINE_CHANGED,
+            metadata__recruitment_entry_id=entry.id,
+        )
+        self.assertEqual(
+            log.metadata["previous_status"],
+            "suspended",
+        )
+        message_text = " ".join(
+            message.message for message in get_messages(response.wsgi_request)
+        )
+        self.assertIn(
+            "will not reopen to applicants until the status is set back to Active",
+            message_text,
+        )
 
     def test_extending_lapsed_deadline_reopens_flags_and_audits(self):
         entry = self._lapsed_cos_entry()
@@ -2702,6 +2794,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         self.assertEqual(log.metadata["previous_closing_date"], previous_closing.isoformat())
         self.assertEqual(log.metadata["new_closing_date"], new_closing.isoformat())
         self.assertTrue(log.metadata["is_extension"])
+        self.assertEqual(log.metadata["previous_status"], "active")
 
     def test_entry_edit_keeps_unchanged_lapsed_closing_date(self):
         entry = self._lapsed_cos_entry()

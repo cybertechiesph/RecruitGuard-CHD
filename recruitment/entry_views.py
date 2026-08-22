@@ -150,9 +150,15 @@ class RecruitmentEntryUpdateView(
             .first()
         ) or {}
         previous_closing_date = previous.get("closing_date")
+        previous_status = previous.get("status")
         new_closing_date = form.cleaned_data.get("closing_date")
+        was_published = bool(
+            previous
+            and previous_status != PositionPosting.EntryStatus.DRAFT
+        )
         is_extension = bool(
-            previous_closing_date
+            was_published
+            and previous_closing_date
             and new_closing_date
             and new_closing_date > previous_closing_date
         )
@@ -162,7 +168,7 @@ class RecruitmentEntryUpdateView(
         response = super().form_valid(form)
         posting = self.object
 
-        if previous_closing_date != new_closing_date:
+        if was_published and previous_closing_date != new_closing_date:
             record_system_audit_event(
                 actor=self.request.user,
                 action=AuditLog.Action.RECRUITMENT_ENTRY_DEADLINE_CHANGED,
@@ -178,6 +184,7 @@ class RecruitmentEntryUpdateView(
                     "previous_closing_date": previous_closing_date.isoformat() if previous_closing_date else "",
                     "new_closing_date": new_closing_date.isoformat() if new_closing_date else "",
                     "is_extension": is_extension,
+                    "previous_status": previous_status,
                 },
             )
         if is_extension:
