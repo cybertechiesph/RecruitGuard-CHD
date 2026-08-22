@@ -11113,47 +11113,66 @@ def _application_receipt_requirement_groups(documents):
     return groups
 
 
-def _application_receipt_requirements_height(requirement_groups):
-    return 18 + sum((len(lines) * 13) + 4 for lines in requirement_groups)
+_RECEIPT_REQUIREMENT_HEADING_HEIGHT = 18
+_RECEIPT_REQUIREMENT_LINE_HEIGHT = 13
+_RECEIPT_REQUIREMENT_ITEM_SPACING = 4
+_RECEIPT_FOOTER_Y = 64
+_RECEIPT_CONTENT_BOTTOM = _RECEIPT_FOOTER_Y + 60
 
 
-def _draw_application_receipt_requirements(pdf, *, left, top, requirement_groups):
+def _application_receipt_requirement_item_height(lines):
+    return (
+        len(lines) * _RECEIPT_REQUIREMENT_LINE_HEIGHT
+        + _RECEIPT_REQUIREMENT_ITEM_SPACING
+    )
+
+
+def _draw_application_receipt_requirements_heading(pdf, *, left, top, continued=False):
     pdf.setFont("Helvetica-Bold", 10.5)
     pdf.setFillColor(_RECEIPT_GREEN_INK)
-    pdf.drawString(left, top, "Requirements Submitted")
-    y = top - 18
-    for lines in requirement_groups:
-        for label_text, filename_text in lines:
-            text_x = left + 4
-            if label_text:
-                pdf.setFont("Helvetica", 9.5)
-                pdf.setFillColor(_RECEIPT_INK)
-                pdf.drawString(text_x, y, label_text)
-                text_x += pdf.stringWidth(label_text, "Helvetica", 9.5) + 5
-            if filename_text:
-                pdf.setFont("Helvetica", 8.5)
-                pdf.setFillColor(_RECEIPT_MUTE)
-                pdf.drawString(text_x, y, filename_text)
-            y -= 13
-        y -= 4
+    heading = "Requirements Submitted (continued)" if continued else "Requirements Submitted"
+    pdf.drawString(left, top, heading)
+    return top - _RECEIPT_REQUIREMENT_HEADING_HEIGHT
+
+
+def _draw_application_receipt_requirement_item(pdf, *, left, y, lines):
+    for label_text, filename_text in lines:
+        text_x = left + 4
+        if label_text:
+            pdf.setFont("Helvetica", 9.5)
+            pdf.setFillColor(_RECEIPT_INK)
+            pdf.drawString(text_x, y, label_text)
+            text_x += pdf.stringWidth(label_text, "Helvetica", 9.5) + 5
+        if filename_text:
+            pdf.setFont("Helvetica", 8.5)
+            pdf.setFillColor(_RECEIPT_MUTE)
+            pdf.drawString(text_x, y, filename_text)
+        y -= _RECEIPT_REQUIREMENT_LINE_HEIGHT
+    y -= _RECEIPT_REQUIREMENT_ITEM_SPACING
     return y
 
 
+def _application_receipt_follow_up_height(steps):
+    step_lines_height = sum(
+        (len(textwrap.wrap(step, width=92)) * 13) + 4 for step in steps
+    )
+    return 16 + step_lines_height + 16 + 62
+
+
 def _draw_application_receipt_footer(pdf, *, left, right, generated_at):
-    footer_y = 64
     pdf.setStrokeColor(_RECEIPT_HAIRLINE)
     pdf.setLineWidth(0.8)
-    pdf.line(left, footer_y, right, footer_y)
+    pdf.line(left, _RECEIPT_FOOTER_Y, right, _RECEIPT_FOOTER_Y)
     pdf.setFont("Helvetica", 7.5)
     pdf.setFillColor(_RECEIPT_MUTE)
     pdf.drawString(
         left,
-        footer_y - 14,
+        _RECEIPT_FOOTER_Y - 14,
         f"Generated {generated_at:%B %d, %Y at %I:%M %p}. This is a system-generated receipt and needs no signature.",
     )
     pdf.drawString(
         left,
-        footer_y - 25,
+        _RECEIPT_FOOTER_Y - 25,
         "Keep your Tracking Code private — treat it like a password.",
     )
 
@@ -11273,23 +11292,23 @@ def _build_application_receipt_pdf(application, *, generated_at=None):
     # ── Itemized requirements ─────────────────────────────────────────
     requirement_groups = _application_receipt_requirement_groups(documents)
     requirements_top = y - 30
-    requirements_height = _application_receipt_requirements_height(requirement_groups)
     steps = [
         "Your application will be reviewed by the recruitment team.",
         "You may be contacted by email or phone for updates or additional requirements.",
         "Check your application status anytime using your Tracking Code and email.",
     ]
 
-    # Keep the complete requirements block together with the fixed sections
-    # that follow it. For a long intake checklist, finish page one cleanly,
-    # repeat the office header, and continue on page two.
-    projected_requirements_bottom = requirements_top - requirements_height
-    projected_next_top = projected_requirements_bottom - 30
-    projected_step_y = projected_next_top - 16
-    for step in steps:
-        projected_step_y -= (len(textwrap.wrap(step, width=92)) * 13) + 4
-    projected_reminder_bottom = projected_step_y - 16 - 62
-    if projected_reminder_bottom < 60:
+    first_item_height = (
+        _application_receipt_requirement_item_height(requirement_groups[0])
+        if requirement_groups
+        else 0
+    )
+    if (
+        requirements_top
+        - _RECEIPT_REQUIREMENT_HEADING_HEIGHT
+        - first_item_height
+        < _RECEIPT_CONTENT_BOTTOM
+    ):
         _draw_application_receipt_footer(
             pdf,
             left=left,
@@ -11305,15 +11324,82 @@ def _build_application_receipt_pdf(application, *, generated_at=None):
         )
         requirements_top = continued_rule_y - 30
 
-    y = _draw_application_receipt_requirements(
-        pdf,
-        left=left,
-        top=requirements_top,
-        requirement_groups=requirement_groups,
+    y = _draw_application_receipt_requirements_heading(
+        pdf, left=left, top=requirements_top
     )
+    first_page_item_count = 0
+    projected_y = y
+    for lines in requirement_groups:
+        item_height = _application_receipt_requirement_item_height(lines)
+        if projected_y - item_height < _RECEIPT_CONTENT_BOTTOM:
+            break
+        projected_y -= item_height
+        first_page_item_count += 1
+
+    # Do not leave a continuation page containing only the follow-up unit.
+    # Carry the final requirement with it so the repeated heading introduces
+    # real list content and the second page reads as a deliberate continuation.
+    projected_next_top = projected_y - 30
+    if (
+        first_page_item_count == len(requirement_groups)
+        and len(requirement_groups) > 1
+        and projected_next_top - _application_receipt_follow_up_height(steps)
+        < _RECEIPT_CONTENT_BOTTOM
+    ):
+        first_page_item_count -= 1
+
+    for index, lines in enumerate(requirement_groups):
+        item_height = _application_receipt_requirement_item_height(lines)
+        if (
+            index == first_page_item_count
+            or y - item_height < _RECEIPT_CONTENT_BOTTOM
+        ):
+            _draw_application_receipt_footer(
+                pdf,
+                left=left,
+                right=right,
+                generated_at=generated_at,
+            )
+            pdf.showPage()
+            continued_rule_y = _draw_application_receipt_header(
+                pdf,
+                left=left,
+                right=right,
+                page_height=page_height,
+            )
+            y = _draw_application_receipt_requirements_heading(
+                pdf,
+                left=left,
+                top=continued_rule_y - 30,
+                continued=True,
+            )
+        y = _draw_application_receipt_requirement_item(
+            pdf,
+            left=left,
+            y=y,
+            lines=lines,
+        )
 
     # ── What happens next ──────────────────────────────────────────────
     next_top = y - 30
+    if (
+        next_top - _application_receipt_follow_up_height(steps)
+        < _RECEIPT_CONTENT_BOTTOM
+    ):
+        _draw_application_receipt_footer(
+            pdf,
+            left=left,
+            right=right,
+            generated_at=generated_at,
+        )
+        pdf.showPage()
+        continued_rule_y = _draw_application_receipt_header(
+            pdf,
+            left=left,
+            right=right,
+            page_height=page_height,
+        )
+        next_top = continued_rule_y - 30
     pdf.setFont("Helvetica-Bold", 10.5)
     pdf.setFillColor(_RECEIPT_GREEN_INK)
     pdf.drawString(left, next_top, "What Happens Next")

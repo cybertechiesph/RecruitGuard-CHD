@@ -4399,6 +4399,36 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertEqual(len(reader.pages), 1)
         self.assertIn(documents[0].label, reader.pages[0].extract_text())
 
+    def test_receipt_pdf_starts_standard_eight_requirements_on_page_one(self):
+        from pypdf import PdfReader
+        from recruitment.services import (
+            _build_application_receipt_pdf,
+            get_current_applicant_document_items,
+        )
+
+        application = self.make_application(self.level1_position)
+        documents = self.add_receipt_documents_until(application, 8)
+        if len(documents) > 8:
+            EvidenceVaultItem.objects.filter(
+                pk__in=[document.pk for document in documents[8:]]
+            ).update(is_archived=True, archive_tag="Eight-item receipt fixture")
+        documents = list(get_current_applicant_document_items(application))
+        self.assertEqual(len(documents), 8)
+        application.submitted_at = timezone.now()
+        application.save(update_fields=["submitted_at", "updated_at"])
+
+        pdf_bytes = _build_application_receipt_pdf(application)
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+        page_texts = [
+            " ".join((page.extract_text() or "").split()) for page in reader.pages
+        ]
+
+        self.assertIn(len(reader.pages), (1, 2))
+        self.assertIn("Requirements Submitted", page_texts[0])
+        self.assertIn(documents[0].label, page_texts[0])
+        if len(reader.pages) == 2:
+            self.assertIn("Requirements Submitted (continued)", page_texts[1])
+
     def test_receipt_pdf_paginates_twelve_requirements(self):
         from pypdf import PdfReader
 
@@ -4417,8 +4447,20 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(reader.pages), 2)
-        extracted_text = "\n".join(page.extract_text() or "" for page in reader.pages)
-        self.assertIn(documents[0].label, extracted_text)
+        page_texts = [
+            " ".join((page.extract_text() or "").split()) for page in reader.pages
+        ]
+        self.assertIn("Requirements Submitted", page_texts[0])
+        self.assertIn(documents[0].label, page_texts[0])
+        self.assertIn("Requirements Submitted (continued)", page_texts[1])
+        self.assertIn(documents[-1].label, page_texts[1])
+        self.assertIn("What Happens Next", page_texts[1])
+        for document in documents:
+            with self.subTest(document_key=document.document_key):
+                self.assertFalse(
+                    document.label in page_texts[0]
+                    and document.label in page_texts[1]
+                )
 
     def test_submitted_application_receipt_downloads_as_pdf(self):
         # Panel revision: the application receipt must download as a real PDF
