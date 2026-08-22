@@ -3144,6 +3144,7 @@ class CosSelectionRound(TimestampedModel):
     class Status(models.TextChoices):
         OPEN = "open", "Open"
         RESOLVED = "resolved", "Resolved"
+        CLOSED_SHORT = "closed_short", "Closed short"
 
     recruitment_entry = models.ForeignKey(
         PositionPosting,
@@ -3167,6 +3168,7 @@ class CosSelectionRound(TimestampedModel):
         blank=True,
         null=True,
     )
+    closed_short_reason = models.TextField(blank=True)
     notes = models.TextField(blank=True)
 
     class Meta:
@@ -4799,6 +4801,10 @@ class AuditLog(TimestampedModel):
         DELIBERATION_FINALIZED = "deliberation_finalized", "Deliberation Finalized"
         COS_SELECTION_ROUND_OPENED = "cos_selection_round_opened", "COS Selection Round Opened"
         COS_SELECTION_ROUND_RESOLVED = "cos_selection_round_resolved", "COS Selection Round Resolved"
+        COS_SELECTION_ROUND_CLOSED_SHORT = (
+            "cos_selection_round_closed_short",
+            "COS Selection Round Closed Short",
+        )
         ATTENDANCE_ABSENCE_RECORDED = "attendance_absence_recorded", "Absence Recorded"
         ATTENDANCE_LETTER_RECEIVED = "attendance_letter_received", "Letter of Intent Received"
         ATTENDANCE_ABSENCE_RESOLVED = "attendance_absence_resolved", "Absence Resolved"
@@ -4985,6 +4991,9 @@ AUDIT_ACTION_DISPLAY_LABELS = {
     AuditLog.Action.INTERVIEW_FALLBACK_UPLOADED: "Interview Rating File Uploaded",
     AuditLog.Action.DELIBERATION_RECORDED: "Deliberation Saved",
     AuditLog.Action.DELIBERATION_FINALIZED: "Deliberation Finalized",
+    AuditLog.Action.COS_SELECTION_ROUND_OPENED: "COS Selection Round Opened",
+    AuditLog.Action.COS_SELECTION_ROUND_RESOLVED: "COS Selection Round Resolved",
+    AuditLog.Action.COS_SELECTION_ROUND_CLOSED_SHORT: "COS Selection Round Closed Short",
     AuditLog.Action.CAR_GENERATED: "Comparative Assessment Report Created",
     AuditLog.Action.CAR_FINALIZED: "Comparative Assessment Report Finalized",
     AuditLog.Action.DECISION_RECORDED: "Decision Saved",
@@ -5073,6 +5082,7 @@ AUDIT_ACTION_CATEGORIES = {
             AuditLog.Action.DELIBERATION_FINALIZED,
             AuditLog.Action.COS_SELECTION_ROUND_OPENED,
             AuditLog.Action.COS_SELECTION_ROUND_RESOLVED,
+            AuditLog.Action.COS_SELECTION_ROUND_CLOSED_SHORT,
             AuditLog.Action.ATTENDANCE_ABSENCE_RECORDED,
             AuditLog.Action.ATTENDANCE_LETTER_RECEIVED,
             AuditLog.Action.ATTENDANCE_ABSENCE_RESOLVED,

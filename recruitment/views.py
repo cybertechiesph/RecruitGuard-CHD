@@ -2,9 +2,12 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
+from django.db import IntegrityError
+from django.db.models import Count, Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 import csv
+import logging
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from io import StringIO
@@ -93,6 +96,7 @@ from .permissions import (
     WORKFLOW_PROCESSOR_ROLES,
 )
 from .services import (
+    COS_EARLIER_ROUND_RESCIND_MESSAGE,
     FINAL_SELECTION_OUT_OF_CONTENTION_STATUSES,
     build_audit_session_summary,
     record_system_audit_event,
@@ -110,6 +114,8 @@ from .services import (
     build_submission_packet,
     build_export_bundle,
     close_recruitment_case,
+    close_cos_selection_round_short,
+    cos_pick_is_from_latest_selection_round,
     generate_comparative_assessment_report,
     get_application_detail_tab,
     get_applicant_document_review_items,
@@ -153,6 +159,7 @@ from .services import (
     get_open_cos_selection_round,
     open_cos_selection_round,
     user_can_open_cos_selection_round,
+    user_can_close_cos_selection_round_short,
     vacancy_uses_cos_selection_rounds,
     cos_eligible_pool,
     cos_deliberation_pool,
@@ -244,7 +251,9 @@ from .services import (
     user_is_interview_rating_support_encoder,
 )
 from .templatetags.recruitment_ui import QUEUE_TASK_LABELS
-from django.db.models import Count, Q
+
+
+logger = logging.getLogger(__name__)
 
 
 EXAM_FIELD_LABELS = {
@@ -700,13 +709,22 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
         else:
             # SL-14 (COS): the same correction, on the record that carries the COS decision
             # — SL-01 made the finalized deliberation pick the selection itself.
+            cos_pick = get_cos_pick_for_case(getattr(application, "case", None))
             context["cos_rescinded_picks"] = get_rescinded_cos_picks_for_case(
                 getattr(application, "case", None)
             )
             if user_can_rescind_cos_vacancy_deliberation(
-                user, get_cos_pick_for_case(getattr(application, "case", None))
+                user, cos_pick
             ):
                 context["cos_pick_rescind_form"] = CosVacancyDeliberationRescindForm()
+            elif (
+                cos_pick is not None
+                and user.role == RecruitmentUser.Role.HRM_CHIEF
+                and not cos_pick_is_from_latest_selection_round(cos_pick)
+            ):
+                context["cos_pick_rescind_unavailable_message"] = (
+                    COS_EARLIER_ROUND_RESCIND_MESSAGE
+                )
         context["current_user_interview_rating"] = get_interview_rating_for_user(application, user)
         context["interview_rating_is_support_encoding"] = user_is_interview_rating_support_encoder(
             user,
@@ -2345,6 +2363,9 @@ class VacancyBatchCosDeliberationView(LoginRequiredMixin, WorkflowProcessorRequi
                 else []
             ),
             "can_open_round": user_can_open_cos_selection_round(request.user, entry),
+            "can_close_round_short": user_can_close_cos_selection_round_short(
+                request.user, entry
+            ),
             "eligible_pool_count": len(eligible_pool),
         }
 
@@ -2358,6 +2379,7 @@ class VacancyBatchCosDeliberationView(LoginRequiredMixin, WorkflowProcessorRequi
             not pool
             and not (pick and pick.is_finalized)
             and not user_can_open_cos_selection_round(request.user, entry)
+            and get_latest_cos_selection_round(entry) is None
         ):
             raise Http404("No COS deliberation is available for this vacancy.")
         return render(request, self.template_name, self._context(request, entry, pool))
@@ -2385,6 +2407,23 @@ class VacancyBatchCosDeliberationView(LoginRequiredMixin, WorkflowProcessorRequi
                     f"Selection round {selection_round.round_number} opened with "
                     f"{selection_round.members.count()} candidate(s) and "
                     f"{selection_round.slot_count} slot(s).",
+                )
+            return redirect("vacancy-batch-cos-deliberation", pk=entry.pk)
+        if operation == "close_round_short":
+            try:
+                selection_round = close_cos_selection_round_short(
+                    entry,
+                    request.user,
+                    request.POST.get("close_short_reason", ""),
+                )
+            except (ValueError, ValidationError) as exc:
+                messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
+            else:
+                messages.success(
+                    request,
+                    f"Selection round {selection_round.round_number} closed with "
+                    f"{selection_round.picks.filter(is_finalized=True, is_rescinded=False).count()} "
+                    f"of {selection_round.slot_count} slots filled.",
                 )
             return redirect("vacancy-batch-cos-deliberation", pk=entry.pk)
         if not user_can_manage_cos_deliberation(request.user, entry):
@@ -3224,6 +3263,15 @@ class CosVacancyDeliberationRescindView(
             )
         except (ValueError, ValidationError) as exc:
             messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
+        except IntegrityError:
+            logger.exception(
+                "COS pick rescission conflicted with another open selection round."
+            )
+            messages.error(
+                request,
+                "This pick cannot be rescinded right now because another selection round "
+                "is open.",
+            )
         else:
             messages.success(
                 request,

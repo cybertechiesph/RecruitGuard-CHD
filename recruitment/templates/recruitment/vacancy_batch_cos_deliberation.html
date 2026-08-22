@@ -30,7 +30,7 @@
     </div>
 </div>
 
-{% if uses_selection_rounds %}
+{% if uses_selection_rounds or latest_round %}
 {% comment %}
 SL-02: continuous COS hires in need-based rounds. The pool accumulates; a round freezes who
 is being considered right now and how many positions it fills.
@@ -38,10 +38,15 @@ is being considered right now and how many positions it fills.
 <div class="card p-4 mb-3">
     <h2 class="h6 mb-1">Selection rounds</h2>
     <p class="rg-note mb-3">
-        This vacancy has continuous intake, so candidates accumulate in a pool. When the
-        office needs to hire, open a round: the candidates eligible at that moment become
-        its members, and only they can be picked. Anyone the round does not pick stays in
-        the pool for the next one.
+        {% if uses_selection_rounds %}
+            This vacancy has continuous intake, so candidates accumulate in a pool. When the
+            office needs to hire, open a round: the candidates eligible at that moment become
+            its members, and only they can be picked. Anyone the round does not pick stays in
+            the pool for the next one.
+        {% else %}
+            This vacancy hires as one batch. Its selection round records who competed and
+            how many positions were filled.
+        {% endif %}
     </p>
 
     {% if selection_round %}
@@ -54,10 +59,39 @@ is being considered right now and how many positions it fills.
         </div>
     {% elif latest_round %}
         <div class="alert alert-secondary" role="status">
-            Round {{ latest_round.round_number }} is resolved.
-            {{ eligible_pool_count }} candidate{{ eligible_pool_count|pluralize }}
-            {{ eligible_pool_count|pluralize:"is,are" }} waiting in the pool.
+            Round {{ latest_round.round_number }} is {{ latest_round.get_status_display|lower }}.
+            {% if uses_selection_rounds %}
+                {{ eligible_pool_count }} candidate{{ eligible_pool_count|pluralize }}
+                {{ eligible_pool_count|pluralize:"is,are" }} waiting in the pool.
+            {% endif %}
         </div>
+    {% endif %}
+
+    {% if can_close_round_short %}
+        <form method="post" class="border rounded p-3 mb-3" style="max-width:720px;">
+            {% csrf_token %}
+            <input type="hidden" name="operation" value="close_round_short">
+            <p class="rg-note mb-2">
+                The round ends now with {{ round_picks|length }} of
+                {{ selection_round.slot_count }} slots filled;
+                {% if uses_selection_rounds %}
+                    unpicked members stay in the pool.
+                {% else %}
+                    unpicked members are told they were not selected.
+                {% endif %}
+            </p>
+            <div class="rg-field mb-2">
+                <label class="form-label" for="cos-round-close-short-reason">
+                    Reason for closing this round short
+                    <span class="text-danger" aria-hidden="true">*</span>
+                </label>
+                <textarea id="cos-round-close-short-reason" name="close_short_reason"
+                          rows="2" class="form-control form-control-sm" required></textarea>
+            </div>
+            <button type="submit" class="btn btn-outline-danger btn-sm">
+                Close this round short
+            </button>
+        </form>
     {% endif %}
 
     {% if can_open_round %}

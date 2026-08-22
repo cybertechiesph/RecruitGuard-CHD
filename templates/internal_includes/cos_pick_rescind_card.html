@@ -47,6 +47,11 @@ Inputs:
         </button>
     </form>
 </details>
+{% elif cos_pick_rescind_unavailable_message %}
+<div class="rg-icard mb-3" id="cos-pick-rescind">
+    <h3 class="rg-icard__title">Rescind this deliberation pick</h3>
+    <p class="rg-note mb-0">{{ cos_pick_rescind_unavailable_message }}</p>
+</div>
 {% endif %}
 
 {% if cos_rescinded_picks %}

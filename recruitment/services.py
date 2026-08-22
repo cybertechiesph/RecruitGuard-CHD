@@ -4187,6 +4187,11 @@ def open_cos_selection_round(posting, actor, *, slot_count=1, notes=""):
         raise ValueError(
             "No candidates are ready for a selection round in this vacancy yet."
         )
+    if slot_count > len(eligible):
+        raise ValueError(
+            "This round cannot fill more positions than there are eligible candidates "
+            f"({len(eligible)})."
+        )
     latest = get_latest_cos_selection_round(posting)
     selection_round = CosSelectionRound(
         recruitment_entry=posting,
@@ -4422,6 +4427,8 @@ def _resolve_cos_selection_round(selection_round, actor):
             if application.case.case_status == RecruitmentCase.CaseStatus.ACTIVE
             and not application.case.is_stage_locked
         ]
+    else:
+        _close_cos_round_unpicked(selection_round, actor)
     record_system_audit_event(
         actor=actor,
         action=AuditLog.Action.COS_SELECTION_ROUND_RESOLVED,
@@ -4441,6 +4448,90 @@ def _resolve_cos_selection_round(selection_round, actor):
                 application.case.id for application in retained
             ),
             "closes_unpicked": not vacancy_uses_cos_selection_rounds(posting),
+        },
+    )
+    return selection_round
+
+
+def user_can_close_cos_selection_round_short(user, posting):
+    """The HRM Chief may finish an open COS round before every slot is filled."""
+    if posting.branch != PositionPosting.Branch.COS:
+        return False
+    if user.role != RecruitmentUser.Role.HRM_CHIEF:
+        return False
+    selection_round = get_open_cos_selection_round(posting)
+    if selection_round is None:
+        return False
+    picks_finalized = selection_round.picks.filter(
+        is_finalized=True, is_rescinded=False
+    ).count()
+    return picks_finalized < selection_round.slot_count
+
+
+@transaction.atomic
+def close_cos_selection_round_short(posting, actor, reason):
+    """End an open COS selection round without filling all of its recorded slots."""
+    if posting.branch != PositionPosting.Branch.COS:
+        raise ValueError("Selection rounds are only for COS vacancies.")
+    if actor.role != RecruitmentUser.Role.HRM_CHIEF:
+        raise ValueError("Only the HRM Chief may close a COS selection round short.")
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValueError("Record why this COS selection round is being closed short.")
+    selection_round = (
+        CosSelectionRound.objects.select_for_update()
+        .filter(
+            recruitment_entry=posting,
+            status=CosSelectionRound.Status.OPEN,
+        )
+        .first()
+    )
+    if selection_round is None:
+        raise ValueError("This vacancy has no open COS selection round to close.")
+    finalized_picks = list(
+        selection_round.picks.filter(is_finalized=True, is_rescinded=False)
+        .select_related("chosen_case")
+        .order_by("created_at", "id")
+    )
+    if len(finalized_picks) >= selection_round.slot_count:
+        raise ValueError("This COS selection round has already filled all of its slots.")
+
+    member_case_ids = sorted(
+        selection_round.members.values_list("recruitment_case_id", flat=True)
+    )
+    selection_round.status = CosSelectionRound.Status.CLOSED_SHORT
+    selection_round.resolved_at = timezone.now()
+    selection_round.resolved_by = actor
+    selection_round.closed_short_reason = reason
+    selection_round.save(
+        update_fields=[
+            "status",
+            "resolved_at",
+            "resolved_by",
+            "closed_short_reason",
+            "updated_at",
+        ]
+    )
+
+    if not vacancy_uses_cos_selection_rounds(posting):
+        _close_cos_round_unpicked(selection_round, actor, notes=reason)
+
+    record_system_audit_event(
+        actor=actor,
+        action=AuditLog.Action.COS_SELECTION_ROUND_CLOSED_SHORT,
+        description=(
+            f"Closed COS selection round {selection_round.round_number} short for "
+            f"{posting.job_code}: {len(finalized_picks)} of "
+            f"{selection_round.slot_count} slots filled."
+        ),
+        metadata={
+            "entry_id": posting.id,
+            "entry_code": posting.job_code,
+            "round_number": selection_round.round_number,
+            "slot_count": selection_round.slot_count,
+            "picks_finalized": len(finalized_picks),
+            "members": member_case_ids,
+            "reason": reason,
         },
     )
     return selection_round
@@ -10027,6 +10118,20 @@ def rescind_final_selection(selection, actor, reason, *, reference=""):
     return selection, restored
 
 
+COS_EARLIER_ROUND_RESCIND_MESSAGE = (
+    "Only the most recent selection round's pick can be rescinded. Earlier rounds are "
+    "history; run a new round instead."
+)
+
+
+def cos_pick_is_from_latest_selection_round(pick):
+    """Pre-round historical picks keep the correction behavior they had before SL2-13."""
+    if pick is None or pick.selection_round_id is None:
+        return True
+    latest_round = get_latest_cos_selection_round(pick.recruitment_entry)
+    return latest_round is not None and pick.selection_round_id == latest_round.id
+
+
 def user_can_rescind_cos_vacancy_deliberation(user, pick):
     """SL-14 (COS): who may void a recorded COS selection.
 
@@ -10039,6 +10144,8 @@ def user_can_rescind_cos_vacancy_deliberation(user, pick):
     if pick is None or pick.is_rescinded or not pick.is_finalized:
         return False
     if pick.recruitment_entry.branch != PositionPosting.Branch.COS:
+        return False
+    if not cos_pick_is_from_latest_selection_round(pick):
         return False
     return user.role == RecruitmentUser.Role.HRM_CHIEF
 
@@ -10067,13 +10174,19 @@ def rescind_cos_vacancy_deliberation(pick, actor, reason, *, reference=""):
         raise ValueError("This COS deliberation pick has already been rescinded.")
     if not pick.is_finalized:
         raise ValueError("Only a finalized COS deliberation pick can be rescinded.")
+    if not cos_pick_is_from_latest_selection_round(pick):
+        raise ValueError(COS_EARLIER_ROUND_RESCIND_MESSAGE)
     if not user_can_rescind_cos_vacancy_deliberation(actor, pick):
         raise ValueError(
             "Only the HRM Chief may rescind a recorded COS deliberation pick."
         )
 
     entry = pick.recruitment_entry
-    selection_round = pick.selection_round
+    selection_round = (
+        CosSelectionRound.objects.select_for_update().get(pk=pick.selection_round_id)
+        if pick.selection_round_id
+        else None
+    )
     winner = pick.chosen_case.application
 
     # The population this pick resolved: its own round's members (SL-02), never the whole
@@ -10115,18 +10228,29 @@ def rescind_cos_vacancy_deliberation(pick, actor, reason, *, reference=""):
         decision.rescinded_at = rescinded_at
         decision.save(update_fields=["is_rescinded", "rescinded_at", "updated_at"])
 
-    # A resolved round reopens: its slot is free again and the replacement pick belongs to
+    # A finished round reopens: its slot is free again and the replacement pick belongs to
     # the same round, not to a new one — nobody ran a second competition.
     round_reopened = False
     if (
         selection_round is not None
-        and selection_round.status == CosSelectionRound.Status.RESOLVED
+        and selection_round.status
+        in {
+            CosSelectionRound.Status.RESOLVED,
+            CosSelectionRound.Status.CLOSED_SHORT,
+        }
     ):
         selection_round.status = CosSelectionRound.Status.OPEN
         selection_round.resolved_at = None
         selection_round.resolved_by = None
+        selection_round.closed_short_reason = ""
         selection_round.save(
-            update_fields=["status", "resolved_at", "resolved_by", "updated_at"]
+            update_fields=[
+                "status",
+                "resolved_at",
+                "resolved_by",
+                "closed_short_reason",
+                "updated_at",
+            ]
         )
         round_reopened = True
         # The round's own "resolved" event would otherwise stand unqualified in the trail.
@@ -10216,31 +10340,39 @@ def rescind_cos_vacancy_deliberation(pick, actor, reason, *, reference=""):
     return pick, restored
 
 
-def _close_cos_non_selected_pool(selected_application, actor, decision):
-    """WF-10: recording the COS Selected decision resolves the rest of the deliberated pool —
-    every other deliberated case closes as not selected and its applicant is notified,
-    mirroring the Plantilla final-selection behavior. Manually recorded Not-selected
-    decisions on individual cases are untouched (their cases are no longer ACTIVE).
+def _close_cos_round_unpicked(selection_round, actor, *, notes=""):
+    """Close the unpicked members of a finished single-batch COS round.
 
-    SL-01/SL-02: the population is the membership snapshot of the round this pick belongs
-    to, not every active case in the posting. A candidate still in screening, awaiting
-    resubmission, or created after the round opened keeps their case — losing a competition
-    you were not entered in is not an outcome the office can defend, and the applicant would
-    have received a "not selected" notice for it.
-
-    A continuous vacancy closes nobody here: its unpicked candidates stay in the pool for
-    the next round."""
-    posting = selected_application.position
+    Full resolution and a short close deliberately share this path. Continuous-vacancy
+    members remain retained candidates, and finalized picks are never touched.
+    """
+    posting = selection_round.recruitment_entry
     if vacancy_uses_cos_selection_rounds(posting):
         return []
-    pick = get_cos_pick_for_case(selected_application.case)
-    selection_round = pick.selection_round if pick else None
-    if selection_round is None:
-        return []
+    finalized_picks = list(
+        selection_round.picks.filter(is_finalized=True, is_rescinded=False)
+        .select_related("chosen_case", "chosen_case__application")
+        .order_by("created_at", "id")
+    )
+    chosen_case_ids = {pick.chosen_case_id for pick in finalized_picks}
+    selected_application_ids = sorted(
+        pick.chosen_case.application_id for pick in finalized_picks
+    )
+    representative_application = (
+        finalized_picks[0].chosen_case.application if finalized_picks else None
+    )
+    representative_decision = (
+        get_latest_final_decision(representative_application)
+        if representative_application
+        else None
+    )
+    decision_notes = (
+        representative_decision.decision_notes if representative_decision else notes
+    )
     siblings = [
         application
         for application in cos_selection_round_pool(selection_round)
-        if application.pk != selected_application.pk
+        if application.case.id not in chosen_case_ids
         and application.case.case_status == RecruitmentCase.CaseStatus.ACTIVE
         and not application.case.is_stage_locked
     ]
@@ -10274,8 +10406,13 @@ def _close_cos_non_selected_pool(selected_application, actor, decision):
                 f"applicant in round {selection_round.round_number}."
             ),
             metadata={
-                "final_decision_id": decision.id,
-                "selected_application_id": selected_application.id,
+                "final_decision_id": (
+                    representative_decision.id if representative_decision else None
+                ),
+                "selected_application_id": (
+                    representative_application.id if representative_application else None
+                ),
+                "selected_application_ids": selected_application_ids,
                 # SL-02 AC#3: name the cycle this application was actually considered in.
                 "selection_round_id": selection_round.id,
                 "round_number": selection_round.round_number,
@@ -10303,7 +10440,7 @@ def _close_cos_non_selected_pool(selected_application, actor, decision):
             to_status=sibling.status,
             from_stage=case_transition["previous_stage"],
             to_stage=sibling.case.current_stage,
-            notes=decision.decision_notes,
+            notes=decision_notes,
         )
         queue_non_selected_applicant_notification(sibling, actor=actor)
         closed.append(sibling)
@@ -10470,10 +10607,6 @@ def record_final_decision(application, actor, cleaned_data):
         queue_selected_applicant_notification(application, actor=actor)
     else:
         queue_non_selected_applicant_notification(application, actor=actor)
-    if application.branch == PositionPosting.Branch.COS and decision.is_selected:
-        # WF-10: the COS Selected decision resolves the whole vacancy pool — mirror the
-        # Plantilla behavior instead of stranding the non-selected siblings unnotified.
-        _close_cos_non_selected_pool(application, actor, decision)
     return decision
 
 

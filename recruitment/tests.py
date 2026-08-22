@@ -110,6 +110,7 @@ from .services import (
     assign_candidate_code,
     build_export_bundle,
     build_submission_packet,
+    close_cos_selection_round_short,
     emit_deadline_approaching_notifications,
     generate_comparative_assessment_report,
     get_case_handoff_options,
@@ -161,6 +162,7 @@ from .services import (
     get_open_cos_selection_round,
     open_cos_selection_round,
     user_can_open_cos_selection_round,
+    user_can_close_cos_selection_round_short,
     cos_deliberation_pool,
     cos_eligible_pool,
     save_exam_record,
@@ -15824,6 +15826,322 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         self.assertFalse(
             user_can_open_cos_selection_round(self.hrm_chief, self.cos_position)
         )
+
+    def test_continuous_round_can_close_short_and_return_unpicked_members_to_pool(self):
+        first = self._continuous_candidate("short-a")
+        second = self._continuous_candidate("short-b")
+        third = self._continuous_candidate("short-c")
+        selection_round = open_cos_selection_round(
+            self.cos_continuous_position,
+            self.hrm_chief,
+            slot_count=2,
+            notes="Two positions were expected.",
+        )
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        console_url = reverse(
+            "vacancy-batch-cos-deliberation",
+            args=[self.cos_continuous_position.pk],
+        )
+        response = client.get(console_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Close this round short")
+        self.assertContains(response, 'name="close_short_reason"')
+
+        with self.captureOnCommitCallbacks(execute=True):
+            save_cos_vacancy_deliberation(
+                self.cos_continuous_position,
+                self.hrm_chief,
+                first.case.id,
+                "One appointment was enough.",
+                finalize=True,
+            )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = client.post(
+                console_url,
+                {
+                    "operation": "close_round_short",
+                    "close_short_reason": "The second funded position was withdrawn.",
+                },
+                follow=True,
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "closed with 1 of 2 slots filled")
+
+        selection_round.refresh_from_db()
+        self.assertEqual(
+            selection_round.status, CosSelectionRound.Status.CLOSED_SHORT
+        )
+        self.assertEqual(
+            selection_round.closed_short_reason,
+            "The second funded position was withdrawn.",
+        )
+        audit = AuditLog.objects.get(
+            action=AuditLog.Action.COS_SELECTION_ROUND_CLOSED_SHORT,
+            application__isnull=True,
+        )
+        self.assertEqual(audit.metadata["round_number"], 1)
+        self.assertEqual(audit.metadata["slot_count"], 2)
+        self.assertEqual(audit.metadata["picks_finalized"], 1)
+        self.assertEqual(
+            audit.metadata["members"],
+            sorted([first.case.id, second.case.id, third.case.id]),
+        )
+        self.assertEqual(
+            audit.metadata["reason"], "The second funded position was withdrawn."
+        )
+
+        for application in (second, third):
+            application.refresh_from_db()
+            self.assertEqual(
+                application.case.case_status, RecruitmentCase.CaseStatus.ACTIVE
+            )
+            self.assertEqual(get_current_workflow_section(application), "deliberation")
+        self.assertEqual(
+            {application.pk for application in cos_eligible_pool(self.cos_continuous_position)},
+            {second.pk, third.pk},
+        )
+        self.assertTrue(
+            user_can_open_cos_selection_round(
+                self.hrm_chief, self.cos_continuous_position
+            )
+        )
+        second_round = open_cos_selection_round(
+            self.cos_continuous_position, self.hrm_chief, slot_count=2
+        )
+        self.assertEqual(second_round.round_number, 2)
+        self.assertEqual(
+            set(second_round.members.values_list("recruitment_case_id", flat=True)),
+            {second.case.id, third.case.id},
+        )
+
+    def test_single_batch_round_can_close_short_and_notify_unpicked_members(self):
+        first, second = self._two_pooling_cos_candidates()
+        third = self._submitted_cos_application(self.cos_position, "pool-short-c")
+        for application in (first, second, third):
+            self.finalize_screening_for_current_stage(application, self.secretariat)
+        for application in (first, second, third):
+            self.finalize_exam_for_current_stage(application, self.secretariat)
+            application.refresh_from_db()
+        for application in (first, second, third):
+            self.finalize_screening_for_current_stage(application, self.hrm_chief)
+        for application in (first, second, third):
+            self.finalize_exam_for_current_stage(application, self.hrm_chief)
+            application.refresh_from_db()
+        for application in (first, second, third):
+            self.finalize_interview_for_current_stage(application, self.hrm_chief)
+            application.refresh_from_db()
+
+        save_cos_vacancy_deliberation(
+            self.cos_position,
+            self.hrm_chief,
+            first.case.id,
+            "Draft the first of two expected picks.",
+            finalize=False,
+        )
+        selection_round = get_open_cos_selection_round(self.cos_position)
+        selection_round.slot_count = 2
+        selection_round.save(update_fields=["slot_count", "updated_at"])
+        with self.captureOnCommitCallbacks(execute=True):
+            save_cos_vacancy_deliberation(
+                self.cos_position,
+                self.hrm_chief,
+                first.case.id,
+                "Finalize the only appointment.",
+                finalize=True,
+            )
+        for application in (second, third):
+            application.refresh_from_db()
+            self.assertEqual(
+                application.case.case_status, RecruitmentCase.CaseStatus.ACTIVE
+            )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            close_cos_selection_round_short(
+                self.cos_position,
+                self.hrm_chief,
+                "The office will fill only one position from this batch.",
+            )
+        selection_round.refresh_from_db()
+        self.assertEqual(
+            selection_round.status, CosSelectionRound.Status.CLOSED_SHORT
+        )
+        for application in (second, third):
+            application.refresh_from_db()
+            self.assertEqual(application.status, RecruitmentApplication.Status.REJECTED)
+            self.assertEqual(
+                application.case.case_status, RecruitmentCase.CaseStatus.REJECTED
+            )
+            self.assertTrue(
+                NotificationLog.objects.filter(
+                    application=application,
+                    notification_type=(
+                        NotificationLog.NotificationType.NON_SELECTED_APPLICANT
+                    ),
+                ).exists()
+            )
+        first.refresh_from_db()
+        self.assertEqual(first.status, RecruitmentApplication.Status.APPROVED)
+        self.assertFalse(
+            user_can_open_cos_selection_round(self.hrm_chief, self.cos_position)
+        )
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        self.assertEqual(
+            client.get(
+                reverse(
+                    "vacancy-batch-cos-deliberation", args=[self.cos_position.pk]
+                )
+            ).status_code,
+            200,
+        )
+
+    def test_close_short_guards_and_open_round_candidate_bound(self):
+        first = self._continuous_candidate("guard-a")
+        self._continuous_candidate("guard-b")
+        with self.assertRaisesMessage(
+            ValueError,
+            "This round cannot fill more positions than there are eligible candidates (2).",
+        ):
+            open_cos_selection_round(
+                self.cos_continuous_position, self.hrm_chief, slot_count=5
+            )
+
+        selection_round = open_cos_selection_round(
+            self.cos_continuous_position, self.hrm_chief, slot_count=2
+        )
+        self.assertTrue(
+            user_can_close_cos_selection_round_short(
+                self.hrm_chief, self.cos_continuous_position
+            )
+        )
+        with self.assertRaisesMessage(
+            ValueError, "Record why this COS selection round is being closed short."
+        ):
+            close_cos_selection_round_short(
+                self.cos_continuous_position, self.hrm_chief, "   "
+            )
+        with self.assertRaisesMessage(
+            ValueError, "Only the HRM Chief may close a COS selection round short."
+        ):
+            close_cos_selection_round_short(
+                self.cos_continuous_position, self.secretariat, "Office decision."
+            )
+        close_cos_selection_round_short(
+            self.cos_continuous_position, self.hrm_chief, "No appointment this round."
+        )
+        selection_round.refresh_from_db()
+        self.assertEqual(
+            selection_round.status, CosSelectionRound.Status.CLOSED_SHORT
+        )
+        first.refresh_from_db()
+        self.assertEqual(first.case.case_status, RecruitmentCase.CaseStatus.ACTIVE)
+        with self.assertRaisesMessage(
+            ValueError, "This vacancy has no open COS selection round to close."
+        ):
+            close_cos_selection_round_short(
+                self.cos_continuous_position, self.hrm_chief, "Again."
+            )
+
+    def test_only_the_latest_round_pick_can_be_rescinded(self):
+        first = self._continuous_candidate("latest-a")
+        second = self._continuous_candidate("latest-b")
+        third = self._continuous_candidate("latest-c")
+        first_round = open_cos_selection_round(
+            self.cos_continuous_position, self.hrm_chief, slot_count=1
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            old_pick = save_cos_vacancy_deliberation(
+                self.cos_continuous_position,
+                self.hrm_chief,
+                first.case.id,
+                "Round one appointment.",
+                finalize=True,
+            )
+        second_round = open_cos_selection_round(
+            self.cos_continuous_position, self.hrm_chief, slot_count=2
+        )
+        self.assertFalse(
+            user_can_rescind_cos_vacancy_deliberation(self.hrm_chief, old_pick)
+        )
+        refusal = (
+            "Only the most recent selection round's pick can be rescinded. Earlier rounds "
+            "are history; run a new round instead."
+        )
+        with self.assertRaisesMessage(ValueError, refusal):
+            rescind_cos_vacancy_deliberation(
+                old_pick, self.hrm_chief, "Trying to reopen history."
+            )
+        first_round.refresh_from_db()
+        second_round.refresh_from_db()
+        self.assertEqual(first_round.status, CosSelectionRound.Status.RESOLVED)
+        self.assertEqual(second_round.status, CosSelectionRound.Status.OPEN)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        response = client.get(reverse("application-detail", args=[first.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.context.get("cos_pick_rescind_form"))
+        self.assertEqual(
+            response.context.get("cos_pick_rescind_unavailable_message"), refusal
+        )
+        self.assertContains(response, "Only the most recent selection round")
+        self.assertContains(response, "Earlier rounds are history")
+        self.assertIsNotNone(second)
+        self.assertIsNotNone(third)
+
+    def test_rescinding_latest_closed_short_pick_reopens_the_same_round(self):
+        first = self._continuous_candidate("reopen-short-a")
+        self._continuous_candidate("reopen-short-b")
+        selection_round = open_cos_selection_round(
+            self.cos_continuous_position, self.hrm_chief, slot_count=2
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            pick = save_cos_vacancy_deliberation(
+                self.cos_continuous_position,
+                self.hrm_chief,
+                first.case.id,
+                "One appointment.",
+                finalize=True,
+            )
+        close_cos_selection_round_short(
+            self.cos_continuous_position,
+            self.hrm_chief,
+            "The second position is no longer funded.",
+        )
+        self.assertTrue(
+            user_can_rescind_cos_vacancy_deliberation(self.hrm_chief, pick)
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            rescind_cos_vacancy_deliberation(
+                pick, self.hrm_chief, "The selected applicant declined."
+            )
+        selection_round.refresh_from_db()
+        self.assertEqual(selection_round.status, CosSelectionRound.Status.OPEN)
+        self.assertEqual(selection_round.closed_short_reason, "")
+        self.assertIsNone(selection_round.resolved_at)
+        self.assertIsNone(selection_round.resolved_by)
+
+    def test_cos_rescind_view_turns_a_round_conflict_into_a_clear_message(self):
+        pick, winner, _sibling = self._cos_pick_with_a_closed_sibling()
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        with patch(
+            "recruitment.views.rescind_cos_vacancy_deliberation",
+            side_effect=IntegrityError("one open round"),
+        ):
+            response = client.post(
+                reverse("cos-pick-rescind", args=[winner.pk]),
+                {"reason": "Correct the pick."},
+                follow=True,
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "This pick cannot be rescinded right now because another selection round is open.",
+        )
+        pick.refresh_from_db()
+        self.assertFalse(pick.is_rescinded)
 
     def test_user_full_name_falls_back_to_username_for_display(self):
         self.assertEqual(self.applicant.get_full_name(), self.applicant.username)
