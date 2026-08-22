@@ -60,12 +60,14 @@ from .requirements import (
     get_applicant_document_requirements,
 )
 from .services import (
+    FINAL_SELECTION_OUT_OF_CONTENTION_STATUSES,
     PENDING_RESUBMISSION_SCREENING_FINALIZE_MESSAGE,
     TOP_FIVE_SELECTION_LIMIT,
     compute_competency_rating_score,
     get_available_actions,
     get_case_handoff_options,
     get_current_applicant_document_map,
+    final_selection_recommended_case_ids,
 )
 from .upload_validation import validate_applicant_document_upload
 
@@ -2707,6 +2709,8 @@ class FinalSelectionForm(BootstrapFormMixin, forms.Form):
             self.fields["selected_item"].queryset = report.items.select_related(
                 "recruitment_case",
                 "recruitment_case__application",
+            ).exclude(
+                recruitment_case__application__status__in=FINAL_SELECTION_OUT_OF_CONTENTION_STATUSES
             ).order_by("rank_order", "created_at")
         self.fields["selected_item"].label = "Selected Appointee"
         self.fields["is_deep_selection"].label = "Deep selection"
@@ -2732,12 +2736,7 @@ class FinalSelectionForm(BootstrapFormMixin, forms.Form):
         candidate at rank 1, and picking any of them is not a deviation."""
         if self.report is None:
             return set()
-        if self.report.recommended_case_id:
-            return {self.report.recommended_case_id}
-        return set(
-            self.report.items.filter(rank_order=1)
-            .values_list("recruitment_case_id", flat=True)
-        )
+        return final_selection_recommended_case_ids(self.report)
 
     def clean(self):
         cleaned_data = super().clean()

@@ -47,6 +47,7 @@ from .forms import (
     ApplicantPortalIntakeForm,
     CaseHandoffForm,
     ExamRecordForm,
+    FinalSelectionForm,
     InternalMFAOTPForm,
     ScreeningReviewForm,
     WorkflowActionForm,
@@ -133,6 +134,8 @@ from .services import (
     record_final_decision,
     user_can_record_final_decision,
     record_final_selection,
+    return_car_for_reassessment,
+    _final_selection_items_are_ready,
     rescind_final_selection,
     user_can_rescind_final_selection,
     user_can_record_final_selection,
@@ -9251,6 +9254,36 @@ class VacancyBatchInterviewTests(BaseRecruitmentTestCase):
         second.refresh_from_db()
         return first, second
 
+    def _three_plantilla_at_interview(self):
+        applications = [
+            self._submit(self.make_application(self.level1_position), self.applicant),
+            self._extra_submitted_application(self.level1_position, "x"),
+            self._extra_submitted_application(self.level1_position, "y"),
+        ]
+        for application in applications:
+            self.finalize_screening_for_current_stage(application, self.secretariat)
+        self.finalize_applicant_pool_for_test(self.level1_position)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(
+                self.level1_position, self.secretariat, self._exam_schedule_payload()
+            )
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_scores(
+                self.level1_position,
+                self.secretariat,
+                {
+                    application.case.id: {
+                        "general_score": str(92 - index),
+                        "technical_score": str(86 - index),
+                    }
+                    for index, application in enumerate(applications)
+                },
+                finalize=True,
+            )
+        for application in applications:
+            application.refresh_from_db()
+        return applications
+
     def _two_cos_at_interview(self):
         first, second = self._two_qualified(self.cos_position, self.secretariat)
         with self.captureOnCommitCallbacks(execute=True):
@@ -9390,6 +9423,102 @@ class VacancyBatchInterviewTests(BaseRecruitmentTestCase):
             self.assertTrue(interview_is_finalized_for_current_stage(application))
             # With the interview done, the pool moves to the CAR section together.
             self.assertEqual(get_current_workflow_section(application), "car")
+
+    def test_plantilla_console_records_a_no_show_without_blocking_the_pool(self):
+        first, absentee, third = self._three_plantilla_at_interview()
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_interview_schedule(
+                self.level1_position,
+                self.secretariat,
+                self._interview_schedule_payload(),
+            )
+
+        support_client = Client()
+        self.force_login_with_mfa(support_client, self.secretariat)
+        console_url = reverse(
+            "vacancy-batch-interview", args=[self.level1_position.pk]
+        )
+        console = support_client.get(console_url)
+        self.assertEqual(console.status_code, 200)
+        self.assertContains(console, 'value="mark_absent"', count=3)
+
+        # A panel member can rate but is not one of the level-aware scheduling support
+        # roles, so a forced console operation still reaches the service guard and fails.
+        panel_client = Client()
+        self.force_login_with_mfa(panel_client, self.hrmpsb)
+        refused = panel_client.post(
+            console_url,
+            {
+                "operation": "mark_absent",
+                "case_id": third.case.id,
+                "notes": "Forced panel-member attempt.",
+            },
+        )
+        self.assertEqual(refused.status_code, 302)
+        self.assertFalse(get_interview_session(third).is_finalized)
+        self.assertIsNone(get_pending_attendance_exception(third))
+
+        with self.captureOnCommitCallbacks(execute=True):
+            recorded = support_client.post(
+                console_url,
+                {
+                    "operation": "mark_absent",
+                    "case_id": absentee.case.id,
+                    "notes": "Did not appear at the scheduled panel interview.",
+                },
+                follow=True,
+            )
+        self.assertEqual(recorded.status_code, 200)
+        self.assertContains(recorded, "Absent &mdash; letter of intent pending", html=True)
+        self.assertContains(recorded, 'value="mark_absent"', count=2)
+
+        absence = get_pending_attendance_exception(
+            absentee, AttendanceException.Stage.INTERVIEW
+        )
+        self.assertIsNotNone(absence)
+        self.assertTrue(get_interview_session(absentee).candidate_was_absent)
+        self.assertEqual(
+            absentee.case.current_stage, RecruitmentCase.Stage.HRMPSB_REVIEW
+        )
+
+        # The batch console remains the only no-show door for pooled vacancies.
+        case_detail = support_client.get(
+            reverse("application-detail", kwargs={"pk": absentee.pk}),
+            {"tab": "interview"},
+        )
+        self.assertEqual(case_detail.status_code, 200)
+        self.assertNotContains(
+            case_detail,
+            reverse("interview-absence-record", kwargs={"pk": absentee.pk}),
+        )
+
+        panel_raters = [self.hrmpsb] + self.extra_plantilla_panel_raters(
+            exclude=self.hrmpsb
+        )
+        for application in (first, third):
+            for panel_rater in panel_raters:
+                save_interview_rating(
+                    application=application,
+                    actor=panel_rater,
+                    cleaned_data=self.competency_rating_cleaned_data(
+                        application, level=3
+                    ),
+                )
+
+        finalized = finalize_vacancy_interview_batch(
+            self.level1_position, self.secretariat
+        )
+        self.assertEqual({application.pk for application in finalized}, {first.pk, third.pk})
+        for application in (first, third):
+            application.refresh_from_db()
+            self.assertEqual(get_current_workflow_section(application), "car")
+        absentee.refresh_from_db()
+        absentee.case.refresh_from_db()
+        absence.refresh_from_db()
+        self.assertEqual(
+            absentee.case.current_stage, RecruitmentCase.Stage.HRMPSB_REVIEW
+        )
+        self.assertTrue(absence.is_pending)
 
     def test_plantilla_finalize_requires_a_rating_per_candidate(self):
         first, second = self._two_plantilla_at_interview()
@@ -16985,6 +17114,232 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         )
         self.assertTrue(new_report.is_finalized)
         self.assertFalse(new_report.is_returned)
+
+    def test_withdrawn_car_item_is_greyed_unselectable_and_untouched_by_selection(self):
+        applications, report = self.prepare_ranked_level1_car(3)
+        winner, withdrawn, sibling = applications
+        original_ranks = {
+            item.recruitment_case_id: item.rank_order for item in report.items.all()
+        }
+        with self.captureOnCommitCallbacks(execute=True):
+            record_application_withdrawal(
+                withdrawn,
+                self.appointing,
+                "Applicant withdrew after the CAR reached the Appointing Authority.",
+            )
+        withdrawn.refresh_from_db()
+        notification_count = NotificationLog.objects.filter(application=withdrawn).count()
+        withdrawn_item = report.items.get(recruitment_case=withdrawn.case)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.appointing)
+        detail = client.get(reverse("application-detail", kwargs={"pk": winner.pk}))
+        self.assertEqual(detail.status_code, 200)
+        self.assertContains(detail, "Withdrawn")
+        self.assertRegex(
+            detail.content.decode(),
+            rf'(?s)<div\s+class="rg-del-car-item rg-fs-candidate opacity-50"[^>]*>.*?'
+            rf'{re.escape(withdrawn.applicant_display_name)}',
+        )
+        self.assertNotRegex(
+            detail.content.decode(),
+            rf'name="selected_item"\s+value="{withdrawn_item.pk}"',
+        )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            selection = record_final_selection(
+                application=winner,
+                actor=self.appointing,
+                cleaned_data={
+                    "selected_item": report.items.get(recruitment_case=winner.case),
+                    "decision_notes": "Selected the board's recommended applicant.",
+                },
+            )
+
+        withdrawn.refresh_from_db()
+        withdrawn.case.refresh_from_db()
+        self.assertEqual(selection.selected_application_id, winner.id)
+        self.assertEqual(withdrawn.status, RecruitmentApplication.Status.WITHDRAWN)
+        self.assertEqual(
+            withdrawn.case.case_status, RecruitmentCase.CaseStatus.WITHDRAWN
+        )
+        self.assertEqual(
+            NotificationLog.objects.filter(application=withdrawn).count(),
+            notification_count,
+        )
+        self.assertEqual(
+            {
+                item.recruitment_case_id: item.rank_order
+                for item in report.items.all()
+            },
+            original_ranks,
+        )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            _rescinded, restored = rescind_final_selection(
+                selection,
+                self.appointing,
+                "The recorded selection must be reconsidered.",
+            )
+        withdrawn.refresh_from_db()
+        self.assertEqual({item.pk for item in restored}, {winner.pk, sibling.pk})
+        self.assertEqual(withdrawn.status, RecruitmentApplication.Status.WITHDRAWN)
+
+    def test_selection_proceeds_with_a_withdrawn_ranked_item(self):
+        applications, report = self.prepare_ranked_level1_car(3)
+        recommended, withdrawn, selected = applications
+        original_ranks = list(report.items.values_list("recruitment_case_id", "rank_order"))
+        with self.captureOnCommitCallbacks(execute=True):
+            record_application_withdrawal(
+                withdrawn,
+                self.appointing,
+                "Applicant withdrew before the final selection.",
+            )
+
+        # Rank #3 remains a deviation from the still-active board recommendation and
+        # therefore keeps the existing WF-03 justification requirement.
+        without_justification = FinalSelectionForm(
+            {
+                "selected_item": report.items.get(recruitment_case=selected.case).pk,
+                "decision_notes": "Selecting rank three.",
+            },
+            report=report,
+        )
+        self.assertFalse(without_justification.is_valid())
+        self.assertIn("deep_selection_justification", without_justification.errors)
+        with self.captureOnCommitCallbacks(execute=True):
+            selection = record_final_selection(
+                application=recommended,
+                actor=self.appointing,
+                cleaned_data={
+                    "selected_item": report.items.get(recruitment_case=selected.case),
+                    "decision_notes": "Selected rank three after reviewing the record.",
+                    "deep_selection_justification": (
+                        "The Authority documented why rank three better meets the vacancy."
+                    ),
+                },
+            )
+        withdrawn.refresh_from_db()
+        self.assertEqual(selection.selected_application_id, selected.id)
+        self.assertEqual(withdrawn.status, RecruitmentApplication.Status.WITHDRAWN)
+        self.assertEqual(
+            list(report.items.values_list("recruitment_case_id", "rank_order")),
+            original_ranks,
+        )
+
+    def test_car_return_proceeds_with_a_withdrawn_ranked_item(self):
+        applications, report = self.prepare_ranked_level1_car(3)
+        first, withdrawn, third = applications
+        rank_before_return = list(
+            report.items.values_list("recruitment_case_id", "rank_order")
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            record_application_withdrawal(
+                withdrawn,
+                self.appointing,
+                "Applicant withdrew before CAR reassessment.",
+            )
+            returned = return_car_for_reassessment(
+                first,
+                self.appointing,
+                "The remaining candidates require HRMPSB reassessment.",
+            )
+        withdrawn.refresh_from_db()
+        first.refresh_from_db()
+        third.refresh_from_db()
+        self.assertTrue(returned.is_returned)
+        self.assertEqual(withdrawn.status, RecruitmentApplication.Status.WITHDRAWN)
+        self.assertEqual(first.status, RecruitmentApplication.Status.HRMPSB_REVIEW)
+        self.assertEqual(third.status, RecruitmentApplication.Status.HRMPSB_REVIEW)
+        self.assertEqual(
+            list(report.items.values_list("recruitment_case_id", "rank_order")),
+            rank_before_return,
+        )
+
+    def test_withdrawn_recommendation_needs_no_deviation_justification_and_is_audited(self):
+        applications, report = self.prepare_ranked_level1_car(3)
+        recommended, selected, third = applications
+        self.assertEqual(report.recommended_case_id, recommended.case.id)
+        with self.captureOnCommitCallbacks(execute=True):
+            record_application_withdrawal(
+                recommended,
+                self.appointing,
+                "The board's recommended candidate withdrew.",
+            )
+
+        selected_item = report.items.get(recruitment_case=selected.case)
+        form = FinalSelectionForm(
+            {
+                "selected_item": selected_item.pk,
+                "decision_notes": "Selected another ranked candidate after the withdrawal.",
+            },
+            report=report,
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        with self.captureOnCommitCallbacks(execute=True):
+            selection = record_final_selection(
+                application=selected,
+                actor=self.appointing,
+                cleaned_data=form.cleaned_data,
+            )
+        recommended.refresh_from_db()
+        third.refresh_from_db()
+        self.assertEqual(selection.selected_application_id, selected.id)
+        self.assertEqual(recommended.status, RecruitmentApplication.Status.WITHDRAWN)
+        self.assertEqual(third.status, RecruitmentApplication.Status.REJECTED)
+        decision_log = AuditLog.objects.filter(
+            application=selected,
+            action=AuditLog.Action.DECISION_RECORDED,
+        ).latest("created_at")
+        self.assertIs(decision_log.metadata["recommended_candidate_withdrawn"], True)
+
+    def test_no_contending_car_items_raises_and_the_form_offers_no_radio(self):
+        applications, report = self.prepare_ranked_level1_car(3)
+        for index, application in enumerate(applications, start=1):
+            with self.captureOnCommitCallbacks(execute=True):
+                record_application_withdrawal(
+                    application,
+                    self.appointing,
+                    f"Applicant {index} withdrew before selection.",
+                )
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "The finalized CAR has no ranked applicants in contention.",
+        ):
+            _final_selection_items_are_ready(report)
+        form = FinalSelectionForm(report=report)
+        self.assertEqual(form.fields["selected_item"].queryset.count(), 0)
+        self.assertNotIn('type="radio"', str(form["selected_item"]))
+
+    def test_vacancy_cancelled_car_item_is_also_out_of_contention(self):
+        applications, report = self.prepare_ranked_level1_car(2)
+        cancelled = applications[1]
+        RecruitmentApplication.objects.filter(pk=cancelled.pk).update(
+            status=RecruitmentApplication.Status.VACANCY_CANCELLED,
+            current_handler_role="",
+        )
+        RecruitmentCase.objects.filter(pk=cancelled.case.pk).update(
+            current_stage=RecruitmentCase.Stage.CLOSED,
+            current_handler_role="",
+            case_status=RecruitmentCase.CaseStatus.VACANCY_CANCELLED,
+            is_stage_locked=True,
+        )
+        cancelled.refresh_from_db()
+        contenders = _final_selection_items_are_ready(report)
+        self.assertEqual(
+            {item.recruitment_case_id for item in contenders},
+            {applications[0].case.id},
+        )
+        form = FinalSelectionForm(report=report)
+        self.assertNotIn(
+            cancelled.case.id,
+            set(
+                form.fields["selected_item"].queryset.values_list(
+                    "recruitment_case_id", flat=True
+                )
+            ),
+        )
 
     def test_return_car_invalid_post_rerenders_bound_form(self):
         applications, report = self.prepare_ranked_level1_car(2)

@@ -6389,11 +6389,16 @@ def _vacancy_interview_stage(posting):
     return RecruitmentCase.Stage.HRMPSB_REVIEW
 
 
-def vacancy_interview_pool(posting):
+def vacancy_interview_pool(posting, *, include_recorded_absences=False):
     """The vacancy's interview-ready applications: at the interview stage (HRMPSB for
     Plantilla, HRM Chief for COS), the interview section current, the interview not yet
     finalized. The qualified pool sits the interview together. Branch-agnostic
-    (Plantilla competency sheet, COS single end-user score)."""
+    (Plantilla competency sheet, COS single end-user score).
+
+    The batch console may include a finalized ABSENT session so the held candidate and
+    letter-of-intent state remain visible. Batch finalization deliberately uses the default
+    pool: a recorded no-show is already finalized, needs no ratings, and must not advance.
+    """
     stage = _vacancy_interview_stage(posting)
     cases = (
         RecruitmentCase.objects.filter(
@@ -6408,7 +6413,14 @@ def vacancy_interview_pool(posting):
     pool = []
     for case in cases:
         application = case.application
-        if (
+        session = get_interview_session(application, stage=stage)
+        is_recorded_absence = bool(
+            include_recorded_absences
+            and session
+            and session.is_finalized
+            and session.attendance_outcome == AttendanceOutcome.ABSENT
+        )
+        if is_recorded_absence or (
             get_current_workflow_section(application) == "interview"
             and not interview_is_finalized_for_current_stage(application)
         ):
@@ -9503,11 +9515,56 @@ def process_workflow_action(application, actor, action, remarks):
     return application
 
 
+FINAL_SELECTION_OUT_OF_CONTENTION_STATUSES = frozenset(
+    {
+        RecruitmentApplication.Status.WITHDRAWN,
+        RecruitmentApplication.Status.VACANCY_CANCELLED,
+    }
+)
+
+
+def _car_recommended_case_ids_before_contention(report):
+    """The recommendation encoded by the finalized CAR, without promoting lower ranks."""
+    if report.recommended_case_id:
+        return {report.recommended_case_id}
+    return car_top_rank_case_ids(report)
+
+
+def final_selection_recommended_case_ids(report):
+    """Recommended case IDs that remain in contention for the Authority's selection."""
+    recommended_case_ids = _car_recommended_case_ids_before_contention(report)
+    if not recommended_case_ids:
+        return set()
+    unavailable_case_ids = set(
+        report.items.filter(
+            recruitment_case_id__in=recommended_case_ids,
+            recruitment_case__application__status__in=FINAL_SELECTION_OUT_OF_CONTENTION_STATUSES,
+        ).values_list("recruitment_case_id", flat=True)
+    )
+    return recommended_case_ids - unavailable_case_ids
+
+
+def _recommended_candidate_had_withdrawn(report):
+    recommended_case_ids = _car_recommended_case_ids_before_contention(report)
+    return bool(
+        recommended_case_ids
+        and report.items.filter(
+            recruitment_case_id__in=recommended_case_ids,
+            recruitment_case__application__status=RecruitmentApplication.Status.WITHDRAWN,
+        ).exists()
+    )
+
+
 def _final_selection_items_are_ready(report):
     items = list(get_comparative_assessment_report_items_for_report(report))
-    if not items:
-        raise ValueError("The finalized CAR has no ranked applicants.")
-    for item in items:
+    contenders = [
+        item
+        for item in items
+        if item.application.status not in FINAL_SELECTION_OUT_OF_CONTENTION_STATUSES
+    ]
+    if not contenders:
+        raise ValueError("The finalized CAR has no ranked applicants in contention.")
+    for item in contenders:
         application = item.application
         case = getattr(application, "case", None)
         if (
@@ -9521,7 +9578,7 @@ def _final_selection_items_are_ready(report):
             raise ValueError(
                 "All CAR applicants must be ready for Appointing Authority final selection."
             )
-    return items
+    return contenders
 
 
 @transaction.atomic
@@ -9659,6 +9716,8 @@ def record_final_selection(application, actor, cleaned_data):
     if get_final_selection_for_entry(report.recruitment_entry):
         raise ValueError("Final selection has already been recorded for this vacancy.")
 
+    report_items = _final_selection_items_are_ready(report)
+    contender_item_ids = {item.id for item in report_items}
     selected_item = cleaned_data["selected_item"]
     selected_item = (
         ComparativeAssessmentReportItem.objects.select_related(
@@ -9669,7 +9728,7 @@ def record_final_selection(application, actor, cleaned_data):
         .filter(pk=selected_item.pk, report=report)
         .first()
     )
-    if not selected_item:
+    if not selected_item or selected_item.id not in contender_item_ids:
         raise ValueError("Select an applicant from the finalized CAR.")
     if not car_item_is_within_top_five(selected_item) and not cleaned_data.get(
         "is_deep_selection"
@@ -9687,11 +9746,8 @@ def record_final_selection(application, actor, cleaned_data):
     # recorded) requires a written justification — HARD rule, mirrored in FinalSelection.clean.
     # SL-08: with no recorded recommendation the fallback is the top computed rank, which a
     # tie can share. Picking any member of that band is not a deviation.
-    recommended_case_ids = (
-        {report.recommended_case_id}
-        if report.recommended_case_id
-        else car_top_rank_case_ids(report)
-    )
+    recommended_case_ids = final_selection_recommended_case_ids(report)
+    recommended_candidate_withdrawn = _recommended_candidate_had_withdrawn(report)
     if (
         recommended_case_ids
         and selected_item.recruitment_case_id not in recommended_case_ids
@@ -9702,7 +9758,6 @@ def record_final_selection(application, actor, cleaned_data):
             "Record the justification for the official record."
         )
 
-    report_items = _final_selection_items_are_ready(report)
     car_snapshot = build_car_selection_packet(report)
     # SL-14: if this vacancy was decided before and that decision was rescinded, chain the
     # replacement to it. Without the link the two rows read as unrelated decisions and the
@@ -9779,6 +9834,7 @@ def record_final_selection(application, actor, cleaned_data):
                 "decision_notes": selection.decision_notes,
                 "is_deep_selection": selection.is_deep_selection,
                 "deep_selection_justification_recorded": bool(selection.deep_selection_justification),
+                "recommended_candidate_withdrawn": recommended_candidate_withdrawn,
                 "from_status": previous_status,
                 "to_status": next_status,
                 "from_role": previous_role,

@@ -3910,6 +3910,18 @@ class FinalSelection(TimestampedModel):
                     .values_list("recruitment_case_id", flat=True)
                 )
             )
+            # SL2-09: a recommendation that has since left the competition does not make
+            # every remaining selection a deviation. Filter it out without promoting the
+            # next stored rank; the finalized CAR remains unchanged.
+            recommended_case_ids -= set(
+                self.comparative_assessment_report.items.filter(
+                    recruitment_case_id__in=recommended_case_ids,
+                    recruitment_case__application__status__in={
+                        RecruitmentApplication.Status.WITHDRAWN,
+                        RecruitmentApplication.Status.VACANCY_CANCELLED,
+                    },
+                ).values_list("recruitment_case_id", flat=True)
+            )
             if (
                 recommended_case_ids
                 and self.selected_item.recruitment_case_id not in recommended_case_ids

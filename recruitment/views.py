@@ -93,6 +93,7 @@ from .permissions import (
     WORKFLOW_PROCESSOR_ROLES,
 )
 from .services import (
+    FINAL_SELECTION_OUT_OF_CONTENTION_STATUSES,
     build_audit_session_summary,
     record_system_audit_event,
     summarize_audit_logs,
@@ -147,6 +148,7 @@ from .services import (
     user_can_rescind_cos_vacancy_deliberation,
     user_can_rescind_final_selection,
     get_final_selection_history,
+    final_selection_recommended_case_ids,
     get_latest_cos_selection_round,
     get_open_cos_selection_round,
     open_cos_selection_round,
@@ -1076,8 +1078,19 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
                 context["cos_pick_is_this_case"] = pick.chosen_case_id == application.case.id
         if user_can_record_final_selection(user, application):
             report = context["current_comparative_assessment_report"]
+            selection_items = list(context["current_comparative_assessment_report_items"])
+            recommended_case_ids = final_selection_recommended_case_ids(report)
+            for item in selection_items:
+                item.is_out_of_contention = (
+                    item.application.status
+                    in FINAL_SELECTION_OUT_OF_CONTENTION_STATUSES
+                )
+                item.is_selection_recommended = (
+                    not recommended_case_ids
+                    or item.recruitment_case_id in recommended_case_ids
+                )
             context["final_selection_report"] = report
-            context["final_selection_items"] = context["current_comparative_assessment_report_items"]
+            context["final_selection_items"] = selection_items
             context["final_selection_form"] = FinalSelectionForm(report=report)
         if user_can_manage_completion(user, application):
             completion_record = context["completion_record"]
@@ -2029,7 +2042,12 @@ class VacancyBatchInterviewView(LoginRequiredMixin, WorkflowProcessorRequiredMix
     def _scoped_pool(self, request, entry):
         return [
             application
-            for application in vacancy_interview_pool(entry)
+            for application in vacancy_interview_pool(
+                entry,
+                include_recorded_absences=(
+                    entry.branch == PositionPosting.Branch.PLANTILLA
+                ),
+            )
             if user_can_view_application(request.user, application)
         ]
 
@@ -2038,13 +2056,36 @@ class VacancyBatchInterviewView(LoginRequiredMixin, WorkflowProcessorRequiredMix
         candidates = []
         for application in pool:
             rating = get_interview_rating_for_user(application, request.user)
+            session = get_interview_session(application)
+            rating_count = get_interview_ratings(application).count()
+            if session:
+                rating_count += session.fallback_ratings.count()
+            absence_exception = next(
+                (
+                    exception
+                    for exception in get_attendance_exceptions(application)
+                    if exception.assessment_stage == AttendanceException.Stage.INTERVIEW
+                    and session
+                    and exception.review_stage == session.review_stage
+                ),
+                None,
+            )
             candidates.append(
                 {
                     "application": application,
                     "case_id": application.case.id,
-                    "session": get_interview_session(application),
+                    "session": session,
                     "rating": rating,
-                    "rating_count": get_interview_ratings(application).count(),
+                    "rating_count": rating_count,
+                    "absence_exception": absence_exception,
+                    "can_mark_absent": bool(
+                        is_plantilla
+                        and session
+                        and session.scheduled_for
+                        and not session.is_finalized
+                        and rating_count == 0
+                        and user_can_manage_interview_session(request.user, application)
+                    ),
                 }
             )
         # WF-08: the HRMPSB panel can't rate a Plantilla pool until the rating sheet is
@@ -2122,6 +2163,30 @@ class VacancyBatchInterviewView(LoginRequiredMixin, WorkflowProcessorRequiredMix
             messages.error(request, pool_block)
             return redirect("vacancy-batch-detail", pk=entry.pk)
         operation = request.POST.get("operation", "")
+
+        if operation == "mark_absent" and entry.branch == PositionPosting.Branch.PLANTILLA:
+            case_id = (request.POST.get("case_id", "") or "").strip()
+            target = next(
+                (application for application in pool if str(application.case.id) == case_id),
+                None,
+            )
+            if target is None:
+                messages.error(request, "This candidate is not in the current interview batch.")
+                return redirect("vacancy-batch-interview", pk=entry.pk)
+            try:
+                mark_interview_absent(
+                    target,
+                    request.user,
+                    notes=(request.POST.get("notes", "") or "").strip(),
+                )
+            except (ValueError, ValidationError) as exc:
+                messages.error(request, str(exc))
+            else:
+                messages.success(
+                    request,
+                    "Interview absence recorded. The candidate is waiting for the letter-of-intent decision.",
+                )
+            return redirect("vacancy-batch-interview", pk=entry.pk)
 
         if operation == "save_schedule":
             form = InterviewSessionForm(request.POST)

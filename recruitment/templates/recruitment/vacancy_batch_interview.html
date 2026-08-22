@@ -63,7 +63,8 @@
     <p class="rg-note mb-3">
         Each candidate is scored on the competency rating sheet from their case page
         (HRMPSB rates online or the secretariat encodes). Finalize the whole pool once every
-        candidate has at least one rating.
+        attending candidate has the required panel ratings. A recorded absence waits here
+        for the office's letter-of-intent decision and does not block the rest of the pool.
     </p>
     <div class="rg-itbl">
         <div class="table-responsive">
@@ -91,15 +92,34 @@
                                 {% endif %}
                             </td>
                             <td>
-                                {% if candidate.rating_count %}
+                                {% if candidate.session.attendance_outcome == "absent" %}
+                                    <span class="rg-pill rg-pill--withdrawn rg-pill--sm">
+                                        Absent &mdash; letter of intent
+                                        {% if candidate.absence_exception.is_pending %}pending{% else %}decided{% endif %}
+                                    </span>
+                                {% elif candidate.rating_count %}
                                     <span class="rg-pill rg-pill--success rg-pill--sm">{{ candidate.rating_count }} on record</span>
                                 {% else %}
                                     <span class="rg-pill rg-pill--neutral rg-pill--sm">0 on record</span>
                                 {% endif %}
                             </td>
                             <td class="col-actions">
-                                <a href="{% url 'application-detail' candidate.application.pk %}"
-                                   class="btn btn-outline-secondary btn-sm">Open case</a>
+                                <div class="d-flex flex-column align-items-end gap-2">
+                                    <a href="{% url 'application-detail' candidate.application.pk %}"
+                                       class="btn btn-outline-secondary btn-sm">Open case</a>
+                                    {% if candidate.can_mark_absent %}
+                                        <form method="post" class="d-flex flex-column align-items-end gap-1">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="operation" value="mark_absent">
+                                            <input type="hidden" name="case_id" value="{{ candidate.case_id }}">
+                                            <label class="visually-hidden" for="absence-notes-{{ candidate.case_id }}">Optional absence notes</label>
+                                            <input type="text" class="form-control form-control-sm"
+                                                   id="absence-notes-{{ candidate.case_id }}" name="notes"
+                                                   placeholder="Optional absence notes">
+                                            <button type="submit" class="btn btn-outline-danger btn-sm">Mark absent</button>
+                                        </form>
+                                    {% endif %}
+                                </div>
                             </td>
                         </tr>
                     {% endfor %}

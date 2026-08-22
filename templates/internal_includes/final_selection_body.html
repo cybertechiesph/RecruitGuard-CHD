@@ -77,8 +77,10 @@ Standards applied:
             {% for item in final_selection_items %}
                 {% with candidate=item.recruitment_case.application %}
                 <li>
-                    <label class="rg-del-car-item rg-fs-candidate" data-rank="{{ item.rank_order }}"
-                           data-recommended="{% if final_selection_report.recommended_case_id %}{% if item.recruitment_case_id == final_selection_report.recommended_case_id %}1{% else %}0{% endif %}{% elif item.rank_order == 1 %}1{% else %}0{% endif %}">
+                    <{% if item.is_out_of_contention %}div{% else %}label{% endif %}
+                           class="rg-del-car-item rg-fs-candidate{% if item.is_out_of_contention %} opacity-50{% endif %}"
+                           {% if not item.is_out_of_contention %}data-rank="{{ item.rank_order }}"
+                           data-recommended="{% if item.is_selection_recommended %}1{% else %}0{% endif %}"{% endif %}>
                         <div class="rg-del-rank-badge">#{{ item.rank_order }}</div>
                         <div class="rg-del-car-item__body">
                             <div class="rg-fs-candidate__header">
@@ -87,6 +89,11 @@ Standards applied:
                                         {{ candidate.applicant_display_name }}
                                         {% if final_selection_report and item.recruitment_case_id == final_selection_report.recommended_case_id %}
                                             <span class="rg-pill rg-pill--success rg-pill--sm">Board's recommendation</span>
+                                        {% endif %}
+                                        {% if candidate.status == "withdrawn" %}
+                                            <span class="rg-pill rg-pill--withdrawn rg-pill--sm">Withdrawn</span>
+                                        {% elif candidate.status == "vacancy_cancelled" %}
+                                            <span class="rg-pill rg-pill--withdrawn rg-pill--sm">Vacancy cancelled</span>
                                         {% endif %}
                                     </div>
                                     <div class="rg-fs-candidate__ref">
@@ -98,12 +105,14 @@ Standards applied:
                                     </div>
                                     {% endif %}
                                 </div>
+                                {% if not item.is_out_of_contention %}
                                 <input type="radio"
                                        class="rg-fs-candidate__radio"
                                        name="{{ final_selection_form.selected_item.html_name }}"
                                        value="{{ item.pk }}"
                                        {% if final_selection_form.selected_item.value|stringformat:"s" == item.pk|stringformat:"s" %}checked{% endif %}
                                        {% if item.rank_order > 5 %}aria-describedby="fs-warn-{{ item.pk }}"{% endif %}>
+                                {% endif %}
                             </div>
                             <div class="rg-del-car-item__scores">
                                 {% if item.qualification_outcome %}
@@ -150,7 +159,7 @@ Standards applied:
                                 <p class="rg-del-car-item__decision"><strong>Ranking note:</strong> {{ item.ranking_notes }}</p>
                             {% endif %}
                         </div>
-                    </label>
+                    </{% if item.is_out_of_contention %}div{% else %}label{% endif %}>
                 </li>
                 {% endwith %}
             {% endfor %}
