@@ -136,14 +136,14 @@
                                            target="_blank" rel="noopener">CAR filing copy</a>
                                     {% endif %}
 
-                                    {% if entry.status != "active" %}
+                                    {% if entry.status != "active" and entry.status != "cancelled" %}
                                         <form method="post" action="{% url 'recruitment-entry-status' entry.pk 'active' %}">
                                             {% csrf_token %}
                                             <button type="submit" class="btn btn-rg-secondary btn-sm">Activate</button>
                                         </form>
                                     {% endif %}
 
-                                    {% if entry.status != "suspended" and entry.status != "closed" %}
+                                    {% if entry.status != "suspended" and entry.status != "closed" and entry.status != "cancelled" %}
                                         <form method="post" action="{% url 'recruitment-entry-status' entry.pk 'suspended' %}">
                                             {% csrf_token %}
                                             <button type="submit" class="btn btn-rg-warn btn-sm"
@@ -155,7 +155,7 @@
                                         </form>
                                     {% endif %}
 
-                                    {% if entry.status != "closed" %}
+                                    {% if entry.status != "closed" and entry.status != "cancelled" %}
                                         {% if entry.close_blocked_until %}
                                             {# WF-07: publication period still running — the server blocks the close too. #}
                                             <span class="d-inline-block" tabindex="0"

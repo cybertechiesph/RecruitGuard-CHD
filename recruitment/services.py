@@ -1368,6 +1368,7 @@ def get_closed_cases_for_user(user):
             # applicant must find it, and the recorder must not lose sight of the record
             # they just created.
             RecruitmentApplication.Status.WITHDRAWN,
+            RecruitmentApplication.Status.VACANCY_CANCELLED,
         ]
     )
     # Secretariat never sees Level 2 closed cases (helper's first guard).
@@ -1427,6 +1428,7 @@ def user_can_view_application(user, application):
         # a withdrawn case was viewable by NOBODY (the status fell outside both branches),
         # which broke the post-withdrawal redirect and hid the record from audit retrieval.
         RecruitmentApplication.Status.WITHDRAWN,
+        RecruitmentApplication.Status.VACANCY_CANCELLED,
     }:
         return _user_has_closed_application_access(user, application)
     return False
@@ -2162,6 +2164,7 @@ def user_can_record_withdrawal(user, application):
         RecruitmentCase.CaseStatus.APPROVED,
         RecruitmentCase.CaseStatus.REJECTED,
         RecruitmentCase.CaseStatus.WITHDRAWN,
+        RecruitmentCase.CaseStatus.VACANCY_CANCELLED,
     }:
         return False
     if case.current_stage in {
@@ -3335,6 +3338,7 @@ def vacancy_screening_batch_status(posting):
         if application.status in {
             RecruitmentApplication.Status.REJECTED,
             RecruitmentApplication.Status.WITHDRAWN,
+            RecruitmentApplication.Status.VACANCY_CANCELLED,
         } or (case and case.case_status == RecruitmentCase.CaseStatus.REJECTED):
             terminal += 1
             continue
@@ -12551,6 +12555,11 @@ def cancel_recruitment_entry(entry, actor, reason):
 
 
 def update_recruitment_entry_status(entry, actor, new_status):
+    if entry.status == PositionPosting.EntryStatus.CANCELLED:
+        raise ValidationError(
+            "This vacancy was cancelled and cannot be reactivated, suspended, or "
+            "closed. Publish a new vacancy instead."
+        )
     # WF-07 (HARD): the publication period is a promise to applicants — the vacancy
     # cannot be closed before its closing date. An early close would also auto-finalize
     # the applicant pool and unlock deliberation/CAR for an incomplete pool. Suspend

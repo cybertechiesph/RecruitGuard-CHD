@@ -61,12 +61,24 @@
 
                 <div class="rg-form-section mb-4">
                     <h2 class="rg-form-section__title">3. Set Recruitment Entry Details</h2>
-                    <p class="rg-form-section__copy">Review the generated entry code, then set the recruitment type, entry status, intake dates, and notes for screening.</p>
+                    {% if form.status %}
+                        <p class="rg-form-section__copy">Review the generated entry code, then set the recruitment type, entry status, intake dates, and notes for screening.</p>
+                    {% else %}
+                        <p class="rg-form-section__copy">Review the generated entry code, recruitment type, intake dates, and notes for screening.</p>
+                    {% endif %}
                     <div class="row g-3">
                         <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.job_code %}</div>
                         <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.item_number %}</div>
                         <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.branch %}</div>
-                        <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.status %}</div>
+                        {% if form.status %}
+                            <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.status %}</div>
+                        {% else %}
+                            <div class="col-md-4">
+                                <div class="form-label">Current Status</div>
+                                <div class="form-control-plaintext fw-semibold">{{ object.get_status_display }}</div>
+                                <p class="rg-form-section__copy mb-0">Change status from the Vacancies list.</p>
+                            </div>
+                        {% endif %}
                         <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.intake_mode %}</div>
                         <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.publication_date %}</div>
                         <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.opening_date %}</div>

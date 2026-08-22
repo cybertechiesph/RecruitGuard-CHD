@@ -2491,6 +2491,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         create_response = client.get(reverse("recruitment-entry-create"))
         self.assertEqual(create_response.status_code, 200)
         self.assertContains(create_response, 'id="id_job_code"')
+        self.assertContains(create_response, 'id="id_status"')
         self.assertContains(create_response, 'placeholder="Will be generated automatically after first save"')
         self.assertContains(
             create_response,
@@ -2508,6 +2509,44 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
 
         self.assertEqual(update_response.status_code, 200)
         self.assertContains(update_response, entry.job_code)
+        self.assertNotContains(update_response, 'id="id_status"')
+        self.assertContains(update_response, "Current Status")
+        self.assertContains(update_response, entry.get_status_display())
+        self.assertContains(update_response, "Change status from the Vacancies list.")
+
+    def test_entry_create_status_choices_allow_only_draft_and_active(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        create_url = reverse("recruitment-entry-create")
+        initial_count = PositionPosting.objects.count()
+        payload = {
+            "position_reference": self.project_assistant_position.pk,
+            "branch": PositionPosting.Branch.COS,
+            "intake_mode": PositionPosting.IntakeMode.CONTINUOUS,
+            "status": PositionPosting.EntryStatus.SUSPENDED,
+            "publication_date": "",
+            "opening_date": self.entry_opening_date_string(),
+            "closing_date": "",
+            "qualification_reference": "SL2 create-status choice regression.",
+        }
+
+        invalid_response = client.post(create_url, payload)
+
+        self.assertEqual(invalid_response.status_code, 200)
+        self.assertContains(
+            invalid_response,
+            "Select a valid choice. suspended is not one of the available choices.",
+        )
+        self.assertEqual(PositionPosting.objects.count(), initial_count)
+
+        payload["status"] = PositionPosting.EntryStatus.ACTIVE
+        valid_response = client.post(create_url, payload)
+
+        self.assertEqual(valid_response.status_code, 302)
+        created_entry = PositionPosting.objects.get(
+            qualification_reference="SL2 create-status choice regression."
+        )
+        self.assertEqual(created_entry.status, PositionPosting.EntryStatus.ACTIVE)
 
     def test_entry_manager_can_create_recruitment_entry(self):
         client = Client()
@@ -2647,6 +2686,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         payload = {
             "position_reference": entry.position_reference_id,
             "branch": entry.branch,
+            "item_number": entry.item_number or "",
             "intake_mode": entry.intake_mode,
             "status": entry.status,
             "publication_date": "",
@@ -2714,7 +2754,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
 
         client = Client()
         self.force_login_with_mfa(client, self.secretariat)
-        response = client.post(
+        edit_response = client.post(
             reverse("recruitment-entry-update", kwargs={"pk": entry.pk}),
             self._entry_edit_payload(
                 entry,
@@ -2723,7 +2763,26 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
             ),
         )
 
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(edit_response.status_code, 302)
+        entry.refresh_from_db()
+        self.assertEqual(entry.status, PositionPosting.EntryStatus.DRAFT)
+        self.assertEqual(entry.closing_date, new_closing)
+        self.assertFalse(entry.deadline_extended)
+        self.assertFalse(
+            AuditLog.objects.filter(
+                action=AuditLog.Action.RECRUITMENT_ENTRY_DEADLINE_CHANGED,
+                metadata__recruitment_entry_id=entry.id,
+            ).exists()
+        )
+
+        activation_response = client.post(
+            reverse(
+                "recruitment-entry-status",
+                kwargs={"pk": entry.pk, "status": PositionPosting.EntryStatus.ACTIVE},
+            )
+        )
+
+        self.assertEqual(activation_response.status_code, 302)
         entry.refresh_from_db()
         self.assertEqual(entry.status, PositionPosting.EntryStatus.ACTIVE)
         self.assertEqual(entry.closing_date, new_closing)
@@ -3109,6 +3168,69 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
             AuditLog.objects.filter(
                 action=AuditLog.Action.RECRUITMENT_ENTRY_STATUS_CHANGED,
                 metadata__entry_code=self.level1_position.job_code,
+            ).exists()
+        )
+
+    def test_entry_edit_ignores_forged_early_close_status(self):
+        self.assertEqual(self.level1_position.status, PositionPosting.EntryStatus.ACTIVE)
+        self.assertIsNotNone(self.level1_position.close_blocked_until)
+        self.assertFalse(self.level1_position.applicant_pool_is_finalized)
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+
+        response = client.post(
+            reverse("recruitment-entry-update", kwargs={"pk": self.level1_position.pk}),
+            self._entry_edit_payload(
+                self.level1_position,
+                status=PositionPosting.EntryStatus.CLOSED,
+            ),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.level1_position.refresh_from_db()
+        self.assertEqual(self.level1_position.status, PositionPosting.EntryStatus.ACTIVE)
+        self.assertFalse(self.level1_position.applicant_pool_is_finalized)
+        self.assertFalse(
+            AuditLog.objects.filter(
+                action=AuditLog.Action.RECRUITMENT_ENTRY_STATUS_CHANGED,
+                metadata__entry_id=self.level1_position.id,
+            ).exists()
+        )
+
+    def test_entry_edit_ignores_forged_cancelled_status_without_resolving_cases(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(application, self.applicant)
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+        previous_application_status = application.status
+        previous_case_status = application.case.case_status
+        previous_case_stage = application.case.current_stage
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+
+        response = client.post(
+            reverse("recruitment-entry-update", kwargs={"pk": self.level1_position.pk}),
+            self._entry_edit_payload(
+                self.level1_position,
+                status=PositionPosting.EntryStatus.CANCELLED,
+            ),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.level1_position.refresh_from_db()
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+        self.assertEqual(self.level1_position.status, PositionPosting.EntryStatus.ACTIVE)
+        self.assertEqual(application.status, previous_application_status)
+        self.assertEqual(application.case.case_status, previous_case_status)
+        self.assertEqual(application.case.current_stage, previous_case_stage)
+        self.assertFalse(application.case.is_stage_locked)
+        self.assertFalse(
+            AuditLog.objects.filter(
+                action=AuditLog.Action.RECRUITMENT_ENTRY_CANCELLED,
+                metadata__entry_id=self.level1_position.id,
             ).exists()
         )
 
@@ -13168,6 +13290,155 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
         self.assertEqual(entry_log.actor, self.secretariat)
         self.assertIn("CSC disapproved", entry_log.metadata["reason"])
         self.assertEqual(entry_log.metadata["affected_application_ids"], [application.id])
+
+    def test_cancelled_vacancy_is_terminal_and_list_offers_no_lifecycle_actions(self):
+        cancel_recruitment_entry(
+            self.level1_position,
+            self.secretariat,
+            "The vacancy was withdrawn by the requesting office.",
+        )
+        self.level1_position.refresh_from_db()
+        refusal = (
+            "This vacancy was cancelled and cannot be reactivated, suspended, or closed. "
+            "Publish a new vacancy instead."
+        )
+
+        for new_status in (
+            PositionPosting.EntryStatus.ACTIVE,
+            PositionPosting.EntryStatus.SUSPENDED,
+            PositionPosting.EntryStatus.CLOSED,
+        ):
+            with self.subTest(new_status=new_status):
+                with self.assertRaisesMessage(ValidationError, refusal):
+                    update_recruitment_entry_status(
+                        self.level1_position,
+                        self.hrm_chief,
+                        new_status,
+                    )
+                self.level1_position.refresh_from_db()
+                self.assertEqual(
+                    self.level1_position.status,
+                    PositionPosting.EntryStatus.CANCELLED,
+                )
+
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        response = client.get(reverse("recruitment-entry-list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.level1_position.job_code)
+        self.assertContains(response, "Cancelled")
+        for new_status in (
+            PositionPosting.EntryStatus.ACTIVE,
+            PositionPosting.EntryStatus.SUSPENDED,
+            PositionPosting.EntryStatus.CLOSED,
+        ):
+            self.assertNotContains(
+                response,
+                reverse(
+                    "recruitment-entry-status",
+                    kwargs={"pk": self.level1_position.pk, "status": new_status},
+                ),
+            )
+        self.assertNotContains(
+            response,
+            reverse("recruitment-entry-cancel", kwargs={"pk": self.level1_position.pk}),
+        )
+
+    def test_vacancy_cancelled_cases_remain_visible_listed_and_terminal_for_batches(self):
+        from recruitment.services import get_closed_cases_for_user
+
+        level1_application = self.make_application(self.level1_position)
+        level2_application = self.make_application(self.level2_position)
+        for application in (level1_application, level2_application):
+            self.verify_application_for_submission(application)
+            with self.captureOnCommitCallbacks(execute=True):
+                submit_application(application, self.applicant)
+            application.refresh_from_db()
+
+        viewers_before_cancellation = {
+            level1_application.pk: {
+                user.pk
+                for user in (
+                    self.applicant,
+                    self.secretariat,
+                    self.hrm_chief,
+                    self.hrmpsb,
+                    self.appointing,
+                    self.sysadmin,
+                )
+                if user_can_view_application(user, level1_application)
+            },
+            level2_application.pk: {
+                user.pk
+                for user in (
+                    self.applicant,
+                    self.secretariat,
+                    self.hrm_chief,
+                    self.hrmpsb,
+                    self.appointing,
+                    self.sysadmin,
+                )
+                if user_can_view_application(user, level2_application)
+            },
+        }
+
+        with self.captureOnCommitCallbacks(execute=True):
+            cancel_recruitment_entry(
+                self.level1_position,
+                self.secretariat,
+                "The requesting office cancelled the Level 1 vacancy.",
+            )
+            cancel_recruitment_entry(
+                self.level2_position,
+                self.hrm_chief,
+                "The requesting office cancelled the Level 2 vacancy.",
+            )
+
+        for application in (level1_application, level2_application):
+            application.refresh_from_db()
+            application.case.refresh_from_db()
+            self.assertEqual(
+                application.status,
+                RecruitmentApplication.Status.VACANCY_CANCELLED,
+            )
+            self.assertEqual(
+                application.case.case_status,
+                RecruitmentCase.CaseStatus.VACANCY_CANCELLED,
+            )
+            self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.CLOSED)
+            for user_pk in viewers_before_cancellation[application.pk]:
+                user = RecruitmentUser.objects.get(pk=user_pk)
+                self.assertTrue(user_can_view_application(user, application))
+
+        for user in (
+            self.hrm_chief,
+            self.hrmpsb,
+            self.appointing,
+        ):
+            self.assertTrue(user_can_view_application(user, level1_application))
+            self.assertTrue(user_can_view_application(user, level2_application))
+            closed_ids = {case.pk for case in get_closed_cases_for_user(user)}
+            self.assertIn(level1_application.pk, closed_ids)
+            self.assertIn(level2_application.pk, closed_ids)
+
+        self.assertTrue(user_can_view_application(self.secretariat, level1_application))
+        self.assertFalse(user_can_view_application(self.secretariat, level2_application))
+        secretariat_closed_ids = {
+            case.pk for case in get_closed_cases_for_user(self.secretariat)
+        }
+        self.assertIn(level1_application.pk, secretariat_closed_ids)
+        self.assertNotIn(level2_application.pk, secretariat_closed_ids)
+        self.assertFalse(user_can_view_application(self.sysadmin, level1_application))
+        self.assertFalse(user_can_view_application(self.sysadmin, level2_application))
+        self.assertFalse(get_closed_cases_for_user(self.sysadmin).exists())
+
+        for posting in (self.level1_position, self.level2_position):
+            batch_status = vacancy_screening_batch_status(posting)
+            self.assertEqual(batch_status.total, 1)
+            self.assertEqual(batch_status.terminal, 1)
+            self.assertEqual(batch_status.pending, 0)
+            self.assertTrue(batch_status.is_ready)
 
     def test_cancelling_needs_a_reason_and_cannot_repeat(self):
         with self.assertRaises(ValidationError):

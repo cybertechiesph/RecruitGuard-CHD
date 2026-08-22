@@ -2904,6 +2904,22 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
             "Leave blank for COS (item numbers apply to Plantilla items only)."
         )
         self.fields["branch"].label = "Engagement Type"
+        if self.instance.pk:
+            # SL2-01: edits may change vacancy metadata and dates, but lifecycle
+            # transitions have one door: the guarded status actions (or the
+            # cancellation form, which records a reason and resolves cases).
+            self.fields.pop("status", None)
+        else:
+            self.fields["status"].choices = [
+                (
+                    PositionPosting.EntryStatus.DRAFT,
+                    PositionPosting.EntryStatus.DRAFT.label,
+                ),
+                (
+                    PositionPosting.EntryStatus.ACTIVE,
+                    PositionPosting.EntryStatus.ACTIVE.label,
+                ),
+            ]
         self.fields["publication_date"].help_text = (
             "For Plantilla, this starts the publication period when recorded."
         )
