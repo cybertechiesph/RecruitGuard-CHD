@@ -40,6 +40,16 @@ def summarize_delivery_failure(exc: Exception) -> str:
         exc,
         (
             smtplib.SMTPConnectError,
+            smtplib.SMTPServerDisconnected,
+            smtplib.SMTPHeloError,
+        ),
+    ):
+        summary = "Could not reach the mail server"
+    elif isinstance(exc, smtplib.SMTPException):
+        summary = "Mail server returned an error"
+    elif isinstance(
+        exc,
+        (
             ConnectionRefusedError,
             socket.timeout,
             TimeoutError,
@@ -47,8 +57,6 @@ def summarize_delivery_failure(exc: Exception) -> str:
         ),
     ):
         summary = "Could not reach the mail server"
-    elif isinstance(exc, smtplib.SMTPException):
-        summary = "Mail server returned an error"
     elif (
         isinstance(exc, RuntimeError)
         and exc.args == ("Email backend did not confirm delivery.",)

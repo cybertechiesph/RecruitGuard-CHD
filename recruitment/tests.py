@@ -10959,6 +10959,57 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         self.assertNotIn("secret-host", str(failed_audit.metadata))
         self.assertEqual(failed_audit.metadata["notification_id"], notification.id)
 
+    def test_delivery_failure_summaries_follow_exception_hierarchy(self):
+        from recruitment.notification_services import summarize_delivery_failure
+
+        cases = [
+            (
+                smtplib.SMTPAuthenticationError(535, b"x"),
+                "Mail server rejected the sender credentials (SMTPAuthenticationError)",
+            ),
+            (
+                smtplib.SMTPRecipientsRefused({"a@b": (550, b"x")}),
+                "Mail server refused the recipient address (SMTPRecipientsRefused)",
+            ),
+            (
+                smtplib.SMTPConnectError(421, b"x"),
+                "Could not reach the mail server (SMTPConnectError)",
+            ),
+            (
+                smtplib.SMTPServerDisconnected("x"),
+                "Could not reach the mail server (SMTPServerDisconnected)",
+            ),
+            (
+                smtplib.SMTPDataError(554, b"x"),
+                "Mail server returned an error (SMTPDataError)",
+            ),
+            (
+                smtplib.SMTPSenderRefused(550, b"x", "a@b"),
+                "Mail server returned an error (SMTPSenderRefused)",
+            ),
+            (
+                ConnectionRefusedError(),
+                "Could not reach the mail server (ConnectionRefusedError)",
+            ),
+            (
+                RuntimeError("Email backend did not confirm delivery."),
+                "Email backend did not confirm delivery. (RuntimeError)",
+            ),
+            (
+                ValueError("x"),
+                "Unexpected error while sending (ValueError)",
+            ),
+        ]
+
+        outputs = []
+        for exception, expected in cases:
+            with self.subTest(exception=type(exception).__name__):
+                output = summarize_delivery_failure(exception)
+                outputs.append(output)
+                self.assertEqual(output, expected)
+
+        self.assertTrue(all("a@b" not in output for output in outputs))
+
     def test_approval_sends_selected_applicant_notification(self):
         application = self.make_application(self.cos_position)
         self.verify_application_for_submission(application)
