@@ -44,7 +44,7 @@ Toggling and unread-count polling are handled by recruitguard-notifications.js.
             <li class="rg-notif__item {% if not notification.read_at %}rg-notif__item--unread{% endif %}">
                 <form method="post" action="{% url 'notification-read' pk=notification.pk %}" class="rg-notif__item-form">
                     {% csrf_token %}
-                    <button type="submit" class="rg-notif__item-link" aria-label="Open: {{ notification.title }}">
+                    <button type="submit" class="rg-notif__item-action" aria-label="Open: {{ notification.title }}">
                         <span class="rg-notif__item-dot" aria-hidden="true"></span>
                         <span class="rg-notif__item-body">
                             <span class="rg-notif__item-title">{{ notification.title }}</span>

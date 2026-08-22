@@ -3205,7 +3205,7 @@ body.applicant-portal-body {
 }
 .rg-notif__item:last-child { border-bottom: none; }
 .rg-notif__item-form { margin: 0; }
-.rg-notif__item-link {
+.rg-notif__item-action {
     display: flex;
     align-items: flex-start;
     gap: 0.65rem;
@@ -3217,14 +3217,14 @@ body.applicant-portal-body {
     text-align: left;
     color: inherit;
 }
-.rg-notif__item-link:hover { background: #f8fafc; }
-.rg-notif__item-link:focus-visible {
+.rg-notif__item-action:hover { background: #f8fafc; }
+.rg-notif__item-action:focus-visible {
     background: #ecfdf5;
     outline: none;
     box-shadow: inset 0 0 0 2px rgba(22, 163, 74, 0.45);
 }
-.rg-notif__item--unread .rg-notif__item-link { background: var(--rg-brand-green-soft, #e6f0dc); }
-.rg-notif__item--unread .rg-notif__item-link:hover { background: #d4e8c0; }
+.rg-notif__item--unread .rg-notif__item-action { background: var(--rg-brand-green-soft, #e6f0dc); }
+.rg-notif__item--unread .rg-notif__item-action:hover { background: #d4e8c0; }
 .rg-notif__item-dot {
     width: 0.5rem;
     height: 0.5rem;

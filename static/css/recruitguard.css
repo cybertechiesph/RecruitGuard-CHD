@@ -3347,26 +3347,6 @@ textarea.form-control {
     margin-top: 0.2rem;
 }
 
-.rg-pub-resend-link {
-    color: var(--rg-primary);
-    font-weight: 600;
-    cursor: pointer;
-    background: none;
-    border: none;
-    padding: 0;
-    font-size: inherit;
-    font-family: inherit;
-}
-
-.rg-pub-resend-link:disabled {
-    color: #9aa4af;
-    cursor: default;
-}
-
-.rg-pub-resend-link:not(:disabled):hover {
-    text-decoration: underline;
-}
-
 /* ── Review cards ────────────────────────────────────────────── */
 .rg-pub-review-card {
     border: 1px solid #d7dde3;
@@ -8301,4 +8281,3 @@ textarea.form-control {
         padding: 0.85rem;
     }
 }
-

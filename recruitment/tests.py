@@ -3275,6 +3275,27 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         payload.update(overrides)
         return payload
 
+    def add_receipt_documents_until(self, application, target_count):
+        from recruitment.services import get_current_applicant_document_items
+
+        current_count = get_current_applicant_document_items(application).count()
+        for index in range(current_count + 1, target_count + 1):
+            document_key = f"zz_receipt_extra_{index:02d}"
+            upload_evidence_item(
+                application=application,
+                actor=application.applicant,
+                label=f"Supplemental Requirement {index:02d}",
+                uploaded_file=self.build_valid_applicant_document_upload(
+                    document_key,
+                    content_prefix=f"receipt-extra-{index:02d}",
+                    filename=f"receipt-extra-{index:02d}.pdf",
+                ),
+                document_key=document_key,
+                artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
+                artifact_type="applicant_document",
+            )
+        return list(get_current_applicant_document_items(application))
+
     def intake_field_validation_form(self, **overrides):
         data = {
             "first_name": "Pat",
@@ -3651,6 +3672,22 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
                 action=AuditLog.Action.APPLICATION_OTP_VERIFIED,
             ).exists()
         )
+
+    def test_otp_resend_is_a_secondary_button_not_a_link_styled_action(self):
+        application = self.make_application(self.level1_position)
+
+        response = self.client.get(
+            reverse("applicant-otp", kwargs={"token": application.public_token})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        resend_button = re.search(
+            r'<button\b[^>]*\bid="resend-btn"[^>]*>',
+            response.content.decode("utf-8"),
+        )
+        self.assertIsNotNone(resend_button)
+        self.assertRegex(resend_button.group(0), r'class="[^"]*\bbtn\b[^"]*"')
+        self.assertNotContains(response, "rg-pub-resend-link")
 
     def test_verified_otp_summary_counts_only_current_active_applicant_documents(self):
         client = Client()
@@ -4315,6 +4352,73 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
 
         self.assertRedirects(response, reverse("applicant-portal"))
         self.assertContains(response, "This receipt link is no longer available.")
+
+    def test_submitted_application_receipt_itemizes_current_requirements(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        application.refresh_from_db()
+        from recruitment.services import get_current_applicant_document_items
+
+        documents = list(get_current_applicant_document_items(application))
+        self.assertGreaterEqual(len(documents), 2)
+
+        response = self.client.get(
+            reverse("applicant-receipt", kwargs={"token": application.public_token})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            f"{len(documents)} file{'s' if len(documents) != 1 else ''} submitted",
+        )
+        for document in documents:
+            with self.subTest(document_key=document.document_key):
+                self.assertContains(response, document.label)
+                self.assertContains(response, document.original_filename)
+
+    def test_receipt_pdf_with_one_requirement_stays_on_one_page(self):
+        from pypdf import PdfReader
+        from recruitment.services import (
+            _build_application_receipt_pdf,
+            get_current_applicant_document_items,
+        )
+
+        application = self.make_application(self.level1_position)
+        documents = list(get_current_applicant_document_items(application))
+        self.assertTrue(documents)
+        EvidenceVaultItem.objects.filter(
+            pk__in=[document.pk for document in documents[1:]]
+        ).update(is_archived=True, archive_tag="Single-item receipt fixture")
+        application.submitted_at = timezone.now()
+        application.save(update_fields=["submitted_at", "updated_at"])
+
+        pdf_bytes = _build_application_receipt_pdf(application)
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+
+        self.assertEqual(len(reader.pages), 1)
+        self.assertIn(documents[0].label, reader.pages[0].extract_text())
+
+    def test_receipt_pdf_paginates_twelve_requirements(self):
+        from pypdf import PdfReader
+
+        application = self.make_application(self.level1_position)
+        documents = self.add_receipt_documents_until(application, 12)
+        self.assertEqual(len(documents), 12)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        application.refresh_from_db()
+
+        response = self.client.get(
+            reverse("applicant-receipt-pdf", kwargs={"token": application.public_token})
+        )
+        pdf_bytes = response.getvalue()
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(reader.pages), 2)
+        extracted_text = "\n".join(page.extract_text() or "" for page in reader.pages)
+        self.assertIn(documents[0].label, extracted_text)
 
     def test_submitted_application_receipt_downloads_as_pdf(self):
         # Panel revision: the application receipt must download as a real PDF

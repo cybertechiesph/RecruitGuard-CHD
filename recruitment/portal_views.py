@@ -451,9 +451,9 @@ class ApplicantReceiptView(TemplateView):
         if application is None:
             raise Http404
         context["application"] = application
-        context["current_applicant_document_count"] = (
-            get_current_applicant_document_items(application).count()
-        )
+        current_applicant_documents = get_current_applicant_document_items(application)
+        context["current_applicant_documents"] = current_applicant_documents
+        context["current_applicant_document_count"] = current_applicant_documents.count()
         return context
 
 

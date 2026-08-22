@@ -11055,27 +11055,9 @@ def _brand_seal_reader():
         return None
 
 
-def _build_application_receipt_pdf(application, *, generated_at=None):
-    generated_at = generated_at or timezone.now()
-    branch_value = getattr(application, "branch", "")
-    engagement = (
-        "Permanent (Plantilla)"
-        if branch_value == PositionPosting.Branch.PLANTILLA
-        else "Contract of Service"
-    )
-    submitted_at = application.submitted_at
-    document_count = get_current_applicant_document_items(application).count()
-
-    buffer = BytesIO()
-    page_width, page_height = A4
-    pdf = canvas.Canvas(buffer, pagesize=A4)
-    pdf.setTitle(f"Application Receipt — {application.case_number_short or application.reference_number}")
-
-    left = 52
-    right = page_width - 52
+def _draw_application_receipt_header(pdf, *, left, right, page_height):
+    """Draw the office identity shared by every receipt PDF page."""
     content_width = right - left
-
-    # ── Official header: seal + office identity, gold rule beneath ──────
     top = page_height - 54
     seal = _brand_seal_reader()
     text_x = left
@@ -11112,6 +11094,98 @@ def _build_application_receipt_pdf(application, *, generated_at=None):
     pdf.setStrokeColor(_RECEIPT_GREEN)
     pdf.setLineWidth(0.8)
     pdf.line(left, rule_y - 3, right, rule_y - 3)
+    return rule_y
+
+
+def _application_receipt_requirement_groups(documents):
+    """Build wrapped label/filename lines before drawing for page-height checks."""
+    groups = []
+    for index, document in enumerate(documents, start=1):
+        label_text = f"{index}. {document.label or 'Submitted requirement'}"
+        filename_text = f"— {document.original_filename or 'File'}"
+        label_lines = textwrap.wrap(label_text, width=68) or [label_text]
+        filename_lines = textwrap.wrap(filename_text, width=88) or [filename_text]
+        lines = [(line, "") for line in label_lines]
+        if filename_lines and len(label_lines[-1]) + len(filename_lines[0]) + 1 <= 88:
+            lines[-1] = (label_lines[-1], filename_lines.pop(0))
+        lines.extend(("", line) for line in filename_lines)
+        groups.append(lines)
+    return groups
+
+
+def _application_receipt_requirements_height(requirement_groups):
+    return 18 + sum((len(lines) * 13) + 4 for lines in requirement_groups)
+
+
+def _draw_application_receipt_requirements(pdf, *, left, top, requirement_groups):
+    pdf.setFont("Helvetica-Bold", 10.5)
+    pdf.setFillColor(_RECEIPT_GREEN_INK)
+    pdf.drawString(left, top, "Requirements Submitted")
+    y = top - 18
+    for lines in requirement_groups:
+        for label_text, filename_text in lines:
+            text_x = left + 4
+            if label_text:
+                pdf.setFont("Helvetica", 9.5)
+                pdf.setFillColor(_RECEIPT_INK)
+                pdf.drawString(text_x, y, label_text)
+                text_x += pdf.stringWidth(label_text, "Helvetica", 9.5) + 5
+            if filename_text:
+                pdf.setFont("Helvetica", 8.5)
+                pdf.setFillColor(_RECEIPT_MUTE)
+                pdf.drawString(text_x, y, filename_text)
+            y -= 13
+        y -= 4
+    return y
+
+
+def _draw_application_receipt_footer(pdf, *, left, right, generated_at):
+    footer_y = 64
+    pdf.setStrokeColor(_RECEIPT_HAIRLINE)
+    pdf.setLineWidth(0.8)
+    pdf.line(left, footer_y, right, footer_y)
+    pdf.setFont("Helvetica", 7.5)
+    pdf.setFillColor(_RECEIPT_MUTE)
+    pdf.drawString(
+        left,
+        footer_y - 14,
+        f"Generated {generated_at:%B %d, %Y at %I:%M %p}. This is a system-generated receipt and needs no signature.",
+    )
+    pdf.drawString(
+        left,
+        footer_y - 25,
+        "Keep your Tracking Code private — treat it like a password.",
+    )
+
+
+def _build_application_receipt_pdf(application, *, generated_at=None):
+    generated_at = generated_at or timezone.now()
+    branch_value = getattr(application, "branch", "")
+    engagement = (
+        "Permanent (Plantilla)"
+        if branch_value == PositionPosting.Branch.PLANTILLA
+        else "Contract of Service"
+    )
+    submitted_at = application.submitted_at
+    documents = list(get_current_applicant_document_items(application))
+    document_count = len(documents)
+
+    buffer = BytesIO()
+    page_width, page_height = A4
+    pdf = canvas.Canvas(buffer, pagesize=A4)
+    pdf.setTitle(f"Application Receipt — {application.case_number_short or application.reference_number}")
+
+    left = 52
+    right = page_width - 52
+    content_width = right - left
+
+    # ── Official header: seal + office identity, gold rule beneath ──────
+    rule_y = _draw_application_receipt_header(
+        pdf,
+        left=left,
+        right=right,
+        page_height=page_height,
+    )
 
     # ── Document title ─────────────────────────────────────────────────
     title_y = rule_y - 32
@@ -11196,16 +11270,53 @@ def _build_application_receipt_pdf(application, *, generated_at=None):
     pdf.setLineWidth(0.8)
     pdf.rect(left, y, content_width, table_top - y, stroke=1, fill=0)
 
-    # ── What happens next ──────────────────────────────────────────────
-    next_top = y - 30
-    pdf.setFont("Helvetica-Bold", 10.5)
-    pdf.setFillColor(_RECEIPT_GREEN_INK)
-    pdf.drawString(left, next_top, "What Happens Next")
+    # ── Itemized requirements ─────────────────────────────────────────
+    requirement_groups = _application_receipt_requirement_groups(documents)
+    requirements_top = y - 30
+    requirements_height = _application_receipt_requirements_height(requirement_groups)
     steps = [
         "Your application will be reviewed by the recruitment team.",
         "You may be contacted by email or phone for updates or additional requirements.",
         "Check your application status anytime using your Tracking Code and email.",
     ]
+
+    # Keep the complete requirements block together with the fixed sections
+    # that follow it. For a long intake checklist, finish page one cleanly,
+    # repeat the office header, and continue on page two.
+    projected_requirements_bottom = requirements_top - requirements_height
+    projected_next_top = projected_requirements_bottom - 30
+    projected_step_y = projected_next_top - 16
+    for step in steps:
+        projected_step_y -= (len(textwrap.wrap(step, width=92)) * 13) + 4
+    projected_reminder_bottom = projected_step_y - 16 - 62
+    if projected_reminder_bottom < 60:
+        _draw_application_receipt_footer(
+            pdf,
+            left=left,
+            right=right,
+            generated_at=generated_at,
+        )
+        pdf.showPage()
+        continued_rule_y = _draw_application_receipt_header(
+            pdf,
+            left=left,
+            right=right,
+            page_height=page_height,
+        )
+        requirements_top = continued_rule_y - 30
+
+    y = _draw_application_receipt_requirements(
+        pdf,
+        left=left,
+        top=requirements_top,
+        requirement_groups=requirement_groups,
+    )
+
+    # ── What happens next ──────────────────────────────────────────────
+    next_top = y - 30
+    pdf.setFont("Helvetica-Bold", 10.5)
+    pdf.setFillColor(_RECEIPT_GREEN_INK)
+    pdf.drawString(left, next_top, "What Happens Next")
     pdf.setFont("Helvetica", 9.5)
     step_y = next_top - 16
     for number, step in enumerate(steps, start=1):
@@ -11245,21 +11356,11 @@ def _build_application_receipt_pdf(application, *, generated_at=None):
         text_y -= 12
 
     # ── Footer ─────────────────────────────────────────────────────────
-    footer_y = 64
-    pdf.setStrokeColor(_RECEIPT_HAIRLINE)
-    pdf.setLineWidth(0.8)
-    pdf.line(left, footer_y, right, footer_y)
-    pdf.setFont("Helvetica", 7.5)
-    pdf.setFillColor(_RECEIPT_MUTE)
-    pdf.drawString(
-        left,
-        footer_y - 14,
-        f"Generated {generated_at:%B %d, %Y at %I:%M %p}. This is a system-generated receipt and needs no signature.",
-    )
-    pdf.drawString(
-        left,
-        footer_y - 25,
-        "Keep your Tracking Code private — treat it like a password.",
+    _draw_application_receipt_footer(
+        pdf,
+        left=left,
+        right=right,
+        generated_at=generated_at,
     )
 
     pdf.showPage()

@@ -79,7 +79,19 @@
             </div>
             <div class="rg-pub-review-row">
                 <dt>Documents</dt>
-                <dd>{{ current_applicant_document_count }} file{{ current_applicant_document_count|pluralize }} submitted</dd>
+                <dd>
+                    <div>{{ current_applicant_document_count }} file{{ current_applicant_document_count|pluralize }} submitted</div>
+                    <ol style="margin:0.45rem 0 0; padding-left:1.25rem;">
+                        {% for document in current_applicant_documents %}
+                            <li style="margin-bottom:0.25rem;">
+                                {{ document.label }}
+                                <span class="rg-imeta" style="display:inline; margin-left:0.25rem;">
+                                    &mdash; {{ document.original_filename }}
+                                </span>
+                            </li>
+                        {% endfor %}
+                    </ol>
+                </dd>
             </div>
         </dl>
     </div>

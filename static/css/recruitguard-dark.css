@@ -1238,10 +1238,10 @@ html[data-theme="dark"] .rg-notif__badge { box-shadow: 0 0 0 2px #1b2733; }
 html[data-theme="dark"] .rg-notif__panel-header { border-bottom: 1px solid rgba(255,255,255,0.08); background: #182230; }
 html[data-theme="dark"] .rg-notif__panel-title { color: var(--rg-brand-green-ink, #d3ecda); }
 html[data-theme="dark"] .rg-notif__item { border-bottom: 1px solid rgba(255,255,255,0.08); }
-html[data-theme="dark"] .rg-notif__item-link:hover { background: #182230; }
-html[data-theme="dark"] .rg-notif__item-link:focus-visible { background: rgba(126,187,66,0.15); }
-html[data-theme="dark"] .rg-notif__item--unread .rg-notif__item-link { background: var(--rg-brand-green-soft, rgba(126,187,66,0.15)); }
-html[data-theme="dark"] .rg-notif__item--unread .rg-notif__item-link:hover { background: rgba(126,187,66,0.24); }
+html[data-theme="dark"] .rg-notif__item-action:hover { background: #182230; }
+html[data-theme="dark"] .rg-notif__item-action:focus-visible { background: rgba(126,187,66,0.15); }
+html[data-theme="dark"] .rg-notif__item--unread .rg-notif__item-action { background: var(--rg-brand-green-soft, rgba(126,187,66,0.15)); }
+html[data-theme="dark"] .rg-notif__item--unread .rg-notif__item-action:hover { background: rgba(126,187,66,0.24); }
 html[data-theme="dark"] .rg-notif__empty { color: #c3d0dc; }
 html[data-theme="dark"] .rg-notif__empty-title { color: #e8edf2; }
 html[data-theme="dark"] .rg-notif__empty .rg-notif__empty-text, html[data-theme="dark"] .rg-notif__empty-text { color: #9aa8b6; }
