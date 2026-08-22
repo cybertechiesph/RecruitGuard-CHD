@@ -154,11 +154,22 @@ email; the resubmission flow already has OTP.)
 **Decisions.**
 - Lookup keys off the **tracking code (REV-G)** + email.
 - After entering tracking code + email, the system emails a one-time code
-  (reusing the existing 3-minute OTP machinery, templates, resend/cooldown and
-  lockout protections). Status renders only after verification.
+  (reusing the existing OTP machinery (code validity is
+  `APPLICATION_OTP_VALIDITY_MINUTES`; the deployment default in .env.example
+  is 10 minutes), templates, resend/cooldown and lockout protections). Status
+  renders only after verification. Decision recorded 2026-08-22: the
+  code-validity window stays at 10 minutes; it is not shortened for this
+  surface.
 - **Session model (Option A):** one successful verification unlocks the status
-  view for **15–30 minutes** (pick one value; recommend 30 to match internal
-  inactivity timeout), then re-verification is required on next visit.
+  view for **30 minutes**, configured by `STATUS_LOOKUP_SESSION_MINUTES`
+  (default 30), matching the internal inactivity timeout; then re-verification
+  is required on next visit.
+- The tokened status link sent in emails is subject to the same gate — it
+  issues a code on open and renders status only after verification; a visitor
+  already verified within the window is not re-prompted. (Amendment
+  2026-08-22: an earlier build deliberately let the tokened link bypass the
+  code; that bypass was removed in 6e4f581 because it contradicted the
+  acceptance line "Unverified visitor can never see status content".)
 
 **Acceptance.**
 - Unverified visitor can never see status content, even with a valid
@@ -234,6 +245,12 @@ copying the recipient's email address into log metadata.
      roles should not hold system audit archives. The metadata-only rule for
      **case evidence** stands untouched — this category is the deliberate,
      documented exception.
+     (Amendment 2026-08-22: the archive files are listed and downloaded from
+     the Audit Log page itself — the sysadmin's own surface — rather than from
+     Secured Files. Secured Files stays metadata-only for the sysadmin with no
+     download of any kind, which keeps that rule simple to state and defend.
+     Everything else in this bullet stands: sysadmin-only, export-then-delete,
+     6-month age guard, the archival act is itself logged.)
 
 **What stays, deliberately (defense talking points).** Failed logins / MFA /
 OTP lockouts (intrusion breadcrumbs); sensitive-access views — evidence vault,
@@ -278,7 +295,9 @@ team direction: the audit log becomes something you produce reports *from*.
 7. **Session header shows sign-in IP / user agent** (already captured at
    login; surface it).
 8. `SESSION_EXPIRE_AT_BROWSER_CLOSE=true` for the internal portal (best-effort
-   hardening; 30-min inactivity timeout remains the real guarantee).
+   hardening; 30-min inactivity timeout remains the real guarantee) — shipped
+   in .env.example (eb8c322); the settings default stays False so a developer's
+   local session survives a browser restart.
 
 **Anti-scope.** No further filters beyond user/date/category/sensitive-only —
 keyword search covers the long tail. Restraint is part of the "clear and
@@ -298,7 +317,7 @@ concise" requirement.
 | Item | Reason |
 |---|---|
 | Exam module (in-portal exams) | Panel suggestion; needs client confirmation first |
-| Dashboard improvements | Deferred by team |
+| Dashboard improvements | Superseded — the dashboard was rebuilt as an oversight console for the System Administrator (aa6956b, 2026-07-17) and reworked for the workflow roles in the UI/UX batches; no further dashboard item is open. |
 | DNS price question | Q&A/justification, not a system change |
 | Secretariat-review dropdown ("demo"-tagged) | Deferred by team |
 | Manuscript: objectives "establish" wording (SMART) | Deferred by team |
@@ -323,3 +342,26 @@ concise" requirement.
   Rationale: blind the raters where blinding is real, not where it is
   theater. Sweep every CAR/deliberation surface: page titles, tables,
   exports, printed CAR (REV-E), notification texts shown to panel members.
+  (Amendment 2026-08-22: interview-logistics notices to panel members —
+  schedule, venue, reschedule — keep the candidate's name, under the same
+  face-to-face exception as the live rating sheet: the panel must know who is
+  in the room. Evaluation-content notices (CAR ready, deliberation) stay
+  code-only.)
+
+## Implementation status (2026-08-22)
+
+| Item | Status | Commits |
+|---|---|---|
+| REV-C | Implemented | (earlier workstream — see git history) |
+| REV-G | Implemented | earlier workstream; 5327e08 + ad5f655 (per-vacancy candidate-code uniqueness with retry; seeders keep CASE-YYYY-NNNN) |
+| REV-B | Implemented | earlier workstream; see amendment above for interview-logistics notices |
+| REV-A | Implemented | earlier workstream; fa44a87 (only a published posting's closing-date move counts as an extension) |
+| REV-I | Implemented | earlier workstream; 6e4f581 (tokened link honors the gate) |
+| REV-E | Implemented | earlier workstream; 6d31a9a + 03010f4 (itemized requirements on the HTML and PDF receipt; no link-styled real actions) |
+| REV-D | Implemented | earlier workstream; eb8c322 + 1217a47 (delivery-failure details redacted to fixed summaries; raw text to server log only) |
+| REV-F | Implemented | earlier workstream; eb8c322 (raw ~70-action dropdown removed; categories only) |
+
+Verification protocol for the 2026-08-22 batch: every commit was implemented
+by Codex from a written brief, then independently reviewed (diff read, targeted
+classes, full suite compared against the known 14-test flaky baseline, and
+browser/PDF checks where the change is user-visible) before acceptance.
