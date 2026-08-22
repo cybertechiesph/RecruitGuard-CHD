@@ -11373,18 +11373,33 @@ class AuditLoggingTraceabilityTests(BaseRecruitmentTestCase):
         client = Client()
         self.force_login_with_mfa(client, self.sysadmin)
         # Generate an oversight "view" record whose metadata is filter state.
-        evidence_response = client.get(reverse("evidence-vault-list"))
-        self.assertEqual(evidence_response.status_code, 200)
-        self.assertTrue(
+        existing_ids = set(
             AuditLog.objects.filter(
                 actor=self.sysadmin,
                 action=AuditLog.Action.EVIDENCE_VAULT_VIEWED,
-            ).exists()
+            ).values_list("pk", flat=True)
+        )
+        evidence_response = client.get(reverse("evidence-vault-list"))
+        self.assertEqual(evidence_response.status_code, 200)
+        vault_log = AuditLog.objects.exclude(pk__in=existing_ids).get(
+            actor=self.sysadmin,
+            action=AuditLog.Action.EVIDENCE_VAULT_VIEWED,
+        )
+        self.assertNotIn(vault_log.pk, existing_ids)
+
+        # Select the event this test generated instead of assuming it lands on
+        # page one of the 50-row, unfiltered consolidated trail.
+        response = client.get(
+            reverse("audit-log-list"),
+            {
+                "q": vault_log.description,
+                "category": "security",
+                "actor": self.sysadmin.pk,
+            },
         )
 
-        response = client.get(reverse("audit-log-list"))
-
         self.assertEqual(response.status_code, 200)
+        self.assertIn(vault_log, response.context["audit_logs"])
         # The details are summarized in plain language, not dumped as raw JSON.
         self.assertContains(response, "Secured Files Viewed")
         self.assertContains(response, "No filters applied.")
