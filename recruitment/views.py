@@ -230,6 +230,7 @@ from .services import (
     get_or_create_vacancy_assessment_weights,
     unlock_vacancy_assessment_weights,
     update_vacancy_assessment_weights,
+    vacancy_assessment_weights_unlock_block_message,
     user_can_manage_interview_session,
     user_can_manage_screening,
     user_can_process_application,
@@ -754,7 +755,12 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
         )
         # SL-00: the CAR split is per-vacancy, so every CAR surface states the split its
         # scores were actually computed against instead of implying the office default.
-        context["car_weights"] = application.position.assessment_weights_or_default
+        current_car = context["current_comparative_assessment_report"]
+        context["car_weights"] = (
+            current_car.assessment_weights_for_display
+            if current_car
+            else application.position.assessment_weights_or_default
+        )
         # SL-08A: the QS and each candidate's screened credentials, so the ETE verdict is
         # made against the record rather than from memory.
         context["car_candidate_facts"] = get_car_candidate_fact_rows(
@@ -2964,7 +2970,7 @@ class ComparativeAssessmentPrintView(LoginRequiredMixin, WorkflowProcessorRequir
                 "entry": application.position,
                 "report": report,
                 "items": items,
-                "weights": application.position.assessment_weights_or_default,
+                "weights": report.assessment_weights_for_display,
                 "printed_by": request.user,
                 "printed_at": timezone.now(),
             },
@@ -2995,7 +3001,7 @@ class ComparativeAssessmentFilingCopyView(LoginRequiredMixin, WorkflowProcessorR
                 "The filing copy is generated from the finalized CAR — finalize it first.",
             )
             return redirect("recruitment-entry-list")
-        weights = entry.assessment_weights_or_default
+        weights = report.assessment_weights_for_display
         rows = []
         for item in get_comparative_assessment_report_items_for_report(report):
             candidate = item.application
@@ -3062,6 +3068,7 @@ class VacancyAssessmentWeightsView(LoginRequiredMixin, EntryManagerRequiredMixin
             "weights": weights,
             "form": form,
             "is_locked": weights.is_locked,
+            "unlock_block_message": vacancy_assessment_weights_unlock_block_message(entry),
             "unlock_form": unlock_form or VacancyAssessmentWeightsUnlockForm(),
         }
 

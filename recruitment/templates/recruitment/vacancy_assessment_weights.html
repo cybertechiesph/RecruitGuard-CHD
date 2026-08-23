@@ -35,6 +35,9 @@
         These weights are <strong>locked</strong> because scoring has started for this vacancy,
         so the split that finalized scores were computed against cannot shift under them.
     </p>
+    {% if unlock_block_message %}
+    <p class="rg-note mb-0">{{ unlock_block_message }}</p>
+    {% else %}
     <p class="rg-note mb-2">
         If the split itself was encoded wrongly, unlock it for correction. The reason is
         recorded in the audit trail together with the split in force right now, and any edit
@@ -50,6 +53,7 @@
             Unlock weights for correction
         </button>
     </form>
+    {% endif %}
 </div>
 {% endif %}
 

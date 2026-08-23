@@ -3644,6 +3644,34 @@ class ComparativeAssessmentReport(TimestampedModel):
     def is_locked(self):
         return self.is_finalized
 
+    @property
+    def assessment_weights_for_display(self):
+        """Return the split preserved with this report.
+
+        CAR versions created before SL2-19 did not carry numeric weights, so
+        those historical rows retain the former behaviour and fall back to the
+        vacancy's current split.
+        """
+        snapshot = (self.consolidated_snapshot or {}).get("assessment_weights")
+        if isinstance(snapshot, dict):
+            try:
+                return VacancyAssessmentWeights(
+                    recruitment_entry=self.recruitment_entry,
+                    ete_weight=Decimal(str(snapshot["ete"])),
+                    exam_weight=Decimal(str(snapshot["exam"])),
+                    interview_weight=Decimal(str(snapshot["interview"])),
+                    exam_general_weight=Decimal(str(snapshot["exam_general"])),
+                    exam_technical_weight=Decimal(str(snapshot["exam_technical"])),
+                )
+            except (InvalidOperation, KeyError, TypeError, ValueError):
+                pass
+        live_weights = VacancyAssessmentWeights.objects.filter(
+            recruitment_entry_id=self.recruitment_entry_id
+        ).first()
+        if live_weights is not None:
+            return live_weights
+        return VacancyAssessmentWeights(recruitment_entry=self.recruitment_entry)
+
     def __str__(self):
         return f"{self.recruitment_entry.job_code} {self.review_stage} CAR v{self.version_number}"
 

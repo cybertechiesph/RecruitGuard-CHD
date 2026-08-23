@@ -3833,12 +3833,18 @@ def _quantize_score(value):
     return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-def _calculate_preliminary_assessment_score(posting, document_review_score, exam_score, interview_score):
+def _calculate_preliminary_assessment_score(
+    posting,
+    document_review_score,
+    exam_score,
+    interview_score,
+    assessment_weights=None,
+):
     # The CAR component weights are now per-vacancy (VacancyAssessmentWeights), resolved from
     # the posting; a vacancy without a row falls back to the office defaults (40/20/40).
     if any(value in (None, "") for value in (document_review_score, exam_score, interview_score)):
         return None
-    weights = posting.assessment_weights_or_default
+    weights = assessment_weights or posting.assessment_weights_or_default
     total = (
         (Decimal(str(document_review_score)) * weights.ete_fraction)
         + (Decimal(str(exam_score)) * weights.exam_component_fraction)
@@ -3847,8 +3853,8 @@ def _calculate_preliminary_assessment_score(posting, document_review_score, exam
     return _quantize_score(total)
 
 
-def _assessment_weight_display(posting):
-    weights = posting.assessment_weights_or_default
+def _assessment_weight_display(posting, assessment_weights=None):
+    weights = assessment_weights or posting.assessment_weights_or_default
     return (
         f"Document review {format_weight_percentage(weights.ete_weight)}%, "
         f"exam {format_weight_percentage(weights.exam_weight)}%, "
@@ -7058,14 +7064,23 @@ def apply_car_ete_ratings(application, actor, posted):
             set_application_ete_rating(case.application, actor, rating)
 
 
-def _car_candidate_rows(recruitment_entry, review_stage, required_draft=None):
+def _car_candidate_rows(
+    recruitment_entry,
+    review_stage,
+    required_draft=None,
+    assessment_weights=None,
+):
     # The finalized CAR is computed directly from each active candidate's finalized
     # screening/exam/interview outputs and ranked by the assessment score. There is no
     # separate HRMPSB deliberation/ranking step for Plantilla anymore, so the final
     # rows are the same computed-and-ranked rows as the draft. ``required_draft`` is
     # accepted for call-site compatibility; the draft's existence is enforced by the
     # caller before finalizing.
-    rows = _car_draft_candidate_rows(recruitment_entry, review_stage)
+    rows = _car_draft_candidate_rows(
+        recruitment_entry,
+        review_stage,
+        assessment_weights=assessment_weights,
+    )
     # SL-03: unlike the draft, the finalized report must be arithmetically defensible.
     _assert_car_rows_are_complete(rows)
     return rows
@@ -7086,7 +7101,7 @@ def _active_plantilla_cases_for_entry(recruitment_entry, review_stage):
     )
 
 
-def _car_draft_candidate_rows(recruitment_entry, review_stage):
+def _car_draft_candidate_rows(recruitment_entry, review_stage, assessment_weights=None):
     cases = _active_plantilla_cases_for_entry(recruitment_entry, review_stage)
     if not cases:
         raise ValueError("No active Plantilla candidates are available for CAR draft preparation.")
@@ -7118,6 +7133,7 @@ def _car_draft_candidate_rows(recruitment_entry, review_stage):
             ete_component,
             exam_score,
             interview_average_score,
+            assessment_weights=assessment_weights,
         )
         rows.append(
             {
@@ -7377,6 +7393,7 @@ def generate_comparative_assessment_report(application, actor, cleaned_data, fin
     ).exists():
         raise ValueError("A finalized CAR already exists for this vacancy.")
 
+    assessment_weights = application.position.assessment_weights_or_default
     latest_draft_report = get_latest_draft_comparative_assessment_report(
         application,
         stage=review_stage,
@@ -7400,9 +7417,14 @@ def generate_comparative_assessment_report(application, actor, cleaned_data, fin
             application.position,
             review_stage,
             required_draft=latest_draft_report,
+            assessment_weights=assessment_weights,
         )
     else:
-        candidate_rows = _car_draft_candidate_rows(application.position, review_stage)
+        candidate_rows = _car_draft_candidate_rows(
+            application.position,
+            review_stage,
+            assessment_weights=assessment_weights,
+        )
     latest_report = get_comparative_assessment_report(
         application,
         stage=review_stage,
@@ -7414,7 +7436,17 @@ def generate_comparative_assessment_report(application, actor, cleaned_data, fin
         "prepared_by_role": actor.role,
         "entry_code": application.position.job_code,
         "review_stage": review_stage,
-        "assessment_weight_display": _assessment_weight_display(application.position),
+        "assessment_weight_display": _assessment_weight_display(
+            application.position,
+            assessment_weights,
+        ),
+        "assessment_weights": {
+            "ete": str(assessment_weights.ete_weight),
+            "exam": str(assessment_weights.exam_weight),
+            "interview": str(assessment_weights.interview_weight),
+            "exam_general": str(assessment_weights.exam_general_weight),
+            "exam_technical": str(assessment_weights.exam_technical_weight),
+        },
         "source_car_draft_id": latest_draft_report.id if finalize and latest_draft_report else "",
         "source_car_draft_version": latest_draft_report.version_number if finalize and latest_draft_report else "",
         "candidate_count": len(candidate_rows),
@@ -7453,6 +7485,7 @@ def generate_comparative_assessment_report(application, actor, cleaned_data, fin
         candidate_rows=candidate_rows,
         generation_number=version_number,
         summary_notes=cleaned_data["summary_notes"],
+        assessment_weights=assessment_weights,
     )
     evidence = store_generated_evidence_item(
         application=application,
@@ -8591,6 +8624,19 @@ def record_evidence_access_denied(evidence, actor, *, application=None, reason="
 
 
 def decrypt_evidence_bytes(evidence, actor, *, application=None):
+    if (
+        actor.role == RecruitmentUser.Role.HRMPSB_MEMBER
+        and evidence.artifact_type == ARTIFACT_TYPE_COMPARATIVE_ASSESSMENT_REPORT
+    ):
+        record_evidence_access_denied(
+            evidence,
+            actor,
+            application=application,
+            reason="car_artifact_restricted_for_hrmpsb",
+        )
+        raise ValueError(
+            "HRMPSB members cannot download the Comparative Assessment Report file."
+        )
     context_application = get_evidence_context_application_for_user(
         actor,
         evidence,
@@ -11690,6 +11736,7 @@ def _build_comparative_assessment_report_pdf(
     candidate_rows,
     generation_number,
     summary_notes,
+    assessment_weights,
 ):
     lines = [
         "DOH-CHD CALABARZON Comparative Assessment Report",
@@ -11699,13 +11746,20 @@ def _build_comparative_assessment_report_pdf(
         f"Prepared By: {actor}",
         f"Prepared At: {timezone.now():%Y-%m-%d %H:%M}",
         f"Generation Version: {generation_number}",
-        f"Preliminary Ranking Basis: {_assessment_weight_display(application.position) or 'Not available'}",
+        f"Preliminary Ranking Basis: {_assessment_weight_display(application.position, assessment_weights) or 'Not available'}",
         "",
         "Ranked Candidates",
     ]
     if summary_notes:
         lines.extend(["Summary Notes:", summary_notes, ""])
     for row in candidate_rows:
+        candidate_code = row["application"].candidate_code
+        if not candidate_code:
+            logger.warning(
+                "CAR artifact candidate application_id=%s has no candidate code; using fallback.",
+                row["application"].pk,
+            )
+            candidate_code = "C-??"
         lines.extend(
             [
                 (
@@ -11714,8 +11768,7 @@ def _build_comparative_assessment_report_pdf(
                     f"Final Rank {row['rank_order'] or 'Unranked'}"
                     f"{' (tied)' if row.get('is_tied') else ''} | "
                     f"Preliminary Rank {row['preliminary_rank_order'] or 'N/A'} | "
-                    f"{row['application'].reference_number} | "
-                    f"{row['application'].applicant_display_name}"
+                    f"{candidate_code}"
                 ),
                 (
                     f"Document Review: {row['qualification_outcome'] or 'N/A'} "
@@ -12517,6 +12570,24 @@ def lock_vacancy_assessment_weights(posting):
     return weights
 
 
+def vacancy_assessment_weights_unlock_block_message(posting):
+    if FinalSelection.objects.filter(
+        recruitment_entry=posting,
+        is_rescinded=False,
+    ).exists():
+        return "The assessment weights cannot be changed after a selection has been recorded."
+    if ComparativeAssessmentReport.objects.filter(
+        recruitment_entry=posting,
+        is_finalized=True,
+        is_returned=False,
+    ).exists():
+        return (
+            "The assessment weights cannot be changed: a Comparative Assessment Report "
+            "has been finalized on this split. Return the CAR for reassessment first."
+        )
+    return ""
+
+
 @transaction.atomic
 def unlock_vacancy_assessment_weights(posting, actor, reason):
     """SL-00: reopen a locked weight row so an encoding error in the split can be corrected.
@@ -12533,6 +12604,9 @@ def unlock_vacancy_assessment_weights(posting, actor, reason):
     weights = get_or_create_vacancy_assessment_weights(posting)
     if not weights.is_locked:
         raise ValidationError("These assessment weights are already editable.")
+    block_message = vacancy_assessment_weights_unlock_block_message(posting)
+    if block_message:
+        raise ValidationError(block_message)
     locked_at = weights.locked_at
     weights.status = VacancyAssessmentWeights.Status.DRAFT
     weights.locked_at = None

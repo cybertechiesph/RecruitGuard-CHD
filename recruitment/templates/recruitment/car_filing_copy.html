@@ -143,7 +143,8 @@ that gets signed and filed. Generating it is recorded in the case audit trail.
             + Interview &times; {{ weights.interview_weight|floatformat:"-1" }}%.
             EPS is the ETE rating carried at its weight. The examination component is itself
             General Ability {{ weights.exam_general_weight|floatformat:"-1" }}% + Technical
-            {{ weights.exam_technical_weight|floatformat:"-1" }}%.
+            {{ weights.exam_technical_weight|floatformat:"-1" }}%. This is the split on which
+            this CAR version was finalized.
             {% if not weights.uses_office_default_car_split %}
                 <strong>This vacancy uses a non-standard split</strong> — the office standard
                 is ETE 40% / Examination 20% / Interview 40%.

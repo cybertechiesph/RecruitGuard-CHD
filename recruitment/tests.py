@@ -106,6 +106,7 @@ from .requirements import (
     get_required_applicant_document_requirements,
 )
 from .services import (
+    ARTIFACT_TYPE_COMPARATIVE_ASSESSMENT_REPORT,
     IDENTIFIER_GENERATION_RETRIES,
     assign_candidate_code,
     build_export_bundle,
@@ -169,6 +170,7 @@ from .services import (
     save_exam_schedule,
     create_competency_rating_template,
     create_default_position_document_requirements,
+    decrypt_evidence_bytes,
     get_or_create_vacancy_assessment_weights,
     lock_vacancy_assessment_weights,
     unlock_vacancy_assessment_weights,
@@ -10067,6 +10069,72 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
             ).exists()
         )
 
+    def test_car_artifact_is_blinded_and_hrmpsb_decrypt_is_denied_and_audited(self):
+        from pypdf import PdfReader
+
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb)
+        self.finalize_deliberation_for_current_stage(
+            application,
+            self.hrmpsb,
+            ranking_position=1,
+        )
+        draft = ComparativeAssessmentReport.objects.get(
+            recruitment_entry=self.level1_position,
+            is_finalized=False,
+        )
+        secretariat_bytes = decrypt_evidence_bytes(
+            draft.evidence_item,
+            self.secretariat,
+            application=application,
+        )
+        self.assertTrue(secretariat_bytes.startswith(b"%PDF"))
+
+        report = self.finalize_car_for_current_stage(application, self.hrmpsb)
+        application.refresh_from_db()
+        evidence = report.evidence_item
+
+        self.assertEqual(
+            evidence.artifact_type,
+            ARTIFACT_TYPE_COMPARATIVE_ASSESSMENT_REPORT,
+        )
+        with self.assertRaisesMessage(
+            ValueError,
+            "HRMPSB members cannot download the Comparative Assessment Report file.",
+        ):
+            decrypt_evidence_bytes(evidence, self.hrmpsb, application=application)
+
+        denial = AuditLog.objects.get(
+            actor=self.hrmpsb,
+            action=AuditLog.Action.EVIDENCE_ACCESS_DENIED,
+            metadata__evidence_id=evidence.id,
+        )
+        self.assertEqual(
+            denial.metadata["reason"],
+            "car_artifact_restricted_for_hrmpsb",
+        )
+        self.assertFalse(
+            AuditLog.objects.filter(
+                actor=self.hrmpsb,
+                action=AuditLog.Action.EVIDENCE_DOWNLOADED,
+                metadata__evidence_id=evidence.id,
+            ).exists()
+        )
+
+        appointing_bytes = decrypt_evidence_bytes(
+            evidence,
+            self.appointing,
+            application=application,
+        )
+        pdf_text = "\n".join(
+            page.extract_text() or ""
+            for page in PdfReader(io.BytesIO(appointing_bytes)).pages
+        )
+        self.assertIn(application.candidate_code, pdf_text)
+        self.assertNotIn(application.reference_number, pdf_text)
+        self.assertNotIn(application.applicant_display_name, pdf_text)
+
     def test_system_admin_cannot_inline_view_evidence(self):
         application = self.make_application(self.level1_position)
         self.verify_application_for_submission(application)
@@ -16984,6 +17052,162 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
                 action=AuditLog.Action.CAR_FINALIZED,
             ).exists()
         )
+
+    def test_finalized_car_and_effective_selection_block_weight_unlock(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_appointing_review(application)
+        report = get_latest_finalized_comparative_assessment_report(application)
+        weights = get_or_create_vacancy_assessment_weights(self.level1_position)
+        self.assertTrue(weights.is_locked)
+
+        car_message = (
+            "The assessment weights cannot be changed: a Comparative Assessment Report "
+            "has been finalized on this split. Return the CAR for reassessment first."
+        )
+        with self.assertRaisesMessage(ValidationError, car_message):
+            unlock_vacancy_assessment_weights(
+                self.level1_position,
+                self.secretariat,
+                "Correct the recorded split.",
+            )
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        weights_url = reverse(
+            "vacancy-assessment-weights",
+            args=[self.level1_position.pk],
+        )
+        blocked_page = client.get(weights_url)
+        self.assertContains(blocked_page, car_message)
+        self.assertNotContains(blocked_page, "Unlock weights for correction")
+
+        return_car_for_reassessment(
+            application,
+            self.appointing,
+            "The CAR split needs a documented correction.",
+        )
+        unlocked = unlock_vacancy_assessment_weights(
+            self.level1_position,
+            self.secretariat,
+            "Correct the split after the CAR return.",
+        )
+        self.assertTrue(unlocked.is_editable)
+
+        lock_vacancy_assessment_weights(self.level1_position)
+        item = report.items.first()
+        selection = FinalSelection.objects.create(
+            comparative_assessment_report=report,
+            recruitment_entry=self.level1_position,
+            selected_item=item,
+            selected_application=item.application,
+            selected_case=item.recruitment_case,
+            decided_by=self.appointing,
+            decision_notes="Effective selection used to protect the recorded split.",
+        )
+        selection_message = (
+            "The assessment weights cannot be changed after a selection has been recorded."
+        )
+        with self.assertRaisesMessage(ValidationError, selection_message):
+            unlock_vacancy_assessment_weights(
+                self.level1_position,
+                self.secretariat,
+                "Attempt after selection.",
+            )
+        blocked_page = client.get(weights_url)
+        self.assertContains(blocked_page, selection_message)
+        self.assertNotContains(blocked_page, "Unlock weights for correction")
+
+        selection.is_rescinded = True
+        selection.save(update_fields=["is_rescinded", "updated_at"])
+        unlocked = unlock_vacancy_assessment_weights(
+            self.level1_position,
+            self.secretariat,
+            "Selection was rescinded and the CAR remains returned.",
+        )
+        self.assertTrue(unlocked.is_editable)
+
+    def test_car_prints_and_filing_copy_use_the_report_snapshot_weights(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_appointing_review(application)
+        report = get_latest_finalized_comparative_assessment_report(application)
+        self.assertEqual(
+            report.consolidated_snapshot["assessment_weights"],
+            {
+                "ete": "40.00",
+                "exam": "20.00",
+                "interview": "40.00",
+                "exam_general": "60.00",
+                "exam_technical": "40.00",
+            },
+        )
+
+        return_car_for_reassessment(
+            application,
+            self.appointing,
+            "Correct the assessment split for the next CAR version.",
+        )
+        weights = unlock_vacancy_assessment_weights(
+            self.level1_position,
+            self.secretariat,
+            "The next CAR uses the corrected split.",
+        )
+        weights.ete_weight = Decimal("50.00")
+        weights.exam_weight = Decimal("10.00")
+        weights.interview_weight = Decimal("40.00")
+        weights.full_clean()
+        weights.save()
+
+        report_weights = report.assessment_weights_for_display
+        self.assertEqual(report_weights.ete_weight, Decimal("40.00"))
+        self.assertEqual(report_weights.exam_weight, Decimal("20.00"))
+        self.assertEqual(report_weights.interview_weight, Decimal("40.00"))
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        with patch(
+            "recruitment.views.get_comparative_assessment_report",
+            return_value=report,
+        ):
+            print_response = client.get(
+                reverse("comparative-assessment-print", kwargs={"pk": application.pk})
+            )
+        self.assertEqual(print_response.status_code, 200)
+        self.assertEqual(print_response.context["weights"].ete_weight, Decimal("40.00"))
+        self.assertContains(print_response, "ETE (40%)")
+        self.assertContains(print_response, "Examination (20%)")
+        self.assertContains(print_response, "Interview (40%)")
+
+        with (
+            patch(
+                "recruitment.views.user_can_generate_entry_car_filing_copy",
+                return_value=True,
+            ),
+            patch("recruitment.views.get_entry_finalized_car", return_value=report),
+        ):
+            filing_response = client.get(
+                reverse(
+                    "comparative-assessment-filing-copy",
+                    kwargs={"pk": self.level1_position.pk},
+                )
+            )
+        self.assertEqual(filing_response.status_code, 200)
+        self.assertEqual(filing_response.context["weights"].exam_weight, Decimal("20.00"))
+        self.assertContains(filing_response, "this CAR version was finalized")
+        for row in filing_response.context["filing_rows"]:
+            expected_eps = (row["item"].ete_rating * Decimal("0.40")).quantize(
+                Decimal("0.01"),
+                rounding=ROUND_HALF_UP,
+            )
+            self.assertEqual(row["eps"], expected_eps)
+
+        pre_snapshot = dict(report.consolidated_snapshot)
+        pre_snapshot.pop("assessment_weights")
+        report.consolidated_snapshot = pre_snapshot
+        report.save(update_fields=["consolidated_snapshot", "updated_at"])
+        fallback = report.assessment_weights_for_display
+        self.assertEqual(fallback.ete_weight, Decimal("50.00"))
+        self.assertEqual(fallback.exam_weight, Decimal("10.00"))
+        self.assertEqual(fallback.interview_weight, Decimal("40.00"))
 
     def test_car_generation_creates_versioned_entry_reports_across_candidates(self):
         primary_application = self.make_application(self.level1_position)
