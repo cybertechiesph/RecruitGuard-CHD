@@ -157,9 +157,6 @@
                 {% elif screening_locked and current_screening_record %}
                     
                     {% include "internal_includes/screening_locked_body.html" %}
-                    {% if action_form and screening_disposition_required %}
-                        {% include "internal_includes/workflow_action_card.html" %}
-                    {% endif %}
 
                 {% else %}
                     
@@ -302,72 +299,6 @@
             {% endif %}
 
             
-            {% if current_detail_tab.key == "actions" %}
-            <div class="rg-cws-stage-section" id="cws-actions">
-                {% include "internal_includes/stage_titlebar.html" with title="Next Step" %}
-
-                {% if action_form %}
-                    {% include "internal_includes/workflow_action_card.html" %}
-                {% endif %}
-
-                {% include "internal_includes/notification_action_cards.html" %}
-
-                {% if override_form %}
-                    <div class="rg-icard" style="border-color:#fca5a5;">
-                        <div class="rg-icard__header">
-                            <div>
-                                <h3 class="rg-icard__title">Level 2 Special Authorization</h3>
-                                <p class="rg-icard__subtitle">
-                                    Use only when HRM Chief authorizes Secretariat to work on this Level 2 case.
-                                </p>
-                            </div>
-                        </div>
-                        <form method="post" action="{% url 'workflow-override' application.pk %}">
-                            {% csrf_token %}
-                            <div class="rg-form-grid">
-                                {% for field in override_form %}
-                                    {% include "recruitment/includes/form_field.html" with field=field %}
-                                {% endfor %}
-                            </div>
-                            <div class="rg-form-actions">
-                                <button type="submit" class="btn btn-outline-danger">
-                                    Allow Secretariat to Handle
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                {% endif %}
-
-                {% if reopen_form %}
-                    <div class="rg-icard" style="border-color:#fca5a5;">
-                        <div class="rg-icard__header">
-                            <div>
-                                <h3 class="rg-icard__title">Authorized Reopen</h3>
-                                <p class="rg-icard__subtitle">
-                                    Use only when a finalized case record must be corrected.
-                                </p>
-                            </div>
-                        </div>
-                        <form method="post" action="{% url 'workflow-reopen' application.pk %}">
-                            {% csrf_token %}
-                            <div class="rg-form-grid">
-                                {% for field in reopen_form %}
-                                    {% include "recruitment/includes/form_field.html" with field=field %}
-                                {% endfor %}
-                            </div>
-                            <div class="rg-form-actions">
-                                <button type="submit" class="btn btn-outline-danger">Reopen Case</button>
-                            </div>
-                        </form>
-                    </div>
-                {% endif %}
-
-                {% if not action_form and not checklist_notification_form and not reminder_notification_form and not override_form and not reopen_form %}
-                    {% include "internal_includes/state_empty.html" with title="No next step available" copy="No next step is available for your role right now." %}
-                {% endif %}
-            </div>
-            {% endif %}
-
             {% comment %} RD-9: delivery state where work happens — rendered on
                EVERY tab (an exam invite that failed must surface at the exam
                stage, not only after it). Context is set for the sending roles

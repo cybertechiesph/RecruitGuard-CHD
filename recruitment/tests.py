@@ -124,7 +124,6 @@ from .services import (
     get_stage_record_versions,
     user_can_manage_screening,
     reopen_recruitment_case,
-    _reopen_screening_after_resubmission,
     interview_is_finalized_for_current_stage,
     get_latest_finalized_comparative_assessment_report,
     get_available_actions,
@@ -4293,36 +4292,6 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertContains(response, "is not finished yet")
         self.assertContains(response, "Resend the code")
 
-    def test_status_lookup_for_single_unfinished_draft_redirects_to_otp(self):
-        client = Client()
-        self.post_portal_intake(
-            client,
-            self.level1_position,
-            self.portal_payload(email="draft.status.lookup@example.com"),
-            follow=True,
-        )
-        application = RecruitmentApplication.objects.get(
-            position=self.level1_position,
-            applicant_email="draft.status.lookup@example.com",
-        )
-        application.tracking_code = "TRK-DRFT-0001"
-        application.save(update_fields=["tracking_code", "updated_at"])
-
-        response = client.post(
-            reverse("applicant-status-lookup"),
-            {
-                "tracking_code": "TRK-DRFT-0001",
-                "email": "draft.status.lookup@example.com",
-            },
-            follow=True,
-        )
-
-        self.assertRedirects(
-            response,
-            reverse("applicant-otp", kwargs={"token": application.public_token}),
-        )
-        self.assertContains(response, "is not finished yet")
-
     def test_invalid_otp_is_rejected(self):
         client = Client()
         self.post_portal_intake(
@@ -5541,24 +5510,8 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
             process_workflow_action(
                 application,
                 self.secretariat,
-                "endorse",
+                "reject",
                 "Attempted without override.",
-            )
-
-    def test_endorsement_requires_finalized_screening_for_screening_stages(self):
-        application = self.make_application(self.level1_position)
-        self.verify_application_for_submission(application)
-        submit_application(application, self.applicant)
-
-        with self.assertRaisesMessage(
-            ValueError,
-            "Finalize the screening record before endorsing this application.",
-        ):
-            process_workflow_action(
-                application,
-                self.secretariat,
-                "endorse",
-                "Attempted before screening finalization.",
             )
 
     def test_case_handoff_modal_shows_fixed_destination_for_single_target(self):
@@ -5811,21 +5764,25 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         application = self.make_application(self.level1_position)
         with patch(
             "recruitment.forms.get_available_actions",
-            return_value=[("return_to_hrm_chief", "Return to HRM Chief")],
+            return_value=[
+                ("return_car_for_reassessment", "Send the CAR back to HRMPSB")
+            ],
         ):
             form = WorkflowActionForm(application=application, user=self.appointing)
 
         self.assertTrue(form.action_is_fixed)
-        self.assertEqual(form.action_fixed_label, "Return to HRM Chief")
+        self.assertEqual(form.action_fixed_label, "Send the CAR back to HRMPSB")
         self.assertEqual(form.fields["action"].widget.input_type, "hidden")
-        self.assertEqual(form["action"].value(), "return_to_hrm_chief")
+        self.assertEqual(form["action"].value(), "return_car_for_reassessment")
 
         html = render_to_string(
             "internal_includes/workflow_action_card.html",
             {"action_form": form, "application": application},
         )
-        self.assertIn("Return to HRM Chief", html)
-        self.assertIn('type="hidden" name="action" value="return_to_hrm_chief"', html)
+        self.assertIn("Send the CAR back to HRMPSB", html)
+        self.assertIn(
+            'type="hidden" name="action" value="return_car_for_reassessment"', html
+        )
         self.assertNotIn('<select name="action"', html)
 
     def test_secretariat_cannot_view_or_queue_level2_without_override_even_if_misassigned(self):
@@ -6032,49 +5989,6 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         self.assertEqual(application.case.current_handler_role, RecruitmentUser.Role.HRM_CHIEF)
         self.assertFalse(WorkflowOverride.objects.filter(application=application, is_active=True).exists())
 
-    def test_legacy_cos_authority_review_can_return_to_hrm_chief(self):
-        application = self.make_application(self.cos_position)
-        self.move_application_to_hrm_chief_review(application)
-
-        case = application.case
-        application.current_handler_role = RecruitmentUser.Role.APPOINTING_AUTHORITY
-        application.status = RecruitmentApplication.Status.APPOINTING_AUTHORITY_REVIEW
-        application.save(update_fields=["current_handler_role", "status", "updated_at"])
-        case.current_stage = RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW
-        case.current_handler_role = RecruitmentUser.Role.APPOINTING_AUTHORITY
-        case.case_status = RecruitmentCase.CaseStatus.ACTIVE
-        case.is_stage_locked = False
-        case.locked_stage = ""
-        case.save(
-            update_fields=[
-                "current_stage",
-                "current_handler_role",
-                "case_status",
-                "is_stage_locked",
-                "locked_stage",
-                "updated_at",
-            ]
-        )
-
-        self.assertEqual(get_current_workflow_section(application), "decision")
-        self.assertEqual(
-            get_available_actions(application, self.appointing),
-            [("return_to_hrm_chief", "Return to HRM Chief")],
-        )
-
-        process_workflow_action(
-            application,
-            self.appointing,
-            "return_to_hrm_chief",
-            "Return legacy COS case to HRM Chief.",
-        )
-
-        application.refresh_from_db()
-        application.case.refresh_from_db()
-        self.assertEqual(application.current_handler_role, RecruitmentUser.Role.HRM_CHIEF)
-        self.assertEqual(application.status, RecruitmentApplication.Status.HRM_CHIEF_REVIEW)
-        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.HRM_CHIEF_REVIEW)
-
     def test_repair_auto_advance_moves_stale_exam_boundary_case(self):
         application = self.make_application(self.level1_position)
         self.verify_application_for_submission(application)
@@ -6205,16 +6119,6 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         self.assertEqual(application.current_handler_role, RecruitmentUser.Role.HRM_CHIEF)
         self.assertEqual(application.status, RecruitmentApplication.Status.HRM_CHIEF_REVIEW)
         self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.HRM_CHIEF_REVIEW)
-        self.assertNotIn(
-            ("endorse", "Endorse to Appointing Authority"),
-            get_available_actions(application, self.hrm_chief),
-        )
-
-        with self.assertRaisesMessage(
-            ValueError, "Finalize the deliberation record before endorsing this COS application."
-        ):
-            process_workflow_action(application, self.hrm_chief, "endorse", "COS endorsed.")
-
         # SL-01: finalizing the vacancy deliberation pick IS the COS selection — the case
         # goes straight from HRM Chief Review to completion, never via HRMPSB or the
         # Appointing Authority.
@@ -6290,7 +6194,7 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
         self.assertGreater(application.case.stage_entered_at, old_stage_entered_at)
         self.assertGreater(application.case.time_in_current_stage, timedelta(seconds=0))
 
-    def test_stage_sla_state_uses_default_thresholds_and_pauses_returned_cases(self):
+    def test_stage_sla_state_uses_default_thresholds_and_pauses_awaiting_resubmission(self):
         application = self.make_application(self.level1_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
@@ -6311,7 +6215,7 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
         self.assertEqual(case.stage_sla_state, "overdue")
         self.assertTrue(case.stage_sla_context["is_overdue"])
 
-        case.case_status = RecruitmentCase.CaseStatus.RETURNED_TO_APPLICANT
+        case.case_status = RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION
         case.save(update_fields=["case_status", "updated_at"])
         self.assertEqual(case.stage_sla_state, "paused")
         self.assertTrue(case.stage_sla_context["is_paused"])
@@ -6787,59 +6691,6 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
             response, "Applicant did not appear for the scheduled examination."
         )
         self.assertNotContains(response, "{#")
-
-    def test_applicant_resubmission_archives_the_first_verification_pass(self):
-        # SL-12: the RD-6 resubmission reopen used to unfinalize the record and blank its
-        # document rows in place. The reviewer's original verdict on the original files is
-        # the evidence that a re-verification was needed at all.
-        application = self.make_application(self.level1_position)
-        self.verify_application_for_submission(application)
-        with self.captureOnCommitCallbacks(execute=True):
-            submit_application(application, application.applicant)
-        application.refresh_from_db()
-        self.finalize_screening_for_current_stage(
-            application,
-            self.secretariat,
-            screening_notes="First verification pass over the submitted documents.",
-        )
-        application.refresh_from_db()
-        record = get_screening_record(application)
-        original_id = record.id
-
-        _reopen_screening_after_resubmission(
-            application,
-            self.secretariat,
-            RecruitmentCase.Stage.SECRETARIAT_REVIEW,
-        )
-
-        record.refresh_from_db()
-        self.assertFalse(record.is_finalized)
-        self.assertEqual(record.correction_version, 2)
-        self.assertIsNotNone(record.reopened_for_resubmission_at)
-        self.assertTrue(
-            all(
-                review.status == ScreeningDocumentReview.ReviewStatus.NOT_REVIEWED
-                for review in record.document_reviews.all()
-            )
-        )
-
-        versions = list(get_stage_record_versions(application))
-        self.assertEqual(len(versions), 1)
-        self.assertEqual(versions[0].record_id, original_id)
-        self.assertEqual(
-            versions[0].trigger, StageRecordVersion.Trigger.APPLICANT_RESUBMISSION
-        )
-        self.assertIn(
-            "First verification pass",
-            versions[0].snapshot["record"]["screening_notes"],
-        )
-        # The pre-reset document statuses survive in the archive.
-        self.assertTrue(
-            any(
-                row["status"] != ScreeningDocumentReview.ReviewStatus.NOT_REVIEWED
-                for row in versions[0].snapshot["document_reviews"]
-            )
-        )
 
     def test_case_timeline_is_visible_on_application_detail(self):
         application = self.make_application(self.level1_position)
@@ -7347,6 +7198,16 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         self.assertContains(response, "Flagged documents returned to the applicant")
         screening_record = ScreeningRecord.objects.get(application=application)
         self.assertFalse(screening_record.is_finalized)
+        locked_body = render_to_string(
+            "internal_includes/screening_locked_body.html",
+            {
+                "current_screening_record": screening_record,
+                "screening_flagged_count": 1,
+                "screening_not_submitted_count": 0,
+            },
+        )
+        self.assertIn("flagged for resubmission", locked_body)
+        self.assertIn("Returned for resubmission", locked_body)
         document_review = screening_record.document_reviews.get(document_key=first_requirement.code)
         self.assertEqual(
             document_review.status,
@@ -7388,63 +7249,6 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         self.assertContains(response, "Add the instruction the applicant should follow")
         self.assertFalse(ScreeningRecord.objects.filter(application=application, is_finalized=True).exists())
 
-    def test_returned_application_resubmit_reopens_finalized_screening(self):
-        # RD-6 integrity: a generic return (no flagged documents) hands the whole
-        # application back. When the applicant resubmits, the finalized screening
-        # must reopen so the edited documents are re-verified — a finalized
-        # screening over the old files would otherwise pass the endorse gate.
-        from recruitment.services import get_screening_record
-
-        application = self.make_application(self.level1_position)
-        self.verify_application_for_submission(application)
-        submit_application(application, self.applicant)
-        self.finalize_screening_for_current_stage(application, self.secretariat)
-
-        stage = RecruitmentCase.Stage.SECRETARIAT_REVIEW
-        before = get_screening_record(application, stage=stage)
-        self.assertTrue(before.is_finalized)
-
-        # Simulate the generic whole-application return: the case is handed back
-        # to the applicant with the screening still finalized. (Reaching the
-        # post-exam actions section per case requires a multi-candidate batch to
-        # avoid auto-advance; the reopen logic under test is stage-based and does
-        # not depend on the return mechanism.)
-        application.refresh_from_db()
-        case = application.case
-        application.status = RecruitmentApplication.Status.RETURNED_TO_APPLICANT
-        application.current_handler_role = RecruitmentUser.Role.APPLICANT
-        application.save(update_fields=["status", "current_handler_role", "updated_at"])
-        case.case_status = RecruitmentCase.CaseStatus.RETURNED_TO_APPLICANT
-        case.current_handler_role = RecruitmentUser.Role.APPLICANT
-        case.save(update_fields=["case_status", "current_handler_role", "updated_at"])
-
-        # Applicant edits and resubmits.
-        with self.captureOnCommitCallbacks(execute=True):
-            submit_application(application, self.applicant)
-        application.refresh_from_db()
-
-        record = get_screening_record(application, stage=stage)
-        self.assertFalse(record.is_finalized)
-        self.assertIsNone(record.finalized_by_id)
-        self.assertIsNotNone(record.reopened_for_resubmission_at)
-        self.assertEqual(
-            record.completeness_status, ScreeningRecord.CompletenessStatus.INCOMPLETE
-        )
-        self.assertTrue(
-            all(
-                row.status == ScreeningDocumentReview.ReviewStatus.NOT_REVIEWED
-                for row in record.document_reviews.all()
-            )
-        )
-        self.assertTrue(
-            AuditLog.objects.filter(
-                application=application, action=AuditLog.Action.SCREENING_REOPENED
-            ).exists()
-        )
-        # Endorse is blocked until the reviewer re-finalizes the screening.
-        with self.assertRaises(ValueError):
-            process_workflow_action(application, self.secretariat, "endorse", "premature")
-
     def test_screening_form_has_no_score_inputs_and_stores_null_scores(self):
         # RD-3: screening checks papers, the CAR gives grades — the ETE score
         # boxes are gone from the screening surface, and a finalized screening
@@ -7478,6 +7282,19 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         self.assertIsNone(screening_record.training_score)
         self.assertIsNone(screening_record.experience_score)
         self.assertIsNone(screening_record.document_review_score)
+        self.assertNotContains(response, "Document review score")
+        self.assertNotContains(response, "Score breakdown")
+        audit_metadata = AuditLog.objects.get(
+            application=application,
+            action=AuditLog.Action.SCREENING_FINALIZED,
+        ).metadata
+        for score_key in (
+            "education_score",
+            "training_score",
+            "experience_score",
+            "document_review_score",
+        ):
+            self.assertNotIn(score_key, audit_metadata)
 
     def test_completeness_is_derived_from_the_document_review(self):
         # RD-1: the reviewer never answers "are the documents complete?" — the
@@ -7610,6 +7427,18 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         self.assertEqual(response.status_code, 200)
         application.refresh_from_db()
         self.assertEqual(application.status, RecruitmentApplication.Status.REJECTED)
+        screening_record = ScreeningRecord.objects.get(application=application)
+        locked_body = render_to_string(
+            "internal_includes/screening_locked_body.html",
+            {
+                "current_screening_record": screening_record,
+                "screening_flagged_count": 1,
+                "screening_not_submitted_count": 0,
+            },
+        )
+        self.assertIn("document flagged as deficient", locked_body)
+        self.assertIn("Flagged as deficient (not returned)", locked_body)
+        self.assertNotIn("Returned for resubmission", locked_body)
         bodies = " ".join(message.body for message in mail.outbox)
         self.assertNotIn("resubmission", bodies.lower())
 
@@ -12072,46 +11901,6 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         )
         self.assertIn("handed off", notification.title)
 
-    def test_resubmission_resets_stage_clock_and_notifies_next_handler(self):
-        # RD-6b removed the generic whole-application return, so the
-        # submit_application resubmit branch (case_status RETURNED_TO_APPLICANT)
-        # is now a defensive net rather than a UI-reachable flow. Construct the
-        # returned state directly to exercise its stage-clock reset + handler
-        # notification (the flagged-document return uses a separate re-upload
-        # path, covered by the other resubmission tests).
-        application = self.make_submitted_application()
-        application.status = RecruitmentApplication.Status.RETURNED_TO_APPLICANT
-        application.current_handler_role = RecruitmentUser.Role.APPLICANT
-        application.save(
-            update_fields=["status", "current_handler_role", "updated_at"]
-        )
-        case = application.case
-        case.case_status = RecruitmentCase.CaseStatus.RETURNED_TO_APPLICANT
-        case.current_handler_role = RecruitmentUser.Role.APPLICANT
-        case.save(
-            update_fields=["case_status", "current_handler_role", "updated_at"]
-        )
-        application.refresh_from_db()
-        application.case.refresh_from_db()
-        Notification.objects.filter(application=application).delete()
-        returned_stage_entered_at = timezone.now() - timedelta(days=4)
-        application.case.stage_entered_at = returned_stage_entered_at
-        application.case.save(update_fields=["stage_entered_at", "updated_at"])
-
-        with self.captureOnCommitCallbacks(execute=True):
-            submit_application(application, self.applicant)
-
-        application.refresh_from_db()
-        application.case.refresh_from_db()
-        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.SECRETARIAT_REVIEW)
-        self.assertGreater(application.case.stage_entered_at, returned_stage_entered_at)
-        notification = Notification.objects.get(
-            application=application,
-            recipient=self.secretariat,
-            kind=Notification.Kind.RESUBMISSION_RECEIVED,
-        )
-        self.assertIn("resubmitted", notification.title)
-
     def test_deadline_approaching_notifications_emit_once_per_day(self):
         application = self.make_submitted_application()
         application.position.closing_date = timezone.localdate() + timedelta(days=1)
@@ -12747,6 +12536,7 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         # are Rejected.
         application = self.make_submitted_application()
         mail.outbox.clear()
+        notification_count = NotificationLog.objects.filter(application=application).count()
 
         with self.assertRaisesMessage(
             ValueError, "Returning the whole application is no longer available"
@@ -12762,11 +12552,9 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         self.assertNotEqual(
             application.status, RecruitmentApplication.Status.RETURNED_TO_APPLICANT
         )
-        self.assertFalse(
-            NotificationLog.objects.filter(
-                application=application,
-                notification_type=NotificationLog.NotificationType.APPLICATION_RETURNED_TO_APPLICANT,
-            ).exists()
+        self.assertEqual(
+            NotificationLog.objects.filter(application=application).count(),
+            notification_count,
         )
         self.assertEqual(len(mail.outbox), 0)
 
@@ -17604,25 +17392,6 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
                 finalize=True,
             )
 
-    def test_plantilla_recommendation_requires_finalized_car(self):
-        application = self.make_application(self.level1_position)
-        self.move_application_to_hrmpsb_review(application)
-        self.finalize_interview_for_current_stage(application, self.hrmpsb)
-        self.finalize_applicant_pool_for_test(self.level1_position)
-        application.position.refresh_from_db()
-
-        # Plantilla has no in-system deliberation anymore — the finalized CAR is the gate.
-        with self.assertRaisesMessage(
-            ValueError,
-            "Finalize the Comparative Assessment Report before recommending this Plantilla application.",
-        ):
-            process_workflow_action(application, self.hrmpsb, "recommend", "Attempted without CAR.")
-
-        # Stages the CAR draft, then finalizing it clears the gate.
-        self.finalize_deliberation_for_current_stage(application, self.hrmpsb, ranking_position=1)
-        report = self.finalize_car_for_current_stage(application, self.hrmpsb)
-        self.assertEqual(ComparativeAssessmentReportItem.objects.filter(report=report).count(), 1)
-
     def test_car_generation_creates_versioned_evidence(self):
         application = self.make_application(self.level1_position)
         self.move_application_to_hrmpsb_review(application)
@@ -18512,23 +18281,6 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         report.refresh_from_db()
         self.assertFalse(report.is_returned)
 
-    def test_appointing_authority_cannot_use_legacy_single_case_approval_actions(self):
-        application = self.make_application(self.level1_position)
-        self.move_application_to_appointing_review(application)
-
-        for action in ("approve", "reject", "return_to_hrm_chief"):
-            with self.assertRaisesMessage(
-                ValueError,
-                "Plantilla Appointing Authority actions must be recorded from the finalized CAR.",
-            ):
-                process_workflow_action(
-                    application,
-                    self.appointing,
-                    action,
-                    "Legacy single-case action should not be available.",
-                )
-            application.refresh_from_db()
-
     def test_level2_final_selection_routes_selected_applicant_to_hrm_chief_completion(self):
         application = self.make_application(self.level2_position)
         self.move_application_to_appointing_review(application)
@@ -19409,18 +19161,18 @@ class BusinessLogicBypassHardeningTests(BaseRecruitmentTestCase):
 
     def test_pt007_forced_later_stage_action_is_rejected(self):
         application = self._submit(self.make_application(self.level1_position))
-        # Fresh at Secretariat screening: an HRMPSB-stage action like "recommend" is not offered.
+        # Fresh at Secretariat screening: the Appointing Authority's CAR-return action is not offered.
         self.assertEqual(
             application.case.current_stage, RecruitmentCase.Stage.SECRETARIAT_REVIEW
         )
         available = {
             value for value, _label in get_available_actions(application, self.secretariat)
         }
-        self.assertNotIn("recommend", available)
+        self.assertNotIn("return_car_for_reassessment", available)
 
         # Form guard: the forced action fails validation ("not allowed at the current step").
         form = WorkflowActionForm(
-            {"action": "recommend", "remarks": "Forced past screening."},
+            {"action": "return_car_for_reassessment", "remarks": "Forced past screening."},
             application=application,
             user=self.secretariat,
         )
@@ -19432,9 +19184,10 @@ class BusinessLogicBypassHardeningTests(BaseRecruitmentTestCase):
         self.force_login_with_mfa(client, self.secretariat)
         response = client.post(
             reverse("workflow-action", kwargs={"pk": application.pk}),
-            {"action": "recommend", "remarks": "Forced past screening."},
+            {"action": "return_car_for_reassessment", "remarks": "Forced past screening."},
         )
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Select a valid choice")
         application.refresh_from_db()
         application.case.refresh_from_db()
         self.assertEqual(
@@ -19445,7 +19198,10 @@ class BusinessLogicBypassHardeningTests(BaseRecruitmentTestCase):
         # Service guard: the state machine refuses it even if the form is bypassed entirely.
         with self.assertRaises(ValueError):
             process_workflow_action(
-                application, self.secretariat, "recommend", "Forced past screening."
+                application,
+                self.secretariat,
+                "return_car_for_reassessment",
+                "Forced past screening.",
             )
 
     # ---- PT-008: finalized-record tampering + weight lock ------------------------------------

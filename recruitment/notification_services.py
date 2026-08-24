@@ -75,7 +75,6 @@ NOTIFICATION_EMAIL_TEMPLATES = {
     NotificationLog.NotificationType.SELECTED_APPLICANT: "email/selected_applicant.html",
     NotificationLog.NotificationType.NON_SELECTED_APPLICANT: "email/non_selected_applicant.html",
     NotificationLog.NotificationType.DOCUMENT_RESUBMISSION_REQUEST: "email/document_resubmission_request.html",
-    NotificationLog.NotificationType.APPLICATION_RETURNED_TO_APPLICANT: "email/application_returned.html",
     NotificationLog.NotificationType.INTERVIEW_SESSION_SCHEDULED: "email/interview_scheduled_internal.html",
     NotificationLog.NotificationType.EXAM_INVITATION: "email/exam_invitation.html",
     NotificationLog.NotificationType.APPLICANT_INTERVIEW_NOTICE: "email/applicant_interview_notice.html",

@@ -3,9 +3,7 @@
         <div>
             <h3 class="rg-icard__title">Your next action</h3>
             <p class="rg-icard__subtitle">
-                {% if screening_disposition_required %}
-                    Choose what happens next for this application.
-                {% elif recruitment_case and recruitment_case.current_stage == "appointing_authority_review" %}
+                {% if recruitment_case and recruitment_case.current_stage == "appointing_authority_review" %}
                     Use this only when the CAR needs to go back for reassessment.
                 {% else %}
                     Choose what happens next for this case.
@@ -54,7 +52,7 @@
                 </label>
                 {{ action_form.remarks }}
                 <div class="form-text">
-                    Required. This is saved to the case history{% if screening_disposition_required %} and included in the message to the applicant{% endif %}.
+                    Required. This is saved to the case history.
                 </div>
                 <div class="invalid-feedback" id="wf-remarks-error" style="display:none;">
                     Add a short reason before you continue.

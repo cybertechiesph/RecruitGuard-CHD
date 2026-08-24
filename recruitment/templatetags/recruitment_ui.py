@@ -67,7 +67,6 @@ STATUS_THEMES = {
     RecruitmentApplication.Status.REJECTED: "danger",
     RecruitmentApplication.Status.WITHDRAWN: "neutral",
     RecruitmentCase.CaseStatus.ACTIVE: "info",
-    RecruitmentCase.CaseStatus.RETURNED_TO_APPLICANT: "warning",
     RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION: "warning",
     RecruitmentCase.CaseStatus.APPROVED: "success",
     RecruitmentCase.CaseStatus.REJECTED: "danger",
@@ -418,7 +417,6 @@ QUEUE_TASK_LABELS = {
     "interview": "Interview",
     "car": "CAR",
     "deliberation": "Deliberation",
-    "actions": "Disposition",
     "decision": "Decision",
     "completion": "Completion",
 }
@@ -430,7 +428,6 @@ QUEUE_TASK_THEMES = {
     "interview": "info",
     "car": "info",
     "deliberation": "info",
-    "actions": "warning",
     "decision": "info",
     "completion": "info",
 }
@@ -441,17 +438,6 @@ def pipeline_stages():
     return PIPELINE_STAGES
 
 
-def _pipeline_step_for_actions(application, current_stage):
-    if current_stage in {
-        RecruitmentCase.Stage.SECRETARIAT_REVIEW,
-        RecruitmentCase.Stage.HRM_CHIEF_REVIEW,
-    }:
-        return "interview"
-    if current_stage == RecruitmentCase.Stage.HRMPSB_REVIEW:
-        return "decision"
-    return PIPELINE_STAGE_MAP.get(current_stage, "screening")
-
-
 @register.simple_tag
 def pipeline_stage_state(application, case_status, step_key):
     recruitment_case = getattr(application, "case", None)
@@ -460,13 +446,10 @@ def pipeline_stage_state(application, case_status, step_key):
         return "future"
 
     current_section = get_current_workflow_section(application)
-    if current_section == "actions":
-        mapped = _pipeline_step_for_actions(application, current_stage)
-    else:
-        mapped = PIPELINE_SECTION_MAP.get(current_section) or PIPELINE_STAGE_MAP.get(
-            current_stage,
-            "screening",
-        )
+    mapped = PIPELINE_SECTION_MAP.get(current_section) or PIPELINE_STAGE_MAP.get(
+        current_stage,
+        "screening",
+    )
     order = [s["key"] for s in PIPELINE_STAGES]
 
     try:
@@ -504,11 +487,6 @@ def pipeline_stage_state(application, case_status, step_key):
 def _queue_task_display(application):
     recruitment_case = getattr(application, "case", None)
     if recruitment_case:
-        if recruitment_case.case_status == RecruitmentCase.CaseStatus.RETURNED_TO_APPLICANT:
-            return (
-                RecruitmentCase.CaseStatus.RETURNED_TO_APPLICANT.label,
-                status_theme(RecruitmentCase.CaseStatus.RETURNED_TO_APPLICANT),
-            )
         if recruitment_case.case_status == RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION:
             return (
                 RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION.label,

@@ -974,7 +974,6 @@ class RecruitmentCase(TimestampedModel):
 
     class CaseStatus(models.TextChoices):
         ACTIVE = "active", "Active"
-        RETURNED_TO_APPLICANT = "returned_to_applicant", "Returned to Applicant"
         AWAITING_RESUBMISSION = "awaiting_resubmission", "Awaiting Resubmission"
         APPROVED = "approved", "Approved"
         REJECTED = "rejected", "Rejected"
@@ -1030,10 +1029,7 @@ class RecruitmentCase(TimestampedModel):
             return timedelta(0)
         if self.current_stage == self.Stage.CLOSED:
             return timedelta(0)
-        if self.case_status in {
-            self.CaseStatus.RETURNED_TO_APPLICANT,
-            self.CaseStatus.AWAITING_RESUBMISSION,
-        }:
+        if self.case_status == self.CaseStatus.AWAITING_RESUBMISSION:
             pause_started_at = self.updated_at or timezone.now()
             return max(pause_started_at - self.stage_entered_at, timedelta(0))
         return max(self.time_in_current_stage, timedelta(0))
@@ -1042,10 +1038,7 @@ class RecruitmentCase(TimestampedModel):
     def stage_sla_state(self):
         if self.current_stage == self.Stage.CLOSED:
             return "ok"
-        if self.case_status in {
-            self.CaseStatus.RETURNED_TO_APPLICANT,
-            self.CaseStatus.AWAITING_RESUBMISSION,
-        }:
+        if self.case_status == self.CaseStatus.AWAITING_RESUBMISSION:
             return "paused"
         elapsed = self.stage_sla_elapsed
         if elapsed >= STAGE_SLA_OVERDUE_THRESHOLD:
@@ -4129,10 +4122,6 @@ class NotificationLog(TimestampedModel):
         DOCUMENT_RESUBMISSION_REQUEST = (
             "document_resubmission_request",
             "Document Resubmission Request",
-        )
-        APPLICATION_RETURNED_TO_APPLICANT = (
-            "application_returned_to_applicant",
-            "Application Returned to Applicant Notification",
         )
         INTERVIEW_SESSION_SCHEDULED = (
             "interview_session_scheduled",

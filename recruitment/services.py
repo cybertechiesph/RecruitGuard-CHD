@@ -248,7 +248,6 @@ WORKFLOW_SECTION_LABELS = {
     "car": "Comparative Assessment",
     "decision": "Decision",
     "completion": "Completion",
-    "actions": "Actions",
 }
 
 
@@ -2346,11 +2345,8 @@ def _auto_advance_after_car_finalized(report, actor):
     return routed_applications
 
 
-def _auto_advance_boundary_is_ready(application, current_stage=None, current_section=None):
+def _auto_advance_boundary_is_ready(application, current_stage=None):
     current_stage = current_stage or get_current_review_stage(application)
-    current_section = current_section or get_current_workflow_section(application)
-    if current_section != "actions":
-        return False
     if current_stage in SCREENING_STAGES:
         if not exam_is_finalized_for_current_stage(application):
             return False
@@ -2384,8 +2380,7 @@ def repair_auto_advance_workflow_boundaries(actor=None):
         if not hasattr(application, "case"):
             continue
         current_stage = application.case.current_stage
-        current_section = get_current_workflow_section(application)
-        if not _auto_advance_boundary_is_ready(application, current_stage, current_section):
+        if not _auto_advance_boundary_is_ready(application, current_stage):
             continue
 
         before_role = application.current_handler_role
@@ -3304,17 +3299,6 @@ def screening_is_finalized_for_current_stage(application):
     return bool(screening_record and screening_record.is_finalized)
 
 
-def screening_requires_disposition_for_current_stage(application):
-    screening_record = get_screening_record(application)
-    if not screening_record or not screening_record.is_finalized:
-        return False
-    return (
-        screening_record.completeness_status == ScreeningRecord.CompletenessStatus.INCOMPLETE
-        or screening_record.qualification_outcome
-        == ScreeningRecord.QualificationOutcome.NOT_QUALIFIED
-    )
-
-
 VacancyScreeningBatchStatus = namedtuple(
     "VacancyScreeningBatchStatus",
     ["total", "qualified", "terminal", "pending", "pending_references", "is_ready"],
@@ -3502,13 +3486,13 @@ def car_is_finalized_for_current_stage(application):
 def _workflow_detail_sequence(application):
     current_stage = get_current_review_stage(application)
     if current_stage == RecruitmentCase.Stage.SECRETARIAT_REVIEW:
-        return ["screening", "exam", "actions"]
+        return ["screening", "exam"]
     if current_stage == RecruitmentCase.Stage.HRM_CHIEF_REVIEW:
         if application.branch == PositionPosting.Branch.COS:
             return ["screening", "exam", "interview", "deliberation", "decision"]
-        return ["screening", "exam", "actions"]
+        return ["screening", "exam"]
     if current_stage == RecruitmentCase.Stage.HRMPSB_REVIEW:
-        return ["interview", "car", "actions"]
+        return ["interview", "car"]
     if current_stage == RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW:
         return ["decision"]
     if current_stage in {
@@ -3521,10 +3505,7 @@ def _workflow_detail_sequence(application):
 
 def _workflow_section_is_complete(application, section_key):
     if section_key == "screening":
-        return (
-            screening_is_finalized_for_current_stage(application)
-            and not screening_requires_disposition_for_current_stage(application)
-        )
+        return screening_is_finalized_for_current_stage(application)
     if section_key == "exam":
         return exam_is_finalized_for_current_stage(application)
     if section_key == "interview":
@@ -3533,8 +3514,6 @@ def _workflow_section_is_complete(application, section_key):
         return deliberation_is_finalized_for_current_stage(application)
     if section_key == "car":
         return car_is_finalized_for_current_stage(application)
-    if section_key == "actions":
-        return False
     return True
 
 
@@ -5569,10 +5548,6 @@ def save_screening_review(
                 "review_stage": review_stage,
                 "completeness_status": screening_record.completeness_status,
                 "qualification_outcome": screening_record.qualification_outcome,
-                "education_score": _decimal_string(screening_record.education_score),
-                "training_score": _decimal_string(screening_record.training_score),
-                "experience_score": _decimal_string(screening_record.experience_score),
-                "document_review_score": _decimal_string(screening_record.document_review_score),
                 "document_review_status_counts": _document_review_status_counts(document_reviews),
                 "is_finalized": screening_record.is_finalized,
             },
@@ -7785,68 +7760,11 @@ def save_completion_tracking(application, actor, cleaned_data, requirement_forms
     return completion_record
 
 
-def _reopen_screening_after_resubmission(application, actor, stage):
-    """RD-6: a whole-application return (no flagged documents) was resubmitted with
-    edited documents. Reopen the stage's finalized screening record so the reviewer
-    must re-verify the new evidence before the case can be endorsed again — a
-    finalized screening over the OLD documents would otherwise pass the endorse gate
-    immediately, letting edited evidence move forward with nobody re-checking it.
-
-    The flagged-document resubmission path (submit_document_resubmission) is separate
-    and already reopens exactly the flagged rows; this covers the generic return.
-    The exam record for the stage is left untouched — the documents changed, the
-    examination result did not; re-finalizing screening is the gate that matters.
-    """
-    screening_record = get_screening_record(application, stage=stage)
-    if not screening_record or not screening_record.is_finalized:
-        return
-    # SL-12: this path used to unfinalize the record and blank its document rows in place,
-    # destroying the first verification pass outright. Archive it first — the reviewer's
-    # original verdict on the original files is the evidence that a re-verification was
-    # needed at all.
-    open_stage_record_correction(
-        screening_record,
-        StageRecordVersion.RecordType.SCREENING,
-        actor,
-        "Applicant resubmitted a returned application; screening re-verification required.",
-        trigger=StageRecordVersion.Trigger.APPLICANT_RESUBMISSION,
-    )
-    screening_record.reopened_for_resubmission_at = timezone.now()
-    # Every document row returns to Not Reviewed — the reviewer confirms each one
-    # against the resubmitted files. Remarks are kept for context.
-    screening_record.document_reviews.all().update(
-        status=ScreeningDocumentReview.ReviewStatus.NOT_REVIEWED,
-        updated_at=timezone.now(),
-    )
-    screening_record.completeness_status = ScreeningRecord.derive_completeness_status(
-        screening_record.document_reviews.all()
-    )
-    screening_record.full_clean()
-    screening_record.save(
-        update_fields=[
-            "reopened_for_resubmission_at",
-            "completeness_status",
-            "updated_at",
-        ]
-    )
-    record_audit_event(
-        application=application,
-        actor=actor,
-        action=AuditLog.Action.SCREENING_REOPENED,
-        description=(
-            "Screening reopened for re-verification after the applicant resubmitted "
-            "a returned application."
-        ),
-        metadata={"stage": stage, "screening_record_id": screening_record.id},
-    )
-
-
 def _upsert_recruitment_case_for_submission(application, actor, next_role, next_status):
     next_stage = _review_stage_from_application_status(next_status)
     if not next_stage:
         raise ValueError("Submitted applications must route to a valid internal review stage.")
 
-    returned_at = None
     case, created = RecruitmentCase.objects.get_or_create(
         application=application,
         defaults={
@@ -7860,53 +7778,15 @@ def _upsert_recruitment_case_for_submission(application, actor, next_role, next_
         },
     )
     if not created:
-        if case.case_status != RecruitmentCase.CaseStatus.RETURNED_TO_APPLICANT:
-            raise ValueError("A recruitment case already exists for this application.")
-        returned_at = case.updated_at
-        _transition_case_stage(case, next_stage, force=True)
-        case.current_handler_role = next_role
-        case.case_status = RecruitmentCase.CaseStatus.ACTIVE
-        case.is_stage_locked = False
-        case.locked_stage = ""
-        case.closed_at = None
-        case.reopened_at = timezone.now()
-        case.save(
-            update_fields=[
-                "branch",
-                "current_stage",
-                "stage_entered_at",
-                "current_handler_role",
-                "case_status",
-                "is_stage_locked",
-                "locked_stage",
-                "closed_at",
-                "reopened_at",
-                "updated_at",
-            ]
-        )
-        # RD-6: the case re-enters at the screening stage — reopen its finalized
-        # screening so the edited documents are re-verified before endorsement.
-        _reopen_screening_after_resubmission(application, actor, next_stage)
-    if created:
-        _emit_case_assignment_notification(
-            application,
-            actor,
-            next_role,
-            title=f"{application.reference_label} assigned to you",
-            body="A new application is ready for review.",
-            tab="screening",
-        )
-    else:
-        document_count = application.evidence_items.filter(
-            artifact_type=ARTIFACT_TYPE_APPLICANT_DOCUMENT,
-            created_at__gte=returned_at,
-        ).count()
-        _emit_resubmission_received_notification(
-            application,
-            actor,
-            next_role,
-            document_count=document_count,
-        )
+        raise ValueError("A recruitment case already exists for this application.")
+    _emit_case_assignment_notification(
+        application,
+        actor,
+        next_role,
+        title=f"{application.reference_label} assigned to you",
+        body="A new application is ready for review.",
+        tab="screening",
+    )
     record_audit_event(
         application=application,
         actor=actor,
@@ -7930,12 +7810,6 @@ def _sync_case_after_workflow_action(application, actor, next_role, next_status,
         case.current_handler_role = next_role
         case.is_stage_locked = False
         case.locked_stage = ""
-        case.closed_at = None
-    elif next_status == RecruitmentApplication.Status.RETURNED_TO_APPLICANT:
-        case.case_status = RecruitmentCase.CaseStatus.RETURNED_TO_APPLICANT
-        case.current_handler_role = RecruitmentUser.Role.APPLICANT
-        case.is_stage_locked = True
-        case.locked_stage = previous_stage
         case.closed_at = None
     elif next_status == RecruitmentApplication.Status.APPROVED:
         if next_role:
@@ -9126,12 +9000,8 @@ def get_available_actions(application, user):
 
     # RD-4: an applicant awaiting resubmission (typically past the deadline) can be
     # removed from the batch — a disqualification with a reason that unblocks the
-    # batch screening gate. The old return/reject offerings that sat here were gated
-    # on screening_requires_disposition_for_current_stage, which post-RD-1 can never
-    # be true (a finalized Not-Qualified screening auto-closes the case; INCOMPLETE
-    # finalized records no longer occur) — so those two were dead, and the same gate
-    # was also (wrongly) suppressing this removal offer, since an awaiting-resubmission
-    # case's screening is never finalized. Removal is offered on the case status alone.
+    # batch screening gate. Removal is offered on the case status alone because an
+    # awaiting-resubmission case's screening is not finalized.
     if (
         current_section == "screening"
         and effective_role in SCREENING_REVIEW_ROLES
@@ -9153,108 +9023,13 @@ def get_available_actions(application, user):
             ("return_car_for_reassessment", "Return CAR for HRMPSB Reassessment"),
         ]
 
-    if (
-        current_section == "decision"
-        and effective_role == RecruitmentUser.Role.APPOINTING_AUTHORITY
-        and current_stage == RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW
-        and application.branch == PositionPosting.Branch.COS
-    ):
-        return [
-            ("return_to_hrm_chief", "Return to HRM Chief"),
-        ]
-
-    if current_section != "actions":
-        return []
-
-    if _auto_advance_boundary_is_ready(application, current_stage, current_section):
-        return []
-
-    if effective_role == RecruitmentUser.Role.SECRETARIAT and current_stage == RecruitmentCase.Stage.SECRETARIAT_REVIEW:
-        endorse_label = (
-            "Endorse to HRMPSB"
-            if application.branch == PositionPosting.Branch.PLANTILLA
-            else "Endorse to HRM Chief"
-        )
-        # RD-6b (Option A): no generic whole-application return. A return is a
-        # document-resubmission request (flag the documents on the screening
-        # review); an unsuitable applicant is Rejected.
-        return [
-            ("endorse", endorse_label),
-            ("reject", "Reject Application"),
-        ]
-    if effective_role == RecruitmentUser.Role.HRM_CHIEF and current_stage == RecruitmentCase.Stage.HRM_CHIEF_REVIEW:
-        if application.branch == PositionPosting.Branch.COS:
-            return []
-        endorse_label = "Endorse to HRMPSB"
-        return [
-            ("endorse", endorse_label),
-            ("reject", "Reject Application"),
-        ]
-    if effective_role == RecruitmentUser.Role.HRMPSB_MEMBER and current_stage == RecruitmentCase.Stage.HRMPSB_REVIEW:
-        return [
-            ("recommend", "Recommend to Appointing Authority"),
-            ("return_to_hrm_chief", "Return to HRM Chief"),
-            ("reject", "Reject Application"),
-        ]
-    if (
-        effective_role == RecruitmentUser.Role.APPOINTING_AUTHORITY
-        and current_stage == RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW
-    ):
-        return []
     return []
 
 
 def _transition_target(application, effective_role, action):
-    current_stage = get_current_review_stage(application)
-    if effective_role == RecruitmentUser.Role.SECRETARIAT:
-        if action == "endorse":
-            if current_stage != RecruitmentCase.Stage.SECRETARIAT_REVIEW:
-                raise ValueError("Unsupported workflow action for the current stage.")
-            if application.branch == PositionPosting.Branch.PLANTILLA:
-                return (
-                    RecruitmentUser.Role.HRMPSB_MEMBER,
-                    RecruitmentApplication.Status.HRMPSB_REVIEW,
-                    "Plantilla application endorsed to HRMPSB by Secretariat.",
-                )
-            return (
-                RecruitmentUser.Role.HRM_CHIEF,
-                RecruitmentApplication.Status.HRM_CHIEF_REVIEW,
-                "COS application endorsed to HRM Chief by Secretariat.",
-            )
-        if action == "reject":
-            return "", RecruitmentApplication.Status.REJECTED, "Rejected by Secretariat."
-    if effective_role == RecruitmentUser.Role.HRM_CHIEF:
-        if action == "endorse":
-            if current_stage != RecruitmentCase.Stage.HRM_CHIEF_REVIEW:
-                raise ValueError("Unsupported workflow action for the current stage.")
-            if application.branch == PositionPosting.Branch.COS:
-                raise ValueError("COS selection is recorded by HRM Chief from the decision step.")
-            return RecruitmentUser.Role.HRMPSB_MEMBER, RecruitmentApplication.Status.HRMPSB_REVIEW, "Plantilla application endorsed to HRMPSB."
-        if action == "reject":
-            return "", RecruitmentApplication.Status.REJECTED, "Rejected by HRM Chief."
-    if effective_role == RecruitmentUser.Role.HRMPSB_MEMBER:
-        if action == "recommend":
-            return RecruitmentUser.Role.APPOINTING_AUTHORITY, RecruitmentApplication.Status.APPOINTING_AUTHORITY_REVIEW, "Recommended by HRMPSB."
-        if action == "return_to_hrm_chief":
-            return RecruitmentUser.Role.HRM_CHIEF, RecruitmentApplication.Status.HRM_CHIEF_REVIEW, "Returned by HRMPSB to HRM Chief."
-        if action == "reject":
-            return "", RecruitmentApplication.Status.REJECTED, "Rejected by HRMPSB."
-    if effective_role == RecruitmentUser.Role.APPOINTING_AUTHORITY:
-        if action == "approve":
-            completion_role = _completion_handler_role(application)
-            completion_role_label = RecruitmentUser.Role(completion_role).label
-            return (
-                completion_role,
-                RecruitmentApplication.Status.APPROVED,
-                (
-                    "Approved by Appointing Authority and routed to "
-                    f"{completion_role_label} for completion tracking."
-                ),
-            )
-        if action == "return_to_hrm_chief":
-            return RecruitmentUser.Role.HRM_CHIEF, RecruitmentApplication.Status.HRM_CHIEF_REVIEW, "Returned by Appointing Authority to HRM Chief."
-        if action == "reject":
-            return "", RecruitmentApplication.Status.REJECTED, "Rejected by Appointing Authority."
+    if action == "reject" and effective_role in SCREENING_REVIEW_ROLES:
+        role_label = RecruitmentUser.Role(effective_role).label
+        return "", RecruitmentApplication.Status.REJECTED, f"Rejected by {role_label}."
     raise ValueError("This action is not allowed at the current step.")
 
 
@@ -9571,45 +9346,6 @@ def process_workflow_action(application, actor, action, remarks):
         if current_section != "decision":
             raise ValueError(_workflow_progress_block_message(application, current_section))
         return return_car_for_reassessment(application, actor, remarks)
-    if (
-        effective_role == RecruitmentUser.Role.APPOINTING_AUTHORITY
-        and application.branch == PositionPosting.Branch.PLANTILLA
-        and action in {"approve", "reject", "return_to_hrm_chief"}
-    ):
-        raise ValueError("Plantilla Appointing Authority actions must be recorded from the finalized CAR.")
-    if action in {"endorse", "recommend"} and current_section != "actions":
-        raise ValueError(_workflow_progress_block_message(application, current_section))
-    if (
-        effective_role in SCREENING_REVIEW_ROLES
-        and application.case.current_stage in SCREENING_STAGES
-        and action == "endorse"
-        and not screening_is_finalized_for_current_stage(application)
-    ):
-        raise ValueError("Finalize the screening record before moving this case forward.")
-    if (
-        effective_role == RecruitmentUser.Role.HRM_CHIEF
-        and application.branch == PositionPosting.Branch.COS
-        and application.case.current_stage == RecruitmentCase.Stage.HRM_CHIEF_REVIEW
-        and action == "endorse"
-    ):
-        deliberation_record = get_deliberation_record(application, stage=application.case.current_stage)
-        if not deliberation_record or not deliberation_record.is_finalized:
-            raise ValueError("Finalize the deliberation record before moving this COS case forward.")
-    if (
-        effective_role == RecruitmentUser.Role.HRMPSB_MEMBER
-        and application.branch == PositionPosting.Branch.PLANTILLA
-        and application.case.current_stage == RecruitmentCase.Stage.HRMPSB_REVIEW
-        and action == "recommend"
-    ):
-        comparative_assessment_report = get_comparative_assessment_report(
-            application,
-            stage=application.case.current_stage,
-        )
-        if not comparative_assessment_report or not comparative_assessment_report.is_finalized:
-            raise ValueError(
-                "Finalize the Comparative Assessment Report before recommending this Plantilla case."
-            )
-
     next_role, next_status, description = _transition_target(application, effective_role, action)
     previous_role = application.current_handler_role
     previous_status = application.status
@@ -9650,54 +9386,6 @@ def process_workflow_action(application, actor, action, remarks):
             "case_locked": application.case.is_stage_locked,
         },
     )
-    if next_role:
-        next_role_label = RecruitmentUser.Role(next_role).label
-        record_audit_event(
-            application=application,
-            actor=actor,
-            action=AuditLog.Action.ROUTED,
-            description=f"Case assigned to {next_role_label}.",
-            metadata={
-                "status": next_status,
-                "current_handler_role": next_role,
-                **_case_timeline_metadata(application.case),
-            },
-        )
-        record_routing_history_event(
-            application=application,
-            actor=actor,
-            route_type=RoutingHistory.RouteType.FORWARD,
-            description=f"Case assigned to {next_role_label}.",
-            recruitment_case=application.case,
-            from_handler_role=previous_role,
-            to_handler_role=next_role,
-            from_status=previous_status,
-            to_status=next_status,
-            from_stage=case_transition["previous_stage"],
-            to_stage=application.case.current_stage,
-            notes=remarks,
-        )
-        stage_label = application.case.get_current_stage_display()
-        if action == "endorse":
-            title = f"{application.reference_label} endorsed to you for {stage_label}"
-        elif action == "recommend":
-            title = f"{application.reference_label} recommended to you for {stage_label}"
-        elif action.startswith("return"):
-            title = f"{application.reference_label} returned to you for {stage_label}"
-        else:
-            title = f"{application.reference_label} assigned to you"
-        _emit_case_assignment_notification(
-            application,
-            actor,
-            next_role,
-            kind=(
-                Notification.Kind.CASE_RETURNED
-                if action.startswith("return")
-                else Notification.Kind.CASE_ASSIGNED
-            ),
-            title=title,
-            body=description,
-        )
     if (
         effective_role == RecruitmentUser.Role.SECRETARIAT
         and application.level == PositionPosting.Level.LEVEL_2
@@ -9707,18 +9395,12 @@ def process_workflow_action(application, actor, action, remarks):
             actor,
             "Secretariat special authorization ended after Level 2 processing.",
         )
-    if next_status == RecruitmentApplication.Status.APPROVED:
-        queue_selected_applicant_notification(application, actor=actor)
-    elif next_status == RecruitmentApplication.Status.REJECTED:
+    if next_status == RecruitmentApplication.Status.REJECTED:
         queue_non_selected_applicant_notification(
             application,
             actor=actor,
             cut_at_screening=case_transition["previous_stage"] in SCREENING_STAGES,
         )
-    # RD-6b cleanup: the RETURNED_TO_APPLICANT notification branch that lived
-    # here was reachable only through the removed generic return (the flagged
-    # path exits early via request_document_resubmission, which sends its own
-    # notice) — deleted rather than left as a dead branch.
     return application
 
 

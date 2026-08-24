@@ -644,18 +644,6 @@ class ApplicantStatusLookupView(FormView):
             messages.success(self.request, "A new verification code has been sent to your email address.")
         return self._render_otp_step(application)
 
-    def get_unfinished_draft(self, tracking_code, email):
-        return (
-            RecruitmentApplication.objects.select_related("position")
-            .filter(
-                tracking_code=tracking_code,
-                applicant_email__iexact=email,
-                submitted_at__isnull=True,
-                status=RecruitmentApplication.Status.DRAFT,
-            )
-            .first()
-        )
-
     def form_valid(self, form):
         application = (
             RecruitmentApplication.objects.select_related("position")
@@ -667,19 +655,6 @@ class ApplicantStatusLookupView(FormView):
             .first()
         )
         if not application:
-            draft = self.get_unfinished_draft(
-                form.cleaned_data["tracking_code"],
-                form.cleaned_data["email"],
-            )
-            if draft is not None:
-                messages.info(
-                    self.request,
-                    (
-                        f"Your application for {draft.position.title} is not finished yet. "
-                        "Verify your email to continue, or use Resend the code if the code expired."
-                    ),
-                )
-                return redirect("applicant-otp", token=draft.public_token)
             form.add_error(
                 None,
                 "We could not find an application with that tracking code and email combination. "

@@ -212,7 +212,6 @@ from .services import (
     save_screening_review,
     return_screening_documents_to_applicant,
     vacancy_uses_batch_exam,
-    screening_requires_disposition_for_current_stage,
     user_can_close_case,
     user_can_manage_comparative_assessment_report,
     user_can_manage_deliberation,
@@ -836,9 +835,6 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
                     instance=screening_record,
                     application=application,
                 )
-        context["screening_disposition_required"] = (
-            screening_requires_disposition_for_current_stage(application)
-        )
         # RD-1: completeness is computed for the banner (never asked), and the
         # flag count drives which decision the reviewer is offered.
         if context.get("screening_form") is not None:

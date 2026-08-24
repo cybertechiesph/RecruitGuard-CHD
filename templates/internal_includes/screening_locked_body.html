@@ -69,7 +69,11 @@
     </span>
     {% if screening_flagged_count %}
         <span class="rg-scr-result-facts__item rg-scr-result-facts__item--flag">
-            {{ screening_flagged_count }} flagged for resubmission
+            {% if current_screening_record.is_finalized and current_screening_record.qualification_outcome == "not_qualified" %}
+                {{ screening_flagged_count }} document{{ screening_flagged_count|pluralize }} flagged as deficient
+            {% else %}
+                {{ screening_flagged_count }} flagged for resubmission
+            {% endif %}
         </span>
     {% endif %}
     {% if screening_not_submitted_count %}
@@ -140,7 +144,11 @@
                                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                                 <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
                                             </svg>
-                                            Returned for resubmission
+                                            {% if current_screening_record.is_finalized and current_screening_record.qualification_outcome == "not_qualified" %}
+                                                Flagged as deficient (not returned)
+                                            {% else %}
+                                                Returned for resubmission
+                                            {% endif %}
                                         </span>
                                     {% endif %}
                                 </td>
@@ -187,19 +195,17 @@
                     </div>
                 </div>
 
+                {% if current_screening_record.document_review_score is not None %}
                 <div class="rg-scr-locked-field">
                     <div class="rg-scr-locked-field__label">Document review score</div>
                     <div class="rg-scr-locked-field__value">
-                        {% if current_screening_record.document_review_score is not None %}
-                            {{ current_screening_record.document_review_score }} / 100
-                            <span style="color:#9aa4af;">
-                                &mdash; {{ current_screening_record.document_review_weight_display }}
-                            </span>
-                        {% else %}
-                            <span style="color:#9aa4af;font-style:italic;">No score recorded</span>
-                        {% endif %}
+                        {{ current_screening_record.document_review_score }} / 100
+                        <span style="color:#9aa4af;">
+                            &mdash; {{ current_screening_record.document_review_weight_display }}
+                        </span>
                     </div>
                 </div>
+                {% endif %}
 
                 {% if current_screening_record.education_score is not None or current_screening_record.training_score is not None or current_screening_record.experience_score is not None %}
                 <div class="rg-scr-locked-field">
@@ -262,11 +268,7 @@
             This screening is final and locked.
         </div>
         <p style="font-size:0.8125rem;color:#5f6c78;margin:0;">
-            {% if screening_disposition_required %}
-                Choose what happens next below.
-            {% else %}
-                Continue with the remaining tasks for this step, or use an authorized reopen to change this record.
-            {% endif %}
+            Continue with the remaining tasks for this step, or use an authorized reopen to change this record.
         </p>
     </div>
 </div>
