@@ -96,6 +96,7 @@ from .permissions import (
     WORKFLOW_PROCESSOR_ROLES,
 )
 from .services import (
+    COMPLETION_HANDOFF_MESSAGE,
     COS_EARLIER_ROUND_RESCIND_MESSAGE,
     FINAL_SELECTION_OUT_OF_CONTENTION_STATUSES,
     build_audit_session_summary,
@@ -1852,6 +1853,7 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
                 f"{absent_waived_count} candidate{'' if absent_waived_count == 1 else 's'} "
                 "marked Absent/Waived will not proceed"
             )
+        first_exam_record = candidates[0]["exam_record"] if candidates else None
         return {
             "finalize_exam_summary_items": finalize_exam_summary_items,
             "entry": entry,
@@ -1863,6 +1865,12 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
             "screening_batch": vacancy_screening_batch_status(entry),
             "weights": weights,
             "schedule_form": schedule_form or ExamScheduleForm(),
+            "batch_valid_from": (
+                first_exam_record.valid_from if first_exam_record else None
+            ),
+            "batch_valid_until": (
+                first_exam_record.valid_until if first_exam_record else None
+            ),
         }
 
     def get(self, request, pk):
@@ -1978,8 +1986,17 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
                 if row:
                     rows[case_id] = row
             # The pool sat one exam, so one validity window covers the batch.
-            valid_from = (request.POST.get("valid_from", "") or "").strip() or None
-            valid_until = (request.POST.get("valid_until", "") or "").strip() or None
+            valid_from_raw = (request.POST.get("valid_from", "") or "").strip()
+            valid_until_raw = (request.POST.get("valid_until", "") or "").strip()
+            try:
+                valid_from = date.fromisoformat(valid_from_raw) if valid_from_raw else None
+                valid_until = date.fromisoformat(valid_until_raw) if valid_until_raw else None
+            except ValueError:
+                messages.error(request, "Enter valid dates for the exam validity window.")
+                return redirect("vacancy-batch-exam", pk=entry.pk)
+            clear_validity_window = bool(
+                request.POST.get("clear_validity_window")
+            )
             # Capture the pre-finalize handler role so the toast can tell "routed to a new
             # office" apart from "same office, next step". The pool moves in lockstep, so one
             # representative role is enough.
@@ -1992,6 +2009,7 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
                     finalize=finalize,
                     valid_from=valid_from,
                     valid_until=valid_until,
+                    clear_validity_window=clear_validity_window,
                 )
             except (ValueError, ValidationError) as exc:
                 # A ValidationError's str() is a raw Python dict — join its messages so the
@@ -2534,6 +2552,9 @@ class CaseHandoffView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
         application = get_object_or_404(RecruitmentApplication, pk=pk)
         if not user_can_view_application(request.user, application):
             raise PermissionDenied
+        if application.case.current_stage == RecruitmentCase.Stage.COMPLETION:
+            messages.error(request, COMPLETION_HANDOFF_MESSAGE)
+            return redirect("application-detail", pk=pk)
 
         form = CaseHandoffForm(request.POST, application=application, user=request.user)
         if form.is_valid():

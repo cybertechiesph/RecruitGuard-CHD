@@ -117,6 +117,10 @@ PENDING_RESUBMISSION_HANDOFF_MESSAGE = (
     "This case is waiting for the applicant's resubmission. Wait for it, or remove the "
     "applicant from the batch, before sending the case."
 )
+COMPLETION_HANDOFF_MESSAGE = (
+    "Completion is handled by the case's designated office and cannot be sent between "
+    "offices."
+)
 PENDING_RESUBMISSION_SCREENING_FINALIZE_MESSAGE = (
     "The applicant's resubmission is still pending. Wait for the new documents (or remove "
     "the applicant from the batch) before finalizing this screening as Qualified."
@@ -1567,13 +1571,21 @@ def get_case_handoff_options(application, user):
     if not hasattr(application, "case"):
         return []
     case = application.case
-    if case.is_stage_locked or case.current_stage == RecruitmentCase.Stage.CLOSED:
+    if case.is_stage_locked or case.current_stage in {
+        RecruitmentCase.Stage.COMPLETION,
+        RecruitmentCase.Stage.CLOSED,
+    }:
         return []
     if not _is_secretariat_hrm_handoff_role(user.role):
         return []
     if application.current_handler_role != user.role or case.current_handler_role != user.role:
         return []
     if case.case_status == RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION:
+        return []
+    if (
+        application.level == PositionPosting.Level.LEVEL_2
+        and case.current_stage != RecruitmentCase.Stage.HRM_CHIEF_REVIEW
+    ):
         return []
     if not user_can_process_application(user, application):
         return []
@@ -1611,6 +1623,8 @@ def route_case_between_secretariat_and_hrm_chief(application, actor, target_role
     if not hasattr(application, "case"):
         raise ValueError("A case must exist before it can be sent.")
     case = application.case
+    if case.current_stage == RecruitmentCase.Stage.COMPLETION:
+        raise ValueError(COMPLETION_HANDOFF_MESSAGE)
     if case.is_stage_locked or case.current_stage == RecruitmentCase.Stage.CLOSED:
         raise ValueError("Final or closed cases cannot be sent.")
     if application.current_handler_role != actor.role or case.current_handler_role != actor.role:
@@ -5942,7 +5956,14 @@ def save_vacancy_exam_schedule(posting, actor, cleaned_data):
 
 @transaction.atomic
 def save_vacancy_exam_scores(
-    posting, actor, scores_by_case_id, *, finalize=False, valid_from=None, valid_until=None
+    posting,
+    actor,
+    scores_by_case_id,
+    *,
+    finalize=False,
+    valid_from=None,
+    valid_until=None,
+    clear_validity_window=False,
 ):
     """Record (and optionally finalize) the exam scores for the whole vacancy's pool in one go,
     looping the per-case save_exam_record. Every candidate takes General Ability + Technical;
@@ -6046,6 +6067,20 @@ def save_vacancy_exam_scores(
             if schedule and schedule.scheduled_for
             else timezone.localdate()
         )
+        if clear_validity_window:
+            effective_valid_from = None
+            effective_valid_until = None
+        else:
+            effective_valid_from = (
+                valid_from
+                if valid_from not in (None, "")
+                else existing_record.valid_from if existing_record else None
+            )
+            effective_valid_until = (
+                valid_until
+                if valid_until not in (None, "")
+                else existing_record.valid_until if existing_record else None
+            )
         save_exam_record(
             application=application,
             actor=actor,
@@ -6061,8 +6096,8 @@ def save_vacancy_exam_scores(
                 "administered_by": administered_by,
                 # RD-2: the pool sat one exam on one day, so the validity window
                 # is the batch's, applied to every candidate alike.
-                "valid_from": valid_from,
-                "valid_until": valid_until,
+                "valid_from": effective_valid_from,
+                "valid_until": effective_valid_until,
                 "exam_notes": "",
             },
             finalize=finalize,

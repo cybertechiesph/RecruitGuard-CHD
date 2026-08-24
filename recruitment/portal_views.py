@@ -152,7 +152,7 @@ class ApplicantVacancyDetailView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["entry"] = self.entry
-        document_requirements = list(get_applicant_document_requirements(self.entry.branch))
+        document_requirements = list(get_applicant_document_requirements(self.entry))
         document_requirements.sort(
             key=lambda requirement: requirement.code == PERFORMANCE_RATING
         )

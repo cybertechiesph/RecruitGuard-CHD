@@ -4737,6 +4737,37 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertNotIn("performance_rating", slot_labels)
         self.assertEqual(slot_labels["training_certificates"], "If applicable")
 
+    def test_public_detail_and_intake_use_the_same_posting_requirements(self):
+        PositionDocumentRequirement.objects.create(
+            posting=self.cos_position,
+            document_code=TRAINING_CERTIFICATES,
+            is_required=True,
+            order=1,
+        )
+
+        vacancy_response = self.client.get(
+            reverse("applicant-vacancy-detail", kwargs={"pk": self.cos_position.pk})
+        )
+        intake_response = self.client.get(
+            reverse("applicant-intake", kwargs={"pk": self.cos_position.pk})
+        )
+        self.assertEqual(vacancy_response.status_code, 200)
+        self.assertEqual(intake_response.status_code, 200)
+
+        detail_requirements = {
+            (requirement.code, requirement.applicant_label)
+            for requirement in vacancy_response.context["document_requirements"]
+        }
+        intake_requirements = {
+            (slot["requirement"].code, slot["label_tag"])
+            for slot in intake_response.context["form"].document_slots
+        }
+        self.assertEqual(detail_requirements, intake_requirements)
+        self.assertEqual(
+            detail_requirements,
+            {(TRAINING_CERTIFICATES, "Required")},
+        )
+
     def test_cos_submission_does_not_require_performance_rating_or_training_certificates(self):
         client = Client()
         response = self.post_portal_intake(
@@ -5543,6 +5574,136 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         self.assertIn("Send to HRM Chief", content)
         self.assertIn('type="hidden" name="target_role" value="hrm_chief"', content)
         self.assertNotIn('<select name="target_role"', content)
+
+    def test_handoff_options_match_routes_the_service_accepts(self):
+        level1 = self.make_application(self.level1_position)
+        self.verify_application_for_submission(level1)
+        submit_application(level1, self.applicant)
+        self.assertEqual(
+            get_case_handoff_options(level1, self.secretariat),
+            [(RecruitmentUser.Role.HRM_CHIEF, "Send to HRM Chief")],
+        )
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("case-handoff", kwargs={"pk": level1.pk}),
+            {
+                "target_role": RecruitmentUser.Role.HRM_CHIEF,
+                "remarks": "Routine Level 1 office handoff.",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        level1.refresh_from_db()
+        self.assertEqual(level1.current_handler_role, RecruitmentUser.Role.HRM_CHIEF)
+
+        level2 = self.make_application(self.level2_position)
+        self.verify_application_for_submission(level2)
+        submit_application(level2, self.applicant)
+        self.assertEqual(
+            get_case_handoff_options(level2, self.hrm_chief),
+            [(RecruitmentUser.Role.SECRETARIAT, "Send to Secretariat")],
+        )
+        self.force_login_with_mfa(client, self.hrm_chief)
+        response = client.post(
+            reverse("case-handoff", kwargs={"pk": level2.pk}),
+            {
+                "target_role": RecruitmentUser.Role.SECRETARIAT,
+                "remarks": "Authorized Level 2 office handoff.",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        level2.refresh_from_db()
+        self.assertEqual(level2.current_handler_role, RecruitmentUser.Role.SECRETARIAT)
+
+    def test_completion_cases_offer_no_handoff_and_refuse_direct_routing(self):
+        refusal = (
+            "Completion is handled by the case's designated office and cannot be sent "
+            "between offices."
+        )
+        postings = [
+            self.cos_position,
+            PositionPosting.objects.create(
+                position_reference=self.medical_officer_position,
+                branch=PositionPosting.Branch.COS,
+                level=PositionPosting.Level.LEVEL_2,
+                intake_mode=PositionPosting.IntakeMode.CONTINUOUS,
+                status=PositionPosting.EntryStatus.ACTIVE,
+            ),
+        ]
+
+        for posting in postings:
+            with self.subTest(level=posting.level):
+                application = self.make_application(posting)
+                self.verify_application_for_submission(application)
+                submit_application(application, self.applicant)
+                handler = (
+                    RecruitmentUser.Role.SECRETARIAT
+                    if posting.level == PositionPosting.Level.LEVEL_1
+                    else RecruitmentUser.Role.HRM_CHIEF
+                )
+                actor = (
+                    self.secretariat
+                    if handler == RecruitmentUser.Role.SECRETARIAT
+                    else self.hrm_chief
+                )
+                target = (
+                    RecruitmentUser.Role.HRM_CHIEF
+                    if handler == RecruitmentUser.Role.SECRETARIAT
+                    else RecruitmentUser.Role.SECRETARIAT
+                )
+                application.status = RecruitmentApplication.Status.APPROVED
+                application.current_handler_role = handler
+                application.save(
+                    update_fields=["status", "current_handler_role", "updated_at"]
+                )
+                application.case.current_stage = RecruitmentCase.Stage.COMPLETION
+                application.case.current_handler_role = handler
+                application.case.case_status = RecruitmentCase.CaseStatus.ACTIVE
+                application.case.is_stage_locked = False
+                application.case.locked_stage = ""
+                application.case.save(
+                    update_fields=[
+                        "current_stage",
+                        "current_handler_role",
+                        "case_status",
+                        "is_stage_locked",
+                        "locked_stage",
+                        "updated_at",
+                    ]
+                )
+
+                self.assertEqual(get_case_handoff_options(application, actor), [])
+                client = Client()
+                self.force_login_with_mfa(client, actor)
+                response = client.post(
+                    reverse("case-handoff", kwargs={"pk": application.pk}),
+                    {
+                        "target_role": target,
+                        "remarks": "Forced completion-stage handoff.",
+                    },
+                )
+                self.assertEqual(response.status_code, 302)
+                self.assertIn(
+                    refusal,
+                    [
+                        message.message
+                        for message in get_messages(response.wsgi_request)
+                    ],
+                )
+                with self.assertRaisesMessage(ValueError, refusal):
+                    route_case_between_secretariat_and_hrm_chief(
+                        application,
+                        actor,
+                        target,
+                        "Forced completion-stage handoff.",
+                    )
+                application.refresh_from_db()
+                application.case.refresh_from_db()
+                self.assertEqual(application.current_handler_role, handler)
+                self.assertEqual(
+                    application.case.current_stage,
+                    RecruitmentCase.Stage.COMPLETION,
+                )
 
     def test_handoff_is_hidden_and_refused_while_resubmission_is_pending(self):
         application = self.make_application(self.level1_position)
@@ -9058,6 +9219,100 @@ class BatchExamTests(BaseRecruitmentTestCase):
         self.assertEqual(response.status_code, 200)
         first.refresh_from_db()
         self.assertEqual(first.status, RecruitmentApplication.Status.HRMPSB_REVIEW)
+
+    def test_batch_exam_preserves_and_renders_its_validity_window_on_finalize(self):
+        first, second = self._two_qualified(self.level1_position)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(
+                self.level1_position, self.secretariat, self._schedule_payload()
+            )
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        console_url = reverse("vacancy-batch-exam", args=[self.level1_position.pk])
+        valid_from = timezone.localdate()
+        valid_until = valid_from + timedelta(days=180)
+        score_payload = {
+            f"general_score_{first.case.id}": "90",
+            f"technical_score_{first.case.id}": "80",
+            f"general_score_{second.case.id}": "70",
+            f"technical_score_{second.case.id}": "60",
+        }
+
+        saved = client.post(
+            console_url,
+            {
+                "operation": "save_scores",
+                "valid_from": valid_from.isoformat(),
+                "valid_until": valid_until.isoformat(),
+                **score_payload,
+            },
+        )
+        self.assertEqual(saved.status_code, 302)
+        rendered = client.get(console_url)
+        self.assertEqual(rendered.status_code, 200)
+        self.assertEqual(rendered.context["batch_valid_from"], valid_from)
+        self.assertEqual(rendered.context["batch_valid_until"], valid_until)
+        self.assertContains(rendered, f'value="{valid_from.isoformat()}"')
+        self.assertContains(rendered, f'value="{valid_until.isoformat()}"')
+
+        with self.captureOnCommitCallbacks(execute=True):
+            finalized = client.post(
+                console_url,
+                {
+                    "operation": "finalize",
+                    "valid_from": "",
+                    "valid_until": "",
+                    **score_payload,
+                },
+            )
+        self.assertEqual(finalized.status_code, 302)
+        for application in (first, second):
+            record = application.exam_records.get(
+                review_stage=RecruitmentCase.Stage.SECRETARIAT_REVIEW
+            )
+            self.assertEqual(record.valid_from, valid_from)
+            self.assertEqual(record.valid_until, valid_until)
+
+    def test_batch_exam_validity_window_can_be_explicitly_cleared(self):
+        first, second = self._two_qualified(self.level1_position)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(
+                self.level1_position, self.secretariat, self._schedule_payload()
+            )
+        valid_from = timezone.localdate()
+        valid_until = valid_from + timedelta(days=180)
+        scores = {
+            first.case.id: {"general_score": "90", "technical_score": "80"},
+            second.case.id: {"general_score": "70", "technical_score": "60"},
+        }
+        save_vacancy_exam_scores(
+            self.level1_position,
+            self.secretariat,
+            scores,
+            valid_from=valid_from,
+            valid_until=valid_until,
+        )
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("vacancy-batch-exam", args=[self.level1_position.pk]),
+            {
+                "operation": "save_scores",
+                "clear_validity_window": "1",
+                f"general_score_{first.case.id}": "90",
+                f"technical_score_{first.case.id}": "80",
+                f"general_score_{second.case.id}": "70",
+                f"technical_score_{second.case.id}": "60",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        for application in (first, second):
+            record = application.exam_records.get(
+                review_stage=RecruitmentCase.Stage.SECRETARIAT_REVIEW
+            )
+            self.assertIsNone(record.valid_from)
+            self.assertIsNone(record.valid_until)
 
     def test_the_batch_console_serves_the_chief_stage_second_pass(self):
         # Live COS E2E regression: the console's pool was pinned to the vacancy's INTAKE
