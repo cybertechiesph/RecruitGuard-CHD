@@ -2673,6 +2673,7 @@ def _emit_case_assignment_notification(
     title=None,
     body="",
     tab=None,
+    exclude_user_ids=None,
 ):
     if not target_role or target_role == RecruitmentUser.Role.APPLICANT:
         return []
@@ -2684,6 +2685,7 @@ def _emit_case_assignment_notification(
         title=title,
         body=body,
         tab=tab,
+        exclude_user_ids=exclude_user_ids,
     )
 
 
@@ -2766,16 +2768,18 @@ def _emit_exam_finalized_in_app_notification(application, actor):
 
 def emit_notification_failed_in_app_alert(notification_log):
     """RD-9: an applicant email failed to send. Raise an in-app bell to the
-    case's current-handler users — otherwise the office believes the applicant
-    was told (an exam invite, a resubmission request) when they never were.
+    case's current-handler users, or the level's owning office after closure —
+    otherwise the office believes the applicant was told (an exam invite, a
+    resubmission request, or a terminal outcome) when they never were.
     Called from notification_services via a local import (that module cannot
     import services at module level)."""
     application = notification_log.application
     case = getattr(application, "case", None)
-    if not case or not case.current_handler_role:
+    if not case:
         return []
+    target_role = case.current_handler_role or _completion_handler_role(application)
     recipients = _active_users_with_application_access(
-        application, role=case.current_handler_role
+        application, role=target_role
     )
     return _notify_application_users(
         application,
@@ -10227,6 +10231,19 @@ def rescind_final_selection(selection, actor, reason, *, reference=""):
             "restored_application_ids": sorted(a.id for a in restored),
         },
     )
+    # Notify only on the winner's restored case. Emitting once per restored sibling would
+    # turn one correction into a vacancy-sized burst of duplicate office alerts.
+    _emit_case_assignment_notification(
+        winner,
+        actor,
+        RecruitmentUser.Role.APPOINTING_AUTHORITY,
+        kind=Notification.Kind.CASE_RETURNED,
+        title=(
+            f"{winner.reference_label} selection rescinded — vacancy back for decision"
+        ),
+        body=reason,
+        exclude_user_ids={actor.id},
+    )
     return selection, restored
 
 
@@ -10448,6 +10465,17 @@ def rescind_cos_vacancy_deliberation(pick, actor, reason, *, reference=""):
             "rescinded_final_decision_ids": sorted(d.id for d in rescinded_decisions),
             "selection_round_reopened": round_reopened,
         },
+    )
+    # Notify only on the winner's restored case. The other restored round members are one
+    # receiving-office workload event, not separate rescission events.
+    _emit_case_assignment_notification(
+        winner,
+        actor,
+        RecruitmentUser.Role.HRM_CHIEF,
+        kind=Notification.Kind.CASE_RETURNED,
+        title=f"{winner.reference_label} COS pick rescinded — round reopened",
+        body=reason,
+        exclude_user_ids={actor.id},
     )
     return pick, restored
 
@@ -11262,6 +11290,15 @@ def reopen_recruitment_case(application, actor, reason):
         from_stage=previous_stage,
         to_stage=case.current_stage,
         notes=reason,
+    )
+    _emit_case_assignment_notification(
+        application,
+        actor,
+        application.current_handler_role,
+        kind=Notification.Kind.CASE_RETURNED,
+        title=f"{application.reference_label} reopened for correction",
+        body=reason,
+        exclude_user_ids={actor.id},
     )
     return case
 

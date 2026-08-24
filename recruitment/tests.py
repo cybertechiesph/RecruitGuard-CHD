@@ -114,6 +114,7 @@ from .services import (
     build_submission_packet,
     close_cos_selection_round_short,
     emit_deadline_approaching_notifications,
+    emit_notification_failed_in_app_alert,
     generate_comparative_assessment_report,
     get_case_handoff_options,
     get_current_workflow_section,
@@ -6382,6 +6383,26 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
             AuditLog.objects.filter(
                 application=application,
                 action=AuditLog.Action.CASE_REOPENED,
+            ).exists()
+        )
+        returned_bell = Notification.objects.get(
+            application=application,
+            recipient=self.secretariat,
+            kind=Notification.Kind.CASE_RETURNED,
+        )
+        self.assertEqual(
+            returned_bell.title,
+            f"{application.reference_label} reopened for correction",
+        )
+        self.assertEqual(
+            returned_bell.body,
+            "Correcting the completion tracking record.",
+        )
+        self.assertFalse(
+            Notification.objects.filter(
+                application=application,
+                recipient=self.hrm_chief,
+                kind=Notification.Kind.CASE_RETURNED,
             ).exists()
         )
 
@@ -12992,6 +13013,91 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         self.assertIsNotNone(bell)
         self.assertIn("did NOT receive", bell.body)
 
+    def test_failed_terminal_email_alerts_the_closed_cases_owning_office(self):
+        for position, expected_recipient, excluded_recipient in [
+            (self.level1_position, self.secretariat, self.hrm_chief),
+            (self.level2_position, self.hrm_chief, self.secretariat),
+        ]:
+            with self.subTest(level=position.level):
+                application = self.make_submitted_application(position)
+                Notification.objects.filter(application=application).delete()
+                application.status = RecruitmentApplication.Status.REJECTED
+                application.current_handler_role = ""
+                application.closed_at = timezone.now()
+                application.save(
+                    update_fields=[
+                        "status",
+                        "current_handler_role",
+                        "closed_at",
+                        "updated_at",
+                    ]
+                )
+                case = application.case
+                case.current_stage = RecruitmentCase.Stage.CLOSED
+                case.current_handler_role = ""
+                case.case_status = RecruitmentCase.CaseStatus.REJECTED
+                case.is_stage_locked = True
+                case.locked_stage = RecruitmentCase.Stage.HRM_CHIEF_REVIEW
+                case.closed_at = timezone.now()
+                case.save(
+                    update_fields=[
+                        "current_stage",
+                        "current_handler_role",
+                        "case_status",
+                        "is_stage_locked",
+                        "locked_stage",
+                        "closed_at",
+                        "updated_at",
+                    ]
+                )
+                inactive_owner = User.objects.create_user(
+                    username=f"inactive-owner-{position.level}",
+                    password="testpass123",
+                    email=f"inactive-{position.level}@example.com",
+                    role=expected_recipient.role,
+                    is_active=False,
+                )
+                log = NotificationLog.objects.create(
+                    application=application,
+                    recruitment_case=case,
+                    notification_type=(
+                        NotificationLog.NotificationType.NON_SELECTED_APPLICANT
+                    ),
+                    delivery_status=NotificationLog.DeliveryStatus.FAILED,
+                    related_status=RecruitmentApplication.Status.REJECTED,
+                    recipient_email=application.applicant_email,
+                    subject="Application result",
+                    body="Final outcome notice.",
+                    failure_details="Mail server returned an error.",
+                )
+
+                alerts = emit_notification_failed_in_app_alert(log)
+
+                self.assertEqual(
+                    {alert.recipient_id for alert in alerts},
+                    {expected_recipient.id},
+                )
+                self.assertTrue(
+                    all(
+                        user_can_view_application(alert.recipient, application)
+                        for alert in alerts
+                    )
+                )
+                self.assertNotIn(
+                    excluded_recipient.id,
+                    {alert.recipient_id for alert in alerts},
+                )
+                self.assertNotIn(
+                    inactive_owner.id,
+                    {alert.recipient_id for alert in alerts},
+                )
+                self.assertTrue(
+                    all(
+                        alert.kind == Notification.Kind.NOTIFICATION_FAILED
+                        for alert in alerts
+                    )
+                )
+
     def test_status_page_hides_unannounced_interview_sessions(self):
         # RD-9: only announced interviews reach the applicant status page
         # (parity with the exam rule).
@@ -15722,6 +15828,12 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         self.assertEqual(sibling.case.case_status, RecruitmentCase.CaseStatus.REJECTED)
         selection_round = pick.selection_round
         self.assertEqual(selection_round.status, CosSelectionRound.Status.RESOLVED)
+        hrm_chief_peer = User.objects.create_user(
+            username="hrm-chief-peer",
+            password="testpass123",
+            email="hrm.chief.peer@example.com",
+            role=RecruitmentUser.Role.HRM_CHIEF,
+        )
 
         with self.captureOnCommitCallbacks(execute=True):
             rescinded, restored = rescind_cos_vacancy_deliberation(
@@ -15771,6 +15883,26 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         self.assertEqual(entry.actor, self.hrm_chief)
         self.assertTrue(entry.metadata["was_selected"])
         self.assertIn("declined", entry.metadata["reason"])
+        returned_bells = Notification.objects.filter(
+            application=winner,
+            kind=Notification.Kind.CASE_RETURNED,
+        )
+        self.assertEqual(returned_bells.count(), 1)
+        returned_bell = returned_bells.get()
+        self.assertEqual(returned_bell.recipient, hrm_chief_peer)
+        self.assertEqual(
+            returned_bell.title,
+            f"{winner.reference_label} COS pick rescinded — round reopened",
+        )
+        self.assertEqual(
+            returned_bell.body,
+            "Chosen applicant declined before the contract was issued.",
+        )
+        self.assertNotIn(winner.applicant_display_name, returned_bell.title)
+        self.assertNotIn(winner.applicant_display_name, returned_bell.body)
+        self.assertFalse(
+            returned_bells.filter(recipient=self.hrm_chief).exists()
+        )
 
     def test_a_replacement_cos_pick_can_be_recorded_after_a_rescind(self):
         # The point of the correction: the vacancy must be decidable again. Every gate that
@@ -18625,6 +18757,12 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
             )
         original_decided_at = selection.decided_at
         original_snapshot = selection.car_snapshot
+        appointing_peer = User.objects.create_user(
+            username="appointing-peer",
+            password="testpass123",
+            email="appointing.peer@example.com",
+            role=RecruitmentUser.Role.APPOINTING_AUTHORITY,
+        )
 
         with self.captureOnCommitCallbacks(execute=True):
             rescinded, restored = rescind_final_selection(
@@ -18679,6 +18817,26 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
                 action=AuditLog.Action.FINAL_SELECTION_RESCINDED,
                 application=winner,
             ).exists()
+        )
+        returned_bells = Notification.objects.filter(
+            application=winner,
+            kind=Notification.Kind.CASE_RETURNED,
+        )
+        self.assertEqual(returned_bells.count(), 1)
+        returned_bell = returned_bells.get()
+        self.assertEqual(returned_bell.recipient, appointing_peer)
+        self.assertEqual(
+            returned_bell.title,
+            f"{winner.reference_label} selection rescinded — vacancy back for decision",
+        )
+        self.assertEqual(
+            returned_bell.body,
+            "The selected applicant declined the appointment before assumption.",
+        )
+        self.assertNotIn(winner.applicant_display_name, returned_bell.title)
+        self.assertNotIn(winner.applicant_display_name, returned_bell.body)
+        self.assertFalse(
+            returned_bells.filter(recipient=self.appointing).exists()
         )
 
     def test_a_replacement_selection_can_be_recorded_and_chains_to_the_rescinded_one(self):
