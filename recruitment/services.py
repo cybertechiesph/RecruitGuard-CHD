@@ -6646,6 +6646,37 @@ def save_vacancy_cos_interview_ratings(posting, actor, ratings_by_case_id, *, fi
                 session.attendance_outcome = AttendanceOutcome.ABSENT
                 session.save(update_fields=["attendance_outcome", "updated_at"])
             continue
+        session = get_interview_session(application)
+        if (
+            has_score
+            and session is not None
+            and session.attendance_outcome == AttendanceOutcome.ABSENT
+        ):
+            absence = (
+                application.attendance_exceptions.filter(
+                    assessment_stage=AttendanceException.Stage.INTERVIEW,
+                    review_stage=session.review_stage,
+                )
+                .order_by("-created_at", "-id")
+                .first()
+            )
+            if absence is not None:
+                if absence.is_pending:
+                    raise ValueError(
+                        "This candidate has a recorded absence awaiting a letter-of-intent "
+                        "decision. Resolve the absence (reschedule) before recording a score."
+                    )
+                raise ValueError(
+                    "This candidate's recorded interview absence has already been decided "
+                    "and cannot accept a score."
+                )
+            if session.is_finalized:
+                raise ValueError("Finalized interview records cannot accept rating changes.")
+            # The COS dropdown can save Absent as a draft without opening SL-06's formal
+            # letter-of-intent process. A later score is the operator correcting that
+            # draft choice, so restore the invariant before the rating is validated.
+            session.attendance_outcome = AttendanceOutcome.ATTENDED
+            session.save(update_fields=["attendance_outcome", "updated_at"])
         if finalize:
             if not has_score:
                 raise ValueError(
@@ -12781,6 +12812,15 @@ def cancel_recruitment_entry(entry, actor, reason):
         raise ValidationError(
             "A selection has already been recorded for this vacancy. Rescind the selection "
             "first if the appointment is not going ahead."
+        )
+    if CosVacancyDeliberation.objects.filter(
+        recruitment_entry=entry,
+        is_finalized=True,
+        is_rescinded=False,
+    ).exists():
+        raise ValidationError(
+            "A COS selection has already been recorded for this vacancy. Rescind the "
+            "deliberation pick first if the engagement is not going ahead."
         )
 
     previous_status = entry.status

@@ -55,6 +55,7 @@ from .forms import (
 from .models import (
     AUDIT_ACTION_CATEGORIES,
     AttendanceException,
+    AttendanceOutcome,
     ApplicationETERating,
     AuditLog,
     ComparativeAssessmentReport,
@@ -200,6 +201,7 @@ from .services import (
     upload_interview_fallback_rating,
     user_can_upload_interview_fallback,
     mark_interview_absent,
+    record_attendance_absence,
     record_application_withdrawal,
     user_can_record_withdrawal,
     user_can_manage_deliberation,
@@ -9365,6 +9367,147 @@ class VacancyBatchInterviewTests(BaseRecruitmentTestCase):
             {a.pk for a in cos_deliberation_pool(self.cos_position)}, {first.pk}
         )
 
+    def test_a_cos_draft_absence_clears_when_the_console_later_posts_a_score(self):
+        first, second = self._two_cos_at_interview()
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_interview_schedule(
+                self.cos_position, self.hrm_chief, self._interview_schedule_payload()
+            )
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        console_url = reverse("vacancy-batch-interview", args=[self.cos_position.pk])
+
+        draft = client.post(
+            console_url,
+            {
+                "operation": "save_scores",
+                f"int_outcome_{second.case.id}": AttendanceOutcome.ABSENT,
+            },
+        )
+        self.assertEqual(draft.status_code, 302)
+        second_session = get_interview_session(second)
+        self.assertEqual(second_session.attendance_outcome, AttendanceOutcome.ABSENT)
+        self.assertFalse(second_session.is_finalized)
+        self.assertIsNone(
+            get_pending_attendance_exception(
+                second, AttendanceException.Stage.INTERVIEW
+            )
+        )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            finalized = client.post(
+                console_url,
+                {
+                    "operation": "finalize",
+                    f"rating_score_{first.case.id}": "88",
+                    f"rating_score_{second.case.id}": "79",
+                },
+            )
+        self.assertEqual(finalized.status_code, 302)
+        second_session.refresh_from_db()
+        self.assertEqual(second_session.attendance_outcome, AttendanceOutcome.ATTENDED)
+        self.assertTrue(second_session.is_finalized)
+        self.assertEqual(
+            str(second.interview_ratings.get().rating_score),
+            "79.00",
+        )
+        for application in (first, second):
+            application.refresh_from_db()
+            self.assertEqual(get_current_workflow_section(application), "deliberation")
+
+    def test_a_cos_score_refuses_an_absence_that_has_entered_the_decision_process(self):
+        first, second = self._two_cos_at_interview()
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_interview_schedule(
+                self.cos_position, self.hrm_chief, self._interview_schedule_payload()
+            )
+        save_vacancy_cos_interview_ratings(
+            self.cos_position,
+            self.hrm_chief,
+            {
+                second.case.id: {
+                    "attendance_outcome": AttendanceOutcome.ABSENT,
+                }
+            },
+            finalize=False,
+        )
+        absence = record_attendance_absence(
+            second,
+            self.hrm_chief,
+            AttendanceException.Stage.INTERVIEW,
+            notes="Absence entered into the letter-of-intent process.",
+        )
+
+        refusal = (
+            "This candidate has a recorded absence awaiting a letter-of-intent decision. "
+            "Resolve the absence (reschedule) before recording a score."
+        )
+        with self.assertRaisesMessage(ValueError, refusal):
+            save_vacancy_cos_interview_ratings(
+                self.cos_position,
+                self.hrm_chief,
+                {second.case.id: {"rating_score": "79"}},
+                finalize=False,
+            )
+        self.assertFalse(second.interview_ratings.exists())
+        self.assertEqual(
+            get_interview_session(second).attendance_outcome,
+            AttendanceOutcome.ABSENT,
+        )
+
+        resolve_attendance_absence(
+            absence,
+            self.hrm_chief,
+            AttendanceException.Outcome.RESCHEDULED,
+            "The candidate will attend the rescheduled sitting.",
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_cos_interview_ratings(
+                self.cos_position,
+                self.hrm_chief,
+                {
+                    first.case.id: {"rating_score": "88"},
+                    second.case.id: {"rating_score": "79"},
+                },
+                finalize=True,
+            )
+        self.assertTrue(interview_is_finalized_for_current_stage(second))
+
+    def test_a_decided_terminal_cos_absence_cannot_be_scored_from_the_console(self):
+        first, second = self._two_cos_at_interview()
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_interview_schedule(
+                self.cos_position, self.hrm_chief, self._interview_schedule_payload()
+            )
+            for application in (first, second):
+                mark_interview_absent(
+                    application,
+                    self.hrm_chief,
+                    notes="Did not attend.",
+                )
+                resolve_attendance_absence(
+                    get_pending_attendance_exception(
+                        application, AttendanceException.Stage.INTERVIEW
+                    ),
+                    self.hrm_chief,
+                    AttendanceException.Outcome.TERMINAL,
+                    "The absence was decided as terminal.",
+                )
+
+        with self.assertRaisesMessage(
+            ValueError, "No candidates are ready for the interview in this vacancy."
+        ):
+            save_vacancy_cos_interview_ratings(
+                self.cos_position,
+                self.hrm_chief,
+                {second.case.id: {"rating_score": "79"}},
+                finalize=False,
+            )
+        second.refresh_from_db()
+        second.case.refresh_from_db()
+        self.assertEqual(second.case.case_status, RecruitmentCase.CaseStatus.REJECTED)
+        self.assertFalse(second.interview_ratings.exists())
+
     def test_plantilla_pool_lists_candidates_at_the_hrmpsb_interview(self):
         first, second = self._two_plantilla_at_interview()
         pool = vacancy_interview_pool(self.level1_position)
@@ -15250,6 +15393,70 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         winner.refresh_from_db()
         sibling.refresh_from_db()
         return pick, winner, sibling
+
+    def test_a_live_cos_pick_must_be_rescinded_before_the_vacancy_is_cancelled(self):
+        pick, winner, sibling = self._cos_pick_with_a_closed_sibling()
+        refusal = (
+            "A COS selection has already been recorded for this vacancy. Rescind the "
+            "deliberation pick first if the engagement is not going ahead."
+        )
+
+        # The entry-list cancellation form is intentionally still shown: the existing
+        # Plantilla selection guard is also server-side only, and the POST surfaces the
+        # precise corrective action without duplicating selection state in list context.
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        listing = client.get(reverse("recruitment-entry-list"))
+        self.assertContains(
+            listing,
+            reverse("recruitment-entry-cancel", args=[self.cos_position.pk]),
+        )
+        refused = client.post(
+            reverse("recruitment-entry-cancel", args=[self.cos_position.pk]),
+            {"reason": "The engagement is not going ahead."},
+            follow=True,
+        )
+        self.assertEqual(refused.status_code, 200)
+        self.assertContains(refused, refusal)
+        self.cos_position.refresh_from_db()
+        pick.refresh_from_db()
+        winner.refresh_from_db()
+        self.assertEqual(self.cos_position.status, PositionPosting.EntryStatus.ACTIVE)
+        self.assertTrue(pick.is_effective)
+        self.assertEqual(winner.case.current_stage, RecruitmentCase.Stage.COMPLETION)
+        self.assertIsNotNone(get_latest_final_decision(winner))
+
+        with self.captureOnCommitCallbacks(execute=True):
+            rescind_cos_vacancy_deliberation(
+                pick,
+                self.hrm_chief,
+                "The engagement is not going ahead.",
+            )
+            entry, affected = cancel_recruitment_entry(
+                self.cos_position,
+                self.hrm_chief,
+                "The requesting office cancelled the engagement.",
+            )
+
+        self.assertEqual(entry.status, PositionPosting.EntryStatus.CANCELLED)
+        self.assertEqual({application.pk for application in affected}, {winner.pk, sibling.pk})
+        for application in (winner, sibling):
+            application.refresh_from_db()
+            application.case.refresh_from_db()
+            self.assertEqual(
+                application.status,
+                RecruitmentApplication.Status.VACANCY_CANCELLED,
+            )
+            self.assertEqual(
+                application.case.case_status,
+                RecruitmentCase.CaseStatus.VACANCY_CANCELLED,
+            )
+            self.assertTrue(
+                NotificationLog.objects.filter(
+                    application=application,
+                    notification_type=NotificationLog.NotificationType.VACANCY_CANCELLED,
+                ).exists()
+            )
 
     def test_rescinding_a_cos_pick_preserves_it_and_reopens_the_round(self):
         # SL-14 (COS): SL-01 made the finalized pick the COS selection, so voiding it must
