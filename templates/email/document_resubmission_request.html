@@ -31,6 +31,15 @@
     </table>
     {% endfor %}
 
+    {% if meta.resubmission_deadline %}
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:10px; background:#fff8e6; border:1px solid #ffdf88; border-radius:8px;">
+        <tr><td style="padding:14px 16px; color:#6b4d06; font-size:13px; line-height:1.6;">
+            {% if meta.deadline_was_extended %}<strong>The resubmission deadline has been extended.</strong><br>{% endif %}
+            Please resubmit on or before <strong>{{ meta.resubmission_deadline_display }}</strong>.
+        </td></tr>
+    </table>
+    {% endif %}
+
     {% if meta.workflow_remarks %}
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:10px; background:#fff8e6; border:1px solid #ffdf88; border-radius:8px;">
         <tr><td style="padding:14px 16px; color:#6b4d06; font-size:13px; line-height:1.6;">

@@ -1,4 +1,11 @@
 {% load recruitment_ui %}
+{% if completion_record.is_voided %}
+<div class="alert alert-warning" role="status">
+    <strong>Voided by rescission.</strong>
+    This completion record no longer supports case closure.
+    {% if completion_record.void_reason %}{{ completion_record.void_reason }}{% endif %}
+</div>
+{% endif %}
 {% comment %}
 Completion stage — 2-step wizard.
 

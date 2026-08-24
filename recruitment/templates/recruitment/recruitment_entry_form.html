@@ -80,6 +80,12 @@
                             </div>
                         {% endif %}
                         <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.intake_mode %}</div>
+                        {% if form.positions_to_fill %}
+                            <div class="col-md-4{% if form.branch.value != 'cos' %} d-none{% endif %}"
+                                 id="positions-to-fill-field">
+                                {% include "recruitment/includes/form_field.html" with field=form.positions_to_fill %}
+                            </div>
+                        {% endif %}
                         <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.publication_date %}</div>
                         <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.opening_date %}</div>
                         <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.closing_date %}</div>
@@ -185,12 +191,16 @@
 (function () {
     var branchSel = document.getElementById('{{ form.branch.id_for_label }}');
     var section = document.getElementById('application-documents-section');
+    var positionsField = document.getElementById('positions-to-fill-field');
     if (!branchSel || !section) {
         return;
     }
 
     function applyBranch() {
         var isCos = branchSel.value === 'cos';
+        if (positionsField) {
+            positionsField.classList.toggle('d-none', !isCos);
+        }
         section.querySelectorAll('.rg-doc-row[data-conditional="true"]').forEach(function (row) {
             row.classList.toggle('d-none', isCos);
             if (isCos) {

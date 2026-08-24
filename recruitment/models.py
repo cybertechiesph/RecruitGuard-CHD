@@ -444,6 +444,10 @@ class PositionPosting(TimestampedModel):
         choices=IntakeMode.choices,
         default=IntakeMode.FIXED_PERIOD,
     )
+    positions_to_fill = models.PositiveSmallIntegerField(
+        default=1,
+        help_text="Number of people this COS posting is intended to engage.",
+    )
     status = models.CharField(
         max_length=20,
         choices=EntryStatus.choices,
@@ -653,6 +657,9 @@ class PositionPosting(TimestampedModel):
                 and self.closing_date
             ):
                 errors["closing_date"] = "Continuous or pooling COS entries must not set a fixed closing date."
+
+        if self.branch != self.Branch.COS:
+            self.positions_to_fill = 1
 
         if self.status == self.EntryStatus.CLOSED and not self.closing_date:
             self.closing_date = timezone.localdate()
@@ -1670,6 +1677,95 @@ class VacancyAssessmentWeights(TimestampedModel):
 
     def __str__(self):
         return f"Assessment weights for {self.recruitment_entry.job_code}"
+
+
+class OfficePolicy(TimestampedModel):
+    """The office-owned choices that intentionally vary without changing workflow law."""
+
+    SINGLETON_PK = 1
+
+    class InterviewAbsenceDecisionOwner(models.TextChoices):
+        SUPPORT_OFFICE = "support_office", "HR support office"
+        PANEL = "panel", "Stage owner / panel"
+
+    class RescindCutoff(models.TextChoices):
+        CASE_CLOSED = "case_closed", "Blocked once the case is closed"
+        CONTRACT_RECORDED = (
+            "contract_recorded",
+            "Blocked once a contract/appointment reference is recorded",
+        )
+        NEVER = "never", "Never blocked"
+
+    allow_extension_after_exam_scheduled = models.BooleanField(
+        default=False,
+        help_text=(
+            "Allow a published vacancy's closing date to move later after an examination "
+            "has been scheduled."
+        ),
+    )
+    allow_resubmission_deadline_extension = models.BooleanField(
+        default=True,
+        help_text=(
+            "Allow the reviewing office to give an applicant more time for a pending "
+            "document resubmission."
+        ),
+    )
+    interview_absence_decided_by = models.CharField(
+        max_length=30,
+        choices=InterviewAbsenceDecisionOwner.choices,
+        default=InterviewAbsenceDecisionOwner.SUPPORT_OFFICE,
+        help_text=(
+            "Choose whether the HR support office or the stage owner records the letter "
+            "and decides a Plantilla interview absence."
+        ),
+    )
+    withdrawal_recorded_by_owning_office = models.BooleanField(
+        default=True,
+        help_text=(
+            "Allow the vacancy's owning office to record an applicant withdrawal before "
+            "completion, even when another role currently owns the stage."
+        ),
+    )
+    rescind_cutoff = models.CharField(
+        max_length=30,
+        choices=RescindCutoff.choices,
+        default=RescindCutoff.CONTRACT_RECORDED,
+        help_text=(
+            "Choose when an appointment or contract decision becomes too late to rescind "
+            "inside recruitment."
+        ),
+    )
+    cos_positions_multi_slot_allowed = models.BooleanField(
+        default=False,
+        help_text=(
+            "Allow a single-batch COS posting to fill more than one position in its one "
+            "selection round."
+        ),
+    )
+    require_reason_for_suspend_close = models.BooleanField(
+        default=True,
+        help_text=(
+            "Require the user to record a reason before suspending or closing a vacancy."
+        ),
+    )
+
+    class Meta:
+        verbose_name = "Office policy"
+        verbose_name_plural = "Office policy"
+
+    def clean(self):
+        if self.pk not in (None, self.SINGLETON_PK):
+            raise ValidationError("Only one Office Policy record may exist.")
+        if type(self).objects.exclude(pk=self.pk).exists():
+            raise ValidationError("Only one Office Policy record may exist.")
+
+    def save(self, *args, **kwargs):
+        self.pk = self.SINGLETON_PK
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return "Office Policy"
 
 
 class ExamRecord(TimestampedModel):
@@ -4273,6 +4369,9 @@ class CompletionRecord(TimestampedModel):
     announcement_reference = models.CharField(max_length=255, blank=True)
     announcement_date = models.DateField(blank=True, null=True)
     remarks = models.TextField(blank=True)
+    is_voided = models.BooleanField(default=False)
+    voided_at = models.DateTimeField(blank=True, null=True)
+    void_reason = models.TextField(blank=True)
 
     class Meta:
         ordering = ["-updated_at"]
@@ -4369,7 +4468,8 @@ class CompletionRecord(TimestampedModel):
     @property
     def ready_for_closure(self):
         return (
-            self.requirements_ready_for_closure
+            not self.is_voided
+            and self.requirements_ready_for_closure
             and self.has_completion_reference_for_closure
             and self.has_completion_date_for_closure
         )
@@ -4377,6 +4477,11 @@ class CompletionRecord(TimestampedModel):
     @property
     def closure_blockers(self):
         blockers = []
+        if self.is_voided:
+            return [
+                "This completion record was voided by rescission. Record fresh completion "
+                "tracking after a new selection."
+            ]
         completion_label = self.completion_label.lower()
         if not self.requirements.exists():
             blockers.append("Add at least one completion requirement item before closing the case.")
@@ -4787,6 +4892,7 @@ class AuditLog(TimestampedModel):
         INTERNAL_ROLE_CHANGED = "internal_role_changed", "Internal Role Changed"
         ASSESSMENT_WEIGHTS_UPDATED = "assessment_weights_updated", "Assessment Weights Updated"
         ASSESSMENT_WEIGHTS_UNLOCKED = "assessment_weights_unlocked", "Assessment Weights Unlocked"
+        OFFICE_POLICY_UPDATED = "office_policy_updated", "Office Policy Updated"
         POSITION_CREATED = "position_created", "Position Created"
         POSITION_UPDATED = "position_updated", "Position Updated"
         RECRUITMENT_ENTRY_CREATED = "recruitment_entry_created", "Recruitment Entry Created"
@@ -4984,6 +5090,7 @@ AUDIT_ACTION_DISPLAY_LABELS = {
     AuditLog.Action.INTERNAL_ACCOUNT_ACTIVATED: "Internal Account Activated",
     AuditLog.Action.INTERNAL_ACCOUNT_DEACTIVATED: "Internal Account Deactivated",
     AuditLog.Action.INTERNAL_ROLE_CHANGED: "Internal Role Changed",
+    AuditLog.Action.OFFICE_POLICY_UPDATED: "Office Policy Updated",
     AuditLog.Action.POSITION_CREATED: "Position Created",
     AuditLog.Action.POSITION_UPDATED: "Position Updated",
     AuditLog.Action.RECRUITMENT_ENTRY_CREATED: "Recruitment Entry Created",
@@ -5146,6 +5253,7 @@ AUDIT_ACTION_CATEGORIES = {
             AuditLog.Action.INTERNAL_ROLE_CHANGED,
             AuditLog.Action.ASSESSMENT_WEIGHTS_UPDATED,
             AuditLog.Action.ASSESSMENT_WEIGHTS_UNLOCKED,
+            AuditLog.Action.OFFICE_POLICY_UPDATED,
             AuditLog.Action.POSITION_CREATED,
             AuditLog.Action.POSITION_UPDATED,
             AuditLog.Action.RECRUITMENT_ENTRY_CREATED,

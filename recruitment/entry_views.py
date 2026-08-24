@@ -16,6 +16,7 @@ from .models import AuditLog, PositionPosting
 from .permissions import EntryManagerRequiredMixin
 from .services import (
     cancel_recruitment_entry,
+    get_office_policy,
     get_manageable_recruitment_entries,
     persist_recruitment_entry,
     record_system_audit_event,
@@ -60,6 +61,7 @@ class RecruitmentEntryListView(LoginRequiredMixin, EntryManagerRequiredMixin, Li
             for entry in entries
             if user_can_generate_entry_car_filing_copy(self.request.user, entry)
         }
+        context["office_policy"] = get_office_policy()
         return context
 
 
@@ -249,7 +251,12 @@ class RecruitmentEntryStatusUpdateView(LoginRequiredMixin, EntryManagerRequiredM
             )
             return redirect("recruitment-entry-list")
         try:
-            update_recruitment_entry_status(entry, request.user, status)
+            update_recruitment_entry_status(
+                entry,
+                request.user,
+                status,
+                reason=request.POST.get("reason", ""),
+            )
         except ValidationError as error:
             _add_validation_messages(request, error)
             return redirect("recruitment-entry-list")

@@ -70,6 +70,7 @@ from .models import (
     InterviewRating,
     InterviewSession,
     Notification,
+    OfficePolicy,
     PositionDocumentRequirement,
     PositionPosting,
     RecruitmentApplication,
@@ -125,10 +126,49 @@ PENDING_RESUBMISSION_SCREENING_FINALIZE_MESSAGE = (
     "The applicant's resubmission is still pending. Wait for the new documents (or remove "
     "the applicant from the batch) before finalizing this screening as Qualified."
 )
+RESCIND_CUTOFF_MESSAGE = (
+    "The appointment has been issued. A revocation at this point is handled as a "
+    "separation, not a rescission."
+)
 
 
 class ApplicationOTPDeliveryError(RuntimeError):
     pass
+
+
+def get_office_policy():
+    """Return the single office-policy row, creating the shipped defaults if needed."""
+    policy, _created = OfficePolicy.objects.get_or_create(pk=OfficePolicy.SINGLETON_PK)
+    return policy
+
+
+@transaction.atomic
+def update_office_policy(policy_form, actor):
+    if actor.role != RecruitmentUser.Role.HRM_CHIEF:
+        raise ValueError("Only the HRM Chief may update Office Policy.")
+    policy = policy_form.instance
+    changed_fields = list(policy_form.changed_data)
+    stored_policy = OfficePolicy.objects.get(pk=policy.pk)
+    previous = {
+        field: getattr(stored_policy, field)
+        for field in changed_fields
+    }
+    policy = policy_form.save()
+    changes = {
+        field: {"old": previous[field], "new": getattr(policy, field)}
+        for field in changed_fields
+    }
+    if changes:
+        record_system_audit_event(
+            actor=actor,
+            action=AuditLog.Action.OFFICE_POLICY_UPDATED,
+            description="Updated Office Policy.",
+            metadata={
+                "changed_fields": changed_fields,
+                "changes": changes,
+            },
+        )
+    return policy, changes
 
 
 EXPORT_ROLES = {
@@ -1486,6 +1526,34 @@ def user_can_support_plantilla_interview(user, application):
     return user.role in PLANTILLA_INTERVIEW_SUPPORT_ROLES_BY_LEVEL.get(application.level, set())
 
 
+def user_can_manage_attendance_exception(user, exception):
+    """Apply the office-selected owner to Plantilla interview absence decisions.
+
+    Examination absences and non-Plantilla interviews keep the assigned-stage-owner rule.
+    """
+    application = exception.application
+    if (
+        exception.assessment_stage != AttendanceException.Stage.INTERVIEW
+        or application.branch != PositionPosting.Branch.PLANTILLA
+    ):
+        return user_can_process_application(user, application)
+    policy = get_office_policy()
+    if (
+        policy.interview_absence_decided_by
+        == OfficePolicy.InterviewAbsenceDecisionOwner.PANEL
+    ):
+        return user_can_process_application(user, application)
+    case = getattr(application, "case", None)
+    return bool(
+        case
+        and not case.is_stage_locked
+        and case.current_stage == RecruitmentCase.Stage.HRMPSB_REVIEW
+        and exception.review_stage == RecruitmentCase.Stage.HRMPSB_REVIEW
+        and user.role
+        in PLANTILLA_INTERVIEW_SUPPORT_ROLES_BY_LEVEL.get(application.level, set())
+    )
+
+
 def user_is_interview_rating_support_encoder(user, application):
     return user_can_support_plantilla_interview(user, application)
 
@@ -2036,7 +2104,7 @@ def record_attendance_letter_of_intent(exception, actor, uploaded_file, notes=""
             "This absence has already been decided — the letter cannot change it."
         )
     application = exception.application
-    if not user_can_process_application(actor, application):
+    if not user_can_manage_attendance_exception(actor, exception):
         raise ValueError("This case is not currently assigned to you.")
     validate_applicant_document_upload(uploaded_file)
     evidence = upload_evidence_item(
@@ -2047,6 +2115,10 @@ def record_attendance_letter_of_intent(exception, actor, uploaded_file, notes=""
         artifact_scope=EvidenceVaultItem.OwnerScope.CASE,
         artifact_type=ARTIFACT_TYPE_LETTER_OF_INTENT,
         document_key=f"{ARTIFACT_TYPE_LETTER_OF_INTENT}:{exception.id}",
+        # SL2-15: the action-specific predicate above may authorize the HR support
+        # office while the HRMPSB panel owns the case. Do not re-run the generic
+        # evidence permission and accidentally undo that narrow authorization.
+        permission_checked=True,
     )
     exception.letter_of_intent = evidence
     exception.letter_received_at = timezone.now()
@@ -2088,7 +2160,7 @@ def resolve_attendance_absence(exception, actor, outcome, reason):
     }:
         raise ValueError("Choose whether the candidate is rescheduled or does not proceed.")
     application = exception.application
-    if not user_can_process_application(actor, application):
+    if not user_can_manage_attendance_exception(actor, exception):
         raise ValueError("This case is not currently assigned to you.")
 
     exception.outcome = outcome
@@ -2194,10 +2266,10 @@ ARTIFACT_TYPE_WITHDRAWAL_REQUEST = "withdrawal_request"
 def user_can_record_withdrawal(user, application):
     """SL-10: who may record that an applicant has stepped out.
 
-    The handler the case is currently assigned to — the office already talking to that
-    applicant. Not available once the case is terminal, and not the route for a selected
-    appointee changing their mind during completion: that unwinds a recorded selection and
-    belongs to the rescind path (SL-14)."""
+    The assigned handler always may; Office Policy may also admit the level's owning office.
+    Not available once the case is terminal, and not the route for a selected appointee
+    changing their mind during completion: that unwinds a recorded selection and belongs to
+    the rescind path (SL-14)."""
     case = getattr(application, "case", None)
     if case is None:
         return False
@@ -2213,7 +2285,12 @@ def user_can_record_withdrawal(user, application):
         RecruitmentCase.Stage.CLOSED,
     }:
         return False
-    return user_can_process_application(user, application)
+    if user_can_process_application(user, application):
+        return True
+    return bool(
+        get_office_policy().withdrawal_recorded_by_owning_office
+        and user.role == _completion_handler_role(application)
+    )
 
 
 @transaction.atomic
@@ -4379,7 +4456,11 @@ def _open_implicit_cos_selection_round(posting, actor):
     selection_round = CosSelectionRound(
         recruitment_entry=posting,
         round_number=1,
-        slot_count=1,
+        slot_count=(
+            posting.positions_to_fill
+            if get_office_policy().cos_positions_multi_slot_allowed
+            else 1
+        ),
         opened_by=actor,
     )
     selection_round.full_clean()
@@ -4861,6 +4942,54 @@ def get_completion_record(application):
     ).filter(application=application).first()
 
 
+def rescind_cutoff_block_message(application):
+    """Return the settled refusal copy when Office Policy closes the rescind door."""
+    policy = get_office_policy()
+    if policy.rescind_cutoff == OfficePolicy.RescindCutoff.NEVER:
+        return ""
+    case = getattr(application, "case", None)
+    if case and case.current_stage == RecruitmentCase.Stage.CLOSED:
+        return RESCIND_CUTOFF_MESSAGE
+    if policy.rescind_cutoff == OfficePolicy.RescindCutoff.CONTRACT_RECORDED:
+        completion_record = get_completion_record(application)
+        if completion_record and (completion_record.completion_reference or "").strip():
+            return RESCIND_CUTOFF_MESSAGE
+    return ""
+
+
+def _void_completion_record_for_rescission(application, reason):
+    completion_record = get_completion_record(application)
+    if completion_record is None or completion_record.is_voided:
+        return completion_record
+    completion_record.is_voided = True
+    completion_record.voided_at = timezone.now()
+    completion_record.void_reason = reason
+    completion_record.save(
+        update_fields=["is_voided", "voided_at", "void_reason", "updated_at"]
+    )
+    return completion_record
+
+
+def _reset_voided_completion_record_for_reselection(application):
+    """Reuse the one-to-one row as a blank tracker when the same person is selected again."""
+    completion_record = get_completion_record(application)
+    if completion_record is None or not completion_record.is_voided:
+        return completion_record
+    completion_record.requirements.all().delete()
+    completion_record.deadline_changes.all().delete()
+    completion_record.completion_reference = ""
+    completion_record.completion_date = None
+    completion_record.deadline = None
+    completion_record.announcement_reference = ""
+    completion_record.announcement_date = None
+    completion_record.remarks = ""
+    completion_record.is_voided = False
+    completion_record.voided_at = None
+    completion_record.void_reason = ""
+    completion_record.save()
+    return completion_record
+
+
 def get_completion_requirements(application):
     completion_record = get_completion_record(application)
     if not completion_record:
@@ -4884,6 +5013,7 @@ def user_can_close_case(user, application):
     completion_record = get_completion_record(application)
     return bool(
         completion_record
+        and not completion_record.is_voided
         and user_can_manage_completion(user, application)
         and completion_record.ready_for_closure
     )
@@ -7630,6 +7760,11 @@ def save_completion_tracking(application, actor, cleaned_data, requirement_forms
 
     completion_record = get_completion_record(application)
     created = completion_record is None
+    if completion_record is not None and completion_record.is_voided:
+        raise ValueError(
+            "This completion record was voided by rescission. Record a new selection "
+            "before starting completion tracking again."
+        )
     if completion_record is None:
         completion_record = CompletionRecord(
             application=application,
@@ -9134,6 +9269,68 @@ def request_document_resubmission(application, actor, remarks):
     return case
 
 
+def user_can_extend_resubmission_deadline(user, application):
+    case = getattr(application, "case", None)
+    if (
+        not get_office_policy().allow_resubmission_deadline_extension
+        or case is None
+        or case.case_status != RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION
+        or not user_can_process_application(user, application)
+    ):
+        return False
+    screening_record = get_screening_record(application, stage=case.current_stage)
+    return bool(screening_record and screening_record.resubmission_deadline)
+
+
+@transaction.atomic
+def extend_document_resubmission_deadline(application, actor, new_deadline, reason):
+    if not get_office_policy().allow_resubmission_deadline_extension:
+        raise ValueError("Office Policy does not allow resubmission deadline extensions.")
+    if not user_can_extend_resubmission_deadline(actor, application):
+        raise ValueError(
+            "This pending resubmission is not currently assigned to you for review."
+        )
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValueError("Record why the resubmission deadline is being extended.")
+    case = application.case
+    screening_record, flagged = _flagged_resubmission_reviews(
+        application, stage=case.current_stage
+    )
+    old_deadline = screening_record.resubmission_deadline
+    if new_deadline is None:
+        raise ValueError("Choose the new resubmission deadline.")
+    if new_deadline < timezone.localdate():
+        raise ValueError("The new resubmission deadline cannot be in the past.")
+    if new_deadline <= old_deadline:
+        raise ValueError("The new deadline must be later than the current deadline.")
+
+    screening_record.resubmission_deadline = new_deadline
+    screening_record.save(update_fields=["resubmission_deadline", "updated_at"])
+    record_audit_event(
+        application=application,
+        actor=actor,
+        action=AuditLog.Action.DECISION_RECORDED,
+        description="Extended the pending document resubmission deadline.",
+        metadata={
+            "old_resubmission_deadline": old_deadline.isoformat(),
+            "new_resubmission_deadline": new_deadline.isoformat(),
+            "actor_id": actor.id,
+            "actor_role": actor.role,
+            "reason": reason,
+        },
+    )
+    queue_document_resubmission_request_notification(
+        application,
+        actor,
+        document_reviews=flagged,
+        workflow_remarks=reason,
+        resubmission_deadline=new_deadline,
+        deadline_was_extended=True,
+    )
+    return screening_record
+
+
 def get_resubmission_request(application):
     """For an application whose case is awaiting resubmission, return the document requirements
     the applicant must re-upload (the flagged ones), the resubmission deadline, and a
@@ -9701,6 +9898,9 @@ def record_final_selection(application, actor, cleaned_data):
         )
         target_application.save(update_fields=["current_handler_role", "status", "closed_at", "updated_at"])
 
+        if selected:
+            _reset_voided_completion_record_for_reselection(target_application)
+
         record_audit_event(
             application=target_application,
             actor=actor,
@@ -9795,11 +9995,10 @@ def record_final_selection(application, actor, cleaned_data):
 def user_can_rescind_final_selection(user, selection):
     """SL-14: who may rescind a recorded Plantilla selection.
 
-    Default authorizer: the role that recorded it — the Appointing Authority. Flagged in
-    the Resolution Log as a default for the client to confirm or narrow. The cutoff (how
-    late a selection may be rescinded) and whether the matter returns to the board are
-    still client policy and are deliberately NOT encoded here."""
+    The Appointing Authority owns the action; Office Policy supplies the cutoff."""
     if selection is None or selection.is_rescinded:
+        return False
+    if rescind_cutoff_block_message(selection.selected_application):
         return False
     return user.role == RecruitmentUser.Role.APPOINTING_AUTHORITY
 
@@ -9822,6 +10021,8 @@ def rescind_final_selection(selection, actor, reason, *, reference=""):
         raise ValueError("Record why this selection is being rescinded.")
     if selection.is_rescinded:
         raise ValueError("This selection has already been rescinded.")
+    if rescind_cutoff_block_message(selection.selected_application):
+        raise ValueError(RESCIND_CUTOFF_MESSAGE)
     if not user_can_rescind_final_selection(actor, selection):
         raise ValueError(
             "Only the Appointing Authority may rescind a recorded final selection."
@@ -9854,6 +10055,7 @@ def rescind_final_selection(selection, actor, reason, *, reference=""):
     selection.rescind_reference = reference or ""
     selection.full_clean()
     selection.save()
+    voided_completion_record = _void_completion_record_for_rescission(winner, reason)
 
     restored = []
     for application in [winner, *closed_siblings]:
@@ -9887,6 +10089,9 @@ def rescind_final_selection(selection, actor, reason, *, reference=""):
                 "reason": reason,
                 "reference": selection.rescind_reference,
                 "was_selected": application.pk == winner.pk,
+                "completion_record_voided": bool(
+                    application.pk == winner.pk and voided_completion_record
+                ),
                 "from_status": previous_status,
                 "to_status": application.status,
                 "from_case_status": previous_case_status,
@@ -9911,6 +10116,9 @@ def rescind_final_selection(selection, actor, reason, *, reference=""):
             "reason": reason,
             "reference": selection.rescind_reference,
             "restored_application_ids": sorted(a.id for a in restored),
+            "voided_completion_record_id": (
+                voided_completion_record.id if voided_completion_record else None
+            ),
         },
     )
     # Notify only on the winner's restored case. Emitting once per restored sibling would
@@ -9949,14 +10157,14 @@ def user_can_rescind_cos_vacancy_deliberation(user, pick):
     Same principle as the Plantilla rescind: the role that records the decision. SL-01 made
     the finalized deliberation pick the COS selection itself, and the HRM Chief records it at
     both levels (see ``_final_decision_stage_and_role``), so the HRM Chief holds the
-    correction too. Flagged in the Resolution Log as a default for the client to confirm or
-    narrow. The cutoff — how late a selection may be voided, e.g. once a contract exists —
-    is office policy and is deliberately NOT encoded here."""
+    correction too. Office Policy supplies the cutoff."""
     if pick is None or pick.is_rescinded or not pick.is_finalized:
         return False
     if pick.recruitment_entry.branch != PositionPosting.Branch.COS:
         return False
     if not cos_pick_is_from_latest_selection_round(pick):
+        return False
+    if rescind_cutoff_block_message(pick.chosen_case.application):
         return False
     return user.role == RecruitmentUser.Role.HRM_CHIEF
 
@@ -9987,6 +10195,8 @@ def rescind_cos_vacancy_deliberation(pick, actor, reason, *, reference=""):
         raise ValueError("Only a finalized COS deliberation pick can be rescinded.")
     if not cos_pick_is_from_latest_selection_round(pick):
         raise ValueError(COS_EARLIER_ROUND_RESCIND_MESSAGE)
+    if rescind_cutoff_block_message(pick.chosen_case.application):
+        raise ValueError(RESCIND_CUTOFF_MESSAGE)
     if not user_can_rescind_cos_vacancy_deliberation(actor, pick):
         raise ValueError(
             "Only the HRM Chief may rescind a recorded COS deliberation pick."
@@ -10020,6 +10230,7 @@ def rescind_cos_vacancy_deliberation(pick, actor, reason, *, reference=""):
     pick.rescind_reference = reference or ""
     pick.full_clean()
     pick.save()
+    voided_completion_record = _void_completion_record_for_rescission(winner, reason)
 
     # The pick is only half the record. Finalizing it recorded a FinalDecision(SELECTED)
     # for the winner, and that row is what reopen_recruitment_case reads to decide whether
@@ -10118,6 +10329,9 @@ def rescind_cos_vacancy_deliberation(pick, actor, reason, *, reference=""):
                 "reason": reason,
                 "reference": pick.rescind_reference,
                 "was_selected": application.pk == winner.pk,
+                "completion_record_voided": bool(
+                    application.pk == winner.pk and voided_completion_record
+                ),
                 "from_status": previous_status,
                 "to_status": application.status,
                 "from_case_status": previous_case_status,
@@ -10146,6 +10360,9 @@ def rescind_cos_vacancy_deliberation(pick, actor, reason, *, reference=""):
             "restored_application_ids": sorted(a.id for a in restored),
             "rescinded_final_decision_ids": sorted(d.id for d in rescinded_decisions),
             "selection_round_reopened": round_reopened,
+            "voided_completion_record_id": (
+                voided_completion_record.id if voided_completion_record else None
+            ),
         },
     )
     # Notify only on the winner's restored case. The other restored round members are one
@@ -10343,6 +10560,9 @@ def record_final_decision(application, actor, cleaned_data):
     decision.full_clean()
     decision.save()
 
+    if decision.is_selected:
+        _reset_voided_completion_record_for_reselection(application)
+
     next_status = FINAL_DECISION_OUTCOME_TO_STATUS[decision.decision_outcome]
     next_role = _completion_handler_role(application) if decision.is_selected else ""
     previous_role = application.current_handler_role
@@ -10446,6 +10666,11 @@ def close_recruitment_case(application, actor, closure_notes):
     completion_record = get_completion_record(application)
     if not completion_record:
         raise ValueError("Record completion tracking before closing the recruitment case.")
+    if completion_record.is_voided:
+        raise ValueError(
+            "This completion record was voided by rescission. Record fresh completion "
+            "tracking after a new selection."
+        )
     if not completion_record.requirements.exists():
         raise ValueError("Add at least one completion requirement item before closing the case.")
     if completion_record.has_pending_requirements:
@@ -12647,7 +12872,7 @@ def cancel_recruitment_entry(entry, actor, reason):
     return entry, affected
 
 
-def update_recruitment_entry_status(entry, actor, new_status):
+def update_recruitment_entry_status(entry, actor, new_status, reason=""):
     if entry.status == PositionPosting.EntryStatus.CANCELLED:
         raise ValidationError(
             "This vacancy was cancelled and cannot be reactivated, suspended, or "
@@ -12666,6 +12891,17 @@ def update_recruitment_entry_status(entry, actor, new_status):
             f"{entry.close_blocked_until.strftime('%B %d, %Y')}. It can't be closed "
             "before then. Use Suspend if applications must stop for an exceptional reason."
         )
+    reason = (reason or "").strip()
+    if (
+        new_status
+        in {
+            PositionPosting.EntryStatus.SUSPENDED,
+            PositionPosting.EntryStatus.CLOSED,
+        }
+        and get_office_policy().require_reason_for_suspend_close
+        and not reason
+    ):
+        raise ValidationError("Record why this vacancy is being suspended or closed.")
     previous_status = entry.status
     previous_closing_date = entry.closing_date
     previous_updated_by = entry.updated_by
@@ -12688,6 +12924,7 @@ def update_recruitment_entry_status(entry, actor, new_status):
             "entry_code": entry.job_code,
             "old_status": previous_status,
             "new_status": new_status,
+            "reason": reason,
         },
     )
     return entry

@@ -10,6 +10,7 @@ Please review the document item{{ requested_documents|length|pluralize }} below:
   Instruction: {{ document.remarks }}
 {% endfor %}
 {% if resubmission_deadline %}
+{% if deadline_was_extended %}The resubmission deadline has been extended.{% endif %}
 Please resubmit on or before {{ resubmission_deadline|date:"F d, Y" }}.
 {% endif %}
 {% if workflow_remarks %}

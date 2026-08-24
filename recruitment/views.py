@@ -48,6 +48,8 @@ from .forms import (
     AttendanceAbsenceDecisionForm,
     AttendanceLetterOfIntentForm,
     InterviewAbsenceForm,
+    OfficePolicyForm,
+    ResubmissionDeadlineExtensionForm,
     VacancyAssessmentWeightsForm,
     VacancyAssessmentWeightsUnlockForm,
     WorkflowActionForm,
@@ -144,13 +146,19 @@ from .services import (
     get_stage_record_correction,
     get_stage_record_versions,
     get_pending_attendance_exception,
+    get_office_policy,
     interview_fallback_panel_queryset,
     mark_interview_absent,
     record_application_withdrawal,
     record_attendance_letter_of_intent,
+    extend_document_resubmission_deadline,
     rescind_cos_vacancy_deliberation,
     rescind_final_selection,
     resolve_attendance_absence,
+    rescind_cutoff_block_message,
+    update_office_policy,
+    user_can_extend_resubmission_deadline,
+    user_can_manage_attendance_exception,
     user_can_record_withdrawal,
     user_can_rescind_cos_vacancy_deliberation,
     user_can_rescind_final_selection,
@@ -691,9 +699,16 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
         pending_absence = get_pending_attendance_exception(application)
         context["attendance_exceptions"] = get_attendance_exceptions(application)
         context["pending_attendance_exception"] = pending_absence
-        if pending_absence and user_can_process_application(user, application):
+        if pending_absence and user_can_manage_attendance_exception(user, pending_absence):
             context["attendance_letter_form"] = AttendanceLetterOfIntentForm()
             context["attendance_decision_form"] = AttendanceAbsenceDecisionForm()
+        if user_can_extend_resubmission_deadline(user, application):
+            screening_record = context["current_screening_record"]
+            context["resubmission_deadline_extension_form"] = (
+                ResubmissionDeadlineExtensionForm(
+                    current_deadline=screening_record.resubmission_deadline
+                )
+            )
         # SL-10: a neutral exit from an active competition, available at every pre-selection
         # stage to whoever the case is assigned to.
         if user_can_record_withdrawal(user, application):
@@ -703,10 +718,17 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
             context["final_selection_history"] = get_final_selection_history(
                 application.position
             )
-            if user_can_rescind_final_selection(
-                user, get_final_selection_for_application(application)
-            ):
+            final_selection = get_final_selection_for_application(application)
+            if user_can_rescind_final_selection(user, final_selection):
                 context["final_selection_rescind_form"] = FinalSelectionRescindForm()
+            elif (
+                final_selection is not None
+                and user.role == RecruitmentUser.Role.APPOINTING_AUTHORITY
+                and rescind_cutoff_block_message(final_selection.selected_application)
+            ):
+                context["final_selection_rescind_unavailable_message"] = (
+                    rescind_cutoff_block_message(final_selection.selected_application)
+                )
         else:
             # SL-14 (COS): the same correction, on the record that carries the COS decision
             # — SL-01 made the finalized deliberation pick the selection itself.
@@ -718,6 +740,14 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
                 user, cos_pick
             ):
                 context["cos_pick_rescind_form"] = CosVacancyDeliberationRescindForm()
+            elif (
+                cos_pick is not None
+                and user.role == RecruitmentUser.Role.HRM_CHIEF
+                and rescind_cutoff_block_message(cos_pick.chosen_case.application)
+            ):
+                context["cos_pick_rescind_unavailable_message"] = (
+                    rescind_cutoff_block_message(cos_pick.chosen_case.application)
+                )
             elif (
                 cos_pick is not None
                 and user.role == RecruitmentUser.Role.HRM_CHIEF
@@ -2649,6 +2679,47 @@ class ScreeningReviewView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, Vi
         return redirect("application-detail", pk=pk)
 
 
+class ResubmissionDeadlineExtensionView(
+    LoginRequiredMixin, WorkflowProcessorRequiredMixin, View
+):
+    def post(self, request, pk):
+        application = get_object_or_404(RecruitmentApplication, pk=pk)
+        if not user_can_extend_resubmission_deadline(request.user, application):
+            raise PermissionDenied
+        screening_record = get_screening_record(
+            application, stage=application.case.current_stage
+        )
+        form = ResubmissionDeadlineExtensionForm(
+            request.POST,
+            current_deadline=screening_record.resubmission_deadline,
+        )
+        if not form.is_valid():
+            messages.error(
+                request,
+                "; ".join(
+                    str(error)
+                    for errors in form.errors.values()
+                    for error in errors
+                ),
+            )
+            return redirect("application-detail", pk=pk)
+        try:
+            extend_document_resubmission_deadline(
+                application,
+                request.user,
+                form.cleaned_data["new_deadline"],
+                form.cleaned_data["reason"],
+            )
+        except (ValueError, ValidationError) as exc:
+            messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
+        else:
+            messages.success(
+                request,
+                "Resubmission deadline extended and one reminder email queued for the applicant.",
+            )
+        return redirect("application-detail", pk=pk)
+
+
 class ExaminationRecordView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
     def post(self, request, pk):
         application = get_object_or_404(RecruitmentApplication, pk=pk)
@@ -3149,6 +3220,48 @@ class VacancyAssessmentWeightsView(LoginRequiredMixin, EntryManagerRequiredMixin
         return render(request, self.template_name, self._context(entry, weights, form))
 
 
+class OfficePolicyView(LoginRequiredMixin, InternalUserRequiredMixin, View):
+    template_name = "recruitment/office_policy.html"
+
+    def _require_owner(self, request):
+        if request.user.role != RecruitmentUser.Role.HRM_CHIEF:
+            raise PermissionDenied
+
+    def get(self, request):
+        self._require_owner(request)
+        policy = get_office_policy()
+        return render(
+            request,
+            self.template_name,
+            {"policy": policy, "form": OfficePolicyForm(instance=policy)},
+        )
+
+    def post(self, request):
+        self._require_owner(request)
+        policy = get_office_policy()
+        form = OfficePolicyForm(request.POST, instance=policy)
+        if form.is_valid():
+            try:
+                _policy, changes = update_office_policy(form, request.user)
+            except (ValueError, ValidationError) as exc:
+                messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
+            else:
+                if changes:
+                    changed_labels = ", ".join(
+                        form.fields[field].label for field in changes
+                    )
+                    messages.success(
+                        request,
+                        f"Office Policy updated: {changed_labels}.",
+                    )
+                else:
+                    messages.info(request, "No Office Policy values changed.")
+                return redirect("office-policy")
+        else:
+            messages.error(request, "Fix the highlighted problems before saving.")
+        return render(request, self.template_name, {"policy": policy, "form": form})
+
+
 class InterviewRatingView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
     def post(self, request, pk):
         application = get_object_or_404(RecruitmentApplication, pk=pk)
@@ -3355,7 +3468,7 @@ class AttendanceExceptionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin
         exception = get_object_or_404(
             AttendanceException, pk=exception_pk, application=application
         )
-        if not user_can_process_application(request.user, application):
+        if not user_can_manage_attendance_exception(request.user, exception):
             raise PermissionDenied
         operation = request.POST.get("operation", "")
         if operation == "letter":

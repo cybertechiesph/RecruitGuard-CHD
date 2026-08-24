@@ -64,11 +64,13 @@ from .views import (
     NotificationReadAllView,
     NotificationReadView,
     NotificationUnreadCountView,
+    OfficePolicyView,
     PositionListView,
     NotificationResendView,
     ReminderNotificationView,
     RequirementChecklistNotificationView,
     ScreeningReviewView,
+    ResubmissionDeadlineExtensionView,
     VacancyBatchConsoleView,
     VacancyBatchCosDeliberationView,
     VacancyBatchDetailView,
@@ -84,6 +86,7 @@ from .views import (
 
 urlpatterns = [
     path("", DashboardView.as_view(), name="dashboard"),
+    path("policy/", OfficePolicyView.as_view(), name="office-policy"),
     path("forbidden/", ForbiddenView.as_view(), name="forbidden"),
     path("login/", InternalLoginView.as_view(), name="login"),
     path("login/mfa/", InternalMFAVerifyView.as_view(), name="internal-mfa-verify"),
@@ -204,6 +207,11 @@ urlpatterns = [
         "applications/<int:pk>/absence/<int:exception_pk>/",
         AttendanceExceptionView.as_view(),
         name="attendance-exception-manage",
+    ),
+    path(
+        "applications/<int:pk>/resubmission/deadline/extend/",
+        ResubmissionDeadlineExtensionView.as_view(),
+        name="resubmission-deadline-extend",
     ),
     path("applications/<int:pk>/deliberation/", DeliberationRecordView.as_view(), name="deliberation-record"),
     path(

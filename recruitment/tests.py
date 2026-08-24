@@ -65,6 +65,7 @@ from .models import (
     CompletionRequirement,
     DeliberationRecord,
     ExamRecord,
+    ExamSchedule,
     EvidenceVaultItem,
     FinalDecision,
     FinalSelection,
@@ -78,6 +79,7 @@ from .models import (
     InterviewRating,
     Notification,
     NotificationLog,
+    OfficePolicy,
     PositionDocumentRequirement,
     PositionReference,
     PositionPosting,
@@ -115,10 +117,12 @@ from .services import (
     close_cos_selection_round_short,
     emit_deadline_approaching_notifications,
     emit_notification_failed_in_app_alert,
+    extend_document_resubmission_deadline,
     generate_comparative_assessment_report,
     get_case_handoff_options,
     get_current_workflow_section,
     get_resubmission_request,
+    get_office_policy,
     get_screening_record,
     get_exam_record,
     get_stage_record_versions,
@@ -163,6 +167,7 @@ from .services import (
     get_latest_cos_selection_round,
     get_open_cos_selection_round,
     open_cos_selection_round,
+    _open_implicit_cos_selection_round,
     user_can_open_cos_selection_round,
     user_can_close_cos_selection_round_short,
     cos_deliberation_pool,
@@ -204,10 +209,13 @@ from .services import (
     record_attendance_absence,
     record_application_withdrawal,
     user_can_record_withdrawal,
+    user_can_extend_resubmission_deadline,
+    user_can_manage_attendance_exception,
     user_can_manage_deliberation,
     save_deliberation_record,
     cancel_recruitment_entry,
     get_completion_record,
+    close_recruitment_case,
     get_pending_attendance_exception,
     record_attendance_letter_of_intent,
     resolve_attendance_absence,
@@ -3170,7 +3178,8 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
             reverse(
                 "recruitment-entry-status",
                 kwargs={"pk": self.level1_position.pk, "status": PositionPosting.EntryStatus.SUSPENDED},
-            )
+            ),
+            {"reason": "Pause while the office reviews the schedule."},
         )
 
         self.assertEqual(response.status_code, 302)
@@ -3262,6 +3271,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
                 "recruitment-entry-status",
                 kwargs={"pk": self.level1_position.pk, "status": PositionPosting.EntryStatus.CLOSED},
             ),
+            {"reason": "The publication period has ended."},
             follow=True,
         )
 
@@ -3310,6 +3320,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
             self.level1_position,
             self.hrm_chief,
             PositionPosting.EntryStatus.SUSPENDED,
+            reason="Pause while the office reviews the schedule.",
         )
         self.level1_position.refresh_from_db()
         self.assertEqual(self.level1_position.status, PositionPosting.EntryStatus.SUSPENDED)
@@ -3326,6 +3337,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
                 self.level1_position,
                 self.hrm_chief,
                 PositionPosting.EntryStatus.SUSPENDED,
+                reason="Testing model validation.",
             )
 
         self.assertIn(
@@ -3353,6 +3365,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
                 "recruitment-entry-status",
                 kwargs={"pk": self.level1_position.pk, "status": PositionPosting.EntryStatus.SUSPENDED},
             ),
+            {"reason": "Pause while the position reference is reviewed."},
             follow=True,
         )
 
@@ -3371,6 +3384,188 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
                 metadata__new_status=PositionPosting.EntryStatus.SUSPENDED,
             ).exists()
         )
+
+    def _record_exam_schedule_for_extension_policy(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        application.refresh_from_db()
+        return ExamSchedule.objects.create(
+            application=application,
+            recruitment_case=application.case,
+            recruitment_entry=self.level1_position,
+            review_stage=application.case.current_stage,
+            scheduled_by=self.secretariat,
+            scheduled_for=timezone.now() + timedelta(days=2),
+            venue="Regional Office Testing Room",
+        )
+
+    def test_default_policy_blocks_publication_extension_after_exam_is_scheduled(self):
+        self._record_exam_schedule_for_extension_policy()
+        previous_closing_date = self.level1_position.closing_date
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+
+        response = client.post(
+            reverse("recruitment-entry-update", kwargs={"pk": self.level1_position.pk}),
+            self._entry_edit_payload(
+                self.level1_position,
+                closing_date=(previous_closing_date + timedelta(days=2)).isoformat(),
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "The examination for this vacancy has already been scheduled. Extending the "
+            "publication would create a second cohort; cancel and re-publish instead.",
+        )
+        self.level1_position.refresh_from_db()
+        self.assertEqual(self.level1_position.closing_date, previous_closing_date)
+
+    def test_policy_can_allow_publication_extension_after_exam_is_scheduled(self):
+        self._record_exam_schedule_for_extension_policy()
+        policy = get_office_policy()
+        policy.allow_extension_after_exam_scheduled = True
+        policy.save(update_fields=["allow_extension_after_exam_scheduled", "updated_at"])
+        previous_closing_date = self.level1_position.closing_date
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+
+        response = client.post(
+            reverse("recruitment-entry-update", kwargs={"pk": self.level1_position.pk}),
+            self._entry_edit_payload(
+                self.level1_position,
+                closing_date=(previous_closing_date + timedelta(days=2)).isoformat(),
+                positions_to_fill="1",
+            ),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.level1_position.refresh_from_db()
+        self.assertEqual(
+            self.level1_position.closing_date, previous_closing_date + timedelta(days=2)
+        )
+        self.assertTrue(self.level1_position.deadline_extended)
+
+    def test_default_policy_hides_and_forces_cos_positions_to_fill_to_one(self):
+        PositionPosting.objects.filter(pk=self.cos_position.pk).update(positions_to_fill=4)
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+
+        edit = client.get(reverse("recruitment-entry-update", kwargs={"pk": self.cos_position.pk}))
+        self.assertEqual(edit.status_code, 200)
+        self.assertNotContains(edit, 'name="positions_to_fill"')
+        response = client.post(
+            reverse("recruitment-entry-update", kwargs={"pk": self.cos_position.pk}),
+            self._entry_edit_payload(self.cos_position, positions_to_fill="7"),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.cos_position.refresh_from_db()
+        self.assertEqual(self.cos_position.positions_to_fill, 1)
+
+    def test_policy_can_expose_and_store_cos_positions_to_fill(self):
+        policy = get_office_policy()
+        policy.cos_positions_multi_slot_allowed = True
+        policy.save(update_fields=["cos_positions_multi_slot_allowed", "updated_at"])
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+
+        edit = client.get(reverse("recruitment-entry-update", kwargs={"pk": self.cos_position.pk}))
+        self.assertEqual(edit.status_code, 200)
+        self.assertContains(edit, 'name="positions_to_fill"')
+        response = client.post(
+            reverse("recruitment-entry-update", kwargs={"pk": self.cos_position.pk}),
+            self._entry_edit_payload(self.cos_position, positions_to_fill="3"),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.cos_position.refresh_from_db()
+        self.assertEqual(self.cos_position.positions_to_fill, 3)
+
+    def test_default_policy_requires_and_audits_suspend_reason(self):
+        with self.assertRaisesMessage(
+            ValidationError, "Record why this vacancy is being suspended or closed."
+        ):
+            update_recruitment_entry_status(
+                self.level1_position,
+                self.hrm_chief,
+                PositionPosting.EntryStatus.SUSPENDED,
+            )
+
+        reason = "Pause while the examination schedule is reviewed."
+        update_recruitment_entry_status(
+            self.level1_position,
+            self.hrm_chief,
+            PositionPosting.EntryStatus.SUSPENDED,
+            reason=reason,
+        )
+        audit = AuditLog.objects.get(
+            action=AuditLog.Action.RECRUITMENT_ENTRY_STATUS_CHANGED,
+            metadata__entry_code=self.level1_position.job_code,
+            metadata__new_status=PositionPosting.EntryStatus.SUSPENDED,
+        )
+        self.assertEqual(audit.metadata["reason"], reason)
+
+    def test_policy_can_restore_reasonless_suspend_and_close_controls(self):
+        policy = get_office_policy()
+        policy.require_reason_for_suspend_close = False
+        policy.save(update_fields=["require_reason_for_suspend_close", "updated_at"])
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+
+        listing = client.get(reverse("recruitment-entry-list"))
+        self.assertEqual(listing.status_code, 200)
+        self.assertNotContains(listing, "Reason for suspending")
+        response = client.post(
+            reverse(
+                "recruitment-entry-status",
+                kwargs={
+                    "pk": self.level1_position.pk,
+                    "status": PositionPosting.EntryStatus.SUSPENDED,
+                },
+            )
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.level1_position.refresh_from_db()
+        self.assertEqual(self.level1_position.status, PositionPosting.EntryStatus.SUSPENDED)
+
+    def test_hrm_chief_can_update_office_policy_and_changes_are_audited(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+
+        response = client.post(
+            reverse("office-policy"),
+            {
+                "allow_extension_after_exam_scheduled": "on",
+                "allow_resubmission_deadline_extension": "on",
+                "interview_absence_decided_by": (
+                    OfficePolicy.InterviewAbsenceDecisionOwner.SUPPORT_OFFICE
+                ),
+                "withdrawal_recorded_by_owning_office": "on",
+                "rescind_cutoff": OfficePolicy.RescindCutoff.CONTRACT_RECORDED,
+                "require_reason_for_suspend_close": "on",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        policy = get_office_policy()
+        self.assertTrue(policy.allow_extension_after_exam_scheduled)
+        audit = AuditLog.objects.get(action=AuditLog.Action.OFFICE_POLICY_UPDATED)
+        self.assertIn("allow_extension_after_exam_scheduled", audit.metadata["changed_fields"])
+        self.assertEqual(
+            audit.metadata["changes"]["allow_extension_after_exam_scheduled"],
+            {"old": False, "new": True},
+        )
+
+    def test_non_chief_cannot_view_or_update_office_policy(self):
+        for actor in (self.secretariat, self.hrmpsb, self.appointing, self.sysadmin):
+            client = Client()
+            self.force_login_with_mfa(client, actor)
+            self.assertEqual(client.get(reverse("office-policy")).status_code, 403)
+            self.assertEqual(client.post(reverse("office-policy"), {}).status_code, 403)
 
 
 class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
@@ -6952,6 +7147,82 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
             RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION,
         )
         return application
+
+    def test_default_policy_allows_audited_resubmission_deadline_extension(self):
+        application = self._awaiting_resubmission_application()
+        record = get_screening_record(application, stage=application.case.current_stage)
+        old_deadline = record.resubmission_deadline
+        new_deadline = old_deadline + timedelta(days=3)
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+
+        detail = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
+        self.assertEqual(detail.status_code, 200)
+        self.assertContains(detail, "Extend resubmission deadline")
+        before_count = NotificationLog.objects.filter(
+            application=application,
+            notification_type=NotificationLog.NotificationType.DOCUMENT_RESUBMISSION_REQUEST,
+        ).count()
+        with self.captureOnCommitCallbacks(execute=True):
+            response = client.post(
+                reverse(
+                    "resubmission-deadline-extend", kwargs={"pk": application.pk}
+                ),
+                {
+                    "new_deadline": new_deadline.isoformat(),
+                    "reason": "The applicant documented a temporary portal access issue.",
+                },
+            )
+
+        self.assertEqual(response.status_code, 302)
+        record.refresh_from_db()
+        self.assertEqual(record.resubmission_deadline, new_deadline)
+        notices = NotificationLog.objects.filter(
+            application=application,
+            notification_type=NotificationLog.NotificationType.DOCUMENT_RESUBMISSION_REQUEST,
+        ).order_by("id")
+        self.assertEqual(notices.count(), before_count + 1)
+        self.assertIn("deadline has been extended", notices.last().body)
+        audit = AuditLog.objects.get(
+            application=application,
+            action=AuditLog.Action.DECISION_RECORDED,
+            description="Extended the pending document resubmission deadline.",
+        )
+        self.assertEqual(audit.metadata["old_resubmission_deadline"], old_deadline.isoformat())
+        self.assertEqual(audit.metadata["new_resubmission_deadline"], new_deadline.isoformat())
+        self.assertEqual(audit.metadata["actor_id"], self.secretariat.id)
+        self.assertIn("portal access issue", audit.metadata["reason"])
+
+    def test_policy_can_disable_resubmission_deadline_extension(self):
+        application = self._awaiting_resubmission_application()
+        record = get_screening_record(application, stage=application.case.current_stage)
+        policy = get_office_policy()
+        policy.allow_resubmission_deadline_extension = False
+        policy.save(update_fields=["allow_resubmission_deadline_extension", "updated_at"])
+
+        self.assertFalse(user_can_extend_resubmission_deadline(self.secretariat, application))
+        with self.assertRaisesMessage(
+            ValueError, "Office Policy does not allow resubmission deadline extensions."
+        ):
+            extend_document_resubmission_deadline(
+                application,
+                self.secretariat,
+                record.resubmission_deadline + timedelta(days=1),
+                "The office granted more time.",
+            )
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        detail = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
+        self.assertEqual(detail.status_code, 200)
+        self.assertNotContains(detail, "Extend resubmission deadline")
+        refused = client.post(
+            reverse("resubmission-deadline-extend", kwargs={"pk": application.pk}),
+            {
+                "new_deadline": (record.resubmission_deadline + timedelta(days=1)).isoformat(),
+                "reason": "The office granted more time.",
+            },
+        )
+        self.assertEqual(refused.status_code, 403)
 
     def test_pending_resubmission_blocks_qualified_finalize_in_service_and_form(self):
         application = self._awaiting_resubmission_application()
@@ -14512,6 +14783,112 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
         )
         return application
 
+    def test_default_policy_assigns_plantilla_interview_absence_to_support_office(self):
+        application = self._plantilla_session_awaiting_ratings()
+        mark_interview_absent(
+            application,
+            self.secretariat,
+            notes="Candidate did not attend the scheduled sitting.",
+        )
+        exception = get_pending_attendance_exception(application)
+
+        self.assertTrue(user_can_manage_attendance_exception(self.secretariat, exception))
+        self.assertFalse(user_can_manage_attendance_exception(self.hrmpsb, exception))
+        with self.assertRaisesMessage(ValueError, "not currently assigned to you"):
+            record_attendance_letter_of_intent(
+                exception,
+                self.hrmpsb,
+                SimpleUploadedFile(
+                    "unauthorized-letter.pdf",
+                    b"%PDF-1.4 unauthorized",
+                    content_type="application/pdf",
+                ),
+            )
+
+        filed = record_attendance_letter_of_intent(
+            exception,
+            self.secretariat,
+            SimpleUploadedFile(
+                "letter-of-intent.pdf",
+                b"%PDF-1.4 letter",
+                content_type="application/pdf",
+            ),
+            notes="Received by HR support.",
+        )
+        self.assertIsNotNone(filed.letter_of_intent_id)
+        resolved = resolve_attendance_absence(
+            exception,
+            self.secretariat,
+            AttendanceException.Outcome.RESCHEDULED,
+            "The submitted letter supports another sitting.",
+        )
+        self.assertEqual(resolved.outcome, AttendanceException.Outcome.RESCHEDULED)
+
+    def test_policy_can_return_plantilla_interview_absence_to_stage_owner(self):
+        policy = get_office_policy()
+        policy.interview_absence_decided_by = (
+            OfficePolicy.InterviewAbsenceDecisionOwner.PANEL
+        )
+        policy.save(update_fields=["interview_absence_decided_by", "updated_at"])
+        application = self._plantilla_session_awaiting_ratings()
+        mark_interview_absent(
+            application,
+            self.secretariat,
+            notes="Candidate did not attend the scheduled sitting.",
+        )
+        exception = get_pending_attendance_exception(application)
+
+        self.assertFalse(user_can_manage_attendance_exception(self.secretariat, exception))
+        self.assertTrue(user_can_manage_attendance_exception(self.hrmpsb, exception))
+        with self.assertRaisesMessage(ValueError, "not currently assigned to you"):
+            resolve_attendance_absence(
+                exception,
+                self.secretariat,
+                AttendanceException.Outcome.RESCHEDULED,
+                "Support office should not decide under panel ownership.",
+            )
+        filed = record_attendance_letter_of_intent(
+            exception,
+            self.hrmpsb,
+            SimpleUploadedFile(
+                "panel-letter.pdf", b"%PDF-1.4 panel", content_type="application/pdf"
+            ),
+        )
+        self.assertIsNotNone(filed.letter_of_intent_id)
+
+    def test_default_policy_lets_owning_office_record_pre_completion_withdrawal(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        application.refresh_from_db()
+
+        self.assertEqual(application.current_handler_role, RecruitmentUser.Role.HRMPSB_MEMBER)
+        self.assertTrue(user_can_record_withdrawal(self.secretariat, application))
+        with self.captureOnCommitCallbacks(execute=True):
+            record_application_withdrawal(
+                application,
+                self.secretariat,
+                "The applicant sent the withdrawal request to the owning office.",
+            )
+        application.refresh_from_db()
+        self.assertEqual(application.status, RecruitmentApplication.Status.WITHDRAWN)
+
+    def test_policy_can_limit_withdrawal_recording_to_the_current_stage_owner(self):
+        policy = get_office_policy()
+        policy.withdrawal_recorded_by_owning_office = False
+        policy.save(update_fields=["withdrawal_recorded_by_owning_office", "updated_at"])
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        application.refresh_from_db()
+
+        self.assertFalse(user_can_record_withdrawal(self.secretariat, application))
+        self.assertTrue(user_can_record_withdrawal(self.hrmpsb, application))
+        with self.assertRaisesMessage(ValueError, "not currently assigned to you"):
+            record_application_withdrawal(
+                application,
+                self.secretariat,
+                "The applicant wrote to the owning office.",
+            )
+
     def test_support_role_can_encode_a_paper_rating_sheet(self):
         # SL-07: the rendered fallback form belongs to the Secretariat, but the generic
         # evidence uploader used to refuse them because HRMPSB owns the case at this stage —
@@ -15516,6 +15893,31 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         application.refresh_from_db()
         return application
 
+    def test_default_policy_keeps_implicit_cos_selection_round_single_slot(self):
+        self._cos_case_at_deliberation()
+        PositionPosting.objects.filter(pk=self.cos_position.pk).update(positions_to_fill=4)
+        self.cos_position.refresh_from_db()
+
+        selection_round = _open_implicit_cos_selection_round(
+            self.cos_position, self.hrm_chief
+        )
+
+        self.assertEqual(selection_round.slot_count, 1)
+
+    def test_policy_can_apply_positions_to_fill_to_implicit_cos_round(self):
+        self._cos_case_at_deliberation()
+        policy = get_office_policy()
+        policy.cos_positions_multi_slot_allowed = True
+        policy.save(update_fields=["cos_positions_multi_slot_allowed", "updated_at"])
+        self.cos_position.positions_to_fill = 3
+        self.cos_position.save(update_fields=["positions_to_fill", "updated_at"])
+
+        selection_round = _open_implicit_cos_selection_round(
+            self.cos_position, self.hrm_chief
+        )
+
+        self.assertEqual(selection_round.slot_count, 3)
+
     # ── SL-14 (COS): a recorded COS pick can be corrected ─────────────────────
     def _cos_pick_with_a_closed_sibling(self):
         """A finalized COS pick plus a sibling the pick closed as not selected."""
@@ -15542,6 +15944,64 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         winner.refresh_from_db()
         sibling.refresh_from_db()
         return pick, winner, sibling
+
+    def test_cos_rescind_cutoff_blocks_contract_then_never_allows_and_voids_tracking(self):
+        pick, winner, _sibling = self._cos_pick_with_a_closed_sibling()
+        completion = CompletionRecord.objects.create(
+            application=winner,
+            recruitment_case=winner.case,
+            tracked_by=self.hrm_chief,
+            completion_reference="COS-CONTRACT-2026-001",
+            completion_date=timezone.localdate(),
+            deadline=timezone.localdate() + timedelta(days=5),
+        )
+        CompletionRequirement.objects.create(
+            completion_record=completion,
+            item_label="Signed contract",
+            status=CompletionRequirement.RequirementStatus.COMPLETED,
+        )
+        refusal = (
+            "The appointment has been issued. A revocation at this point is handled as a "
+            "separation, not a rescission."
+        )
+
+        self.assertFalse(user_can_rescind_cos_vacancy_deliberation(self.hrm_chief, pick))
+        with self.assertRaisesMessage(ValueError, refusal):
+            rescind_cos_vacancy_deliberation(
+                pick, self.hrm_chief, "The engagement will not proceed."
+            )
+
+        policy = get_office_policy()
+        policy.rescind_cutoff = OfficePolicy.RescindCutoff.NEVER
+        policy.save(update_fields=["rescind_cutoff", "updated_at"])
+        self.assertTrue(user_can_rescind_cos_vacancy_deliberation(self.hrm_chief, pick))
+        with self.captureOnCommitCallbacks(execute=True):
+            rescind_cos_vacancy_deliberation(
+                pick, self.hrm_chief, "The engagement will not proceed."
+            )
+        completion.refresh_from_db()
+        self.assertTrue(completion.is_voided)
+        self.assertIsNotNone(completion.voided_at)
+        self.assertEqual(completion.void_reason, "The engagement will not proceed.")
+        self.assertFalse(completion.ready_for_closure)
+        self.assertIn("Voided by rescission", render_to_string(
+            "internal_includes/completion_locked_body.html",
+            {"completion_record": completion},
+        ))
+
+        with self.captureOnCommitCallbacks(execute=True):
+            save_cos_vacancy_deliberation(
+                self.cos_position,
+                self.hrm_chief,
+                winner.case.id,
+                "The engagement is proceeding after correction.",
+                finalize=True,
+            )
+        completion.refresh_from_db()
+        self.assertFalse(completion.is_voided)
+        self.assertEqual(completion.completion_reference, "")
+        self.assertIsNone(completion.completion_date)
+        self.assertFalse(completion.requirements.exists())
 
     def test_a_live_cos_pick_must_be_rescinded_before_the_vacancy_is_cancelled(self):
         pick, winner, sibling = self._cos_pick_with_a_closed_sibling()
@@ -18490,6 +18950,79 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
             outsider.case.case_status, RecruitmentCase.CaseStatus.REJECTED
         )
         self.assertEqual(outsider.case.current_stage, RecruitmentCase.Stage.CLOSED)
+
+    def test_plantilla_rescind_cutoff_blocks_appointment_then_never_allows_and_resets_tracking(self):
+        applications, report = self.prepare_ranked_level1_car(1)
+        winner = applications[0]
+        with self.captureOnCommitCallbacks(execute=True):
+            selection = record_final_selection(
+                application=winner,
+                actor=self.appointing,
+                cleaned_data={
+                    "selected_item": report.items.get(rank_order=1),
+                    "decision_notes": "Selected the board's recommended applicant.",
+                },
+            )
+        completion = CompletionRecord.objects.create(
+            application=winner,
+            recruitment_case=winner.case,
+            tracked_by=self.secretariat,
+            completion_reference="APPOINTMENT-2026-001",
+            completion_date=timezone.localdate(),
+            deadline=timezone.localdate() + timedelta(days=5),
+        )
+        CompletionRequirement.objects.create(
+            completion_record=completion,
+            item_label="Signed appointment paper",
+            status=CompletionRequirement.RequirementStatus.COMPLETED,
+        )
+        refusal = (
+            "The appointment has been issued. A revocation at this point is handled as a "
+            "separation, not a rescission."
+        )
+
+        self.assertFalse(user_can_rescind_final_selection(self.appointing, selection))
+        with self.assertRaisesMessage(ValueError, refusal):
+            rescind_final_selection(
+                selection, self.appointing, "The appointment will not proceed."
+            )
+        client = Client()
+        self.force_login_with_mfa(client, self.appointing)
+        detail = client.get(reverse("application-detail", kwargs={"pk": winner.pk}))
+        self.assertEqual(detail.status_code, 200)
+        self.assertContains(detail, refusal)
+        self.assertNotContains(
+            detail, reverse("final-selection-rescind", kwargs={"pk": winner.pk})
+        )
+
+        policy = get_office_policy()
+        policy.rescind_cutoff = OfficePolicy.RescindCutoff.NEVER
+        policy.save(update_fields=["rescind_cutoff", "updated_at"])
+        self.assertTrue(user_can_rescind_final_selection(self.appointing, selection))
+        with self.captureOnCommitCallbacks(execute=True):
+            rescind_final_selection(
+                selection, self.appointing, "The appointment will not proceed."
+            )
+        completion.refresh_from_db()
+        self.assertTrue(completion.is_voided)
+        self.assertFalse(completion.ready_for_closure)
+        self.assertIn("voided by rescission", completion.closure_blockers[0].lower())
+
+        with self.captureOnCommitCallbacks(execute=True):
+            replacement = record_final_selection(
+                application=winner,
+                actor=self.appointing,
+                cleaned_data={
+                    "selected_item": report.items.get(rank_order=1),
+                    "decision_notes": "Re-selected after correcting the rescission.",
+                },
+            )
+        self.assertEqual(replacement.supersedes_id, selection.id)
+        completion.refresh_from_db()
+        self.assertFalse(completion.is_voided)
+        self.assertEqual(completion.completion_reference, "")
+        self.assertIsNone(completion.completion_date)
+        self.assertFalse(completion.requirements.exists())
 
     def test_rescinding_a_selection_preserves_it_and_reopens_the_vacancy(self):
         # SL-14: the correction is additive. The original selection keeps every value it

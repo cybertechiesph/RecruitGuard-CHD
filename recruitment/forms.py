@@ -43,6 +43,7 @@ from .models import (
     InterviewRating,
     InterviewSession,
     InternalPasswordHistory,
+    OfficePolicy,
     PositionReference,
     PositionPosting,
     RecruitmentApplication,
@@ -68,6 +69,7 @@ from .services import (
     get_case_handoff_options,
     get_current_applicant_document_map,
     final_selection_recommended_case_ids,
+    get_office_policy,
 )
 from .upload_validation import validate_applicant_document_upload
 
@@ -1518,6 +1520,50 @@ class VacancyAssessmentWeightsUnlockForm(BootstrapFormMixin, forms.Form):
         return cleaned
 
 
+class OfficePolicyForm(BootstrapFormMixin, forms.ModelForm):
+    class Meta:
+        model = OfficePolicy
+        fields = [
+            "allow_extension_after_exam_scheduled",
+            "allow_resubmission_deadline_extension",
+            "interview_absence_decided_by",
+            "withdrawal_recorded_by_owning_office",
+            "rescind_cutoff",
+            "cos_positions_multi_slot_allowed",
+            "require_reason_for_suspend_close",
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
+
+
+class ResubmissionDeadlineExtensionForm(BootstrapFormMixin, forms.Form):
+    new_deadline = forms.DateField(
+        label="New resubmission deadline",
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+    reason = forms.CharField(
+        label="Reason for extending",
+        max_length=1000,
+        widget=forms.Textarea(attrs={"rows": 3}),
+    )
+
+    def __init__(self, *args, current_deadline=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.current_deadline = current_deadline
+        self.fields["new_deadline"].widget.attrs["min"] = timezone.localdate().isoformat()
+        self._apply_bootstrap()
+
+    def clean_new_deadline(self):
+        new_deadline = self.cleaned_data["new_deadline"]
+        if new_deadline < timezone.localdate():
+            raise forms.ValidationError("The new resubmission deadline cannot be in the past.")
+        if self.current_deadline and new_deadline <= self.current_deadline:
+            raise forms.ValidationError("The new deadline must be later than the current deadline.")
+        return new_deadline
+
+
 class CaseClosureForm(BootstrapFormMixin, forms.Form):
     closure_notes = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}))
 
@@ -2866,6 +2912,7 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
             "item_number",
             "branch",
             "intake_mode",
+            "positions_to_fill",
             "status",
             "publication_date",
             "opening_date",
@@ -2877,6 +2924,7 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
             "publication_date": forms.DateInput(attrs={"type": "date"}),
             "opening_date": forms.DateInput(attrs={"type": "date"}),
             "closing_date": forms.DateInput(attrs={"type": "date"}),
+            "positions_to_fill": forms.NumberInput(attrs={"min": "1", "max": "20"}),
             "qualification_reference": forms.Textarea(attrs={"rows": 3}),
         }
 
@@ -2916,6 +2964,21 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
             "Leave blank for COS (item numbers apply to Plantilla items only)."
         )
         self.fields["branch"].label = "Engagement Type"
+        office_policy = get_office_policy()
+        self.cos_positions_multi_slot_allowed = (
+            office_policy.cos_positions_multi_slot_allowed
+        )
+        if self.cos_positions_multi_slot_allowed:
+            self.fields["positions_to_fill"].label = "Positions to fill"
+            self.fields["positions_to_fill"].min_value = 1
+            self.fields["positions_to_fill"].max_value = 20
+            self.fields["positions_to_fill"].help_text = (
+                "For a single-batch COS posting, enter how many applicants may be selected "
+                "in its one selection round."
+            )
+        else:
+            self.fields.pop("positions_to_fill", None)
+            self.instance.positions_to_fill = 1
         if self.instance.pk:
             # SL2-01: edits may change vacancy metadata and dates, but lifecycle
             # transitions have one door: the guarded status actions (or the
@@ -2987,6 +3050,12 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
         elif branch == PositionPosting.Branch.COS:
             cleaned_data["item_number"] = ""
 
+        if not self.cos_positions_multi_slot_allowed:
+            self.instance.positions_to_fill = 1
+        elif branch != PositionPosting.Branch.COS:
+            cleaned_data["positions_to_fill"] = 1
+            self.instance.positions_to_fill = 1
+
         if position_reference is None:
             self.add_error("position_reference", "Select a position reference before creating the recruitment entry.")
         else:
@@ -3056,6 +3125,30 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
                     "The closing date cannot be set to a past date. To close a "
                     "posting, set its status to Closed instead.",
                 )
+            if (
+                self.instance.pk
+                and effective_closing_date != original_closing_date
+                and original_closing_date
+                and effective_closing_date > original_closing_date
+            ):
+                original_status = (
+                    PositionPosting.objects.filter(pk=self.instance.pk)
+                    .values_list("status", flat=True)
+                    .first()
+                )
+                if (
+                    original_status != PositionPosting.EntryStatus.DRAFT
+                    and ExamSchedule.objects.filter(
+                        recruitment_entry_id=self.instance.pk
+                    ).exists()
+                    and not get_office_policy().allow_extension_after_exam_scheduled
+                ):
+                    self.add_error(
+                        "closing_date",
+                        "The examination for this vacancy has already been scheduled. "
+                        "Extending the publication would create a second cohort; cancel "
+                        "and re-publish instead.",
+                    )
             # RD-7: a manual Close is a deliberate stop — extending the deadline
             # must not silently undo it (is_open_for_intake requires ACTIVE, so
             # the public page would show "Deadline extended" while intake stays

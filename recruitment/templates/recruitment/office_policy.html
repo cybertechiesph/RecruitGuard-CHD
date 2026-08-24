@@ -1,0 +1,51 @@
+{% extends "internal_base.html" %}
+
+{% block internal_title %}Office Policy{% endblock %}
+
+{% block breadcrumb %}
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<span class="rg-breadcrumb-current">Office Policy</span>
+{% endblock %}
+
+{% block content %}
+<div class="rg-page-header">
+    <div>
+        <p class="rg-eyebrow">Governance</p>
+        <h1 class="rg-page-title">Office Policy</h1>
+        <p class="rg-page-copy">
+            Set the recruitment rules that the office may choose. Workflow rules fixed by
+            law and role remain enforced separately.
+        </p>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-xl-9">
+        <form method="post" class="rg-icard" novalidate>
+            {% csrf_token %}
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+            {% endif %}
+            <div class="rg-icard__header">
+                <div>
+                    <h2 class="rg-icard__title">Current office choices</h2>
+                    <p class="rg-icard__subtitle">
+                        Every changed value is recorded in the audit log with its previous
+                        and new setting.
+                    </p>
+                </div>
+            </div>
+            <div class="row g-4">
+                {% for field in form %}
+                    <div class="col-12{% if field.field.widget.input_type != 'checkbox' %} col-lg-6{% endif %}">
+                        {% include "recruitment/includes/form_field.html" with field=field %}
+                    </div>
+                {% endfor %}
+            </div>
+            <div class="rg-form-actions mt-4">
+                <button type="submit" class="btn btn-rg-primary">Save Office Policy</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

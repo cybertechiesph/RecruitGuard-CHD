@@ -162,6 +162,29 @@
                     
                     {% include "internal_includes/state_empty.html" with title="Screening not yet available" copy="This step will open when the case is assigned to Secretariat or HRM Chief." %}
                 {% endif %}
+
+                {% if resubmission_deadline_extension_form %}
+                    <details class="rg-icard mt-3" id="resubmission-deadline-extension">
+                        <summary class="rg-icard__title" style="cursor:pointer; padding:0.25rem 0;">
+                            Extend resubmission deadline
+                        </summary>
+                        <p class="rg-icard__subtitle">
+                            Current deadline:
+                            <strong>{{ current_screening_record.resubmission_deadline|date:"F d, Y" }}</strong>.
+                            The new date and reason are recorded, and the applicant receives one reminder.
+                        </p>
+                        <form method="post"
+                              action="{% url 'resubmission-deadline-extend' application.pk %}"
+                              novalidate>
+                            {% csrf_token %}
+                            {% include "recruitment/includes/form_field.html" with field=resubmission_deadline_extension_form.new_deadline %}
+                            {% include "recruitment/includes/form_field.html" with field=resubmission_deadline_extension_form.reason %}
+                            <button type="submit" class="btn btn-outline-secondary btn-sm">
+                                Extend deadline and send reminder
+                            </button>
+                        </form>
+                    </details>
+                {% endif %}
             </div>
             {% endif %}
 

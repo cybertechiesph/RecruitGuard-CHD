@@ -6,8 +6,7 @@ person withdrawing before appointment — into the official truth forever. Resci
 edits or deletes the original: it marks it rescinded, keeps every recorded value, and frees
 the vacancy so a replacement decision can be recorded as a new, linked record.
 
-The cutoff (how late a selection may be rescinded) and whether the matter returns to the
-board are office policy and are deliberately not encoded — the client has not settled them.
+Office Policy supplies the cutoff; the original selection and its correction trail stay intact.
 
 Inputs:
   final_selection_rescind_form : FinalSelectionRescindForm | None
@@ -47,6 +46,11 @@ Inputs:
         </button>
     </form>
 </details>
+{% elif final_selection_rescind_unavailable_message %}
+<div class="rg-icard mb-3" id="final-selection-rescind">
+    <h3 class="rg-icard__title">Rescind this selection</h3>
+    <p class="rg-note mb-0">{{ final_selection_rescind_unavailable_message }}</p>
+</div>
 {% endif %}
 
 {% if final_selection_history %}

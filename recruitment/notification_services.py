@@ -422,6 +422,7 @@ def _build_document_resubmission_fallback_body(
     requested_documents,
     workflow_remarks="",
     resubmission_deadline=None,
+    deadline_was_extended=False,
 ):
     item_label = "item" if len(requested_documents) == 1 else "items"
     lines = [
@@ -441,7 +442,15 @@ def _build_document_resubmission_fallback_body(
         lines.append(f"  Instruction: {document['remarks']}")
     if resubmission_deadline:
         lines.extend(
-            ["", f"Please resubmit on or before {resubmission_deadline:%B %d, %Y}."]
+            [
+                "",
+                (
+                    "The resubmission deadline has been extended. "
+                    if deadline_was_extended
+                    else ""
+                )
+                + f"Please resubmit on or before {resubmission_deadline:%B %d, %Y}.",
+            ]
         )
     remarks = (workflow_remarks or "").strip()
     if remarks:
@@ -465,6 +474,7 @@ def _build_document_resubmission_request_notification(
     document_reviews,
     workflow_remarks="",
     resubmission_deadline=None,
+    deadline_was_extended=False,
 ):
     requested_documents = [
         {
@@ -483,6 +493,7 @@ def _build_document_resubmission_request_notification(
                 "workflow_remarks": (workflow_remarks or "").strip(),
                 "status_link": build_applicant_status_url(application),
                 "resubmission_deadline": resubmission_deadline,
+                "deadline_was_extended": deadline_was_extended,
             },
         ).strip()
     except Exception:
@@ -500,6 +511,7 @@ def _build_document_resubmission_request_notification(
             requested_documents,
             workflow_remarks=workflow_remarks,
             resubmission_deadline=resubmission_deadline,
+            deadline_was_extended=deadline_was_extended,
         )
     return (
         f"DOH–CHD CALABARZON Recruitment Portal document resubmission needed: {application.position.title}",
@@ -1161,6 +1173,7 @@ def queue_document_resubmission_request_notification(
     document_reviews,
     workflow_remarks="",
     resubmission_deadline=None,
+    deadline_was_extended=False,
 ):
     document_reviews = list(document_reviews or [])
     if not document_reviews:
@@ -1170,6 +1183,7 @@ def queue_document_resubmission_request_notification(
         document_reviews,
         workflow_remarks=workflow_remarks,
         resubmission_deadline=resubmission_deadline,
+        deadline_was_extended=deadline_was_extended,
     )
     return queue_notification(
         application,
@@ -1189,6 +1203,12 @@ def queue_document_resubmission_request_notification(
             "resubmission_deadline": (
                 resubmission_deadline.isoformat() if resubmission_deadline else ""
             ),
+            "resubmission_deadline_display": (
+                resubmission_deadline.strftime("%B %d, %Y")
+                if resubmission_deadline
+                else ""
+            ),
+            "deadline_was_extended": deadline_was_extended,
         },
     )
 
