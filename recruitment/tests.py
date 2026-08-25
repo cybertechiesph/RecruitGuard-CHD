@@ -7202,47 +7202,6 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
         self.assertIn("Qualification Standards", notification.body)
         self.assertNotIn("submitted document(s)", notification.body)
 
-    def test_not_qualified_notice_counts_flagged_document_deficiencies_without_details(self):
-        application = self.make_application(self.level1_position)
-        self.verify_application_for_submission(application)
-        submit_application(application, self.applicant)
-        requirement = get_applicant_document_requirements(application)[0]
-        client = Client()
-        self.force_login_with_mfa(client, self.secretariat)
-
-        with self.captureOnCommitCallbacks(execute=True):
-            response = client.post(
-                reverse("screening-review", kwargs={"pk": application.pk}),
-                {
-                    **self.screening_payload(
-                        qualification_outcome=(
-                            ScreeningRecord.QualificationOutcome.NOT_QUALIFIED
-                        ),
-                        screening_notes="Does not meet the Qualification Standards.",
-                    ),
-                    **self.screening_document_status_payload(
-                        application,
-                        overrides={
-                            requirement.code: (
-                                ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
-                            )
-                        },
-                    ),
-                    f"document_remarks__{requirement.code}": "Pages are incomplete.",
-                    "operation": "finalize",
-                },
-            )
-        self.assertEqual(response.status_code, 302)
-        notification = NotificationLog.objects.get(
-            application=application,
-            notification_type=NotificationLog.NotificationType.NON_SELECTED_APPLICANT,
-        )
-        self.assertIn(
-            "The review also noted deficiencies in 1 submitted document(s).",
-            notification.body,
-        )
-        self.assertNotIn("Pages are incomplete", notification.body)
-
     def test_future_stage_posts_are_blocked_until_the_current_task_is_finalized(self):
         application = self.make_application(self.level2_position)
         self.verify_application_for_submission(application)
@@ -7288,6 +7247,47 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         }
         payload.update(overrides)
         return payload
+
+    def test_not_qualified_notice_counts_flagged_document_deficiencies_without_details(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        requirement = get_applicant_document_requirements(application)[0]
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = client.post(
+                reverse("screening-review", kwargs={"pk": application.pk}),
+                {
+                    **self.screening_payload(
+                        qualification_outcome=(
+                            ScreeningRecord.QualificationOutcome.NOT_QUALIFIED
+                        ),
+                        screening_notes="Does not meet the Qualification Standards.",
+                    ),
+                    **self.screening_document_status_payload(
+                        application,
+                        overrides={
+                            requirement.code: (
+                                ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
+                            )
+                        },
+                    ),
+                    f"document_remarks__{requirement.code}": "Pages are incomplete.",
+                    "operation": "finalize",
+                },
+            )
+        self.assertEqual(response.status_code, 302)
+        notification = NotificationLog.objects.get(
+            application=application,
+            notification_type=NotificationLog.NotificationType.NON_SELECTED_APPLICANT,
+        )
+        self.assertIn(
+            "The review also noted deficiencies in 1 submitted document(s).",
+            notification.body,
+        )
+        self.assertNotIn("Pages are incomplete", notification.body)
 
     def _awaiting_resubmission_application(self):
         application = self.make_application(self.level1_position)
