@@ -23,6 +23,8 @@ from .models import (
     RecruitmentApplication,
     RecruitmentCase,
     RecruitmentUser,
+    ScreeningDocumentReview,
+    ScreeningRecord,
 )
 from .applicant_labels import applicant_branch_label, applicant_status_label
 
@@ -74,6 +76,8 @@ NOTIFICATION_EMAIL_TEMPLATES = {
     NotificationLog.NotificationType.SUBMISSION_ACKNOWLEDGMENT: "email/application_received.html",
     NotificationLog.NotificationType.SELECTED_APPLICANT: "email/selected_applicant.html",
     NotificationLog.NotificationType.NON_SELECTED_APPLICANT: "email/non_selected_applicant.html",
+    NotificationLog.NotificationType.SELECTION_UNDER_REVIEW: "email/selection_under_review.html",
+    NotificationLog.NotificationType.APPLICANT_CONTACT_UPDATED: "email/applicant_contact_updated.html",
     NotificationLog.NotificationType.DOCUMENT_RESUBMISSION_REQUEST: "email/document_resubmission_request.html",
     NotificationLog.NotificationType.INTERVIEW_SESSION_SCHEDULED: "email/interview_scheduled_internal.html",
     NotificationLog.NotificationType.EXAM_INVITATION: "email/exam_invitation.html",
@@ -380,13 +384,91 @@ def _build_non_selected_notification(application, cut_at_screening=False, exam_s
         f"Dear {application.applicant_display_name},",
         "",
         result_line,
-        f"Application ID: {application.reference_number}",
-        "",
-        closing,
     ]
+    if cut_at_screening:
+        screening = (
+            ScreeningRecord.objects.filter(
+                application=application,
+                is_finalized=True,
+                qualification_outcome=ScreeningRecord.QualificationOutcome.NOT_QUALIFIED,
+            )
+            .order_by("-updated_at", "-pk")
+            .first()
+        )
+        deficient_count = (
+            ScreeningDocumentReview.objects.filter(
+                screening_record=screening,
+                status=(
+                    ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
+                ),
+            ).count()
+            if screening
+            else 0
+        )
+        if deficient_count:
+            lines.extend(
+                [
+                    "",
+                    (
+                        "The review also noted deficiencies in "
+                        f"{deficient_count} submitted document(s)."
+                    ),
+                ]
+            )
+    lines.extend(
+        [
+            f"Application ID: {application.reference_number}",
+            "",
+            closing,
+        ]
+    )
     _append_status_link(lines, application)
     return (
         f"DOH–CHD CALABARZON Recruitment Portal application result: {application.position.title}",
+        "\n".join(lines),
+    )
+
+
+def _build_selection_under_review_notification(application):
+    lines = [
+        f"Dear {application.applicant_display_name},",
+        "",
+        (
+            f"The earlier selection notice for your application for "
+            f"{application.position.title} is no longer final."
+        ),
+        (
+            "The office is re-deliberating the vacancy. You will be informed when a "
+            "new decision is recorded."
+        ),
+        f"Application ID: {application.reference_number}",
+    ]
+    _append_status_link(lines, application)
+    return (
+        f"Update on your application for {application.position.title}",
+        "\n".join(lines),
+    )
+
+
+def _build_applicant_contact_updated_notification(application, *, is_new_address):
+    lines = [
+        f"Dear {application.applicant_display_name},",
+        "",
+        "The contact information on your recruitment application was corrected by the office.",
+    ]
+    if is_new_address:
+        lines.append("Future recruitment notices will be sent using the updated contact details.")
+    else:
+        lines.append("Future recruitment notices will no longer be sent to this email address.")
+    lines.extend(
+        [
+            "If you did not request or expect this correction, contact the HRM Unit promptly.",
+            f"Application ID: {application.reference_number}",
+        ]
+    )
+    _append_status_link(lines, application)
+    return (
+        f"Contact information updated for {application.position.title}",
         "\n".join(lines),
     )
 
@@ -840,6 +922,76 @@ def queue_non_selected_applicant_notification(
             "status_link": build_applicant_status_url(application),
         },
     )
+
+
+def queue_selection_under_review_notification(application, actor=None):
+    subject, body = _build_selection_under_review_notification(application)
+    return queue_notification(
+        application,
+        notification_type=NotificationLog.NotificationType.SELECTION_UNDER_REVIEW,
+        actor=actor,
+        subject=subject,
+        body=body,
+        metadata={
+            "reference_number": application.reference_number,
+            "status": application.status,
+            "branch": application.branch,
+            "status_link": build_applicant_status_url(application),
+        },
+    )
+
+
+def queue_applicant_contact_updated_notifications(
+    application,
+    *,
+    actor=None,
+    old_email,
+    new_email,
+):
+    notifications = []
+    old_email = (old_email or "").strip().lower()
+    new_email = (new_email or "").strip().lower()
+    if old_email and old_email != new_email:
+        subject, body = _build_applicant_contact_updated_notification(
+            application,
+            is_new_address=False,
+        )
+        notifications.append(
+            queue_notification(
+                application,
+                notification_type=NotificationLog.NotificationType.APPLICANT_CONTACT_UPDATED,
+                actor=actor,
+                subject=subject,
+                body=body,
+                recipient_email=old_email,
+                metadata={
+                    "reference_number": application.reference_number,
+                    "status_link": build_applicant_status_url(application),
+                    "copy": "previous_address",
+                },
+            )
+        )
+    subject, body = _build_applicant_contact_updated_notification(
+        application,
+        is_new_address=True,
+    )
+    notifications.append(
+        queue_notification(
+            application,
+            notification_type=NotificationLog.NotificationType.APPLICANT_CONTACT_UPDATED,
+            actor=actor,
+            subject=subject,
+            body=body,
+            recipient_email=new_email,
+            metadata={
+                "reference_number": application.reference_number,
+                "status_link": build_applicant_status_url(application),
+                "copy": "updated_address",
+                "new_email": new_email,
+            },
+        )
+    )
+    return notifications
 
 
 def _build_withdrawal_acknowledgement(application, reason=""):

@@ -63,6 +63,7 @@ from .requirements import (
 from .services import (
     FINAL_SELECTION_OUT_OF_CONTENTION_STATUSES,
     PENDING_RESUBMISSION_SCREENING_FINALIZE_MESSAGE,
+    REAPPLICATION_ELIGIBLE_TERMINAL_STATUSES,
     TOP_FIVE_SELECTION_LIMIT,
     compute_competency_rating_score,
     get_available_actions,
@@ -72,13 +73,14 @@ from .services import (
     get_office_policy,
 )
 from .upload_validation import validate_applicant_document_upload
+from .applicant_contact import (
+    APPLICANT_MOBILE_ERROR_MESSAGE,
+    normalize_philippine_mobile_number,
+)
 
 
 APPLICANT_NAME_ALLOWED_PATTERN = r"^(?=.*[^\W\d_])(?:[^\W\d_]|[ .'-])+$"
 APPLICANT_NAME_ERROR_MESSAGE = "Please enter your name using letters only."
-APPLICANT_MOBILE_ERROR_MESSAGE = (
-    "Enter a Philippine mobile number, like 0917 123 4567."
-)
 APPLICANT_QUALIFICATION_SUMMARY_MAX_LENGTH = 1000
 APPLICANT_QUALIFICATION_SUMMARY_LENGTH_ERROR_MESSAGE = (
     "Please shorten this to 1,000 characters or less."
@@ -93,20 +95,6 @@ APPLICANT_COVER_LETTER_LENGTH_ERROR_MESSAGE = (
 )
 
 _APPLICANT_NAME_ALLOWED_RE = re.compile(APPLICANT_NAME_ALLOWED_PATTERN, re.UNICODE)
-_APPLICANT_MOBILE_SEPARATORS_RE = re.compile(r"[ ()-]")
-_APPLICANT_LOCAL_MOBILE_RE = re.compile(r"09\d{9}")
-_APPLICANT_INTERNATIONAL_MOBILE_RE = re.compile(r"(?:\+63|63)9\d{9}")
-
-
-def normalize_philippine_mobile_number(value):
-    compact_value = _APPLICANT_MOBILE_SEPARATORS_RE.sub("", (value or "").strip())
-    if _APPLICANT_LOCAL_MOBILE_RE.fullmatch(compact_value):
-        return f"+63{compact_value[1:]}"
-    if _APPLICANT_INTERNATIONAL_MOBILE_RE.fullmatch(compact_value):
-        return compact_value if compact_value.startswith("+") else f"+{compact_value}"
-    raise ValueError(APPLICANT_MOBILE_ERROR_MESSAGE)
-
-
 class BootstrapFormMixin:
     def _apply_bootstrap(self):
         for field in self.fields.values():
@@ -805,7 +793,7 @@ class ApplicantPortalIntakeForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form
                 position=self.entry,
                 applicant_email__iexact=applicant_email,
                 submitted_at__isnull=False,
-            ).exists()
+            ).exclude(status__in=REAPPLICATION_ELIGIBLE_TERMINAL_STATUSES).exists()
             if duplicate_exists:
                 self.add_error(
                     "email",
@@ -1305,9 +1293,11 @@ class CompletionRequirementForm(BootstrapFormMixin, forms.ModelForm):
         fields = [
             "item_label",
             "status",
+            "completed_on",
             "notes",
         ]
         widgets = {
+            "completed_on": forms.DateInput(attrs={"type": "date"}),
             "notes": forms.Textarea(attrs={"rows": 2}),
         }
 
@@ -1315,9 +1305,20 @@ class CompletionRequirementForm(BootstrapFormMixin, forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["item_label"].label = "Requirement Item"
         self.fields["status"].label = "Status"
+        self.fields["completed_on"].label = "Received on"
+        self.fields["completed_on"].required = False
+        self.fields["completed_on"].help_text = (
+            "When the hard copy was actually received. Leave blank for today."
+        )
         self.fields["notes"].label = "Notes"
         self.fields["notes"].required = False
         self._apply_bootstrap()
+
+    def clean_completed_on(self):
+        completed_on = self.cleaned_data.get("completed_on")
+        if completed_on and completed_on > timezone.localdate():
+            raise forms.ValidationError("The received date cannot be in the future.")
+        return completed_on
 
 
 class BaseCompletionRequirementFormSet(BaseInlineFormSet):
@@ -1535,8 +1536,28 @@ class OfficePolicyForm(BootstrapFormMixin, forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        labels = {
+            "allow_extension_after_exam_scheduled": (
+                "Allow closing-date extension after the exam is scheduled"
+            ),
+            "allow_resubmission_deadline_extension": (
+                "Resubmission deadline may be extended"
+            ),
+            "interview_absence_decided_by": "Interview absences are decided by",
+            "withdrawal_recorded_by_owning_office": (
+                "Owning office may record withdrawals"
+            ),
+            "rescind_cutoff": "When rescission is no longer allowed",
+            "cos_positions_multi_slot_allowed": (
+                "COS postings may fill multiple positions"
+            ),
+            "require_reason_for_suspend_close": (
+                "Suspend and Close require a reason"
+            ),
+        }
+        for field_name, label in labels.items():
+            self.fields[field_name].label = label
         self._apply_bootstrap()
-
 
 class ResubmissionDeadlineExtensionForm(BootstrapFormMixin, forms.Form):
     new_deadline = forms.DateField(
@@ -2510,6 +2531,44 @@ class ApplicationWithdrawalForm(BootstrapFormMixin, forms.Form):
         return uploaded_file
 
 
+class ApplicantContactUpdateForm(BootstrapFormMixin, forms.Form):
+    new_email = forms.EmailField(label="New email address")
+    new_phone = forms.CharField(
+        label="Phone number",
+        required=False,
+        help_text="Philippine mobile number; leave blank to clear the number on file.",
+    )
+    reason = forms.CharField(
+        label="Reason for correction",
+        widget=forms.Textarea(attrs={"rows": 3}),
+    )
+
+    def __init__(self, *args, application=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if application is not None and not self.is_bound:
+            self.initial.setdefault("new_email", application.applicant_email)
+            self.initial.setdefault("new_phone", application.applicant_phone)
+        self._apply_bootstrap()
+
+    def clean_new_email(self):
+        return self.cleaned_data["new_email"].strip().lower()
+
+    def clean_new_phone(self):
+        value = (self.cleaned_data.get("new_phone") or "").strip()
+        if not value:
+            return ""
+        try:
+            return normalize_philippine_mobile_number(value)
+        except ValueError as exc:
+            raise forms.ValidationError(str(exc)) from exc
+
+    def clean_reason(self):
+        reason = (self.cleaned_data.get("reason") or "").strip()
+        if not reason:
+            raise forms.ValidationError("Record why the applicant contact was corrected.")
+        return reason
+
+
 class AttendanceLetterOfIntentForm(BootstrapFormMixin, forms.Form):
     """SL-06: file the applicant's letter of intent against a recorded absence."""
 
@@ -2831,8 +2890,8 @@ class PositionDocumentRequirementsForm(forms.Form):
     """Per-vacancy checklist: which applicant documents apply and whether each is required.
 
     Renders one row per branch catalog document. The minimum required documents and any
-    posting that is already live are rendered as disabled fields, so Django ignores posted
-    values and cleans them to their initial state.
+    posting that is already live cannot add, remove, or strengthen requirements. A live
+    posting may still relax an existing required item to optional.
     """
 
     APPLIES_PREFIX = "doc_applies__"
@@ -2850,6 +2909,7 @@ class PositionDocumentRequirementsForm(forms.Form):
         existing = {}
         if posting is not None and posting.pk:
             existing = {row.document_code: row for row in posting.document_requirements.all()}
+        has_saved_configuration = bool(existing)
         self.rows = []
         for requirement in catalog:
             code = requirement.code
@@ -2882,12 +2942,24 @@ class PositionDocumentRequirementsForm(forms.Form):
                     existing_row.is_required if existing_row is not None else requirement.is_required
                 )
                 level_name = self.LEVEL_PREFIX + code
+                level_locked = forced_min or (
+                    locked
+                    and (
+                        (
+                            has_saved_configuration
+                            and (existing_row is None or not existing_row.is_required)
+                        )
+                        or (
+                            not has_saved_configuration and not requirement.is_required
+                        )
+                    )
+                )
                 self.fields[level_name] = forms.ChoiceField(
                     choices=self.LEVEL_CHOICES,
                     required=False,
                     initial="required" if (forced_min or level_required) else "optional",
                     widget=forms.RadioSelect,
-                    disabled=forced_min or locked,
+                    disabled=level_locked,
                 )
                 row["level_field"] = self[level_name]
             self.rows.append(row)
@@ -2897,7 +2969,13 @@ class PositionDocumentRequirementsForm(forms.Form):
         for row in self.rows:
             code = row["requirement"].code
             applies = row["forced_min"] or bool(self.cleaned_data.get(self.APPLIES_PREFIX + code))
-            level_value = self.cleaned_data.get(self.LEVEL_PREFIX + code)
+            level_name = self.LEVEL_PREFIX + code
+            level_value = self.cleaned_data.get(level_name)
+            # Programmatic edit POSTs created before the live-relaxation control existed
+            # may omit the newly enabled radio. Treat omission as no change; an actual
+            # browser submission carries either "required" or "optional".
+            if self.locked and level_name not in self.data and level_name in self.fields:
+                level_value = self.fields[level_name].initial
             selections.append(
                 {
                     "code": code,

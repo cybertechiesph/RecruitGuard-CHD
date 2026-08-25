@@ -69,6 +69,36 @@
                 </strong>
             </div>
         </div>
+        {% if applicant_contact_form %}
+        <details class="mt-3">
+            <summary class="btn btn-outline-secondary btn-sm">Update contact details</summary>
+            <form method="post" action="{% url 'applicant-contact-update' application.pk %}" class="border rounded p-3 mt-2">
+                {% csrf_token %}
+                {% if applicant_contact_form.non_field_errors %}
+                    <div class="alert alert-danger py-2">{{ applicant_contact_form.non_field_errors }}</div>
+                {% endif %}
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label" for="{{ applicant_contact_form.new_email.id_for_label }}">{{ applicant_contact_form.new_email.label }}</label>
+                        {{ applicant_contact_form.new_email }}
+                        {% for error in applicant_contact_form.new_email.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="{{ applicant_contact_form.new_phone.id_for_label }}">{{ applicant_contact_form.new_phone.label }}</label>
+                        {{ applicant_contact_form.new_phone }}
+                        {% if applicant_contact_form.new_phone.help_text %}<div class="form-text">{{ applicant_contact_form.new_phone.help_text }}</div>{% endif %}
+                        {% for error in applicant_contact_form.new_phone.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="{{ applicant_contact_form.reason.id_for_label }}">{{ applicant_contact_form.reason.label }}</label>
+                        {{ applicant_contact_form.reason }}
+                        {% for error in applicant_contact_form.reason.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-rg-primary btn-sm mt-3">Save corrected contact</button>
+            </form>
+        </details>
+        {% endif %}
         <div class="rg-applicant-panel__field">
             <span class="rg-applicant-panel__label">Qualification summary</span>
             <p>

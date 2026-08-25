@@ -102,7 +102,7 @@
                     <h2 class="rg-form-section__title">5. Application Documents</h2>
                     <p class="rg-form-section__copy">Choose which documents applicants must provide for this vacancy and whether each is required or optional. The Cover/Application Letter and Personal Data Sheet are always required.</p>
                     {% if documents_form.locked %}
-                        <div class="alert alert-warning">This recruitment entry already has submitted applications or a linked recruitment case, so its application documents are locked and cannot be changed.</div>
+                        <div class="alert alert-warning">This checklist is live. Existing required documents may be relaxed to optional, but documents cannot be added or removed and optional documents cannot be made required.</div>
                     {% endif %}
                     <div class="rg-doc-checklist">
                         {% for row in documents_form.rows %}

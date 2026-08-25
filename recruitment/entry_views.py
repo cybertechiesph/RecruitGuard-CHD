@@ -100,10 +100,6 @@ class _RecruitmentEntryDocumentMixin:
             changed_fields=form.changed_data,
         )
         self.object = posting
-        if posting.is_live_for_metadata_lock:
-            # Configuration is locked once the posting is live; keep the existing rows.
-            messages.success(self.request, self.success_message)
-            return redirect(self.get_success_url())
         documents_form = self._build_documents_form(self.request.POST)
         if not documents_form.is_valid():
             return self.render_to_response(

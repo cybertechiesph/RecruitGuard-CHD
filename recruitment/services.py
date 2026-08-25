@@ -19,6 +19,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 from django.core.mail import EmailMultiAlternatives
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Max, Min, Q
@@ -32,6 +33,7 @@ from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 
 from .email_branding import email_branding_context
+from .applicant_contact import normalize_philippine_mobile_number
 from .request_context import current_session_tag
 from .models import (
     AUDIT_ACTION_CATEGORIES,
@@ -92,6 +94,8 @@ from .notification_services import (
     queue_interview_batch_panel_digest_notifications,
     queue_interview_session_scheduled_notifications,
     queue_non_selected_applicant_notification,
+    queue_applicant_contact_updated_notifications,
+    queue_selection_under_review_notification,
     queue_selected_applicant_notification,
     queue_submission_acknowledgment_notification,
     queue_vacancy_cancellation_notification,
@@ -112,6 +116,14 @@ from .upload_validation import (
 
 
 logger = logging.getLogger(__name__)
+
+
+REAPPLICATION_ELIGIBLE_TERMINAL_STATUSES = frozenset(
+    {
+        RecruitmentApplication.Status.WITHDRAWN,
+        RecruitmentApplication.Status.VACANCY_CANCELLED,
+    }
+)
 
 
 PENDING_RESUBMISSION_HANDOFF_MESSAGE = (
@@ -2611,6 +2623,90 @@ def _completion_handler_role(application):
     if application.level == PositionPosting.Level.LEVEL_1:
         return RecruitmentUser.Role.SECRETARIAT
     return RecruitmentUser.Role.HRM_CHIEF
+
+
+def user_can_update_applicant_contact(user, application):
+    case = getattr(application, "case", None)
+    if not getattr(user, "is_authenticated", False) or not user.is_active:
+        return False
+    if case is None or case.current_stage == RecruitmentCase.Stage.CLOSED:
+        return False
+    return user.role == _completion_handler_role(application)
+
+
+@transaction.atomic
+def update_applicant_contact(
+    application,
+    actor,
+    new_email,
+    new_phone,
+    reason,
+):
+    if not user_can_update_applicant_contact(actor, application):
+        raise ValueError("Only the case's owning office may correct applicant contact details.")
+
+    normalized_email = normalize_applicant_email(new_email)
+    try:
+        validate_email(normalized_email)
+    except ValidationError as exc:
+        raise ValueError("Enter a valid applicant email address.") from exc
+
+    normalized_phone = ""
+    if (new_phone or "").strip():
+        try:
+            normalized_phone = normalize_philippine_mobile_number(new_phone)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValueError("Record why the applicant contact was corrected.")
+
+    old_email = normalize_applicant_email(application.applicant_email)
+    old_phone = (application.applicant_phone or "").strip()
+    if normalized_email == old_email and normalized_phone == old_phone:
+        raise ValueError("The applicant contact details are unchanged.")
+
+    duplicate_exists = (
+        RecruitmentApplication.objects.filter(
+            position=application.position,
+            applicant_email__iexact=normalized_email,
+        )
+        .exclude(pk=application.pk)
+        .exclude(status__in=REAPPLICATION_ELIGIBLE_TERMINAL_STATUSES)
+        .exists()
+    )
+    if duplicate_exists:
+        raise ValueError(
+            "Another active application for this vacancy already uses that email address."
+        )
+
+    application.applicant_email = normalized_email
+    application.applicant_phone = normalized_phone
+    application.save(
+        update_fields=["applicant_email", "applicant_phone", "updated_at"]
+    )
+
+    record_audit_event(
+        application=application,
+        actor=actor,
+        action=AuditLog.Action.APPLICANT_CONTACT_UPDATED,
+        description="Corrected the applicant's contact information.",
+        metadata={
+            "old_email": old_email,
+            "new_email": normalized_email,
+            "old_phone": old_phone,
+            "new_phone": normalized_phone,
+            "reason": reason,
+        },
+    )
+    notifications = queue_applicant_contact_updated_notifications(
+        application,
+        actor=actor,
+        old_email=old_email,
+        new_email=normalized_email,
+    )
+    return application, notifications
 
 
 def _handler_role_from_stage(stage, application=None):
@@ -8084,6 +8180,7 @@ def get_reusable_public_application_for_applicant(entry, applicant):
             position=entry,
             applicant=applicant,
         )
+        .exclude(status__in=REAPPLICATION_ELIGIBLE_TERMINAL_STATUSES)
         .order_by("-updated_at", "-created_at")
         .first()
     )
@@ -8331,7 +8428,7 @@ def _upsert_public_application_draft(
         position=entry,
         applicant_email__iexact=applicant_email,
         submitted_at__isnull=False,
-    ).exists()
+    ).exclude(status__in=REAPPLICATION_ELIGIBLE_TERMINAL_STATUSES).exists()
     if existing_submitted_application:
         raise ValueError(
             "You have already submitted an application for this position using this email address."
@@ -8402,7 +8499,7 @@ def _upsert_public_application_draft(
     try:
         application.save()
     except IntegrityError as exc:
-        if "unique_application_per_applicant_position" not in str(exc):
+        if "unique_active_application_per_applicant_position" not in str(exc):
             raise
         raise ValueError(
             "An application for this recruitment entry already exists for this applicant."
@@ -10300,6 +10397,8 @@ def rescind_final_selection(selection, actor, reason, *, reference=""):
         body=reason,
         exclude_user_ids={actor.id},
     )
+    for application in restored:
+        queue_selection_under_review_notification(application, actor=actor)
     return selection, restored
 
 
@@ -10542,6 +10641,8 @@ def rescind_cos_vacancy_deliberation(pick, actor, reason, *, reference=""):
         body=reason,
         exclude_user_ids={actor.id},
     )
+    for application in restored:
+        queue_selection_under_review_notification(application, actor=actor)
     return pick, restored
 
 
@@ -12876,12 +12977,6 @@ def set_position_document_requirements(posting, selections, actor):
     stays required; conditional documents (performance rating) are stored as optional because
     their requiredness is applicant-driven.
     """
-    if posting.is_live_for_metadata_lock:
-        raise ValidationError(
-            "Application document requirements are locked because this recruitment entry has "
-            "submitted applications or linked recruitment cases."
-        )
-
     branch_catalog = APPLICANT_DOCUMENT_REQUIREMENTS_BY_BRANCH.get(posting.branch, ())
     selection_by_code = {selection["code"]: selection for selection in selections}
 
@@ -12904,6 +12999,93 @@ def set_position_document_requirements(posting, selections, actor):
         desired[code] = is_required
 
     existing = {row.document_code: row for row in posting.document_requirements.all()}
+    if posting.is_live_for_metadata_lock:
+        if not existing:
+            # Legacy postings without rows still expose the branch catalog as their
+            # effective checklist. Preserve an ordinary metadata edit as a no-op; if an
+            # existing catalog requirement is relaxed, materialize that effective set.
+            effective_codes = {requirement.code for requirement in branch_catalog}
+            if set(desired) != effective_codes:
+                raise ValidationError(
+                    "A live application checklist may only relax an existing required "
+                    "document to optional; documents cannot be added or removed."
+                )
+            relaxed_codes = sorted(
+                requirement.code
+                for requirement in branch_catalog
+                if requirement.is_required
+                and requirement.code not in MIN_REQUIRED_DOCUMENT_CODES
+                and not desired[requirement.code]
+            )
+            if not relaxed_codes:
+                return
+            PositionDocumentRequirement.objects.bulk_create(
+                PositionDocumentRequirement(
+                    posting=posting,
+                    document_code=code,
+                    is_required=is_required,
+                    order=order_by_code[code],
+                )
+                for code, is_required in desired.items()
+            )
+            record_system_audit_event(
+                actor=actor,
+                action=AuditLog.Action.RECRUITMENT_ENTRY_UPDATED,
+                description=f"Relaxed application documents for '{posting.job_code}'.",
+                metadata={
+                    "entry_id": posting.id,
+                    "entry_code": posting.job_code,
+                    "relaxed_codes": relaxed_codes,
+                    "document_codes": sorted(desired),
+                    "required_codes": sorted(
+                        code for code, required in desired.items() if required
+                    ),
+                },
+            )
+            return
+        existing_codes = set(existing)
+        desired_codes = set(desired)
+        if desired_codes != existing_codes:
+            raise ValidationError(
+                "A live application checklist may only relax an existing required document "
+                "to optional; documents cannot be added or removed."
+            )
+        strengthened_codes = sorted(
+            code
+            for code, row in existing.items()
+            if not row.is_required and desired[code]
+        )
+        if strengthened_codes:
+            raise ValidationError(
+                "A live application checklist may only be relaxed; an optional document "
+                "cannot be made required."
+            )
+        relaxed_codes = sorted(
+            code
+            for code, row in existing.items()
+            if row.is_required and not desired[code]
+        )
+        if relaxed_codes:
+            PositionDocumentRequirement.objects.filter(
+                posting=posting,
+                document_code__in=relaxed_codes,
+            ).update(is_required=False, updated_at=timezone.now())
+            record_system_audit_event(
+                actor=actor,
+                action=AuditLog.Action.RECRUITMENT_ENTRY_UPDATED,
+                description=f"Relaxed application documents for '{posting.job_code}'.",
+                metadata={
+                    "entry_id": posting.id,
+                    "entry_code": posting.job_code,
+                    "relaxed_codes": relaxed_codes,
+                    "document_codes": sorted(desired),
+                    "required_codes": sorted(
+                        code for code, required in desired.items() if required
+                    ),
+                },
+            )
+        return
+
     for code, row in existing.items():
         if code not in desired:
             row.delete()

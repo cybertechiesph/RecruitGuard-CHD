@@ -795,8 +795,8 @@ class PositionDocumentRequirement(TimestampedModel):
     def _assert_not_locked(self):
         if self.posting_id and self.posting.is_live_for_metadata_lock:
             raise ValidationError(
-                "Application document requirements cannot change once the recruitment entry "
-                "has submitted applications or linked recruitment cases."
+                "A live application checklist cannot add, remove, or strengthen documents. "
+                "Use the vacancy checklist editor only to relax an existing requirement."
             )
 
     def save(self, *args, **kwargs):
@@ -891,7 +891,10 @@ class RecruitmentApplication(TimestampedModel):
         constraints = [
             models.UniqueConstraint(
                 fields=["applicant", "position"],
-                name="unique_application_per_applicant_position",
+                condition=~models.Q(
+                    status__in=["withdrawn", "vacancy_cancelled"]
+                ),
+                name="unique_active_application_per_applicant_position",
             ),
             models.UniqueConstraint(
                 fields=["position", "candidate_code"],
@@ -4247,6 +4250,14 @@ class NotificationLog(TimestampedModel):
         )
         # SL-11: the vacancy was cancelled — a neutral notice, not a rejection.
         VACANCY_CANCELLED = "vacancy_cancelled", "Vacancy Cancellation Notice"
+        SELECTION_UNDER_REVIEW = (
+            "selection_under_review",
+            "Selection Under Review Notice",
+        )
+        APPLICANT_CONTACT_UPDATED = (
+            "applicant_contact_updated",
+            "Applicant Contact Updated Notice",
+        )
         DOCUMENT_RESUBMISSION_REQUEST = (
             "document_resubmission_request",
             "Document Resubmission Request",
@@ -4933,6 +4944,10 @@ class AuditLog(TimestampedModel):
         RECRUITMENT_ENTRY_DEADLINE_CHANGED = "recruitment_entry_deadline_changed", "Recruitment Entry Deadline Changed"
         APPLICATION_CREATED = "application_created", "Application Created"
         APPLICATION_UPDATED = "application_updated", "Application Updated"
+        APPLICANT_CONTACT_UPDATED = (
+            "applicant_contact_updated",
+            "Applicant Contact Updated",
+        )
         APPLICATION_OTP_SENT = "application_otp_sent", "Application OTP Sent"
         APPLICATION_OTP_FAILED = "application_otp_failed", "Application OTP Failed"
         APPLICATION_OTP_LOCKED = "application_otp_locked", "Application OTP Locked"
@@ -5131,6 +5146,7 @@ AUDIT_ACTION_DISPLAY_LABELS = {
     AuditLog.Action.RECRUITMENT_ENTRY_STATUS_CHANGED: "Recruitment Entry Status Changed",
     AuditLog.Action.APPLICATION_CREATED: "Application Created",
     AuditLog.Action.APPLICATION_UPDATED: "Application Updated",
+    AuditLog.Action.APPLICANT_CONTACT_UPDATED: "Applicant Contact Updated",
     AuditLog.Action.APPLICATION_OTP_SENT: "Verification Code Sent",
     AuditLog.Action.APPLICATION_OTP_VERIFIED: "Email Verified",
     AuditLog.Action.APPLICATION_SUBMITTED: "Application Submitted",
@@ -5295,6 +5311,7 @@ AUDIT_ACTION_CATEGORIES = {
             AuditLog.Action.RECRUITMENT_ENTRY_UPDATED,
             AuditLog.Action.RECRUITMENT_ENTRY_STATUS_CHANGED,
             AuditLog.Action.RECRUITMENT_ENTRY_DEADLINE_CHANGED,
+            AuditLog.Action.APPLICANT_CONTACT_UPDATED,
         ],
     },
     "exports": {

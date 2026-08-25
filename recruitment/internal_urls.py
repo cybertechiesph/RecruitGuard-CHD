@@ -51,6 +51,7 @@ from .views import (
     FinalSelectionView,
     NoAppointmentView,
     ApplicationWithdrawalView,
+    ApplicantContactUpdateView,
     AttendanceExceptionView,
     ComparativeAssessmentFilingCopyView,
     CosVacancyDeliberationRescindView,
@@ -208,6 +209,11 @@ urlpatterns = [
         "applications/<int:pk>/absence/<int:exception_pk>/",
         AttendanceExceptionView.as_view(),
         name="attendance-exception-manage",
+    ),
+    path(
+        "applications/<int:pk>/contact/",
+        ApplicantContactUpdateView.as_view(),
+        name="applicant-contact-update",
     ),
     path(
         "applications/<int:pk>/resubmission/deadline/extend/",

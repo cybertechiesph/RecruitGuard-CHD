@@ -315,7 +315,19 @@ Bootstrap Icons CSS).
                                     {{ req_form.status }}
                                 </div>
 
-                                <div class="col-sm-8">
+                                <div class="col-sm-4">
+                                    <label class="form-label fw-semibold rg-cmp-req-label"
+                                           for="{{ req_form.completed_on.id_for_label }}">
+                                        {{ req_form.completed_on.label }}
+                                    </label>
+                                    {{ req_form.completed_on }}
+                                    {% if req_form.completed_on.help_text %}<div class="form-text">{{ req_form.completed_on.help_text }}</div>{% endif %}
+                                    {% for error in req_form.completed_on.errors %}
+                                        <div class="invalid-feedback d-block">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+
+                                <div class="col-sm-4">
                                     <label class="form-label fw-semibold rg-cmp-req-label"
                                            for="{{ req_form.notes.id_for_label }}">
                                         {{ req_form.notes.label }}

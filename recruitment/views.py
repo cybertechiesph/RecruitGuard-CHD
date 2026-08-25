@@ -44,6 +44,7 @@ from .forms import (
     RequirementChecklistNotificationForm,
     ScreeningReviewForm,
     ApplicationWithdrawalForm,
+    ApplicantContactUpdateForm,
     CosVacancyDeliberationRescindForm,
     FinalSelectionRescindForm,
     AttendanceAbsenceDecisionForm,
@@ -158,9 +159,11 @@ from .services import (
     resolve_attendance_absence,
     rescind_cutoff_block_message,
     update_office_policy,
+    update_applicant_contact,
     user_can_extend_resubmission_deadline,
     user_can_manage_attendance_exception,
     user_can_record_withdrawal,
+    user_can_update_applicant_contact,
     user_can_rescind_cos_vacancy_deliberation,
     user_can_rescind_final_selection,
     get_final_selection_history,
@@ -716,6 +719,10 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
         # stage to whoever the case is assigned to.
         if user_can_record_withdrawal(user, application):
             context["withdrawal_form"] = ApplicationWithdrawalForm()
+        if user_can_update_applicant_contact(user, application):
+            context["applicant_contact_form"] = ApplicantContactUpdateForm(
+                application=application
+            )
         # SL-14: a recorded selection is strongly controlled but no longer a one-way door.
         if application.branch == PositionPosting.Branch.PLANTILLA:
             context["final_selection_history"] = get_final_selection_history(
@@ -3466,6 +3473,42 @@ class ApplicationWithdrawalView(LoginRequiredMixin, WorkflowProcessorRequiredMix
         if user_can_view_application(request.user, application):
             return redirect("application-detail", pk=pk)
         return redirect("workflow-queue")
+
+
+class ApplicantContactUpdateView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
+    def post(self, request, pk):
+        application = get_object_or_404(RecruitmentApplication, pk=pk)
+        if not user_can_update_applicant_contact(request.user, application):
+            raise PermissionDenied
+        form = ApplicantContactUpdateForm(request.POST, application=application)
+        if not form.is_valid():
+            messages.error(request, "Correct the highlighted contact details.")
+            return _render_application_detail_with_overrides(
+                request,
+                application,
+                applicant_contact_form=form,
+            )
+        try:
+            update_applicant_contact(
+                application,
+                request.user,
+                form.cleaned_data["new_email"],
+                form.cleaned_data["new_phone"],
+                form.cleaned_data["reason"],
+            )
+        except (ValueError, ValidationError) as exc:
+            form.add_error(None, str(exc))
+            messages.error(request, str(exc))
+            return _render_application_detail_with_overrides(
+                request,
+                application,
+                applicant_contact_form=form,
+            )
+        messages.success(
+            request,
+            "Applicant contact updated. Notices were queued for the affected email addresses.",
+        )
+        return redirect("application-detail", pk=pk)
 
 
 class AttendanceExceptionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):

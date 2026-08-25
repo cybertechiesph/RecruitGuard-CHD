@@ -51,6 +51,7 @@ from .forms import (
     InternalMFAOTPForm,
     ScreeningReviewForm,
     WorkflowActionForm,
+    OfficePolicyForm,
 )
 from .models import (
     AUDIT_ACTION_CATEGORIES,
@@ -212,6 +213,8 @@ from .services import (
     record_attendance_absence,
     record_application_withdrawal,
     user_can_record_withdrawal,
+    update_applicant_contact,
+    user_can_update_applicant_contact,
     user_can_extend_resubmission_deadline,
     user_can_manage_attendance_exception,
     user_can_manage_deliberation,
@@ -3610,6 +3613,38 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         payload.update(overrides)
         return payload
 
+    def submit_portal_application(self, email):
+        client = Client()
+        mail.outbox.clear()
+        response = self.post_portal_intake(
+            client,
+            self.level1_position,
+            self.portal_payload(email=email),
+        )
+        self.assertEqual(response.status_code, 302)
+        application = (
+            RecruitmentApplication.objects.filter(
+                position=self.level1_position,
+                applicant_email__iexact=email,
+            )
+            .order_by("-created_at", "-pk")
+            .first()
+        )
+        otp = self.extract_otp_from_last_email()
+        client.post(
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            {"action": "verify", "otp": otp},
+        )
+        response = client.post(
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            {"action": "finalize"},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        application.refresh_from_db()
+        self.assertIsNotNone(application.submitted_at)
+        return application
+
     def add_receipt_documents_until(self, application, target_count):
         from recruitment.services import get_current_applicant_document_items
 
@@ -4225,6 +4260,93 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         )
         self.assertEqual(
             RecruitmentApplication.objects.filter(position=self.level1_position).count(),
+            1,
+        )
+
+    def test_non_merit_terminal_applications_may_reapply_but_rejection_stays_barred(self):
+        withdrawn = self.submit_portal_application("reapply.withdrawn@example.com")
+        old_withdrawn_case = withdrawn.case
+        old_withdrawn_tracking = withdrawn.tracking_code
+        old_withdrawn_reference = withdrawn.reference_number
+        with self.captureOnCommitCallbacks(execute=True):
+            record_application_withdrawal(
+                withdrawn,
+                self.secretariat,
+                "Applicant withdrew and later chose to apply again.",
+            )
+
+        reapplied_after_withdrawal = self.submit_portal_application(
+            "reapply.withdrawn@example.com"
+        )
+        withdrawn.refresh_from_db()
+        old_withdrawn_case.refresh_from_db()
+        self.assertNotEqual(reapplied_after_withdrawal.pk, withdrawn.pk)
+        self.assertNotEqual(reapplied_after_withdrawal.case.pk, old_withdrawn_case.pk)
+        self.assertNotEqual(reapplied_after_withdrawal.tracking_code, old_withdrawn_tracking)
+        self.assertNotEqual(reapplied_after_withdrawal.reference_number, old_withdrawn_reference)
+        self.assertEqual(withdrawn.status, RecruitmentApplication.Status.WITHDRAWN)
+        self.assertEqual(old_withdrawn_case.case_status, RecruitmentCase.CaseStatus.WITHDRAWN)
+
+        cancelled = self.submit_portal_application("reapply.cancelled@example.com")
+        cancelled.status = RecruitmentApplication.Status.VACANCY_CANCELLED
+        cancelled.closed_at = timezone.now()
+        cancelled.save(update_fields=["status", "closed_at", "updated_at"])
+        cancelled.case.case_status = RecruitmentCase.CaseStatus.VACANCY_CANCELLED
+        cancelled.case.current_stage = RecruitmentCase.Stage.CLOSED
+        cancelled.case.current_handler_role = ""
+        cancelled.case.is_stage_locked = True
+        cancelled.case.save(
+            update_fields=[
+                "case_status",
+                "current_stage",
+                "current_handler_role",
+                "is_stage_locked",
+                "updated_at",
+            ]
+        )
+        reapplied_after_cancellation = self.submit_portal_application(
+            "reapply.cancelled@example.com"
+        )
+        self.assertNotEqual(reapplied_after_cancellation.pk, cancelled.pk)
+        self.assertNotEqual(reapplied_after_cancellation.case.pk, cancelled.case.pk)
+        self.assertNotEqual(reapplied_after_cancellation.tracking_code, cancelled.tracking_code)
+        self.assertNotEqual(
+            reapplied_after_cancellation.reference_number,
+            cancelled.reference_number,
+        )
+
+        rejected = self.submit_portal_application("reapply.rejected@example.com")
+        rejected.status = RecruitmentApplication.Status.REJECTED
+        rejected.closed_at = timezone.now()
+        rejected.save(update_fields=["status", "closed_at", "updated_at"])
+        rejected.case.case_status = RecruitmentCase.CaseStatus.REJECTED
+        rejected.case.current_stage = RecruitmentCase.Stage.CLOSED
+        rejected.case.current_handler_role = ""
+        rejected.case.is_stage_locked = True
+        rejected.case.save(
+            update_fields=[
+                "case_status",
+                "current_stage",
+                "current_handler_role",
+                "is_stage_locked",
+                "updated_at",
+            ]
+        )
+        response = self.post_portal_intake(
+            Client(),
+            self.level1_position,
+            self.portal_payload(email="reapply.rejected@example.com"),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "You have already submitted an application for this position using this email address.",
+        )
+        self.assertEqual(
+            RecruitmentApplication.objects.filter(
+                position=self.level1_position,
+                applicant_email="reapply.rejected@example.com",
+            ).count(),
             1,
         )
 
@@ -7078,6 +7200,48 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
         self.assertTrue(notification.metadata.get("cut_at_screening"))
         self.assertEqual(notification.delivery_status, NotificationLog.DeliveryStatus.SENT)
         self.assertIn("Qualification Standards", notification.body)
+        self.assertNotIn("submitted document(s)", notification.body)
+
+    def test_not_qualified_notice_counts_flagged_document_deficiencies_without_details(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        requirement = get_applicant_document_requirements(application)[0]
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = client.post(
+                reverse("screening-review", kwargs={"pk": application.pk}),
+                {
+                    **self.screening_payload(
+                        qualification_outcome=(
+                            ScreeningRecord.QualificationOutcome.NOT_QUALIFIED
+                        ),
+                        screening_notes="Does not meet the Qualification Standards.",
+                    ),
+                    **self.screening_document_status_payload(
+                        application,
+                        overrides={
+                            requirement.code: (
+                                ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
+                            )
+                        },
+                    ),
+                    f"document_remarks__{requirement.code}": "Pages are incomplete.",
+                    "operation": "finalize",
+                },
+            )
+        self.assertEqual(response.status_code, 302)
+        notification = NotificationLog.objects.get(
+            application=application,
+            notification_type=NotificationLog.NotificationType.NON_SELECTED_APPLICANT,
+        )
+        self.assertIn(
+            "The review also noted deficiencies in 1 submitted document(s).",
+            notification.body,
+        )
+        self.assertNotIn("Pages are incomplete", notification.body)
 
     def test_future_stage_posts_are_blocked_until_the_current_task_is_finalized(self):
         application = self.make_application(self.level2_position)
@@ -12077,6 +12241,143 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
     def make_approved_level2_plantilla_application(self):
         return self.make_selected_application(self.level2_position)
 
+    def test_owning_office_corrects_contact_with_audit_dual_notice_and_fresh_otp(self):
+        application = self.make_submitted_application()
+        old_email = application.applicant_email
+        new_email = "corrected.applicant@example.com"
+        application.otp_requested_at = timezone.now() - timedelta(minutes=30)
+        application.save(update_fields=["otp_requested_at", "updated_at"])
+        old_otp = issue_application_otp(
+            application,
+            actor=application.applicant,
+            purpose="status_lookup",
+        )
+
+        self.assertTrue(user_can_update_applicant_contact(self.secretariat, application))
+        self.assertFalse(user_can_update_applicant_contact(self.hrm_chief, application))
+        with self.assertRaisesMessage(
+            ValueError,
+            "Only the case's owning office may correct applicant contact details.",
+        ):
+            update_applicant_contact(
+                application,
+                self.hrm_chief,
+                new_email,
+                "09181234567",
+                "Applicant supplied a corrected address.",
+            )
+
+        mail.outbox.clear()
+        with self.captureOnCommitCallbacks(execute=True):
+            updated, notices = update_applicant_contact(
+                application,
+                self.secretariat,
+                new_email,
+                "0918 123 4567",
+                "Applicant supplied a corrected address.",
+            )
+        updated.refresh_from_db()
+        self.assertEqual(updated.applicant_email, new_email)
+        self.assertEqual(updated.applicant_phone, "+639181234567")
+        self.assertEqual(len(notices), 2)
+        logs = NotificationLog.objects.filter(
+            application=application,
+            notification_type=NotificationLog.NotificationType.APPLICANT_CONTACT_UPDATED,
+        )
+        self.assertEqual(set(logs.values_list("recipient_email", flat=True)), {old_email, new_email})
+        old_copy = logs.get(recipient_email=old_email)
+        self.assertNotIn(new_email, old_copy.body)
+        self.assertNotIn(new_email, json.dumps(old_copy.metadata))
+        old_message = next(message for message in mail.outbox if old_email in message.to)
+        self.assertNotIn(new_email, old_message.body)
+        self.assertTrue(
+            all(new_email not in alternative[0] for alternative in old_message.alternatives)
+        )
+        audit = AuditLog.objects.get(
+            application=application,
+            action=AuditLog.Action.APPLICANT_CONTACT_UPDATED,
+        )
+        self.assertEqual(audit.metadata["old_email"], old_email)
+        self.assertEqual(audit.metadata["new_email"], new_email)
+        self.assertIn("corrected address", audit.metadata["reason"])
+
+        with self.assertRaises(ValueError):
+            verify_application_otp(application, old_otp, purpose="status_lookup")
+        application.otp_requested_at = timezone.now() - timedelta(minutes=30)
+        application.save(update_fields=["otp_requested_at", "updated_at"])
+        fresh_otp = issue_application_otp(
+            application,
+            actor=application.applicant,
+            purpose="status_lookup",
+        )
+        verify_application_otp(application, fresh_otp, purpose="status_lookup")
+
+        status_client = Client()
+        old_lookup = status_client.post(
+            reverse("applicant-status-lookup"),
+            {"tracking_code": application.tracking_code, "email": old_email},
+        )
+        self.assertContains(old_lookup, "We could not find an application")
+        application.otp_requested_at = timezone.now() - timedelta(minutes=30)
+        application.save(update_fields=["otp_requested_at", "updated_at"])
+        new_lookup = status_client.post(
+            reverse("applicant-status-lookup"),
+            {"tracking_code": application.tracking_code, "email": new_email},
+        )
+        self.assertContains(new_lookup, "Check Your Email")
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        detail = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
+        self.assertContains(detail, "Update contact details")
+        self.assertContains(detail, reverse("applicant-contact-update", args=[application.pk]))
+
+    def test_contact_correction_permission_follows_level_and_closes_with_the_case(self):
+        level2 = self.make_submitted_application(self.level2_position)
+        self.assertTrue(user_can_update_applicant_contact(self.hrm_chief, level2))
+        self.assertFalse(user_can_update_applicant_contact(self.secretariat, level2))
+        level2.case.current_stage = RecruitmentCase.Stage.CLOSED
+        level2.case.save(update_fields=["current_stage", "updated_at"])
+        self.assertFalse(user_can_update_applicant_contact(self.hrm_chief, level2))
+
+    def test_contact_correction_refuses_unchanged_and_duplicate_active_email(self):
+        application = self.make_submitted_application()
+        application.applicant_phone = "+639171234567"
+        application.save(update_fields=["applicant_phone", "updated_at"])
+        with self.assertRaisesMessage(ValueError, "contact details are unchanged"):
+            update_applicant_contact(
+                application,
+                self.secretariat,
+                application.applicant_email,
+                application.applicant_phone,
+                "No effective change.",
+            )
+
+        other_applicant = User.objects.create_user(
+            username="contact-duplicate-applicant",
+            email="contact.duplicate@example.com",
+            role=RecruitmentUser.Role.APPLICANT,
+            is_active=False,
+        )
+        RecruitmentApplication.objects.create(
+            applicant=other_applicant,
+            position=self.level1_position,
+            status=RecruitmentApplication.Status.DRAFT,
+            applicant_first_name="Other",
+            applicant_last_name="Applicant",
+            applicant_email="contact.duplicate@example.com",
+            applicant_phone="+639171110000",
+            qualification_summary="Other application.",
+        )
+        with self.assertRaisesMessage(ValueError, "already uses that email address"):
+            update_applicant_contact(
+                application,
+                self.secretariat,
+                "contact.duplicate@example.com",
+                application.applicant_phone,
+                "Applicant supplied a duplicate address.",
+            )
+
     def test_initial_submission_creates_in_app_case_assignment(self):
         application = self.make_submitted_application()
 
@@ -13426,11 +13727,56 @@ class CompletionTrackingTests(BaseRecruitmentTestCase):
         for index, item in enumerate(items):
             payload[f"completion_requirements-{index}-item_label"] = item["item_label"]
             payload[f"completion_requirements-{index}-status"] = item["status"]
+            payload[f"completion_requirements-{index}-completed_on"] = item.get(
+                "completed_on", ""
+            )
             payload[f"completion_requirements-{index}-notes"] = item.get("notes", "")
         payload[f"completion_requirements-{len(items)}-item_label"] = ""
         payload[f"completion_requirements-{len(items)}-status"] = CompletionRequirement.RequirementStatus.PENDING
+        payload[f"completion_requirements-{len(items)}-completed_on"] = ""
         payload[f"completion_requirements-{len(items)}-notes"] = ""
         return payload
+
+    def test_completion_requirement_honors_received_date_and_rejects_future_date(self):
+        application = self.make_selected_application(self.cos_position)
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        received_on = timezone.localdate() - timedelta(days=2)
+
+        response = client.post(
+            reverse("completion-tracking", kwargs={"pk": application.pk}),
+            self.completion_payload(
+                [
+                    {
+                        "item_label": "Signed contract",
+                        "status": CompletionRequirement.RequirementStatus.COMPLETED,
+                        "completed_on": received_on.isoformat(),
+                    }
+                ]
+            ),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        requirement = get_completion_record(application).requirements.get()
+        self.assertEqual(requirement.completed_on, received_on)
+
+        future = timezone.localdate() + timedelta(days=1)
+        response = client.post(
+            reverse("completion-tracking", kwargs={"pk": application.pk}),
+            self.completion_payload(
+                [
+                    {
+                        "item_label": "Signed contract",
+                        "status": CompletionRequirement.RequirementStatus.COMPLETED,
+                        "completed_on": future.isoformat(),
+                    }
+                ]
+            ),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "The received date cannot be in the future.")
+        requirement.refresh_from_db()
+        self.assertEqual(requirement.completed_on, received_on)
 
     def test_plantilla_completion_tracking_stores_announcement_and_requirement_statuses(self):
         application = self.make_selected_application(self.level1_position)
@@ -16100,6 +16446,16 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             email="hrm.chief.peer@example.com",
             role=RecruitmentUser.Role.HRM_CHIEF,
         )
+        withdrawn = self._submitted_cos_application(
+            self.cos_position,
+            "rescind-withdrawn",
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            record_application_withdrawal(
+                withdrawn,
+                self.secretariat,
+                "Applicant withdrew before the COS pick was reconsidered.",
+            )
 
         with self.captureOnCommitCallbacks(execute=True):
             rescinded, restored = rescind_cos_vacancy_deliberation(
@@ -16140,6 +16496,26 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             )
             self.assertIsNone(application.closed_at)
             self.assertEqual(get_current_workflow_section(application), "deliberation")
+            review_notice = NotificationLog.objects.get(
+                application=application,
+                notification_type=(
+                    NotificationLog.NotificationType.SELECTION_UNDER_REVIEW
+                ),
+            )
+            self.assertEqual(
+                review_notice.subject,
+                f"Update on your application for {self.cos_position.title}",
+            )
+            self.assertIn("no longer final", review_notice.body)
+            self.assertNotIn("declined", review_notice.body.lower())
+        self.assertFalse(
+            NotificationLog.objects.filter(
+                application=withdrawn,
+                notification_type=(
+                    NotificationLog.NotificationType.SELECTION_UNDER_REVIEW
+                ),
+            ).exists()
+        )
 
         # Auditable: actor, reason and who was restored.
         entry = AuditLog.objects.filter(
@@ -18944,6 +19320,26 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         withdrawn.refresh_from_db()
         self.assertEqual({item.pk for item in restored}, {winner.pk, sibling.pk})
         self.assertEqual(withdrawn.status, RecruitmentApplication.Status.WITHDRAWN)
+        for application in (winner, sibling):
+            notice = NotificationLog.objects.get(
+                application=application,
+                notification_type=(
+                    NotificationLog.NotificationType.SELECTION_UNDER_REVIEW
+                ),
+            )
+            self.assertEqual(
+                notice.subject,
+                f"Update on your application for {self.level1_position.title}",
+            )
+            self.assertIn("re-deliberating", notice.body)
+        self.assertFalse(
+            NotificationLog.objects.filter(
+                application=withdrawn,
+                notification_type=(
+                    NotificationLog.NotificationType.SELECTION_UNDER_REVIEW
+                ),
+            ).exists()
+        )
 
     def test_selection_proceeds_with_a_withdrawn_ranked_item(self):
         applications, report = self.prepare_ranked_level1_car(3)
@@ -19900,7 +20296,7 @@ class PositionDocumentRequirementTests(BaseRecruitmentTestCase):
             APPLICANT_DOCUMENT_REQUIREMENTS_BY_BRANCH[PositionPosting.Branch.PLANTILLA],
         )
 
-    def test_configuration_locked_once_posting_is_live(self):
+    def test_live_configuration_may_only_relax_an_existing_required_document(self):
         posting = self.level1_position
         set_position_document_requirements(
             posting, self._branch_selections(PositionPosting.Branch.PLANTILLA), self.secretariat
@@ -19911,15 +20307,64 @@ class PositionDocumentRequirementTests(BaseRecruitmentTestCase):
         posting.refresh_from_db()
         self.assertTrue(posting.is_live_for_metadata_lock)
 
-        with self.assertRaises(ValidationError):
+        selections = self._branch_selections(
+            PositionPosting.Branch.PLANTILLA,
+            level_overrides={DIPLOMA: False},
+        )
+        set_position_document_requirements(posting, selections, self.secretariat)
+        self.assertFalse(
+            posting.document_requirements.get(document_code=DIPLOMA).is_required
+        )
+        audit = AuditLog.objects.filter(
+            action=AuditLog.Action.RECRUITMENT_ENTRY_UPDATED,
+            metadata__entry_id=posting.id,
+            metadata__relaxed_codes__isnull=False,
+        ).latest("created_at")
+        self.assertEqual(audit.metadata["relaxed_codes"], [DIPLOMA])
+
+        with self.assertRaisesMessage(ValidationError, "cannot be made required"):
             set_position_document_requirements(
-                posting, self._branch_selections(PositionPosting.Branch.PLANTILLA), self.secretariat
+                posting,
+                self._branch_selections(PositionPosting.Branch.PLANTILLA),
+                self.secretariat,
+            )
+
+        with self.assertRaisesMessage(ValidationError, "cannot be added or removed"):
+            set_position_document_requirements(
+                posting,
+                self._branch_selections(
+                    PositionPosting.Branch.PLANTILLA,
+                    applies_overrides={TRAINING_CERTIFICATES: False},
+                    level_overrides={DIPLOMA: False},
+                ),
+                self.secretariat,
             )
 
         existing_row = posting.document_requirements.first()
         existing_row.is_required = not existing_row.is_required
         with self.assertRaises(ValidationError):
             existing_row.save()
+
+    def test_live_configuration_refuses_adding_a_document(self):
+        posting = self.level1_position
+        set_position_document_requirements(
+            posting,
+            self._branch_selections(
+                PositionPosting.Branch.PLANTILLA,
+                applies_overrides={PERFORMANCE_RATING: False},
+            ),
+            self.secretariat,
+        )
+        application = self.make_application(posting)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+
+        with self.assertRaisesMessage(ValidationError, "cannot be added or removed"):
+            set_position_document_requirements(
+                posting,
+                self._branch_selections(PositionPosting.Branch.PLANTILLA),
+                self.secretariat,
+            )
 
     def test_submit_gate_uses_configured_required_set(self):
         posting = self.level1_position
@@ -20004,8 +20449,71 @@ class PositionDocumentRequirementTests(BaseRecruitmentTestCase):
         self.force_login_with_mfa(client, self.secretariat)
         response = client.get(reverse("recruitment-entry-update", kwargs={"pk": posting.pk}))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "locked and cannot be changed")
+        self.assertContains(response, "Existing required documents may be relaxed to optional")
         self.assertContains(response, "disabled")
+
+    def test_update_view_can_relax_one_live_document_without_changing_the_rest(self):
+        posting = self.level1_position
+        set_position_document_requirements(
+            posting,
+            self._branch_selections(PositionPosting.Branch.PLANTILLA),
+            self.secretariat,
+        )
+        application = self.make_application(posting)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        before_codes = set(
+            posting.document_requirements.values_list("document_code", flat=True)
+        )
+        payload = {
+            "position_reference": posting.position_reference_id,
+            "item_number": posting.item_number,
+            "branch": posting.branch,
+            "intake_mode": posting.intake_mode,
+            "publication_date": posting.publication_date.isoformat()
+            if posting.publication_date
+            else "",
+            "opening_date": posting.opening_date.isoformat() if posting.opening_date else "",
+            "closing_date": posting.closing_date.isoformat() if posting.closing_date else "",
+            "qualification_reference": posting.qualification_reference,
+        }
+        for row in posting.document_requirements.all():
+            payload[f"doc_applies__{row.document_code}"] = "on"
+            if row.document_code not in {PERFORMANCE_RATING}:
+                payload[f"doc_level__{row.document_code}"] = (
+                    "optional" if row.document_code == DIPLOMA else "required"
+                )
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.post(
+            reverse("recruitment-entry-update", kwargs={"pk": posting.pk}),
+            payload,
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            set(posting.document_requirements.values_list("document_code", flat=True)),
+            before_codes,
+        )
+        self.assertFalse(
+            posting.document_requirements.get(document_code=DIPLOMA).is_required
+        )
+
+    def test_office_policy_page_uses_plain_language_labels(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        response = client.get(reverse("office-policy"))
+        self.assertEqual(response.status_code, 200)
+        for label in (
+            "Allow closing-date extension after the exam is scheduled",
+            "Resubmission deadline may be extended",
+            "Interview absences are decided by",
+            "Owning office may record withdrawals",
+            "When rescission is no longer allowed",
+            "COS postings may fill multiple positions",
+            "Suspend and Close require a reason",
+        ):
+            self.assertContains(response, label)
 
 
 class BusinessLogicBypassHardeningTests(BaseRecruitmentTestCase):
