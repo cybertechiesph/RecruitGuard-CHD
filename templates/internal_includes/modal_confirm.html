@@ -33,6 +33,9 @@ Parameters:
   form_id       — if set, confirm button submits this form
   confirm_name  — if set (with form_id), confirm button carries this name…
   confirm_value — …and this value (e.g. a named submit button: operation=finalize)
+  reason_label  — if set (with form_id), renders a required reason textarea
+  reason_id     — HTML id for the optional reason textarea
+  reason_name   — POST name for the optional reason textarea
   confirm_url   — if set (and no form_id), confirm button links here
   confirm_class — extra CSS class on confirm button
 {% endcomment %}
@@ -55,6 +58,13 @@ Parameters:
             <div class="modal-body">
                 {% if body %}
                     <p class="mb-0 rg-modal-confirm__body-copy">{{ body }}</p>
+                {% endif %}{% if reason_label and form_id %}
+                    <div class="mt-3">
+                        <label class="form-label" for="{{ reason_id }}">{{ reason_label }}</label>
+                        <textarea class="form-control form-control-sm" rows="2"
+                                  id="{{ reason_id }}" name="{{ reason_name|default:'reason' }}"
+                                  form="{{ form_id }}" required></textarea>
+                    </div>
                 {% endif %}
                 {% if summary_items %}
                     <div class="rg-modal-confirm__summary mt-3">

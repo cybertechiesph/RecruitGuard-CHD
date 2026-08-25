@@ -181,25 +181,18 @@
                                             </span>
                                         {% else %}
                                             {% if office_policy.require_reason_for_suspend_close %}
-                                                <details class="d-inline-block">
-                                                    <summary class="btn btn-rg-destructive btn-sm">Close</summary>
-                                                    <form method="post"
-                                                          action="{% url 'recruitment-entry-status' entry.pk 'closed' %}"
-                                                          class="mt-2 p-2 border rounded" style="min-width:22rem;">
-                                                        {% csrf_token %}
-                                                        <label class="form-label" for="close-reason-{{ entry.pk }}">
-                                                            Reason for closing
-                                                        </label>
-                                                        <textarea class="form-control form-control-sm" rows="2"
-                                                                  id="close-reason-{{ entry.pk }}" name="reason" required></textarea>
-                                                        <p class="rg-note mt-2 mb-2">
-                                                            Closing stops new applications. Existing cases continue through the workflow.
-                                                        </p>
-                                                        <button type="submit" class="btn btn-rg-destructive btn-sm">
-                                                            Close this vacancy
-                                                        </button>
-                                                    </form>
-                                                </details>
+                                                <form method="post"
+                                                      action="{% url 'recruitment-entry-status' entry.pk 'closed' %}"
+                                                      id="closeForm{{ entry.pk }}">
+                                                    {% csrf_token %}
+                                                </form>
+                                                <button type="button"
+                                                        class="btn btn-rg-destructive btn-sm"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#closeModal{{ entry.pk }}">
+                                                    Close
+                                                </button>
+                                                {% include "internal_includes/modal_confirm.html" with modal_id=entry.pk|dom_id:"closeModal" variant="destructive" title="Close this recruitment entry?" body="Closing will stop accepting new applications for this entry and, for Plantilla vacancies, marks the applicant pool ready for HRMPSB deliberation/CAR. Existing cases in the workflow will not be affected." confirm_label="Close Entry" form_id=entry.pk|dom_id:"closeForm" reason_label="Reason for closing" reason_id=entry.pk|dom_id:"close-reason-" reason_name="reason" %}
                                             {% else %}
                                                 <form method="post"
                                                       action="{% url 'recruitment-entry-status' entry.pk 'closed' %}"

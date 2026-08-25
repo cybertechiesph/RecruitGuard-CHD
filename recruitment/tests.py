@@ -11130,6 +11130,13 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         self.assertContains(response, f'id="closeModal{self.level1_position.pk}"')
         self.assertContains(response, f'id="closeForm{self.level1_position.pk}"')
         self.assertContains(response, f'form="closeForm{self.level1_position.pk}"')
+        self.assertContains(response, "Reason for closing")
+        self.assertContains(response, f'id="close-reason-{self.level1_position.pk}"')
+        self.assertContains(response, 'name="reason"')
+        self.assertContains(
+            response,
+            f'form="closeForm{self.level1_position.pk}" required',
+        )
         self.assertContains(response, 'class="mb-0 rg-modal-confirm__body-copy"')
         self.assertNotContains(
             response,
