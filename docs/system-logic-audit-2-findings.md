@@ -517,3 +517,68 @@ Recommended order: the nine Critical items first (SL2-01, 05, 06, 07, 08, 09,
 client-dependent Majors once §6 is answered, grouping by surface (vacancy
 lifecycle; interview/attendance; CAR/AA; rescind/reopen/cancel; COS rounds);
 then the Minor cleanups (SL2-46, 47, 50, 51) as one dead-code commit.
+
+---
+
+## 9. Implementation status and decisions (2026-08-25)
+
+Every finding in §3 is now resolved. Implementation ran in three phases under
+the Codex workflow (written brief → implementation → independent review: diff
+read, targeted classes, full suite against the known 14-test flaky baseline,
+live browser/PDF checks where user-visible).
+
+### 9.1 Findings → commits
+
+| Brief | Commit | Findings closed |
+|---|---|---|
+| SL2-A | b5ff9f8 | SL2-01, SL2-03, SL2-45 |
+| SL2-B (+B.1 a9b44c2) | 3b73b65 | SL2-05, SL2-06, SL2-07 |
+| SL2-C | 340fc1d | SL2-08, SL2-09 |
+| SL2-D | f7c5f35 | SL2-12, SL2-13 (migration 0081) |
+| SL2-E | 87d179c | SL2-19, SL2-20 |
+| SL2-F | 2645067 | SL2-11, SL2-44 |
+| SL2-G | ebb559c | SL2-21, SL2-38, SL2-40 |
+| SL2-H | 5325d86 | SL2-32 (in-app), SL2-33 |
+| SL2-I | 2fb9287 | SL2-39, SL2-46, SL2-47, SL2-50, SL2-51 (migration 0082) |
+| SL2-J (+J.1 5487f12, J.2 0d28fa3) | 96cb2af | SL2-10, SL2-15, SL2-25, SL2-30, SL2-34, SL2-48, SL2-49 as Office Policy switches (migration 0083) |
+| SL2-K | f144794 | SL2-26, SL2-27, SL2-28 (label), lead L-15 (migration 0084) |
+| SL2-L | f99fb85 | SL2-22, SL2-23, SL2-29, SL2-32 (applicant email), question 32 notice, checklist relax-only (migration 0085) |
+
+Findings SL2-02 (shortening a published deadline), SL2-16 (rating void),
+SL2-17 (fresh notice after reschedule), SL2-18 (multi-day pooled interviews),
+SL2-24 (QS snapshot), SL2-35 (L1-COS validation delegation), SL2-36
+(split-stage lockout), SL2-37 (second-pass re-key), SL2-41 (retention-lapse
+closure), SL2-42/43 (COS console polish beyond what SL2-D shipped) remain
+**open by design**: they are governed by the decisions below (several are
+simply refused today, which is the safe strict state) or wait on a future
+maintenance window. The §3 leads not named here remain leads.
+
+### 9.2 The decisions (developers deciding; no client questionnaire)
+
+The team resolved §6's questions as developers rather than sending the client
+a questionnaire. Two kinds of answer:
+
+**Office Policy switches** (one HRM Chief-edited record, every change audited,
+shipped strict — flipping one is configuration, not a code change):
+extension after a scheduled exam (off) · resubmission-deadline extension (on) ·
+interview absences decided by (HR support office) · owning office may record
+withdrawals (on) · rescission cutoff (blocked once a contract/appointment
+reference is recorded; rescission also voids the completion record) ·
+multi-slot COS postings (off) · Suspend/Close require a reason (on).
+
+**Fixed rules** (built in; each is a single named guard, changeable in
+minutes if practice differs): a published closing date can never be shortened;
+Cancelled is terminal (re-run = new vacancy); withdrawn or vacancy-cancelled
+applicants may re-apply (new case; REJECTED stays barred); the owning office
+corrects applicant contact details with audit + dual notices; the AA proceeds
+past a withdrawal, may record "No appointment — failure of search", and a
+board may recommend none (making every subsequent pick a justified
+deviation); a CAR return corrects ETE/recommendation only and says so; the
+CAR records its deliberation date and members present (quorum derived, the
+yes/no control retired); completion requirements carry the date actually
+received; reversed outcomes send a neutral "under review" notice; the
+Not-Qualified notice states document deficiencies; a live checklist may only
+be relaxed.
+
+The client receives the finished behavior plus a plain-language policy guide
+(docs/office-policy-guide.md) instead of open questions.
