@@ -20444,12 +20444,17 @@ class PositionDocumentRequirementTests(BaseRecruitmentTestCase):
         application = self.make_application(posting)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
+        application.refresh_from_db()
+        posting.refresh_from_db()
+        self.assertIsNotNone(application.submitted_at)
+        self.assertTrue(posting.is_live_for_metadata_lock)
 
         client = Client()
         self.force_login_with_mfa(client, self.secretariat)
         response = client.get(reverse("recruitment-entry-update", kwargs={"pk": posting.pk}))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Existing required documents may be relaxed to optional")
+        self.assertTrue(response.context["documents_form"].locked)
+        self.assertContains(response, '<div class="alert alert-warning">', count=1)
         self.assertContains(response, "disabled")
 
     def test_update_view_can_relax_one_live_document_without_changing_the_rest(self):
