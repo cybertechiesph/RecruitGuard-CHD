@@ -49,6 +49,7 @@ from .views import (
     ExamScheduleView,
     ExportApplicationBundleView,
     FinalSelectionView,
+    NoAppointmentView,
     ApplicationWithdrawalView,
     AttendanceExceptionView,
     ComparativeAssessmentFilingCopyView,
@@ -225,6 +226,11 @@ urlpatterns = [
         name="comparative-assessment-print",
     ),
     path("applications/<int:pk>/final-selection/", FinalSelectionView.as_view(), name="final-selection-record"),
+    path(
+        "applications/<int:pk>/no-appointment/",
+        NoAppointmentView.as_view(),
+        name="no-appointment-record",
+    ),
     path(
         "applications/<int:pk>/final-selection/rescind/",
         FinalSelectionRescindView.as_view(),

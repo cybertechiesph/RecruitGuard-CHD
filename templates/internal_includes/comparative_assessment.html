@@ -334,28 +334,25 @@ HRM Chief on COS). Two states:
                     Make sure the candidate rankings are correct before continuing.
                 </p>
                 <div class="rg-car-quorum">
-                    <label class="form-label" for="car-quorum-met">Quorum met during deliberation? <span class="text-danger" aria-hidden="true">*</span></label>
-                    <select id="car-quorum-met" name="quorum_met" form="car-form" required
-                            class="form-select form-select-sm" style="max-width:140px;">
-                        <option value="">—</option>
-                        <option value="yes">Yes</option>
-                        <option value="no">No</option>
-                    </select>
-                    <div class="invalid-feedback" id="car-quorum-error">
-                        Deliberation quorum (at least 3 of the 5 HRMPSB members) must be met before the CAR can be finalized.
-                    </div>
                     <label class="form-label mt-2" for="car-members-present">HRMPSB members present (3&ndash;5) <span class="text-danger" aria-hidden="true">*</span></label>
                     <input type="number" id="car-members-present" name="members_present" form="car-form" required
                            class="form-control form-control-sm" min="3" max="5" step="1" style="max-width:140px;">
                     <div class="invalid-feedback" id="car-members-error">
                         Record how many HRMPSB members were present (3&ndash;5).
                     </div>
-                    <div class="form-text">Recorded with the finalized report (the board's deliberation itself is held on paper).</div>
+                    <label class="form-label mt-2" for="car-deliberated-on">Date of deliberation <span class="text-danger" aria-hidden="true">*</span></label>
+                    <input type="date" id="car-deliberated-on" name="deliberated_on" form="car-form" required
+                           class="form-control form-control-sm" style="max-width:180px;">
+                    <div class="invalid-feedback" id="car-deliberated-on-error">
+                        Record the deliberation date.
+                    </div>
+                    <div class="form-text">The members present establish quorum; both facts are recorded with the finalized report.</div>
                 </div>
                 <div class="rg-car-recommendation mt-3">
                     <label class="form-label" for="car-recommended-case">Board's recommended applicant <span class="text-danger" aria-hidden="true">*</span></label>
                     <select id="car-recommended-case" name="recommended_case" form="car-form" class="form-select form-select-sm">
                         <option value="">— Select the recommended applicant —</option>
+                        <option value="none">— Board recommends no candidate —</option>
                         {% for item in current_comparative_assessment_report_items %}
                             <option value="{{ item.recruitment_case_id }}">
                                 #{{ item.rank_order }} — {{ item.application.candidate_code_label }}
@@ -365,7 +362,7 @@ HRM Chief on COS). Two states:
                     <label class="form-label mt-2" for="car-recommendation-notes">Recommendation notes / remarks</label>
                     <textarea id="car-recommendation-notes" name="recommendation_notes" form="car-form"
                               class="form-control form-control-sm" rows="3">{{ car_form.recommendation_notes.value|default_if_none:'' }}</textarea>
-                    <div class="form-text">The board deliberates off-system; record its recommended applicant here on its behalf.</div>
+                    <div class="form-text">The board deliberates off-system. Notes are required when it recommends no candidate.</div>
                 </div>
             </div>
             <div class="modal-footer" style="border-top:1px solid #e2e8f0; padding:0.875rem 1.25rem; display:flex; justify-content:flex-end; gap:0.625rem;">
@@ -422,18 +419,18 @@ HRM Chief on COS). Two states:
     }
     if (confirmBtn) {
         confirmBtn.addEventListener("click", function () {
-            // WF-02 courtesy mirror of the server rule: quorum Yes + 3–5 members present.
-            var quorum = document.getElementById("car-quorum-met");
-            if (quorum && quorum.value !== "yes") {
-                quorum.classList.add("is-invalid");
-                if (quorum.focus) { try { quorum.focus(); } catch (e) {} }
-                return;
-            }
+            // WF-02 courtesy mirror of the server rule: 3–5 members establishes quorum.
             var members = document.getElementById("car-members-present");
             var membersVal = members ? parseInt(members.value, 10) : NaN;
             if (members && (isNaN(membersVal) || membersVal < 3 || membersVal > 5)) {
                 members.classList.add("is-invalid");
                 if (members.focus) { try { members.focus(); } catch (e) {} }
+                return;
+            }
+            var deliberatedOn = document.getElementById("car-deliberated-on");
+            if (deliberatedOn && !deliberatedOn.value) {
+                deliberatedOn.classList.add("is-invalid");
+                if (deliberatedOn.focus) { try { deliberatedOn.focus(); } catch (e) {} }
                 return;
             }
             var rec = document.getElementById("car-recommended-case");
@@ -442,11 +439,17 @@ HRM Chief on COS). Two states:
                 if (rec.focus) { try { rec.focus(); } catch (e) {} }
                 return;
             }
+            var recNotes = document.getElementById("car-recommendation-notes");
+            if (rec && rec.value === "none" && recNotes && !recNotes.value.trim()) {
+                recNotes.classList.add("is-invalid");
+                if (recNotes.focus) { try { recNotes.focus(); } catch (e) {} }
+                return;
+            }
             if (opField) opField.value = "finalize";
             form.submit();
         });
     }
-    ["car-quorum-met", "car-members-present"].forEach(function (id) {
+    ["car-members-present", "car-deliberated-on", "car-recommended-case", "car-recommendation-notes"].forEach(function (id) {
         var el = document.getElementById(id);
         if (el) {
             el.addEventListener("change", function () { el.classList.remove("is-invalid"); });
@@ -582,12 +585,12 @@ HRM Chief on COS). Two states:
         </ul>
     {% endif %}
 
-    {% if current_comparative_assessment_report.quorum_met is not None or current_comparative_assessment_report.members_present is not None %}
+    {% if current_comparative_assessment_report.members_present is not None %}
         <p class="rg-del-car__summary-notes">
-            <strong>Quorum:</strong>
-            {% if current_comparative_assessment_report.quorum_met %}Met{% elif current_comparative_assessment_report.quorum_met is False %}Not met{% else %}Not recorded{% endif %}
-            {% if current_comparative_assessment_report.members_present is not None %}
-                &middot; {{ current_comparative_assessment_report.members_present }} member{{ current_comparative_assessment_report.members_present|pluralize }} present
+            <strong>Quorum:</strong> Met
+            &middot; {{ current_comparative_assessment_report.members_present }} member{{ current_comparative_assessment_report.members_present|pluralize }} present
+            {% if current_comparative_assessment_report.deliberated_on %}
+                &middot; Deliberated {{ current_comparative_assessment_report.deliberated_on|date:"M d, Y" }}
             {% endif %}
         </p>
     {% endif %}
@@ -596,10 +599,14 @@ HRM Chief on COS). Two states:
         <p class="rg-del-car__summary-notes">{{ current_comparative_assessment_report.summary_notes }}</p>
     {% endif %}
 
-    {% if current_comparative_assessment_report.recommended_case_id %}
+    {% if current_comparative_assessment_report.recommended_case_id or current_comparative_assessment_report.recommends_none %}
         <p class="rg-del-car__summary-notes">
-            <strong>Board's recommended applicant:</strong>
-            {{ current_comparative_assessment_report.recommended_case.application.candidate_code_label }}
+            <strong>Board's recommendation:</strong>
+            {% if current_comparative_assessment_report.recommends_none %}
+                No candidate
+            {% else %}
+                {{ current_comparative_assessment_report.recommended_case.application.candidate_code_label }}
+            {% endif %}
             {% if current_comparative_assessment_report.recommendation_notes %}
                 &mdash; {{ current_comparative_assessment_report.recommendation_notes }}
             {% endif %}
@@ -660,10 +667,14 @@ HRM Chief on COS). Two states:
         </ul>
     {% endif %}
 
-    {% if current_comparative_assessment_report.recommended_case_id %}
+    {% if current_comparative_assessment_report.recommended_case_id or current_comparative_assessment_report.recommends_none %}
         <p class="rg-del-car__summary-notes">
             <strong>Recorded recommendation:</strong>
-            {{ current_comparative_assessment_report.recommended_case.application.candidate_code_label }}
+            {% if current_comparative_assessment_report.recommends_none %}
+                No candidate
+            {% else %}
+                {{ current_comparative_assessment_report.recommended_case.application.candidate_code_label }}
+            {% endif %}
         </p>
     {% endif %}
 </section>

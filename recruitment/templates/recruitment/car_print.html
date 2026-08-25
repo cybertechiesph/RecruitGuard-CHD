@@ -84,6 +84,7 @@
             <div><span>Engagement:</span> {{ entry.get_branch_display }}</div>
             <div><span>Candidates assessed:</span> {{ items|length }}</div>
             {% if report.members_present %}<div><span>HRMPSB members present:</span> {{ report.members_present }}</div>{% endif %}
+            {% if report.deliberated_on %}<div><span>Date of deliberation:</span> {{ report.deliberated_on|date:"F d, Y" }}</div>{% endif %}
         </div>
 
         <table class="rank">
@@ -123,7 +124,13 @@
             <p>{{ report.summary_notes|linebreaksbr }}</p>
         </div>
         {% endif %}
-        {% if report.recommendation_notes %}
+        {% if report.recommends_none %}
+        <div class="notes">
+            <h2>Recommendation</h2>
+            <p><strong>Board recommendation: none &mdash; see notes.</strong></p>
+            <p>{{ report.recommendation_notes|linebreaksbr }}</p>
+        </div>
+        {% elif report.recommendation_notes %}
         <div class="notes">
             <h2>Recommendation</h2>
             <p>{{ report.recommendation_notes|linebreaksbr }}</p>
@@ -174,7 +181,7 @@
 
         <div class="doc-meta" style="margin-top:24px;">
             <div><span>Date of Interview:</span> ______________________</div>
-            <div><span>Date of Deliberation:</span> ______________________</div>
+            <div><span>Date of Deliberation:</span> {{ report.deliberated_on|date:"F d, Y" }}</div>
         </div>
 
         <div class="print-meta">

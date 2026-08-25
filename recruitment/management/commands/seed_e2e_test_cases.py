@@ -612,9 +612,8 @@ class Command(BaseCommand):
                 actor=users["secretariat"],
                 cleaned_data={
                     "summary_notes": f"E2E finalized CAR for {code}.",
-                    # WF-02: the board's quorum attestation is required at finalize.
-                    "quorum_met": True,
                     "members_present": MIN_INTERVIEW_RATINGS_PLANTILLA,
+                    "deliberated_on": timezone.localdate(),
                     "recommended_case_id": applications[0].case.id,
                     "recommendation_notes": "HRMPSB recommends the top-ranked applicant.",
                 },

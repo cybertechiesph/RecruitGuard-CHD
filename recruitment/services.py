@@ -4935,6 +4935,14 @@ def user_can_record_final_selection(user, application):
     return user_can_process_application(user, application)
 
 
+def user_can_record_no_appointment(user, application):
+    """The Appointing Authority may close a ready Plantilla CAR without a pick."""
+    return (
+        user_can_record_final_selection(user, application)
+        and get_final_selection_for_entry(application.position) is None
+    )
+
+
 def get_completion_record(application):
     return CompletionRecord.objects.select_related(
         "tracked_by",
@@ -7526,20 +7534,25 @@ def autosave_comparative_assessment_report_notes(application, actor, cleaned_dat
     return draft_report
 
 
-@transaction.atomic
-def _resolve_car_recommended_case_id(raw_case_id, candidate_rows):
-    """Validate the board's recommended applicant is one of the CAR's ranked candidates
-    and return its case id. Raises a clear error when missing or out of pool."""
+def _resolve_car_recommendation(raw_case_id, candidate_rows, recommendation_notes):
+    """Return ``(recommended_case_id, recommends_none)`` for the board's choice."""
+    if raw_case_id == "none":
+        if not (recommendation_notes or "").strip():
+            raise ValueError(
+                "Explain why the board recommends no candidate before finalizing the CAR."
+            )
+        return None, True
+
     pool_case_ids = {row["recruitment_case"].id for row in candidate_rows}
     try:
         case_id = int(raw_case_id)
     except (TypeError, ValueError):
         raise ValueError(
-            "Record the HRMPSB board's recommended applicant before finalizing the CAR."
+            "Record the HRMPSB board's recommendation before finalizing the CAR."
         )
     if case_id not in pool_case_ids:
         raise ValueError("The recommended applicant must be one of this vacancy's candidates.")
-    return case_id
+    return case_id, False
 
 
 def generate_comparative_assessment_report(application, actor, cleaned_data, finalize=False):
@@ -7578,21 +7591,25 @@ def generate_comparative_assessment_report(application, actor, cleaned_data, fin
             raise ValueError(
                 "Prepare the CAR draft before finalizing the Comparative Assessment Report."
             )
-        # WF-02: enforce the deliberation quorum up front (mirrors the model clean) so a
-        # direct POST can't bypass it and no CAR PDF/evidence is generated for a bad finalize.
-        if cleaned_data.get("quorum_met") is not True:
-            raise ValueError(
-                "Deliberation quorum (at least 3 of the 5 HRMPSB members) must be met "
-                "before the CAR can be finalized."
-            )
+        # WF-02: members present is the quorum fact. Validate it before generating any
+        # evidence so an invalid direct POST cannot leave an orphaned CAR artifact.
         members_present = cleaned_data.get("members_present")
         if members_present is None or not (3 <= members_present <= 5):
             raise ValueError("Record how many HRMPSB members were present (3–5).")
+        deliberated_on = cleaned_data.get("deliberated_on")
+        if not deliberated_on:
+            raise ValueError("Record the deliberation date before finalizing the CAR.")
         candidate_rows = _car_candidate_rows(
             application.position,
             review_stage,
             required_draft=latest_draft_report,
             assessment_weights=assessment_weights,
+        )
+        recommendation_notes = (cleaned_data.get("recommendation_notes") or "").strip()
+        recommended_case_id, recommends_none = _resolve_car_recommendation(
+            cleaned_data.get("recommended_case_id"),
+            candidate_rows,
+            recommendation_notes,
         )
     else:
         candidate_rows = _car_draft_candidate_rows(
@@ -7690,12 +7707,11 @@ def generate_comparative_assessment_report(application, actor, cleaned_data, fin
     if finalize:
         report.finalized_by = actor
         report.finalized_at = timezone.now()
-        report.quorum_met = cleaned_data.get("quorum_met")
         report.members_present = cleaned_data.get("members_present")
-        report.recommended_case_id = _resolve_car_recommended_case_id(
-            cleaned_data.get("recommended_case_id"), candidate_rows
-        )
-        report.recommendation_notes = (cleaned_data.get("recommendation_notes") or "").strip()
+        report.deliberated_on = cleaned_data.get("deliberated_on")
+        report.recommended_case_id = recommended_case_id
+        report.recommends_none = recommends_none
+        report.recommendation_notes = recommendation_notes
     report.full_clean()
     report.save()
 
@@ -7742,6 +7758,11 @@ def generate_comparative_assessment_report(application, actor, cleaned_data, fin
             "is_finalized": report.is_finalized,
             "prepared_by_role": actor.role,
             "recommended_case_id": report.recommended_case_id,
+            "recommends_none": report.recommends_none,
+            "members_present": report.members_present,
+            "deliberated_on": (
+                report.deliberated_on.isoformat() if report.deliberated_on else ""
+            ),
         },
     )
     if finalize:
@@ -9155,7 +9176,10 @@ def get_available_actions(application, user):
         and not get_final_selection_for_application(application)
     ):
         return [
-            ("return_car_for_reassessment", "Return CAR for HRMPSB Reassessment"),
+            (
+                "return_car_for_reassessment",
+                "Return CAR for correction (ETE / recommendation)",
+            ),
         ]
 
     return []
@@ -9611,6 +9635,8 @@ FINAL_SELECTION_OUT_OF_CONTENTION_STATUSES = frozenset(
 
 def _car_recommended_case_ids_before_contention(report):
     """The recommendation encoded by the finalized CAR, without promoting lower ranks."""
+    if report.recommends_none:
+        return set()
     if report.recommended_case_id:
         return {report.recommended_case_id}
     return car_top_rank_case_ids(report)
@@ -9631,6 +9657,8 @@ def final_selection_recommended_case_ids(report):
 
 
 def _recommended_candidate_had_withdrawn(report):
+    if report.recommends_none:
+        return False
     recommended_case_ids = _car_recommended_case_ids_before_contention(report)
     return bool(
         recommended_case_ids
@@ -9673,9 +9701,9 @@ def return_car_for_reassessment(application, actor, remarks):
     if not remarks:
         raise ValueError("Record the reason for returning the CAR.")
     if application.branch != PositionPosting.Branch.PLANTILLA:
-        raise ValueError("CAR reassessment returns are only available for Plantilla vacancies.")
+        raise ValueError("CAR correction returns are only available for Plantilla vacancies.")
     if actor.role != RecruitmentUser.Role.APPOINTING_AUTHORITY:
-        raise ValueError("Only the Appointing Authority may return the CAR for reassessment.")
+        raise ValueError("Only the Appointing Authority may return the CAR for correction.")
     if not user_can_process_application(actor, application):
         raise ValueError("This case is not currently assigned to you.")
     if get_current_workflow_section(application) != "decision":
@@ -9685,7 +9713,7 @@ def return_car_for_reassessment(application, actor, remarks):
 
     report = get_latest_finalized_comparative_assessment_report(application)
     if not report:
-        raise ValueError("Finalize the CAR before returning it for reassessment.")
+        raise ValueError("Finalize the CAR before returning it for correction.")
 
     report_items = _final_selection_items_are_ready(report)
     report.is_returned = True
@@ -9743,7 +9771,9 @@ def return_car_for_reassessment(application, actor, remarks):
             application=target_application,
             actor=actor,
             action=AuditLog.Action.CAR_RETURNED,
-            description="Appointing Authority returned the CAR for HRMPSB reassessment.",
+            description=(
+                "Appointing Authority returned the CAR for ETE and recommendation correction."
+            ),
             metadata={
                 "car_report_id": report.id,
                 "car_version_number": report.version_number,
@@ -9764,7 +9794,9 @@ def return_car_for_reassessment(application, actor, remarks):
             application=target_application,
             actor=actor,
             route_type=RoutingHistory.RouteType.REOPEN,
-            description="Returned from Appointing Authority to HRMPSB for CAR reassessment.",
+            description=(
+                "Returned from Appointing Authority to HRMPSB for ETE and recommendation correction."
+            ),
             recruitment_case=target_application.case,
             from_handler_role=previous_role,
             to_handler_role=target_application.current_handler_role,
@@ -9780,10 +9812,140 @@ def return_car_for_reassessment(application, actor, remarks):
             RecruitmentUser.Role.HRMPSB_MEMBER,
             kind=Notification.Kind.CASE_RETURNED,
             title=f"{target_application.reference_label} returned to you for HRMPSB Review",
-            body="The CAR was returned for reassessment.",
+            body=(
+                "The CAR was returned to correct the ETE ratings and recommendation. "
+                "Finalized exam and interview scores remain locked."
+            ),
             tab="deliberation",
         )
 
+    return report
+
+
+def _close_car_item_as_non_selected(
+    item,
+    actor,
+    decision_notes,
+    *,
+    final_selection=None,
+    selected_item=None,
+    recommended_candidate_withdrawn=False,
+    description,
+    routing_description,
+    extra_metadata=None,
+):
+    """Close one in-contention CAR item with the canonical non-selected effects."""
+    target_application = item.application
+    previous_role = target_application.current_handler_role
+    previous_status = target_application.status
+    case_transition = _sync_case_after_workflow_action(
+        application=target_application,
+        actor=actor,
+        next_role="",
+        next_status=RecruitmentApplication.Status.REJECTED,
+        remarks=decision_notes,
+    )
+    target_application.current_handler_role = ""
+    target_application.status = RecruitmentApplication.Status.REJECTED
+    target_application.closed_at = timezone.now()
+    target_application.save(
+        update_fields=["current_handler_role", "status", "closed_at", "updated_at"]
+    )
+
+    metadata = {
+        "final_selection_id": final_selection.id if final_selection else "",
+        "car_report_id": item.report_id,
+        "selected_car_item_id": selected_item.id if selected_item else "",
+        "car_item_id": item.id,
+        "decision_outcome": FinalDecision.Outcome.NOT_SELECTED,
+        "decision_notes": decision_notes,
+        "is_deep_selection": bool(final_selection and final_selection.is_deep_selection),
+        "deep_selection_justification_recorded": bool(
+            final_selection and final_selection.deep_selection_justification
+        ),
+        "recommended_candidate_withdrawn": recommended_candidate_withdrawn,
+        "from_status": previous_status,
+        "to_status": target_application.status,
+        "from_role": previous_role,
+        "to_role": target_application.current_handler_role,
+        "from_stage": case_transition["previous_stage"],
+        "to_stage": target_application.case.current_stage,
+        "from_case_status": case_transition["previous_case_status"],
+        "to_case_status": target_application.case.case_status,
+        "case_locked": target_application.case.is_stage_locked,
+    }
+    metadata.update(extra_metadata or {})
+    record_audit_event(
+        application=target_application,
+        actor=actor,
+        action=AuditLog.Action.DECISION_RECORDED,
+        description=description,
+        metadata=metadata,
+    )
+    record_routing_history_event(
+        application=target_application,
+        actor=actor,
+        route_type=RoutingHistory.RouteType.CLOSE,
+        description=routing_description,
+        recruitment_case=target_application.case,
+        from_handler_role=previous_role,
+        to_handler_role="",
+        from_status=previous_status,
+        to_status=target_application.status,
+        from_stage=case_transition["previous_stage"],
+        to_stage=target_application.case.current_stage,
+        notes=decision_notes,
+    )
+    queue_non_selected_applicant_notification(target_application, actor=actor)
+    return target_application
+
+
+@transaction.atomic
+def record_no_appointment(application, actor, reason):
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValueError("Record why no appointment will be made from this CAR.")
+    if get_final_selection_for_entry(application.position):
+        raise ValueError("Final selection has already been recorded for this vacancy.")
+    if not user_can_record_no_appointment(actor, application):
+        raise ValueError(
+            "Only the Appointing Authority may record no appointment from a ready finalized CAR."
+        )
+    report = get_latest_finalized_comparative_assessment_report(application)
+    if not report:
+        raise ValueError("Finalize the CAR before recording no appointment.")
+
+    report_items = _final_selection_items_are_ready(report)
+    item_ids = [item.id for item in report_items]
+    for item in report_items:
+        _close_car_item_as_non_selected(
+            item,
+            actor,
+            reason,
+            description=(
+                "Appointing Authority recorded no appointment from the finalized CAR."
+            ),
+            routing_description=(
+                "Closed as not selected after the Appointing Authority recorded "
+                "failure of search."
+            ),
+            extra_metadata={"no_appointment_recorded": True},
+        )
+
+    record_system_audit_event(
+        actor=actor,
+        action=AuditLog.Action.NO_APPOINTMENT_RECORDED,
+        description=(
+            f"Recorded no appointment for {report.recruitment_entry.job_code} "
+            "after reviewing the finalized CAR."
+        ),
+        metadata={
+            "report_id": report.id,
+            "report_version": report.version_number,
+            "reason": reason,
+            "item_ids": item_ids,
+        },
+    )
     return report
 
 
@@ -9835,12 +9997,17 @@ def record_final_selection(application, actor, cleaned_data):
     recommended_case_ids = final_selection_recommended_case_ids(report)
     recommended_candidate_withdrawn = _recommended_candidate_had_withdrawn(report)
     if (
-        recommended_case_ids
-        and selected_item.recruitment_case_id not in recommended_case_ids
+        (
+            report.recommends_none
+            or (
+                recommended_case_ids
+                and selected_item.recruitment_case_id not in recommended_case_ids
+            )
+        )
         and not (cleaned_data.get("deep_selection_justification") or "").strip()
     ):
         raise ValueError(
-            "You are selecting someone other than the board's recommended candidate. "
+            "This selection differs from the board's recorded recommendation. "
             "Record the justification for the official record."
         )
 
@@ -9874,6 +10041,22 @@ def record_final_selection(application, actor, cleaned_data):
     for item in report_items:
         target_application = item.application
         selected = item.pk == selected_item.pk
+        if not selected:
+            _close_car_item_as_non_selected(
+                item,
+                actor,
+                selection.decision_notes,
+                final_selection=selection,
+                selected_item=selected_item,
+                recommended_candidate_withdrawn=recommended_candidate_withdrawn,
+                description=(
+                    "Appointing Authority selected another applicant from the finalized CAR."
+                ),
+                routing_description=(
+                    "Closed as not selected after Appointing Authority selected from CAR."
+                ),
+            )
+            continue
         next_role = _completion_handler_role(target_application) if selected else ""
         next_status = (
             RecruitmentApplication.Status.APPROVED
@@ -9972,23 +10155,6 @@ def record_final_selection(application, actor, cleaned_data):
                 tab="completion",
             )
             queue_selected_applicant_notification(target_application, actor=actor)
-        else:
-            record_routing_history_event(
-                application=target_application,
-                actor=actor,
-                route_type=RoutingHistory.RouteType.CLOSE,
-                description="Closed as not selected after Appointing Authority selected from CAR.",
-                recruitment_case=target_application.case,
-                from_handler_role=previous_role,
-                to_handler_role="",
-                from_status=previous_status,
-                to_status=next_status,
-                from_stage=case_transition["previous_stage"],
-                to_stage=target_application.case.current_stage,
-                notes=selection.decision_notes,
-            )
-            queue_non_selected_applicant_notification(target_application, actor=actor)
-
     return selection
 
 
@@ -12593,7 +12759,7 @@ def vacancy_assessment_weights_unlock_block_message(posting):
     ).exists():
         return (
             "The assessment weights cannot be changed: a Comparative Assessment Report "
-            "has been finalized on this split. Return the CAR for reassessment first."
+            "has been finalized on this split. Return the CAR for correction first."
         )
     return ""
 

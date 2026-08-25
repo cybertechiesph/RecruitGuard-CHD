@@ -613,9 +613,8 @@ class Command(BaseCommand):
                 "summary_notes": "Demo finalized CAR forwarded to the Appointing Authority.",
                 "recommended_case_id": applications[0].case.id,
                 "recommendation_notes": "HRMPSB recommends the top-ranked applicant.",
-                # WF-02: the CAR finalize requires the deliberation quorum.
-                "quorum_met": True,
                 "members_present": MIN_INTERVIEW_RATINGS_PLANTILLA,
+                "deliberated_on": timezone.localdate(),
             },
             finalize=True,
         )

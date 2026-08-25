@@ -141,13 +141,16 @@ from .services import (
     record_final_decision,
     user_can_record_final_decision,
     record_final_selection,
+    record_no_appointment,
     return_car_for_reassessment,
     _final_selection_items_are_ready,
     rescind_final_selection,
     user_can_rescind_final_selection,
     user_can_record_final_selection,
+    user_can_record_no_appointment,
     get_final_selection_for_entry,
     get_final_selection_history,
+    final_selection_recommended_case_ids,
     record_system_audit_event,
     remove_applicant_from_batch,
     save_cos_vacancy_deliberation,
@@ -864,9 +867,8 @@ class BaseRecruitmentTestCase(TestCase):
             actor=car_actor,
             cleaned_data={
                 "summary_notes": summary_notes,
-                # WF-02: the deliberation quorum (3–5 members, met) is required at finalize.
-                "quorum_met": True,
                 "members_present": 4,
+                "deliberated_on": timezone.localdate(),
                 # The board's recommended applicant is captured at finalize (defaults to
                 # this application's own case, which is always in the pool).
                 "recommended_case_id": (
@@ -905,7 +907,7 @@ class BaseRecruitmentTestCase(TestCase):
             # WF-03: picking someone other than the board's recommendation (rank #1
             # fallback) requires a written justification for the official record.
             recommended_case_id = report.recommended_case_id
-            if recommended_case_id is None:
+            if recommended_case_id is None and not report.recommends_none:
                 rank_one = candidate_items.filter(rank_order=1).first()
                 recommended_case_id = rank_one.recruitment_case_id if rank_one else None
             cleaned_data = {
@@ -913,8 +915,11 @@ class BaseRecruitmentTestCase(TestCase):
                 "decision_notes": decision_notes,
             }
             if (
-                recommended_case_id
-                and selected_item.recruitment_case_id != recommended_case_id
+                report.recommends_none
+                or (
+                    recommended_case_id
+                    and selected_item.recruitment_case_id != recommended_case_id
+                )
             ):
                 cleaned_data["deep_selection_justification"] = (
                     "Documented justification for selecting against the board's recommendation."
@@ -5960,13 +5965,19 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         with patch(
             "recruitment.forms.get_available_actions",
             return_value=[
-                ("return_car_for_reassessment", "Send the CAR back to HRMPSB")
+                (
+                    "return_car_for_reassessment",
+                    "Return CAR for correction (ETE / recommendation)",
+                )
             ],
         ):
             form = WorkflowActionForm(application=application, user=self.appointing)
 
         self.assertTrue(form.action_is_fixed)
-        self.assertEqual(form.action_fixed_label, "Send the CAR back to HRMPSB")
+        self.assertEqual(
+            form.action_fixed_label,
+            "Return CAR for correction (ETE / recommendation)",
+        )
         self.assertEqual(form.fields["action"].widget.input_type, "hidden")
         self.assertEqual(form["action"].value(), "return_car_for_reassessment")
 
@@ -5974,7 +5985,7 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
             "internal_includes/workflow_action_card.html",
             {"action_form": form, "application": application},
         )
-        self.assertIn("Send the CAR back to HRMPSB", html)
+        self.assertIn("Return CAR for correction (ETE / recommendation)", html)
         self.assertIn(
             'type="hidden" name="action" value="return_car_for_reassessment"', html
         )
@@ -17221,8 +17232,8 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             actor=self.secretariat,
             cleaned_data={
                 "summary_notes": "Prepared by HRMS from finalized HRMPSB records.",
-                "quorum_met": True,
                 "members_present": 4,
+                "deliberated_on": timezone.localdate(),
                 "recommended_case_id": application.case.id,
             },
             finalize=True,
@@ -17281,8 +17292,8 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             actor=self.secretariat,
             cleaned_data={
                 "summary_notes": "Level 2 CAR prepared by the Secretariat (WF-04).",
-                "quorum_met": True,
                 "members_present": 4,
+                "deliberated_on": timezone.localdate(),
                 "recommended_case_id": application.case.id,
             },
             finalize=True,
@@ -17401,8 +17412,8 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             actor=self.secretariat,
             cleaned_data={
                 "summary_notes": "CAR includes advisory preliminary ranking.",
-                "quorum_met": True,
                 "members_present": 4,
+                "deliberated_on": timezone.localdate(),
                 "recommended_case_id": secondary_application.case.id,
             },
             finalize=True,
@@ -17566,28 +17577,82 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         item = draft.items.get(recruitment_case=application.case)
         self.assertEqual(item.ete_rating, Decimal("81.00"))
 
-    def test_car_finalize_records_quorum_attestation(self):
+    def test_car_finalize_derives_quorum_from_members_and_records_deliberation_date(self):
         application = self.make_application(self.level1_position)
         self.move_application_to_hrmpsb_review(application)
         self.finalize_interview_for_current_stage(application, self.hrmpsb)
         self.finalize_deliberation_for_current_stage(application, self.hrmpsb, ranking_position=1)
         self.ensure_ete_ratings_for_pool(application)
 
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'name="quorum_met"')
+        self.assertContains(response, 'name="members_present"')
+        self.assertContains(response, 'name="deliberated_on"')
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "Record how many HRMPSB members were present (3–5).",
+        ):
+            generate_comparative_assessment_report(
+                application=application,
+                actor=self.secretariat,
+                cleaned_data={
+                    "summary_notes": "Too few members.",
+                    "members_present": 2,
+                    "deliberated_on": timezone.localdate(),
+                    "recommended_case_id": application.case.id,
+                },
+                finalize=True,
+            )
+
+        deliberated_on = timezone.localdate() - timedelta(days=1)
         report = generate_comparative_assessment_report(
             application=application,
             actor=self.secretariat,
             cleaned_data={
                 "summary_notes": "Finalized CAR.",
-                "quorum_met": True,
-                "members_present": 5,
+                "members_present": 3,
+                "deliberated_on": deliberated_on,
                 "recommended_case_id": application.case.id,
             },
             finalize=True,
         )
 
         self.assertTrue(report.is_finalized)
-        self.assertIs(report.quorum_met, True)
-        self.assertEqual(report.members_present, 5)
+        self.assertIsNone(report.quorum_met)
+        self.assertEqual(report.members_present, 3)
+        self.assertEqual(report.deliberated_on, deliberated_on)
+
+    def test_car_finalize_requires_the_deliberation_date(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb)
+        self.finalize_deliberation_for_current_stage(application, self.hrmpsb, ranking_position=1)
+        self.ensure_ete_ratings_for_pool(application)
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "Record the deliberation date before finalizing the CAR.",
+        ):
+            generate_comparative_assessment_report(
+                application=application,
+                actor=self.secretariat,
+                cleaned_data={
+                    "summary_notes": "Date omitted.",
+                    "members_present": 3,
+                    "recommended_case_id": application.case.id,
+                },
+                finalize=True,
+            )
+        self.assertFalse(
+            ComparativeAssessmentReport.objects.filter(
+                recruitment_entry=application.position,
+                is_finalized=True,
+            ).exists()
+        )
 
     def test_car_cannot_finalize_with_a_blank_formula_component(self):
         # SL-03: the audit's probe — a candidate with no ETE finalized at rank 1 and was
@@ -17611,8 +17676,8 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
                 actor=self.secretariat,
                 cleaned_data={
                     "summary_notes": "Finalizing without an ETE rating.",
-                    "quorum_met": True,
                     "members_present": 4,
+                    "deliberated_on": timezone.localdate(),
                     "recommended_case_id": application.case.id,
                 },
                 finalize=True,
@@ -17636,8 +17701,8 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             actor=self.secretariat,
             cleaned_data={
                 "summary_notes": "Complete CAR.",
-                "quorum_met": True,
                 "members_present": 4,
+                "deliberated_on": timezone.localdate(),
                 "recommended_case_id": application.case.id,
             },
             finalize=True,
@@ -17783,15 +17848,15 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
 
         with self.assertRaisesMessage(
             ValueError,
-            "Record the HRMPSB board's recommended applicant before finalizing the CAR.",
+            "Record the HRMPSB board's recommendation before finalizing the CAR.",
         ):
             generate_comparative_assessment_report(
                 application=application,
                 actor=self.secretariat,
                 cleaned_data={
                     "summary_notes": "No recommendation provided.",
-                    "quorum_met": True,
                     "members_present": 4,
+                    "deliberated_on": timezone.localdate(),
                 },
                 finalize=True,
             )
@@ -17814,8 +17879,8 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             actor=self.secretariat,
             cleaned_data={
                 "summary_notes": "Finalized CAR with recommendation.",
-                "quorum_met": True,
                 "members_present": 4,
+                "deliberated_on": timezone.localdate(),
                 "recommended_case_id": application.case.id,
                 "recommendation_notes": "Strongest competency profile in the pool.",
             },
@@ -17825,6 +17890,138 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         self.assertTrue(report.is_finalized)
         self.assertEqual(report.recommended_case_id, application.case.id)
         self.assertEqual(report.recommendation_notes, "Strongest competency profile in the pool.")
+
+    def test_board_can_recommend_none_with_notes_and_every_pick_is_a_deviation(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb)
+        self.finalize_deliberation_for_current_stage(application, self.hrmpsb, ranking_position=1)
+        self.ensure_ete_ratings_for_pool(application)
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
+        self.assertContains(response, '— Board recommends no candidate —')
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "Explain why the board recommends no candidate before finalizing the CAR.",
+        ):
+            generate_comparative_assessment_report(
+                application=application,
+                actor=self.secretariat,
+                cleaned_data={
+                    "summary_notes": "Board recommendation pending.",
+                    "members_present": 3,
+                    "deliberated_on": timezone.localdate(),
+                    "recommended_case_id": "none",
+                    "recommendation_notes": "",
+                },
+                finalize=True,
+            )
+
+        report = generate_comparative_assessment_report(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data={
+                "summary_notes": "Board concluded the search.",
+                "members_present": 3,
+                "deliberated_on": timezone.localdate(),
+                "recommended_case_id": "none",
+                "recommendation_notes": "No candidate met the board's full expectations.",
+            },
+            finalize=True,
+        )
+        self.assertTrue(report.recommends_none)
+        self.assertIsNone(report.recommended_case_id)
+        self.assertEqual(final_selection_recommended_case_ids(report), set())
+
+        application.refresh_from_db()
+        item = report.items.get(recruitment_case=application.case)
+        form = FinalSelectionForm(
+            {
+                "selected_item": item.id,
+                "decision_notes": "Attempted without a deviation reason.",
+            },
+            report=report,
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn(
+            "This selection differs from the board's recorded recommendation.",
+            form.errors["deep_selection_justification"][0],
+        )
+        with self.assertRaisesMessage(
+            ValueError,
+            "This selection differs from the board's recorded recommendation.",
+        ):
+            record_final_selection(
+                application,
+                self.appointing,
+                {
+                    "selected_item": item,
+                    "decision_notes": "Attempted without a deviation reason.",
+                },
+            )
+
+        self.force_login_with_mfa(client, self.appointing)
+        detail_response = client.get(
+            reverse("application-detail", kwargs={"pk": application.pk})
+        )
+        self.assertContains(detail_response, 'data-recommended="0"')
+        print_response = client.get(
+            reverse("comparative-assessment-print", kwargs={"pk": application.pk})
+        )
+        self.assertEqual(print_response.status_code, 200)
+        self.assertContains(print_response, "Board recommendation: none")
+        self.assertContains(print_response, "No candidate met the board&#x27;s full expectations.")
+        self.assertContains(
+            print_response,
+            report.deliberated_on.strftime("%B %d, %Y"),
+        )
+
+        filing_client = Client()
+        self.force_login_with_mfa(filing_client, self.secretariat)
+        filing_response = filing_client.get(
+            reverse("comparative-assessment-filing-copy", kwargs={"pk": application.position_id})
+        )
+        self.assertEqual(filing_response.status_code, 200)
+        self.assertContains(filing_response, "Board recommendation: none")
+        self.assertContains(
+            filing_response,
+            report.deliberated_on.strftime("%B %d, %Y"),
+        )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            selection = record_final_selection(
+                application,
+                self.appointing,
+                {
+                    "selected_item": item,
+                    "decision_notes": "Selected despite no board recommendation.",
+                    "deep_selection_justification": (
+                        "The appointing authority documented the independent selection basis."
+                    ),
+                },
+            )
+        self.assertEqual(selection.selected_item_id, item.id)
+
+    def test_recommend_one_keeps_the_existing_non_deviation_path(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_appointing_review(application)
+        report = get_latest_finalized_comparative_assessment_report(application)
+        item = report.items.get(recruitment_case=application.case)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            selection = record_final_selection(
+                application,
+                self.appointing,
+                {
+                    "selected_item": item,
+                    "decision_notes": "Selected the board's recommended applicant.",
+                },
+            )
+        self.assertEqual(selection.selected_item_id, item.id)
+        self.assertFalse(selection.deep_selection_justification)
 
     def test_car_finalize_rejects_a_recommendation_outside_the_pool(self):
         application = self.make_application(self.level1_position)
@@ -17845,8 +18042,8 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
                 actor=self.secretariat,
                 cleaned_data={
                     "summary_notes": "Cross-vacancy recommendation.",
-                    "quorum_met": True,
                     "members_present": 4,
+                    "deliberated_on": timezone.localdate(),
                     "recommended_case_id": other.case.id,
                 },
                 finalize=True,
@@ -17885,7 +18082,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
 
         car_message = (
             "The assessment weights cannot be changed: a Comparative Assessment Report "
-            "has been finalized on this split. Return the CAR for reassessment first."
+            "has been finalized on this split. Return the CAR for correction first."
         )
         with self.assertRaisesMessage(ValidationError, car_message):
             unlock_vacancy_assessment_weights(
@@ -18083,8 +18280,8 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             actor=self.secretariat,
             cleaned_data={
                 "summary_notes": "Final entry-level CAR.",
-                "quorum_met": True,
                 "members_present": 4,
+                "deliberated_on": timezone.localdate(),
                 "recommended_case_id": secondary_application.case.id,
             },
             finalize=True,
@@ -18353,6 +18550,151 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
             ).exists()
         )
 
+    def test_appointing_authority_can_record_no_appointment_and_cases_remain_reopenable(self):
+        applications, report = self.prepare_ranked_level1_car(3)
+        client = Client()
+        self.force_login_with_mfa(client, self.appointing)
+        detail = client.get(
+            reverse("application-detail", kwargs={"pk": applications[0].pk})
+        )
+        self.assertEqual(detail.status_code, 200)
+        self.assertContains(detail, "No appointment (failure of search)")
+        self.assertContains(
+            detail,
+            "Every remaining candidate is told they were not selected. "
+            "The vacancy can then be re-published as a new posting.",
+        )
+        self.assertContains(
+            detail,
+            reverse("no-appointment-record", kwargs={"pk": applications[0].pk}),
+        )
+
+        blank_response = client.post(
+            reverse("no-appointment-record", kwargs={"pk": applications[0].pk}),
+            {"reason": ""},
+        )
+        self.assertEqual(blank_response.status_code, 200)
+        self.assertContains(blank_response, "This field is required.")
+        self.assertFalse(
+            AuditLog.objects.filter(action=AuditLog.Action.NO_APPOINTMENT_RECORDED).exists()
+        )
+
+        reason = "The appointing authority declared a failure of search."
+        with self.captureOnCommitCallbacks(execute=True):
+            response = client.post(
+                reverse("no-appointment-record", kwargs={"pk": applications[0].pk}),
+                {"reason": reason},
+            )
+        self.assertEqual(response.status_code, 302)
+        redirected = client.get(response["Location"])
+        self.assertEqual(redirected.status_code, 200)
+
+        report.refresh_from_db()
+        self.assertTrue(report.is_finalized)
+        self.assertFalse(report.is_returned)
+        self.assertFalse(
+            FinalSelection.objects.filter(recruitment_entry=self.level1_position).exists()
+        )
+        for item, application in zip(report.items.order_by("rank_order", "id"), applications):
+            application.refresh_from_db()
+            application.case.refresh_from_db()
+            self.assertEqual(application.status, RecruitmentApplication.Status.REJECTED)
+            self.assertEqual(application.case.case_status, RecruitmentCase.CaseStatus.REJECTED)
+            self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.CLOSED)
+            decision_audit = AuditLog.objects.get(
+                application=application,
+                action=AuditLog.Action.DECISION_RECORDED,
+                metadata__no_appointment_recorded=True,
+            )
+            self.assertEqual(decision_audit.metadata["car_report_id"], report.id)
+            self.assertEqual(decision_audit.metadata["car_item_id"], item.id)
+            self.assertEqual(decision_audit.metadata["decision_notes"], reason)
+            self.assertEqual(
+                decision_audit.metadata["decision_outcome"],
+                FinalDecision.Outcome.NOT_SELECTED,
+            )
+            self.assertTrue(
+                NotificationLog.objects.filter(
+                    application=application,
+                    notification_type=NotificationLog.NotificationType.NON_SELECTED_APPLICANT,
+                ).exists()
+            )
+
+        system_audit = AuditLog.objects.get(
+            application__isnull=True,
+            action=AuditLog.Action.NO_APPOINTMENT_RECORDED,
+        )
+        self.assertEqual(system_audit.metadata["report_id"], report.id)
+        self.assertEqual(system_audit.metadata["report_version"], report.version_number)
+        self.assertEqual(system_audit.metadata["reason"], reason)
+        self.assertEqual(
+            system_audit.metadata["item_ids"],
+            list(report.items.order_by("rank_order", "id").values_list("id", flat=True)),
+        )
+
+        # RD-7: no FinalSelection exists, so this is an ordinary rejected case and the
+        # correction door remains available.
+        reopened = reopen_recruitment_case(
+            applications[0],
+            self.hrm_chief,
+            "Correction needed after the failure-of-search record.",
+        )
+        reopened.application.refresh_from_db()
+        reopened.refresh_from_db()
+        self.assertEqual(reopened.case_status, RecruitmentCase.CaseStatus.ACTIVE)
+        self.assertEqual(
+            reopened.application.status,
+            RecruitmentApplication.Status.APPOINTING_AUTHORITY_REVIEW,
+        )
+
+    def test_no_appointment_refuses_an_unready_car_or_an_existing_selection(self):
+        applications, report = self.prepare_ranked_level1_car(2)
+        unready = applications[1]
+        unready.current_handler_role = RecruitmentUser.Role.HRMPSB_MEMBER
+        unready.save(update_fields=["current_handler_role", "updated_at"])
+        unready.case.current_handler_role = RecruitmentUser.Role.HRMPSB_MEMBER
+        unready.case.save(update_fields=["current_handler_role", "updated_at"])
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "All CAR applicants must be ready for Appointing Authority final selection.",
+        ):
+            record_no_appointment(
+                applications[0],
+                self.appointing,
+                "Attempted while a CAR item was not ready.",
+            )
+
+        unready.current_handler_role = RecruitmentUser.Role.APPOINTING_AUTHORITY
+        unready.status = RecruitmentApplication.Status.APPOINTING_AUTHORITY_REVIEW
+        unready.save(update_fields=["current_handler_role", "status", "updated_at"])
+        unready.case.current_handler_role = RecruitmentUser.Role.APPOINTING_AUTHORITY
+        unready.case.current_stage = RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW
+        unready.case.save(
+            update_fields=["current_handler_role", "current_stage", "updated_at"]
+        )
+        selected_item = report.items.get(recruitment_case=applications[0].case)
+        with self.captureOnCommitCallbacks(execute=True):
+            record_final_selection(
+                applications[0],
+                self.appointing,
+                {
+                    "selected_item": selected_item,
+                    "decision_notes": "A selection now stands.",
+                },
+            )
+
+        self.assertFalse(user_can_record_no_appointment(self.appointing, applications[0]))
+        with self.assertRaisesMessage(
+            ValueError,
+            "Final selection has already been recorded for this vacancy.",
+        ):
+            record_no_appointment(
+                applications[0],
+                self.appointing,
+                "Attempted after selection.",
+            )
+
     def test_final_selection_outside_top_five_requires_deep_selection_support(self):
         applications, report = self.prepare_ranked_level1_car(6)
         selected_item = report.items.get(rank_order=6)
@@ -18431,8 +18773,22 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         applications, report = self.prepare_ranked_level1_car(2)
 
         self.assertIn(
-            ("return_car_for_reassessment", "Return CAR for HRMPSB Reassessment"),
+            (
+                "return_car_for_reassessment",
+                "Return CAR for correction (ETE / recommendation)",
+            ),
             get_available_actions(applications[0], self.appointing),
+        )
+        client = Client()
+        self.force_login_with_mfa(client, self.appointing)
+        detail = client.get(
+            reverse("application-detail", kwargs={"pk": applications[0].pk})
+        )
+        self.assertContains(detail, "Return CAR for correction (ETE / recommendation)")
+        self.assertContains(
+            detail,
+            "A return reopens the ETE ratings and the recommendation. "
+            "Finalized exam and interview scores are not re-opened.",
         )
         returned_report = process_workflow_action(
             applications[0],
@@ -18486,14 +18842,31 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
             actor=self.secretariat,
             cleaned_data={
                 "summary_notes": "Final CAR after HRMPSB reassessment.",
-                "quorum_met": True,
                 "members_present": 4,
+                "deliberated_on": timezone.localdate(),
                 "recommended_case_id": applications[0].case.id,
             },
             finalize=True,
         )
         self.assertTrue(new_report.is_finalized)
         self.assertFalse(new_report.is_returned)
+
+    def test_a_historical_car_without_a_deliberation_date_can_still_be_returned(self):
+        applications, report = self.prepare_ranked_level1_car(1)
+        ComparativeAssessmentReport.objects.filter(pk=report.pk).update(
+            deliberated_on=None
+        )
+        report.refresh_from_db()
+
+        returned = return_car_for_reassessment(
+            applications[0],
+            self.appointing,
+            "Correct the recommendation on this historical CAR.",
+        )
+
+        returned.refresh_from_db()
+        self.assertTrue(returned.is_returned)
+        self.assertIsNone(returned.deliberated_on)
 
     def test_withdrawn_car_item_is_greyed_unselectable_and_untouched_by_selection(self):
         applications, report = self.prepare_ranked_level1_car(3)
@@ -18735,7 +19108,7 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Send the CAR back to HRMPSB")
+        self.assertContains(response, "Return CAR for correction (ETE / recommendation)")
         self.assertContains(response, "This field is required.")
         self.assertFalse(FinalSelection.objects.filter(recruitment_entry=self.level1_position).exists())
         report.refresh_from_db()

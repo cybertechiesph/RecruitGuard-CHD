@@ -3560,6 +3560,7 @@ class ComparativeAssessmentReport(TimestampedModel):
     summary_notes = models.TextField(blank=True)
     quorum_met = models.BooleanField(blank=True, null=True)
     members_present = models.PositiveSmallIntegerField(blank=True, null=True)
+    deliberated_on = models.DateField(blank=True, null=True)
     # The HRMPSB board's recommended applicant, recorded on its behalf at CAR finalize
     # (the board deliberates off-system; the secretariat encodes the pick — spec §5.4).
     recommended_case = models.ForeignKey(
@@ -3569,6 +3570,7 @@ class ComparativeAssessmentReport(TimestampedModel):
         blank=True,
         null=True,
     )
+    recommends_none = models.BooleanField(default=False)
     recommendation_notes = models.TextField(blank=True)
     consolidated_snapshot = models.JSONField(default=dict, blank=True)
     version_number = models.PositiveIntegerField(default=1)
@@ -3665,20 +3667,42 @@ class ComparativeAssessmentReport(TimestampedModel):
                 errors["evidence_item"] = (
                     "The generated CAR file must stay linked to the same recruitment entry as the report."
                 )
-        # WF-02: quorum (3–5 of the 5 HRMPSB members) is a HARD gate on finalize.
-        # Draft saves stay unvalidated — the deliberation may not have happened yet.
-        if self.is_finalized and self.quorum_met is not True:
-            errors["quorum_met"] = (
-                "Deliberation quorum (at least 3 of the 5 HRMPSB members) must be met "
-                "before the CAR can be finalized."
-            )
+        # WF-02: 3–5 members present is the quorum fact. The historical quorum_met field
+        # remains for old CAR rows, but new reports derive quorum from this count.
         if self.is_finalized and (
             self.members_present is None or not (3 <= self.members_present <= 5)
         ):
             errors["members_present"] = "Record how many HRMPSB members were present (3–5)."
-        if self.is_finalized and not self.recommended_case_id:
+        if self.is_finalized and not self.deliberated_on:
+            # The nullable migration deliberately cannot invent a deliberation date for
+            # historical finalized CARs. Keep those existing rows operable (notably for an
+            # AA return), while every newly finalized CAR must carry the fact.
+            existing_without_date = bool(
+                self.pk
+                and type(self).objects.filter(
+                    pk=self.pk,
+                    deliberated_on__isnull=True,
+                ).exists()
+            )
+            if not existing_without_date:
+                errors["deliberated_on"] = (
+                    "Record the deliberation date before finalizing the CAR."
+                )
+        if self.recommends_none and self.recommended_case_id:
             errors["recommended_case"] = (
-                "Record the HRMPSB board's recommended applicant before finalizing the CAR."
+                "A CAR that recommends no candidate cannot also name a recommended applicant."
+            )
+        if (
+            self.is_finalized
+            and self.recommends_none
+            and not (self.recommendation_notes or "").strip()
+        ):
+            errors["recommendation_notes"] = (
+                "Explain why the board recommends no candidate before finalizing the CAR."
+            )
+        elif self.is_finalized and not self.recommends_none and not self.recommended_case_id:
+            errors["recommended_case"] = (
+                "Record the HRMPSB board's recommendation before finalizing the CAR."
             )
         elif (
             self.recommended_case_id
@@ -4018,22 +4042,25 @@ class FinalSelection(TimestampedModel):
         # WF-03: selecting against the board's recommendation (falling back to rank #1 when
         # no recommendation was recorded) requires a written justification for the record.
         if self.selected_item_id and self.comparative_assessment_report_id:
-            recommended_case_id = self.comparative_assessment_report.recommended_case_id
+            report = self.comparative_assessment_report
+            recommended_case_id = report.recommended_case_id
             # SL-08: with no recorded recommendation the fallback is the top computed rank,
             # which a tie can share. Picking any member of that band is not a deviation.
-            recommended_case_ids = (
-                {recommended_case_id}
-                if recommended_case_id
-                else set(
-                    self.comparative_assessment_report.items.filter(rank_order=1)
-                    .values_list("recruitment_case_id", flat=True)
+            recommended_case_ids = set()
+            if not report.recommends_none:
+                recommended_case_ids = (
+                    {recommended_case_id}
+                    if recommended_case_id
+                    else set(
+                        report.items.filter(rank_order=1)
+                        .values_list("recruitment_case_id", flat=True)
+                    )
                 )
-            )
             # SL2-09: a recommendation that has since left the competition does not make
             # every remaining selection a deviation. Filter it out without promoting the
             # next stored rank; the finalized CAR remains unchanged.
             recommended_case_ids -= set(
-                self.comparative_assessment_report.items.filter(
+                report.items.filter(
                     recruitment_case_id__in=recommended_case_ids,
                     recruitment_case__application__status__in={
                         RecruitmentApplication.Status.WITHDRAWN,
@@ -4042,12 +4069,17 @@ class FinalSelection(TimestampedModel):
                 ).values_list("recruitment_case_id", flat=True)
             )
             if (
-                recommended_case_ids
-                and self.selected_item.recruitment_case_id not in recommended_case_ids
+                (
+                    report.recommends_none
+                    or (
+                        recommended_case_ids
+                        and self.selected_item.recruitment_case_id not in recommended_case_ids
+                    )
+                )
                 and not (self.deep_selection_justification or "").strip()
             ):
                 errors["deep_selection_justification"] = (
-                    "You are selecting someone other than the board's recommended candidate. "
+                    "This selection differs from the board's recorded recommendation. "
                     "Record the justification for the official record."
                 )
         if self.decided_by_id and self.decided_by.role != RecruitmentUser.Role.APPOINTING_AUTHORITY:
@@ -4935,6 +4967,7 @@ class AuditLog(TimestampedModel):
         CAR_FINALIZED = "car_finalized", "Comparative Assessment Report Finalized"
         CAR_RETURNED = "car_returned", "Comparative Assessment Report Returned"
         DECISION_RECORDED = "decision_recorded", "Decision Recorded"
+        NO_APPOINTMENT_RECORDED = "no_appointment_recorded", "No Appointment Recorded"
         APPLICANT_DISQUALIFIED = "applicant_disqualified", "Applicant Disqualified"
         APPLICATION_WITHDRAWN = "application_withdrawn", "Application Withdrawn"
         RECRUITMENT_ENTRY_CANCELLED = "recruitment_entry_cancelled", "Recruitment Entry Cancelled"
@@ -5121,6 +5154,7 @@ AUDIT_ACTION_DISPLAY_LABELS = {
     AuditLog.Action.CAR_GENERATED: "Comparative Assessment Report Created",
     AuditLog.Action.CAR_FINALIZED: "Comparative Assessment Report Finalized",
     AuditLog.Action.DECISION_RECORDED: "Decision Saved",
+    AuditLog.Action.NO_APPOINTMENT_RECORDED: "No Appointment Recorded",
     AuditLog.Action.COMPLETION_RECORDED: "Completion Saved",
     AuditLog.Action.CASE_CLOSED: "Case Closed",
     AuditLog.Action.NOTIFICATION_SENT: "Notification Sent",
@@ -5214,6 +5248,7 @@ AUDIT_ACTION_CATEGORIES = {
             AuditLog.Action.CAR_FINALIZED,
             AuditLog.Action.CAR_RETURNED,
             AuditLog.Action.DECISION_RECORDED,
+            AuditLog.Action.NO_APPOINTMENT_RECORDED,
             AuditLog.Action.APPLICANT_DISQUALIFIED,
             AuditLog.Action.APPLICATION_WITHDRAWN,
             AuditLog.Action.RECRUITMENT_ENTRY_CANCELLED,

@@ -2691,21 +2691,18 @@ class DeliberationRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, f
 
 
 class ComparativeAssessmentReportForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.ModelForm):
-    quorum_met = forms.ChoiceField(
-        choices=[("", "—"), ("yes", "Yes"), ("no", "No")],
-        required=False,
-    )
-
     class Meta:
         model = ComparativeAssessmentReport
         fields = [
             "summary_notes",
             "members_present",
+            "deliberated_on",
             "recommendation_notes",
         ]
         widgets = {
             "summary_notes": forms.Textarea(attrs={"rows": 4}),
             "members_present": forms.NumberInput(attrs={"min": "3", "max": "5", "step": "1"}),
+            "deliberated_on": forms.DateInput(attrs={"type": "date"}),
             "recommendation_notes": forms.Textarea(attrs={"rows": 3}),
         }
 
@@ -2715,19 +2712,11 @@ class ComparativeAssessmentReportForm(DeferredModelValidationMixin, BootstrapFor
         self.fields["summary_notes"].required = False
         self.fields["members_present"].label = "HRMPSB members present"
         self.fields["members_present"].required = False
+        self.fields["deliberated_on"].label = "Date of deliberation"
+        self.fields["deliberated_on"].required = False
         self.fields["recommendation_notes"].label = "Recommendation Notes / Remarks"
         self.fields["recommendation_notes"].required = False
-        self.fields["quorum_met"].label = "Quorum met"
         self._apply_bootstrap()
-
-    def clean_quorum_met(self):
-        value = self.cleaned_data.get("quorum_met")
-        if value == "yes":
-            return True
-        if value == "no":
-            return False
-        return None
-
 
 class CARItemChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, item):
@@ -2810,16 +2799,32 @@ class FinalSelectionForm(BootstrapFormMixin, forms.Form):
         recommended_case_ids = self._recommended_case_ids()
         if (
             selected_item
-            and recommended_case_ids
-            and selected_item.recruitment_case_id not in recommended_case_ids
+            and (
+                getattr(self.report, "recommends_none", False)
+                or (
+                    recommended_case_ids
+                    and selected_item.recruitment_case_id not in recommended_case_ids
+                )
+            )
             and not justification
         ):
             self.add_error(
                 "deep_selection_justification",
-                "You are selecting someone other than the board's recommended candidate. "
+                "This selection differs from the board's recorded recommendation. "
                 "Record the justification for the official record.",
             )
         return cleaned_data
+
+
+class NoAppointmentForm(BootstrapFormMixin, forms.Form):
+    reason = forms.CharField(
+        label="Reason",
+        widget=forms.Textarea(attrs={"rows": 4}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
 
 
 class PositionDocumentRequirementsForm(forms.Form):

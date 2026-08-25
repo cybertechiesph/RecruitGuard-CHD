@@ -10,7 +10,7 @@ Standards applied:
     override allowed afterwards.
   - Confirm modal on "Record this final selection" (lighter wording —
     a Final Decision step still follows).
-  - Confirm modal on "Send the CAR back to HRMPSB" (destructive of the
+  - Confirm modal on "Return CAR for correction" (destructive of the
     current CAR state — short, names the recipient, requires remarks).
 {% endcomment %}
 
@@ -237,7 +237,42 @@ Standards applied:
     </div>
 </form>
 
-{# ─── Card 4: Return CAR for Reassessment (when applicable) ─── #}
+{# ─── Card 4: No appointment / failure of search ─── #}
+{% if no_appointment_form %}
+<div class="rg-icard">
+    <div class="rg-icard__header">
+        <div>
+            <h3 class="rg-icard__title">No appointment (failure of search)</h3>
+            <p class="rg-icard__subtitle">
+                Every remaining candidate is told they were not selected. The vacancy can then be re-published as a new posting.
+            </p>
+        </div>
+    </div>
+    <form method="post" action="{% url 'no-appointment-record' application.pk %}" novalidate>
+        {% csrf_token %}
+        <div class="rg-field">
+            <label class="form-label" for="{{ no_appointment_form.reason.id_for_label }}">
+                {{ no_appointment_form.reason.label }} <span class="text-danger" aria-hidden="true">*</span>
+            </label>
+            {{ no_appointment_form.reason }}
+            <div class="form-text">Required. This is preserved in every affected case and the vacancy audit record.</div>
+            {% for error in no_appointment_form.reason.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+        <div class="rg-fs-actions">
+            <div class="rg-fs-actions__btns">
+                <span class="rg-fs-actions__spacer"></span>
+                <button type="submit" class="btn btn-outline-danger">
+                    Record no appointment
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endif %}
+
+{# ─── Card 5: Return CAR for correction (when applicable) ─── #}
 {% if action_form %}
 <form method="post"
       action="{% url 'workflow-action' application.pk %}"
@@ -248,10 +283,9 @@ Standards applied:
     <div class="rg-icard rg-fs-return-card">
         <div class="rg-icard__header">
             <div>
-                <h3 class="rg-icard__title">Send the CAR back to HRMPSB</h3>
+                <h3 class="rg-icard__title">Return CAR for correction (ETE / recommendation)</h3>
                 <p class="rg-icard__subtitle">
-                    Use this only when the finalized CAR needs to go back to HRMPSB for re-deliberation before an appointee is selected.
-                    <strong>The current CAR state will be replaced.</strong>
+                    A return reopens the ETE ratings and the recommendation. Finalized exam and interview scores are not re-opened.
                 </p>
             </div>
         </div>
@@ -291,7 +325,7 @@ Standards applied:
             <div class="rg-fs-actions__btns">
                 <span class="rg-fs-actions__spacer"></span>
                 <button type="button" class="rg-wf-action-btn rg-wf-action-btn--return-car-for-reassessment" id="fs-return-btn">
-                    Send back to HRMPSB
+                    Return CAR for correction
                 </button>
             </div>
         </div>
@@ -321,7 +355,7 @@ Standards applied:
                 </ul>
                 <p class="mb-2" id="fs-modal-deviation" hidden style="font-size:0.8rem;color:#8a5a00;">
                     Board's recommendation:
-                    <strong>{% for item in final_selection_items %}{% if final_selection_report.recommended_case_id %}{% if item.recruitment_case_id == final_selection_report.recommended_case_id %}{{ item.recruitment_case.application.applicant_display_name }} (rank #{{ item.rank_order }}){% endif %}{% elif item.rank_order == 1 %}{{ item.recruitment_case.application.applicant_display_name }} (rank #{{ item.rank_order }}){% endif %}{% endfor %}</strong>
+                    <strong>{% if final_selection_report.recommends_none %}No candidate{% else %}{% for item in final_selection_items %}{% if final_selection_report.recommended_case_id %}{% if item.recruitment_case_id == final_selection_report.recommended_case_id %}{{ item.recruitment_case.application.applicant_display_name }} (rank #{{ item.rank_order }}){% endif %}{% elif item.rank_order == 1 %}{{ item.recruitment_case.application.applicant_display_name }} (rank #{{ item.rank_order }}){% endif %}{% endfor %}{% endif %}</strong>
                     &mdash; you are selecting <strong id="fs-modal-deviation-selected">&mdash;</strong>.
                 </p>
                 <p class="mb-0" style="font-size:0.78rem; color:#5f6c78;">
@@ -341,20 +375,20 @@ Standards applied:
 </div>
 
 {% if action_form %}
-{# Send the CAR back to HRMPSB #}
+{# Return the CAR for correction #}
 <div class="modal fade" id="fsReturnConfirmModal" tabindex="-1"
      aria-labelledby="fsReturnConfirmLabel" aria-modal="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content" style="border-radius:0.6rem; overflow:hidden;">
             <div class="modal-header" style="background:var(--rg-brand-gold); border-bottom:none; padding:1rem 1.25rem;">
                 <h5 class="modal-title" id="fsReturnConfirmLabel" style="font-size:0.95rem; font-weight:700; color:#5a4106; margin:0;">
-                    Send the CAR back to HRMPSB?
+                    Return the CAR for correction?
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" style="padding:1.25rem; font-size:0.83rem; color:#374151; line-height:1.6;">
                 <p class="mb-2">
-                    HRMPSB will re-do the deliberation. The current Comparative Assessment Report will be returned and a fresh round of evaluation begins.
+                    A return reopens the ETE ratings and the recommendation. Finalized exam and interview scores are not re-opened.
                 </p>
                 <p class="mb-0" style="font-size:0.78rem; color:#5f6c78;">
                     Your <strong>remarks</strong> above are saved to the case history and visible to HRMPSB.
@@ -365,7 +399,7 @@ Standards applied:
                     Keep reviewing
                 </button>
                 <button type="button" class="rg-wf-action-btn rg-wf-action-btn--return-car-for-reassessment" id="fs-return-confirm">
-                    Yes, send back to HRMPSB
+                    Yes, return the CAR
                 </button>
             </div>
         </div>

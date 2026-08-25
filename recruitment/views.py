@@ -33,6 +33,7 @@ from .forms import (
     ExamScheduleForm,
     EvidenceUploadForm,
     FinalSelectionForm,
+    NoAppointmentForm,
     InterviewFallbackUploadForm,
     InterviewRatingForm,
     CompetencyDefinitionFormSet,
@@ -207,6 +208,7 @@ from .services import (
     record_export_denied,
     record_final_decision,
     record_final_selection,
+    record_no_appointment,
     record_evidence_vault_access,
     record_protected_record_access,
     reopen_recruitment_case,
@@ -253,6 +255,7 @@ from .services import (
     vacancy_screening_batch_block_message,
     user_can_record_final_decision,
     user_can_record_final_selection,
+    user_can_record_no_appointment,
     user_can_reopen_case,
     user_can_upload_interview_fallback,
     user_can_upload_evidence,
@@ -1137,12 +1140,17 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
                     in FINAL_SELECTION_OUT_OF_CONTENTION_STATUSES
                 )
                 item.is_selection_recommended = (
-                    not recommended_case_ids
-                    or item.recruitment_case_id in recommended_case_ids
+                    not report.recommends_none
+                    and (
+                        not recommended_case_ids
+                        or item.recruitment_case_id in recommended_case_ids
+                    )
                 )
             context["final_selection_report"] = report
             context["final_selection_items"] = selection_items
             context["final_selection_form"] = FinalSelectionForm(report=report)
+            if user_can_record_no_appointment(user, application):
+                context["no_appointment_form"] = NoAppointmentForm()
         if user_can_manage_completion(user, application):
             completion_record = context["completion_record"]
             requirement_instance = completion_record or CompletionRecord(
@@ -3713,6 +3721,45 @@ class FinalSelectionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, Vie
                     "Choose the selected appointee and provide decision remarks.",
                 ),
             )
+
+
+class NoAppointmentView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
+    def post(self, request, pk):
+        application = get_object_or_404(RecruitmentApplication, pk=pk)
+        if not user_can_record_no_appointment(request.user, application):
+            raise PermissionDenied
+
+        form = NoAppointmentForm(request.POST)
+        if not form.is_valid():
+            messages.error(request, "Record why no appointment will be made.")
+            return _render_application_detail_with_overrides(
+                request,
+                application,
+                no_appointment_form=form,
+            )
+        try:
+            report = record_no_appointment(
+                application=application,
+                actor=request.user,
+                reason=form.cleaned_data["reason"],
+            )
+        except (ValueError, ValidationError) as exc:
+            form.add_error("reason", str(exc))
+            messages.error(request, str(exc))
+            return _render_application_detail_with_overrides(
+                request,
+                application,
+                no_appointment_form=form,
+            )
+        messages.success(
+            request,
+            "No appointment recorded. The remaining candidates were closed as not selected.",
+        )
+        first_item = report.items.order_by("rank_order", "id").first()
+        return redirect(
+            "application-detail",
+            pk=first_item.application.pk if first_item else application.pk,
+        )
 
 
 class CompletionTrackingView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
