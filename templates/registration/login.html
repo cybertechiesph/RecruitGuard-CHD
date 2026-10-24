@@ -24,6 +24,13 @@ background: #0e2f14;
                 Sign in with your assigned internal credentials.
             </p>
 
+            {% if signed_out_for_inactivity %}
+                <div class="alert alert-info mb-3" role="status" data-inactivity-signout>
+                    You were signed out after {{ inactivity_timeout_minutes }} minutes of inactivity to protect
+                    recruitment records. Sign in again to continue where you left off.
+                </div>
+            {% endif %}
+
             {% if messages %}
                 {% for message in messages %}
                     <div class="alert alert-{{ message.tags|default:'info' }} mb-3">{{ message }}</div>

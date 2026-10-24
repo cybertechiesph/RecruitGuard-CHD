@@ -61,7 +61,8 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "config.middleware.SecurityHeadersMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
+    # Django's SessionMiddleware, except passive polls don't extend the inactivity timeout.
+    "config.middleware.ActivityAwareSessionMiddleware",
     "config.middleware.RateLimitMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -374,13 +375,16 @@ CSP_DIRECTIVES = {
         "https://fonts.googleapis.com",
     ),
     "font-src": ("'self'", "https://fonts.gstatic.com", "data:"),
-    "img-src": ("'self'", "data:"),
+    # TI-2: blob: lets the applicant intake form preview a file the applicant just picked
+    # (a local object URL - never a remote origin). Only img-src and frame-src allow it.
+    "img-src": ("'self'", "data:", "blob:"),
     "connect-src": (
         "'self'",
         CLOUDFLARE_TURNSTILE_ORIGIN,
         GOOGLE_RECAPTCHA_ORIGIN,
     ),
     "frame-src": (
+        "blob:",
         CLOUDFLARE_TURNSTILE_ORIGIN,
         GOOGLE_RECAPTCHA_ORIGIN,
         GOOGLE_RECAPTCHA_FRAME_ORIGIN,

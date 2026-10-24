@@ -1,0 +1,29 @@
+{% comment %}
+  TI-3: "Display" menu in the internal top bar - text size and layout density. Choices are saved
+  in this browser only (display_prefs_head.html), like the light/dark toggle beside it.
+{% endcomment %}
+<div class="dropdown rg-display-menu">
+    <button type="button"
+            class="rg-theme-toggle rg-display-menu__toggle"
+            data-bs-toggle="dropdown"
+            data-bs-auto-close="outside"
+            aria-expanded="false"
+            aria-label="Display options: text size and layout"
+            title="Display options">
+        <svg class="rg-theme-toggle__icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>
+        </svg>
+        <span class="rg-theme-toggle__text">Display</span>
+    </button>
+    <div class="dropdown-menu dropdown-menu-end rg-display-menu__panel">
+        <p class="rg-display-menu__heading">Text size</p>
+        {% include "text_size_control.html" %}
+        <p class="rg-display-menu__heading">Layout</p>
+        <div class="rg-display-menu__seg" role="group" aria-label="Layout density">
+            <button type="button" class="rg-display-menu__opt" data-rg-density="comfortable" aria-pressed="false">Comfortable</button>
+            <button type="button" class="rg-display-menu__opt" data-rg-density="compact" aria-pressed="false">Compact</button>
+        </div>
+        <p class="rg-display-menu__hint">Saved on this browser only.</p>
+    </div>
+</div>

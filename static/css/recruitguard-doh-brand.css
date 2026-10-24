@@ -4245,3 +4245,510 @@ body.applicant-portal-body {
     color: #b91c1c;
     font-weight: 700;
 }
+
+/* ==========================================================================
+   TI-2 — Applicant portal: file preview, Plantilla/COS explainer, mobile fixes
+   ========================================================================== */
+
+/* "View" actions next to a picked file (Step 2 chip + Step 3 review list). */
+.rg-pub-upload-slot__view,
+.rg-intake-review__view {
+    background: none;
+    border: 1px solid var(--rg-brand-green, #1b5e20);
+    border-radius: 999px;
+    color: var(--rg-brand-green, #1b5e20);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.2;
+    padding: 0.3rem 0.8rem;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.rg-pub-upload-slot__view:hover,
+.rg-intake-review__view:hover {
+    background: var(--rg-brand-green, #1b5e20);
+    color: #fff;
+}
+.rg-pub-upload-slot__view:focus-visible,
+.rg-intake-review__view:focus-visible {
+    outline: 3px solid #1d4ed8;
+    outline-offset: 2px;
+}
+.rg-intake-review__docstate {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+.rg-intake-preview .modal-header > div { min-width: 0; }
+.rg-intake-preview__meta {
+    font-size: 0.85rem;
+    color: #4b5563;
+    word-break: break-all;
+}
+.rg-intake-preview .modal-body {
+    background: #f3f4f6;
+    text-align: center;
+}
+.rg-intake-preview__image {
+    max-width: 100%;
+    height: auto;
+    border: 1px solid #d1d5db;
+    background: #fff;
+}
+.rg-intake-preview__frame {
+    width: 100%;
+    height: 70vh;
+    border: 1px solid #d1d5db;
+    background: #fff;
+}
+.rg-intake-preview__fallback,
+.rg-intake-preview__note {
+    font-size: 0.85rem;
+    color: #374151;
+    text-align: left;
+}
+.rg-intake-preview__fallback { margin: 0.75rem 0 0; }
+
+/* Plantilla / COS explainer (shared include). */
+.rg-branch-explainer {
+    margin-top: 0.75rem;
+    border: 1px solid #dbe4dc;
+    border-radius: 8px;
+    background: #f7faf7;
+}
+.rg-branch-explainer__summary {
+    cursor: pointer;
+    padding: 0.65rem 0.9rem;
+    font-weight: 600;
+    font-size: 0.92rem;
+    color: var(--rg-brand-green, #1b5e20);
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+}
+.rg-branch-explainer__summary:focus-visible {
+    outline: 3px solid #1d4ed8;
+    outline-offset: 2px;
+    border-radius: 8px;
+}
+.rg-branch-explainer__body {
+    padding: 0 0.9rem 0.8rem;
+    font-size: 0.92rem;
+    color: #1f2937;
+}
+.rg-branch-note {
+    margin: 0.6rem 0 0;
+    padding: 0.55rem 0.8rem;
+    border-left: 3px solid var(--rg-brand-gold, #f1a208);
+    background: #fffbeb;
+    font-size: 0.92rem;
+    color: #1f2937;
+    border-radius: 0 6px 6px 0;
+}
+.rg-branch-legend {
+    display: grid;
+    gap: 0.4rem;
+    margin: 0.75rem 0 0;
+}
+.rg-branch-legend__item {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    font-size: 0.9rem;
+    color: #374151;
+}
+.rg-branch-legend__item dt { flex-shrink: 0; font-weight: 400; }
+.rg-branch-legend__item dd { margin: 0; }
+
+/* Phones: no text below 12px and comfortable tap targets (audited at 375px). */
+@media (max-width: 575.98px) {
+    .applicant-portal-body .rg-brand-kicker,
+    .rg-pub-hero__eyebrow,
+    .rg-pub-chip,
+    .rg-intake-journey__num,
+    .rg-intake-optional {
+        font-size: 0.75rem;
+    }
+
+    .rg-pub-back,
+    .rg-pub-breadcrumb a,
+    .rg-public-footer__meta a,
+    .rg-help-pad__channel-value {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+    }
+    /* Links inside running text: enlarge the hit area without moving the text. */
+    .rg-pub-help-box__copy a,
+    .rg-pub-home-footer-notes a,
+    .rg-help-pad a:not(.rg-help-pad__channel-value),
+    .applicant-portal-body .rg-faq__body a {
+        padding-block: 0.7rem;
+    }
+
+    .applicant-portal-body .form-check-input {
+        width: 1.375rem;
+        height: 1.375rem;
+        margin-top: 0.1rem;
+    }
+    .applicant-portal-body .form-check-label {
+        padding-left: 0.35rem;
+        cursor: pointer;
+    }
+
+    .rg-pub-upload-slot__view,
+    .rg-intake-review__view {
+        min-height: 36px;
+        padding-inline: 1rem;
+    }
+    .rg-intake-review__docs li {
+        flex-wrap: wrap;
+    }
+    .rg-intake-preview__frame { height: 60vh; }
+}
+
+/* ==========================================================================
+   TI-3 — Display comfort: user text size + compact density (internal)
+   Every screen size in these stylesheets is in rem, so scaling the root
+   font size scales the whole interface. Screen only: print layouts keep
+   their own sizes, and the stand-alone print templates never load this.
+   ========================================================================== */
+@media screen {
+    html[data-text-size="large"] { font-size: 112.5%; }
+    html[data-text-size="larger"] { font-size: 125%; }
+}
+
+/* Text-size buttons (applicant header + internal Display menu). */
+.rg-textsize {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0.15rem;
+    border: 1px solid #cfd6dd;
+    border-radius: 999px;
+    background: #fff;
+}
+.rg-textsize__label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #4b5563;
+    padding: 0 0.4rem 0 0.5rem;
+}
+.rg-textsize__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.1rem;
+    height: 2.1rem;
+    padding: 0 0.35rem;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: #374151;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+}
+.rg-textsize__btn--default { font-size: 0.8rem; }
+.rg-textsize__btn--large { font-size: 0.98rem; }
+.rg-textsize__btn--larger { font-size: 1.16rem; }
+.rg-textsize__btn:hover { background: var(--rg-brand-green-soft); color: var(--rg-brand-green); }
+.rg-textsize__btn[aria-pressed="true"] {
+    background: var(--rg-brand-green);
+    color: #fff;
+}
+.rg-textsize__btn:focus-visible {
+    outline: 3px solid #1d4ed8;
+    outline-offset: 1px;
+}
+.rg-public-topbar__inner .rg-textsize { flex-shrink: 0; }
+
+/* Internal "Display" menu. */
+.rg-display-menu__panel {
+    min-width: 15rem;
+    padding: 0.75rem 0.9rem 0.6rem;
+}
+.rg-display-menu__heading {
+    margin: 0 0 0.35rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #4b5563;
+}
+.rg-display-menu__panel .rg-textsize { margin-bottom: 0.8rem; }
+.rg-display-menu__seg {
+    display: flex;
+    gap: 0.25rem;
+    padding: 0.15rem;
+    border: 1px solid #cfd6dd;
+    border-radius: 0.5rem;
+}
+.rg-display-menu__opt {
+    flex: 1;
+    border: 0;
+    border-radius: 0.375rem;
+    padding: 0.4rem 0.6rem;
+    background: transparent;
+    color: #374151;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.rg-display-menu__opt:hover { background: var(--rg-brand-green-soft); color: var(--rg-brand-green); }
+.rg-display-menu__opt[aria-pressed="true"] { background: var(--rg-brand-green); color: #fff; }
+.rg-display-menu__opt:focus-visible { outline: 2px solid #1e5c2d; outline-offset: 1px; }
+.rg-display-menu__hint {
+    margin: 0.6rem 0 0;
+    font-size: 0.75rem;
+    color: #4b5563;
+}
+
+@media screen {
+    html[data-theme="dark"] .rg-textsize,
+    html[data-theme="dark"] .rg-display-menu__seg { background: #1b2733; border-color: rgba(255, 255, 255, 0.14); }
+    html[data-theme="dark"] .rg-textsize__btn,
+    html[data-theme="dark"] .rg-display-menu__opt { color: #c3d0dc; }
+    html[data-theme="dark"] .rg-textsize__btn:hover,
+    html[data-theme="dark"] .rg-display-menu__opt:hover { background: rgba(91, 191, 114, 0.15); color: #74cf88; }
+    html[data-theme="dark"] .rg-textsize__btn[aria-pressed="true"],
+    html[data-theme="dark"] .rg-display-menu__opt[aria-pressed="true"] { background: #2e7d40; color: #fff; }
+    html[data-theme="dark"] .rg-display-menu__heading,
+    html[data-theme="dark"] .rg-display-menu__hint { color: #a9b6c3; }
+}
+
+/* Compact density — internal portal only. Tightens gutters, card and table
+   padding and form spacing by roughly a third; type size is unchanged. */
+@media screen {
+    html[data-density="compact"] .internal-portal-body .rg-main-content { padding: 0.85rem 1rem 2rem; }
+    html[data-density="compact"] .internal-portal-body .rg-context-bar { padding-top: 0.45rem; padding-bottom: 0.45rem; }
+    html[data-density="compact"] .internal-portal-body .rg-page-header { margin-bottom: 1.1rem; gap: 1rem; }
+    html[data-density="compact"] .internal-portal-body .rg-icard { padding: 0.85rem; }
+    html[data-density="compact"] .internal-portal-body .rg-icard + .rg-icard { margin-top: 0.65rem; }
+    html[data-density="compact"] .internal-portal-body .rg-itbl .table > :not(caption) > * > * { padding: 0.5rem 0.7rem; }
+    html[data-density="compact"] .internal-portal-body .table > :not(caption) > * > * { padding-top: 0.4rem; padding-bottom: 0.4rem; }
+    html[data-density="compact"] .internal-portal-body .rg-form-grid { gap: 0.65rem; }
+    html[data-density="compact"] .internal-portal-body .rg-field { gap: 0.3rem; }
+    html[data-density="compact"] .internal-portal-body .card-body { padding: 0.75rem; }
+    html[data-density="compact"] .internal-portal-body .rg-sidebar__link { padding: 0.45rem 0.75rem; }
+    html[data-density="compact"] .internal-portal-body .mb-4 { margin-bottom: 1rem !important; }
+}
+
+/* TI-3 contrast pass — every text/background pair below measured under WCAG AA
+   (4.5:1 for normal text) in the light theme. Ratios: before -> after.
+   Disabled step-rail items stay visibly "not yet" via weight/cursor, but are
+   now readable (they still tell the user what comes next). */
+.rg-breadcrumb-sep { color: #6b7280; }                                   /* 1.69 -> 4.83 */
+.rg-istat__label { color: #5f6c78; }                                     /* 3.51 -> 5.37 */
+.rg-applicant-panel__label { color: #5f6c78; }                           /* 3.08 -> 5.37 */
+.rg-notif-page__meta-time { color: #4b5563; }                            /* 4.05 -> 6.39 on #e6f0dc */
+.rg-scr-steprail__item.is-disabled { color: #5f6c78 !important; font-weight: 500; }   /* 1.36 -> 5.0 on #f5f6f7 */
+.rg-scr-steprail__item.is-disabled .rg-scr-steprail__num { color: #4b5563; }          /* 1.33 -> 6.97 */
+.rg-scr-steprail__item { color: #5f6c78; }                               /* 3.08 -> 5.37 */
+.rg-scr-steprail__num { color: #4b5563; }                                /* 4.06 -> 6.04 on #e3e8ee */
+.rg-pub-optional-tag { color: #4b5563; }                                 /* 2.34 -> 7.10 */
+.rg-intake-journey__num { color: #374151; }                              /* 4.37 -> 8.30 */
+.rg-intake-steprail__item { color: #5f6c78; }                            /* 3.08 -> 5.37 */
+.rg-intake-steprail__num { color: #374151; }                             /* 3.92 -> 8.30 */
+.rg-intake-charcount { color: #64748b; }                                 /* 2.56 -> 4.76 */
+
+@media screen {
+    /* Dark theme (internal portal): same pass against the dark surfaces. */
+    html[data-theme="dark"] .rg-breadcrumb-sep { color: rgba(255, 255, 255, 0.55); }                 /* 2.71 -> 6.9 */
+    html[data-theme="dark"] .rg-scr-steprail__item.is-disabled,
+    html[data-theme="dark"] .rg-scr-steprail__item.is-disabled .rg-scr-steprail__num { color: #9aa8b6 !important; } /* 3.35 -> 6.0 */
+    html[data-theme="dark"] .rg-cmp-req-form-row__seq { color: #b4c0cc; }                            /* 3.88 -> 6.4 */
+    html[data-theme="dark"] .rg-cmp-req-form-row__delete-label { color: #fca5a5; }                   /* 4.09 -> 6.3 */
+}
+
+/* TI-3: the case header's identity block had flex-basis 0, so at larger text sizes (or
+   narrow windows) the case title was squeezed to a few characters wide while the facts row
+   kept its width. Give it a real basis so the facts wrap underneath instead. */
+.rg-cws-header__identity { flex: 1 1 16rem; }
+
+/* TI-3: long e-mail addresses (e.g. the Public Assistance Desk mailbox) must wrap on phones,
+   especially at the larger text sizes, instead of widening the page. */
+.applicant-portal-body a[href^="mailto:"] { overflow-wrap: anywhere; }
+
+/* TI-3: the Display button adds one more control to the internal top bar; on phones keep the
+   bar within the screen by tightening the gaps and dropping the role pill (the signed-in
+   name stays, and the role is shown on every case page anyway). */
+@media (max-width: 479.98px) {
+    .rg-context-bar__right { gap: 0.4rem; }
+    .rg-context-bar__role { display: none; }
+    .rg-user-pill { display: inline-block; max-width: 7.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+/* ==========================================================================
+   TI-4 — Closed Cases filters
+   ========================================================================== */
+.rg-closed-filters__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+    gap: 0.75rem 1rem;
+    align-items: end;
+}
+.rg-closed-filters__search { grid-column: span 2; }
+.rg-closed-filters__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.85rem;
+}
+@media (max-width: 575.98px) {
+    .rg-closed-filters__search { grid-column: auto; }
+}
+
+/* ==========================================================================
+   TI-5 — Schedule calendar (read-only) + "Coming up" panel
+   Event kinds carry a text label as well as a colour.
+   ========================================================================== */
+.rg-sched-viewtoggle { background: #fff; }
+.rg-sched-viewtoggle .rg-display-menu__opt { text-decoration: none; text-align: center; white-space: nowrap; }
+.rg-sched-viewtoggle .rg-display-menu__opt.is-active { background: var(--rg-brand-green); color: #fff; }
+
+.rg-sched-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    list-style: none;
+    padding: 0;
+    margin: 0 0 1rem;
+}
+
+.rg-sched-event__kind {
+    display: inline-block;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+/* Each kind: tinted background + dark ink of the same hue (all >= 4.5:1). */
+.rg-sched-event--exam .rg-sched-event__kind, .rg-sched-event__kind.rg-sched-event--exam { background: #e3f3fb; color: #145a7c; border-color: #b6dff2; }
+.rg-sched-event--interview .rg-sched-event__kind, .rg-sched-event__kind.rg-sched-event--interview { background: #e6f0dc; color: #1e5c2d; border-color: #c4dcae; }
+.rg-sched-event--deliberation .rg-sched-event__kind, .rg-sched-event__kind.rg-sched-event--deliberation { background: #efe9f8; color: #553c8b; border-color: #d6c9ef; }
+.rg-sched-event--closing .rg-sched-event__kind, .rg-sched-event__kind.rg-sched-event--closing { background: #fff4d6; color: #7a5200; border-color: #f2d68a; }
+.rg-sched-event--resubmission .rg-sched-event__kind, .rg-sched-event__kind.rg-sched-event--resubmission { background: #fdecea; color: #9b2a22; border-color: #f4c3be; }
+.rg-sched-event--completion .rg-sched-event__kind, .rg-sched-event__kind.rg-sched-event--completion { background: #f1f4f7; color: #374151; border-color: #d7dde3; }
+
+.rg-sched-event {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 0.5rem;
+    padding: 0.5rem 0;
+    border-top: 1px solid #edf0f3;
+    font-size: 0.85rem;
+}
+.rg-sched-event:first-of-type { border-top: 0; }
+.rg-sched-event__time { font-weight: 700; color: #111827; font-variant-numeric: tabular-nums; }
+.rg-sched-event__title { color: #1f2937; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+a.rg-sched-event__title { color: var(--rg-brand-green); }
+.rg-sched-event__place { flex-basis: 100%; color: #4b5563; font-size: 0.8rem; }
+
+.rg-sched-monthbar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+.rg-sched-monthbar__title {
+    margin: 0 0.5rem;
+    font-size: 1.15rem;
+    font-weight: 700;
+    min-width: 10rem;
+    text-align: center;
+}
+
+.rg-sched-grid { padding: 0; overflow: hidden; }
+.rg-sched-grid__row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.rg-sched-grid__dow {
+    padding: 0.5rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #4b5563;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e5e9ed;
+}
+.rg-sched-cell {
+    min-height: 6.5rem;
+    padding: 0.35rem 0.4rem;
+    border-right: 1px solid #edf0f3;
+    border-bottom: 1px solid #edf0f3;
+    min-width: 0;
+}
+.rg-sched-grid__row > .rg-sched-cell:last-child { border-right: 0; }
+.rg-sched-cell.is-outside { background: #fafbfc; }
+.rg-sched-cell.is-outside .rg-sched-cell__num { color: #6b7280; }
+.rg-sched-cell__num { display: inline-block; font-size: 0.8rem; font-weight: 700; color: #111827; margin-bottom: 0.2rem; }
+.rg-sched-cell.is-today .rg-sched-cell__num {
+    background: var(--rg-brand-green);
+    color: #fff;
+    border-radius: 999px;
+    padding: 0 0.45rem;
+}
+.rg-sched-event--compact {
+    display: block;
+    padding: 0.25rem 0;
+    font-size: 0.75rem;
+    line-height: 1.3;
+}
+.rg-sched-event--compact .rg-sched-event__kind { font-size: 0.66rem; margin-bottom: 0.1rem; }
+.rg-sched-event--compact .rg-sched-event__time { display: block; font-size: 0.72rem; }
+.rg-sched-event--compact .rg-sched-event__title { display: block; font-weight: 500; }
+
+.rg-sched-list { display: grid; gap: 0.75rem; }
+.rg-sched-list--month { display: none; }
+.rg-sched-day__title { font-size: 0.95rem; font-weight: 700; margin: 0 0 0.25rem; color: #111827; }
+
+.rg-sched-comingup__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+.rg-sched-comingup__title { font-size: 1rem; font-weight: 700; margin: 0; }
+.rg-sched-comingup__days { display: grid; grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); gap: 0.25rem 1.25rem; }
+.rg-sched-comingup__date { margin: 0.4rem 0 0; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #4b5563; }
+
+@media (max-width: 767.98px) {
+    .rg-sched-grid { display: none; }
+    .rg-sched-list--month { display: grid; }
+    .rg-sched-monthbar__title { min-width: 0; font-size: 1rem; }
+}
+
+@media screen {
+    html[data-theme="dark"] .rg-sched-viewtoggle { background: #1b2733; }
+    html[data-theme="dark"] .rg-sched-grid__dow { background: #172230; color: #a9b6c3; border-color: rgba(255, 255, 255, 0.08); }
+    html[data-theme="dark"] .rg-sched-cell { border-color: rgba(255, 255, 255, 0.07); }
+    html[data-theme="dark"] .rg-sched-cell.is-outside { background: #131b26; }
+    html[data-theme="dark"] .rg-sched-cell.is-outside .rg-sched-cell__num { color: #8a99a8; }
+    html[data-theme="dark"] :is(.rg-sched-cell__num, .rg-sched-event__time, .rg-sched-day__title) { color: #e8edf2; }
+    html[data-theme="dark"] .rg-sched-cell.is-today .rg-sched-cell__num { background: #2e7d40; color: #fff; }
+    html[data-theme="dark"] .rg-sched-event { border-color: rgba(255, 255, 255, 0.07); }
+    html[data-theme="dark"] .rg-sched-event__title { color: #d5dde5; }
+    html[data-theme="dark"] a.rg-sched-event__title { color: #74cf88; }
+    html[data-theme="dark"] :is(.rg-sched-event__place, .rg-sched-comingup__date) { color: #a9b6c3; }
+    html[data-theme="dark"] .rg-sched-event__kind { background: rgba(255, 255, 255, 0.08); color: #e8edf2; border-color: rgba(255, 255, 255, 0.18); }
+    html[data-theme="dark"] .rg-sched-event--exam .rg-sched-event__kind, html[data-theme="dark"] .rg-sched-event__kind.rg-sched-event--exam { color: #8fd0f0; border-color: rgba(143, 208, 240, 0.4); }
+    html[data-theme="dark"] .rg-sched-event--interview .rg-sched-event__kind, html[data-theme="dark"] .rg-sched-event__kind.rg-sched-event--interview { color: #8fdc9f; border-color: rgba(143, 220, 159, 0.4); }
+    html[data-theme="dark"] .rg-sched-event--deliberation .rg-sched-event__kind, html[data-theme="dark"] .rg-sched-event__kind.rg-sched-event--deliberation { color: #c9b6f0; border-color: rgba(201, 182, 240, 0.4); }
+    html[data-theme="dark"] .rg-sched-event--closing .rg-sched-event__kind, html[data-theme="dark"] .rg-sched-event__kind.rg-sched-event--closing { color: #f5d27a; border-color: rgba(245, 210, 122, 0.4); }
+    html[data-theme="dark"] .rg-sched-event--resubmission .rg-sched-event__kind, html[data-theme="dark"] .rg-sched-event__kind.rg-sched-event--resubmission { color: #f6a9a2; border-color: rgba(246, 169, 162, 0.4); }
+}
+.rg-sched-event--compact .rg-sched-event__kind { white-space: normal; }
+.rg-sched-monthbar { flex-wrap: wrap; }
+@media (max-width: 575.98px) {
+    .rg-page-header--stack-sm { flex-direction: column; align-items: stretch; gap: 0.75rem; }
+}

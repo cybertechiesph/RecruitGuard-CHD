@@ -2,8 +2,17 @@ import hashlib
 import time
 
 from django.conf import settings
+from django.contrib.sessions.middleware import SessionMiddleware
 from django.core.cache import cache
 from django.http import HttpResponse
+
+PASSIVE_SESSION_REQUEST_ATTR = "_rg_passive_session_request"
+
+
+def mark_passive_session_request(request):
+    """Flag a request as background traffic (e.g. the notification-bell poll) so it does not
+    count as user activity: the session is read as usual but its expiry is not pushed back."""
+    setattr(request, PASSIVE_SESSION_REQUEST_ATTR, True)
 
 
 def _serialize_policy(directives):
@@ -23,6 +32,25 @@ def _serialize_permissions_policy(directives):
         allowed = " ".join(allowlist)
         parts.append(f"{feature}=({allowed})")
     return ", ".join(parts)
+
+
+class ActivityAwareSessionMiddleware(SessionMiddleware):
+    """SessionMiddleware that skips the SESSION_SAVE_EVERY_REQUEST refresh for passive requests.
+
+    With SESSION_SAVE_EVERY_REQUEST, every request re-saves the session and so restarts the
+    inactivity timeout. The notification bell polls once a minute, which used to keep an
+    unattended tab signed in indefinitely. Passive requests that did not change the session
+    now leave its expiry alone; anything that modifies the session is still saved normally."""
+
+    def process_response(self, request, response):
+        session = getattr(request, "session", None)
+        if (
+            getattr(request, PASSIVE_SESSION_REQUEST_ATTR, False)
+            and session is not None
+            and not session.modified
+        ):
+            return response
+        return super().process_response(request, response)
 
 
 class SecurityHeadersMiddleware:

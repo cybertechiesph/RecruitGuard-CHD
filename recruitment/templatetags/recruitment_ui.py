@@ -1,6 +1,7 @@
 import json
 
 from django import template
+from django.conf import settings
 from django.utils.timesince import timesince as django_timesince
 
 from recruitment.models import (
@@ -605,3 +606,9 @@ def notifications_bell(context):
         "has_unread": unread_count > 0,
         "badge_label": badge_label,
     }
+
+
+@register.simple_tag
+def session_inactivity_timeout_seconds():
+    """TI-1: the server-side inactivity timeout, so the idle-warning script mirrors it exactly."""
+    return int(getattr(settings, "SESSION_INACTIVITY_TIMEOUT_SECONDS", 30 * 60))

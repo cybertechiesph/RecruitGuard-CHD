@@ -1,11 +1,11 @@
 {% extends "internal_base.html" %}
 {% load recruitment_ui %}
 
-{% block internal_title %}{% if is_queue %}My Queue{% else %}Cases I Can View{% endif %}{% endblock %}
+{% block internal_title %}{% if is_queue %}My Queue{% elif is_closed_list %}Closed Cases{% else %}Cases I Can View{% endif %}{% endblock %}
 
 {% block breadcrumb %}
 <span class="rg-breadcrumb-sep">&rsaquo;</span>
-<span class="rg-breadcrumb-current">{% if is_queue %}My Queue{% else %}Applications{% endif %}</span>
+<span class="rg-breadcrumb-current">{% if is_queue %}My Queue{% elif is_closed_list %}Closed Cases{% else %}Applications{% endif %}</span>
 {% endblock %}
 
 {% block content %}
@@ -13,7 +13,7 @@
     <div>
         <h1 class="rg-page-title">{% if is_queue %}My Queue{% elif is_closed_list %}Closed Cases{% else %}Cases I Can View{% endif %}</h1>
         {% if is_closed_list %}
-            <p class="rg-imeta mt-1">Approved and rejected cases you retain access to, for records requests.</p>
+            <p class="rg-imeta mt-1">Approved, not-selected, withdrawn and cancelled cases you retain access to, for records requests.</p>
         {% endif %}
     </div>
     <div class="rg-page-actions">
@@ -25,7 +25,34 @@
     </div>
 </div>
 
-{% if show_search %}
+{% if is_closed_list and closed_filter_form %}
+{% comment %}
+  TI-4: Closed Cases is the records-request lookup, so it filters by what a request names:
+  outcome, when it closed, and which vacancy - not by workflow step (every row is closed).
+{% endcomment %}
+<form method="get" class="rg-closed-filters rg-icard mb-3" role="search" aria-label="Find closed cases" data-closed-filters>
+    <div class="rg-closed-filters__grid">
+        <div class="rg-field mb-0 rg-closed-filters__search">
+            <label class="form-label" for="q">Search</label>
+            <input type="search" class="form-control" id="q" name="q" value="{{ q }}"
+                   placeholder="{% if search_includes_email %}Name, e-mail, case number, or position{% else %}Case number or position{% endif %}">
+        </div>
+        {% for field in closed_filter_form %}
+            <div class="rg-field mb-0">
+                <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+            </div>
+        {% endfor %}
+        {% if branch %}<input type="hidden" name="branch" value="{{ branch }}">{% endif %}
+    </div>
+    <div class="rg-closed-filters__actions">
+        <button type="submit" class="btn btn-rg-primary btn-sm">Find cases</button>
+        {% if q or branch or closed_filters_active %}
+            <a href="{{ request.path }}" class="btn btn-outline-secondary btn-sm">Clear filters</a>
+        {% endif %}
+    </div>
+</form>
+{% elif show_search %}
 <form method="get" class="rg-queue-search d-flex flex-wrap align-items-end gap-2 mb-3" role="search">
     <div class="rg-field mb-0" style="flex:1 1 260px;">
         <label class="form-label" for="q">Search applicant, reference, or position</label>
@@ -50,16 +77,16 @@
 </form>
 {% endif %}
 
-{% if applications or branch %}
+{% if applications or branch or closed_filters_active %}
     <div class="rg-queue-toolbar">
         {# Server-side branch filter (GET param; works across pages, count reflects the branch-filtered total; preserves the active q/step filters). #}
         <div class="rg-queue-filters" role="group" aria-label="Filter cases by type">
             <a class="rg-queue-chip{% if not branch %} is-active{% endif %}"
-               href="?{% if q %}q={{ q|urlencode }}&{% endif %}{% if step %}step={{ step|urlencode }}{% endif %}">All</a>
+               href="?{{ querystring_without_branch }}">All</a>
             <a class="rg-queue-chip{% if branch == 'plantilla' %} is-active{% endif %}"
-               href="?branch=plantilla{% if q %}&q={{ q|urlencode }}{% endif %}{% if step %}&step={{ step|urlencode }}{% endif %}">Plantilla</a>
+               href="?branch=plantilla{% if querystring_without_branch %}&amp;{{ querystring_without_branch }}{% endif %}">Plantilla</a>
             <a class="rg-queue-chip{% if branch == 'cos' %} is-active{% endif %}"
-               href="?branch=cos{% if q %}&q={{ q|urlencode }}{% endif %}{% if step %}&step={{ step|urlencode }}{% endif %}">Contract of Service</a>
+               href="?branch=cos{% if querystring_without_branch %}&amp;{{ querystring_without_branch }}{% endif %}">Contract of Service</a>
         </div>
         <p class="rg-queue-count" aria-live="polite">
             <strong>{{ total_count }}</strong>
@@ -71,8 +98,8 @@
 
 {% if not applications %}
     <div class="rg-icard">
-        {% if q or step or branch %}
-            {% include "internal_includes/state_empty.html" with title="No matching cases" copy="No cases match your search or step filter. Try a different term, or reset the filters." %}
+        {% if q or step or branch or closed_filters_active %}
+            {% include "internal_includes/state_empty.html" with title="No matching cases" copy="No cases match your search or filters. Try a different term, or clear the filters." %}
         {% elif is_queue %}
             {% include "internal_includes/state_empty.html" with title="You're all caught up" copy="No cases need your action right now. New assignments will appear here." %}
         {% elif is_closed_list %}
@@ -92,11 +119,16 @@
                         {% if not is_queue %}
                             <th>Branch / Level</th>
                         {% endif %}
+                        {% if is_closed_list %}
+                            <th>Outcome</th>
+                            <th>Closed</th>
+                        {% else %}
                         <th>{% if is_queue %}Needed Step{% else %}Current Step{% endif %}</th>
                         {% if not is_queue %}
                             <th>Assigned To</th>
                         {% endif %}
                         <th>Last Updated</th>
+                        {% endif %}
                         <th class="col-actions"><span class="visually-hidden">Actions</span></th>
                     </tr>
                 </thead>
@@ -148,6 +180,21 @@
                                     </div>
                                 </td>
                             {% endif %}
+                            {% if is_closed_list %}
+                                <td>
+                                    <span class="rg-pill rg-pill--{{ application.status|status_theme }} rg-pill--sm">
+                                        {{ application.get_status_display }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if application.closed_at %}
+                                        <div style="font-size:0.8125rem;color:#374151;">{{ application.closed_at|date:"M d, Y" }}</div>
+                                        <div class="rg-imeta mt-1">{{ application.closed_at|timesince_short }} ago</div>
+                                    {% else %}
+                                        <div class="rg-imeta">Not recorded</div>
+                                    {% endif %}
+                                </td>
+                            {% else %}
                             <td>
                                 {% queue_task_theme application as task_theme %}
                                 {% queue_task_label application as task_label %}
@@ -184,6 +231,7 @@
                                 </div>
                                 <div class="rg-imeta mt-1">{{ application.updated_at|date:"M d, Y" }}</div>
                             </td>
+                            {% endif %}
                             <td class="col-actions">
                                 <div class="rg-itbl-actions">
                                     <a href="{% url 'application-detail' application.pk %}"

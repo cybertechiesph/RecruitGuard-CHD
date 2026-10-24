@@ -1,0 +1,64 @@
+{% comment %}
+  TI-2: the one place the applicant portal explains Permanent (Plantilla) vs Contract of
+  Service. Applicants rated this lower because the explanation lived only in the Help FAQ,
+  so it is now also shown where they choose and apply. Edit the wording HERE only.
+
+  Parameters:
+    mode   - "faq" (both types, full), "detail" (expandable, for one posting),
+             "note" (one line on the intake form) or "legend" (job-openings list)
+    branch - "plantilla" or "cos" (required for "detail" and "note")
+{% endcomment %}
+{% if mode == "faq" %}
+<div data-branch-explainer="faq">
+    <p><strong>Plantilla (Permanent)</strong> positions are regular government posts with full
+    Civil Service tenure and full government benefits. They follow the standard Civil Service
+    Commission appointment process and are funded by a regular plantilla item.</p>
+    <p><strong>Contract of Service (COS)</strong> positions are time-bound engagements for
+    specific work or projects. They do not carry tenure or Civil Service eligibility, and the
+    benefits package differs from a permanent appointment.</p>
+    <p>Each posting on the Job Openings page is labelled with its type. Choose the one that fits
+    your career plans.</p>
+</div>
+{% elif mode == "detail" %}
+<details class="rg-branch-explainer" data-branch-explainer="detail">
+    <summary class="rg-branch-explainer__summary">
+        What does {% if branch == "plantilla" %}&ldquo;Permanent (Plantilla)&rdquo;{% else %}&ldquo;Contract of Service&rdquo;{% endif %} mean?
+    </summary>
+    <div class="rg-branch-explainer__body">
+        {% if branch == "plantilla" %}
+            <p>This is a <strong>regular government post</strong> with full Civil Service tenure and full
+            government benefits. It follows the standard Civil Service Commission appointment process and
+            is funded by a regular plantilla item.</p>
+            <p class="mb-0">Not looking for a permanent post? <strong>Contract of Service</strong> openings
+            are time-bound engagements for specific work or projects.</p>
+        {% else %}
+            <p>This is a <strong>time-bound engagement</strong> for specific work or projects. It does not
+            carry tenure or Civil Service eligibility, and the benefits package differs from a permanent
+            appointment.</p>
+            <p class="mb-0">Looking for a permanent post? <strong>Plantilla</strong> openings are regular
+            government posts with Civil Service tenure and full government benefits.</p>
+        {% endif %}
+    </div>
+</details>
+{% elif mode == "note" %}
+<p class="rg-branch-note" data-branch-explainer="note">
+    {% if branch == "plantilla" %}
+        You are applying for a <strong>Permanent (Plantilla)</strong> position &mdash; a regular government
+        post with Civil Service tenure and full government benefits.
+    {% else %}
+        You are applying for a <strong>Contract of Service</strong> position &mdash; a time-bound engagement
+        for specific work or projects, without Civil Service tenure.
+    {% endif %}
+</p>
+{% elif mode == "legend" %}
+<dl class="rg-branch-legend" data-branch-explainer="legend">
+    <div class="rg-branch-legend__item">
+        <dt><span class="rg-pub-chip rg-pub-chip--plantilla">Permanent</span></dt>
+        <dd>Regular government post (plantilla) with Civil Service tenure and full government benefits.</dd>
+    </div>
+    <div class="rg-branch-legend__item">
+        <dt><span class="rg-pub-chip rg-pub-chip--cos">Contract of Service</span></dt>
+        <dd>Time-bound engagement for specific work or projects, without Civil Service tenure.</dd>
+    </div>
+</dl>
+{% endif %}

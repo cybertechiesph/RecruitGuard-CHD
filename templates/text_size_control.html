@@ -1,0 +1,16 @@
+{% comment %}
+  TI-3: text-size buttons (wired by display_prefs_head.html). Each "A" is drawn bigger than the
+  last so the choice is visible even before the label is read.
+{% endcomment %}
+<div class="rg-textsize" role="group" aria-label="Text size">
+    {% if show_label %}<span class="rg-textsize__label" aria-hidden="true">Text size</span>{% endif %}
+    <button type="button" class="rg-textsize__btn rg-textsize__btn--default" data-rg-text-size="default" aria-pressed="false" title="Default text size">
+        A<span class="visually-hidden"> Default text size</span>
+    </button>
+    <button type="button" class="rg-textsize__btn rg-textsize__btn--large" data-rg-text-size="large" aria-pressed="false" title="Large text">
+        A<span class="visually-hidden"> Large text</span>
+    </button>
+    <button type="button" class="rg-textsize__btn rg-textsize__btn--larger" data-rg-text-size="larger" aria-pressed="false" title="Larger text">
+        A<span class="visually-hidden"> Larger text</span>
+    </button>
+</div>

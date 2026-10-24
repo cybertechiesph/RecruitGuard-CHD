@@ -39,6 +39,7 @@ background:
                class="rg-nav-link rg-nav-link--{% if request.resolver_match.url_name == 'applicant-help' %}primary{% else %}secondary{% endif %}">
                 Help
             </a>
+            {% include "text_size_control.html" %}
         </nav>
     </div>
 </header>

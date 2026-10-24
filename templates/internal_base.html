@@ -48,6 +48,7 @@ background:
                         {{ user.role|role_label }}
                     </span>
                 </span>
+                {% include "internal_includes/display_menu.html" %}
                 <button type="button"
                         class="rg-theme-toggle"
                         data-rg-theme-toggle
@@ -90,10 +91,51 @@ background:
         </main>
     </div>
 </div>
+
+{% comment %}
+  TI-1: inactivity warning. recruitguard-session.js mirrors the server's inactivity timeout,
+  warns before it lapses, and signs out cleanly (with ?reason=timeout) when it does.
+{% endcomment %}
+<div data-rg-session
+     data-timeout-seconds="{% session_inactivity_timeout_seconds %}"
+     data-warning-seconds="120"
+     data-keepalive-url="{% url 'session-keep-alive' %}"
+     data-session-check-url="{% url 'notification-unread-count' %}"
+     data-login-url="{% url 'login' %}">
+    <div class="modal fade rg-session-dialog" id="rg-session-dialog" tabindex="-1"
+         role="alertdialog" aria-modal="true"
+         aria-labelledby="rg-session-dialog-title" aria-describedby="rg-session-dialog-body"
+         data-rg-session-dialog>
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title h5" id="rg-session-dialog-title">Are you still there?</h2>
+                </div>
+                <div class="modal-body" id="rg-session-dialog-body">
+                    <p class="mb-2">
+                        For security, you&rsquo;ll be signed out in
+                        <strong class="rg-session-dialog__countdown" data-rg-session-countdown>2:00</strong>
+                        because there has been no activity.
+                    </p>
+                    <p class="mb-0 small">Choose <strong>Stay signed in</strong> to keep working. Unsaved changes on this page may be lost if you are signed out.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-rg-session-signout>Sign out</button>
+                    <button type="button" class="btn btn-rg-primary" data-rg-session-stay>Stay signed in</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <form method="post" action="{% url 'logout' %}" hidden data-rg-session-logout-form>
+        {% csrf_token %}
+        <input type="hidden" name="next" value="">
+    </form>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="{% static 'js/recruitguard-autosave.js' %}?v=20260522-sliceD2"></script>
+<script src="{% static 'js/recruitguard-autosave.js' %}?v=20261025-ti1"></script>
+<script src="{% static 'js/recruitguard-session.js' %}?v=20261025-ti1"></script>
 <script src="{% static 'js/recruitguard-notifications.js' %}?v=20260524-sliceD1"></script>
 <script src="{% static 'js/rg-wizard-validation.js' %}?v=20260624-val2c"></script>
 <script>

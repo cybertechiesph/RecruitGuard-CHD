@@ -1,0 +1,93 @@
+{% extends "internal_base.html" %}
+
+{% block internal_title %}Schedule{% endblock %}
+
+{% block breadcrumb %}
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<span class="rg-breadcrumb-current">Schedule</span>
+{% endblock %}
+
+{% block content %}
+<div class="rg-page-header rg-page-header--stack-sm">
+    <div>
+        <h1 class="rg-page-title">Schedule</h1>
+        <p class="rg-page-copy">
+            Exams, interviews and deadlines for the cases you handle. This view is read-only &mdash;
+            open an event to schedule or change it on its case or batch page.
+        </p>
+    </div>
+    <div class="rg-page-actions">
+        <div class="rg-display-menu__seg rg-sched-viewtoggle" role="group" aria-label="Calendar view">
+            <a class="rg-display-menu__opt{% if view_mode == 'month' %} is-active{% endif %}"
+               href="?view=month&amp;month={{ month_param }}"
+               {% if view_mode == 'month' %}aria-current="page"{% endif %}>Month</a>
+            <a class="rg-display-menu__opt{% if view_mode == 'agenda' %} is-active{% endif %}"
+               href="?view=agenda"
+               {% if view_mode == 'agenda' %}aria-current="page"{% endif %}>Next {{ agenda_days }} days</a>
+        </div>
+    </div>
+</div>
+
+<ul class="rg-sched-legend" aria-label="Event types">
+    {% for kind, label in event_kinds.items %}
+        <li><span class="rg-sched-event__kind rg-sched-event--{{ kind }}">{{ label }}</span></li>
+    {% endfor %}
+</ul>
+
+{% if view_mode == "month" %}
+    <div class="rg-sched-monthbar">
+        <a class="btn btn-outline-secondary btn-sm" href="?view=month&amp;month={{ prev_month_param }}">&lsaquo; Previous</a>
+        <h2 class="rg-sched-monthbar__title">{{ month_start|date:"F Y" }}</h2>
+        <a class="btn btn-outline-secondary btn-sm" href="?view=month&amp;month={{ next_month_param }}">Next &rsaquo;</a>
+        <a class="btn btn-outline-secondary btn-sm" href="?view=month">Today</a>
+    </div>
+
+    <div class="rg-sched-grid rg-icard" role="table" aria-label="{{ month_start|date:'F Y' }}">
+        <div class="rg-sched-grid__row rg-sched-grid__head" role="row">
+            {% for name in weekday_names %}<div class="rg-sched-grid__dow" role="columnheader">{{ name }}</div>{% endfor %}
+        </div>
+        {% for week in weeks %}
+            <div class="rg-sched-grid__row" role="row">
+                {% for cell in week %}
+                    <div class="rg-sched-cell{% if not cell.in_month %} is-outside{% endif %}{% if cell.is_today %} is-today{% endif %}"
+                         role="cell" aria-label="{{ cell.day|date:'l, F j' }}{% if cell.events %}, {{ cell.events|length }} event{{ cell.events|length|pluralize }}{% endif %}">
+                        <span class="rg-sched-cell__num">{{ cell.day|date:"j" }}</span>
+                        {% for event in cell.events %}
+                            {% include "internal_includes/schedule_event.html" with event=event compact=True %}
+                        {% endfor %}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endfor %}
+    </div>
+
+    {% comment %}
+      Small screens: the grid is hidden and the same month is listed day by day.
+    {% endcomment %}
+    <div class="rg-sched-list rg-sched-list--month">
+        {% for day, day_events in month_days.items %}
+            <section class="rg-sched-day rg-icard">
+                <h3 class="rg-sched-day__title">{{ day|date:"l, F j" }}{% if day == today %} &middot; Today{% endif %}</h3>
+                {% for event in day_events %}{% include "internal_includes/schedule_event.html" with event=event %}{% endfor %}
+            </section>
+        {% empty %}
+            <div class="rg-icard">
+                {% include "internal_includes/state_empty.html" with title="Nothing scheduled this month" copy="Exams, interviews and deadlines for your cases will appear here." %}
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="rg-sched-list">
+        {% for day, day_events in agenda.items %}
+            <section class="rg-sched-day rg-icard">
+                <h3 class="rg-sched-day__title">{{ day|date:"l, F j" }}{% if day == today %} &middot; Today{% endif %}</h3>
+                {% for event in day_events %}{% include "internal_includes/schedule_event.html" with event=event %}{% endfor %}
+            </section>
+        {% empty %}
+            <div class="rg-icard">
+                {% include "internal_includes/state_empty.html" with title="Nothing coming up" copy="No exams, interviews or deadlines in the next 30 days for your cases." %}
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
+{% endblock %}

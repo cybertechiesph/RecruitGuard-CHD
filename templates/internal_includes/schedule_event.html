@@ -1,0 +1,14 @@
+{% comment %}
+  TI-5: one calendar event (shared by the month grid, the agenda and the coming-up panel).
+  Kind is shown as a coloured chip AND as text, never by colour alone.
+{% endcomment %}
+<div class="rg-sched-event rg-sched-event--{{ event.kind }}{% if compact %} rg-sched-event--compact{% endif %}" data-schedule-event="{{ event.kind }}">
+    <span class="rg-sched-event__kind">{{ event.label }}</span>
+    {% if event.at %}<span class="rg-sched-event__time">{{ event.at|date:"g:i A" }}</span>{% endif %}
+    {% if event.url %}
+        <a class="rg-sched-event__title" href="{{ event.url }}"{% if compact %} title="{{ event.title }}" aria-label="{{ event.title }}"{% endif %}>{% if compact %}{{ event.short_title }}{% else %}{{ event.title }}{% endif %}</a>
+    {% else %}
+        <span class="rg-sched-event__title"{% if compact %} title="{{ event.title }}"{% endif %}>{% if compact %}{{ event.short_title }}{% else %}{{ event.title }}{% endif %}</span>
+    {% endif %}
+    {% if event.location and not compact %}<span class="rg-sched-event__place">{{ event.location }}</span>{% endif %}
+</div>

@@ -18,6 +18,7 @@
             Applying for<br>
             <strong>{{ entry.title }}</strong>
         </div>
+        {% include "text_size_control.html" %}
     </div>
 </header>
 {% endblock %}
@@ -42,6 +43,7 @@
             Fill in your information, upload your documents, then review before continuing to email verification.
             Fields marked with <span class="text-danger">*</span> are required.
         </p>
+        {% include "recruitment/includes/branch_explainer.html" with mode="note" branch=entry.branch %}
     </header>
 
     {# ── Page-level alerts ─────────────────────────────────────── #}
@@ -261,6 +263,12 @@
                         Selected: <strong data-file-selection-name></strong><span class="rg-pub-upload-slot__selection-size" data-file-selection-size></span>
                     </span>
                     <button type="button"
+                            class="rg-pub-upload-slot__view"
+                            data-preview-slot="{{ slot.field.html_name }}"
+                            aria-label="View the selected file for {{ slot.field.label }}">
+                        View
+                    </button>
+                    <button type="button"
                             class="rg-pub-upload-slot__remove"
                             data-file-clear
                             aria-label="Remove selected file">
@@ -341,6 +349,33 @@
             </div>
         </section>
     </form>
+</div>
+
+{% comment %}
+TI-2: lets the applicant open the file they picked before submitting, to confirm it is the
+right document. Preview is local only (a blob: URL of the chosen file) - nothing is uploaded
+or served back by the server until the form is submitted.
+{% endcomment %}
+<div class="modal fade rg-intake-preview" id="rg-intake-preview" tabindex="-1"
+     aria-labelledby="rg-intake-preview-title" aria-hidden="true" data-intake-preview>
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="min-w-0">
+                    <h2 class="modal-title h5" id="rg-intake-preview-title" data-preview-title>Selected file</h2>
+                    <p class="rg-intake-preview__meta mb-0" data-preview-meta></p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close preview"></button>
+            </div>
+            <div class="modal-body" data-preview-body></div>
+            <div class="modal-footer">
+                <p class="rg-intake-preview__note me-auto mb-0">
+                    Is this the right document, and is the text easy to read? If not, close this window and choose another file.
+                </p>
+                <button type="button" class="btn btn-rg-primary" data-bs-dismiss="modal">Looks right</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 {# ── Sticky action bar ─────────────────────────────────────── #}
@@ -1107,7 +1142,9 @@
             if (applicabilityName && valOf(applicabilityName) === "not_applicable") {
                 status = '<span class="rg-intake-review__status">Not applicable</span>';
             } else if (hasFile) {
-                status = '<span class="rg-intake-review__status is-ok">' + escapeHtml(fileInput.files[0].name) + "</span>";
+                status = '<span class="rg-intake-review__status is-ok">' + escapeHtml(fileInput.files[0].name) + "</span>" +
+                    '<button type="button" class="rg-intake-review__view" data-preview-slot="' + escapeHtml(name) +
+                    '" aria-label="View ' + escapeHtml(fileInput.files[0].name) + '">View</button>';
             } else if (savedFile) {
                 status = '<span class="rg-intake-review__status is-ok">' + escapeHtml(savedFile) + " (already saved)</span>";
             } else if (slot.dataset.required === "true") {
@@ -1115,12 +1152,81 @@
             } else {
                 status = '<span class="rg-intake-review__status">Not uploaded</span>';
             }
-            html += '<li><span class="rg-intake-review__doclabel">' + escapeHtml(label) + "</span>" + status + "</li>";
+            html += '<li><span class="rg-intake-review__doclabel">' + escapeHtml(label) + '</span><span class="rg-intake-review__docstate">' + status + "</span></li>";
         });
         html += "</ul></div>";
 
         target.innerHTML = html;
     }
+
+    /* ── TI-2: preview a selected file before submitting ─────────
+       Builds a blob: URL for the chosen File and shows it in a modal - images
+       inline, PDFs in a frame. Nothing leaves the browser. The URL is revoked
+       when the modal closes so large scans don't pile up in memory. */
+    var previewModalEl = document.querySelector("[data-intake-preview]");
+    var previewBody = previewModalEl && previewModalEl.querySelector("[data-preview-body]");
+    var previewTitle = previewModalEl && previewModalEl.querySelector("[data-preview-title]");
+    var previewMeta = previewModalEl && previewModalEl.querySelector("[data-preview-meta]");
+    var previewUrl = null;
+    var previewModal = null;
+
+    function releasePreview() {
+        if (previewUrl) { URL.revokeObjectURL(previewUrl); previewUrl = null; }
+        if (previewBody) previewBody.innerHTML = "";
+    }
+
+    function openPreview(slotName) {
+        var input = form.elements[slotName];
+        var file = input && input.files && input.files.length ? input.files[0] : null;
+        if (!file || !previewModalEl || !previewBody || !window.URL || !URL.createObjectURL) return;
+        var slot = document.querySelector('[data-intake-slot][data-slot-name="' + slotName + '"]');
+        releasePreview();
+        previewUrl = URL.createObjectURL(file);
+        var ext = String(file.name || "").split(".").pop().toLowerCase();
+        var isPdf = ext === "pdf" || file.type === "application/pdf";
+        var isImage = ["jpg", "jpeg", "png"].indexOf(ext) !== -1 || /^image\//.test(file.type || "");
+        if (previewTitle) previewTitle.textContent = (slot && slot.dataset.slotLabel) || "Selected file";
+        if (previewMeta) previewMeta.textContent = file.name + " · " + formatFileSize(file.size);
+
+        if (isImage) {
+            var img = document.createElement("img");
+            img.src = previewUrl;
+            img.alt = "Preview of " + file.name;
+            img.className = "rg-intake-preview__image";
+            previewBody.appendChild(img);
+        } else if (isPdf) {
+            var frame = document.createElement("iframe");
+            frame.src = previewUrl;
+            frame.title = "Preview of " + file.name;
+            frame.className = "rg-intake-preview__frame";
+            previewBody.appendChild(frame);
+            var hint = document.createElement("p");
+            hint.className = "rg-intake-preview__fallback";
+            hint.textContent = "If the preview above is blank, your device can't show PDFs inside the page. " +
+                "Check the file name and size above, or open the file on your device before submitting.";
+            previewBody.appendChild(hint);
+        } else {
+            var none = document.createElement("p");
+            none.className = "rg-intake-preview__fallback";
+            none.textContent = "Preview is not available for this file type. The file name and size are shown above.";
+            previewBody.appendChild(none);
+        }
+
+        if (window.bootstrap && window.bootstrap.Modal) {
+            previewModal = previewModal || new window.bootstrap.Modal(previewModalEl);
+            previewModal.show();
+        }
+    }
+
+    if (previewModalEl) {
+        previewModalEl.addEventListener("hidden.bs.modal", releasePreview);
+    }
+    document.addEventListener("click", function (event) {
+        var trigger = event.target.closest && event.target.closest("[data-preview-slot]");
+        if (!trigger) return;
+        event.preventDefault();
+        openPreview(trigger.getAttribute("data-preview-slot"));
+    });
 
     /* ── Wire up ────────────────────────────────────────────── */
     if (nextBtn) {

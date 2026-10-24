@@ -33,6 +33,7 @@
                 <span class="rg-pub-badge" title="Plantilla Item Number">Item No.: {{ entry.item_number }}</span>
             {% endif %}
         </div>
+        {% include "recruitment/includes/branch_explainer.html" with mode="detail" branch=entry.branch %}
 
         {# Deadline #}
         {% if entry.closing_date %}

@@ -1,0 +1,66 @@
+{% comment %}
+  TI-3: display preferences (text size for everyone, layout density for internal users).
+
+  Included in <head> by base.html, so it covers the applicant portal, the internal portal and the
+  sign-in pages, but not the stand-alone print templates (CAR, rating sheet, audit report) or the
+  e-mails. Runs before first paint so a saved preference never flashes at the default size.
+
+    localStorage["rg-text-size"] -> html[data-text-size]  default | large | larger
+    localStorage["rg-density"]   -> html[data-density]    comfortable | compact  (internal CSS only)
+
+  Controls anywhere on the page: buttons with data-rg-text-size="<value>" or
+  data-rg-density="<value>"; aria-pressed is kept in sync. Changes sync across open tabs.
+{% endcomment %}
+<script>
+(function () {
+    "use strict";
+    var root = document.documentElement;
+    var PREFS = {
+        "rg-text-size": { attr: "data-text-size", values: ["default", "large", "larger"], fallback: "default" },
+        "rg-density": { attr: "data-density", values: ["comfortable", "compact"], fallback: "comfortable" }
+    };
+
+    function read(key) {
+        var v = null;
+        try { v = localStorage.getItem(key); } catch (e) {}
+        return PREFS[key].values.indexOf(v) !== -1 ? v : PREFS[key].fallback;
+    }
+    function applyAll() {
+        Object.keys(PREFS).forEach(function (key) { root.setAttribute(PREFS[key].attr, read(key)); });
+    }
+    function syncControls() {
+        Object.keys(PREFS).forEach(function (key) {
+            var dataAttr = key === "rg-text-size" ? "data-rg-text-size" : "data-rg-density";
+            var current = root.getAttribute(PREFS[key].attr);
+            document.querySelectorAll("[" + dataAttr + "]").forEach(function (btn) {
+                btn.setAttribute("aria-pressed", btn.getAttribute(dataAttr) === current ? "true" : "false");
+            });
+        });
+    }
+
+    applyAll();
+
+    window.addEventListener("storage", function (e) {
+        if (e.key === null || PREFS[e.key]) { applyAll(); syncControls(); }
+    });
+
+    function wire() {
+        syncControls();
+        document.addEventListener("click", function (e) {
+            var btn = e.target.closest && e.target.closest("[data-rg-text-size],[data-rg-density]");
+            if (!btn) return;
+            var key = btn.hasAttribute("data-rg-text-size") ? "rg-text-size" : "rg-density";
+            var value = btn.getAttribute(key === "rg-text-size" ? "data-rg-text-size" : "data-rg-density");
+            if (PREFS[key].values.indexOf(value) === -1) return;
+            try { localStorage.setItem(key, value); } catch (err) {}
+            root.setAttribute(PREFS[key].attr, value);
+            syncControls();
+        });
+    }
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", wire);
+    } else {
+        wire();
+    }
+})();
+</script>

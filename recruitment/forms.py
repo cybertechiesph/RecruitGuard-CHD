@@ -1037,6 +1037,78 @@ class AuditLogSearchForm(BootstrapFormMixin, forms.Form):
         self._apply_bootstrap()
 
 
+class ClosedCaseFilterForm(BootstrapFormMixin, forms.Form):
+    """TI-4: narrows the Closed Cases lookup. Choices for year and vacancy are built from the
+    caller's already-scoped closed cases, so the form can only ever narrow that set; a value
+    outside it (a guessed vacancy id, a bad date) simply fails that field and is ignored."""
+
+    OUTCOME_CHOICES = (
+        ("", "All outcomes"),
+        (RecruitmentApplication.Status.APPROVED, "Approved"),
+        (RecruitmentApplication.Status.REJECTED, "Not selected / rejected"),
+        (RecruitmentApplication.Status.WITHDRAWN, "Withdrawn"),
+        (RecruitmentApplication.Status.VACANCY_CANCELLED, "Vacancy cancelled"),
+    )
+    SORT_NEWEST = "newest"
+    SORT_OLDEST = "oldest"
+    SORT_CASE = "case"
+    SORT_CHOICES = (
+        (SORT_NEWEST, "Newest closed first"),
+        (SORT_OLDEST, "Oldest closed first"),
+        (SORT_CASE, "Case number"),
+    )
+
+    outcome = forms.ChoiceField(required=False, choices=OUTCOME_CHOICES, label="Outcome")
+    year = forms.ChoiceField(required=False, choices=(), label="Year closed")
+    closed_from = forms.DateField(
+        required=False,
+        label="Closed from",
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+    closed_to = forms.DateField(
+        required=False,
+        label="Closed to",
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+    vacancy = forms.ChoiceField(required=False, choices=(), label="Vacancy")
+    sort = forms.ChoiceField(required=False, choices=SORT_CHOICES, label="Sort by")
+
+    def __init__(self, *args, scope, **kwargs):
+        super().__init__(*args, **kwargs)
+        years = sorted(
+            {closed.year for closed in scope.exclude(closed_at=None).values_list("closed_at", flat=True)},
+            reverse=True,
+        )
+        self.fields["year"].choices = [("", "Any year"), *[(str(y), str(y)) for y in years]]
+        vacancies = (
+            PositionPosting.objects.filter(pk__in=scope.values("position_id"))
+            .select_related("position_reference")
+            .order_by("-opening_date", "pk")
+        )
+        self.fields["vacancy"].choices = [
+            ("", "All vacancies"),
+            *[(str(entry.pk), f"{entry.title} ({entry.job_code})") for entry in vacancies],
+        ]
+        self._apply_bootstrap()
+
+    def clean(self):
+        cleaned_data = super().clean()
+        start, end = cleaned_data.get("closed_from"), cleaned_data.get("closed_to")
+        if start and end and start > end:
+            # Swap rather than reject: the intent ("between these two dates") is clear.
+            cleaned_data["closed_from"], cleaned_data["closed_to"] = end, start
+        return cleaned_data
+
+    def filter_values(self):
+        """The valid filters only. An invalid field is dropped (not a 500, not an empty list)."""
+        self.is_valid()
+        return {
+            name: value
+            for name, value in self.cleaned_data.items()
+            if name in self.fields and value not in (None, "")
+        }
+
+
 class EvidenceArchiveForm(BootstrapFormMixin, forms.Form):
     ACTION_CHOICES = (
         ("archive", "Archive"),

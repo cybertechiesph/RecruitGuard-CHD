@@ -78,6 +78,14 @@ class InternalLoginView(LoginView):
             messages.info(request, "Please sign in again to complete internal verification.")
         return super().dispatch(request, *args, **kwargs)
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # TI-1: the idle-warning script signs the user out with ?reason=timeout so the sign-in
+        # page can say why, instead of looking like an unexplained crash.
+        context["signed_out_for_inactivity"] = self.request.GET.get("reason") == "timeout"
+        context["inactivity_timeout_minutes"] = settings.SESSION_INACTIVITY_TIMEOUT_SECONDS // 60
+        return context
+
     def post(self, request, *args, **kwargs):
         username = request.POST.get("username", "")
         if get_internal_login_lock(username, request) is not None:

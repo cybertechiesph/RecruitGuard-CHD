@@ -22,6 +22,29 @@
     </div>
 </div>
 
+{% comment %}
+  TI-5: the next seven days from the Schedule page, so nobody has to open each case to find
+  out what is happening this week.
+{% endcomment %}
+<section class="rg-icard rg-sched-comingup mb-3" aria-labelledby="coming-up-title" data-coming-up>
+    <div class="rg-sched-comingup__head">
+        <h2 class="rg-sched-comingup__title" id="coming-up-title">Coming up &middot; next 7 days</h2>
+        <a href="{% url 'schedule-calendar' %}" class="btn btn-outline-secondary btn-sm">Open schedule</a>
+    </div>
+    {% if coming_up %}
+        <div class="rg-sched-comingup__days">
+            {% for day, day_events in coming_up.items %}
+                <div class="rg-sched-comingup__day">
+                    <p class="rg-sched-comingup__date">{{ day|date:"D, M j" }}</p>
+                    {% for event in day_events %}{% include "internal_includes/schedule_event.html" with event=event %}{% endfor %}
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="rg-imeta mb-0">No exams, interviews or deadlines in the next 7 days.</p>
+    {% endif %}
+</section>
+
 {% if not vacancies %}
     <div class="rg-icard">
         {% include "internal_includes/state_empty.html" with title="You're all caught up" copy="No vacancy batches need your action right now. New assignments will appear here grouped by vacancy." %}
