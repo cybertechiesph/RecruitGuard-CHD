@@ -1,0 +1,21 @@
+{% load static %}
+{% comment %}
+  Blank official forms / guides for one document requirement (requirements.py `downloads`).
+  Files are the CSC's public forms served from static/forms/; the guide is a portal page.
+  Parameters: downloads (tuple of RequirementDownload), compact (optional, smaller list).
+{% endcomment %}
+{% if downloads %}
+<ul class="rg-req-downloads{% if compact %} rg-req-downloads--compact{% endif %}" data-requirement-downloads>
+    {% for item in downloads %}
+        <li>
+            {% if item.guide_url_name %}
+                <a href="{% url item.guide_url_name %}" class="rg-req-downloads__link">{{ item.label }}</a>
+            {% else %}
+                <a href="{% static item.static_path %}" class="rg-req-downloads__link"
+                   {% if item.format_label != "PDF" %}download{% else %}target="_blank" rel="noopener"{% endif %}>{{ item.label }}</a>
+            {% endif %}
+            <span class="rg-req-downloads__format">{{ item.format_label }}</span>
+        </li>
+    {% endfor %}
+</ul>
+{% endif %}

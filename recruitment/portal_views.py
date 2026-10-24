@@ -18,7 +18,14 @@ from .forms import (
 )
 from .models import PositionPosting, RecruitmentApplication, RecruitmentCase
 from .applicant_labels import APPLICANT_STATUS_LABELS as _APPLICANT_STATUS_LABELS
-from .requirements import PERFORMANCE_RATING, get_applicant_document_requirements
+from .requirements import (
+    ALL_FORM_DOWNLOADS,
+    PDS_FORM_DOWNLOAD,
+    PDS_OFFICIAL_GUIDE_DOWNLOAD,
+    PERFORMANCE_RATING,
+    WES_FORM_DOWNLOAD,
+    get_applicant_document_requirements,
+)
 from .services import (
     ApplicationOTPDeliveryError,
     create_public_application_draft,
@@ -168,6 +175,21 @@ class ApplicantHelpView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["otp_validity_minutes"] = settings.APPLICATION_OTP_VALIDITY_MINUTES
+        context["form_downloads"] = ALL_FORM_DOWNLOADS
+        return context
+
+
+class ApplicantPdsGuideView(TemplateView):
+    """Plain-language companion to the CSC's official PDS guide (source copy:
+    docs/pds-plain-guide-copy.md). The official guide stays linked as the authority."""
+
+    template_name = "recruitment/applicant_pds_guide.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["pds_form"] = PDS_FORM_DOWNLOAD
+        context["pds_official_guide"] = PDS_OFFICIAL_GUIDE_DOWNLOAD
+        context["wes_form"] = WES_FORM_DOWNLOAD
         return context
 
 

@@ -7,6 +7,13 @@ an original plain-language rewrite, not a reproduction; where the two ever
 disagree, the CSC guide wins and the page says so.
 
 Render target: applicant portal, same layout/classes as the Help page.
+**Built:** `recruitment/templates/recruitment/applicant_pds_guide.html` at `/apply/help/pds-guide/`.
+Keep this file and the template in step when the copy changes.
+
+**Flow (confirmed against the CSC guide, Revised 2026):** the PDS is filled out in the MS Excel
+format; the CSC accepts an e-signature/digital certificate and an unfiltered digital photo, so
+the applicant can finish entirely on the computer and save as PDF. Printing, signing by hand
+and scanning is the fallback. The portal accepts PDF/JPG/PNG only.
 
 ---
 
@@ -30,12 +37,16 @@ word.
 ## Before you start
 
 You will need:
-- A computer with Excel or a free alternative (Google Sheets, LibreOffice).
-  **The PDS must be typed, not handwritten.**
+- A computer with Microsoft Excel. **The PDS must be typed, not handwritten.**
+  Free programs such as LibreOffice can open the file but may break its tick
+  boxes and page layout — check every page if you use one. A phone is not
+  practical; use a computer, or ask a computer shop.
+- The blank Work Experience Sheet (WES) as well — it is downloadable from the
+  same page.
 - Your school records, eligibility or licence details, and job history —
   including exact dates.
 - A recent passport-size photo (4.5 cm × 3.5 cm), taken within the last six
-  months, no filters.
+  months, no filters. A digital photo is fine.
 - Any valid government ID.
 
 Take your time. It is normal for this to take an hour or two the first time.
@@ -138,20 +149,24 @@ each one's complete name, their office or home address, and a contact number
 or email. Tell them you listed them.
 
 ### Question 42 — the last step
-- Sign the form (or use your right thumbmark if you cannot sign).
+- Sign the form — an e-signature is accepted (or use your right thumbmark if
+  you are unable to sign).
 - Write your government ID number and the date it was issued.
 - Attach your passport-size photo.
 - Put your signature and the date on the bottom of every page.
 
 ## Before you upload it to this portal
 
-1. **Print only the extra sheets you actually used.** The workbook has
+1. **Choose one way to finish.** This portal accepts PDF, JPG, and PNG files,
+   not Excel files.
+   - *All on the computer:* add your e-signature and the date at the bottom of
+     every page, add your digital photo, then save as PDF (*File → Save as* or
+     *Export* → PDF).
+   - *Print and sign:* print, sign and date every page, attach your photo, then
+     scan it or take a clear photo of every page.
+2. **Include only the extra sheets you actually used.** The workbook has
    continuation sheets (C5 to C11) for people who need more rows. If you did
-   not use one, do not include it.
-2. **Save your accomplished PDS as a PDF** — this portal accepts PDF, JPG, and
-   PNG files, not Excel files. In Excel: *File → Save as* (or *Export*) and
-   choose PDF. If you printed and signed a paper copy, a clear scan or photo of
-   every page is fine.
+   not use one, leave it out.
 3. Check that your name, dates, and school names read exactly as they do on
    your other documents. Mismatches are the most common reason we return an
    application for correction.

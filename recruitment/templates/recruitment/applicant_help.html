@@ -52,12 +52,31 @@
                         Requirements differ between Plantilla and COS entries, but common documents include:</p>
                         <ul>
                             <li>Signed application or cover letter for the selected position</li>
-                            <li>Personal Data Sheet (CS Form No. 212, Revised 2025) with Work Experience Sheet</li>
+                            <li>Personal Data Sheet (CS Form No. 212, Revised 2026) with Work Experience Sheet</li>
                             <li>Eligibility, rating, or license documents where required by the posting</li>
                             <li>Diploma and transcript of records</li>
                             <li>Employment and training certificates where applicable to the selected branch</li>
                         </ul>
                         <p>Documents should be saved as <strong>PDF, JPG, or PNG</strong> files, with a maximum size of 5 MB per file.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="accordion-item rg-faq" id="forms">
+                <h3 class="accordion-header" id="faq-forms-hd">
+                    <button class="accordion-button rg-faq__button collapsed" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#faq-forms"
+                            aria-expanded="false" aria-controls="faq-forms">
+                        Where do I get the blank PDS and Work Experience Sheet?
+                    </button>
+                </h3>
+                <div id="faq-forms" class="accordion-collapse collapse" aria-labelledby="faq-forms-hd">
+                    <div class="accordion-body rg-faq__body">
+                        <p>You can download the official Civil Service Commission forms here &mdash; no need to search
+                        online. Fill them up on a computer, then save or scan the finished forms as PDF before uploading.</p>
+                        {% include "recruitment/includes/requirement_downloads.html" with downloads=form_downloads %}
+                        <p class="mb-0">New to the PDS? Read our
+                        <a href="{% url 'applicant-pds-guide' %}">plain-language guide to filling up your PDS</a>.</p>
                     </div>
                 </div>
             </div>

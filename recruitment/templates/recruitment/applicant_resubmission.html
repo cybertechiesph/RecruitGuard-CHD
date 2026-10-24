@@ -82,6 +82,7 @@
                             {{ field.field.resubmission_remarks|default:"The recruitment team asked for a clearer copy of this document." }}
                         </div>
                         {% include "recruitment/includes/form_field.html" with field=field %}
+                        {% include "recruitment/includes/requirement_downloads.html" with downloads=field.field.requirement_downloads compact=True %}
                     </div>
                 {% endfor %}
                 <div class="d-flex gap-2 mt-3">

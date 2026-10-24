@@ -116,6 +116,7 @@
             <li {% if not req.is_required or req.conditional_on_performance_rating %}class="is-optional"{% endif %}>
                 {{ req.title }}
                 <span class="rg-pub-optional-tag">{{ req.applicant_label }}</span>
+                {% include "recruitment/includes/requirement_downloads.html" with downloads=req.downloads compact=True %}
             </li>
             {% endfor %}
         </ul>

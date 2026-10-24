@@ -21270,3 +21270,68 @@ class ScheduleCalendarTests(BaseRecruitmentTestCase):
         client = Client()
         self.force_login_with_mfa(client, self.secretariat)
         self.assertContains(client.get(reverse("vacancy-batches")), reverse("schedule-calendar"))
+
+
+class ApplicantFormTemplatesTests(BaseRecruitmentTestCase):
+    """Blank official CSC forms (PDS Revised 2026 + WES) and the plain-language PDS guide are
+    offered wherever applicants are asked for those documents."""
+
+    def test_pds_and_wes_requirements_carry_their_downloads(self):
+        from django.contrib.staticfiles import finders
+
+        from .requirements import (
+            PERSONAL_DATA_SHEET,
+            WORK_EXPERIENCE_SHEET,
+            get_applicant_document_requirements,
+        )
+
+        for position in (self.level1_position, self.cos_position):
+            by_code = {r.code: r for r in get_applicant_document_requirements(position)}
+            pds = by_code[PERSONAL_DATA_SHEET]
+            self.assertIn("Revised 2026", pds.title)
+            self.assertTrue(any(d.static_path.endswith("revised-2026.xlsx") for d in pds.downloads))
+            self.assertTrue(by_code[WORK_EXPERIENCE_SHEET].downloads)
+            for download in pds.downloads + by_code[WORK_EXPERIENCE_SHEET].downloads:
+                if download.static_path:
+                    self.assertIsNotNone(finders.find(download.static_path), download.static_path)
+
+    def test_intake_form_offers_the_blank_forms_under_their_upload_slots(self):
+        response = self.client.get(reverse("applicant-intake", kwargs={"pk": self.level1_position.pk}))
+        self.assertContains(response, "forms/cs-form-212-pds-revised-2026.xlsx")
+        self.assertContains(response, "forms/cs-form-212-work-experience-sheet.docx")
+        self.assertContains(response, reverse("applicant-pds-guide"))
+        self.assertNotContains(response, "Revised 2025")
+
+    def test_vacancy_page_lists_the_downloads_with_documents_needed(self):
+        response = self.client.get(
+            reverse("applicant-vacancy-detail", kwargs={"pk": self.cos_position.pk})
+        )
+        self.assertContains(response, "forms/cs-form-212-pds-revised-2026.xlsx")
+        self.assertContains(response, "data-requirement-downloads")
+
+    def test_help_page_has_a_forms_entry(self):
+        response = self.client.get(reverse("applicant-help"))
+        self.assertContains(response, "Where do I get the blank PDS and Work Experience Sheet?")
+        self.assertContains(response, "forms/csc-pds-guide-revised-2026.pdf")
+        self.assertContains(response, "CS Form No. 212, Revised 2026")
+        self.assertNotContains(response, "Revised 2025")
+
+    def test_pds_guide_page_renders_with_downloads_and_both_finishing_options(self):
+        response = self.client.get(reverse("applicant-pds-guide"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "How to fill up your Personal Data Sheet (PDS)")
+        self.assertContains(response, "forms/cs-form-212-pds-revised-2026.xlsx")
+        self.assertContains(response, "Option A")
+        self.assertContains(response, "Option B")
+        self.assertContains(response, "Question 42")
+
+    def test_resubmission_form_offers_the_blank_form_for_a_returned_pds(self):
+        from .forms import DocumentResubmissionForm
+        from .requirements import PERSONAL_DATA_SHEET, get_applicant_document_requirements
+
+        pds = next(
+            r for r in get_applicant_document_requirements(self.level1_position)
+            if r.code == PERSONAL_DATA_SHEET
+        )
+        form = DocumentResubmissionForm(requirements=[pds], remarks_by_code={})
+        self.assertEqual(form.fields[pds.file_field_name].requirement_downloads, pds.downloads)

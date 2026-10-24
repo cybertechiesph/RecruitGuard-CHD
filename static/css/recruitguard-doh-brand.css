@@ -4752,3 +4752,69 @@ a.rg-sched-event__title { color: var(--rg-brand-green); }
 @media (max-width: 575.98px) {
     .rg-page-header--stack-sm { flex-direction: column; align-items: stretch; gap: 0.75rem; }
 }
+
+/* ==========================================================================
+   Applicant document templates — blank CSC forms + PDS guide page
+   ========================================================================== */
+.rg-req-downloads {
+    list-style: none;
+    margin: 0.5rem 0 0.75rem;
+    padding: 0;
+    display: grid;
+    gap: 0.35rem;
+}
+.rg-req-downloads li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+}
+.rg-req-downloads li::before {
+    content: "";
+    flex-shrink: 0;
+    width: 1rem;
+    height: 1rem;
+    background: currentColor;
+    color: var(--rg-brand-green);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/%3E%3Cpolyline points='7 10 12 15 17 10'/%3E%3Cline x1='12' y1='15' x2='12' y2='3'/%3E%3C/svg%3E") center / contain no-repeat;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/%3E%3Cpolyline points='7 10 12 15 17 10'/%3E%3Cline x1='12' y1='15' x2='12' y2='3'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.rg-req-downloads__link {
+    color: var(--rg-brand-green);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+.rg-req-downloads__format {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #374151;
+    background: #f1f4f7;
+    border: 1px solid #d7dde3;
+    border-radius: 4px;
+    padding: 0 0.35rem;
+}
+.rg-req-downloads--compact { margin: 0.35rem 0 0; }
+.rg-req-downloads--compact li { font-size: 0.82rem; }
+.rg-pub-doc-list .rg-req-downloads { flex-basis: 100%; }
+
+.rg-pds-guide__body { font-size: 0.95rem; color: #1f2937; }
+.rg-pds-guide__rules { display: grid; gap: 0.6rem; padding-left: 1.25rem; font-size: 0.95rem; color: #1f2937; }
+.rg-pds-guide__ways {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 0.75rem;
+}
+.rg-pds-guide__way {
+    border: 1px solid #dbe4dc;
+    border-radius: 8px;
+    background: #f7faf7;
+    padding: 0.85rem 1rem 0.4rem;
+}
+.rg-pds-guide__way-title { font-size: 0.95rem; font-weight: 700; color: var(--rg-brand-green-ink); margin: 0 0 0.4rem; }
+.rg-pds-guide__way ol { padding-left: 1.15rem; font-size: 0.9rem; }
+.rg-pds-guide code { color: #1f2937; background: #f1f4f7; padding: 0 0.25rem; border-radius: 3px; }
+@media (max-width: 575.98px) {
+    .rg-req-downloads__link { display: inline-flex; align-items: center; min-height: 44px; }
+}
+.rg-pub-doc-list li:has(.rg-req-downloads) { flex-wrap: wrap; }

@@ -900,6 +900,8 @@ class DocumentResubmissionForm(BootstrapFormMixin, forms.Form):
             # Surfaced above each slot on the resubmission page so the applicant sees
             # exactly why this document was returned (recognition over recall).
             field.resubmission_remarks = (remarks_by_code.get(requirement.code) or "").strip()
+            # Blank official form (e.g. the PDS) for a document the applicant must redo.
+            field.requirement_downloads = requirement.downloads
             self.fields[requirement.file_field_name] = field
             self.upload_field_names.append((requirement.code, requirement.file_field_name))
         self._apply_bootstrap()

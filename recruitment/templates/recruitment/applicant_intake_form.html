@@ -242,6 +242,7 @@
                 {% if slot.field.help_text %}
                     <p class="rg-pub-upload-slot__hint">{{ slot.field.help_text }}</p>
                 {% endif %}
+                {% include "recruitment/includes/requirement_downloads.html" with downloads=slot.requirement.downloads %}
 
                 {% comment %}
                 Performance-rating applicability is asked once, at the top of Step 2

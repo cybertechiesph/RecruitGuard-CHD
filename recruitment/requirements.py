@@ -4,12 +4,52 @@ from .models import PositionPosting
 
 
 @dataclass(frozen=True)
+class RequirementDownload:
+    """A blank official form (or its guide) an applicant can download next to an upload slot.
+    `static_path` is relative to STATIC_ROOT; `guide_url_name` instead points at a portal page."""
+
+    label: str
+    format_label: str
+    static_path: str = ""
+    guide_url_name: str = ""
+
+
+# Official CSC files served from static/forms/ (public government forms; metadata cleaned).
+# A new CSC revision gets a new file name, so a cached old copy is never served for it.
+PDS_FORM_DOWNLOAD = RequirementDownload(
+    label="Blank PDS form (CS Form No. 212, Revised 2026)",
+    format_label="Excel",
+    static_path="forms/cs-form-212-pds-revised-2026.xlsx",
+)
+PDS_GUIDE_PAGE = RequirementDownload(
+    label="How to fill up your PDS (plain-language guide)",
+    format_label="Guide",
+    guide_url_name="applicant-pds-guide",
+)
+PDS_OFFICIAL_GUIDE_DOWNLOAD = RequirementDownload(
+    label="Official CSC guide to filling out the PDS (Revised 2026)",
+    format_label="PDF",
+    static_path="forms/csc-pds-guide-revised-2026.pdf",
+)
+WES_FORM_DOWNLOAD = RequirementDownload(
+    label="Blank Work Experience Sheet (attachment to CS Form No. 212)",
+    format_label="Word",
+    static_path="forms/cs-form-212-work-experience-sheet.docx",
+)
+PDS_DOWNLOADS = (PDS_FORM_DOWNLOAD, PDS_GUIDE_PAGE, PDS_OFFICIAL_GUIDE_DOWNLOAD)
+WES_DOWNLOADS = (WES_FORM_DOWNLOAD,)
+ALL_FORM_DOWNLOADS = (PDS_FORM_DOWNLOAD, WES_FORM_DOWNLOAD, PDS_OFFICIAL_GUIDE_DOWNLOAD)
+
+
+@dataclass(frozen=True)
 class ApplicantDocumentRequirement:
     code: str
     title: str
     help_text: str
     is_required: bool = True
     conditional_on_performance_rating: bool = False
+    # Blank official forms / guides shown under this requirement wherever it is listed.
+    downloads: tuple = ()
 
     @property
     def file_field_name(self):
@@ -45,13 +85,15 @@ PLANTILLA_APPLICANT_DOCUMENT_REQUIREMENTS = (
     ),
     ApplicantDocumentRequirement(
         code=PERSONAL_DATA_SHEET,
-        title="Personal Data Sheet (CS Form No. 212, Revised 2025) with recent passport-sized picture",
+        title="Personal Data Sheet (CS Form No. 212, Revised 2026) with recent passport-sized picture",
         help_text="Upload the completed Personal Data Sheet with the required photo attached.",
+        downloads=PDS_DOWNLOADS,
     ),
     ApplicantDocumentRequirement(
         code=WORK_EXPERIENCE_SHEET,
         title="Work Experience Sheet",
         help_text="Upload the Work Experience Sheet that accompanies the Personal Data Sheet.",
+        downloads=WES_DOWNLOADS,
     ),
     ApplicantDocumentRequirement(
         code=PERFORMANCE_RATING,
@@ -98,13 +140,15 @@ COS_APPLICANT_DOCUMENT_REQUIREMENTS = (
     ),
     ApplicantDocumentRequirement(
         code=PERSONAL_DATA_SHEET,
-        title="Personal Data Sheet (CS Form No. 212, Revised 2025) with recent passport-sized picture",
+        title="Personal Data Sheet (CS Form No. 212, Revised 2026) with recent passport-sized picture",
         help_text="Upload the completed Personal Data Sheet with the required photo attached.",
+        downloads=PDS_DOWNLOADS,
     ),
     ApplicantDocumentRequirement(
         code=WORK_EXPERIENCE_SHEET,
         title="Work Experience Sheet",
         help_text="Upload the Work Experience Sheet that accompanies the Personal Data Sheet.",
+        downloads=WES_DOWNLOADS,
     ),
     ApplicantDocumentRequirement(
         code=ELIGIBILITY_OR_LICENSE,
