@@ -157,7 +157,7 @@
     <div class="rg-ta-result-card rg-ta-result-card--{{ status_variant }}">
         <div class="rg-ta-result-card__head">
             <p class="rg-ta-result-card__ref">{% blocktranslate with case=application.case_number_short %}Case No. {{ case }}{% endblocktranslate %}</p>
-            <h1 class="rg-ta-result-card__applicant">{{ application.applicant_display_name }}</h1>
+            <h1 class="rg-ta-result-card__applicant"><span class="visually-hidden">{% translate "Application status for" %} </span>{{ application.applicant_display_name }}</h1>
             <p class="rg-ta-result-card__position">
                 {{ application.position.title }}
                 <span class="rg-ta-sep">&middot;</span>
@@ -342,7 +342,8 @@
             <label class="form-label" for="withdraw-reason">{% translate "Reason" %} <span class="rg-intake-optional">{% translate "Optional" %}</span></label>
             <textarea class="form-control" id="withdraw-reason" name="reason" rows="2" maxlength="1000"></textarea>
             <div class="form-check mt-2">
-                <input class="form-check-input" type="checkbox" id="withdraw-confirm" name="confirm" required>
+                <input class="form-check-input" type="checkbox" id="withdraw-confirm" name="confirm" required
+                       data-required-message="{% translate 'Tick this box to confirm you want to withdraw.' %}">
                 <label class="form-check-label" for="withdraw-confirm">{% translate "I want to withdraw my application. I understand this can't be undone online." %}</label>
             </div>
             <button type="submit" class="btn btn-outline-danger mt-2">{% translate "Send my withdrawal request" %}</button>
@@ -413,4 +414,13 @@
     </div>
 
 </div>
+<script>
+// The browser's own "please tick this box" is in the browser's language; use ours.
+(function () {
+    var box = document.getElementById("withdraw-confirm");
+    if (!box) return;
+    box.addEventListener("invalid", function () { box.setCustomValidity(box.getAttribute("data-required-message")); });
+    box.addEventListener("change", function () { box.setCustomValidity(""); });
+})();
+</script>
 {% endblock %}

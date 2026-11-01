@@ -192,6 +192,10 @@ msgid "Use this code to verify your email and continue your application."
 msgstr "Gamitin ang code na ito para ma-verify ang email mo at maituloy ang application mo."
 
 #: templates/email/applicant_otp.html
+msgid "Use this code to verify your email on the page you have open."
+msgstr "Gamitin ang code na ito para ma-verify ang email mo sa page na bukas ngayon."
+
+#: templates/email/applicant_otp.html
 msgid "This code expires in <strong>%(minutes)s minute</strong>."
 msgid_plural "This code expires in <strong>%(minutes)s minutes</strong>."
 msgstr[0] "Mag-e-expire ang code na ito sa loob ng <strong>%(minutes)s minuto</strong>."
@@ -1946,6 +1950,10 @@ msgid "Didn't get it? Resend the code"
 msgstr "Hindi natanggap? I-resend ang code"
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
+msgid "Application status for"
+msgstr "Status ng application ni"
+
+#: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Application progress"
 msgstr "Progress ng application"
 
@@ -2040,6 +2048,10 @@ msgstr "Kung ayaw mo nang ituloy ang application mo para sa <strong>%(title)s</s
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Reason"
 msgstr "Dahilan"
+
+#: recruitment/templates/recruitment/applicant_status_lookup.html
+msgid "Tick this box to confirm you want to withdraw."
+msgstr "I-tick ang box na ito para i-confirm na gusto mong mag-withdraw."
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "I want to withdraw my application. I understand this can't be undone online."
@@ -2202,10 +2214,6 @@ msgid "<strong>You don&rsquo;t have to finish in one go.</strong> Everything is 
 msgstr "<strong>Hindi mo kailangang tapusin agad.</strong> Nase-save lahat habang nagdadagdag ka. Bumalik anytime mula sa My Applications o sa link sa verification email mo."
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
-msgid "This vacancy is no longer accepting applications."
-msgstr "Hindi na tumatanggap ng applicants ang vacancy na ito."
-
-#: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "<strong>Data Privacy Notice:</strong> Your personal data will be used solely for recruitment purposes in accordance with the Data Privacy Act of 2012 (Republic Act No. 10173)."
 msgstr "<strong>Data Privacy Notice:</strong> Gagamitin lang ang personal data mo para sa recruitment, ayon sa Data Privacy Act of 2012 (Republic Act No. 10173)."
 
@@ -2216,10 +2224,6 @@ msgstr "Mag-apply sa Position na Ito"
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "No account needed &mdash; we just email you a code to confirm your address."
 msgstr "Hindi kailangan ng account &mdash; mag-e-email lang kami ng code para ma-confirm ang email mo."
-
-#: recruitment/templates/recruitment/applicant_vacancy_detail.html
-msgid "Applications are not currently open for this position"
-msgstr "Hindi pa bukas ang applications para sa position na ito"
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "You meet the listed standards. You can apply."

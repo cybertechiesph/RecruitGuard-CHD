@@ -4023,7 +4023,9 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         )
         self.assertEqual(detail_response.status_code, 200)
         self.assertFalse(detail_response.context["can_apply"])
-        self.assertContains(detail_response, "Applications are not currently open for this position")
+        self.assertContains(detail_response, "Applications for this position are closed.")
+        self.assertNotContains(detail_response, "How to Apply")
+        self.assertNotContains(detail_response, "Apply for This Position")
 
         intake_response = self.client.get(
             reverse("applicant-intake", kwargs={"pk": self.level1_position.pk})
@@ -12809,9 +12811,10 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         # The page renders the OTP step for an awaiting-resubmission application.
         self.assertEqual(client.get(url).status_code, 200)
 
-        # Verify the applicant (the page's email-OTP step) then re-upload the flagged document.
+        # Verify the applicant on the page (email-OTP step) then re-upload the flagged document.
         otp_code = issue_application_otp(application, actor=application.applicant)
-        verify_application_otp(application, otp_code, actor=application.applicant)
+        verified = client.post(url, {"action": "verify", "otp": otp_code})
+        self.assertEqual(verified.status_code, 302)
         upload = self.build_valid_applicant_document_upload(
             first_requirement.code, content_prefix="reuploaded"
         )
@@ -12825,6 +12828,32 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         application.case.refresh_from_db()
         self.assertEqual(application.case.case_status, RecruitmentCase.CaseStatus.ACTIVE)
         self.assertEqual(application.current_handler_role, RecruitmentUser.Role.SECRETARIAT)
+
+    def test_resubmission_needs_this_browser_to_be_verified(self):
+        application = self._awaiting_resubmission_application()
+        first_requirement = get_applicant_document_requirements(application.branch)[0]
+        url = reverse("applicant-resubmit", kwargs={"token": application.public_token})
+        # The applicant verifies in their own browser...
+        applicant_browser = Client()
+        otp_code = issue_application_otp(application, actor=application.applicant)
+        applicant_browser.post(url, {"action": "verify", "otp": otp_code})
+        # ...but someone else holding the emailed link still cannot upload.
+        other_browser = Client()
+        self.assertContains(other_browser.get(url), "Step 1")
+        response = other_browser.post(
+            url,
+            {
+                "action": "resubmit",
+                first_requirement.file_field_name: self.build_valid_applicant_document_upload(
+                    first_requirement.code
+                ),
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        application.case.refresh_from_db()
+        self.assertEqual(
+            application.case.case_status, RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION
+        )
 
     def test_submit_document_resubmission_requires_a_valid_otp(self):
         application = self.make_submitted_application()
@@ -12991,13 +13020,12 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
                 application, self.secretariat, "return_to_applicant", "Please resubmit."
             )
         application.refresh_from_db()
-        otp_code = issue_application_otp(application, actor=application.applicant)
-        verify_application_otp(application, otp_code, actor=application.applicant)
+        client = self._verified_status_client(application)
 
         url = reverse("applicant-resubmit", kwargs={"token": application.public_token})
-        page = Client().get(url)
+        page = client.get(url)
         self.assertContains(page, "multiple")
-        response = Client().post(
+        response = client.post(
             url,
             {
                 "action": "resubmit",

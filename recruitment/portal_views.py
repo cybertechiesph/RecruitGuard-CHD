@@ -328,11 +328,9 @@ class ApplicantVacancyDetailView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["entry"] = self.entry
-        document_requirements = list(get_applicant_document_requirements(self.entry))
-        document_requirements.sort(
-            key=lambda requirement: requirement.code == PERFORMANCE_RATING
+        context["document_requirements"] = _applicant_requirement_order(
+            get_applicant_document_requirements(self.entry)
         )
-        context["document_requirements"] = document_requirements
         context["is_closing_soon"] = _posting_is_closing_soon(self.entry)
         context["can_apply"] = self.entry.is_open_for_intake
         return context
@@ -395,7 +393,9 @@ class ApplicantPortalIntakeView(View):
         context = {
             "entry": self.entry,
             "form": form,
-            "document_requirements": get_applicant_document_requirements(self.entry),
+            "document_requirements": _applicant_requirement_order(
+                get_applicant_document_requirements(self.entry)
+            ),
         }
         return render(self.request, "recruitment/applicant_start.html", context, status=status)
 
@@ -649,6 +649,12 @@ class ApplicantDraftAccessMixin:
         )
 
 
+def _applicant_requirement_order(requirements):
+    """Documents in the order applicants see them everywhere: the "if applicable" performance
+    rating last (a stable sort keeps the rest in their official order)."""
+    return sorted(requirements, key=lambda requirement: requirement.code == PERFORMANCE_RATING)
+
+
 def application_script_strings():
     """Messages shown by recruitguard-applicant-application.js, in the page's language.
     {name} placeholders are filled in by the script."""
@@ -720,6 +726,8 @@ class ApplicantApplicationView(ApplicantDraftAccessMixin, TemplateView):
         slots = build_document_slot_states(
             application, performance_rating_applicable=self.performance_rating_applicable()
         )
+        # Same order as the vacancy page: the "if applicable" rating comes last.
+        slots.sort(key=lambda slot: slot["code"] == PERFORMANCE_RATING)
         reusable = get_reusable_documents(application)
         for slot in slots:
             slot["reusable"] = None if slot["is_ready"] else reusable.get(slot["code"])
@@ -1427,11 +1435,10 @@ class ApplicantResubmissionView(TemplateView):
         return redirect("applicant-my-applications")
 
     def _email_verified(self, application):
-        # A code entered on this page, or this browser proving the email recently through My
-        # Applications or the status page, so the applicant is not asked for a third code.
-        return application.otp_is_currently_valid or _status_otp_verified_recently(
-            self.request, application
-        )
+        # Only THIS browser's proof counts: a code entered on this page, or a recent sign-in
+        # through My Applications or the status page. The application's own "verified" flag is
+        # not enough, or anyone else holding the emailed link could upload during the code window.
+        return _status_otp_verified_recently(self.request, application)
 
     def get(self, request, *args, **kwargs):
         application = self.get_application()
@@ -1516,8 +1523,7 @@ class ApplicantResubmissionView(TemplateView):
             )
 
         if action == "resubmit":
-            session_verified = _status_otp_verified_recently(request, application)
-            if not (session_verified or application.otp_is_currently_valid):
+            if not self._email_verified(application):
                 messages.error(request, _("Verify your email before resubmitting your documents."))
                 return redirect("applicant-resubmit", token=application.public_token)
             resubmission_form = DocumentResubmissionForm(
@@ -1529,7 +1535,7 @@ class ApplicantResubmissionView(TemplateView):
                         application,
                         application.applicant,
                         resubmission_form.get_uploads(),
-                        email_verified_in_session=session_verified,
+                        email_verified_in_session=True,
                     )
                 except ValueError as exc:
                     messages.error(request, str(exc))

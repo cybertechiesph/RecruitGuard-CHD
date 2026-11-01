@@ -242,6 +242,19 @@ A second end-to-end walkthrough (English and Filipino, phone size) found these, 
   internal/applicant forms (about 435 lines) had been pasted in twice by the i18n commit; the
   second copy silently replaced the first.
 
+## Minor polish (November 2026)
+- **Resubmit page checks this browser only.** Only a code entered there, or a recent My
+  Applications or status-page sign-in in the same browser, unlocks the upload. The
+  application's own "verified" flag no longer lets someone else holding the emailed link
+  upload during the code window.
+- **Closed vacancies say "closed" once** (the notice at the top). "How to Apply" is hidden and
+  the bottom button links to the open positions.
+- **One document order:** the "if applicable" performance rating comes last on the vacancy,
+  start and application pages.
+- The status page heading reads "Application status for [name]" to screen readers.
+- Code emails for submitted applications no longer say "continue your application".
+- The withdrawal tick box shows the portal's own (translated) message, not the browser's.
+
 ## Still needs people (not code)
 - Test on real phones (a cheap Android on mobile data, an iPhone), including inside Facebook.
 - A 5-person usability test with people who have never seen the portal.

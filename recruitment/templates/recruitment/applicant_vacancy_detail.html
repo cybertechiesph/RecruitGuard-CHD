@@ -166,10 +166,10 @@
         </ul>
     </div>
 
-    {# How to apply #}
+    {# How to apply (a closed vacancy already says so in the notice at the top) #}
+    {% if can_apply %}
     <div class="rg-pub-section">
         <h2 class="rg-pub-section__title">{% translate "How to Apply" %}</h2>
-        {% if can_apply %}
         <ol class="rg-pub-section__copy rg-howto-steps">
             <li>{% translate "Click <strong>&ldquo;Apply for This Position&rdquo;</strong> below and enter your name, email and mobile number." %}</li>
             <li>{% translate "Enter the 6-digit code we email you." %}</li>
@@ -182,11 +182,8 @@
             anytime from My Applications or the link in your verification email.
             {% endblocktranslate %}
         </p>
-        {% else %}
-        <p class="rg-pub-section__copy">{% translate "This vacancy is no longer accepting applications." %}
-            <a href="{% url 'applicant-portal' %}#job-openings">{% translate "See the positions that are open now" %}</a>.</p>
-        {% endif %}
     </div>
+    {% endif %}
 
     {# Data privacy notice #}
     <div class="rg-pub-info-box rg-pub-info-box--info" style="margin-top:1.75rem; font-size:0.8125rem;">
@@ -210,9 +207,9 @@
     </div>
     {% else %}
     <div style="margin-top:2rem; text-align:center;">
-        <button class="btn btn-outline-secondary btn-lg" disabled style="min-width:320px;">
-            {% translate "Applications are not currently open for this position" %}
-        </button>
+        <a href="{% url 'applicant-portal' %}#job-openings" class="btn btn-rg-primary btn-lg" style="min-width:320px;">
+            {% translate "See the positions that are open now" %} &rarr;
+        </a>
     </div>
     {% endif %}
 
