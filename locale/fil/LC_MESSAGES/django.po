@@ -29,11 +29,7 @@ msgstr "Menu ng applicant"
 msgid "Job Openings"
 msgstr "Job Openings"
 
-#: templates/applicant_base.html recruitment/templates/recruitment/applicant_portal.html
-msgid "Track Application"
-msgstr "I-track ang Application"
-
-#: templates/applicant_base.html templates/email/applicant_hub_code.html recruitment/templates/recruitment/applicant_my_applications.html recruitment/templates/recruitment/applicant_receipt.html
+#: templates/applicant_base.html templates/email/applicant_hub_code.html recruitment/templates/recruitment/applicant_my_applications.html recruitment/templates/recruitment/applicant_portal.html recruitment/templates/recruitment/applicant_receipt.html
 msgid "My Applications"
 msgstr "My Applications"
 
@@ -934,8 +930,8 @@ msgid "How do I check my application status?"
 msgstr "Paano ko iche-check ang status ng application ko?"
 
 #: recruitment/templates/recruitment/applicant_help.html
-msgid "Go to the <a href=\"%(link3)s\">Track Application</a> page and enter your Tracking Code and email address. The portal will show your current status in plain language."
-msgstr "Pumunta sa <a href=\"%(link3)s\">Track Application</a> page at ilagay ang Tracking Code at email mo. Ipapakita ng portal ang current status mo sa simpleng salita."
+msgid "Open <a href=\"%(link3)s\">My Applications</a> and enter your email. We send you a 6-digit code, then you see every application you made with that email and its status, in plain language. Prefer your tracking code? Use the <a href=\"%(link3b)s\">tracking code page</a> instead."
+msgstr "Buksan ang <a href=\"%(link3)s\">My Applications</a> at ilagay ang email mo. Magpapadala kami ng 6-digit code, tapos makikita mo lahat ng application na ginawa mo gamit ang email na iyon at ang status ng bawat isa. Mas gusto mo ang tracking code? Gamitin ang <a href=\"%(link3b)s\">tracking code page</a>."
 
 #: recruitment/templates/recruitment/applicant_help.html
 msgid "Easier: every status update email we send includes a direct link straight to your status page &mdash; just click that."
@@ -1080,6 +1076,14 @@ msgstr "Gamitin ang email na ginamit mo sa pag-apply. Magpapadala kami ng 6-digi
 #: recruitment/templates/recruitment/applicant_my_applications.html
 msgid "Send me a code"
 msgstr "Padalhan ako ng code"
+
+#: recruitment/templates/recruitment/applicant_my_applications.html
+msgid "Have a tracking code instead?"
+msgstr "May tracking code ka?"
+
+#: recruitment/templates/recruitment/applicant_my_applications.html
+msgid "Use your tracking code"
+msgstr "Gamitin ang tracking code mo"
 
 #: recruitment/templates/recruitment/applicant_my_applications.html recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_status_lookup.html recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Back to Job Openings"
@@ -1500,8 +1504,8 @@ msgid "Track your application"
 msgstr "I-track ang application mo"
 
 #: recruitment/templates/recruitment/applicant_portal.html
-msgid "Check your status anytime with the tracking code we give you when you submit."
-msgstr "Alamin ang status mo anytime gamit ang tracking code na ibibigay namin pagka-submit mo."
+msgid "Check your status anytime on My Applications &mdash; just your email, no tracking code needed."
+msgstr "I-check ang status mo anytime sa My Applications &mdash; email mo lang ang kailangan, hindi na ang tracking code."
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "These are the positions currently accepting applications."
@@ -1838,6 +1842,14 @@ msgstr "I-track ang Application Mo"
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Enter the private Tracking Code you received when you submitted your application, along with the email address you used."
 msgstr "Ilagay ang Tracking Code na natanggap mo noong nag-submit ka, at ang email na ginamit mo."
+
+#: recruitment/templates/recruitment/applicant_status_lookup.html
+msgid "Lost your tracking code?"
+msgstr "Nawala ang tracking code mo?"
+
+#: recruitment/templates/recruitment/applicant_status_lookup.html
+msgid "See all your applications with just your email"
+msgstr "Tingnan lahat ng application mo gamit lang ang email mo"
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html recruitment/forms.py
 msgid "Tracking Code"

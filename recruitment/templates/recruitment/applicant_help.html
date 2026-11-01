@@ -331,9 +331,10 @@
                 </h3>
                 <div id="faq-s3" class="accordion-collapse collapse" aria-labelledby="faq-s3-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>{% url 'applicant-status-lookup' as link3 %}{% blocktranslate trimmed %}Go to the <a href="{{ link3 }}">Track Application</a> page
-                        and enter your Tracking Code and email address. The portal will show your current status
-                        in plain language.{% endblocktranslate %}</p>
+                        <p>{% url 'applicant-my-applications' as link3 %}{% url 'applicant-status-lookup' as link3b %}{% blocktranslate trimmed %}Open
+                        <a href="{{ link3 }}">My Applications</a> and enter your email. We send you a 6-digit code, then you
+                        see every application you made with that email and its status, in plain language. Prefer your
+                        tracking code? Use the <a href="{{ link3b }}">tracking code page</a> instead.{% endblocktranslate %}</p>
                         <p>{% blocktranslate trimmed %}Easier: every status update email we send includes a direct link straight to your
                         status page &mdash; just click that.{% endblocktranslate %}</p>
                     </div>

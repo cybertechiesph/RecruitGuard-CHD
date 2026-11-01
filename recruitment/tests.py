@@ -22037,7 +22037,7 @@ class ApplicantPortalLanguageTests(BaseRecruitmentTestCase):
     def test_language_switch_shows_the_portal_in_filipino(self):
         page = self.filipino_client().get(reverse("applicant-portal"))
         self.assertContains(page, '<html lang="fil">')
-        self.assertContains(page, "I-track ang Application")
+        self.assertContains(page, "Tingnan ang Job Openings")
         self.assertContains(page, "Paano mag-apply")
         self.assertContains(page, 'value="fil" lang="fil" class="rg-langswitch__btn is-current"')
 
@@ -22049,13 +22049,13 @@ class ApplicantPortalLanguageTests(BaseRecruitmentTestCase):
 
     def test_a_filipino_phone_gets_filipino_automatically(self):
         page = Client().get(reverse("applicant-portal"), HTTP_ACCEPT_LANGUAGE="fil-PH,fil;q=0.9")
-        self.assertContains(page, "I-track ang Application")
+        self.assertContains(page, "Tingnan ang Job Openings")
 
     def test_staff_pages_stay_in_english(self):
         client = self.filipino_client()
         page = client.get(reverse("login"))
         self.assertContains(page, '<html lang="en">')
-        self.assertNotContains(page, "I-track ang Application")
+        self.assertNotContains(page, "Tingnan ang Job Openings")
 
     def test_application_flow_messages_follow_the_language(self):
         client = self.filipino_client()
@@ -22225,3 +22225,13 @@ class MyApplicationsAndLanguageEmailTests(BaseRecruitmentTestCase):
         self.assertNotContains(page, "data-english-only")
         guide = client.get(reverse("applicant-pds-guide"))
         self.assertContains(guide, "Paano mag-fill up ng Personal Data Sheet (PDS)")
+
+    def test_one_menu_entry_for_everything_after_applying(self):
+        home = Client().get(reverse("applicant-portal"))
+        self.assertContains(home, reverse("applicant-my-applications"))
+        self.assertNotContains(home, ">\n                Track Application\n")
+        hub = Client().get(reverse("applicant-my-applications"))
+        self.assertContains(hub, "Have a tracking code instead?")
+        self.assertContains(hub, reverse("applicant-status-lookup"))
+        lookup = Client().get(reverse("applicant-status-lookup"))
+        self.assertContains(lookup, "See all your applications with just your email")

@@ -205,6 +205,12 @@ After a full applicant walkthrough:
   - Uploading a typed PDF whose footer says "Revised 2017" shows a warning straight away.
   - Scans and photos aren't judged.
 - Migration `0089_applicant_hub_and_language`.
+- **One menu entry after applying:** the header has just Job Openings, **My Applications** and
+  Help.
+  - "Track Application" is no longer a separate menu item.
+  - The tracking-code page still exists, linked both ways ("Have a tracking code instead?" /
+    "Lost your tracking code?"), and My Applications is highlighted on it.
+  - The home page button and "How it works" point to My Applications.
 
 ## Still needs people (not code)
 - Test on real phones (a cheap Android on mobile data, an iPhone), including inside Facebook.
