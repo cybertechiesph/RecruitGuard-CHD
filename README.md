@@ -165,13 +165,26 @@ Run these once a day on the server (for example from cron). Both are safe to re-
 ```bash
 python manage.py emit_deadline_notifications   # in-app alerts for postings closing within 24 hours
 python manage.py send_draft_reminders          # one email to applicants whose verified application is still unsubmitted 3 days before closing
+python manage.py send_resubmission_reminders   # one email per pending document resubmission, 2 days before its deadline
+python manage.py purge_abandoned_drafts        # removes uploaded files of never-submitted drafts 30 days after the vacancy closed (records and audit trail kept)
 ```
 
-Add `--dry-run` to either to see what it would do without sending anything. Example crontab line (08:00 daily):
+Add `--dry-run` to any of them to see what it would do without sending or removing anything. Example crontab lines (08:00 daily):
 
 ```
 0 8 * * * cd /path/to/RecruitGuard-CHD && .venv/bin/python manage.py send_draft_reminders
+5 8 * * * cd /path/to/RecruitGuard-CHD && .venv/bin/python manage.py send_resubmission_reminders
+10 8 * * * cd /path/to/RecruitGuard-CHD && .venv/bin/python manage.py purge_abandoned_drafts
 ```
+
+## Behind nginx: client IP addresses
+
+Set `RATE_LIMIT_TRUST_X_FORWARDED_FOR=True` on the server (nginx sits in front of Django).
+The app then reads the visitor's address from the **right-hand** end of `X-Forwarded-For`,
+which nginx appends and the visitor cannot forge. With it `False` behind nginx, every visitor
+looks like `127.0.0.1` and shares one rate-limit budget. Rate limits count per browser, with a
+per-IP ceiling of `RATE_LIMIT_SHARED_IP_FACTOR` (default 10) times that, so applicants on the
+same mobile network (carrier-grade NAT) don't lock each other out.
 
 ## First internal account note
 

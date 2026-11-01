@@ -5052,3 +5052,43 @@ a.rg-sched-event__title { color: var(--rg-brand-green); }
     .rg-apply-wrap { padding-bottom: 4.5rem; }
 }
 @media print { .rg-apply-sticky { display: none !important; } }
+
+/* Tip shown inside Facebook/Messenger/Instagram's built-in browser */
+.rg-inapp-notice { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 0.7rem 0.9rem; margin: 0 0 1rem; color: #1e3a8a; font-size: 0.9rem; }
+.rg-inapp-notice__title { margin: 0 0 0.2rem; font-weight: 700; }
+.rg-inapp-notice__copy { margin: 0; }
+
+/* Vacancy page: qualification self-check */
+.rg-qs-check { border: 1px solid #d1d5db; border-radius: 10px; padding: 0.85rem 1rem; margin: 0; background: #fff; }
+.rg-qs-check__legend { font-size: 0.95rem; font-weight: 600; color: #111827; float: none; width: auto; margin-bottom: 0.5rem; }
+.rg-qs-check__item { display: flex; gap: 0.6rem; align-items: flex-start; padding: 0.45rem 0; border-top: 1px solid #f1f5f9; font-size: 0.92rem; color: #1f2937; cursor: pointer; }
+.rg-qs-check__item input { margin-top: 0.25rem; width: 1.1rem; height: 1.1rem; flex: 0 0 auto; }
+.rg-qs-check__result { margin: 0.5rem 0 0; font-weight: 600; font-size: 0.9rem; }
+.rg-qs-check__result.is-good { color: #15803d; }
+.rg-qs-check__result.is-warn { color: #92400e; }
+.rg-qs-check__note { margin: 0.4rem 0 0; font-size: 0.8rem; color: #4b5563; }
+.rg-doc-card__warning { font-size: 0.86rem; color: #78350f; background: #fef3c7; border-radius: 6px; padding: 0.45rem 0.6rem; margin-top: 0.5rem; }
+
+/* Deadline wording + last-day countdown */
+.rg-pub-deadline-countdown { display: block; font-weight: 700; margin-top: 0.15rem; }
+.rg-apply-deadline { margin: 0.6rem 0 0; padding: 0.55rem 0.75rem; border-radius: 8px; background: #fff7ed; border: 1px solid #fed7aa; color: #7c2d12; font-size: 0.9rem; }
+.rg-apply-deadline [data-closes-at] { font-weight: 700; margin-left: 0.25rem; }
+
+/* Track Application: withdrawal request */
+.rg-ta-withdraw { margin: 1rem 0; border: 1px solid #e5e7eb; border-radius: 10px; padding: 0.7rem 0.9rem; background: #fff; }
+.rg-ta-withdraw summary { cursor: pointer; font-weight: 600; color: #374151; }
+.rg-ta-withdraw__copy { margin: 0.6rem 0; font-size: 0.9rem; color: #374151; }
+
+/* Application page: reuse a document from an earlier application */
+.rg-doc-reuse { margin: 0.5rem 0; padding: 0.55rem 0.7rem; border: 1px dashed #93c5fd; border-radius: 8px; background: #f8fbff; font-size: 0.88rem; color: #1f2937; }
+.rg-doc-reuse__file { color: #4b5563; word-break: break-all; }
+.rg-doc-reuse__hint { display: block; margin-top: 0.3rem; font-size: 0.8rem; color: #4b5563; }
+
+/* Accessibility pass: nothing smaller than 12px; tap targets at least 24px tall */
+.rg-brand-kicker, .rg-pub-hero__eyebrow, .rg-pub-chip, .rg-pub-job-card__ref,
+.rg-pub-privacy__eyebrow, .rg-req-downloads__format { font-size: max(0.75rem, 12px) !important; }
+.rg-pub-back, .rg-pub-home-footer-notes a, .rg-public-footer a { display: inline-block; min-height: 24px; padding-block: 3px; }
+.rg-pub-radio-list input[type="radio"], .rg-apply-confirm .form-check-input,
+.rg-qs-check__item input, .rg-ta-withdraw .form-check-input { width: 1.35rem; height: 1.35rem; }
+.rg-pub-radio-list label { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 32px; }
+.rg-intake-optional { font-size: max(0.75rem, 12px) !important; }

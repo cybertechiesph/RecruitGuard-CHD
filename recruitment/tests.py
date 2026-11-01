@@ -12862,6 +12862,123 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         session.save()
         return client
 
+    def _awaiting_resubmission_application(self):
+        application = self.make_submitted_application()
+        first_requirement = get_applicant_document_requirements(application.branch)[0]
+        self._finalize_screening_with_flagged_document(application, first_requirement)
+        with self.captureOnCommitCallbacks(execute=True):
+            process_workflow_action(
+                application, self.secretariat, "return_to_applicant", "Please resubmit."
+            )
+        application.refresh_from_db()
+        return application
+
+    def test_resubmission_reminder_goes_once_per_deadline(self):
+        from django.core.management import call_command
+
+        application = self._awaiting_resubmission_application()
+        record = ScreeningRecord.objects.get(
+            application=application, review_stage=application.case.current_stage
+        )
+        record.resubmission_deadline = timezone.localdate() + timedelta(days=1)
+        record.save(update_fields=["resubmission_deadline", "updated_at"])
+        mail.outbox.clear()
+
+        call_command("send_resubmission_reminders", stdout=io.StringIO())
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("corrected documents", mail.outbox[0].subject)
+        self.assertIn(
+            reverse("applicant-resubmit", kwargs={"token": application.public_token}),
+            mail.outbox[0].body,
+        )
+        self.assertTrue(
+            AuditLog.objects.filter(
+                application=application, action=AuditLog.Action.RESUBMISSION_REMINDER_SENT
+            ).exists()
+        )
+        call_command("send_resubmission_reminders", stdout=io.StringIO())
+        self.assertEqual(len(mail.outbox), 1)
+
+        # A new (extended) deadline gets its own reminder.
+        with self.captureOnCommitCallbacks(execute=True):
+            extend_document_resubmission_deadline(
+                application, self.secretariat, timezone.localdate() + timedelta(days=2), "Applicant asked."
+            )
+        mail.outbox.clear()
+        call_command("send_resubmission_reminders", stdout=io.StringIO())
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_resubmission_reminder_skips_deadlines_far_away(self):
+        from recruitment.services import find_resubmissions_due_for_reminder
+
+        application = self._awaiting_resubmission_application()
+        ScreeningRecord.objects.filter(application=application).update(
+            resubmission_deadline=timezone.localdate() + timedelta(days=10)
+        )
+        self.assertEqual(find_resubmissions_due_for_reminder(), [])
+
+    def test_applicant_can_ask_to_withdraw_and_the_office_confirms_it(self):
+        application = self.make_submitted_application()
+        status_url = reverse("applicant-status-link", kwargs={"token": application.public_token})
+        withdraw_url = reverse("applicant-withdrawal-request", kwargs={"token": application.public_token})
+
+        # Without the emailed status code, nothing happens.
+        response = Client().post(withdraw_url, {"confirm": "on"})
+        self.assertRedirects(response, status_url, fetch_redirect_response=False)
+        application.refresh_from_db()
+        self.assertIsNone(application.withdrawal_requested_at)
+
+        client = self._verified_status_client(application)
+        page = client.get(status_url)
+        self.assertContains(page, "Withdraw my application")
+        no_confirm = client.post(withdraw_url, {"reason": "Found another job."}, follow=True)
+        self.assertContains(no_confirm, "Tick the box to confirm")
+        application.refresh_from_db()
+        self.assertIsNone(application.withdrawal_requested_at)
+
+        response = client.post(withdraw_url, {"reason": "Found another job.", "confirm": "on"}, follow=True)
+        self.assertContains(response, "Your request to withdraw was sent")
+        self.assertContains(response, "data-withdrawal-requested")
+        application.refresh_from_db()
+        self.assertIsNotNone(application.withdrawal_requested_at)
+        self.assertEqual(application.withdrawal_request_reason, "Found another job.")
+        # The case itself is untouched until staff record it.
+        self.assertEqual(application.status, RecruitmentApplication.Status.SECRETARIAT_REVIEW)
+        self.assertTrue(
+            Notification.objects.filter(
+                application=application,
+                recipient=self.secretariat,
+                kind=Notification.Kind.WITHDRAWAL_REQUESTED,
+            ).exists()
+        )
+        self.assertTrue(
+            AuditLog.objects.filter(
+                application=application, action=AuditLog.Action.APPLICATION_WITHDRAWAL_REQUESTED
+            ).exists()
+        )
+        # Asking twice is refused politely.
+        again = client.post(withdraw_url, {"confirm": "on"}, follow=True)
+        self.assertNotContains(again, "Withdraw my application")
+
+        staff = Client()
+        self.force_login_with_mfa(staff, self.secretariat)
+        case_page = staff.get(reverse("application-detail", kwargs={"pk": application.pk}))
+        self.assertContains(case_page, "The applicant asked to withdraw")
+        self.assertContains(case_page, "Found another job.")
+        self.assertEqual(
+            case_page.context["withdrawal_form"].initial["reason"].startswith(
+                "The applicant asked to withdraw through the applicant portal"
+            ),
+            True,
+        )
+
+    def test_withdrawal_is_not_offered_after_a_decision(self):
+        application = self.make_approved_cos_application()
+        page = self._verified_status_client(application).get(
+            reverse("applicant-status-link", kwargs={"token": application.public_token})
+        )
+        self.assertNotContains(page, "Withdraw my application")
+
     def test_resubmission_page_combines_several_files_into_one_pdf(self):
         from pypdf import PdfReader
 
@@ -21759,3 +21876,144 @@ class StepByStepApplicantIntakeTests(BaseRecruitmentTestCase):
         self.assertContains(response, "This applicant action is not available.")
         application.refresh_from_db()
         self.assertIsNone(application.submitted_at)
+
+
+class ApplicantPortalPolishTests(BaseRecruitmentTestCase):
+    """In-app-browser tip, qualification self-check, deadline wording, abandoned-draft
+    clean-up, document reuse and the vacancy funnel counts."""
+
+    def setUp(self):
+        super().setUp()
+        cache.clear()
+
+    def test_facebook_in_app_browser_gets_an_open_in_browser_tip(self):
+        url = reverse("applicant-intake", kwargs={"pk": self.cos_position.pk})
+        facebook = self.client.get(
+            url,
+            HTTP_USER_AGENT="Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/119.0 Mobile Safari/537.36 [FB_IAB/FB4A;FBAV/440.0.0.0;]",
+        )
+        self.assertContains(facebook, 'data-in-app-browser="facebook"')
+        self.assertContains(facebook, "Open in browser")
+        chrome = self.client.get(
+            url, HTTP_USER_AGENT="Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/119.0 Mobile Safari/537.36"
+        )
+        self.assertNotContains(chrome, "data-in-app-browser")
+
+    def test_vacancy_page_offers_a_qualification_self_check(self):
+        self.level1_position.qualification_reference = (
+            "Education: Bachelor's degree. Training: 4 hours of relevant training. "
+            "Experience: 1 year of relevant experience. Eligibility: Career Service (Subprofessional)."
+        )
+        self.level1_position.save(update_fields=["qualification_reference", "updated_at"])
+        self.assertEqual(
+            [label for label, _text in self.level1_position.qualification_items],
+            ["Education", "Training", "Experience", "Eligibility"],
+        )
+        page = self.client.get(reverse("applicant-vacancy-detail", kwargs={"pk": self.level1_position.pk}))
+        self.assertContains(page, '<fieldset class="rg-qs-check"')
+        self.assertContains(page, "Career Service (Subprofessional).")
+        self.assertContains(page, "data-apply-link")
+
+    def test_plain_qualification_text_stays_plain(self):
+        self.level1_position.qualification_reference = "See the CSC qualification standards."
+        self.level1_position.save(update_fields=["qualification_reference", "updated_at"])
+        self.assertEqual(self.level1_position.qualification_items, [])
+        page = self.client.get(reverse("applicant-vacancy-detail", kwargs={"pk": self.level1_position.pk}))
+        self.assertNotContains(page, '<fieldset class="rg-qs-check"')
+        self.assertContains(page, "See the CSC qualification standards.")
+
+    def test_deadline_says_the_exact_time_and_counts_down_on_the_last_day(self):
+        self.level1_position.closing_date = timezone.localdate()
+        self.level1_position.save(update_fields=["closing_date", "updated_at"])
+        page = self.client.get(reverse("applicant-vacancy-detail", kwargs={"pk": self.level1_position.pk}))
+        self.assertContains(page, "11:59 PM")
+        self.assertContains(page, "(Philippine time)")
+        self.assertContains(page, "data-closes-at")
+        self.assertContains(page, "recruitguard-deadline.js")
+
+        client, application = self.open_portal_draft("deadline.banner@example.com")
+        app_page = client.get(reverse("applicant-application", kwargs={"token": application.public_token}))
+        self.assertContains(app_page, "data-deadline-banner")
+        self.assertContains(app_page, "Submit by 11:59 PM")
+
+    def test_abandoned_draft_files_are_removed_but_the_record_stays(self):
+        from django.core.management import call_command
+        from recruitment.applicant_documents import get_document_parts
+
+        client, draft = self.open_portal_draft("abandoned@example.com")
+        self.upload_portal_document(client, draft, "personal_data_sheet")
+        _client2, active_draft = self.open_portal_draft("still.open@example.com", position=self.cos_position)
+        self.upload_portal_document(_client2, active_draft, "personal_data_sheet")
+        RecruitmentApplication.objects.filter(pk__in=[draft.pk, active_draft.pk]).update(
+            updated_at=timezone.now() - timedelta(days=45)
+        )
+        # Level 1 vacancy has closed; the COS pooling vacancy is still open.
+        self.level1_position.closing_date = timezone.localdate() - timedelta(days=40)
+        self.level1_position.save(update_fields=["closing_date", "updated_at"])
+
+        call_command("purge_abandoned_drafts", stdout=io.StringIO())
+
+        self.assertTrue(RecruitmentApplication.objects.filter(pk=draft.pk).exists())
+        self.assertFalse(get_document_parts(draft).exists())
+        item = EvidenceVaultItem.objects.get(application=draft, document_key="personal_data_sheet")
+        self.assertEqual(bytes(item.ciphertext), b"")
+        self.assertTrue(item.is_archived)
+        self.assertTrue(item.sha256_digest)  # the fingerprint is kept
+        self.assertTrue(
+            AuditLog.objects.filter(application=draft, action=AuditLog.Action.EVIDENCE_ARCHIVED).exists()
+        )
+        # A draft on a vacancy that is still open is left alone.
+        self.assertTrue(get_document_parts(active_draft).exists())
+
+    def test_documents_can_be_reused_from_an_earlier_application(self):
+        self.apply_through_portal("reuse.me@example.com")
+        client, cos_draft = self.open_portal_draft("reuse.me@example.com", position=self.cos_position)
+        page = client.get(reverse("applicant-application", kwargs={"token": cos_draft.public_token}))
+        slots = {slot["code"]: slot for slot in page.context["slots"]}
+        reusable = slots["personal_data_sheet"]["reusable"]
+        self.assertIsNotNone(reusable)
+        self.assertContains(page, "Use this file")
+
+        reuse_url = reverse(
+            "applicant-document-reuse",
+            kwargs={"token": cos_draft.public_token, "code": "personal_data_sheet"},
+        )
+        wrong = client.post(reuse_url, {"evidence_id": reusable.pk + 999})
+        self.assertEqual(wrong.status_code, 400)
+        response = client.post(reuse_url, {"evidence_id": reusable.pk})
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertTrue(response.json()["is_ready"])
+        self.assertIsNotNone(get_current_applicant_document_map(cos_draft).get("personal_data_sheet"))
+
+    def test_someone_elses_documents_are_never_offered(self):
+        self.apply_through_portal("first.person@example.com")
+        client, other_draft = self.open_portal_draft("second.person@example.com", position=self.cos_position)
+        page = client.get(reverse("applicant-application", kwargs={"token": other_draft.public_token}))
+        self.assertTrue(all(slot["reusable"] is None for slot in page.context["slots"]))
+        first_pds = EvidenceVaultItem.objects.get(
+            application__applicant_email="first.person@example.com",
+            document_key="personal_data_sheet",
+            is_current_version=True,
+        )
+        response = client.post(
+            reverse(
+                "applicant-document-reuse",
+                kwargs={"token": other_draft.public_token, "code": "personal_data_sheet"},
+            ),
+            {"evidence_id": first_pds.pk},
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_vacancy_list_shows_how_far_applicants_got(self):
+        self.apply_through_portal("funnel.done@example.com")
+        self.open_portal_draft("funnel.verified@example.com")
+        self.start_portal_draft(Client(), self.level1_position, "funnel.started@example.com")
+        staff = Client()
+        self.force_login_with_mfa(staff, self.secretariat)
+        page = staff.get(reverse("recruitment-entry-list"))
+        self.assertContains(page, "data-portal-funnel")
+        funnel = next(e for e in page.context["entries"] if e.pk == self.level1_position.pk).portal_funnel
+        self.assertEqual(
+            (funnel["started"], funnel["verified"], funnel["with_documents"], funnel["submitted"]),
+            (3, 2, 1, 1),
+        )

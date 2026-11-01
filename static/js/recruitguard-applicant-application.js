@@ -65,6 +65,64 @@
         }).catch(function () { return file; });
     }
 
+    /* Photo quality check (after upload, never blocks): very small, dark or blurry photos of
+       documents are the most common reason the office asks for a document again. */
+    var QUALITY_MIN_EDGE = 1000;   // px on the long edge
+    var QUALITY_MIN_BRIGHTNESS = 70; // average luminance, 0-255
+    var QUALITY_MIN_SHARPNESS = 40;  // variance of the Laplacian on a 320px-wide copy
+    function checkPhotoQuality(file) {
+        var kind = kindOf(file);
+        if ((kind !== "jpg" && kind !== "png") || !window.createImageBitmap) return Promise.resolve([]);
+        return createImageBitmap(file, { imageOrientation: "from-image" }).then(function (bitmap) {
+            var issues = [];
+            if (Math.max(bitmap.width, bitmap.height) < QUALITY_MIN_EDGE) issues.push("small");
+            var width = Math.min(320, bitmap.width);
+            var height = Math.max(1, Math.round(bitmap.height * (width / bitmap.width)));
+            var canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            var ctx = canvas.getContext("2d");
+            ctx.drawImage(bitmap, 0, 0, width, height);
+            if (bitmap.close) bitmap.close();
+            var pixels = ctx.getImageData(0, 0, width, height).data;
+            var gray = new Float32Array(width * height);
+            var total = 0;
+            for (var i = 0, p = 0; i < pixels.length; i += 4, p++) {
+                gray[p] = 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2];
+                total += gray[p];
+            }
+            if (total / gray.length < QUALITY_MIN_BRIGHTNESS) issues.push("dark");
+            var sum = 0, sumSq = 0, count = 0;
+            for (var y = 1; y < height - 1; y++) {
+                for (var x = 1; x < width - 1; x++) {
+                    var c = y * width + x;
+                    var lap = gray[c - 1] + gray[c + 1] + gray[c - width] + gray[c + width] - 4 * gray[c];
+                    sum += lap; sumSq += lap * lap; count++;
+                }
+            }
+            if (count && (sumSq / count - Math.pow(sum / count, 2)) < QUALITY_MIN_SHARPNESS) issues.push("blurry");
+            return issues;
+        }).catch(function () { return []; });
+    }
+    var QUALITY_MESSAGES = {
+        small: "This photo is small, so the text may be hard to read.",
+        dark: "This photo looks dark.",
+        blurry: "This photo looks blurry."
+    };
+    function qualityWarning(card, name, issues) {
+        var box = card.querySelector("[data-doc-warning]");
+        if (!box || !issues.length) return;
+        var line = document.createElement("p");
+        line.className = "rg-doc-card__error-line";
+        var strong = document.createElement("strong");
+        strong.textContent = name;
+        line.appendChild(strong);
+        line.appendChild(document.createTextNode(" — " + issues.map(function (i) { return QUALITY_MESSAGES[i]; }).join(" ") +
+            " It was saved. Tap View to check you can read it, and take it again if not."));
+        box.appendChild(line);
+        box.hidden = false;
+    }
+
     /* ── document cards ──────────────────────────────────────── */
     var partTemplate = document.getElementById("rg-part-template");
     var uploadingTemplate = document.getElementById("rg-part-uploading-template");
@@ -149,7 +207,12 @@
                     row.remove();
                     var body = null;
                     try { body = JSON.parse(xhr.responseText); } catch (x) {}
-                    if (xhr.status === 200 && body) { applySlotState(card, body); resolve(); return; }
+                    if (xhr.status === 200 && body) {
+                        applySlotState(card, body);
+                        checkPhotoQuality(prepared).then(function (issues) { qualityWarning(card, file.name, issues); });
+                        resolve();
+                        return;
+                    }
                     reject(fileError(file.name, (body && body.error) || "The upload did not go through. Try again."));
                 });
                 xhr.addEventListener("error", function () {
@@ -163,6 +226,8 @@
 
     function handleFiles(card, files) {
         cardError(card, "");
+        var warningBox = card.querySelector("[data-doc-warning]");
+        if (warningBox) { warningBox.textContent = ""; warningBox.hidden = true; }
         var errors = [];
         var chain = Promise.resolve();
         Array.prototype.forEach.call(files, function (file) {
@@ -187,6 +252,40 @@
                 input.value = "";
             });
         });
+    });
+
+    /* "Use this file" from the applicant's earlier application. */
+    root.addEventListener("click", function (e) {
+        var reuseBtn = e.target.closest && e.target.closest("[data-reuse-url]");
+        if (!reuseBtn) return;
+        var card = reuseBtn.closest("[data-doc-card]");
+        var data = new FormData();
+        data.append("evidence_id", reuseBtn.getAttribute("data-evidence-id"));
+        reuseBtn.disabled = true;
+        reuseBtn.textContent = "Adding…";
+        fetch(reuseBtn.getAttribute("data-reuse-url"), {
+            method: "POST",
+            body: data,
+            credentials: "same-origin",
+            headers: { "X-CSRFToken": csrf, "X-Requested-With": "XMLHttpRequest" }
+        }).then(function (res) { return res.json().then(function (body) { return [res, body]; }); })
+          .then(function (pair) {
+              if (pair[0].ok) {
+                  applySlotState(card, pair[1]);
+                  cardError(card, "");
+                  var box = reuseBtn.closest("[data-reuse-box]");
+                  if (box) box.remove();
+              } else {
+                  reuseBtn.disabled = false;
+                  reuseBtn.textContent = "Use this file";
+                  cardError(card, pair[1].error || "That file could not be added.");
+              }
+          })
+          .catch(function () {
+              reuseBtn.disabled = false;
+              reuseBtn.textContent = "Use this file";
+              cardError(card, "That file could not be added. Check your connection.");
+          });
     });
 
     /* Remove / view (delegated, so freshly added rows work too). */

@@ -1,6 +1,6 @@
 import re
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.conf import settings
@@ -733,6 +733,63 @@ class PositionPosting(TimestampedModel):
             return self.closing_date >= timezone.localdate()
         return True
 
+    QUALIFICATION_LABELS = ("Education", "Training", "Experience", "Eligibility")
+
+    @property
+    def qualification_items(self):
+        """[(label, text)] of the qualification standards, for the applicant's self-check.
+        From the position reference's QS fields when filled in; otherwise parsed from the
+        vacancy's "Education: ... Training: ... Experience: ... Eligibility: ..." text. Empty
+        when neither gives at least two labelled standards (the page then shows plain text)."""
+        reference = self.position_reference
+        if reference is not None:
+            items = [
+                (label, (getattr(reference, f"qs_{label.lower()}") or "").strip())
+                for label in self.QUALIFICATION_LABELS
+            ]
+            items = [(label, text) for label, text in items if text]
+            if len(items) >= 2:
+                return items
+        return self._qualification_items_from_entry_text()
+
+    @property
+    def qualification_reference_is_checklist(self):
+        """True when the checklist above was built from this vacancy's own qualification
+        text (so the page doesn't print that text a second time)."""
+        reference = self.position_reference
+        reference_items = [
+            label for label in self.QUALIFICATION_LABELS
+            if reference is not None and (getattr(reference, f"qs_{label.lower()}") or "").strip()
+        ]
+        return len(reference_items) < 2 and bool(self._qualification_items_from_entry_text())
+
+    def _qualification_items_from_entry_text(self):
+        pattern = re.compile(r"\b(" + "|".join(self.QUALIFICATION_LABELS) + r")\s*:", re.IGNORECASE)
+        source = self.qualification_reference or ""
+        matches = list(pattern.finditer(source))
+        items = []
+        for index, match in enumerate(matches):
+            end = matches[index + 1].start() if index + 1 < len(matches) else len(source)
+            text = source[match.end():end].strip().rstrip(";").strip()
+            if text:
+                items.append((match.group(1).capitalize(), text))
+        return items if len(items) >= 2 else []
+
+    @property
+    def intake_closes_at(self):
+        """The moment applications stop, when a closing date governs intake: the end of the
+        closing date (11:59 PM) in the portal's time zone (Asia/Manila). None otherwise."""
+        governs = self.branch == self.Branch.PLANTILLA or self.intake_mode == self.IntakeMode.OPENING_BASED
+        if not (governs and self.closing_date):
+            return None
+        end_of_day = datetime.combine(self.closing_date, time(23, 59))
+        return timezone.make_aware(end_of_day, timezone.get_current_timezone())
+
+    @property
+    def intake_closes_today(self):
+        closes_at = self.intake_closes_at
+        return bool(closes_at and self.closing_date == timezone.localdate())
+
     @property
     def intake_deadline_has_passed(self):
         return bool(self.closing_date and self.closing_date < timezone.localdate())
@@ -887,6 +944,10 @@ class RecruitmentApplication(TimestampedModel):
     # When the "your application isn't submitted yet" email went out (send_draft_reminders),
     # so a draft is reminded at most once.
     draft_reminder_sent_at = models.DateTimeField(blank=True, null=True)
+    # The applicant asked (from Track Application) to withdraw. Staff still record the
+    # withdrawal itself, so the case, batches and schedules are handled by the office.
+    withdrawal_requested_at = models.DateTimeField(blank=True, null=True)
+    withdrawal_request_reason = models.TextField(blank=True)
     otp_attempt_count = models.PositiveSmallIntegerField(default=0)
     submission_hash = models.CharField(max_length=64, blank=True)
     submitted_at = models.DateTimeField(blank=True, null=True)
@@ -1273,6 +1334,8 @@ class ScreeningRecord(TimestampedModel):
     # visible as "awaiting resubmission" until the applicant re-uploads or the deadline passes.
     resubmission_requested_at = models.DateTimeField(blank=True, null=True)
     resubmission_deadline = models.DateField(blank=True, null=True)
+    # When the "your corrected documents are due soon" email went out for this deadline.
+    resubmission_reminder_sent_at = models.DateTimeField(blank=True, null=True)
     # RD-6: set when a whole-application return is resubmitted and this finalized
     # record is reopened for re-verification over the edited documents. Cleared is
     # the normal state; a set value with is_finalized False means "re-verify".
@@ -4353,6 +4416,7 @@ class Notification(TimestampedModel):
         CASE_RETURNED = "case_returned", "Case returned to you"
         SCREENING_FINALIZED = "screening_finalized", "Screening finalized"
         RESUBMISSION_RECEIVED = "resubmission_received", "Resubmission received"
+        WITHDRAWAL_REQUESTED = "withdrawal_requested", "Applicant asked to withdraw"
         INTERVIEW_SCHEDULED = "interview_scheduled", "Interview session scheduled"
         INTERVIEW_FINALIZED = "interview_finalized", "Interview session finalized"
         # RD-9: exam finalize previously advanced the pool silently in-app.
@@ -4992,6 +5056,11 @@ class AuditLog(TimestampedModel):
             "application_draft_reminder_sent",
             "Unsubmitted Draft Reminder Sent",
         )
+        RESUBMISSION_REMINDER_SENT = "resubmission_reminder_sent", "Resubmission Reminder Sent"
+        APPLICATION_WITHDRAWAL_REQUESTED = (
+            "application_withdrawal_requested",
+            "Applicant Asked to Withdraw",
+        )
         APPLICATION_OTP_FAILED = "application_otp_failed", "Application OTP Failed"
         APPLICATION_OTP_LOCKED = "application_otp_locked", "Application OTP Locked"
         APPLICATION_OTP_VERIFIED = "application_otp_verified", "Application OTP Verified"
@@ -5192,6 +5261,8 @@ AUDIT_ACTION_DISPLAY_LABELS = {
     AuditLog.Action.APPLICANT_CONTACT_UPDATED: "Applicant Contact Updated",
     AuditLog.Action.APPLICATION_OTP_SENT: "Verification Code Sent",
     AuditLog.Action.APPLICATION_DRAFT_REMINDER_SENT: "Unsubmitted Draft Reminder Sent",
+    AuditLog.Action.RESUBMISSION_REMINDER_SENT: "Resubmission Reminder Sent",
+    AuditLog.Action.APPLICATION_WITHDRAWAL_REQUESTED: "Applicant Asked to Withdraw",
     AuditLog.Action.APPLICATION_OTP_VERIFIED: "Email Verified",
     AuditLog.Action.APPLICATION_SUBMITTED: "Application Submitted",
     AuditLog.Action.CASE_CREATED: "Case Created",
@@ -5281,6 +5352,8 @@ AUDIT_ACTION_CATEGORIES = {
         "actions": [
             AuditLog.Action.APPLICATION_CREATED,
             AuditLog.Action.APPLICATION_DRAFT_REMINDER_SENT,
+            AuditLog.Action.RESUBMISSION_REMINDER_SENT,
+            AuditLog.Action.APPLICATION_WITHDRAWAL_REQUESTED,
             AuditLog.Action.APPLICATION_UPDATED,
             AuditLog.Action.APPLICATION_SUBMITTED,
             AuditLog.Action.CASE_CREATED,

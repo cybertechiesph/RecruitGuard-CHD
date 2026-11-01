@@ -50,7 +50,10 @@
                 {% if is_closing_soon %}
                     <strong>Closing Soon &mdash;</strong>
                 {% endif %}
-                Application Deadline: <strong>{{ entry.closing_date|date:"F d, Y" }}</strong>
+                Application Deadline: <strong>{{ entry.closing_date|date:"F d, Y" }}{% if entry.intake_closes_at %}, 11:59 PM{% endif %}</strong>{% if entry.intake_closes_at %} (Philippine time){% endif %}
+                {% if entry.intake_closes_today %}
+                    <span class="rg-pub-deadline-countdown">Closes today &mdash; <span data-closes-at="{{ entry.intake_closes_at|date:'c' }}"></span></span>
+                {% endif %}
                 {% if entry.deadline_extended %}
                     <span class="rg-pub-deadline-extended">
                         Deadline extended &mdash; applications reopened until the new date.
@@ -99,19 +102,35 @@
     {% endif %}
 
     {# Qualifications #}
-    {% if entry.qualification_reference or entry.position_reference and entry.position_reference.qualification_summary or not entry.position_reference and entry.requirements %}
+    {% with qs_items=entry.qualification_items %}
+    {% if qs_items or entry.qualification_reference or entry.position_reference and entry.position_reference.qualification_summary or not entry.position_reference and entry.requirements %}
     <div class="rg-pub-section">
         <h2 class="rg-pub-section__title">Qualifications</h2>
-        {% if entry.qualification_reference %}
+        {% if entry.qualification_reference and not entry.qualification_reference_is_checklist %}
         <p class="rg-pub-section__copy" style="margin-bottom:0.75rem;">{{ entry.qualification_reference }}</p>
         {% endif %}
-        {% if entry.position_reference and entry.position_reference.qualification_summary %}
+        {% if qs_items %}
+        {% comment %}
+          Self-check, not a gate: anyone may apply and the office decides who qualifies. It
+          lets someone see in a moment whether they meet the standards before they spend time
+          gathering documents (and saves the office from screening clear mismatches).
+        {% endcomment %}
+        <fieldset class="rg-qs-check" data-qs-check>
+            <legend class="rg-qs-check__legend">Do you meet these? Tick each one that applies to you.</legend>
+            {% for label, text in qs_items %}
+            <label class="rg-qs-check__item"><input type="checkbox" data-qs-item> <span><strong>{{ label }}:</strong> {{ text }}</span></label>
+            {% endfor %}
+            <p class="rg-qs-check__result" data-qs-result aria-live="polite"></p>
+            <p class="rg-qs-check__note">This is only for you; nothing here is sent. The recruitment team checks every application against these standards.</p>
+        </fieldset>
+        {% elif entry.position_reference and entry.position_reference.qualification_summary %}
         <div class="rg-pub-section__copy">{{ entry.position_reference.qualification_summary|linebreaksbr }}</div>
         {% elif not entry.position_reference and entry.requirements %}
         <p class="rg-pub-section__copy">{{ entry.requirements }}</p>
         {% endif %}
     </div>
     {% endif %}
+    {% endwith %}
 
     {# Documents needed #}
     <div class="rg-pub-section">
@@ -161,7 +180,7 @@
     {# Bottom CTA #}
     {% if can_apply %}
     <div style="margin-top:2rem; text-align:center;">
-        <a href="{% url 'applicant-intake' entry.pk %}" class="btn btn-rg-primary btn-lg" style="min-width:320px;">
+        <a href="{% url 'applicant-intake' entry.pk %}" class="btn btn-rg-primary btn-lg" style="min-width:320px;" data-apply-link>
             Apply for This Position &rarr;
         </a>
         <p style="margin-top:0.75rem; font-size:0.8125rem; color:#5f6c78;">
@@ -182,3 +201,43 @@
 
 </div>
 {% endblock %}
+
+{% block extra_scripts %}
+{% load static %}
+<script src="{% static 'js/recruitguard-deadline.js' %}?v=20261101-dl1"></script>
+<script>
+(function () {
+    var box = document.querySelector("[data-qs-check]");
+    if (!box) return;
+    var items = box.querySelectorAll("[data-qs-item]");
+    var result = box.querySelector("[data-qs-result]");
+    function allTicked() {
+        return Array.prototype.every.call(items, function (item) { return item.checked; });
+    }
+    function refresh() {
+        var ticked = Array.prototype.filter.call(items, function (item) { return item.checked; }).length;
+        if (!ticked) { result.textContent = ""; result.className = "rg-qs-check__result"; return; }
+        if (allTicked()) {
+            result.textContent = "You meet the listed standards. You can apply.";
+            result.className = "rg-qs-check__result is-good";
+        } else {
+            result.textContent = ticked + " of " + items.length + " ticked. Applicants who don't meet every standard are not shortlisted.";
+            result.className = "rg-qs-check__result is-warn";
+        }
+    }
+    Array.prototype.forEach.call(items, function (item) { item.addEventListener("change", refresh); });
+    var apply = document.querySelector("[data-apply-link]");
+    if (apply) {
+        apply.addEventListener("click", function (event) {
+            if (allTicked()) return;
+            var ok = window.confirm(
+                "You haven't ticked every qualification standard. Applicants who don't meet all " +
+                "of them are not shortlisted. Apply anyway?"
+            );
+            if (!ok) { event.preventDefault(); box.scrollIntoView({ behavior: "smooth", block: "center" }); }
+        });
+    }
+})();
+</script>
+{% endblock %}
+

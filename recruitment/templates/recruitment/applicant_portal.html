@@ -105,7 +105,7 @@
                         {% if entry.is_closing_soon %}
                             <span class="rg-pub-job-card__urgent">Closing soon</span>
                         {% endif %}
-                        Closes {{ entry.closing_date|date:"F d, Y" }}
+                        {% if entry.intake_closes_today %}Closes today, 11:59 PM{% else %}Closes {{ entry.closing_date|date:"F d, Y" }}{% endif %}
                         {% if entry.deadline_extended %}
                             <span class="rg-pub-job-card__extended">Deadline extended</span>
                         {% endif %}
@@ -145,7 +145,7 @@
                         {% if entry.is_closing_soon %}
                             <span class="rg-pub-job-card__urgent">Closing soon</span>
                         {% endif %}
-                        Closes {{ entry.closing_date|date:"F d, Y" }}
+                        {% if entry.intake_closes_today %}Closes today, 11:59 PM{% else %}Closes {{ entry.closing_date|date:"F d, Y" }}{% endif %}
                         {% if entry.deadline_extended %}
                             <span class="rg-pub-job-card__extended">Deadline extended</span>
                         {% endif %}

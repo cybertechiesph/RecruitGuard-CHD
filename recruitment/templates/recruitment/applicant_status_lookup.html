@@ -276,6 +276,37 @@
     </div>
 
 
+    {# ── Withdraw (a request to the office, which records it) ── #}
+    {% if application.withdrawal_requested_at %}
+    <div class="rg-ta-action-card rg-ta-action-card--rest" id="withdraw" data-withdrawal-requested>
+        <p class="rg-ta-action-card__title">Withdrawal requested</p>
+        <p class="rg-ta-action-card__copy">
+            You asked to withdraw on {{ application.withdrawal_requested_at|date:"F d, Y" }}. The recruitment
+            office will record it and email you at <strong>{{ application.applicant_email }}</strong>.
+        </p>
+    </div>
+    {% elif can_request_withdrawal %}
+    <details class="rg-ta-withdraw" id="withdraw">
+        <summary>Withdraw my application</summary>
+        <form method="post" action="{% url 'applicant-withdrawal-request' token=application.public_token %}" data-withdraw-form>
+            {% csrf_token %}
+            <p class="rg-ta-withdraw__copy">
+                If you no longer want to be considered for <strong>{{ application.position.title }}</strong>, you can
+                ask to withdraw here. The office will record it and email you. Withdrawing is not a rejection, and you
+                may apply again to other positions.
+            </p>
+            <label class="form-label" for="withdraw-reason">Reason <span class="rg-intake-optional">Optional</span></label>
+            <textarea class="form-control" id="withdraw-reason" name="reason" rows="2" maxlength="1000"></textarea>
+            <div class="form-check mt-2">
+                <input class="form-check-input" type="checkbox" id="withdraw-confirm" name="confirm" required>
+                <label class="form-check-label" for="withdraw-confirm">I want to withdraw my application. I understand this can't be undone online.</label>
+            </div>
+            <button type="submit" class="btn btn-outline-danger mt-2">Send my withdrawal request</button>
+        </form>
+    </details>
+    {% endif %}
+
+
     {# ── Facts ────────────────────────────────────────────────────── #}
     <div class="rg-ta-facts">
         <p class="rg-ta-facts__title">Application details</p>

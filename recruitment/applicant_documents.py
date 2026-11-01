@@ -24,6 +24,7 @@ import io
 from dataclasses import dataclass
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import transaction
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pypdf import PdfReader, PdfWriter
@@ -32,11 +33,12 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 
-from .models import ApplicantDocumentPart, AuditLog, EvidenceVaultItem
+from .models import ApplicantDocumentPart, AuditLog, EvidenceVaultItem, RecruitmentCase
 from .requirements import get_applicant_document_requirements
 from .services import (
     ARTIFACT_TYPE_APPLICANT_DOCUMENT,
     _archive_applicant_document_key,
+    _decrypt_evidence_bytes,
     _get_aes_key,
     encrypt_evidence_bytes,
     get_current_applicant_document_map,
@@ -317,6 +319,56 @@ def rebuild_applicant_document(application, requirement):
             },
         )
     return evidence
+
+
+def get_reusable_documents(application):
+    """{document_key: EvidenceVaultItem}: for each of this draft's requirements, the newest
+    current document the SAME applicant (same verified email identity) already submitted in
+    another application. Lets someone applying to several vacancies skip re-uploading their
+    PDS, diploma, etc. Documents still out for correction elsewhere are not offered."""
+    codes = {requirement.code for requirement in get_applicant_document_requirements(application.position)}
+    items = (
+        EvidenceVaultItem.objects.filter(
+            application__applicant=application.applicant,
+            application__submitted_at__isnull=False,
+            artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
+            artifact_type=ARTIFACT_TYPE_APPLICANT_DOCUMENT,
+            is_current_version=True,
+            is_archived=False,
+            size_bytes__gt=0,
+            document_key__in=codes,
+        )
+        .exclude(application=application)
+        .exclude(application__case__case_status=RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION)
+        .select_related("application__position")
+        .order_by("-created_at", "-pk")
+    )
+    reusable = {}
+    for item in items:
+        reusable.setdefault(item.document_key, item)
+    return reusable
+
+
+def reuse_applicant_document(application, document_key, evidence_id):
+    """Copy a document from the applicant's earlier application into this draft, as a part
+    (same validation, duplicate checks and audit as a fresh upload)."""
+    item = get_reusable_documents(application).get(document_key)
+    if item is None or item.pk != evidence_id:
+        raise ValueError("That document can no longer be reused. Add the file instead.")
+    upload = SimpleUploadedFile(
+        item.original_filename,
+        _decrypt_evidence_bytes(item),
+        content_type=item.content_type or "application/octet-stream",
+    )
+    part = add_applicant_document_part(application, document_key, upload)
+    record_audit_event(
+        application=application,
+        actor=application.applicant,
+        action=AuditLog.Action.EVIDENCE_UPLOADED,
+        description=f"Reused a document from the applicant's application {item.application.reference_label}.",
+        metadata={"document_key": document_key, "source_evidence_id": item.pk, "part_id": part.pk},
+    )
+    return part
 
 
 def purge_applicant_document_parts(application):

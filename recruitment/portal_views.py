@@ -5,6 +5,7 @@ from django.contrib import messages
 from django.db import OperationalError
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils.text import slugify
 from django.views import View
 from django.utils import timezone
@@ -15,9 +16,11 @@ from .applicant_documents import (
     build_document_slot_states,
     clear_applicant_document_parts,
     get_document_parts,
+    get_reusable_documents,
     purge_applicant_document_parts,
     read_applicant_document_part,
     remove_applicant_document_part,
+    reuse_applicant_document,
     slot_state_payload,
 )
 from .forms import (
@@ -45,6 +48,8 @@ from .requirements import (
 )
 from .services import (
     ApplicationOTPDeliveryError,
+    applicant_can_request_withdrawal,
+    request_application_withdrawal,
     _build_application_receipt_pdf,
     get_current_applicant_document_items,
     get_public_recruitment_entries,
@@ -280,6 +285,7 @@ def _build_applicant_status_context(application):
         "resubmission_deadline": resubmission_deadline,
         "upcoming_schedules": _build_applicant_upcoming_schedules(application),
         "timeline": _build_applicant_timeline(application, status_label),
+        "can_request_withdrawal": applicant_can_request_withdrawal(application),
         "completion_checklist": _build_applicant_completion_checklist(application),
     }
 
@@ -622,6 +628,9 @@ class ApplicantApplicationView(ApplicantDraftAccessMixin, TemplateView):
         slots = build_document_slot_states(
             application, performance_rating_applicable=self.performance_rating_applicable()
         )
+        reusable = get_reusable_documents(application)
+        for slot in slots:
+            slot["reusable"] = None if slot["is_ready"] else reusable.get(slot["code"])
         required = [slot for slot in slots if slot["required_now"]]
         max_bytes = min(
             getattr(settings, "MAX_EVIDENCE_UPLOAD_BYTES", MAX_APPLICANT_DOCUMENT_UPLOAD_BYTES),
@@ -636,6 +645,10 @@ class ApplicantApplicationView(ApplicantDraftAccessMixin, TemplateView):
                 "required_total": len(required),
                 "required_ready": sum(1 for slot in required if slot["is_ready"]),
                 "submit_errors": submit_errors or [],
+                "deadline_soon": bool(
+                    application.position.intake_closes_at
+                    and application.position.intake_closes_at - timezone.now() <= timedelta(days=3)
+                ),
                 "max_upload_bytes": max_bytes,
                 "max_upload_mb": max_bytes // (1024 * 1024),
             }
@@ -739,6 +752,22 @@ class ApplicantDocumentPartUploadView(ApplicantDraftAccessMixin, View):
             if slot["code"] == document_key:
                 return slot_state_payload(slot)
         return {"code": document_key, "is_ready": False, "parts": []}
+
+
+class ApplicantDocumentReuseView(ApplicantDocumentPartUploadView):
+    """Use a document the same applicant already submitted with another application."""
+
+    def post(self, request, *args, **kwargs):
+        document_key = kwargs["code"]
+        try:
+            evidence_id = int(request.POST.get("evidence_id", ""))
+        except ValueError:
+            return JsonResponse({"error": "Choose a document to reuse."}, status=400)
+        try:
+            reuse_applicant_document(self.application, document_key, evidence_id)
+        except ValueError as exc:
+            return JsonResponse({"error": str(exc)}, status=400)
+        return JsonResponse(self._slot_payload(document_key))
 
 
 class ApplicantDocumentPartDeleteView(ApplicantDocumentPartUploadView):
@@ -1094,6 +1123,39 @@ class ApplicantStatusLinkView(TemplateView):
                 "We emailed a verification code to your address. Enter it below to view your status.",
             )
         return self.render_to_response(self.get_context_data(**otp_context))
+
+
+class ApplicantWithdrawalRequestView(View):
+    """"Withdraw my application" on Track Application. Only for a browser that verified the
+    emailed status code; it sends a request to the office, which records the withdrawal."""
+
+    def post(self, request, *args, **kwargs):
+        application = (
+            RecruitmentApplication.objects.select_related("position", "case")
+            .filter(public_token=kwargs["token"], submitted_at__isnull=False)
+            .first()
+        )
+        if application is None:
+            messages.error(request, "This link is no longer available.")
+            return redirect("applicant-status-lookup")
+        status_url = reverse("applicant-status-link", kwargs={"token": application.public_token})
+        if not _status_otp_verified_recently(request, application):
+            messages.info(request, "Verify your email again to continue.")
+            return redirect(status_url)
+        if request.POST.get("confirm") != "on":
+            messages.error(request, "Tick the box to confirm that you want to withdraw.")
+            return redirect(f"{status_url}#withdraw")
+        try:
+            request_application_withdrawal(application, request.POST.get("reason", ""))
+        except ValueError as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(
+                request,
+                "Your request to withdraw was sent to the recruitment office. "
+                "You will get an email once it is recorded.",
+            )
+        return redirect(status_url)
 
 
 class ApplicantResubmissionView(TemplateView):

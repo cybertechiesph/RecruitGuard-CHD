@@ -27,6 +27,7 @@
      data-max-upload-mb="{{ max_upload_mb }}">
 
     {% include "recruitment/includes/applicant_journey.html" with step=3 %}
+    {% include "recruitment/includes/in_app_browser_notice.html" %}
 
     <header class="rg-apply-header">
         <h1 class="rg-apply-header__title">Your application for {{ entry.title }}</h1>
@@ -36,6 +37,13 @@
             with the link in your verification email.
         </p>
         <p class="rg-apply-header__jump"><a href="#sec-docs">Jump to your documents &darr;</a></p>
+        {% if deadline_soon %}
+        <p class="rg-apply-deadline" role="status" data-deadline-banner>
+            <strong>Submit by 11:59 PM on {{ entry.closing_date|date:"F j" }}</strong> (Philippine time).
+            {% if entry.intake_closes_today %}<span data-closes-at="{{ entry.intake_closes_at|date:'c' }}"></span>{% endif %}
+            After that, unsubmitted applications can no longer be sent.
+        </p>
+        {% endif %}
     </header>
 
     {% if messages %}
@@ -145,10 +153,21 @@
                 </p>
                 {% endif %}
 
+                {% if slot.reusable %}
+                <div class="rg-doc-reuse" data-reuse-box>
+                    <p class="mb-1">You sent this with your application for <strong>{{ slot.reusable.application.position.title }}</strong>
+                        ({{ slot.reusable.created_at|date:"M j, Y" }}): <span class="rg-doc-reuse__file">{{ slot.reusable.original_filename }}</span></p>
+                    <button type="button" class="btn btn-sm btn-outline-primary"
+                            data-reuse-url="{% url 'applicant-document-reuse' application.public_token slot.code %}"
+                            data-evidence-id="{{ slot.reusable.pk }}">Use this file</button>
+                    <span class="rg-doc-reuse__hint">Check it&rsquo;s still current (e.g. the PDS form version).</span>
+                </div>
+                {% endif %}
                 <ul class="rg-doc-parts" data-part-list>
                     {% for part in slot.parts %}{% include "recruitment/includes/applicant_document_part.html" %}{% endfor %}
                 </ul>
                 <div class="rg-doc-card__error" data-doc-error role="alert" hidden></div>
+                <div class="rg-doc-card__warning" data-doc-warning role="status" hidden></div>
 
                 <div class="rg-doc-card__actions">
                     <label class="btn btn-outline-primary rg-doc-card__add">
@@ -236,5 +255,6 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="{% static 'js/recruitguard-applicant-application.js' %}?v=20261101-apply3"></script>
+<script src="{% static 'js/recruitguard-applicant-application.js' %}?v=20261101-apply5"></script>
+<script src="{% static 'js/recruitguard-deadline.js' %}?v=20261101-dl1"></script>
 {% endblock %}

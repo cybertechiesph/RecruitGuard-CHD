@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils import timezone
@@ -12,7 +13,7 @@ from .forms import (
     RecruitmentEntryCancellationForm,
     RecruitmentEntryForm,
 )
-from .models import AuditLog, PositionPosting
+from .models import AuditLog, EvidenceVaultItem, PositionPosting, RecruitmentApplication
 from .permissions import EntryManagerRequiredMixin
 from .services import (
     cancel_recruitment_entry,
@@ -62,7 +63,39 @@ class RecruitmentEntryListView(LoginRequiredMixin, EntryManagerRequiredMixin, Li
             if user_can_generate_entry_car_filing_copy(self.request.user, entry)
         }
         context["office_policy"] = get_office_policy()
+        funnel = _applicant_portal_funnel(entries)
+        for entry in entries:
+            entry.portal_funnel = funnel.get(entry.pk)
+        context["entries"] = entries
         return context
+
+
+def _applicant_portal_funnel(entries):
+    """Per vacancy, how far people got in the applicant portal: started, verified their
+    email, added at least one document, submitted. Counts only (no names), so the office can
+    see where applicants give up."""
+    rows = (
+        RecruitmentApplication.objects.filter(position__in=entries)
+        .values("position_id")
+        .annotate(
+            started=Count("pk", distinct=True),
+            verified=Count(
+                "pk",
+                distinct=True,
+                filter=Q(otp_verified_at__isnull=False) | Q(submitted_at__isnull=False),
+            ),
+            with_documents=Count(
+                "pk",
+                distinct=True,
+                filter=Q(
+                    evidence_items__artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
+                    evidence_items__artifact_type="applicant_document",
+                ),
+            ),
+            submitted=Count("pk", distinct=True, filter=Q(submitted_at__isnull=False)),
+        )
+    )
+    return {row["position_id"]: row for row in rows}
 
 
 class _RecruitmentEntryDocumentMixin:

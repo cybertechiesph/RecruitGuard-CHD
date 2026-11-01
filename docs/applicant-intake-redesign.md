@@ -95,5 +95,59 @@ After a full applicant walkthrough:
   - Hiding it would mean a silent "check your email" for everyone, which confuses the much more common honest case.
 - **Tracking code, then email, then emailed code (REV-I).** This sequence is what protects status pages from someone who only knows the tracking code.
 
-## Not changed
-- Abandoned drafts keep their staging parts until removed. There's no automatic clean-up yet.
+## Portal polish (November 2026, second round)
+
+- **Shared mobile IPs and forged headers:** see the README section "Behind nginx: client IP
+  addresses".
+  - Rate limits now count per browser, with a per-IP ceiling.
+  - The visitor's IP is read from the right-hand end of `X-Forwarded-For`.
+  - One helper, `config/client_ip.py`, serves rate limits, the password-reset throttle, the
+    login throttle, captcha and the audit log.
+- **Facebook / Messenger / Instagram built-in browsers:**
+  - The start, application and resubmission pages show a short tip on how to open the page
+    in Chrome or Safari.
+  - Uploads and the camera often fail in those browsers.
+- **Qualification self-check:**
+  - The vacancy page turns the standards into a "Do you meet these?" checklist.
+  - The standards come from the position's QS fields, or are parsed from the vacancy's
+    "Education: … Training: … Experience: … Eligibility: …" text.
+  - The checklist never blocks. Clicking Apply with unticked items asks for confirmation;
+    nothing is sent or stored.
+- **Photo quality:** after a photo uploads, the page warns if it's small (under 1,000 px),
+  dark, or blurry. The photo is saved either way.
+- **Deadlines:**
+  - "11:59 PM (Philippine time)" is shown on Plantilla and opening-based vacancies.
+  - A live countdown runs on the last day.
+  - The application page shows a "Submit by…" banner in the last 3 days.
+- **Resubmission reminders:** `send_resubmission_reminders`, once per deadline. A new or
+  extended deadline resets it.
+- **Abandoned drafts:**
+  - `purge_abandoned_drafts` removes the uploaded files of drafts that were never
+    submitted, 30 days after the vacancy stopped accepting applications.
+  - The draft, the file names and fingerprints, and the audit trail are kept, because
+    deleting the draft would delete its audit history.
+- **Withdrawal requests:**
+  - "Withdraw my application" on Track Application, behind the emailed code.
+  - It sends a request: the handler is notified, and the case page's withdrawal card opens
+    with the details filled in. Staff still record the withdrawal (SL-10), so batches and
+    schedules stay under the office's control.
+- **Document reuse:** each document card can offer the same applicant's (same verified
+  email) document from an earlier submitted application. It is copied in through the normal
+  upload checks.
+- **Funnel:** the staff vacancy list shows, per vacancy, how many people started, verified
+  their email, added documents and submitted. Counts only.
+- **Accessibility pass:**
+  - No text smaller than 12px on applicant pages.
+  - Radio buttons and checkboxes are 22px.
+  - Short links meet the 24px target-size minimum.
+  - Labels, headings and landmarks were checked on the home, vacancy, start, code and
+    application pages.
+- Migration `0088_reminders_withdrawal_requests_retention`.
+
+## Still needs people (not code)
+- Test on real phones (a cheap Android on mobile data, an iPhone), including inside Facebook.
+- A 5-person usability test with people who have never seen the portal.
+- A screen-reader pass (TalkBack and NVDA).
+- A proper sending domain with SPF, DKIM and DMARC instead of Gmail SMTP.
+- Automated browser tests of the journey, e.g. Playwright. This needs a dev-only
+  dependency and browser downloads, so it was left for the team to approve.

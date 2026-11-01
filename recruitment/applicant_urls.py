@@ -13,6 +13,8 @@ from .portal_views import (
     ApplicantReceiptPdfView,
     ApplicantReceiptView,
     ApplicantResubmissionView,
+    ApplicantWithdrawalRequestView,
+    ApplicantDocumentReuseView,
     ApplicantStatusLinkView,
     ApplicantStatusLookupView,
     ApplicantVacancyDetailView,
@@ -28,6 +30,11 @@ urlpatterns = [
     path("entries/<int:pk>/apply/", ApplicantPortalIntakeView.as_view(), name="applicant-intake"),
     path("<uuid:token>/otp/", ApplicantOTPView.as_view(), name="applicant-otp"),
     path("<uuid:token>/application/", ApplicantApplicationView.as_view(), name="applicant-application"),
+    path(
+        "<uuid:token>/documents/<slug:code>/reuse/",
+        ApplicantDocumentReuseView.as_view(),
+        name="applicant-document-reuse",
+    ),
     path(
         "<uuid:token>/documents/<slug:code>/",
         ApplicantDocumentPartUploadView.as_view(),
@@ -47,4 +54,9 @@ urlpatterns = [
     path("<uuid:token>/receipt/download/", ApplicantReceiptPdfView.as_view(), name="applicant-receipt-pdf"),
     path("<uuid:token>/status/", ApplicantStatusLinkView.as_view(), name="applicant-status-link"),
     path("<uuid:token>/resubmit/", ApplicantResubmissionView.as_view(), name="applicant-resubmit"),
+    path(
+        "<uuid:token>/withdraw/",
+        ApplicantWithdrawalRequestView.as_view(),
+        name="applicant-withdrawal-request",
+    ),
 ]

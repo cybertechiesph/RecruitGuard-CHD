@@ -1,0 +1,16 @@
+{% load recruitment_ui %}{% in_app_browser as in_app %}{% if in_app %}
+{% comment %}
+  Shown only inside an app's built-in browser (Facebook, Messenger, Instagram...), where
+  uploads and the camera often fail. It is a tip, not a blocker: the page still works.
+{% endcomment %}
+<div class="rg-inapp-notice" role="note" data-in-app-browser="{{ in_app }}">
+    <p class="rg-inapp-notice__title">
+        You opened this page inside {% if in_app == "facebook" %}Facebook{% else %}an app{% endif %}.
+    </p>
+    <p class="rg-inapp-notice__copy">
+        If adding files or taking a photo doesn&rsquo;t work, open this page in Chrome or Safari:
+        tap <strong>&middot;&middot;&middot;</strong> or <strong>&#8942;</strong> (top right) and choose
+        <strong>Open in browser</strong>. Anything you already saved stays saved.
+    </p>
+</div>
+{% endif %}

@@ -12,10 +12,18 @@ Inputs:
   withdrawal_form : ApplicationWithdrawalForm | None
 {% endcomment %}
 {% if withdrawal_form %}
-<details class="rg-icard mb-3" id="withdrawal-card">
+<details class="rg-icard mb-3" id="withdrawal-card"{% if application.withdrawal_requested_at %} open{% endif %}>
     <summary class="rg-icard__title" style="cursor:pointer; padding:0.25rem 0;">
         Record an applicant withdrawal
     </summary>
+    {% if application.withdrawal_requested_at %}
+    <div class="alert alert-warning py-2 px-3 mb-2" role="status" data-withdrawal-requested>
+        <strong>The applicant asked to withdraw</strong> through the applicant portal on
+        {{ application.withdrawal_requested_at|date:"F d, Y g:i A" }}.
+        {% if application.withdrawal_request_reason %}Reason given: &ldquo;{{ application.withdrawal_request_reason }}&rdquo;{% endif %}
+        The details are filled in below; record it to close the case as withdrawn.
+    </div>
+    {% endif %}
     <p class="rg-icard__subtitle">
         Use this when the applicant tells the office they are stepping out. The case closes
         as <strong>withdrawn</strong> &mdash; a neutral exit, kept distinct from a rejection

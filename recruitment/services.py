@@ -2884,6 +2884,63 @@ def _emit_resubmission_received_notification(
     )
 
 
+APPLICANT_WITHDRAWAL_CLOSED_STATUSES = {
+    RecruitmentApplication.Status.APPROVED,
+    RecruitmentApplication.Status.REJECTED,
+    RecruitmentApplication.Status.WITHDRAWN,
+    RecruitmentApplication.Status.VACANCY_CANCELLED,
+}
+
+
+def applicant_can_request_withdrawal(application):
+    """The status page offers "Withdraw my application" while the competition is still running
+    for this applicant (the same stages where staff can record a withdrawal)."""
+    case = getattr(application, "case", None)
+    return bool(
+        application.submitted_at
+        and case is not None
+        and application.status not in APPLICANT_WITHDRAWAL_CLOSED_STATUSES
+        and case.current_stage
+        not in {RecruitmentCase.Stage.COMPLETION, RecruitmentCase.Stage.CLOSED}
+        and not application.withdrawal_requested_at
+    )
+
+
+@transaction.atomic
+def request_application_withdrawal(application, reason=""):
+    """The applicant asks to withdraw. Nothing about the case changes here: the office is
+    notified and records the withdrawal itself (SL-10), so batches, schedules and notices are
+    handled by staff. The request and its reason go on the record."""
+    application = RecruitmentApplication.objects.select_for_update().get(pk=application.pk)
+    if application.withdrawal_requested_at:
+        raise ValueError("You already asked to withdraw this application. The office will confirm by email.")
+    if not applicant_can_request_withdrawal(application):
+        raise ValueError(
+            "This application can no longer be withdrawn online. Please contact the recruitment office."
+        )
+    application.withdrawal_requested_at = timezone.now()
+    application.withdrawal_request_reason = (reason or "").strip()[:1000]
+    application.save(
+        update_fields=["withdrawal_requested_at", "withdrawal_request_reason", "updated_at"]
+    )
+    record_audit_event(
+        application=application,
+        actor=application.applicant,
+        action=AuditLog.Action.APPLICATION_WITHDRAWAL_REQUESTED,
+        description="Applicant asked to withdraw this application from Track Application.",
+        metadata={"reason": application.withdrawal_request_reason},
+    )
+    _emit_case_assignment_notification(
+        application,
+        application.applicant,
+        application.case.current_handler_role,
+        kind=Notification.Kind.WITHDRAWAL_REQUESTED,
+        title=f"{application.reference_label} applicant asked to withdraw",
+        body="Confirm it with Record an applicant withdrawal on the case page.",
+    )
+    return application
+
+
 def _emit_interview_scheduled_in_app_notifications(application, interview_session, recipients):
     scheduled_for = timezone.localtime(interview_session.scheduled_for).strftime("%B %d, %Y")
     return _notify_application_users(
@@ -8575,6 +8632,149 @@ def send_draft_reminder(application):
     return application
 
 
+RESUBMISSION_REMINDER_DEFAULT_DAYS_BEFORE = 2
+
+
+def find_resubmissions_due_for_reminder(
+    days_before=RESUBMISSION_REMINDER_DEFAULT_DAYS_BEFORE, today=None
+):
+    """Pending document resubmissions whose deadline is within ``days_before`` days and that
+    have not been reminded for that deadline yet."""
+    today = today or timezone.localdate()
+    records = (
+        ScreeningRecord.objects.select_related("application", "application__position", "application__case")
+        .filter(
+            resubmission_reminder_sent_at__isnull=True,
+            resubmission_deadline__gte=today,
+            resubmission_deadline__lte=today + timedelta(days=days_before),
+            application__case__case_status=RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION,
+        )
+        .order_by("resubmission_deadline", "pk")
+    )
+    due = []
+    for record in records:
+        case = record.application.case
+        # Only the record of the stage that is waiting (older stages keep stale deadlines).
+        if record.review_stage == case.current_stage:
+            due.append(record)
+    return due
+
+
+def send_resubmission_reminder(screening_record):
+    """One reminder email for a pending resubmission; stamps resubmission_reminder_sent_at."""
+    application = screening_record.application
+    position = application.position
+    path = reverse("applicant-resubmit", kwargs={"token": application.public_token})
+    base_url = (getattr(settings, "APPLICANT_PORTAL_BASE_URL", "") or "").strip().rstrip("/")
+    resubmit_url = f"{base_url}{path}" if base_url else path
+    deadline = date_format(screening_record.resubmission_deadline, "F j, Y")
+    subject = f"Reminder: send your corrected documents for {position.title} by {deadline}"
+    text_body = (
+        f"Hello {application.applicant_first_name or 'applicant'},\n\n"
+        f"The recruitment team is still waiting for the corrected documents for your application "
+        f"for {position.title} (Case No. {application.case_number_short}). "
+        f"Please send them on or before {deadline}.\n\n"
+        f"Open this link to see which documents and why, then upload them:\n{resubmit_url}\n\n"
+        "DOH–CHD CALABARZON Recruitment Portal"
+    )
+    try:
+        html_body = render_to_string(
+            "email/resubmission_reminder.html",
+            {
+                "application": application,
+                "position_title": position.title,
+                "deadline": screening_record.resubmission_deadline,
+                "resubmit_url": resubmit_url,
+                **email_branding_context("applicant"),
+            },
+        )
+    except Exception:
+        logger.exception("Failed to render the resubmission reminder HTML for application %s.", application.pk)
+        html_body = ""
+    email = EmailMultiAlternatives(
+        subject=subject,
+        body=text_body,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[application.applicant_email],
+    )
+    if html_body:
+        email.attach_alternative(html_body, "text/html")
+    email.send(fail_silently=False)
+    screening_record.resubmission_reminder_sent_at = timezone.now()
+    screening_record.save(update_fields=["resubmission_reminder_sent_at", "updated_at"])
+    record_audit_event(
+        application=application,
+        actor=None,
+        action=AuditLog.Action.RESUBMISSION_REMINDER_SENT,
+        description="Reminded the applicant that their corrected documents are due soon.",
+        metadata={"resubmission_deadline": screening_record.resubmission_deadline.isoformat()},
+    )
+    return screening_record
+
+
+ABANDONED_DRAFT_DEFAULT_DAYS = 30
+ABANDONED_DRAFT_ARCHIVE_TAG = "File removed: application never submitted and the vacancy closed"
+
+
+def find_abandoned_drafts(older_than_days=ABANDONED_DRAFT_DEFAULT_DAYS, now=None):
+    """Unsubmitted drafts that can no longer be submitted (the vacancy stopped accepting
+    applications) and that nobody has touched for ``older_than_days`` days, and that still
+    hold uploaded files."""
+    now = now or timezone.now()
+    cutoff = now - timedelta(days=older_than_days)
+    candidates = (
+        RecruitmentApplication.objects.select_related("position")
+        .filter(
+            status=RecruitmentApplication.Status.DRAFT,
+            submitted_at__isnull=True,
+            updated_at__lt=cutoff,
+        )
+        .filter(
+            Q(document_parts__isnull=False)
+            | Q(evidence_items__artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION, evidence_items__size_bytes__gt=0)
+        )
+        .distinct()
+        .order_by("pk")
+    )
+    return [application for application in candidates if not application.position.is_open_for_intake]
+
+
+@transaction.atomic
+def purge_abandoned_draft_files(application):
+    """Remove the uploaded files of an abandoned draft. The draft itself, each file's name,
+    size and SHA-256 fingerprint, and the audit trail are kept; only the file contents go.
+    (Deleting the draft would also delete its audit history.)"""
+    from .models import ApplicantDocumentPart
+
+    parts_deleted, _ = ApplicantDocumentPart.objects.filter(application=application).delete()
+    items = EvidenceVaultItem.objects.filter(
+        application=application,
+        artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
+        size_bytes__gt=0,
+    )
+    item_ids = list(items.values_list("pk", flat=True))
+    items.update(
+        nonce=b"",
+        ciphertext=b"",
+        size_bytes=0,
+        is_archived=True,
+        archive_tag=ABANDONED_DRAFT_ARCHIVE_TAG,
+        archived_at=timezone.now(),
+        updated_at=timezone.now(),
+    )
+    record_audit_event(
+        application=application,
+        actor=None,
+        action=AuditLog.Action.EVIDENCE_ARCHIVED,
+        description=(
+            "Removed the uploaded files of an application that was never submitted, after its "
+            "vacancy closed (retention clean-up)."
+        ),
+        metadata={"evidence_ids": item_ids, "staging_parts_deleted": parts_deleted},
+    )
+    return len(item_ids) + parts_deleted
+
+
 def issue_application_otp(
     application, actor=None, *, defer_delivery=True, enforce_cooldown=False, purpose="editing"
 ):
@@ -9359,8 +9559,14 @@ def request_document_resubmission(application, actor, remarks):
     deadline = timezone.localdate() + timedelta(days=DOCUMENT_RESUBMISSION_DEADLINE_DAYS)
     screening_record.resubmission_requested_at = timezone.now()
     screening_record.resubmission_deadline = deadline
+    screening_record.resubmission_reminder_sent_at = None
     screening_record.save(
-        update_fields=["resubmission_requested_at", "resubmission_deadline", "updated_at"]
+        update_fields=[
+            "resubmission_requested_at",
+            "resubmission_deadline",
+            "resubmission_reminder_sent_at",
+            "updated_at",
+        ]
     )
 
     # The case stays at its reviewing stage with the reviewing handler, unlocked, but flagged as
@@ -9461,7 +9667,10 @@ def extend_document_resubmission_deadline(application, actor, new_deadline, reas
         raise ValueError("The new deadline must be later than the current deadline.")
 
     screening_record.resubmission_deadline = new_deadline
-    screening_record.save(update_fields=["resubmission_deadline", "updated_at"])
+    screening_record.resubmission_reminder_sent_at = None  # the new deadline gets its own reminder
+    screening_record.save(
+        update_fields=["resubmission_deadline", "resubmission_reminder_sent_at", "updated_at"]
+    )
     record_audit_event(
         application=application,
         actor=actor,

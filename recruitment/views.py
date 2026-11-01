@@ -755,7 +755,15 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
         # SL-10: a neutral exit from an active competition, available at every pre-selection
         # stage to whoever the case is assigned to.
         if user_can_record_withdrawal(user, application):
-            context["withdrawal_form"] = ApplicationWithdrawalForm()
+            initial = {}
+            if application.withdrawal_requested_at:
+                requested_on = timezone.localtime(application.withdrawal_requested_at)
+                initial["reason"] = (
+                    f"The applicant asked to withdraw through the applicant portal on "
+                    f"{requested_on:%B %d, %Y %I:%M %p}."
+                    + (f" Reason given: {application.withdrawal_request_reason}" if application.withdrawal_request_reason else "")
+                )
+            context["withdrawal_form"] = ApplicationWithdrawalForm(initial=initial)
         if user_can_update_applicant_contact(user, application):
             context["applicant_contact_form"] = ApplicantContactUpdateForm(
                 application=application

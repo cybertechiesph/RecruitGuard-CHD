@@ -1,4 +1,5 @@
 import json
+import re
 
 from django import template
 from django.conf import settings
@@ -28,6 +29,25 @@ from recruitment.services import (
 )
 
 register = template.Library()
+
+# Apps that open links in their own built-in browser (Facebook, Messenger, Instagram, LINE,
+# WeChat, TikTok). Vacancies are shared on Facebook, so many applicants arrive this way, and
+# these browsers are known to mishandle file uploads, the camera and cookies.
+IN_APP_BROWSER_PATTERN = re.compile(
+    r"FBAN|FBAV|FB_IAB|FBIOS|Instagram|Messenger|\bLine/|MicroMessenger|TikTok|musical_ly|BytedanceWebview",
+    re.IGNORECASE,
+)
+
+
+@register.simple_tag(takes_context=True)
+def in_app_browser(context):
+    """"facebook", "other" or "" for the visitor's browser, from its user agent."""
+    request = context.get("request")
+    user_agent = request.META.get("HTTP_USER_AGENT", "") if request is not None else ""
+    match = IN_APP_BROWSER_PATTERN.search(user_agent)
+    if not match:
+        return ""
+    return "facebook" if match.group(0).upper().startswith(("FB", "MESSENGER")) else "other"
 
 
 @register.filter

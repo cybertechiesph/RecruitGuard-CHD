@@ -66,6 +66,14 @@
                                 <div style="font-size:0.8125rem;font-weight:600;color:#111827;margin-top:0.15rem;">
                                     {{ entry.title }}
                                 </div>
+                                {% if entry.portal_funnel %}
+                                <div class="rg-imeta mt-1" data-portal-funnel title="How far people got in the applicant portal">
+                                    {{ entry.portal_funnel.started }} started
+                                    <span class="rg-imeta__sep"></span>{{ entry.portal_funnel.verified }} verified email
+                                    <span class="rg-imeta__sep"></span>{{ entry.portal_funnel.with_documents }} added documents
+                                    <span class="rg-imeta__sep"></span>{{ entry.portal_funnel.submitted }} submitted
+                                </div>
+                                {% endif %}
                             </td>
                             <td>
                                 {% if entry.position_reference %}
