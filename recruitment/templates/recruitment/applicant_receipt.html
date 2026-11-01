@@ -7,6 +7,8 @@
 {% block content %}
 <div class="rg-pub-wrap" style="max-width:580px; padding-top:2.5rem;">
 
+    {% include "recruitment/includes/applicant_journey.html" with step=4 %}
+
     {% comment %} REV-E: print-only official heading — the printout reads as a document,
        not a screenshot of a web page. {% endcomment %}
     <div class="rg-receipt-print-head" aria-hidden="true">

@@ -1,0 +1,21 @@
+{% comment %}
+  Four-step journey bar for the redesigned intake. Parameter: step (1-4).
+{% endcomment %}
+<ol class="rg-journey" aria-label="Application steps">
+    <li class="rg-journey__step {% if step > 1 %}is-done{% elif step == 1 %}is-current{% endif %}"{% if step == 1 %} aria-current="step"{% endif %}>
+        <span class="rg-journey__num" aria-hidden="true">{% if step > 1 %}&#10003;{% else %}1{% endif %}</span>
+        <span class="rg-journey__label">Your details</span>
+    </li>
+    <li class="rg-journey__step {% if step > 2 %}is-done{% elif step == 2 %}is-current{% endif %}"{% if step == 2 %} aria-current="step"{% endif %}>
+        <span class="rg-journey__num" aria-hidden="true">{% if step > 2 %}&#10003;{% else %}2{% endif %}</span>
+        <span class="rg-journey__label">Verify email</span>
+    </li>
+    <li class="rg-journey__step {% if step > 3 %}is-done{% elif step == 3 %}is-current{% endif %}"{% if step == 3 %} aria-current="step"{% endif %}>
+        <span class="rg-journey__num" aria-hidden="true">{% if step > 3 %}&#10003;{% else %}3{% endif %}</span>
+        <span class="rg-journey__label">Documents</span>
+    </li>
+    <li class="rg-journey__step {% if step == 4 %}is-current{% endif %}"{% if step == 4 %} aria-current="step"{% endif %}>
+        <span class="rg-journey__num" aria-hidden="true">{% if step == 4 %}&#10003;{% else %}4{% endif %}</span>
+        <span class="rg-journey__label">Submitted</span>
+    </li>
+</ol>

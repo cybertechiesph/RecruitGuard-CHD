@@ -4,23 +4,7 @@
 {% block title %}Verify your email | Applicant Portal{% endblock %}
 
 {% block site_header %}
-{# Simplified navbar during application flow. #}
-<header class="rg-topbar rg-public-topbar">
-    <div class="rg-container rg-topbar__inner rg-public-topbar__inner">
-        <a class="rg-brand rg-public-brand" href="{% url 'applicant-portal' %}">
-            <span class="rg-brand-copy">
-                <span class="rg-brand-kicker">Republic of the Philippines</span>
-                <span class="rg-brand-agency">Department of Health &ndash; CHD CALABARZON</span>
-                <span class="rg-brand-title">Applicant Portal</span>
-            </span>
-        </a>
-        <div class="rg-public-topbar__applying">
-            Applying for<br>
-            <strong>{{ application.position.title }}</strong>
-        </div>
-        {% include "text_size_control.html" %}
-    </div>
-</header>
+{% include "recruitment/includes/applicant_flow_header.html" with position_title=application.position.title %}
 {% endblock %}
 
 {% block main_class %}{% endblock %}
@@ -29,28 +13,14 @@
 {% block message_stack %}{% endblock %}
 
 {% block content %}
-
-<script>
-    // The typed-answer draft is now saved on the server (we reached the OTP step),
-    // so drop the local copy — including on a shared/borrowed phone (UX-02).
-    try { localStorage.removeItem("rg-intake-{{ application.position.pk }}"); } catch (e) {}
-</script>
-
+{% comment %}
+  Step 2 of the redesigned intake, and also the way back in: the link in every code e-mail
+  points here. Verifying opens the application page for this browser; the draft link alone
+  never shows a draft's contents.
+{% endcomment %}
 <div class="rg-pub-wrap" style="max-width:560px; padding-top:1.5rem;">
 
-    {# ── Applicant journey indicator (Apply / Verify / Done) ───── #}
-    <div class="rg-intake-journey" role="status" aria-label="Application journey">
-        <span class="rg-intake-journey__phase is-done">
-            <span class="rg-intake-journey__num">✓</span> Apply
-        </span>
-        <span class="rg-intake-journey__phase {% if not application.otp_is_currently_valid %}is-current{% else %}is-done{% endif %}">
-            <span class="rg-intake-journey__num">{% if application.otp_is_currently_valid %}✓{% else %}2{% endif %}</span>
-            Verify email
-        </span>
-        <span class="rg-intake-journey__phase {% if application.otp_is_currently_valid %}is-current{% endif %}">
-            <span class="rg-intake-journey__num">3</span> Submit
-        </span>
-    </div>
+    {% include "recruitment/includes/applicant_journey.html" with step=2 %}
 
     {% if messages %}
         <div class="rg-pub-message-stack">
@@ -60,15 +30,16 @@
         </div>
     {% endif %}
 
-    {# ── State A: code not yet verified ─────────────────────────── #}
-    {% if not application.otp_is_currently_valid %}
-
     <div class="rg-pub-otp-card">
         <h1 class="rg-pub-otp-card__title">Verify your email</h1>
         <p class="rg-pub-otp-card__reassure" style="margin:0 0 0.6rem; color:#4b5563; font-size:0.9rem;">
-            Your answers and uploaded documents are saved. Finish verifying to submit them.
+            {% if has_active_code %}
+                Enter the code we emailed you to continue your application. Anything you already added is saved.
+            {% else %}
+                To open your saved application, get a new code below &mdash; we&rsquo;ll send it to your email.
+            {% endif %}
         </p>
-        <p class="rg-pub-otp-card__intro">We sent a 6-digit code to:</p>
+        <p class="rg-pub-otp-card__intro">{% if has_active_code %}We sent a 6-digit code to:{% else %}Your email:{% endif %}</p>
 
         <div class="rg-pub-otp-email">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
@@ -96,7 +67,7 @@
                        pattern="[0-9]{6}"
                        placeholder="------"
                        aria-describedby="rg-otp-help rg-otp-error"
-                       autofocus>
+                       {% if has_active_code %}autofocus{% endif %}>
                 <div class="invalid-feedback" id="rg-otp-error" role="alert" style="display:none;"></div>
                 {% for error in otp_form.otp.errors %}
                     <div class="invalid-feedback d-block">{{ error }}</div>
@@ -104,7 +75,7 @@
             </div>
 
             <p class="rg-pub-otp-help" id="rg-otp-help">
-                The code is valid for {{ otp_validity_minutes }} minute{{ otp_validity_minutes|pluralize }}.
+                Each code works for {{ otp_validity_minutes }} minute{{ otp_validity_minutes|pluralize }}. If it expires, get a new one below.
             </p>
 
             <button type="submit" class="btn btn-rg-primary btn-lg w-100">
@@ -113,121 +84,29 @@
         </form>
 
         <div class="rg-pub-otp-resend">
-            <p class="mb-2"><strong>Didn’t receive the code?</strong></p>
+            <p class="mb-2"><strong>{% if has_active_code %}Didn&rsquo;t receive the code?{% else %}Need a code?{% endif %}</strong></p>
+            {% if has_active_code %}
             <ul class="rg-pub-otp-tips">
                 <li>Check your <strong>Spam</strong> or <strong>Junk Mail</strong> folder.</li>
                 <li>Make sure the email address above is correct.</li>
             </ul>
+            {% endif %}
 
             <form method="post" class="d-inline">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="resend">
-                <button type="submit" class="btn btn-outline-secondary btn-sm" id="resend-btn">Resend the code</button>
+                <button type="submit" class="btn {% if has_active_code %}btn-outline-secondary btn-sm{% else %}btn-rg-primary{% endif %}" id="resend-btn">
+                    {% if has_active_code %}Resend the code{% else %}Email me a code{% endif %}
+                </button>
             </form>
             <span id="resend-timer" class="rg-pub-resend-timer"></span>
 
             <p class="rg-pub-otp-wrongmail">
                 Wrong email address?
-                <a href="{% url 'applicant-intake' application.position.pk %}?token={{ application.public_token }}">
-                    &larr; Go back to edit your information
-                </a>
+                <a href="{% url 'applicant-intake' application.position.pk %}">&larr; Start again with the correct email</a>
             </p>
         </div>
     </div>
-
-    {# ── State B: code verified, ready to submit ────────────────── #}
-    {% else %}
-
-    <div class="rg-pub-otp-card rg-pub-otp-card--verified">
-        <div class="rg-pub-otp-card__checkmark" aria-hidden="true">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="9.5"/>
-                <path d="M8 12l3 3 5-5"/>
-            </svg>
-        </div>
-        <h1 class="rg-pub-otp-card__title">Email verified</h1>
-        <p class="rg-pub-otp-card__intro">
-            Your email address is confirmed. Review your application before submitting.
-        </p>
-
-        <div class="rg-pub-review-card">
-            <div class="rg-pub-review-card__header">
-                <span class="rg-pub-review-card__title">Application summary</span>
-            </div>
-            <div class="rg-pub-review-card__body">
-                <dl class="rg-pub-review-dl">
-                    <div class="rg-pub-review-row">
-                        <dt>Applicant</dt>
-                        <dd>{{ application.applicant_display_name }}</dd>
-                    </div>
-                    <div class="rg-pub-review-row">
-                        <dt>Email</dt>
-                        <dd>{{ application.applicant_email }}
-                            <span class="rg-pub-verified-tag">&#10003; Verified</span>
-                        </dd>
-                    </div>
-                    <div class="rg-pub-review-row">
-                        <dt>Position</dt>
-                        <dd>{{ application.position.title }}</dd>
-                    </div>
-                    <div class="rg-pub-review-row">
-                        <dt>Documents</dt>
-                        <dd>{{ current_applicant_document_count }} file{{ current_applicant_document_count|pluralize }} uploaded</dd>
-                    </div>
-                </dl>
-            </div>
-        </div>
-
-        <div class="rg-pub-info-box rg-pub-info-box--warning">
-            <p>Once you submit, your application can no longer be edited. Make sure everything is correct before continuing.</p>
-            <p class="mb-0" style="margin-top:0.4rem;">
-                Need to fix something?
-                <a href="{% url 'applicant-intake' application.position.pk %}?token={{ application.public_token }}">Go back to edit your information</a>.
-            </p>
-        </div>
-
-        <form method="post" id="rg-otp-submit-form">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="finalize">
-            <button type="button" class="btn btn-rg-primary btn-lg w-100" id="rg-otp-submit-btn"
-                    data-bs-toggle="modal" data-bs-target="#rg-otp-submit-modal">
-                Submit my application &rarr;
-            </button>
-        </form>
-    </div>
-
-    {# Submit confirmation modal — no fade so it appears immediately on click #}
-    <div class="modal" id="rg-otp-submit-modal" tabindex="-1"
-         aria-labelledby="rg-otp-submit-modal-title">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content" style="border-radius:0.5rem; overflow:hidden;">
-                <div class="modal-header" style="background:var(--rg-primary); border-bottom:none; padding:1rem 1.25rem;">
-                    <h2 class="modal-title h5" id="rg-otp-submit-modal-title"
-                        style="color:#fff; margin:0; font-size:0.95rem; font-weight:700;">
-                        Submit your application?
-                    </h2>
-                    <button type="button" class="btn-close btn-close-white"
-                            data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body" style="padding:1.25rem; font-size:0.88rem; color:#374151; line-height:1.6;">
-                    <p class="mb-0">
-                        Submitting locks in your application. You won’t be able to edit it after this.
-                        Please make sure the details above are correct.
-                    </p>
-                </div>
-                <div class="modal-footer" style="border-top:1px solid #e2e8f0; padding:0.875rem 1.25rem;
-                            display:flex; justify-content:flex-end; gap:0.625rem;">
-                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">
-                        Not yet
-                    </button>
-                    <button type="submit" form="rg-otp-submit-form" class="btn btn-rg-primary" id="rg-otp-submit-confirm">
-                        Yes, submit my application
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
 
     <div class="rg-pub-back-row">
         <a href="{% url 'applicant-portal' %}" class="rg-pub-back">
@@ -272,26 +151,6 @@
                 input.classList.remove("is-invalid");
             });
         }
-    }
-
-
-    /* ── Submit confirmation modal ─────────────────────────────── */
-    var submitForm = document.getElementById("rg-otp-submit-form");
-    var submitBtn = document.getElementById("rg-otp-submit-btn");
-    var confirmBtn = document.getElementById("rg-otp-submit-confirm");
-    if (submitForm) {
-        submitForm.addEventListener("submit", function (e) {
-            if (submitForm.dataset.submitting === "1") {
-                e.preventDefault();
-                return;
-            }
-            submitForm.dataset.submitting = "1";
-            if (confirmBtn) {
-                confirmBtn.disabled = true;
-                confirmBtn.textContent = "Submitting…";
-            }
-            if (submitBtn) submitBtn.disabled = true;
-        });
     }
 
     /* ── Resend cooldown countdown ─────────────────────────────── */

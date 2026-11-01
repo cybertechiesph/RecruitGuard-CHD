@@ -1,6 +1,10 @@
 from django.urls import path
 
 from .portal_views import (
+    ApplicantApplicationView,
+    ApplicantDocumentPartDeleteView,
+    ApplicantDocumentPartPreviewView,
+    ApplicantDocumentPartUploadView,
     ApplicantHelpView,
     ApplicantPdsGuideView,
     ApplicantOTPView,
@@ -23,6 +27,22 @@ urlpatterns = [
     path("entries/<int:pk>/", ApplicantVacancyDetailView.as_view(), name="applicant-vacancy-detail"),
     path("entries/<int:pk>/apply/", ApplicantPortalIntakeView.as_view(), name="applicant-intake"),
     path("<uuid:token>/otp/", ApplicantOTPView.as_view(), name="applicant-otp"),
+    path("<uuid:token>/application/", ApplicantApplicationView.as_view(), name="applicant-application"),
+    path(
+        "<uuid:token>/documents/<slug:code>/",
+        ApplicantDocumentPartUploadView.as_view(),
+        name="applicant-document-part-upload",
+    ),
+    path(
+        "<uuid:token>/documents/parts/<int:part_id>/delete/",
+        ApplicantDocumentPartDeleteView.as_view(),
+        name="applicant-document-part-delete",
+    ),
+    path(
+        "<uuid:token>/documents/parts/<int:part_id>/",
+        ApplicantDocumentPartPreviewView.as_view(),
+        name="applicant-document-part-preview",
+    ),
     path("<uuid:token>/receipt/", ApplicantReceiptView.as_view(), name="applicant-receipt"),
     path("<uuid:token>/receipt/download/", ApplicantReceiptPdfView.as_view(), name="applicant-receipt-pdf"),
     path("<uuid:token>/status/", ApplicantStatusLinkView.as_view(), name="applicant-status-link"),

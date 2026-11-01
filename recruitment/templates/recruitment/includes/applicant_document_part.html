@@ -1,0 +1,13 @@
+{% comment %}
+  One uploaded file inside a document card. The same markup is cloned by
+  recruitguard-applicant-application.js for files added without a page reload
+  (keep the data-* hooks in step with renderPart() there).
+{% endcomment %}
+<li class="rg-doc-part" data-part-id="{{ part.pk }}">
+    <span class="rg-doc-part__icon" aria-hidden="true">{% if part.content_type == "application/pdf" %}PDF{% else %}IMG{% endif %}</span>
+    <span class="rg-doc-part__name" data-part-name>{{ part.original_filename }}</span>
+    <span class="rg-doc-part__size" data-part-size>{{ part.size_bytes|filesizeformat }}</span>
+    <button type="button" class="rg-doc-part__btn" data-part-view>View</button>
+    <button type="button" class="rg-doc-part__btn rg-doc-part__btn--remove" data-part-remove
+            aria-label="Remove {{ part.original_filename }}">Remove</button>
+</li>

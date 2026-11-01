@@ -501,7 +501,196 @@ class InternalUserUpdateForm(BootstrapFormMixin, forms.ModelForm):
         return email
 
 
-class ApplicantPortalIntakeForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form):
+class ApplicantIdentityCleaningMixin:
+    """Name / e-mail / mobile / qualification-summary cleaning shared by every applicant
+    form, so the start form, the application page and the one-request form all accept and
+    normalise exactly the same input."""
+
+    def clean_email(self):
+        return self.cleaned_data["email"].strip().lower()
+
+    def _clean_applicant_name(self, field_name):
+        value = unicodedata.normalize("NFC", self.cleaned_data[field_name])
+        value = re.sub(r"\s+", " ", value.strip())
+        if not _APPLICANT_NAME_ALLOWED_RE.fullmatch(value):
+            raise forms.ValidationError(APPLICANT_NAME_ERROR_MESSAGE)
+        return value
+
+    def clean_first_name(self):
+        return self._clean_applicant_name("first_name")
+
+    def clean_last_name(self):
+        return self._clean_applicant_name("last_name")
+
+    def clean_phone(self):
+        try:
+            return normalize_philippine_mobile_number(self.cleaned_data["phone"])
+        except ValueError as exc:
+            raise forms.ValidationError(APPLICANT_MOBILE_ERROR_MESSAGE) from exc
+
+    def clean_qualification_summary(self):
+        value = self.cleaned_data["qualification_summary"].strip()
+        if len(value) > APPLICANT_QUALIFICATION_SUMMARY_MAX_LENGTH:
+            raise forms.ValidationError(
+                APPLICANT_QUALIFICATION_SUMMARY_LENGTH_ERROR_MESSAGE
+            )
+        return value
+
+    REQUIRED_MESSAGES = {
+        "first_name": "Enter your first name.",
+        "last_name": "Enter your last name.",
+        "email": "Enter your email address.",
+        "phone": "Enter your mobile number.",
+        "qualification_summary": "Write a short summary of your qualifications.",
+        "performance_rating_applicability": "Choose whether you have a performance rating.",
+    }
+
+    def _apply_required_messages(self):
+        # Say exactly what is missing instead of a generic "This field is required."
+        for name, message in self.REQUIRED_MESSAGES.items():
+            if name in self.fields:
+                self.fields[name].error_messages["required"] = message
+
+    def _apply_identity_autocomplete(self):
+        # Mobile autofill hints for the applicant's own identity fields (WCAG 1.3.5).
+        for name, hint in (
+            ("first_name", "given-name"),
+            ("last_name", "family-name"),
+            ("email", "email"),
+            ("phone", "tel-national"),
+        ):
+            if name in self.fields:
+                self.fields[name].widget.attrs["autocomplete"] = hint
+
+
+class ApplicantStartForm(ApplicantIdentityCleaningMixin, CaptchaFormMixin, BootstrapFormMixin, forms.Form):
+    """Step 1 of the redesigned intake: who you are and where to reach you. Submitting it
+    sends a verification code; nothing else is asked until the e-mail is verified, so a typo
+    is caught before any documents are uploaded and the draft can be resumed from the e-mail."""
+
+    captcha_scope = "applicant_intake"
+
+    first_name = forms.CharField(
+        max_length=APPLICANT_NAME_MAX_LENGTH,
+        error_messages={"max_length": APPLICANT_NAME_LENGTH_ERROR_MESSAGE},
+    )
+    last_name = forms.CharField(
+        max_length=APPLICANT_NAME_MAX_LENGTH,
+        error_messages={"max_length": APPLICANT_NAME_LENGTH_ERROR_MESSAGE},
+    )
+    email = forms.EmailField(label="Email address")
+    phone = forms.CharField(max_length=50, label="Mobile number")
+    privacy_consent = forms.BooleanField(
+        label=(
+            "I consent to DOH–CHD CALABARZON using the information I submit for this "
+            "recruitment, as described in the privacy notice."
+        ),
+        error_messages={"required": "Give your consent to continue."},
+    )
+
+    def __init__(self, *args, entry=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.entry = entry
+        self._apply_bootstrap()
+        self._apply_identity_autocomplete()
+        self._apply_required_messages()
+        self.fields["phone"].widget.attrs["inputmode"] = "tel"
+        self.fields["email"].widget.attrs["inputmode"] = "email"
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if self.entry and not self.entry.is_open_for_intake:
+            raise forms.ValidationError(
+                "The selected recruitment entry is not currently open for intake."
+            )
+        email = cleaned_data.get("email")
+        if self.entry and email:
+            already_submitted = RecruitmentApplication.objects.filter(
+                position=self.entry,
+                applicant_email__iexact=email,
+                submitted_at__isnull=False,
+            ).exclude(status__in=REAPPLICATION_ELIGIBLE_TERMINAL_STATUSES).exists()
+            if already_submitted:
+                self.add_error(
+                    "email",
+                    "You have already submitted an application for this position using this email address.",
+                )
+        return cleaned_data
+
+
+class ApplicantApplicationForm(ApplicantIdentityCleaningMixin, BootstrapFormMixin, forms.Form):
+    """The application page of the redesigned intake (after the e-mail is verified).
+    Documents are uploaded separately, one file at a time; this form carries the typed
+    answers and, on submit, the applicant's certification."""
+
+    first_name = forms.CharField(
+        max_length=APPLICANT_NAME_MAX_LENGTH,
+        error_messages={"max_length": APPLICANT_NAME_LENGTH_ERROR_MESSAGE},
+    )
+    last_name = forms.CharField(
+        max_length=APPLICANT_NAME_MAX_LENGTH,
+        error_messages={"max_length": APPLICANT_NAME_LENGTH_ERROR_MESSAGE},
+    )
+    phone = forms.CharField(max_length=50, label="Mobile number")
+    qualification_summary = forms.CharField(
+        label="Summary of your qualifications",
+        widget=forms.Textarea(
+            attrs={"rows": 5, "data-char-limit": APPLICANT_QUALIFICATION_SUMMARY_MAX_LENGTH}
+        ),
+        help_text=(
+            "The education, experience, training and eligibility that best match this position."
+        ),
+    )
+    cover_letter = forms.CharField(
+        required=False,
+        label="Note to the recruitment team",
+        max_length=APPLICANT_COVER_LETTER_MAX_LENGTH,
+        error_messages={"max_length": APPLICANT_COVER_LETTER_LENGTH_ERROR_MESSAGE},
+        widget=forms.Textarea(attrs={"rows": 3, "data-char-limit": APPLICANT_COVER_LETTER_MAX_LENGTH}),
+    )
+    # Starts unanswered and is only demanded at Submit (Plantilla), so autosave and
+    # "Save and finish later" work before the applicant has decided.
+    performance_rating_applicability = forms.ChoiceField(
+        choices=RecruitmentApplication.PerformanceRatingApplicability.choices,
+        widget=forms.RadioSelect,
+        required=False,
+        label="Do you have a performance rating for the last rating period?",
+    )
+    submission_confirmation = forms.BooleanField(
+        required=False,
+        label=(
+            "I certify that my information and uploaded documents are true and complete, and I "
+            "consent to their use for this recruitment."
+        ),
+    )
+
+    def __init__(self, *args, entry=None, require_confirmation=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.entry = entry
+        self.require_confirmation = require_confirmation
+        self._apply_bootstrap()
+        self._apply_identity_autocomplete()
+        self._apply_required_messages()
+        self.fields["performance_rating_applicability"].widget.attrs["class"] = "rg-pub-radio-list"
+        self.fields["phone"].widget.attrs["inputmode"] = "tel"
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if self.entry and self.entry.branch == PositionPosting.Branch.COS:
+            cleaned_data["performance_rating_applicability"] = (
+                RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
+            )
+        elif self.require_confirmation and not cleaned_data.get("performance_rating_applicability"):
+            self.add_error(
+                "performance_rating_applicability",
+                self.REQUIRED_MESSAGES["performance_rating_applicability"],
+            )
+        if self.require_confirmation and not cleaned_data.get("submission_confirmation"):
+            self.add_error("submission_confirmation", "Tick this box to submit your application.")
+        return cleaned_data
+
+
+class ApplicantPortalIntakeForm(ApplicantIdentityCleaningMixin, CaptchaFormMixin, BootstrapFormMixin, forms.Form):
     captcha_scope = "applicant_intake"
 
     first_name = forms.CharField(
@@ -591,36 +780,6 @@ class ApplicantPortalIntakeForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form
         self.fields["email"].widget.attrs["autocomplete"] = "email"
         self.fields["phone"].widget.attrs["autocomplete"] = "tel-national"
         self._refresh_document_slots()
-
-    def clean_email(self):
-        return self.cleaned_data["email"].strip().lower()
-
-    def _clean_applicant_name(self, field_name):
-        value = unicodedata.normalize("NFC", self.cleaned_data[field_name])
-        value = re.sub(r"\s+", " ", value.strip())
-        if not _APPLICANT_NAME_ALLOWED_RE.fullmatch(value):
-            raise forms.ValidationError(APPLICANT_NAME_ERROR_MESSAGE)
-        return value
-
-    def clean_first_name(self):
-        return self._clean_applicant_name("first_name")
-
-    def clean_last_name(self):
-        return self._clean_applicant_name("last_name")
-
-    def clean_phone(self):
-        try:
-            return normalize_philippine_mobile_number(self.cleaned_data["phone"])
-        except ValueError as exc:
-            raise forms.ValidationError(APPLICANT_MOBILE_ERROR_MESSAGE) from exc
-
-    def clean_qualification_summary(self):
-        value = self.cleaned_data["qualification_summary"].strip()
-        if len(value) > APPLICANT_QUALIFICATION_SUMMARY_MAX_LENGTH:
-            raise forms.ValidationError(
-                APPLICANT_QUALIFICATION_SUMMARY_LENGTH_ERROR_MESSAGE
-            )
-        return value
 
     def get_requirement_uploads(self):
         return {
@@ -878,8 +1037,31 @@ class ApplicantOTPForm(BootstrapFormMixin, forms.Form):
         return otp
 
 
+class MultipleFileInput(forms.ClearableFileInput):
+    allow_multiple_selected = True
+
+
+class MultipleFileField(forms.FileField):
+    """A file field that accepts several files at once (cleaned to a list)."""
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("widget", MultipleFileInput())
+        super().__init__(*args, **kwargs)
+
+    def clean(self, data, initial=None):
+        single_clean = super().clean
+        if isinstance(data, (list, tuple)):
+            files = [single_clean(item, initial) for item in data if item]
+            if not files and self.required:
+                raise forms.ValidationError(self.error_messages["required"], code="required")
+            return files
+        cleaned = single_clean(data, initial)
+        return [cleaned] if cleaned else []
+
+
 class DocumentResubmissionForm(BootstrapFormMixin, forms.Form):
-    """Scoped re-upload form for Track Application: one required file per flagged document.
+    """Scoped re-upload form for Track Application: one or more files per flagged document
+    (several are combined into one PDF, like on the application page).
 
     ``requirements`` is the list of applicant document-requirement objects the reviewer flagged
     for resubmission; only those slots are exposed (already-accepted documents are untouched).
@@ -891,11 +1073,15 @@ class DocumentResubmissionForm(BootstrapFormMixin, forms.Form):
         remarks_by_code = remarks_by_code or {}
         self.upload_field_names = []
         for requirement in self.requirements:
-            field = forms.FileField(
+            field = MultipleFileField(
                 required=True,
                 label=requirement.title,
-                help_text="Upload a clear, readable PDF, JPG, or PNG.",
-                widget=forms.ClearableFileInput(attrs={"accept": ".pdf,.jpg,.jpeg,.png"}),
+                help_text=(
+                    "Upload a clear, readable PDF, JPG, or PNG. Several pages? Select all of them "
+                    "(or several photos) and we combine them into one file."
+                ),
+                widget=MultipleFileInput(attrs={"accept": ".pdf,.jpg,.jpeg,.png", "multiple": True}),
+                error_messages={"required": "Add a file for this document."},
             )
             # Surfaced above each slot on the resubmission page so the applicant sees
             # exactly why this document was returned (recognition over recall).

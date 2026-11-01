@@ -26,6 +26,7 @@ from django.db.models import Count, Max, Min, Q
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.formats import date_format
 from django.utils.text import slugify
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -8596,7 +8597,8 @@ def _deliver_application_otp(application, otp_code, *, actor=None, otp_expires_a
     )
     if continue_url:
         text_body += (
-            f"\n\nContinue your application for {application.position.title}:\n{continue_url}"
+            f"\n\nKeep this email. Your progress is saved, and this link brings you back to your "
+            f"application for {application.position.title} anytime:\n{continue_url}"
         )
     try:
         html_body = render_to_string(
@@ -8647,6 +8649,81 @@ def _deliver_application_otp(application, otp_code, *, actor=None, otp_expires_a
         description="Sent applicant verification code for final submission.",
         metadata={"otp_expires_at": otp_expires_at.isoformat()},
     )
+
+
+DRAFT_REMINDER_DEFAULT_DAYS_BEFORE = 3
+
+
+def find_drafts_due_for_reminder(days_before=DRAFT_REMINDER_DEFAULT_DAYS_BEFORE, today=None):
+    """Verified, unsubmitted drafts whose vacancy closes within ``days_before`` days (and is
+    still open) and that have not been reminded yet. Unverified drafts are skipped: nobody
+    has shown they own that inbox, so we don't email it."""
+    today = today or timezone.localdate()
+    candidates = (
+        RecruitmentApplication.objects.select_related("position")
+        .filter(
+            status=RecruitmentApplication.Status.DRAFT,
+            submitted_at__isnull=True,
+            otp_verified_at__isnull=False,
+            draft_reminder_sent_at__isnull=True,
+            position__closing_date__gte=today,
+            position__closing_date__lte=today + timedelta(days=days_before),
+        )
+        .order_by("position__closing_date", "pk")
+    )
+    return [application for application in candidates if application.position.is_open_for_intake]
+
+
+def send_draft_reminder(application):
+    """One reminder email for an unsubmitted draft; stamps draft_reminder_sent_at."""
+    from .notification_services import build_applicant_otp_url
+
+    position = application.position
+    continue_url = build_applicant_otp_url(application)
+    closing = date_format(position.closing_date, "F j, Y")
+    subject = f"Your application for {position.title} is not submitted yet"
+    text_body = (
+        f"Hello {application.applicant_first_name or 'applicant'},\n\n"
+        f"You started an application for {position.title}, but it has not been submitted yet. "
+        f"Applications close on {closing}.\n\n"
+        "Everything you added is saved. Open this link, enter the code we email you, and "
+        f"submit when your documents are ready:\n{continue_url}\n\n"
+        "If you no longer wish to apply, you can ignore this email.\n\n"
+        "DOH–CHD CALABARZON Recruitment Portal"
+    )
+    try:
+        html_body = render_to_string(
+            "email/applicant_draft_reminder.html",
+            {
+                "application": application,
+                "position_title": position.title,
+                "closing_date": position.closing_date,
+                "continue_url": continue_url,
+                **email_branding_context("applicant"),
+            },
+        )
+    except Exception:
+        logger.exception("Failed to render the draft reminder HTML for application %s.", application.pk)
+        html_body = ""
+    email = EmailMultiAlternatives(
+        subject=subject,
+        body=text_body,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[application.applicant_email],
+    )
+    if html_body:
+        email.attach_alternative(html_body, "text/html")
+    email.send(fail_silently=False)
+    application.draft_reminder_sent_at = timezone.now()
+    application.save(update_fields=["draft_reminder_sent_at", "updated_at"])
+    record_audit_event(
+        application=application,
+        actor=application.applicant,
+        action=AuditLog.Action.APPLICATION_DRAFT_REMINDER_SENT,
+        description="Reminded the applicant that their application is not submitted yet.",
+        metadata={"closing_date": position.closing_date.isoformat()},
+    )
+    return application
 
 
 def issue_application_otp(
@@ -8735,8 +8812,7 @@ def _record_application_otp_failure(application, actor, *, reason, locked=False)
 def verify_application_otp(application, otp_code, actor=None, purpose="editing"):
     application = RecruitmentApplication.objects.get(pk=application.pk)
     actor = actor or application.applicant
-    message_suffix = " before final submission." if purpose == "editing" else "."
-    locked_error = f"Too many invalid verification attempts. Request a new code{message_suffix}"
+    locked_error = "Too many invalid verification attempts. Request a new code."
     if purpose == "editing" and not application.is_editable_by_applicant:
         raise ValueError("Email verification is only available before final submission.")
     if not application.otp_hash or not application.otp_expires_at:
@@ -8744,7 +8820,7 @@ def verify_application_otp(application, otp_code, actor=None, purpose="editing")
         raise ValueError("Request a verification code first.")
     if application.otp_expires_at < timezone.now():
         _record_application_otp_failure(application, actor, reason="expired")
-        raise ValueError(f"The verification code has expired. Request a new code{message_suffix}")
+        raise ValueError("The verification code has expired. Request a new code.")
     if application.otp_attempt_count >= _application_otp_max_attempts():
         _record_application_otp_failure(application, actor, reason="attempt_limit", locked=True)
         raise ValueError(locked_error)
@@ -8757,7 +8833,11 @@ def verify_application_otp(application, otp_code, actor=None, purpose="editing")
         _record_application_otp_failure(application, actor, reason="invalid_code", locked=locked)
         if locked:
             raise ValueError(locked_error)
-        raise ValueError("The verification code is invalid.")
+        tries_left = _application_otp_max_attempts() - application.otp_attempt_count
+        raise ValueError(
+            f"The verification code is invalid. You have {tries_left} "
+            f"{'try' if tries_left == 1 else 'tries'} left."
+        )
 
     application.otp_verified_at = timezone.now()
     application.otp_attempt_count = 0
@@ -8782,6 +8862,115 @@ def create_public_application_draft(entry, cleaned_data, requirement_uploads):
         requirement_uploads,
         issue_otp=False,
     )
+
+
+@transaction.atomic
+def start_public_application_draft(entry, cleaned_data):
+    """Step 1 of the redesigned intake: find or create the applicant's draft from their name,
+    e-mail and mobile number only, before the e-mail is verified.
+
+    An existing unsubmitted draft for the same e-mail is returned UNCHANGED. Until the code
+    sent to that inbox is verified, nobody has shown they own the address, so a stranger who
+    types someone else's e-mail must not be able to rewrite that person's draft (the
+    one-request flow updates the draft first and verifies afterwards). The owner can correct
+    their details on the application page once verified."""
+    if not entry.is_open_for_intake:
+        raise ValueError("The selected recruitment entry is not currently open for intake.")
+    applicant_email = normalize_applicant_email(cleaned_data["email"])
+    if RecruitmentApplication.objects.filter(
+        position=entry,
+        applicant_email__iexact=applicant_email,
+        submitted_at__isnull=False,
+    ).exclude(status__in=REAPPLICATION_ELIGIBLE_TERMINAL_STATUSES).exists():
+        raise ValueError(
+            "You have already submitted an application for this position using this email address."
+        )
+
+    applicant_user = get_portal_applicant_identity_by_email(applicant_email)
+    application = None
+    if applicant_user is not None:
+        application = get_reusable_public_application_for_applicant(entry, applicant_user)
+        if application and application.submitted_at:
+            raise ValueError(
+                "You have already submitted an application for this position using this email address."
+            )
+    if application is None:
+        application = get_reusable_public_application_draft(entry, applicant_email)
+    if application is not None:
+        return application
+
+    if applicant_user is None:
+        applicant_user = create_portal_applicant_identity(
+            first_name=cleaned_data["first_name"],
+            last_name=cleaned_data["last_name"],
+            email=applicant_email,
+            phone=cleaned_data["phone"],
+        )
+    application = RecruitmentApplication(
+        applicant=applicant_user,
+        position=entry,
+        status=RecruitmentApplication.Status.DRAFT,
+        applicant_first_name=cleaned_data["first_name"],
+        applicant_last_name=cleaned_data["last_name"],
+        applicant_email=applicant_email,
+        applicant_phone=cleaned_data["phone"],
+        checklist_privacy_consent=bool(cleaned_data.get("privacy_consent")),
+        # Plantilla: left unanswered until the applicant chooses on the application page.
+        performance_rating_applicability=(
+            RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
+            if entry.branch == PositionPosting.Branch.COS
+            else ""
+        ),
+    )
+    try:
+        application.save()
+    except IntegrityError as exc:
+        if "unique_active_application_per_applicant_position" not in str(exc):
+            raise
+        raise ValueError(
+            "An application for this recruitment entry already exists for this applicant."
+        ) from exc
+    record_audit_event(
+        application=application,
+        actor=applicant_user,
+        action=AuditLog.Action.APPLICATION_CREATED,
+        description="Applicant started an accountless application (details only, e-mail not yet verified).",
+        metadata={"public_token": str(application.public_token), "applicant_identity_id": applicant_user.id},
+    )
+    return application
+
+
+def save_applicant_application_answers(application, cleaned_data):
+    """Save the typed answers from the application page (after e-mail verification)."""
+    if not application.is_editable_by_applicant or application.submitted_at:
+        raise ValueError("This application has already been submitted and can no longer be changed.")
+    application.applicant_first_name = cleaned_data["first_name"]
+    application.applicant_last_name = cleaned_data["last_name"]
+    application.applicant_phone = cleaned_data["phone"]
+    application.qualification_summary = cleaned_data.get("qualification_summary", "")
+    application.cover_letter = cleaned_data.get("cover_letter", "")
+    application.performance_rating_applicability = (
+        cleaned_data.get("performance_rating_applicability")
+        or application.performance_rating_applicability
+    )
+    application.save(
+        update_fields=[
+            "applicant_first_name",
+            "applicant_last_name",
+            "applicant_phone",
+            "qualification_summary",
+            "cover_letter",
+            "performance_rating_applicability",
+            "updated_at",
+        ]
+    )
+    _sync_portal_applicant_identity(
+        application.applicant,
+        first_name=application.applicant_first_name,
+        last_name=application.applicant_last_name,
+        email=application.applicant_email,
+    )
+    return application
 
 
 def _get_aes_key():
@@ -9131,7 +9320,12 @@ def _route_for_submission(application):
 
 
 @transaction.atomic
-def submit_application(application, actor):
+def submit_application(application, actor, *, email_verified_in_session=False):
+    """``email_verified_in_session``: the redesigned intake verifies the email FIRST and then
+    lets the applicant work on the application for as long as their browser session stays
+    verified (it lapses after the normal inactivity timeout). The view passes True only when
+    that session marker is present; the email must still have been verified for this draft.
+    The one-request flow keeps the stricter "code verified within its validity window" rule."""
     if application.applicant_id != actor.id:
         raise ValueError("Only the owning applicant can submit this application.")
     if not application.is_editable_by_applicant:
@@ -9160,7 +9354,10 @@ def submit_application(application, actor):
         )
     if not application.position.is_open_for_intake:
         raise ValueError("This recruitment entry is not currently open for intake.")
-    if not application.otp_is_currently_valid:
+    if email_verified_in_session:
+        if not application.otp_verified_at:
+            raise ValueError("Email verification is required before final submission.")
+    elif not application.otp_is_currently_valid:
         if application.otp_expires_at and application.otp_expires_at < timezone.now():
             raise ValueError("Your email verification has expired. Request a new code before final submission.")
         raise ValueError("Email verification is required before final submission.")
@@ -9481,8 +9678,12 @@ def submit_document_resubmission(application, actor, uploaded_files):
     gauntlet (intake-open, full checklist, cross-slot duplicate-digest) because it is a scoped
     fix of specific flagged documents, not a fresh submission.
 
-    ``uploaded_files`` is a ``{document_code: UploadedFile}`` mapping for the flagged documents.
+    ``uploaded_files`` maps each flagged document code to an UploadedFile, or to a list of
+    them: one file is stored as-is, several are combined (in order) into one PDF.
     """
+    from .applicant_documents import combine_uploaded_files
+
+
     if application.applicant_id != getattr(actor, "id", None):
         raise ValueError("Only the applicant may resubmit documents for this application.")
     case = getattr(application, "case", None)
@@ -9504,15 +9705,40 @@ def submit_document_resubmission(application, actor, uploaded_files):
 
     for code in flagged_codes:
         requirement = requirements.get(code)
-        upload_evidence_item(
+        files = uploaded_files[code]
+        if not isinstance(files, (list, tuple)):
+            files = [files]
+        if len(files) == 1 or requirement is None:
+            upload_evidence_item(
+                application=application,
+                actor=actor,
+                label=requirement.title if requirement else code,
+                uploaded_file=files[0],
+                document_key=code,
+                artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
+                artifact_type=ARTIFACT_TYPE_APPLICANT_DOCUMENT,
+                stage=EvidenceVaultItem.Stage.APPLICANT_INTAKE,
+            )
+            continue
+        filename, content_type, raw_bytes, part_digests = combine_uploaded_files(requirement, files)
+        evidence = store_generated_evidence_item(
             application=application,
             actor=actor,
-            label=requirement.title if requirement else code,
-            uploaded_file=uploaded_files[code],
-            document_key=code,
-            artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
+            label=requirement.title,
+            filename=filename,
+            raw_bytes=raw_bytes,
+            content_type=content_type,
             artifact_type=ARTIFACT_TYPE_APPLICANT_DOCUMENT,
+            artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
             stage=EvidenceVaultItem.Stage.APPLICANT_INTAKE,
+            document_key=code,
+        )
+        record_audit_event(
+            application=application,
+            actor=actor,
+            action=AuditLog.Action.EVIDENCE_UPLOADED,
+            description=f"Combined {len(files)} resubmitted files into one PDF for '{requirement.title}'.",
+            metadata={"document_key": code, "evidence_id": evidence.id, "part_digests": part_digests},
         )
 
     # Reopen the finalized screening record and reset ONLY the flagged rows for re-review;

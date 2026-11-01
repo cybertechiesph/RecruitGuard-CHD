@@ -867,10 +867,13 @@ class RecruitmentApplication(TimestampedModel):
     applicant_last_name = models.CharField(max_length=150, blank=True)
     applicant_email = models.EmailField(blank=True)
     applicant_phone = models.CharField(max_length=50, blank=True)
+    # Blank only on a Plantilla draft whose applicant hasn't answered yet (step-by-step intake);
+    # Submit requires an answer.
     performance_rating_applicability = models.CharField(
         max_length=20,
         choices=PerformanceRatingApplicability.choices,
         default=PerformanceRatingApplicability.APPLICABLE,
+        blank=True,
     )
     checklist_privacy_consent = models.BooleanField(default=False)
     checklist_documents_complete = models.BooleanField(default=False)
@@ -881,6 +884,9 @@ class RecruitmentApplication(TimestampedModel):
     otp_requested_at = models.DateTimeField(blank=True, null=True)
     otp_expires_at = models.DateTimeField(blank=True, null=True)
     otp_verified_at = models.DateTimeField(blank=True, null=True)
+    # When the "your application isn't submitted yet" email went out (send_draft_reminders),
+    # so a draft is reminded at most once.
+    draft_reminder_sent_at = models.DateTimeField(blank=True, null=True)
     otp_attempt_count = models.PositiveSmallIntegerField(default=0)
     submission_hash = models.CharField(max_length=64, blank=True)
     submitted_at = models.DateTimeField(blank=True, null=True)
@@ -4908,6 +4914,39 @@ class EvidenceVaultItem(TimestampedModel):
         return f"{owner_label} - {self.label} ({self.version_label})"
 
 
+class ApplicantDocumentPart(TimestampedModel):
+    """One page / file an applicant added to a document requirement before submitting.
+
+    A requirement can take several parts (a 4-page PDS photographed page by page, six
+    training certificates). The applicant-facing document that reviewers see is still a
+    single EvidenceVaultItem per requirement: one part is stored as-is (so an e-signed PDF
+    keeps its signature), several parts are combined into one PDF. Parts are staging data
+    for drafts only — they are encrypted like evidence and deleted once the application is
+    submitted, so the submitted record lives solely in the Evidence Vault.
+    """
+
+    application = models.ForeignKey(
+        "RecruitmentApplication",
+        on_delete=models.CASCADE,
+        related_name="document_parts",
+    )
+    document_key = models.CharField(max_length=100)
+    sort_order = models.PositiveIntegerField(default=0)
+    original_filename = models.CharField(max_length=255)
+    content_type = models.CharField(max_length=255)
+    size_bytes = models.PositiveIntegerField()
+    sha256_digest = models.CharField(max_length=64)
+    nonce = models.BinaryField()
+    ciphertext = models.BinaryField()
+
+    class Meta:
+        ordering = ["document_key", "sort_order", "created_at", "pk"]
+        indexes = [models.Index(fields=["application", "document_key"])]
+
+    def __str__(self):
+        return f"{self.document_key} part {self.sort_order} ({self.original_filename})"
+
+
 class AuditLog(TimestampedModel):
     class Action(models.TextChoices):
         INTERNAL_LOGIN = "internal_login", "Internal Login"
@@ -4949,6 +4988,10 @@ class AuditLog(TimestampedModel):
             "Applicant Contact Updated",
         )
         APPLICATION_OTP_SENT = "application_otp_sent", "Application OTP Sent"
+        APPLICATION_DRAFT_REMINDER_SENT = (
+            "application_draft_reminder_sent",
+            "Unsubmitted Draft Reminder Sent",
+        )
         APPLICATION_OTP_FAILED = "application_otp_failed", "Application OTP Failed"
         APPLICATION_OTP_LOCKED = "application_otp_locked", "Application OTP Locked"
         APPLICATION_OTP_VERIFIED = "application_otp_verified", "Application OTP Verified"
@@ -5148,6 +5191,7 @@ AUDIT_ACTION_DISPLAY_LABELS = {
     AuditLog.Action.APPLICATION_UPDATED: "Application Updated",
     AuditLog.Action.APPLICANT_CONTACT_UPDATED: "Applicant Contact Updated",
     AuditLog.Action.APPLICATION_OTP_SENT: "Verification Code Sent",
+    AuditLog.Action.APPLICATION_DRAFT_REMINDER_SENT: "Unsubmitted Draft Reminder Sent",
     AuditLog.Action.APPLICATION_OTP_VERIFIED: "Email Verified",
     AuditLog.Action.APPLICATION_SUBMITTED: "Application Submitted",
     AuditLog.Action.CASE_CREATED: "Case Created",
@@ -5236,6 +5280,7 @@ AUDIT_ACTION_CATEGORIES = {
         "label": "Case activity",
         "actions": [
             AuditLog.Action.APPLICATION_CREATED,
+            AuditLog.Action.APPLICATION_DRAFT_REMINDER_SENT,
             AuditLog.Action.APPLICATION_UPDATED,
             AuditLog.Action.APPLICATION_SUBMITTED,
             AuditLog.Action.CASE_CREATED,

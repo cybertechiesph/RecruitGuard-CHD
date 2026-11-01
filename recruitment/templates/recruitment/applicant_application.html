@@ -1,0 +1,240 @@
+{% extends "applicant_base.html" %}
+{% load static %}
+
+{% block title %}Your application — {{ entry.title }} | Applicant Portal{% endblock %}
+
+{% block site_header %}
+{% include "recruitment/includes/applicant_flow_header.html" with position_title=entry.title %}
+{% endblock %}
+
+{% block main_class %}{% endblock %}
+
+{# Messages are shown inside the page, under the header (not twice). #}
+{% block message_stack %}{% endblock %}
+
+{% block content %}
+{% comment %}
+  Step 3 of the redesigned intake (reached only from a verified session). Answers save as
+  you type; each document file uploads on its own the moment it is picked, so a dropped
+  connection only costs that one file. One Submit at the end.
+{% endcomment %}
+<div class="rg-pub-wrap rg-apply-wrap"
+     data-application
+     data-autosave-url="{% url 'applicant-application' application.public_token %}"
+     data-part-delete-url="{% url 'applicant-document-part-delete' application.public_token 0 %}"
+     data-part-preview-url="{% url 'applicant-document-part-preview' application.public_token 0 %}"
+     data-max-upload-bytes="{{ max_upload_bytes }}"
+     data-max-upload-mb="{{ max_upload_mb }}">
+
+    {% include "recruitment/includes/applicant_journey.html" with step=3 %}
+
+    <header class="rg-apply-header">
+        <h1 class="rg-apply-header__title">Your application for {{ entry.title }}</h1>
+        {% include "recruitment/includes/branch_explainer.html" with mode="note" branch=entry.branch %}
+        <p class="rg-apply-header__copy">
+            <strong>Everything is saved as you go.</strong> You can close this page and come back later
+            with the link in your verification email.
+        </p>
+        <p class="rg-apply-header__jump"><a href="#sec-docs">Jump to your documents &darr;</a></p>
+    </header>
+
+    {% if messages %}
+        <div class="rg-pub-message-stack">
+            {% for message in messages %}<div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>{% endfor %}
+        </div>
+    {% endif %}
+    {% if submit_errors or form.errors %}
+        <div class="alert alert-danger" role="alert" tabindex="-1" data-error-summary>
+            <strong>Your application was not submitted yet.</strong>
+            {% for error in submit_errors %}<p class="mb-0">{{ error }}</p>{% endfor %}
+            {% if form.errors %}
+                <p class="mb-1">Please fix these:</p>
+                <ul class="mb-0 rg-apply-error-links">
+                    {% for field in form %}{% if field.errors %}
+                    <li><a href="#{% if field.name == 'performance_rating_applicability' %}sec-about-rating{% else %}{{ field.id_for_label }}{% endif %}">{{ field.errors.0 }}</a></li>
+                    {% endif %}{% endfor %}
+                    {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+            {% endif %}
+        </div>
+    {% endif %}
+
+    <form method="post" id="rg-application-form" novalidate>
+        {% csrf_token %}
+
+        {# ── 1. Your details ───────────────────────────────────────── #}
+        <section class="rg-apply-card" aria-labelledby="sec-details">
+            <h2 id="sec-details" class="rg-apply-card__title">1. Your details</h2>
+            <p class="rg-apply-card__meta">
+                Email: <strong>{{ application.applicant_email }}</strong>
+                <span class="rg-pub-verified-tag">&#10003; Verified</span>
+            </p>
+            <div class="rg-intake-grid">
+                {% for field in form %}
+                    {% if field.name == "first_name" or field.name == "last_name" or field.name == "phone" %}
+                    <div class="rg-pub-field">
+                        <label for="{{ field.id_for_label }}">{{ field.label }} <span class="text-danger" aria-hidden="true">*</span></label>
+                        {{ field }}
+                        {% for error in field.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </section>
+
+        {# ── 2. About your qualifications ──────────────────────────── #}
+        <section class="rg-apply-card" aria-labelledby="sec-about">
+            <h2 id="sec-about" class="rg-apply-card__title">2. About your qualifications</h2>
+            <div class="rg-pub-field">
+                <label for="{{ form.qualification_summary.id_for_label }}">{{ form.qualification_summary.label }} <span class="text-danger" aria-hidden="true">*</span></label>
+                {{ form.qualification_summary }}
+                <div class="form-text rg-char-hint"><span>{{ form.qualification_summary.help_text }}</span> <span class="rg-char-count" data-char-count-for="{{ form.qualification_summary.id_for_label }}" aria-live="polite"></span></div>
+                {% for error in form.qualification_summary.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+            <div class="rg-pub-field">
+                <label for="{{ form.cover_letter.id_for_label }}">{{ form.cover_letter.label }} <span class="rg-intake-optional">Optional</span></label>
+                {{ form.cover_letter }}
+                <div class="form-text rg-char-hint"><span></span> <span class="rg-char-count" data-char-count-for="{{ form.cover_letter.id_for_label }}" aria-live="polite"></span></div>
+                {% for error in form.cover_letter.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+            {% if entry.branch == "plantilla" %}
+            <fieldset class="rg-pub-field" id="sec-about-rating" data-performance-rating-question>
+                <legend>{{ form.performance_rating_applicability.label }} <span class="text-danger" aria-hidden="true">*</span></legend>
+                {{ form.performance_rating_applicability }}
+                {% for error in form.performance_rating_applicability.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </fieldset>
+            {% endif %}
+            <p class="rg-apply-autosave" data-autosave-status aria-live="polite"></p>
+        </section>
+
+        {# ── 3. Documents ─────────────────────────────────────────── #}
+        <section class="rg-apply-card" aria-labelledby="sec-docs">
+            <h2 id="sec-docs" class="rg-apply-card__title">3. Your documents</h2>
+            <p class="rg-apply-card__copy">
+                Add each document as a PDF, JPG or PNG (up to {{ max_upload_mb }} MB per file). A document with several
+                pages? Add the pages one by one, or as several photos &mdash; we combine them into one file for the
+                reviewers. Each file is saved the moment it finishes uploading.
+            </p>
+            <p class="rg-doc-progress" data-doc-progress aria-live="polite">
+                <strong data-doc-ready>{{ required_ready }}</strong> of <strong data-doc-total>{{ required_total }}</strong> required documents ready
+            </p>
+
+            {% for slot in slots %}
+            <div class="rg-doc-card{% if slot.is_ready %} is-ready{% endif %}"
+                 id="doc-{{ slot.code }}"
+                 data-doc-card
+                 data-code="{{ slot.code }}"
+                 data-title="{{ slot.requirement.title }}"
+                 data-required="{% if slot.required_now %}true{% else %}false{% endif %}"
+                 data-upload-url="{% url 'applicant-document-part-upload' application.public_token slot.code %}"
+                 {% if slot.requirement.conditional_on_performance_rating %}data-conditional-performance-rating{% endif %}
+                 {% if not slot.applies %}hidden{% endif %}>
+                <div class="rg-doc-card__head">
+                    <h3 class="rg-doc-card__title">{{ slot.requirement.title }}</h3>
+                    <span class="rg-doc-card__status" data-doc-status>
+                        {% if slot.is_ready %}&#10003; Ready{% elif slot.required_now %}Required{% else %}If applicable{% endif %}
+                    </span>
+                </div>
+                <p class="rg-doc-card__hint">{{ slot.requirement.help_text }}</p>
+                {% include "recruitment/includes/requirement_downloads.html" with downloads=slot.requirement.downloads compact=True %}
+
+                {% if slot.legacy_document %}
+                <p class="rg-doc-card__legacy" data-legacy-document>
+                    Saved earlier: <strong>{{ slot.legacy_document.original_filename }}</strong>.
+                    Add new files below only if you want to replace it.
+                </p>
+                {% endif %}
+
+                <ul class="rg-doc-parts" data-part-list>
+                    {% for part in slot.parts %}{% include "recruitment/includes/applicant_document_part.html" %}{% endfor %}
+                </ul>
+                <div class="rg-doc-card__error" data-doc-error role="alert" hidden></div>
+
+                <div class="rg-doc-card__actions">
+                    <label class="btn btn-outline-primary rg-doc-card__add">
+                        <input type="file" class="visually-hidden" data-part-input multiple
+                               accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png">
+                        {% if slot.parts or slot.legacy_document %}Add another file{% else %}Add files{% endif %}
+                    </label>
+                    <label class="btn btn-outline-primary rg-doc-card__camera">
+                        <input type="file" class="visually-hidden" data-part-input accept="image/*" capture="environment">
+                        Take a photo
+                    </label>
+                </div>
+            </div>
+            {% endfor %}
+        </section>
+
+        {# ── 4. Review and submit ─────────────────────────────────── #}
+        <section class="rg-apply-card" aria-labelledby="sec-submit">
+            <h2 id="sec-submit" class="rg-apply-card__title">4. Submit your application</h2>
+            <div class="rg-doc-missing" data-doc-missing {% if required_ready == required_total %}hidden{% endif %}>
+                <p class="mb-1"><strong>Still needed before you can submit:</strong></p>
+                <ul class="mb-0" data-doc-missing-list>
+                    {% for slot in slots %}{% if slot.required_now and not slot.is_ready %}<li><a href="#doc-{{ slot.code }}">{{ slot.requirement.title }}</a></li>{% endif %}{% endfor %}
+                </ul>
+            </div>
+            <div class="form-check rg-apply-confirm">
+                {{ form.submission_confirmation }}
+                <label class="form-check-label" for="{{ form.submission_confirmation.id_for_label }}">{{ form.submission_confirmation.label }}</label>
+                {% for error in form.submission_confirmation.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+            <p class="rg-apply-submit-note">After you submit, you can no longer change your application. You&rsquo;ll get a receipt and a tracking code right away.</p>
+            <div class="rg-apply-actions">
+                <button type="submit" name="action" value="save" class="btn btn-outline-secondary">Save and finish later</button>
+                <button type="submit" name="action" value="submit" class="btn btn-rg-primary btn-lg" data-submit-application>Submit my application</button>
+            </div>
+        </section>
+    </form>
+
+    {# Phones: keep the document count and the way to Submit in reach while scrolling. #}
+    <div class="rg-apply-sticky" data-doc-sticky aria-hidden="true">
+        <span class="rg-apply-sticky__count"><strong data-doc-ready-sticky>{{ required_ready }}</strong> of <span data-doc-total-sticky>{{ required_total }}</span> documents ready</span>
+        <a href="#sec-docs" class="rg-apply-sticky__link" tabindex="-1">Documents</a>
+        <a href="#sec-submit" class="btn btn-rg-primary btn-sm" tabindex="-1">Submit &darr;</a>
+    </div>
+</div>
+
+{# File preview (the applicant's own files, shown from a local blob: URL). #}
+<div class="modal fade rg-intake-preview" id="rg-part-preview" tabindex="-1"
+     aria-labelledby="rg-part-preview-title" aria-hidden="true" data-part-preview>
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="min-w-0">
+                    <h2 class="modal-title h5" id="rg-part-preview-title" data-preview-title>Your file</h2>
+                    <p class="rg-intake-preview__meta mb-0" data-preview-meta></p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close preview"></button>
+            </div>
+            <div class="modal-body" data-preview-body></div>
+            <div class="modal-footer">
+                <p class="rg-intake-preview__note me-auto mb-0">Is this the right document, and is the text easy to read?</p>
+                <button type="button" class="btn btn-rg-primary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<template id="rg-part-template">
+    <li class="rg-doc-part" data-part-id="">
+        <span class="rg-doc-part__icon" aria-hidden="true"></span>
+        <span class="rg-doc-part__name" data-part-name></span>
+        <span class="rg-doc-part__size" data-part-size></span>
+        <button type="button" class="rg-doc-part__btn" data-part-view>View</button>
+        <button type="button" class="rg-doc-part__btn rg-doc-part__btn--remove" data-part-remove>Remove</button>
+    </li>
+</template>
+<template id="rg-part-uploading-template">
+    <li class="rg-doc-part is-uploading">
+        <span class="rg-doc-part__icon" aria-hidden="true">&uarr;</span>
+        <span class="rg-doc-part__name" data-part-name></span>
+        <progress class="rg-doc-part__progress" max="100" value="0"></progress>
+    </li>
+</template>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/recruitguard-applicant-application.js' %}?v=20261101-apply3"></script>
+{% endblock %}

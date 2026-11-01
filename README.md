@@ -158,6 +158,21 @@ Open these URLs after the server starts:
 - Internal dashboard: `http://127.0.0.1:8000/internal/`
 - Django admin: `http://127.0.0.1:8000/admin/`
 
+## Scheduled jobs
+
+Run these once a day on the server (for example from cron). Both are safe to re-run.
+
+```bash
+python manage.py emit_deadline_notifications   # in-app alerts for postings closing within 24 hours
+python manage.py send_draft_reminders          # one email to applicants whose verified application is still unsubmitted 3 days before closing
+```
+
+Add `--dry-run` to either to see what it would do without sending anything. Example crontab line (08:00 daily):
+
+```
+0 8 * * * cd /path/to/RecruitGuard-CHD && .venv/bin/python manage.py send_draft_reminders
+```
+
 ## First internal account note
 
 `createsuperuser` gives you Django admin access, but the internal portal only allows internal roles. That is why the setup commands above also set the account role to `system_admin`.

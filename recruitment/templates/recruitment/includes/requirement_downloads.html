@@ -8,13 +8,15 @@
 <ul class="rg-req-downloads{% if compact %} rg-req-downloads--compact{% endif %}" data-requirement-downloads>
     {% for item in downloads %}
         <li>
-            {% if item.guide_url_name %}
-                <a href="{% url item.guide_url_name %}" class="rg-req-downloads__link">{{ item.label }}</a>
-            {% else %}
-                <a href="{% static item.static_path %}" class="rg-req-downloads__link"
-                   {% if item.format_label != "PDF" %}download{% else %}target="_blank" rel="noopener"{% endif %}>{{ item.label }}</a>
-            {% endif %}
-            <span class="rg-req-downloads__format">{{ item.format_label }}</span>
+            <span class="rg-req-downloads__text">
+                {% if item.guide_url_name %}
+                    <a href="{% url item.guide_url_name %}" class="rg-req-downloads__link">{{ item.label }}</a>
+                {% else %}
+                    <a href="{% static item.static_path %}" class="rg-req-downloads__link"
+                       {% if item.format_label != "PDF" %}download{% else %}target="_blank" rel="noopener"{% endif %}>{{ item.label }}</a>
+                {% endif %}
+                <span class="rg-req-downloads__format">{{ item.format_label }}</span>
+            </span>
         </li>
     {% endfor %}
 </ul>

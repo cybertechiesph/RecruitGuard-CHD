@@ -42,14 +42,14 @@
             <span class="rg-pub-howitworks__num" aria-hidden="true">2</span>
             <div>
                 <p class="rg-pub-howitworks__title">Apply online</p>
-                <p class="rg-pub-howitworks__copy">Fill in your information, upload your documents, and verify your email.</p>
+                <p class="rg-pub-howitworks__copy">Verify your email, then add your documents &mdash; phone photos are fine. Finish later if you need to.</p>
             </div>
         </li>
         <li class="rg-pub-howitworks__step">
             <span class="rg-pub-howitworks__num" aria-hidden="true">3</span>
             <div>
                 <p class="rg-pub-howitworks__title">Track your application</p>
-                <p class="rg-pub-howitworks__copy">Check your status anytime using your reference number.</p>
+                <p class="rg-pub-howitworks__copy">Check your status anytime with the tracking code we give you when you submit.</p>
             </div>
         </li>
     </ol>
@@ -87,7 +87,7 @@
        aria-label="View details for {{ entry.title }}">
         <div class="rg-pub-job-card__inner">
             <div class="rg-pub-job-card__body">
-                {% if entry.item_number %}<p class="rg-pub-job-card__ref">Item No. {{ entry.item_number }}</p>{% endif %}
+                <p class="rg-pub-job-card__ref">{{ entry.job_code }}{% if entry.item_number %} &middot; Item No. {{ entry.item_number }}{% endif %}</p>
                 <h3 class="rg-pub-job-card__title">{{ entry.title }}</h3>
                 <div class="rg-pub-job-card__chips">
                     <span class="rg-pub-chip rg-pub-chip--plantilla">Permanent</span>
@@ -98,6 +98,7 @@
                 </div>
                 <p class="rg-pub-job-card__meta">
                     {{ entry.official_office_label|default:"CHD CALABARZON" }}
+                    <span class="rg-pub-job-card__posted">&middot; Posted {{ entry.plantilla_publication_start_date|date:"M j, Y" }}</span>
                 </p>
                 <p class="rg-pub-job-card__deadline {% if entry.is_closing_soon %}rg-pub-job-card__deadline--urgent{% endif %}">
                     {% if entry.closing_date %}
@@ -126,7 +127,7 @@
        aria-label="View details for {{ entry.title }}">
         <div class="rg-pub-job-card__inner">
             <div class="rg-pub-job-card__body">
-                {% if entry.item_number %}<p class="rg-pub-job-card__ref">Item No. {{ entry.item_number }}</p>{% endif %}
+                <p class="rg-pub-job-card__ref">{{ entry.job_code }}{% if entry.item_number %} &middot; Item No. {{ entry.item_number }}{% endif %}</p>
                 <h3 class="rg-pub-job-card__title">{{ entry.title }}</h3>
                 <div class="rg-pub-job-card__chips">
                     <span class="rg-pub-chip rg-pub-chip--cos">Contract of Service</span>
@@ -137,6 +138,7 @@
                 </div>
                 <p class="rg-pub-job-card__meta">
                     {{ entry.official_office_label|default:"CHD CALABARZON" }}
+                    <span class="rg-pub-job-card__posted">&middot; Posted {{ entry.plantilla_publication_start_date|date:"M j, Y" }}</span>
                 </p>
                 <p class="rg-pub-job-card__deadline {% if entry.is_closing_soon %}rg-pub-job-card__deadline--urgent{% endif %}">
                     {% if entry.closing_date %}

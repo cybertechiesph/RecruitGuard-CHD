@@ -32,8 +32,29 @@
                 <div id="faq-a1" class="accordion-collapse collapse show" aria-labelledby="faq-a1-hd">
                     <div class="accordion-body rg-faq__body">
                         <p>No. You don&rsquo;t need an account. You only need a valid email address.
-                        We will send a 6-digit verification code to that email before your application is finalized.</p>
-                        <p>The verification code is valid for {{ otp_validity_minutes }} minute{{ otp_validity_minutes|pluralize }}.</p>
+                        When you start, we send a 6-digit code to that email; entering it confirms the address
+                        and opens your application.</p>
+                        <p>Each code works for {{ otp_validity_minutes }} minute{{ otp_validity_minutes|pluralize }}.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="accordion-item rg-faq" id="save-later">
+                <h3 class="accordion-header" id="faq-save-hd">
+                    <button class="accordion-button rg-faq__button collapsed" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#faq-save"
+                            aria-expanded="false" aria-controls="faq-save">
+                        Can I save my application and finish later?
+                    </button>
+                </h3>
+                <div id="faq-save" class="accordion-collapse collapse" aria-labelledby="faq-save-hd">
+                    <div class="accordion-body rg-faq__body">
+                        <p>Yes. Your answers are saved as you type, and each document is saved the moment it
+                        finishes uploading. You can close the page at any time.</p>
+                        <p>To come back, open the <strong>verification email</strong> we sent you and tap
+                        <strong>&ldquo;Continue your application&rdquo;</strong>. We&rsquo;ll send a fresh code
+                        to confirm it&rsquo;s you, then everything you added is waiting. Remember to submit before
+                        the application deadline.</p>
                     </div>
                 </div>
             </div>
@@ -143,12 +164,13 @@
                 </h3>
                 <div id="faq-a6" class="accordion-collapse collapse" aria-labelledby="faq-a6-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>Each file must be 5 MB or smaller. If you&rsquo;re over the limit, try one of these:</p>
+                        <p>Each file must be 5 MB or smaller. Most people won&rsquo;t hit this:</p>
                         <ul>
-                            <li><strong>Scanned PDFs:</strong> scan at a lower resolution (200&ndash;300 DPI is enough
-                            for documents).</li>
-                            <li><strong>Photos:</strong> retake at a lower camera resolution, or use a free image
-                            compressor like <em>TinyPNG</em> or <em>iLovePDF</em>.</li>
+                            <li><strong>Photos:</strong> large phone photos are shrunk automatically before they upload.</li>
+                            <li><strong>Several pages:</strong> you don&rsquo;t need one big file &mdash; add the pages
+                            one by one (or as several photos) and we combine them for you.</li>
+                            <li><strong>Scanned PDFs:</strong> if one PDF is still too large, scan at a lower resolution
+                            (200&ndash;300 DPI is enough), or split it and add the parts separately.</li>
                             <li><strong>Multi-page PDFs:</strong> some scanners produce huge files because each page
                             is saved as an image. Use a PDF compressor (iLovePDF, Smallpdf) to reduce the file size.</li>
                             <li><strong>Long documents:</strong> if a single document genuinely needs to be larger,
@@ -200,7 +222,7 @@
                             <li>Check your <strong>Spam</strong> or <strong>Junk Mail</strong> folder. The email
                             comes from a government recruitment address and may be filtered.</li>
                             <li>Make sure the email address you entered is correct &mdash; go back and check.</li>
-                            <li>Click <strong>&ldquo;Resend Code&rdquo;</strong> on the verification page to request
+                            <li>Tap <strong>&ldquo;Resend the code&rdquo;</strong> on the verification page to request
                             a new code. You can resend once every 60 seconds.</li>
                             <li>If you still don&rsquo;t receive it after a few minutes, try a different email address
                             and start a new application.</li>
@@ -219,8 +241,8 @@
                 </h3>
                 <div id="faq-e2" class="accordion-collapse collapse" aria-labelledby="faq-e2-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>The 6-digit code is valid for a limited time after it is sent. If it expires, click
-                        <strong>&ldquo;Resend Code&rdquo;</strong> to get a fresh one.</p>
+                        <p>Each 6-digit code works for {{ otp_validity_minutes }} minute{{ otp_validity_minutes|pluralize }} after it is sent.
+                        If it expires, tap <strong>&ldquo;Resend the code&rdquo;</strong> to get a fresh one.</p>
                     </div>
                 </div>
             </div>
@@ -235,10 +257,10 @@
                 </h3>
                 <div id="faq-e3" class="accordion-collapse collapse" aria-labelledby="faq-e3-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>Yes. On the verification page, click
-                        <strong>&ldquo;Go back to edit your information&rdquo;</strong> at the bottom. The form will
-                        re-open with your information pre-filled, including the documents you already uploaded. Change
-                        the email address (or anything else), then submit again to receive a new verification code.</p>
+                        <p>Yes. On the verification page, tap
+                        <strong>&ldquo;Start again with the correct email&rdquo;</strong> and enter the right address.
+                        The code goes to the new address. Nothing was uploaded yet at that point, so you don&rsquo;t
+                        lose any documents.</p>
                     </div>
                 </div>
             </div>

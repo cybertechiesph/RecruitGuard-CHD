@@ -1,3 +1,4 @@
+import hashlib
 import importlib
 import io
 import json
@@ -27,6 +28,7 @@ from django.test import Client, RequestFactory, SimpleTestCase, TestCase, overri
 from django.template.loader import render_to_string
 from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
+from django.utils.formats import date_format
 
 from .admin import ExamRecordAdmin, ScreeningRecordAdmin
 from .captcha import (
@@ -3613,6 +3615,31 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         payload.update(overrides)
         return payload
 
+    def open_verified_application(self, email, position=None):
+        """Redesigned intake: start (details only) -> verify the e-mailed code. Returns the
+        client (now holding a verified session for the draft) and the draft."""
+        position = position or self.level1_position
+        client = Client()
+        mail.outbox.clear()
+        response = self.post_portal_intake(
+            client,
+            position,
+            {
+                "first_name": "Pat",
+                "last_name": "Applicant",
+                "email": email,
+                "phone": "09171234567",
+                "privacy_consent": "on",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        application = RecruitmentApplication.objects.get(position=position, applicant_email=email)
+        client.post(
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            {"action": "verify", "otp": self.extract_otp_from_last_email()},
+        )
+        return client, application
+
     def submit_portal_application(self, email):
         client = Client()
         mail.outbox.clear()
@@ -3840,7 +3867,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         response = self.client.get(reverse("applicant-help"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "The verification code is valid for 12 minutes.")
+        self.assertContains(response, "Each code works for 12 minutes.")
 
     def test_applicant_home_shows_trust_notes_at_bottom_only(self):
         response = self.client.get(reverse("applicant-portal"))
@@ -3868,17 +3895,14 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
 
     @override_settings(MAX_EVIDENCE_UPLOAD_BYTES=10 * 1024 * 1024)
     def test_intake_document_controls_use_effective_server_upload_limit(self):
-        response = self.client.get(
-            reverse("applicant-intake", kwargs={"pk": self.level1_position.pk})
-        )
+        client, application = self.open_verified_application("limits@example.com")
+        response = client.get(reverse("applicant-application", kwargs={"token": application.public_token}))
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["max_upload_bytes"], 5 * 1024 * 1024)
         self.assertEqual(response.context["max_upload_mb"], 5)
         self.assertContains(response, 'data-max-upload-bytes="5242880"')
-        self.assertContains(response, "data-file-selection")
-        self.assertContains(response, "data-file-clear")
-        self.assertContains(response, "Remove selected file")
+        self.assertContains(response, "data-part-input")
         self.assertContains(response, 'name="submission_confirmation"')
         self.assertNotContains(response, 'name="checklist_privacy_consent"')
         self.assertNotContains(response, 'name="checklist_documents_complete"')
@@ -4022,9 +4046,8 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertEqual(response.status_code, 200)
         application.refresh_from_db()
         self.assertIsNotNone(application.otp_verified_at)
-        self.assertContains(response, f"?token={application.public_token}")
-        self.assertContains(response, 'id="rg-otp-submit-confirm"')
-        self.assertContains(response, 'form="rg-otp-submit-form"')
+        # Redesigned intake: verifying opens the application page with its single Submit.
+        self.assertContains(response, "data-submit-application")
 
         response = client.post(
             reverse("applicant-otp", kwargs={"token": application.public_token}),
@@ -4105,10 +4128,15 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
             {"action": "verify", "otp": self.extract_otp_from_last_email()},
             follow=True,
         )
-        response = client.get(reverse("applicant-otp", kwargs={"token": application.public_token}))
-
-        self.assertContains(response, "8 files uploaded")
-        self.assertNotContains(response, "10 files uploaded")
+        response = client.get(
+            reverse("applicant-application", kwargs={"token": application.public_token})
+        )
+        self.assertEqual(response.status_code, 200)
+        ready_slots = [slot for slot in response.context["slots"] if slot["is_ready"]]
+        # 8 current documents: the replaced cover letter counts once, the archived
+        # performance rating not at all.
+        self.assertEqual(len(ready_slots), 8)
+        self.assertNotIn("performance_rating", {slot["code"] for slot in ready_slots})
 
         receipt_response = client.post(
             reverse("applicant-otp", kwargs={"token": application.public_token}),
@@ -4167,16 +4195,44 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
             applicant_email="rehydrate.draft@example.com",
         )
 
-        response = client.get(
+        # A bare draft link no longer opens the draft: it goes to e-mail verification first.
+        fresh_client = Client()
+        response = fresh_client.get(
             reverse("applicant-intake", kwargs={"pk": self.level1_position.pk}),
             {"token": application.public_token},
         )
+        self.assertRedirects(
+            response,
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            fetch_redirect_response=False,
+        )
+        response = fresh_client.get(
+            reverse("applicant-application", kwargs={"token": application.public_token})
+        )
+        self.assertEqual(response.status_code, 302)
 
+        # Once verified, the application page comes back prefilled with the saved draft.
+        RecruitmentApplication.objects.filter(pk=application.pk).update(
+            otp_requested_at=timezone.now()
+            - timedelta(seconds=settings.APPLICATION_OTP_RESEND_COOLDOWN_SECONDS + 1)
+        )
+        mail.outbox.clear()
+        with self.captureOnCommitCallbacks(execute=True):
+            fresh_client.post(
+                reverse("applicant-otp", kwargs={"token": application.public_token}),
+                {"action": "resend"},
+            )
+        fresh_client.post(
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            {"action": "verify", "otp": self.extract_otp_from_last_email()},
+        )
+        response = fresh_client.get(
+            reverse("applicant-application", kwargs={"token": application.public_token})
+        )
         self.assertEqual(response.status_code, 200)
         form = response.context["form"]
         self.assertEqual(form["first_name"].value(), "Maria")
         self.assertEqual(form["last_name"].value(), "Santos")
-        self.assertEqual(form["email"].value(), "rehydrate.draft@example.com")
         self.assertEqual(form["phone"].value(), "+639991234567")
         self.assertEqual(form["qualification_summary"].value(), "Saved qualification summary.")
         self.assertEqual(form["cover_letter"].value(), "Saved cover letter note.")
@@ -4184,9 +4240,8 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
             form["performance_rating_applicability"].value(),
             RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE,
         )
-        self.assertTrue(form["checklist_privacy_consent"].value())
-        self.assertTrue(form.saved_draft_notice)
-        self.assertIn("signed_cover_letter", form.existing_documents_by_code)
+        slots = {slot["code"]: slot for slot in response.context["slots"]}
+        self.assertTrue(slots["signed_cover_letter"]["is_ready"])
 
     def test_intake_reuses_identity_draft_when_application_email_drifted(self):
         client = Client()
@@ -4371,7 +4426,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertEqual(response.status_code, 200)
         form = response.context["form"]
         self.assertIsNone(form["first_name"].value())
-        self.assertFalse(form.saved_draft_notice)
+        self.assertNotIn("qualification_summary", form.fields)
 
     def test_cos_public_submission_completes_and_status_lookup_works(self):
         client = Client()
@@ -4711,7 +4766,8 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
             {"action": "verify", "otp": self.extract_otp_from_last_email()},
             follow=True,
         )
-        self.assertContains(response, "Email verified")
+        # Verified: the applicant is taken to the application page.
+        self.assertContains(response, "data-submit-application")
 
     def test_applicant_otp_resend_respects_server_cooldown(self):
         client = Client()
@@ -4990,9 +5046,10 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         intake_response = self.client.get(
             reverse("applicant-intake", kwargs={"pk": self.level1_position.pk})
         )
+        # The start page lists the same catalog applicants will upload against.
         slot_labels = {
-            slot["requirement"].code: slot["label_tag"]
-            for slot in intake_response.context["form"].document_slots
+            requirement.code: requirement.applicant_label
+            for requirement in intake_response.context["document_requirements"]
         }
         self.assertEqual(slot_labels["performance_rating"], "If applicable")
         self.assertEqual(slot_labels["personal_data_sheet"], "Required")
@@ -5022,9 +5079,10 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
             reverse("applicant-intake", kwargs={"pk": self.cos_position.pk})
         )
         self.assertEqual(intake_response.status_code, 200)
+        # The start page lists the same catalog applicants will upload against.
         slot_labels = {
-            slot["requirement"].code: slot["label_tag"]
-            for slot in intake_response.context["form"].document_slots
+            requirement.code: requirement.applicant_label
+            for requirement in intake_response.context["document_requirements"]
         }
         self.assertNotIn("performance_rating", slot_labels)
         self.assertEqual(slot_labels["training_certificates"], "If applicable")
@@ -5051,8 +5109,8 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
             for requirement in vacancy_response.context["document_requirements"]
         }
         intake_requirements = {
-            (slot["requirement"].code, slot["label_tag"])
-            for slot in intake_response.context["form"].document_slots
+            (requirement.code, requirement.applicant_label)
+            for requirement in intake_response.context["document_requirements"]
         }
         self.assertEqual(detail_requirements, intake_requirements)
         self.assertEqual(
@@ -5286,7 +5344,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Please fix the highlighted fields below.")
-        self.assertContains(response, "This field is required.")
+        self.assertContains(response, "Enter your first name.")
         self.assertFalse(
             RecruitmentApplication.objects.filter(position=self.level1_position).exists()
         )
@@ -13041,6 +13099,139 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         # No OTP verified -> refused.
         with self.assertRaises(ValueError):
             submit_document_resubmission(application, self.applicant, uploaded_files)
+
+    def _real_pdf_upload(self, name, label):
+        from reportlab.pdfgen import canvas as rl_canvas
+
+        buffer = io.BytesIO()
+        pdf = rl_canvas.Canvas(buffer)
+        pdf.drawString(72, 720, label)
+        pdf.showPage()
+        pdf.save()
+        return SimpleUploadedFile(name, buffer.getvalue(), content_type="application/pdf")
+
+    def _verified_status_client(self, application):
+        from recruitment.portal_views import STATUS_OTP_VERIFIED_SESSION_KEY
+
+        client = Client()
+        session = client.session
+        session[STATUS_OTP_VERIFIED_SESSION_KEY] = {str(application.pk): timezone.now().isoformat()}
+        session.save()
+        return client
+
+    def test_resubmission_page_combines_several_files_into_one_pdf(self):
+        from pypdf import PdfReader
+
+        application = self.make_submitted_application()
+        first_requirement = get_applicant_document_requirements(application.branch)[0]
+        self._finalize_screening_with_flagged_document(application, first_requirement)
+        with self.captureOnCommitCallbacks(execute=True):
+            process_workflow_action(
+                application, self.secretariat, "return_to_applicant", "Please resubmit."
+            )
+        application.refresh_from_db()
+        otp_code = issue_application_otp(application, actor=application.applicant)
+        verify_application_otp(application, otp_code, actor=application.applicant)
+
+        url = reverse("applicant-resubmit", kwargs={"token": application.public_token})
+        page = Client().get(url)
+        self.assertContains(page, "multiple")
+        response = Client().post(
+            url,
+            {
+                "action": "resubmit",
+                first_requirement.file_field_name: [
+                    self._real_pdf_upload("page1.pdf", "Page one"),
+                    self._real_pdf_upload("page2.pdf", "Page two"),
+                ],
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        application.case.refresh_from_db()
+        self.assertEqual(application.case.case_status, RecruitmentCase.CaseStatus.ACTIVE)
+        current = EvidenceVaultItem.objects.get(
+            application=application,
+            document_key=first_requirement.code,
+            stage=EvidenceVaultItem.Stage.APPLICANT_INTAKE,
+            is_current_version=True,
+        )
+        self.assertEqual(current.content_type, "application/pdf")
+        from recruitment.services import _decrypt_evidence_bytes
+
+        combined = PdfReader(io.BytesIO(_decrypt_evidence_bytes(current)))
+        self.assertEqual(len(combined.pages), 2)
+
+    def test_resubmission_rejects_the_same_file_twice_for_one_document(self):
+        application = self.make_submitted_application()
+        first_requirement = get_applicant_document_requirements(application.branch)[0]
+        self._finalize_screening_with_flagged_document(application, first_requirement)
+        with self.captureOnCommitCallbacks(execute=True):
+            process_workflow_action(
+                application, self.secretariat, "return_to_applicant", "Please resubmit."
+            )
+        application.refresh_from_db()
+        otp_code = issue_application_otp(application, actor=application.applicant)
+        verify_application_otp(application, otp_code, actor=application.applicant)
+        application.refresh_from_db()
+        upload = self._real_pdf_upload("same.pdf", "Same")
+        upload_again = SimpleUploadedFile("same-copy.pdf", upload.read(), content_type="application/pdf")
+        upload.seek(0)
+        with self.assertRaisesMessage(ValueError, "You already added this file"):
+            submit_document_resubmission(
+                application, self.applicant, {first_requirement.code: [upload, upload_again]}
+            )
+
+    def test_status_page_shows_a_step_by_step_timeline(self):
+        application = self.make_submitted_application()
+        response = self._verified_status_client(application).get(
+            reverse("applicant-status-link", kwargs={"token": application.public_token})
+        )
+        self.assertContains(response, "data-status-timeline")
+        self.assertContains(response, "Application submitted")
+        self.assertContains(response, "Document check")
+        self.assertContains(response, "Final decision")
+        steps = response.context["timeline"]
+        self.assertEqual([step["state"] for step in steps], ["done", "current", "upcoming"])
+
+    def test_status_timeline_marks_an_ended_application(self):
+        application = self.make_submitted_application()
+        application.status = RecruitmentApplication.Status.REJECTED
+        application.save(update_fields=["status", "updated_at"])
+        response = self._verified_status_client(application).get(
+            reverse("applicant-status-link", kwargs={"token": application.public_token})
+        )
+        last = response.context["timeline"][-1]
+        self.assertEqual(last["state"], "ended")
+        self.assertEqual(last["label"], "Result: Not Selected")
+
+    def test_status_page_shows_completion_checklist_only_after_it_was_emailed(self):
+        application = self.make_approved_cos_application()
+        deadline = timezone.localdate() + timedelta(days=10)
+        self._record_completion_tracking(
+            application,
+            self.secretariat,
+            deadline=deadline,
+            items=[
+                ("Signed contract", CompletionRequirement.RequirementStatus.PENDING),
+                ("Medical certificate", CompletionRequirement.RequirementStatus.COMPLETED),
+                ("Waived item", CompletionRequirement.RequirementStatus.NOT_APPLICABLE),
+            ],
+        )
+        status_url = reverse("applicant-status-link", kwargs={"token": application.public_token})
+        before = self._verified_status_client(application).get(status_url)
+        self.assertNotContains(before, "data-completion-checklist")
+
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        with self.captureOnCommitCallbacks(execute=True):
+            client.post(reverse("notification-checklist", kwargs={"pk": application.pk}), {})
+        after = self._verified_status_client(application).get(status_url)
+        self.assertContains(after, "data-completion-checklist")
+        self.assertContains(after, "Signed contract")
+        self.assertContains(after, "Medical certificate")
+        self.assertContains(after, "Received")
+        self.assertNotContains(after, "Waived item")
+        self.assertContains(after, date_format(deadline, "F d, Y"))
 
     def test_return_to_applicant_falls_back_to_text_when_resubmission_template_fails(self):
         application = self.make_submitted_application()
@@ -20949,8 +21140,8 @@ class ApplicantPortalTurnoverTests(BaseRecruitmentTestCase):
         response = self.client.get(reverse("applicant-intake", kwargs={"pk": self.cos_position.pk}))
         self.assertContains(response, 'data-branch-explainer="note"')
         self.assertContains(response, "You are applying for a <strong>Contract of Service</strong>")
-        self.assertContains(response, "data-intake-preview")
-        self.assertContains(response, "data-preview-slot=")
+        # The file preview now lives on the application page (after e-mail verification).
+        self.assertContains(response, "data-start-form")
 
     def test_help_faq_uses_the_shared_explainer(self):
         response = self.client.get(reverse("applicant-help"))
@@ -21335,3 +21526,458 @@ class ApplicantFormTemplatesTests(BaseRecruitmentTestCase):
         )
         form = DocumentResubmissionForm(requirements=[pds], remarks_by_code={})
         self.assertEqual(form.fields[pds.file_field_name].requirement_downloads, pds.downloads)
+
+
+class InterviewFinalizeButtonScriptTests(SimpleTestCase):
+    """Walkthrough regression: the Finalize session handler read `maxRequiredOutputs` without
+    declaring it, so every click threw a ReferenceError and the interview could not be finalized
+    from the UI. Every variable the handler reads must be declared in the template script."""
+
+    def test_finalize_handler_variables_are_declared(self):
+        from django.template.loader import get_template
+
+        source = get_template("internal_includes/interview_session_manager.html").template.source
+        for name in ("minRequiredOutputs", "maxRequiredOutputs", "totalRatings", "fallbackCount"):
+            self.assertIn(f"var {name} =", source, name)
+
+
+class StepByStepApplicantIntakeTests(BaseRecruitmentTestCase):
+    """Redesigned applicant intake: details -> verify e-mail -> application page where each
+    file uploads on its own (several per document, combined into one PDF) -> one Submit."""
+
+    def setUp(self):
+        super().setUp()
+        cache.clear()
+
+    # -- helpers --------------------------------------------------------
+    def real_pdf(self, label, pages=1):
+        from reportlab.pdfgen import canvas as rl_canvas
+
+        buffer = io.BytesIO()
+        pdf = rl_canvas.Canvas(buffer)
+        for page in range(pages):
+            pdf.drawString(72, 720, f"{label} page {page + 1}")
+            pdf.showPage()
+        pdf.save()
+        return buffer.getvalue()
+
+    def pdf_upload(self, label, pages=1, filename=None):
+        return SimpleUploadedFile(
+            filename or f"{label}.pdf", self.real_pdf(label, pages), content_type="application/pdf"
+        )
+
+    def photo_upload(self, label, size=(3000, 2000), with_gps=True):
+        from PIL import Image as PILImage
+
+        image = PILImage.new("RGB", size, (200, 220, 240))
+        buffer = io.BytesIO()
+        exif = PILImage.Exif()
+        exif[0x010F] = "PhoneMaker"  # camera make
+        if with_gps:
+            exif[0x8825] = {1: "N", 2: (14.0, 38.0, 0.0)}  # GPS IFD
+        image.save(buffer, format="JPEG", exif=exif)
+        return SimpleUploadedFile(f"{label}.jpg", buffer.getvalue(), content_type="image/jpeg")
+
+    def start(self, client, position, email, first_name="Pat", last_name="Applicant"):
+        mail.outbox.clear()
+        with self.captureOnCommitCallbacks(execute=True):
+            return client.post(
+                reverse("applicant-intake", kwargs={"pk": position.pk}),
+                {
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "email": email,
+                    "phone": "09171234567",
+                    "privacy_consent": "on",
+                },
+            )
+
+    def verified_client(self, email, position=None):
+        position = position or self.cos_position
+        client = Client()
+        self.start(client, position, email)
+        application = RecruitmentApplication.objects.get(position=position, applicant_email=email)
+        client.post(
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            {"action": "verify", "otp": self.extract_otp_from_last_email()},
+        )
+        return client, application
+
+    def upload(self, client, application, code, uploaded_file):
+        return client.post(
+            reverse(
+                "applicant-document-part-upload",
+                kwargs={"token": application.public_token, "code": code},
+            ),
+            {"file": uploaded_file},
+        )
+
+    def current_document(self, application, code):
+        from recruitment.services import get_current_applicant_document_map
+
+        return get_current_applicant_document_map(application).get(code)
+
+    def answers(self, **overrides):
+        data = {
+            "first_name": "Pat",
+            "last_name": "Applicant",
+            "phone": "09171234567",
+            "qualification_summary": "Two years of records work.",
+            "cover_letter": "",
+            "performance_rating_applicability": "not_applicable",
+        }
+        data.update(overrides)
+        return data
+
+    # -- start + verify ---------------------------------------------------
+    def test_start_creates_a_details_only_draft_and_sends_a_code(self):
+        response = self.start(Client(), self.cos_position, "new.start@example.com")
+        application = RecruitmentApplication.objects.get(applicant_email="new.start@example.com")
+        self.assertRedirects(
+            response,
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            fetch_redirect_response=False,
+        )
+        self.assertEqual(application.status, RecruitmentApplication.Status.DRAFT)
+        self.assertTrue(application.checklist_privacy_consent)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("Keep this email", mail.outbox[0].body)
+
+    def test_start_requires_consent(self):
+        response = Client().post(
+            reverse("applicant-intake", kwargs={"pk": self.cos_position.pk}),
+            {"first_name": "Pat", "last_name": "A", "email": "c@example.com", "phone": "09171234567"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Give your consent to continue.")
+        self.assertFalse(RecruitmentApplication.objects.filter(applicant_email="c@example.com").exists())
+
+    def test_starting_again_with_someone_elses_email_does_not_change_their_draft(self):
+        self.start(Client(), self.cos_position, "owner@example.com", first_name="Maria")
+        self.start(Client(), self.cos_position, "owner@example.com", first_name="Intruder")
+        drafts = RecruitmentApplication.objects.filter(applicant_email="owner@example.com")
+        self.assertEqual(drafts.count(), 1)
+        self.assertEqual(drafts.get().applicant_first_name, "Maria")
+
+    def test_verifying_opens_the_application_page_for_this_browser_only(self):
+        client, application = self.verified_client("verify.me@example.com")
+        page = reverse("applicant-application", kwargs={"token": application.public_token})
+        self.assertEqual(client.get(page).status_code, 200)
+        # The draft link on its own (another browser) is sent back to verification.
+        other = Client().get(page)
+        self.assertRedirects(
+            other,
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            fetch_redirect_response=False,
+        )
+        denied = self.upload(Client(), application, "personal_data_sheet", self.pdf_upload("pds"))
+        self.assertEqual(denied.status_code, 403)
+
+    # -- documents --------------------------------------------------------
+    def test_a_single_pdf_is_kept_byte_for_byte(self):
+        client, application = self.verified_client("single@example.com")
+        upload = self.pdf_upload("signed-pds", pages=4)
+        original = upload.read()
+        upload.seek(0)
+        response = self.upload(client, application, "personal_data_sheet", upload)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["is_ready"])
+        evidence = self.current_document(application, "personal_data_sheet")
+        self.assertEqual(evidence.sha256_digest, hashlib.sha256(original).hexdigest())
+
+    def test_several_files_are_combined_into_one_pdf_in_order(self):
+        from pypdf import PdfReader
+        from recruitment.services import _decrypt_evidence_bytes
+
+        client, application = self.verified_client("multi@example.com")
+        self.upload(client, application, "training_certificates", self.pdf_upload("cert-a", pages=2))
+        self.upload(client, application, "training_certificates", self.photo_upload("cert-b"))
+        response = self.upload(client, application, "training_certificates", self.pdf_upload("cert-c"))
+        self.assertEqual(len(response.json()["parts"]), 3)
+        evidence = self.current_document(application, "training_certificates")
+        combined = PdfReader(io.BytesIO(_decrypt_evidence_bytes(evidence)))
+        self.assertEqual(len(combined.pages), 4)
+        self.assertIn("cert-a page 1", combined.pages[0].extract_text())
+        self.assertIn("cert-c page 1", combined.pages[3].extract_text())
+
+    def test_photos_are_shrunk_and_stripped_of_location_data(self):
+        from PIL import Image as PILImage
+        from recruitment.applicant_documents import get_document_parts, read_applicant_document_part
+
+        client, application = self.verified_client("photo@example.com")
+        self.upload(client, application, "diploma", self.photo_upload("diploma", size=(4000, 3000)))
+        part = get_document_parts(application, "diploma").get()
+        with PILImage.open(io.BytesIO(read_applicant_document_part(part))) as stored:
+            self.assertLessEqual(max(stored.size), 2400)
+            self.assertNotIn(0x8825, stored.getexif())
+            self.assertNotIn(0x010F, stored.getexif())
+
+    def test_the_same_file_is_refused_twice_and_across_documents(self):
+        client, application = self.verified_client("dupes@example.com")
+        data = self.real_pdf("same")
+        first = self.upload(client, application, "diploma", SimpleUploadedFile("a.pdf", data, "application/pdf"))
+        self.assertEqual(first.status_code, 200)
+        again = self.upload(client, application, "diploma", SimpleUploadedFile("b.pdf", data, "application/pdf"))
+        self.assertEqual(again.status_code, 400)
+        self.assertIn("already added", again.json()["error"])
+        elsewhere = self.upload(
+            client, application, "transcript_of_records", SimpleUploadedFile("c.pdf", data, "application/pdf")
+        )
+        self.assertEqual(elsewhere.status_code, 400)
+        self.assertIn("another document", elsewhere.json()["error"])
+
+    def test_bad_files_get_plain_errors(self):
+        client, application = self.verified_client("bad@example.com")
+        wrong_type = self.upload(
+            client, application, "diploma", SimpleUploadedFile("notes.txt", b"hello", "text/plain")
+        )
+        self.assertEqual(wrong_type.status_code, 400)
+        self.assertIn("PDF, JPG, or PNG", wrong_type.json()["error"])
+        broken = self.upload(
+            client, application, "diploma", SimpleUploadedFile("x.pdf", b"%PDF-1.4 broken", "application/pdf")
+        )
+        self.assertEqual(broken.status_code, 400)
+        self.assertIn("open this PDF", broken.json()["error"])
+        unknown = self.upload(client, application, "not_a_requirement", self.pdf_upload("x"))
+        self.assertEqual(unknown.status_code, 400)
+
+    def test_removing_the_last_file_clears_the_document(self):
+        client, application = self.verified_client("remove@example.com")
+        part_id = self.upload(client, application, "diploma", self.pdf_upload("dip")).json()["parts"][0]["id"]
+        response = client.post(
+            reverse(
+                "applicant-document-part-delete",
+                kwargs={"token": application.public_token, "part_id": part_id},
+            )
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["is_ready"])
+        self.assertIsNone(self.current_document(application, "diploma"))
+
+    def test_preview_returns_only_the_applicants_own_file(self):
+        client, application = self.verified_client("preview@example.com")
+        part_id = self.upload(client, application, "diploma", self.pdf_upload("mine")).json()["parts"][0]["id"]
+        url = reverse(
+            "applicant-document-part-preview",
+            kwargs={"token": application.public_token, "part_id": part_id},
+        )
+        response = client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        other_client, other_application = self.verified_client("other.preview@example.com")
+        stolen = other_client.get(
+            reverse(
+                "applicant-document-part-preview",
+                kwargs={"token": other_application.public_token, "part_id": part_id},
+            )
+        )
+        self.assertEqual(stolen.status_code, 404)
+
+    # -- answers + submit -------------------------------------------------
+    def test_answers_autosave(self):
+        client, application = self.verified_client("autosave@example.com")
+        response = client.post(
+            reverse("applicant-application", kwargs={"token": application.public_token}),
+            {**self.answers(qualification_summary="Saved while typing."), "action": "autosave"},
+        )
+        self.assertEqual(response.json(), {"ok": True})
+        application.refresh_from_db()
+        self.assertEqual(application.qualification_summary, "Saved while typing.")
+
+    def test_submit_is_blocked_until_required_documents_are_in(self):
+        client, application = self.verified_client("missing@example.com")
+        response = client.post(
+            reverse("applicant-application", kwargs={"token": application.public_token}),
+            {**self.answers(), "submission_confirmation": "on", "action": "submit"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "required documents")
+        application.refresh_from_db()
+        self.assertIsNone(application.submitted_at)
+
+    def test_full_submission_in_one_click_after_documents(self):
+        from recruitment.applicant_documents import get_document_parts
+
+        client, application = self.verified_client("complete@example.com")
+        for requirement in get_required_applicant_document_requirements(application):
+            self.assertEqual(
+                self.upload(client, application, requirement.code, self.pdf_upload(requirement.code)).status_code,
+                200,
+            )
+        response = client.post(
+            reverse("applicant-application", kwargs={"token": application.public_token}),
+            {**self.answers(), "submission_confirmation": "on", "action": "submit"},
+        )
+        self.assertRedirects(
+            response,
+            reverse("applicant-receipt", kwargs={"token": application.public_token}),
+            fetch_redirect_response=False,
+        )
+        application.refresh_from_db()
+        self.assertIsNotNone(application.submitted_at)
+        self.assertEqual(application.status, RecruitmentApplication.Status.SECRETARIAT_REVIEW)
+        # Staging copies are gone; the Evidence Vault holds the record.
+        self.assertFalse(get_document_parts(application).exists())
+        # The draft page is closed for good.
+        self.assertEqual(
+            client.get(reverse("applicant-application", kwargs={"token": application.public_token})).status_code,
+            302,
+        )
+
+    def test_submit_needs_the_certification_box(self):
+        client, application = self.verified_client("cert@example.com")
+        response = client.post(
+            reverse("applicant-application", kwargs={"token": application.public_token}),
+            {**self.answers(), "action": "submit"},
+        )
+        self.assertContains(response, "Tick this box to submit your application.")
+
+    def test_plantilla_no_rating_answer_drops_rating_files(self):
+        client, application = self.verified_client("rating@example.com", position=self.level1_position)
+        self.upload(client, application, "performance_rating", self.pdf_upload("ipcr"))
+        self.assertIsNotNone(self.current_document(application, "performance_rating"))
+        client.post(
+            reverse("applicant-application", kwargs={"token": application.public_token}),
+            {**self.answers(performance_rating_applicability="not_applicable"), "action": "autosave"},
+        )
+        self.assertIsNone(self.current_document(application, "performance_rating"))
+
+
+    # -- walkthrough improvements (Nov 2026) ------------------------------
+    def test_plantilla_rating_question_starts_unanswered_and_is_asked_at_submit(self):
+        client, application = self.verified_client("pr.blank@example.com", position=self.level1_position)
+        self.assertEqual(application.performance_rating_applicability, "")
+        page = client.get(reverse("applicant-application", kwargs={"token": application.public_token}))
+        self.assertNotContains(page, 'value="applicable" checked')
+        self.assertNotContains(page, 'value="not_applicable" checked')
+        url = reverse("applicant-application", kwargs={"token": application.public_token})
+        autosave = client.post(
+            url, {**self.answers(performance_rating_applicability=""), "action": "autosave"}
+        )
+        self.assertEqual(autosave.json(), {"ok": True})
+        submit = client.post(
+            url,
+            {
+                **self.answers(performance_rating_applicability=""),
+                "submission_confirmation": "on",
+                "action": "submit",
+            },
+        )
+        self.assertContains(submit, "Choose whether you have a performance rating.")
+        application.refresh_from_db()
+        self.assertIsNone(application.submitted_at)
+
+    def test_rating_answer_is_kept_when_another_field_has_an_error(self):
+        client, application = self.verified_client("pr.keep@example.com", position=self.level1_position)
+        response = client.post(
+            reverse("applicant-application", kwargs={"token": application.public_token}),
+            {**self.answers(first_name="", performance_rating_applicability="applicable"), "action": "submit"},
+        )
+        self.assertContains(response, "Enter your first name.")
+        application.refresh_from_db()
+        self.assertEqual(application.performance_rating_applicability, "applicable")
+        rating_slot = next(s for s in response.context["slots"] if s["code"] == "performance_rating")
+        self.assertTrue(rating_slot["applies"])
+
+    def test_saved_message_is_shown_once(self):
+        client, application = self.verified_client("once@example.com")
+        response = client.post(
+            reverse("applicant-application", kwargs={"token": application.public_token}),
+            {**self.answers(), "action": "save"},
+            follow=True,
+        )
+        self.assertEqual(response.content.decode().count("Your answers were saved."), 1)
+
+    def test_application_page_has_counters_jump_link_and_phone_progress_bar(self):
+        client, application = self.verified_client("counter@example.com")
+        page = client.get(reverse("applicant-application", kwargs={"token": application.public_token}))
+        self.assertContains(page, 'data-char-limit="1000"')
+        self.assertContains(page, "data-char-count-for")
+        self.assertContains(page, 'href="#sec-docs"')
+        self.assertContains(page, "data-doc-sticky")
+
+    def test_error_summary_links_to_the_field(self):
+        client, application = self.verified_client("links@example.com")
+        response = client.post(
+            reverse("applicant-application", kwargs={"token": application.public_token}),
+            {**self.answers(first_name=""), "action": "save"},
+        )
+        self.assertContains(response, 'href="#id_first_name"')
+
+    def test_wrong_code_says_how_many_tries_are_left(self):
+        client = Client()
+        self.start(client, self.cos_position, "tries@example.com")
+        application = RecruitmentApplication.objects.get(applicant_email="tries@example.com")
+        code = self.extract_otp_from_last_email()
+        wrong = "000000" if code != "000000" else "111111"
+        response = client.post(
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            {"action": "verify", "otp": wrong},
+        )
+        self.assertContains(response, "The verification code is invalid. You have")
+        self.assertContains(response, "left.")
+        self.assertNotContains(response, "before final submission")
+
+    def test_closed_vacancy_page_says_it_is_closed(self):
+        self.level1_position.closing_date = timezone.localdate() - timedelta(days=1)
+        self.level1_position.save(update_fields=["closing_date", "updated_at"])
+        response = Client().get(reverse("applicant-vacancy-detail", kwargs={"pk": self.level1_position.pk}))
+        self.assertContains(response, "Applications for this position are closed.")
+        self.assertNotContains(response, "Click <strong>&ldquo;Apply for This Position&rdquo;</strong>")
+
+    def test_job_cards_show_the_vacancy_code(self):
+        response = Client().get(reverse("applicant-portal"))
+        self.assertContains(response, self.cos_position.job_code)
+        self.assertContains(response, "Posted ")
+
+    def test_help_page_explains_saving_and_finishing_later(self):
+        response = Client().get(reverse("applicant-help"))
+        self.assertContains(response, "Can I save my application and finish later?")
+        self.assertNotContains(response, "Go back to edit your information")
+        self.assertNotContains(response, "TinyPNG")
+
+    def test_receipt_shows_the_finished_journey(self):
+        from recruitment.applicant_documents import build_document_slot_states
+
+        client, application = self.verified_client("receipt.journey@example.com")
+        for slot in build_document_slot_states(application, performance_rating_applicable=False):
+            if slot["required_now"]:
+                self.upload(client, application, slot["code"], self.pdf_upload(slot["code"]))
+        with self.captureOnCommitCallbacks(execute=True):
+            client.post(
+                reverse("applicant-application", kwargs={"token": application.public_token}),
+                {**self.answers(), "submission_confirmation": "on", "action": "submit"},
+            )
+        receipt = client.get(reverse("applicant-receipt", kwargs={"token": application.public_token}))
+        self.assertContains(receipt, "rg-journey")
+        self.assertContains(receipt, 'aria-current="step"')
+
+    def test_draft_reminders_go_once_to_verified_drafts_closing_soon(self):
+        from django.core.management import call_command
+
+        self.level1_position.closing_date = timezone.localdate() + timedelta(days=2)
+        self.level1_position.save(update_fields=["closing_date", "updated_at"])
+        _client, verified = self.verified_client("remind.me@example.com", position=self.level1_position)
+        self.start(Client(), self.level1_position, "never.verified@example.com")
+        mail.outbox.clear()
+
+        call_command("send_draft_reminders", stdout=io.StringIO())
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["remind.me@example.com"])
+        self.assertIn("not submitted yet", mail.outbox[0].subject)
+        self.assertIn(
+            reverse("applicant-otp", kwargs={"token": verified.public_token}), mail.outbox[0].body
+        )
+        verified.refresh_from_db()
+        self.assertIsNotNone(verified.draft_reminder_sent_at)
+
+        call_command("send_draft_reminders", stdout=io.StringIO())
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_draft_reminders_skip_vacancies_closing_later(self):
+        from recruitment.services import find_drafts_due_for_reminder
+
+        self.level1_position.closing_date = timezone.localdate() + timedelta(days=20)
+        self.level1_position.save(update_fields=["closing_date", "updated_at"])
+        self.verified_client("later@example.com", position=self.level1_position)
+        self.assertEqual(find_drafts_due_for_reminder(), [])
