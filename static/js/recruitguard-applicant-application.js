@@ -24,6 +24,9 @@
     var MAX_EDGE = 2400;
     var ALLOWED = { "application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png" };
     var csrf = (form.querySelector("input[name=csrfmiddlewaretoken]") || {}).value || "";
+    // Parts of a page that only work with this script (the resubmit page keeps plain file
+    // fields in <noscript> for browsers without it).
+    root.querySelectorAll("[data-js-only]").forEach(function (el) { el.hidden = false; });
 
     /* Messages in the page's language (English / Filipino), from the server as JSON.
        t(key, fallback, {name: value}) fills {name} placeholders. */
@@ -526,7 +529,8 @@
     var submitBtn = root.querySelector("[data-submit-application]");
     form.addEventListener("submit", function (e) {
         var submitter = e.submitter;
-        if (!submitter || submitter.value !== "submit") return;
+        var action = submitter && submitter.value;
+        if (action !== "submit" && action !== "resubmit") return;
         if (root.querySelector(".rg-doc-part.is-uploading")) {
             e.preventDefault();
             window.alert(t("wait_uploads", "Please wait until your files finish uploading."));
@@ -539,7 +543,7 @@
         var hidden = document.createElement("input");
         hidden.type = "hidden";
         hidden.name = "action";
-        hidden.value = "submit";
+        hidden.value = action;
         form.appendChild(hidden);
     });
 

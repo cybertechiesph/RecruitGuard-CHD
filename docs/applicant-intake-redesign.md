@@ -255,6 +255,22 @@ A second end-to-end walkthrough (English and Filipino, phone size) found these, 
 - Code emails for submitted applications no longer say "continue your application".
 - The withdrawal tick box shows the portal's own (translated) message, not the browser's.
 
+## Upload cards on the resubmit page (November 2026)
+- **Same cards as the application page.** Returned documents use the same upload cards:
+  - Each file is checked and saved as it is picked, with a camera button and preview.
+  - Photo warnings and the old-PDS warning appear the same way.
+  - Each card shows why the document was returned.
+- **Nothing reaches the office until the applicant presses "Resubmit documents".** Files are
+  staged as `ApplicantDocumentPart` rows without rebuilding the application's documents. They
+  are then sent together to `submit_document_resubmission`, and the staging is cleared. Staged
+  files for a resubmission that is no longer open are also cleared.
+- **Endpoints:** `applicant-resubmit-part-upload`, `applicant-resubmit-part-delete` and
+  `applicant-resubmit-part-preview`. Each needs the case to be awaiting resubmission, the
+  document to be one that was returned, and this browser to be verified.
+- **Shared markup:** the card and the preview pop-up are shared templates
+  (`includes/applicant_document_card.html`, `includes/applicant_upload_shared.html`).
+- **No JavaScript:** browsers without JavaScript still get plain file fields.
+
 ## Still needs people (not code)
 - Test on real phones (a cheap Android on mobile data, an iPhone), including inside Facebook.
 - A 5-person usability test with people who have never seen the portal.

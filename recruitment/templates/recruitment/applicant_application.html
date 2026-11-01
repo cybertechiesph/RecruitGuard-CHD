@@ -145,69 +145,7 @@
                 {% endblocktranslate %}
             </p>
 
-            {% for slot in slots %}
-            <div class="rg-doc-card{% if slot.is_ready %} is-ready{% endif %}"
-                 id="doc-{{ slot.code }}"
-                 data-doc-card
-                 data-code="{{ slot.code }}"
-                 data-title="{{ slot.requirement.title }}"
-                 data-required="{% if slot.required_now %}true{% else %}false{% endif %}"
-                 data-upload-url="{% url 'applicant-document-part-upload' application.public_token slot.code %}"
-                 {% if slot.requirement.conditional_on_performance_rating %}data-conditional-performance-rating{% endif %}
-                 {% if not slot.applies %}hidden{% endif %}>
-                <div class="rg-doc-card__head">
-                    <h3 class="rg-doc-card__title">{{ slot.requirement.title }}</h3>
-                    <span class="rg-doc-card__status" data-doc-status>
-                        {% if slot.is_ready %}&#10003; {% translate "Ready" %}{% elif slot.required_now %}{% translate "Required" %}{% else %}{% translate "If applicable" %}{% endif %}
-                    </span>
-                </div>
-                <p class="rg-doc-card__hint">{{ slot.requirement.help_text }}</p>
-                {% if slot.code == "personal_data_sheet" %}
-                <p class="rg-doc-card__note" data-pds-version-note>{% translate "Use the <strong>Revised 2026</strong> PDS. The old 2017 form may be returned to you." %}</p>
-                {% endif %}
-                {% include "recruitment/includes/requirement_downloads.html" with downloads=slot.requirement.downloads compact=True %}
-
-                {% if slot.legacy_document %}
-                <p class="rg-doc-card__legacy" data-legacy-document>
-                    {% blocktranslate trimmed with name=slot.legacy_document.original_filename %}
-                    Saved earlier: <strong>{{ name }}</strong>.
-                    Add new files below only if you want to replace it.
-                    {% endblocktranslate %}
-                </p>
-                {% endif %}
-
-                {% if slot.reusable %}
-                <div class="rg-doc-reuse" data-reuse-box>
-                    <p class="mb-1">
-                        {% blocktranslate trimmed with title=slot.reusable.application.position.title date=slot.reusable.created_at|date:"M j, Y" %}
-                        You sent this with your application for <strong>{{ title }}</strong> ({{ date }}):
-                        {% endblocktranslate %}
-                        <span class="rg-doc-reuse__file">{{ slot.reusable.original_filename }}</span></p>
-                    <button type="button" class="btn btn-sm btn-outline-primary"
-                            data-reuse-url="{% url 'applicant-document-reuse' application.public_token slot.code %}"
-                            data-evidence-id="{{ slot.reusable.pk }}">{% translate "Use this file" %}</button>
-                    <span class="rg-doc-reuse__hint">{% translate "Check it&rsquo;s still current (e.g. the PDS form version)." %}</span>
-                </div>
-                {% endif %}
-                <ul class="rg-doc-parts" data-part-list>
-                    {% for part in slot.parts %}{% include "recruitment/includes/applicant_document_part.html" %}{% endfor %}
-                </ul>
-                <div class="rg-doc-card__error" data-doc-error role="alert" hidden></div>
-                <div class="rg-doc-card__warning" data-doc-warning role="status" hidden></div>
-
-                <div class="rg-doc-card__actions">
-                    <label class="btn btn-outline-primary rg-doc-card__add">
-                        <input type="file" class="visually-hidden" data-part-input multiple
-                               accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png">
-                        {% if slot.parts or slot.legacy_document %}{% translate "Add another file" %}{% else %}{% translate "Add files" %}{% endif %}
-                    </label>
-                    <label class="btn btn-outline-primary rg-doc-card__camera">
-                        <input type="file" class="visually-hidden" data-part-input accept="image/*" capture="environment">
-                        {% translate "Take a photo" %}
-                    </label>
-                </div>
-            </div>
-            {% endfor %}
+            {% for slot in slots %}{% include "recruitment/includes/applicant_document_card.html" with upload_url_name="applicant-document-part-upload" %}{% endfor %}
         </section>
 
         {# ── 4. Review and submit ─────────────────────────────────── #}
@@ -244,48 +182,11 @@
     </div>
 </div>
 
-{# File preview (the applicant's own files, shown from a local blob: URL). #}
-<div class="modal fade rg-intake-preview" id="rg-part-preview" tabindex="-1"
-     aria-labelledby="rg-part-preview-title" aria-hidden="true" data-part-preview>
-    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header">
-                <div class="min-w-0">
-                    <h2 class="modal-title h5" id="rg-part-preview-title" data-preview-title>{% translate "Your file" %}</h2>
-                    <p class="rg-intake-preview__meta mb-0" data-preview-meta></p>
-                </div>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{% translate 'Close preview' %}"></button>
-            </div>
-            <div class="modal-body" data-preview-body></div>
-            <div class="modal-footer">
-                <p class="rg-intake-preview__note me-auto mb-0">{% translate "Is this the right document, and is the text easy to read?" %}</p>
-                <button type="button" class="btn btn-rg-primary" data-bs-dismiss="modal">{% translate "Close" %}</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<template id="rg-part-template">
-    <li class="rg-doc-part" data-part-id="">
-        <span class="rg-doc-part__icon" aria-hidden="true"></span>
-        <span class="rg-doc-part__name" data-part-name></span>
-        <span class="rg-doc-part__size" data-part-size></span>
-        <button type="button" class="rg-doc-part__btn" data-part-view>{% translate "View" %}</button>
-        <button type="button" class="rg-doc-part__btn rg-doc-part__btn--remove" data-part-remove>{% translate "Remove" %}</button>
-    </li>
-</template>
-<template id="rg-part-uploading-template">
-    <li class="rg-doc-part is-uploading">
-        <span class="rg-doc-part__icon" aria-hidden="true">&uarr;</span>
-        <span class="rg-doc-part__name" data-part-name></span>
-        <progress class="rg-doc-part__progress" max="100" value="0"></progress>
-    </li>
-</template>
-{{ script_strings|json_script:"rg-apply-i18n" }}
+{% include "recruitment/includes/applicant_upload_shared.html" %}
 
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="{% static 'js/recruitguard-applicant-application.js' %}?v=20261102-walk1"></script>
+<script src="{% static 'js/recruitguard-applicant-application.js' %}?v=20261102-resub1"></script>
 <script src="{% static 'js/recruitguard-deadline.js' %}?v=20261101-dl2"></script>
 {% endblock %}

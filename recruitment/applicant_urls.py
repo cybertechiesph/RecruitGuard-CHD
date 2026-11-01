@@ -13,6 +13,9 @@ from .portal_views import (
     ApplicantReceiptPdfView,
     ApplicantReceiptView,
     ApplicantResubmissionView,
+    ApplicantResubmitPartDeleteView,
+    ApplicantResubmitPartPreviewView,
+    ApplicantResubmitPartUploadView,
     ApplicantWithdrawalRequestView,
     ApplicantMyApplicationsView,
     ApplicantMyApplicationOpenView,
@@ -56,6 +59,21 @@ urlpatterns = [
     path("<uuid:token>/receipt/download/", ApplicantReceiptPdfView.as_view(), name="applicant-receipt-pdf"),
     path("<uuid:token>/status/", ApplicantStatusLinkView.as_view(), name="applicant-status-link"),
     path("<uuid:token>/resubmit/", ApplicantResubmissionView.as_view(), name="applicant-resubmit"),
+    path(
+        "<uuid:token>/resubmit/documents/<slug:code>/",
+        ApplicantResubmitPartUploadView.as_view(),
+        name="applicant-resubmit-part-upload",
+    ),
+    path(
+        "<uuid:token>/resubmit/parts/<int:part_id>/delete/",
+        ApplicantResubmitPartDeleteView.as_view(),
+        name="applicant-resubmit-part-delete",
+    ),
+    path(
+        "<uuid:token>/resubmit/parts/<int:part_id>/",
+        ApplicantResubmitPartPreviewView.as_view(),
+        name="applicant-resubmit-part-preview",
+    ),
     path("my/", ApplicantMyApplicationsView.as_view(), name="applicant-my-applications"),
     path(
         "my/<uuid:token>/open/",

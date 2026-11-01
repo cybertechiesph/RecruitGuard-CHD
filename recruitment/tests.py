@@ -12855,6 +12855,78 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
             application.case.case_status, RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION
         )
 
+    def test_resubmission_cards_stage_files_until_resubmit(self):
+        from recruitment.applicant_documents import get_document_parts
+
+        application = self._awaiting_resubmission_application()
+        code = get_applicant_document_requirements(application.branch)[0].code
+        client = self._verified_status_client(application)
+        page = client.get(reverse("applicant-resubmit", kwargs={"token": application.public_token}))
+        self.assertContains(page, "data-doc-card")
+        self.assertContains(page, "Why it was returned:")
+        before = get_current_applicant_document_map(application)[code].sha256_digest
+
+        upload_url = reverse(
+            "applicant-resubmit-part-upload", kwargs={"token": application.public_token, "code": code}
+        )
+        first = client.post(upload_url, {"file": self._real_pdf_upload("page1.pdf", "Page one")})
+        self.assertEqual(first.status_code, 200, first.content)
+        self.assertTrue(first.json()["is_ready"])
+        second = client.post(upload_url, {"file": self._real_pdf_upload("page2.pdf", "Page two")})
+        part_id = second.json()["parts"][-1]["id"]
+        preview = client.get(
+            reverse(
+                "applicant-resubmit-part-preview",
+                kwargs={"token": application.public_token, "part_id": part_id},
+            )
+        )
+        self.assertEqual(preview["Content-Type"], "application/pdf")
+        # A document that was not returned cannot be staged.
+        other_code = get_applicant_document_requirements(application.branch)[1].code
+        refused = client.post(
+            reverse(
+                "applicant-resubmit-part-upload",
+                kwargs={"token": application.public_token, "code": other_code},
+            ),
+            {"file": self._real_pdf_upload("other.pdf", "Other")},
+        )
+        self.assertEqual(refused.status_code, 400)
+        # Nothing reaches the office until the applicant presses Resubmit.
+        application.refresh_from_db()
+        self.assertEqual(get_current_applicant_document_map(application)[code].sha256_digest, before)
+        self.assertEqual(
+            application.case.case_status, RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION
+        )
+
+        response = client.post(
+            reverse("applicant-resubmit", kwargs={"token": application.public_token}),
+            {"action": "resubmit"},
+        )
+        self.assertEqual(response.status_code, 302)
+        application.refresh_from_db()
+        application.case.refresh_from_db()
+        self.assertEqual(application.case.case_status, RecruitmentCase.CaseStatus.ACTIVE)
+        current = get_current_applicant_document_map(application)[code]
+        self.assertNotEqual(current.sha256_digest, before)
+        from pypdf import PdfReader
+
+        from recruitment.services import _decrypt_evidence_bytes
+
+        self.assertEqual(len(PdfReader(io.BytesIO(_decrypt_evidence_bytes(current))).pages), 2)
+        self.assertFalse(get_document_parts(application).exists())
+
+    def test_resubmission_cards_refuse_an_unverified_browser(self):
+        application = self._awaiting_resubmission_application()
+        code = get_applicant_document_requirements(application.branch)[0].code
+        response = Client().post(
+            reverse(
+                "applicant-resubmit-part-upload",
+                kwargs={"token": application.public_token, "code": code},
+            ),
+            {"file": self._real_pdf_upload("page1.pdf", "Page one")},
+        )
+        self.assertEqual(response.status_code, 403)
+
     def test_submit_document_resubmission_requires_a_valid_otp(self):
         application = self.make_submitted_application()
         first_requirement = get_applicant_document_requirements(application.branch)[0]

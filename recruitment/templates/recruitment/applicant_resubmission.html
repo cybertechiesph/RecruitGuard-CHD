@@ -1,5 +1,5 @@
 {% extends "applicant_base.html" %}
-{% load i18n recruitment_ui %}
+{% load static i18n recruitment_ui %}
 
 {% block title %}{% translate "Resubmit documents" %} | {% translate "Applicant Portal" %}{% endblock %}
 
@@ -74,7 +74,12 @@
         </div>
     {% else %}
         {# Step 2 — re-upload only the flagged documents. #}
-        <div class="card p-4 mb-3">
+        <div class="rg-apply-wrap"
+             data-application
+             data-part-delete-url="{% url 'applicant-resubmit-part-delete' application.public_token 0 %}"
+             data-part-preview-url="{% url 'applicant-resubmit-part-preview' application.public_token 0 %}"
+             data-max-upload-bytes="{{ max_upload_bytes }}"
+             data-max-upload-mb="{{ max_upload_mb }}">
             <h2 class="h6">{% translate "Step 2 — Re-upload the requested documents" %}</h2>
             <p class="rg-note">
                 {% blocktranslate trimmed %}
@@ -82,8 +87,15 @@
                 already-accepted documents do not need to be uploaded again.
                 {% endblocktranslate %}
             </p>
-            <form method="post" enctype="multipart/form-data" novalidate>
+            <form method="post" enctype="multipart/form-data" novalidate id="rg-application-form">
                 {% csrf_token %}
+                {% comment %}With JavaScript: upload cards (each file is checked and saved the
+                  moment it is picked; nothing reaches the office until "Resubmit documents").
+                  Without it: plain file fields sent with the button.{% endcomment %}
+                <div data-js-only hidden>
+                    {% for slot in slots %}{% include "recruitment/includes/applicant_document_card.html" with upload_url_name="applicant-resubmit-part-upload" returned=True %}{% endfor %}
+                </div>
+                <noscript>
                 {% for field in resubmission_form %}
                     <div class="rg-resubmit-item mb-4">
                         <div class="alert alert-warning py-2 px-3 mb-2" style="font-size:0.9rem;">
@@ -91,14 +103,12 @@
                             {% if field.field.resubmission_remarks %}{{ field.field.resubmission_remarks }}{% else %}{% translate "The recruitment team asked for a clearer copy of this document." %}{% endif %}
                         </div>
                         {% include "recruitment/includes/form_field.html" with field=field %}
-                        {# Same field name, so photos taken here are sent with the files picked above. #}
-                        <label class="form-label rg-note mt-2 mb-1" for="{{ field.id_for_label }}_camera">{% translate "Or take a photo with your phone:" %}</label>
-                        <input type="file" class="form-control" id="{{ field.id_for_label }}_camera" name="{{ field.html_name }}" accept="image/*" capture="environment">
                         {% include "recruitment/includes/requirement_downloads.html" with downloads=field.field.requirement_downloads compact=True %}
                     </div>
                 {% endfor %}
+                </noscript>
                 <div class="d-flex gap-2 mt-3">
-                    <button type="submit" name="action" value="resubmit" class="btn btn-rg-primary">
+                    <button type="submit" name="action" value="resubmit" class="btn btn-rg-primary" data-submit-application>
                         {% translate "Resubmit documents" %}
                     </button>
                     <a href="{% url 'applicant-status-link' token=application.public_token %}"
@@ -121,4 +131,11 @@
         </a>
     </div>
 </div>
+{% if otp_verified %}{% include "recruitment/includes/applicant_upload_shared.html" %}{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+{% if otp_verified %}
+<script src="{% static 'js/recruitguard-applicant-application.js' %}?v=20261102-resub1"></script>
+{% endif %}
 {% endblock %}

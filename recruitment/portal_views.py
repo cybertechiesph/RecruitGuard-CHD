@@ -21,9 +21,13 @@ from .applicant_documents import (
     looks_like_old_pds,
     purge_applicant_document_parts,
     read_applicant_document_part,
+    add_resubmission_part,
     remove_applicant_document_part,
+    remove_resubmission_part,
+    resubmission_slot_states,
     reuse_applicant_document,
     slot_state_payload,
+    staged_resubmission_uploads,
 )
 from .forms import (
     ApplicantHubEmailForm,
@@ -852,12 +856,7 @@ class ApplicantDocumentPartUploadView(ApplicantDraftAccessMixin, View):
         except ValueError as exc:
             return JsonResponse({"error": str(exc)}, status=400)
         payload = self._slot_payload(document_key)
-        if document_key == PERSONAL_DATA_SHEET and looks_like_old_pds(part):
-            payload["warning"] = _(
-                "This looks like the old PDS (Revised 2017). The office needs the Revised 2026 form, "
-                "so this may be returned to you. Download the 2026 form from this card, fill it in, "
-                "and upload it instead."
-            )
+        _add_old_pds_warning(payload, document_key, part)
         return JsonResponse(payload)
 
     def _slot_payload(self, document_key):
@@ -867,6 +866,15 @@ class ApplicantDocumentPartUploadView(ApplicantDraftAccessMixin, View):
             if slot["code"] == document_key:
                 return slot_state_payload(slot)
         return {"code": document_key, "is_ready": False, "parts": []}
+
+
+def _add_old_pds_warning(payload, document_key, part):
+    if document_key == PERSONAL_DATA_SHEET and looks_like_old_pds(part):
+        payload["warning"] = _(
+            "This looks like the old PDS (Revised 2017). The office needs the Revised 2026 form, "
+            "so this may be returned to you. Download the 2026 form from this card, fill it in, "
+            "and upload it instead."
+        )
 
 
 class ApplicantDocumentReuseView(ApplicantDocumentPartUploadView):
@@ -915,6 +923,77 @@ class ApplicantDocumentPartPreviewView(ApplicantDraftAccessMixin, View):
         return response
 
 
+class ApplicantResubmissionAccessMixin:
+    """For the returned-document upload cards: the application must be awaiting a
+    resubmission, and THIS browser must have verified the email recently."""
+
+    def dispatch(self, request, *args, **kwargs):
+        self.application = (
+            RecruitmentApplication.objects.select_related("position", "case")
+            .filter(public_token=kwargs["token"])
+            .first()
+        )
+        if self.application is None:
+            return JsonResponse({"error": _("This application could not be found.")}, status=404)
+        self.requirements, _deadline, _remarks = get_resubmission_request(self.application)
+        if not self.requirements:
+            return JsonResponse(
+                {"error": _("There are no documents awaiting resubmission for this application.")},
+                status=409,
+            )
+        if not _status_otp_verified_recently(request, self.application):
+            return JsonResponse(
+                {"error": _("Your session ended. Reload the page and verify your email to continue.")},
+                status=403,
+            )
+        return super().dispatch(request, *args, **kwargs)
+
+    def _slot_payload(self, document_key):
+        for slot in resubmission_slot_states(self.application, self.requirements):
+            if slot["code"] == document_key:
+                return slot_state_payload(slot)
+        return {"code": document_key, "is_ready": False, "parts": []}
+
+
+class ApplicantResubmitPartUploadView(ApplicantResubmissionAccessMixin, View):
+    """One file for one returned document, staged the moment it is picked."""
+
+    def post(self, request, *args, **kwargs):
+        uploaded_file = request.FILES.get("file")
+        if uploaded_file is None:
+            return JsonResponse({"error": _("Choose a file to upload.")}, status=400)
+        document_key = kwargs["code"]
+        allowed = {requirement.code for requirement in self.requirements}
+        try:
+            part = add_resubmission_part(self.application, document_key, uploaded_file, allowed)
+        except ValueError as exc:
+            return JsonResponse({"error": str(exc)}, status=400)
+        payload = self._slot_payload(document_key)
+        _add_old_pds_warning(payload, document_key, part)
+        return JsonResponse(payload)
+
+
+class ApplicantResubmitPartDeleteView(ApplicantResubmissionAccessMixin, View):
+    def post(self, request, *args, **kwargs):
+        try:
+            document_key = remove_resubmission_part(self.application, kwargs["part_id"])
+        except ValueError as exc:
+            return JsonResponse({"error": str(exc)}, status=404)
+        return JsonResponse(self._slot_payload(document_key))
+
+
+class ApplicantResubmitPartPreviewView(ApplicantResubmissionAccessMixin, View):
+    def get(self, request, *args, **kwargs):
+        part = get_document_parts(self.application).filter(pk=kwargs["part_id"]).first()
+        if part is None:
+            raise Http404
+        response = HttpResponse(read_applicant_document_part(part), content_type=part.content_type)
+        response["Content-Disposition"] = "inline"
+        response["X-Content-Type-Options"] = "nosniff"
+        response["Cache-Control"] = "no-store"
+        return response
+
+
 class ApplicantReceiptView(TemplateView):
     template_name = "recruitment/applicant_receipt.html"
 
@@ -930,7 +1009,7 @@ class ApplicantReceiptView(TemplateView):
         if self.application is None:
             messages.error(
                 request,
-                _("This receipt link is no longer available. If you already submitted, use Track Application with your Tracking Code and email."),
+                _("This receipt link is no longer available. If you already submitted, open My Applications and enter your email."),
             )
             return redirect("applicant-portal")
         return super().get(request, *args, **kwargs)
@@ -961,7 +1040,7 @@ class ApplicantReceiptPdfView(View):
         if application is None:
             messages.error(
                 request,
-                _("This receipt link is no longer available. If you already submitted, use Track Application with your Tracking Code and email."),
+                _("This receipt link is no longer available. If you already submitted, open My Applications and enter your email."),
             )
             return redirect("applicant-portal")
 
@@ -1446,6 +1525,10 @@ class ApplicantResubmissionView(TemplateView):
             return self._missing(request)
         requirements, _deadline, _remarks = get_resubmission_request(application)
         if not requirements:
+            if application.submitted_at:
+                # Files staged for a resubmission that is no longer open (sent, extended
+                # away, or closed by the office) are not kept.
+                purge_applicant_document_parts(application)
             messages.info(request, _("There are no documents awaiting resubmission for this application."))
             return redirect("applicant-status-link", token=application.public_token)
         return super().get(request, *args, **kwargs)
@@ -1459,6 +1542,17 @@ class ApplicantResubmissionView(TemplateView):
         context["application"] = application
         context["requirements"] = requirements
         context["resubmission_deadline"] = deadline
+        slots = resubmission_slot_states(application, requirements)
+        for slot in slots:
+            slot["remarks"] = remarks_by_code.get(slot["code"], "")
+        context["slots"] = slots
+        context["script_strings"] = application_script_strings()
+        max_bytes = min(
+            getattr(settings, "MAX_EVIDENCE_UPLOAD_BYTES", MAX_APPLICANT_DOCUMENT_UPLOAD_BYTES),
+            MAX_APPLICANT_DOCUMENT_UPLOAD_BYTES,
+        )
+        context["max_upload_bytes"] = max_bytes
+        context["max_upload_mb"] = max_bytes // (1024 * 1024)
         context["otp_verified"] = self._email_verified(application)
         context["has_active_code"] = bool(
             application.otp_hash
@@ -1526,6 +1620,26 @@ class ApplicantResubmissionView(TemplateView):
             if not self._email_verified(application):
                 messages.error(request, _("Verify your email before resubmitting your documents."))
                 return redirect("applicant-resubmit", token=application.public_token)
+            codes = {requirement.code for requirement in requirements}
+            staged = staged_resubmission_uploads(application, codes)
+            if staged:
+                # The upload cards already staged each file; send them all in one go.
+                try:
+                    submit_document_resubmission(
+                        application, application.applicant, staged, email_verified_in_session=True
+                    )
+                except ValueError as exc:
+                    messages.error(request, str(exc))
+                    return self.render_to_response(self.get_context_data(application=application))
+                purge_applicant_document_parts(application)
+                messages.success(request, _("Your documents have been resubmitted for review."))
+                return redirect("applicant-status-link", token=application.public_token)
+            if not request.FILES:
+                messages.error(
+                    request, _("Add the corrected file for each document above, then press Resubmit documents.")
+                )
+                return self.render_to_response(self.get_context_data(application=application))
+            # Without JavaScript the page falls back to plain file fields.
             resubmission_form = DocumentResubmissionForm(
                 request.POST, request.FILES, requirements=requirements, remarks_by_code=remarks_by_code
             )

@@ -1,0 +1,42 @@
+{% load i18n %}{% comment %}
+  The preview pop-up, row templates and translated script messages that the upload cards
+  (recruitguard-applicant-application.js) need. Include once per page that has cards.
+{% endcomment %}
+{# File preview (the applicant's own files, shown from a local blob: URL). #}
+<div class="modal fade rg-intake-preview" id="rg-part-preview" tabindex="-1"
+     aria-labelledby="rg-part-preview-title" aria-hidden="true" data-part-preview>
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="min-w-0">
+                    <h2 class="modal-title h5" id="rg-part-preview-title" data-preview-title>{% translate "Your file" %}</h2>
+                    <p class="rg-intake-preview__meta mb-0" data-preview-meta></p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{% translate 'Close preview' %}"></button>
+            </div>
+            <div class="modal-body" data-preview-body></div>
+            <div class="modal-footer">
+                <p class="rg-intake-preview__note me-auto mb-0">{% translate "Is this the right document, and is the text easy to read?" %}</p>
+                <button type="button" class="btn btn-rg-primary" data-bs-dismiss="modal">{% translate "Close" %}</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<template id="rg-part-template">
+    <li class="rg-doc-part" data-part-id="">
+        <span class="rg-doc-part__icon" aria-hidden="true"></span>
+        <span class="rg-doc-part__name" data-part-name></span>
+        <span class="rg-doc-part__size" data-part-size></span>
+        <button type="button" class="rg-doc-part__btn" data-part-view>{% translate "View" %}</button>
+        <button type="button" class="rg-doc-part__btn rg-doc-part__btn--remove" data-part-remove>{% translate "Remove" %}</button>
+    </li>
+</template>
+<template id="rg-part-uploading-template">
+    <li class="rg-doc-part is-uploading">
+        <span class="rg-doc-part__icon" aria-hidden="true">&uarr;</span>
+        <span class="rg-doc-part__name" data-part-name></span>
+        <progress class="rg-doc-part__progress" max="100" value="0"></progress>
+    </li>
+</template>
+{{ script_strings|json_script:"rg-apply-i18n" }}

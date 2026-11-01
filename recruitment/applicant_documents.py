@@ -241,6 +241,14 @@ def add_applicant_document_part(application, document_key, uploaded_file):
     """Validate, clean and store one file for a requirement, then rebuild that document."""
     _ensure_editable(application)
     requirement = _requirement_or_error(application, document_key)
+    part = _store_part(application, document_key, uploaded_file)
+    rebuild_applicant_document(application, requirement)
+    return part
+
+
+def _store_part(application, document_key, uploaded_file):
+    """Validate, clean and encrypt one file as a part of ``document_key`` (shared by drafts
+    and by returned-document resubmissions)."""
     prepared = prepare_part_upload(uploaded_file)
     digest = hashlib.sha256(prepared.raw_bytes).hexdigest()
 
@@ -268,7 +276,6 @@ def add_applicant_document_part(application, document_key, uploaded_file):
         nonce=nonce,
         ciphertext=ciphertext,
     )
-    rebuild_applicant_document(application, requirement)
     return part
 
 
@@ -455,3 +462,54 @@ def slot_state_payload(slot):
             for part in slot["parts"]
         ],
     }
+
+
+# ── Returned documents (resubmission) ───────────────────────────────────────────────
+# The same staging parts, but nothing in the submitted application changes until the
+# applicant presses "Resubmit documents": the office keeps seeing the current copy, and the
+# staged files are handed to submit_document_resubmission() in one go.
+
+
+def add_resubmission_part(application, document_key, uploaded_file, allowed_codes):
+    if document_key not in allowed_codes:
+        raise ValueError(_("This document was not returned to you."))
+    return _store_part(application, document_key, uploaded_file)
+
+
+def remove_resubmission_part(application, part_id):
+    part = get_document_parts(application).filter(pk=part_id).first()
+    if part is None:
+        raise ValueError(_("That file is no longer part of this application."))
+    document_key = part.document_key
+    part.delete()
+    return document_key
+
+
+def resubmission_slot_states(application, requirements):
+    """Card state for each returned document (same shape as build_document_slot_states)."""
+    parts_by_key = {}
+    for part in get_document_parts(application):
+        parts_by_key.setdefault(part.document_key, []).append(part)
+    return [
+        {
+            "requirement": requirement,
+            "code": requirement.code,
+            "applies": True,
+            "required_now": True,
+            "parts": parts_by_key.get(requirement.code, []),
+            "legacy_document": None,
+            "is_ready": bool(parts_by_key.get(requirement.code)),
+        }
+        for requirement in requirements
+    ]
+
+
+def staged_resubmission_uploads(application, codes):
+    """{code: [uploaded file, ...]} from the staged parts, in the order they were added."""
+    uploads = {}
+    for part in get_document_parts(application):
+        if part.document_key in codes:
+            uploads.setdefault(part.document_key, []).append(
+                SimpleUploadedFile(part.original_filename, _decrypt_part(part), content_type=part.content_type)
+            )
+    return uploads

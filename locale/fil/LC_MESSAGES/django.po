@@ -621,50 +621,6 @@ msgstr "I-upload ang bawat document bilang PDF, JPG o PNG (hanggang %(mb)s MB ba
 msgid "<strong data-doc-ready>%(ready)s</strong> of <strong data-doc-total>%(total)s</strong> required documents ready"
 msgstr "<strong data-doc-ready>%(ready)s</strong> sa <strong data-doc-total>%(total)s</strong> required documents ang ready na"
 
-#: recruitment/templates/recruitment/applicant_application.html recruitment/portal_views.py
-msgid "Ready"
-msgstr "Ready na"
-
-#: recruitment/templates/recruitment/applicant_application.html recruitment/portal_views.py recruitment/requirements.py
-msgid "Required"
-msgstr "Required"
-
-#: recruitment/templates/recruitment/applicant_application.html recruitment/portal_views.py recruitment/requirements.py
-msgid "If applicable"
-msgstr "Kung meron"
-
-#: recruitment/templates/recruitment/applicant_application.html
-msgid "Use the <strong>Revised 2026</strong> PDS. The old 2017 form may be returned to you."
-msgstr "Gamitin ang <strong>Revised 2026</strong> na PDS. Puwedeng ibalik sa iyo ang lumang 2017 form."
-
-#: recruitment/templates/recruitment/applicant_application.html
-msgid "Saved earlier: <strong>%(name)s</strong>. Add new files below only if you want to replace it."
-msgstr "Na-save dati: <strong>%(name)s</strong>. Mag-upload lang ng bagong file sa baba kung gusto mo itong palitan."
-
-#: recruitment/templates/recruitment/applicant_application.html
-msgid "You sent this with your application for <strong>%(title)s</strong> (%(date)s):"
-msgstr "Ipinasa mo ito sa application mo para sa <strong>%(title)s</strong> (%(date)s):"
-
-#: recruitment/templates/recruitment/applicant_application.html recruitment/portal_views.py
-msgid "Use this file"
-msgstr "Gamitin ang file na ito"
-
-#: recruitment/templates/recruitment/applicant_application.html
-msgid "Check it&rsquo;s still current (e.g. the PDS form version)."
-msgstr "I-check kung updated pa ito (halimbawa, ang version ng PDS form)."
-
-#: recruitment/templates/recruitment/applicant_application.html recruitment/portal_views.py
-msgid "Add another file"
-msgstr "Mag-upload ng isa pang file"
-
-#: recruitment/templates/recruitment/applicant_application.html recruitment/portal_views.py
-msgid "Add files"
-msgstr "Mag-upload ng file"
-
-#: recruitment/templates/recruitment/applicant_application.html
-msgid "Take a photo"
-msgstr "Picturan gamit ang phone"
-
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "4. Submit your application"
 msgstr "4. I-submit ang application mo"
@@ -696,30 +652,6 @@ msgstr "Documents"
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "Submit"
 msgstr "I-submit"
-
-#: recruitment/templates/recruitment/applicant_application.html
-msgid "Your file"
-msgstr "File mo"
-
-#: recruitment/templates/recruitment/applicant_application.html
-msgid "Close preview"
-msgstr "Isara ang preview"
-
-#: recruitment/templates/recruitment/applicant_application.html
-msgid "Is this the right document, and is the text easy to read?"
-msgstr "Ito ba ang tamang document, at malinaw bang mabasa?"
-
-#: recruitment/templates/recruitment/applicant_application.html
-msgid "Close"
-msgstr "Isara"
-
-#: recruitment/templates/recruitment/applicant_application.html recruitment/templates/recruitment/includes/applicant_document_part.html
-msgid "View"
-msgstr "Tingnan"
-
-#: recruitment/templates/recruitment/applicant_application.html recruitment/templates/recruitment/includes/applicant_document_part.html
-msgid "Remove"
-msgstr "Tanggalin"
 
 #: recruitment/templates/recruitment/applicant_help.html
 msgid "Help &amp; FAQ"
@@ -1799,17 +1731,13 @@ msgstr "Step 2 — I-upload ulit ang hinihinging documents"
 msgid "Only the documents the recruitment team flagged are shown below. Your already-accepted documents do not need to be uploaded again."
 msgstr "Ang documents lang na ibinalik ng recruitment team ang nasa baba. Hindi na kailangang i-upload ulit ang documents na tanggap na."
 
-#: recruitment/templates/recruitment/applicant_resubmission.html
+#: recruitment/templates/recruitment/applicant_resubmission.html recruitment/templates/recruitment/includes/applicant_document_card.html
 msgid "Why it was returned:"
 msgstr "Bakit ibinalik:"
 
-#: recruitment/templates/recruitment/applicant_resubmission.html
+#: recruitment/templates/recruitment/applicant_resubmission.html recruitment/templates/recruitment/includes/applicant_document_card.html
 msgid "The recruitment team asked for a clearer copy of this document."
 msgstr "Humingi ang recruitment team ng mas malinaw na kopya ng document na ito."
-
-#: recruitment/templates/recruitment/applicant_resubmission.html
-msgid "Or take a photo with your phone:"
-msgstr "O kumuha ng picture gamit ang phone mo:"
 
 #: recruitment/templates/recruitment/applicant_resubmission.html
 msgid "Cancel"
@@ -2237,9 +2165,61 @@ msgstr "{ticked} sa {total} ang naka-check. Hindi isinasama sa shortlist ang app
 msgid "You haven't ticked every qualification standard. Applicants who don't meet all of them are not shortlisted. Apply anyway?"
 msgstr "Hindi mo na-check lahat ng qualifications. Hindi isinasama sa shortlist ang applicants na hindi pasok sa lahat. Mag-apply pa rin?"
 
+#: recruitment/templates/recruitment/includes/applicant_document_card.html recruitment/portal_views.py
+msgid "Ready"
+msgstr "Ready na"
+
+#: recruitment/templates/recruitment/includes/applicant_document_card.html recruitment/portal_views.py recruitment/requirements.py
+msgid "Required"
+msgstr "Required"
+
+#: recruitment/templates/recruitment/includes/applicant_document_card.html recruitment/portal_views.py recruitment/requirements.py
+msgid "If applicable"
+msgstr "Kung meron"
+
+#: recruitment/templates/recruitment/includes/applicant_document_card.html
+msgid "Use the <strong>Revised 2026</strong> PDS. The old 2017 form may be returned to you."
+msgstr "Gamitin ang <strong>Revised 2026</strong> na PDS. Puwedeng ibalik sa iyo ang lumang 2017 form."
+
+#: recruitment/templates/recruitment/includes/applicant_document_card.html
+msgid "Saved earlier: <strong>%(name)s</strong>. Add new files below only if you want to replace it."
+msgstr "Na-save dati: <strong>%(name)s</strong>. Mag-upload lang ng bagong file sa baba kung gusto mo itong palitan."
+
+#: recruitment/templates/recruitment/includes/applicant_document_card.html
+msgid "You sent this with your application for <strong>%(title)s</strong> (%(date)s):"
+msgstr "Ipinasa mo ito sa application mo para sa <strong>%(title)s</strong> (%(date)s):"
+
+#: recruitment/templates/recruitment/includes/applicant_document_card.html recruitment/portal_views.py
+msgid "Use this file"
+msgstr "Gamitin ang file na ito"
+
+#: recruitment/templates/recruitment/includes/applicant_document_card.html
+msgid "Check it&rsquo;s still current (e.g. the PDS form version)."
+msgstr "I-check kung updated pa ito (halimbawa, ang version ng PDS form)."
+
+#: recruitment/templates/recruitment/includes/applicant_document_card.html recruitment/portal_views.py
+msgid "Add another file"
+msgstr "Mag-upload ng isa pang file"
+
+#: recruitment/templates/recruitment/includes/applicant_document_card.html recruitment/portal_views.py
+msgid "Add files"
+msgstr "Mag-upload ng file"
+
+#: recruitment/templates/recruitment/includes/applicant_document_card.html
+msgid "Take a photo"
+msgstr "Picturan gamit ang phone"
+
+#: recruitment/templates/recruitment/includes/applicant_document_part.html recruitment/templates/recruitment/includes/applicant_upload_shared.html
+msgid "View"
+msgstr "Tingnan"
+
 #: recruitment/templates/recruitment/includes/applicant_document_part.html
 msgid "Remove %(name)s"
 msgstr "Tanggalin ang %(name)s"
+
+#: recruitment/templates/recruitment/includes/applicant_document_part.html recruitment/templates/recruitment/includes/applicant_upload_shared.html
+msgid "Remove"
+msgstr "Tanggalin"
 
 #: recruitment/templates/recruitment/includes/applicant_flow_header.html
 msgid "Applying for"
@@ -2252,6 +2232,22 @@ msgstr "Steps sa pag-apply"
 #: recruitment/templates/recruitment/includes/applicant_journey.html
 msgid "Verify email"
 msgstr "I-verify ang email"
+
+#: recruitment/templates/recruitment/includes/applicant_upload_shared.html
+msgid "Your file"
+msgstr "File mo"
+
+#: recruitment/templates/recruitment/includes/applicant_upload_shared.html
+msgid "Close preview"
+msgstr "Isara ang preview"
+
+#: recruitment/templates/recruitment/includes/applicant_upload_shared.html
+msgid "Is this the right document, and is the text easy to read?"
+msgstr "Ito ba ang tamang document, at malinaw bang mabasa?"
+
+#: recruitment/templates/recruitment/includes/applicant_upload_shared.html
+msgid "Close"
+msgstr "Isara"
 
 #: recruitment/templates/recruitment/includes/branch_explainer.html
 msgid "<strong>Plantilla (Permanent)</strong> positions are regular government posts with full Civil Service tenure and full government benefits. They follow the standard Civil Service Commission appointment process and are funded by a regular plantilla item."
@@ -2420,6 +2416,10 @@ msgstr "Wala na sa application na ito ang file na iyon."
 #: recruitment/applicant_documents.py
 msgid "That document can no longer be reused. Add the file instead."
 msgstr "Hindi na puwedeng gamitin ulit ang document na iyon. I-upload na lang ang file."
+
+#: recruitment/applicant_documents.py
+msgid "This document was not returned to you."
+msgstr "Hindi ibinalik sa iyo ang document na ito."
 
 #: recruitment/applicant_hub.py
 msgid "DOH–CHD CALABARZON Recruitment Portal: your code for My Applications"
@@ -3032,6 +3032,10 @@ msgid "Remove {name}"
 msgstr "Tanggalin ang {name}"
 
 #: recruitment/portal_views.py
+msgid "This looks like the old PDS (Revised 2017). The office needs the Revised 2026 form, so this may be returned to you. Download the 2026 form from this card, fill it in, and upload it instead."
+msgstr "Mukhang lumang PDS ito (Revised 2017). Ang kailangan ng office ay ang Revised 2026 form, kaya baka ibalik ito sa iyo. I-download ang 2026 form sa card na ito, sagutan, at i-upload ito."
+
+#: recruitment/portal_views.py
 msgid "Application submitted"
 msgstr "Na-submit ang application"
 
@@ -3070,10 +3074,6 @@ msgstr "Hindi puwede ang action na ito."
 #: recruitment/portal_views.py
 msgid "Application submitted successfully."
 msgstr "Na-submit na ang application mo."
-
-#: recruitment/portal_views.py
-msgid "This looks like the old PDS (Revised 2017). The office needs the Revised 2026 form, so this may be returned to you. Download the 2026 form from this card, fill it in, and upload it instead."
-msgstr "Mukhang lumang PDS ito (Revised 2017). Ang kailangan ng office ay ang Revised 2026 form, kaya baka ibalik ito sa iyo. I-download ang 2026 form sa card na ito, sagutan, at i-upload ito."
 
 #: recruitment/portal_views.py
 msgid "This link is no longer available. Open My Applications and enter your email."
@@ -3116,8 +3116,8 @@ msgid "Your answers were saved. Files are saved as soon as you add them."
 msgstr "Na-save ang mga sagot mo. Nase-save agad ang files pagka-upload."
 
 #: recruitment/portal_views.py
-msgid "This receipt link is no longer available. If you already submitted, use Track Application with your Tracking Code and email."
-msgstr "Hindi na gumagana ang link ng resibo na ito. Kung naka-submit ka na, gamitin ang I-track ang Application gamit ang Tracking Code at email mo."
+msgid "This receipt link is no longer available. If you already submitted, open My Applications and enter your email."
+msgstr "Hindi na available ang link ng resibo na ito. Kung nag-submit ka na, buksan ang My Applications at ilagay ang email mo."
 
 #: recruitment/portal_views.py
 msgid "Your verification session has ended. Enter your Tracking Code and email again."
@@ -3180,6 +3180,10 @@ msgid "Choose a file to upload."
 msgstr "Pumili ng file na ia-upload."
 
 #: recruitment/portal_views.py
+msgid "Your session ended. Reload the page and verify your email to continue."
+msgstr "Na-end na ang session mo. I-reload ang page at i-verify ang email mo para ituloy."
+
+#: recruitment/portal_views.py
 msgid "We could not send a verification code right now. Please try again in a few moments."
 msgstr "Hindi kami makapagpadala ng verification code ngayon. Subukan ulit maya-maya."
 
@@ -3222,10 +3226,6 @@ msgstr "Nasa office na ang application mo para sa final decision."
 #: recruitment/portal_views.py
 msgid "This application was already submitted."
 msgstr "Na-submit na ang application na ito."
-
-#: recruitment/portal_views.py
-msgid "Your session ended. Reload the page and verify your email to continue."
-msgstr "Na-end na ang session mo. I-reload ang page at i-verify ang email mo para ituloy."
 
 #: recruitment/portal_views.py
 msgid "Choose a document to reuse."

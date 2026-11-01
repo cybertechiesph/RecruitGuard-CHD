@@ -1,0 +1,72 @@
+{% load i18n %}{% comment %}
+  One document card with instant per-file upload (recruitguard-applicant-application.js).
+  Used by the application page and by the returned-documents (resubmit) page.
+  Expects: slot, application, upload_url_name; optional: returned (shows the reason).
+{% endcomment %}
+<div class="rg-doc-card{% if slot.is_ready %} is-ready{% endif %}"
+     id="doc-{{ slot.code }}"
+     data-doc-card
+     data-code="{{ slot.code }}"
+     data-title="{{ slot.requirement.title }}"
+     data-required="{% if slot.required_now %}true{% else %}false{% endif %}"
+     data-upload-url="{% url upload_url_name application.public_token slot.code %}"
+     {% if slot.requirement.conditional_on_performance_rating %}data-conditional-performance-rating{% endif %}
+     {% if not slot.applies %}hidden{% endif %}>
+    <div class="rg-doc-card__head">
+        <h3 class="rg-doc-card__title">{{ slot.requirement.title }}</h3>
+        <span class="rg-doc-card__status" data-doc-status>
+            {% if slot.is_ready %}&#10003; {% translate "Ready" %}{% elif slot.required_now %}{% translate "Required" %}{% else %}{% translate "If applicable" %}{% endif %}
+        </span>
+    </div>
+    {% if returned %}
+    <div class="alert alert-warning py-2 px-3 mb-2 rg-doc-card__returned">
+        <strong>{% translate "Why it was returned:" %}</strong>
+        {% if slot.remarks %}{{ slot.remarks }}{% else %}{% translate "The recruitment team asked for a clearer copy of this document." %}{% endif %}
+    </div>
+    {% endif %}
+    <p class="rg-doc-card__hint">{{ slot.requirement.help_text }}</p>
+    {% if slot.code == "personal_data_sheet" %}
+    <p class="rg-doc-card__note" data-pds-version-note>{% translate "Use the <strong>Revised 2026</strong> PDS. The old 2017 form may be returned to you." %}</p>
+    {% endif %}
+    {% include "recruitment/includes/requirement_downloads.html" with downloads=slot.requirement.downloads compact=True %}
+
+    {% if slot.legacy_document %}
+    <p class="rg-doc-card__legacy" data-legacy-document>
+        {% blocktranslate trimmed with name=slot.legacy_document.original_filename %}
+        Saved earlier: <strong>{{ name }}</strong>.
+        Add new files below only if you want to replace it.
+        {% endblocktranslate %}
+    </p>
+    {% endif %}
+
+    {% if slot.reusable %}
+    <div class="rg-doc-reuse" data-reuse-box>
+        <p class="mb-1">
+            {% blocktranslate trimmed with title=slot.reusable.application.position.title date=slot.reusable.created_at|date:"M j, Y" %}
+            You sent this with your application for <strong>{{ title }}</strong> ({{ date }}):
+            {% endblocktranslate %}
+            <span class="rg-doc-reuse__file">{{ slot.reusable.original_filename }}</span></p>
+        <button type="button" class="btn btn-sm btn-outline-primary"
+                data-reuse-url="{% url 'applicant-document-reuse' application.public_token slot.code %}"
+                data-evidence-id="{{ slot.reusable.pk }}">{% translate "Use this file" %}</button>
+        <span class="rg-doc-reuse__hint">{% translate "Check it&rsquo;s still current (e.g. the PDS form version)." %}</span>
+    </div>
+    {% endif %}
+    <ul class="rg-doc-parts" data-part-list>
+        {% for part in slot.parts %}{% include "recruitment/includes/applicant_document_part.html" %}{% endfor %}
+    </ul>
+    <div class="rg-doc-card__error" data-doc-error role="alert" hidden></div>
+    <div class="rg-doc-card__warning" data-doc-warning role="status" hidden></div>
+
+    <div class="rg-doc-card__actions">
+        <label class="btn btn-outline-primary rg-doc-card__add">
+            <input type="file" class="visually-hidden" data-part-input multiple
+                   accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png">
+            {% if slot.parts or slot.legacy_document %}{% translate "Add another file" %}{% else %}{% translate "Add files" %}{% endif %}
+        </label>
+        <label class="btn btn-outline-primary rg-doc-card__camera">
+            <input type="file" class="visually-hidden" data-part-input accept="image/*" capture="environment">
+            {% translate "Take a photo" %}
+        </label>
+    </div>
+</div>
