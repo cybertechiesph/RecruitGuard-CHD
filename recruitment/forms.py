@@ -3125,6 +3125,22 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
         item_number = (cleaned_data.get("item_number") or "").strip()
         if branch == PositionPosting.Branch.PLANTILLA and not item_number:
             self.add_error("item_number", "Enter the plantilla item number for this vacancy.")
+        elif branch == PositionPosting.Branch.PLANTILLA:
+            clash = (
+                PositionPosting.objects.filter(
+                    branch=PositionPosting.Branch.PLANTILLA,
+                    item_number__iexact=item_number,
+                    status__in=PositionPosting.OPEN_ITEM_STATUSES,
+                )
+                .exclude(pk=self.instance.pk)
+                .first()
+            )
+            if clash:
+                self.add_error(
+                    "item_number",
+                    f"Item {item_number} is already being filled by {clash.job_code} "
+                    f"({clash.title}). Close or cancel that posting first, or check the item number.",
+                )
         elif branch == PositionPosting.Branch.COS:
             cleaned_data["item_number"] = ""
 

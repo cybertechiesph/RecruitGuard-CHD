@@ -333,7 +333,7 @@
                 <div class="rg-scr-modal-summary">
                     <div class="rg-scr-modal-summary__row">
                         <span class="rg-scr-modal-summary__label">Candidate</span>
-                        <span class="rg-scr-modal-summary__value">{{ application.candidate_code_label }} &mdash; {{ application.applicant_display_name }}</span>
+                        <span class="rg-scr-modal-summary__value">{{ application.candidate_code_label }}{% if request.user.role != "hrmpsb_member" %} &mdash; {{ application.applicant_display_name }}{% endif %}</span>
                     </div>
                     <div class="rg-scr-modal-summary__row">
                         <span class="rg-scr-modal-summary__label">Date &amp; time</span>

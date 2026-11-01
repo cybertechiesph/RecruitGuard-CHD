@@ -3,10 +3,17 @@
 {% block title %}{% blocktranslate trimmed %}DOH–CHD CALABARZON Recruitment Portal Examination Invitation{% endblocktranslate %}{% endblock %}
 {% block preheader %}{% blocktranslate trimmed with title=application.position.title %}You are invited to take the examination for {{ title }}.{% endblocktranslate %}{% endblock %}
 {% block body %}
+    {% if meta.schedule_changed %}
+    <h1 style="margin:0; color:#111827; font-size:21px; line-height:1.3; font-weight:700;">{% blocktranslate trimmed %}Examination Schedule Changed{% endblocktranslate %}</h1>
+    <p style="margin:10px 0 0; color:#5f6c78; font-size:14px; line-height:1.65;">
+        {% blocktranslate trimmed with name=application.applicant_display_name title=application.position.title %}Dear {{ name }}, the examination for {{ title }} has a new schedule. <strong>This replaces the schedule we sent you earlier.</strong> Please note the new details below.{% endblocktranslate %}
+    </p>
+    {% else %}
     <h1 style="margin:0; color:#111827; font-size:21px; line-height:1.3; font-weight:700;">{% blocktranslate trimmed %}Examination Invitation{% endblocktranslate %}</h1>
     <p style="margin:10px 0 0; color:#5f6c78; font-size:14px; line-height:1.65;">
         {% blocktranslate trimmed with name=application.applicant_display_name title=application.position.title %}Dear {{ name }}, you passed the initial screening for {{ title }} and are invited to take the examination. Please note the details below.{% endblocktranslate %}
     </p>
+    {% endif %}
 
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:16px; background:#f8fafc; border:1px solid #d7dde3; border-radius:8px;">
         <tr><td style="padding:14px 16px 6px; color:#5f6c78; font-size:12px; line-height:1.4; font-weight:700; text-transform:uppercase; letter-spacing:0.08em;">{% blocktranslate trimmed %}Examination details{% endblocktranslate %}</td></tr>

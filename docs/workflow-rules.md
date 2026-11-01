@@ -41,9 +41,10 @@ approved rule is:
   at siya po ang final approval lalo na sa higher-level positions."
 - **The passes are independent, not a re-keying exercise.** The Chief sees the Secretariat's
   finalized results read-only as the first-pass basis (the "Earlier review — Secretariat"
-  card) and records their own findings. A one-click "Copy results from Secretariat review"
-  accelerator prefills the Chief's still-editable form; it is a convenience, never an
-  auto-accept.
+  card) and records their own findings. One-click accelerators prefill the Chief's
+  still-editable forms: "Copy document checks from the Secretariat's review" on screening
+  (the Qualified/Not qualified decision is left to the Chief), and "Copy scores from the
+  earlier review" on the batch exam page. They are conveniences, never an auto-accept.
 - **Rule for disagreement.** Each pass is a stage-local finalized record and neither
   overwrites the other. The record finalized at the case's **current** stage is the operative
   one for that stage and for everything downstream of it; the earlier pass is preserved

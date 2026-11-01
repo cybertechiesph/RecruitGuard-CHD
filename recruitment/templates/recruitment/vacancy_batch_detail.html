@@ -108,7 +108,7 @@
                             {% comment %} Ronel revision: case number only — no applicant name
                                on the batch list, to reduce selection bias. {% endcomment %}
                             <div class="fw-bold" style="font-family:ui-monospace,SFMono-Regular,'Cascadia Mono',Consolas,Menlo,monospace;font-size:0.78rem;color:#5f6c78;">
-                                {{ application.reference_label }}
+                                {{ application|case_ref_for:request.user }}
                             </div>
                         </td>
                         <td>
@@ -116,6 +116,7 @@
                             {% queue_task_label application as task_label %}
                             <span class="rg-pill rg-pill--{{ task_theme }} rg-pill--sm">{{ task_label }}</span>
                             {% include "internal_includes/stage_sla_badge.html" with recruitment_case=application.case variant="sm" %}
+                                {% include "internal_includes/case_flags.html" with application=application %}
                         </td>
                         <td>
                             <div style="font-size:0.8125rem;color:#374151;">{{ application.updated_at|timesince_short }} ago</div>

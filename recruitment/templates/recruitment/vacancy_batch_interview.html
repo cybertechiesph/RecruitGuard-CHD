@@ -13,6 +13,14 @@
 {% endblock %}
 
 {% block content %}
+{% if withdrawal_requests %}
+    <div class="alert alert-warning" role="status" data-withdrawal-requests>
+        <strong>{{ withdrawal_requests|length }} applicant{{ withdrawal_requests|length|pluralize }} asked to withdraw:</strong>
+        {% for application in withdrawal_requests %}<a href="{% url 'application-detail' application.pk %}">{{ application|case_ref_for:request.user }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}.
+        Record the withdrawal on the case first, so they aren't sent this batch's schedule.
+    </div>
+{% endif %}
+
 <div class="rg-page-header">
     <div>
         <h1 class="rg-page-title">Batch Interview — {{ entry.title }}</h1>
@@ -81,8 +89,8 @@
                     {% for candidate in candidates %}
                         <tr>
                             <td>
-                                <div class="fw-bold" style="font-size:0.8rem;">{{ candidate.application.applicant_display_name }}</div>
-                                <div class="rg-imeta mt-1">{{ candidate.application.reference_label }}</div>
+                                <div class="fw-bold" style="font-size:0.8rem;">{{ candidate.application|identity_for:request.user }}</div>{% include "internal_includes/case_flags.html" with application=candidate.application %}
+                                {% if request.user.role != "hrmpsb_member" %}<div class="rg-imeta mt-1">{{ candidate.application.reference_label }}</div>{% endif %}
                             </td>
                             <td>
                                 {% if candidate.session and candidate.session.scheduled_for %}
@@ -127,7 +135,7 @@
             </table>
         </div>
     </div>
-    <form method="post" class="mt-3">
+    <form method="post" class="mt-3" id="interviewFinalizeForm">
         {% csrf_token %}
         <div class="row g-3" style="max-width:680px;">
             <div class="col-md-6">
@@ -141,9 +149,10 @@
         </div>
         <div class="form-text mb-2">If the board's first (pre-CAR) deliberation has been held, note it here — recorded in the case history when the batch is finalized.</div>
         <div class="rg-form-actions mt-2">
-            <button type="submit" name="operation" value="finalize" class="btn btn-rg-primary">Finalize interview batch</button>
+            <button type="button" class="btn btn-rg-primary" data-bs-toggle="modal" data-bs-target="#confirmFinalizeInterview">Finalize interview batch</button>
         </div>
     </form>
+    {% include "internal_includes/modal_confirm.html" with modal_id="confirmFinalizeInterview" variant="destructive" title="Finalize this interview batch?" body="This locks every candidate's interview ratings and moves the whole pool to the CAR. Ratings can no longer be changed afterwards." confirm_label="Finalize interview batch" cancel_label="Cancel" form_id="interviewFinalizeForm" confirm_name="operation" confirm_value="finalize" %}
 </div>
 {% else %}
 {# ── COS: single end-user score per candidate, inline ─────────── #}
@@ -153,7 +162,7 @@
         Enter each candidate's end-user / HRMS interview score (0–100). Add a justification when a
         score lands below 75 or above 98.
     </p>
-    <form method="post">
+    <form method="post" id="cosInterviewForm">
         {% csrf_token %}
         <div class="rg-itbl">
             <div class="table-responsive">
@@ -171,8 +180,8 @@
                         {% for candidate in candidates %}
                             <tr>
                                 <td>
-                                    <div class="fw-bold" style="font-size:0.8rem;">{{ candidate.application.applicant_display_name }}</div>
-                                    <div class="rg-imeta mt-1">{{ candidate.application.reference_label }}</div>
+                                    <div class="fw-bold" style="font-size:0.8rem;">{{ candidate.application|identity_for:request.user }}</div>{% include "internal_includes/case_flags.html" with application=candidate.application %}
+                                    {% if request.user.role != "hrmpsb_member" %}<div class="rg-imeta mt-1">{{ candidate.application.reference_label }}</div>{% endif %}
                                     {% if candidate.session and candidate.session.scheduled_for %}
                                         <div class="rg-imeta mt-1">{{ candidate.session.scheduled_for|date:"M d, H:i" }}</div>
                                     {% else %}
@@ -218,9 +227,10 @@
         </div>
         <div class="rg-form-actions mt-3 d-flex gap-2">
             <button type="submit" name="operation" value="save_scores" class="btn btn-outline-secondary">Save scores</button>
-            <button type="submit" name="operation" value="finalize" class="btn btn-rg-primary">Finalize interview batch</button>
+            <button type="button" class="btn btn-rg-primary" data-bs-toggle="modal" data-bs-target="#confirmFinalizeCosInterview">Finalize interview batch</button>
         </div>
     </form>
+    {% include "internal_includes/modal_confirm.html" with modal_id="confirmFinalizeCosInterview" variant="destructive" title="Finalize this interview batch?" body="This locks every candidate's interview score and moves the whole pool on. Scores can no longer be changed afterwards." confirm_label="Finalize interview batch" cancel_label="Cancel" form_id="cosInterviewForm" confirm_name="operation" confirm_value="finalize" %}
 </div>
 {% endif %}
 {% endblock %}

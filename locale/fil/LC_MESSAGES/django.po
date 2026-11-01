@@ -370,6 +370,14 @@ msgid "You are invited to take the examination for %(title)s."
 msgstr "Imbitado kang mag-exam para sa %(title)s."
 
 #: templates/email/exam_invitation.html
+msgid "Examination Schedule Changed"
+msgstr "Nagbago ang Schedule ng Exam"
+
+#: templates/email/exam_invitation.html
+msgid "Dear %(name)s, the examination for %(title)s has a new schedule. <strong>This replaces the schedule we sent you earlier.</strong> Please note the new details below."
+msgstr "Hi %(name)s, may bagong schedule ang exam para sa %(title)s. <strong>Papalitan nito ang schedule na pinadala namin dati.</strong> Pakitingnan ang bagong details sa baba."
+
+#: templates/email/exam_invitation.html
 msgid "Examination Invitation"
 msgstr "Imbitasyon sa Exam"
 
@@ -2760,8 +2768,24 @@ msgid "This is not an assessment of your qualifications — no candidate was sel
 msgstr "Hindi ito dahil sa qualifications mo — walang napiling candidate para sa vacancy na ito."
 
 #: recruitment/notification_services.py
+msgid "The examination for %(title)s has a new schedule. This replaces the schedule we sent you earlier. Please note the new details below:"
+msgstr "May bagong schedule ang exam para sa %(title)s. Papalitan nito ang schedule na pinadala namin dati. Pakitingnan ang bagong details sa baba:"
+
+#: recruitment/notification_services.py
+msgid "Good news. You passed the initial screening for %(title)s and are invited to take the examination. Please note the details below:"
+msgstr "Good news! Pumasa ka sa initial screening para sa %(title)s at imbitado kang mag-exam. Pakitingnan ang details sa baba:"
+
+#: recruitment/notification_services.py
 msgid "Reporting instructions:"
 msgstr "Paalala bago pumunta:"
+
+#: recruitment/notification_services.py
+msgid "DOH–CHD CALABARZON Recruitment Portal exam schedule changed: %(title)s"
+msgstr "DOH–CHD CALABARZON Recruitment Portal: nagbago ang schedule ng exam para sa %(title)s"
+
+#: recruitment/notification_services.py
+msgid "DOH–CHD CALABARZON Recruitment Portal exam invitation: %(title)s"
+msgstr "DOH–CHD CALABARZON Recruitment Portal: imbitasyon sa exam para sa %(title)s"
 
 #: recruitment/notification_services.py
 msgid "Case No. %(ref)s"
@@ -2852,20 +2876,12 @@ msgid "DOH–CHD CALABARZON Recruitment Portal: %(title)s recruitment cancelled"
 msgstr "DOH–CHD CALABARZON Recruitment Portal: kinansela ang recruitment para sa %(title)s"
 
 #: recruitment/notification_services.py
-msgid "Good news. You passed the initial screening for %(title)s and are invited to take the examination. Please note the details below:"
-msgstr "Good news! Pumasa ka sa initial screening para sa %(title)s at imbitado kang mag-exam. Pakitingnan ang details sa baba:"
-
-#: recruitment/notification_services.py
 msgid "Schedule: %(when)s"
 msgstr "Schedule: %(when)s"
 
 #: recruitment/notification_services.py
 msgid "Venue: %(venue)s"
 msgstr "Lugar: %(venue)s"
-
-#: recruitment/notification_services.py
-msgid "DOH–CHD CALABARZON Recruitment Portal exam invitation: %(title)s"
-msgstr "DOH–CHD CALABARZON Recruitment Portal: imbitasyon sa exam para sa %(title)s"
 
 #: recruitment/notification_services.py
 msgid "You are scheduled for an interview for %(title)s. Please note the details below:"
@@ -3206,6 +3222,10 @@ msgstr "I-verify muna ang email mo bago i-resubmit ang documents mo."
 #: recruitment/portal_views.py
 msgid "Your documents have been resubmitted for review."
 msgstr "Na-resubmit na ang documents mo para ma-review."
+
+#: recruitment/portal_views.py
+msgid "Add the corrected file for each document above, then press Resubmit documents."
+msgstr "Idagdag ang inayos na file para sa bawat document sa itaas, tapos pindutin ang I-resubmit ang documents."
 
 #: recruitment/portal_views.py
 msgid "Where: %(place)s"

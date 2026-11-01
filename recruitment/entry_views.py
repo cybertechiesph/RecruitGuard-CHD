@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
@@ -161,6 +163,29 @@ class RecruitmentEntryCreateView(
     model = PositionPosting
     form_class = RecruitmentEntryForm
     success_message = "Recruitment entry created."
+    DUPLICATE_WINDOW_SECONDS = 120
+
+    def form_valid(self, form):
+        # A double click (or a resubmitted page) must not create the same vacancy twice:
+        # an identical entry this person created moments ago is treated as the same click.
+        recent = (
+            PositionPosting.objects.filter(
+                created_by=self.request.user,
+                position_reference=form.cleaned_data.get("position_reference"),
+                branch=form.cleaned_data.get("branch"),
+                opening_date=form.cleaned_data.get("opening_date"),
+                created_at__gte=timezone.now() - timedelta(seconds=self.DUPLICATE_WINDOW_SECONDS),
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        if recent is not None:
+            messages.info(
+                self.request,
+                f"{recent.job_code} was already created a moment ago, so it wasn't created again.",
+            )
+            return redirect(self.get_success_url())
+        return super().form_valid(form)
 
 
 class RecruitmentEntryUpdateView(

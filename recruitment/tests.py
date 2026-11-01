@@ -37,6 +37,7 @@ from .captcha import (
     validate_turnstile_token,
 )
 from .forms import (
+    RecruitmentEntryForm,
     APPLICANT_COVER_LETTER_LENGTH_ERROR_MESSAGE,
     APPLICANT_COVER_LETTER_MAX_LENGTH,
     APPLICANT_MOBILE_ERROR_MESSAGE,
@@ -238,6 +239,7 @@ from .services import (
     user_can_view_application,
     verify_application_otp,
 )
+from .notification_services import resend_notification
 from .upload_validation import (
     ORIGINAL_FILENAME_MAX_LENGTH,
     clamp_original_filename,
@@ -254,7 +256,20 @@ User = get_user_model()
     RATE_LIMIT_ENABLED=False,
 )
 class BaseRecruitmentTestCase(TestCase):
+    # Most tests schedule an exam or interview a little ahead and record its results straight
+    # away, standing in for "the office records them afterwards". The rule that results wait
+    # for the sitting has its own tests (SecretariatEssentialsTests), which set this to True.
+    enforce_event_held = False
+
     def setUp(self):
+        if not self.enforce_event_held:
+            for target, value in (
+                ("recruitment.services.event_not_held_yet", False),
+                ("recruitment.services.event_held_by", True),
+            ):
+                held = patch(target, return_value=value)
+                held.start()
+                self.addCleanup(held.stop)
         self.applicant = User.objects.create_user(
             username="applicant",
             password="testpass123",
@@ -2546,7 +2561,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
             level=PositionPosting.Level.LEVEL_1,
             intake_mode=PositionPosting.IntakeMode.FIXED_PERIOD,
             status=PositionPosting.EntryStatus.DRAFT,
-            item_number="OSEC-DOH-AA6-1-2026",
+            item_number="OSEC-DOH-AA6-11-2026",
             publication_date=publication_date,
             opening_date=publication_date,
             closing_date=expected_closing_date,
@@ -2564,7 +2579,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
             level=PositionPosting.Level.LEVEL_1,
             intake_mode=PositionPosting.IntakeMode.FIXED_PERIOD,
             status=PositionPosting.EntryStatus.DRAFT,
-            item_number="OSEC-DOH-AA6-1-2026",
+            item_number="OSEC-DOH-AA6-12-2026",
             publication_date=publication_date,
             opening_date=publication_date,
             closing_date=publication_date + timedelta(days=30),
@@ -2798,7 +2813,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
             {
                 "position_reference": self.admin_aide_position.pk,
                 "branch": PositionPosting.Branch.PLANTILLA,
-                "item_number": "OSEC-DOH-AA6-1-2026",
+                "item_number": "OSEC-DOH-AA6-13-2026",
                 "intake_mode": PositionPosting.IntakeMode.FIXED_PERIOD,
                 "status": PositionPosting.EntryStatus.ACTIVE,
                 "publication_date": "",
@@ -2827,7 +2842,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
             {
                 "position_reference": self.admin_aide_position.pk,
                 "branch": PositionPosting.Branch.PLANTILLA,
-                "item_number": "OSEC-DOH-AA6-1-2026",
+                "item_number": "OSEC-DOH-AA6-14-2026",
                 "intake_mode": PositionPosting.IntakeMode.FIXED_PERIOD,
                 "status": PositionPosting.EntryStatus.ACTIVE,
                 "publication_date": "",
@@ -22357,3 +22372,222 @@ class MyApplicationsAndLanguageEmailTests(BaseRecruitmentTestCase):
         self.assertContains(hub, reverse("applicant-status-lookup"))
         lookup = Client().get(reverse("applicant-status-lookup"))
         self.assertContains(lookup, "See all your applications with just your email")
+
+
+class SecretariatEssentialsTests(BaseRecruitmentTestCase):
+    """The six essential fixes from docs/secretariat-walkthrough-2026-11.md."""
+
+    enforce_event_held = True
+    _submit = BatchExamTests._submit
+    _extra_submitted_application = BatchExamTests._extra_submitted_application
+    _two_qualified = BatchExamTests._two_qualified
+    _schedule_payload = BatchExamTests._schedule_payload
+
+    def _not_yet(self):
+        # Setup steps that record results "afterwards" use the suite-wide stand-in.
+        return patch("recruitment.services.event_not_held_yet", return_value=False)
+
+    def _plantilla_at_interview(self):
+        first, second = self._two_qualified(self.level1_position)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(self.level1_position, self.secretariat, self._schedule_payload())
+        with self._not_yet(), self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_scores(
+                self.level1_position,
+                self.secretariat,
+                {
+                    first.case.id: {"general_score": "90", "technical_score": "80"},
+                    second.case.id: {"general_score": "85", "technical_score": "75"},
+                },
+                finalize=True,
+            )
+        first.refresh_from_db()
+        second.refresh_from_db()
+        return first, second
+
+    # P1-2: results wait for the sitting
+    def test_exam_results_cannot_be_finalized_before_the_exam(self):
+        first, second = self._two_qualified(self.level1_position)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(self.level1_position, self.secretariat, self._schedule_payload())
+        scores = {
+            first.case.id: {"general_score": "90", "technical_score": "80"},
+            second.case.id: {"general_score": "85", "technical_score": "75"},
+        }
+        with self.assertRaisesMessage(ValueError, "The exam is scheduled for"):
+            save_vacancy_exam_scores(self.level1_position, self.secretariat, scores, finalize=True)
+        # Saving them as a draft is fine; once the sitting has passed, finalize works.
+        save_vacancy_exam_scores(self.level1_position, self.secretariat, scores, finalize=False)
+        ExamSchedule.objects.filter(application__in=[first, second]).update(
+            scheduled_for=timezone.now() - timedelta(hours=1)
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_scores(self.level1_position, self.secretariat, scores, finalize=True)
+        first.refresh_from_db()
+        self.assertEqual(first.case.current_stage, RecruitmentCase.Stage.HRMPSB_REVIEW)
+
+    def test_interview_cannot_be_finalized_before_it_takes_place(self):
+        self._plantilla_at_interview()
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_interview_schedule(
+                self.level1_position,
+                self.secretariat,
+                {"scheduled_for": timezone.now() + timedelta(days=2), "location": "Board Room", "session_notes": ""},
+            )
+        with self.assertRaisesMessage(ValueError, "The interview is scheduled for"):
+            finalize_vacancy_interview_batch(self.level1_position, self.secretariat)
+
+    # P1-3: the sent schedule is visible; a second send is a marked change
+    def test_a_changed_exam_schedule_is_shown_and_marked_as_a_change(self):
+        first, _second = self._two_qualified(self.level1_position)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(self.level1_position, self.secretariat, self._schedule_payload())
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        page = client.get(reverse("vacancy-batch-exam", args=[self.level1_position.pk]))
+        self.assertContains(page, "data-current-sitting")
+        self.assertContains(page, "Change the schedule")
+        moved = dict(self._schedule_payload(), scheduled_for=timezone.now() + timedelta(hours=5), venue="Room 2")
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(self.level1_position, self.secretariat, moved)
+        subjects = list(
+            NotificationLog.objects.filter(
+                application=first, notification_type=NotificationLog.NotificationType.EXAM_INVITATION
+            ).order_by("created_at").values_list("subject", flat=True)
+        )
+        self.assertEqual(len(subjects), 2)
+        self.assertIn("exam invitation", subjects[0])
+        self.assertIn("exam schedule changed", subjects[1])
+        self.assertEqual(ExamSchedule.objects.filter(application=first).count(), 1)
+
+    def test_staff_notices_and_past_invitations_cannot_be_resent(self):
+        first, _second = self._two_qualified(self.level1_position)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(self.level1_position, self.secretariat, self._schedule_payload())
+        invitation = NotificationLog.objects.get(
+            application=first, notification_type=NotificationLog.NotificationType.EXAM_INVITATION
+        )
+        staff_notice = NotificationLog.objects.create(
+            application=first,
+            notification_type=NotificationLog.NotificationType.INTERVIEW_SESSION_SCHEDULED,
+            recipient_email="panel@example.com",
+            subject="Interview scheduled",
+            body="Internal notice.",
+        )
+        with self.assertRaisesMessage(ValueError, "Only emails sent to the applicant"):
+            resend_notification(staff_notice, self.secretariat)
+        invitation.metadata = dict(
+            invitation.metadata, scheduled_for=(timezone.now() - timedelta(days=1)).isoformat()
+        )
+        invitation.save(update_fields=["metadata"])
+        with self.assertRaisesMessage(ValueError, "already passed"):
+            resend_notification(invitation, self.secretariat)
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        page = client.get(reverse("application-detail", args=[first.pk]))
+        self.assertNotIn(staff_notice, page.context["notification_log_entries"])
+
+    # P1-1: the panel never sees who a candidate is
+    def test_the_panel_never_sees_the_applicants_identity(self):
+        first, _second = self._plantilla_at_interview()
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_interview_schedule(
+                self.level1_position,
+                self.secretariat,
+                {"scheduled_for": timezone.now() + timedelta(hours=3), "location": "Board Room", "session_notes": ""},
+            )
+        first.refresh_from_db()
+        client = Client()
+        self.force_login_with_mfa(client, self.hrmpsb)
+        secrets = [first.applicant_display_name, first.applicant_email, first.reference_number]
+        for url in (
+            reverse("vacancy-batch-detail", args=[self.level1_position.pk]),
+            reverse("vacancy-batch-interview", args=[self.level1_position.pk]),
+            reverse("application-detail", args=[first.pk]),
+            reverse("notification-list"),
+        ):
+            response = client.get(url)
+            self.assertEqual(response.status_code, 200, url)
+            for secret in secrets:
+                self.assertNotContains(response, secret, msg_prefix=url)
+        for title, body in Notification.objects.filter(recipient=self.hrmpsb).values_list("title", "body"):
+            for secret in secrets:
+                self.assertNotIn(secret, title + body)
+
+    # P1-4: the HRM Chief's COS re-check reuses the Secretariat's sitting
+    def test_cos_chief_recheck_reuses_the_sitting_and_offers_the_scores(self):
+        first, second = self._two_qualified(self.cos_position)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(self.cos_position, self.secretariat, self._schedule_payload())
+        scores = {
+            first.case.id: {"general_score": "82", "technical_score": "80"},
+            second.case.id: {"general_score": "78", "technical_score": "74"},
+        }
+        with self._not_yet(), self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_scores(self.cos_position, self.secretariat, scores, finalize=True)
+        for application in (first, second):
+            application.refresh_from_db()
+            self.finalize_screening_for_current_stage(application, self.hrm_chief)
+        invitations = NotificationLog.objects.filter(
+            notification_type=NotificationLog.NotificationType.EXAM_INVITATION
+        )
+        sent_before = invitations.count()
+        client = Client()
+        self.force_login_with_mfa(client, self.hrm_chief)
+        page = client.get(reverse("vacancy-batch-exam", args=[self.cos_position.pk]))
+        self.assertContains(page, "no new schedule is needed")
+        self.assertContains(page, "data-copy-prior-scores")
+        self.assertContains(page, "Earlier review: 82")
+        self.assertNotContains(page, "Send the exam schedule to the batch (section 1) before finalizing")
+        with self._not_yet(), self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_scores(self.cos_position, self.hrm_chief, scores, finalize=True)
+        self.assertEqual(invitations.count(), sent_before)
+
+    # P1-5: one open posting per plantilla item
+    def test_a_plantilla_item_can_only_be_open_once(self):
+        from django.db import IntegrityError, transaction as db_transaction
+
+        with self.assertRaises(IntegrityError), db_transaction.atomic():
+            PositionPosting.objects.create(
+                position_reference=self.admin_aide_position,
+                title="Administrative Aide VI",
+                branch=PositionPosting.Branch.PLANTILLA,
+                level=PositionPosting.Level.LEVEL_1,
+                item_number=self.level1_position.item_number,
+                status=PositionPosting.EntryStatus.ACTIVE,
+                intake_mode=PositionPosting.IntakeMode.FIXED_PERIOD,
+                opening_date=timezone.localdate(),
+                closing_date=timezone.localdate() + timedelta(days=14),
+                job_code="VAC-PLT-2026-990",
+            )
+        form = RecruitmentEntryForm(
+            data={
+                "position_reference": self.admin_aide_position.pk,
+                "branch": PositionPosting.Branch.PLANTILLA,
+                "status": PositionPosting.EntryStatus.ACTIVE,
+                "intake_mode": PositionPosting.IntakeMode.FIXED_PERIOD,
+                "item_number": self.level1_position.item_number.lower(),
+                "opening_date": timezone.localdate().isoformat(),
+                "closing_date": (timezone.localdate() + timedelta(days=14)).isoformat(),
+            }
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("already being filled", str(form.errors["item_number"]))
+
+    # P1-6: a portal withdrawal request is visible where the office works
+    def test_a_withdrawal_request_is_flagged_on_queue_and_batch_lists(self):
+        first, _second = self._two_qualified(self.level1_position)
+        RecruitmentApplication.objects.filter(pk=first.pk).update(
+            withdrawal_requested_at=timezone.now(), withdrawal_request_reason="Took another job."
+        )
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        for url in (
+            reverse("workflow-queue"),
+            reverse("vacancy-batch-detail", args=[self.level1_position.pk]),
+            reverse("vacancy-batch-exam", args=[self.level1_position.pk]),
+        ):
+            response = client.get(url)
+            self.assertContains(response, "data-flag-withdrawal-requested", msg_prefix=url)
+        page = client.get(reverse("vacancy-batch-exam", args=[self.level1_position.pk]))
+        self.assertContains(page, "asked to withdraw")

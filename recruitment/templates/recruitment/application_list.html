@@ -202,6 +202,7 @@
                                     {{ task_label }}
                                 </span>
                                 {% include "internal_includes/stage_sla_badge.html" with recruitment_case=application.case variant="sm" %}
+                                {% include "internal_includes/case_flags.html" with application=application %}
                                 {% if application.completion_record.is_overdue %}
                                     {% comment %} RD-8: the tracked completion deadline has
                                        passed with requirements still pending. {% endcomment %}

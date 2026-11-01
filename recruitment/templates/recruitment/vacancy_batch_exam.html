@@ -30,6 +30,13 @@
     </div>
 </div>
 
+{% if withdrawal_requests %}
+    <div class="alert alert-warning" role="status" data-withdrawal-requests>
+        <strong>{{ withdrawal_requests|length }} applicant{{ withdrawal_requests|length|pluralize }} asked to withdraw:</strong>
+        {% for application in withdrawal_requests %}<a href="{% url 'application-detail' application.pk %}">{{ application|case_ref_for:request.user }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}.
+        Record the withdrawal on the case first, so they aren't sent this batch's schedule.
+    </div>
+{% endif %}
 {% if not screening_batch.is_ready %}
     <div class="alert alert-warning" role="status">
         Screening batch is on hold: <strong>{{ screening_batch.pending }}</strong>
@@ -61,8 +68,22 @@
 {# ── One schedule for the whole batch ─────────────────────────── #}
 <div class="card p-4 mb-3">
     <h2 class="h6 mb-1">1 — Schedule the exam (applies to every candidate)</h2>
-    <p class="rg-note mb-3">The whole qualified pool sits the exam together. Each applicant is notified.</p>
-    <form method="post">
+    {% if current_sitting %}
+        {% comment %}What the candidates were already told. Changing it is deliberate,
+          confirmed, and emails a clearly marked "schedule changed" notice.{% endcomment %}
+        <div class="alert alert-success mb-3" role="status" data-current-sitting>
+            <strong>Sent to {{ candidate_count }} candidate{{ candidate_count|pluralize }}:</strong>
+            {{ current_sitting.scheduled_for|date:"F j, Y" }} at {{ current_sitting.scheduled_for|date:"g:i A" }},
+            {{ current_sitting.venue }}.
+            {% if sitting_from_earlier_stage %}
+                Scheduled at the earlier review &mdash; the candidates sit this exam once, so no new schedule is needed here.
+            {% endif %}
+        </div>
+    {% else %}
+        <p class="rg-note mb-3">The whole qualified pool sits the exam together. Each applicant is notified.</p>
+    {% endif %}
+    {% if not current_sitting %}
+    <form method="post" id="examScheduleForm" class="mt-3">
         {% csrf_token %}
         <input type="hidden" name="operation" value="save_schedule">
         <div class="row g-3">
@@ -72,12 +93,39 @@
             <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=schedule_form.notice_delivery %}</div>
         </div>
         <div class="rg-form-actions mt-3">
-            <button type="submit" class="btn btn-rg-primary"{% if not screening_batch.is_ready %} disabled{% endif %}>
-                Send schedule to batch
+            <button type="button" class="btn btn-rg-primary"{% if not screening_batch.is_ready %} disabled{% endif %}
+                    data-bs-toggle="modal" data-bs-target="#confirmSendExamSchedule">
+                {% if current_sitting %}Send the changed schedule{% else %}Send schedule to batch{% endif %}
             </button>
         </div>
     </form>
+    {% elif not sitting_from_earlier_stage %}
+        <details class="mb-1">
+            <summary class="btn btn-outline-secondary btn-sm">Change the schedule</summary>
+    <form method="post" id="examScheduleForm" class="mt-3">
+        {% csrf_token %}
+        <input type="hidden" name="operation" value="save_schedule">
+        <div class="row g-3">
+            <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=schedule_form.scheduled_for %}</div>
+            <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=schedule_form.venue %}</div>
+            <div class="col-md-8">{% include "recruitment/includes/form_field.html" with field=schedule_form.instructions %}</div>
+            <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=schedule_form.notice_delivery %}</div>
+        </div>
+        <div class="rg-form-actions mt-3">
+            <button type="button" class="btn btn-rg-primary"{% if not screening_batch.is_ready %} disabled{% endif %}
+                    data-bs-toggle="modal" data-bs-target="#confirmSendExamSchedule">
+                {% if current_sitting %}Send the changed schedule{% else %}Send schedule to batch{% endif %}
+            </button>
+        </div>
+    </form>
+        </details>
+    {% endif %}
 </div>
+{% if current_sitting %}
+    {% include "internal_includes/modal_confirm.html" with modal_id="confirmSendExamSchedule" title="Send a changed exam schedule?" body="Every candidate in this batch gets an email marked “Exam schedule changed” that replaces the schedule they already have." confirm_label="Send the changed schedule" cancel_label="Cancel" form_id="examScheduleForm" %}
+{% else %}
+    {% include "internal_includes/modal_confirm.html" with modal_id="confirmSendExamSchedule" title="Send the exam schedule?" body="Every candidate in this batch is notified of this date, time and venue." confirm_label="Send schedule to batch" cancel_label="Cancel" form_id="examScheduleForm" %}
+{% endif %}
 
 {# ── One score grid + one finalize ────────────────────────────── #}
 <div class="card p-4 mb-3">
@@ -89,6 +137,14 @@
     </p>
     <form method="post" id="examScoreForm" novalidate>
         {% csrf_token %}
+        {% if has_prior_scores %}
+            {% comment %}COS two-pass: the earlier review's finalized results, copied into this
+              still-editable form on request. Change anything you disagree with before saving.{% endcomment %}
+            <div class="alert alert-info d-flex flex-wrap align-items-center gap-2" role="status">
+                <span>The earlier review already recorded this sitting's scores (shown under each field).</span>
+                <button type="button" class="btn btn-sm btn-outline-primary" data-copy-prior-scores>Copy scores from the earlier review</button>
+            </div>
+        {% endif %}
         <div class="rg-itbl">
             <div class="table-responsive">
                 <table class="table align-middle">
@@ -108,6 +164,7 @@
                                     {% comment %} Ronel revision: identify candidates by case
                                        number, not name, to reduce selection bias. {% endcomment %}
                                     <div class="fw-bold" style="font-size:0.8rem;">{{ candidate.application.reference_label }}</div>
+                                    {% include "internal_includes/case_flags.html" with application=candidate.application %}
                                 </td>
                                 <td>
                                     {% comment %} RD-2: Absent/Waived lives here now — the
@@ -132,13 +189,17 @@
                                     <input type="number" step="0.01" min="0" max="100" class="form-control js-exam-score"
                                            data-case-id="{{ candidate.case_id }}"
                                            name="general_score_{{ candidate.case_id }}"
+                                           {% if candidate.prior_record %}data-prior="{{ candidate.prior_record.general_score|default_if_none:'' }}"{% endif %}
                                            value="{{ candidate.general_score|default_if_none:'' }}">
+                                    {% if candidate.prior_record %}<div class="rg-imeta mt-1">Earlier review: {{ candidate.prior_record.general_score|default_if_none:"—" }}</div>{% endif %}
                                 </td>
                                 <td>
                                     <input type="number" step="0.01" min="0" max="100" class="form-control js-exam-score"
                                            data-case-id="{{ candidate.case_id }}"
                                            name="technical_score_{{ candidate.case_id }}"
+                                           {% if candidate.prior_record %}data-prior="{{ candidate.prior_record.technical_score|default_if_none:'' }}"{% endif %}
                                            value="{{ candidate.technical_score|default_if_none:'' }}">
+                                    {% if candidate.prior_record %}<div class="rg-imeta mt-1">Earlier review: {{ candidate.prior_record.technical_score|default_if_none:"—" }}</div>{% endif %}
                                 </td>
                                 <td>
                                     {% if candidate.exam_record and candidate.exam_record.is_finalized %}
@@ -210,6 +271,21 @@
 {% include "internal_includes/modal_confirm.html" with modal_id="confirmFinalizeExam" variant="destructive" title="Finalize this exam batch?" body=finalize_exam_body summary_items=finalize_exam_summary_items confirm_label="Finalize Exam Batch" cancel_label="Cancel" form_id="examScoreForm" confirm_name="operation" confirm_value="finalize" %}
 
 <script>
+// COS two-pass: copy the earlier review's scores into the editable fields (only empty ones,
+// so nothing the reviewer already typed is overwritten).
+(function () {
+    var btn = document.querySelector("[data-copy-prior-scores]");
+    if (!btn) return;
+    btn.addEventListener("click", function () {
+        document.querySelectorAll("#examScoreForm input[data-prior]").forEach(function (input) {
+            if (!input.value && input.getAttribute("data-prior")) {
+                input.value = input.getAttribute("data-prior");
+                input.dispatchEvent(new Event("input", { bubbles: true }));
+            }
+        });
+    });
+})();
+
 (function () {
     "use strict";
     var form = document.getElementById("examScoreForm");

@@ -93,6 +93,7 @@ from .models import (
     StageRecordVersion,
 )
 from .notification_services import (
+    INTERNAL_AUDIENCE_NOTIFICATION_TYPES,
     NOTIFICATION_MANAGER_ROLES,
     get_recent_notifications,
     get_unread_count,
@@ -196,6 +197,7 @@ from .services import (
     get_evidence_queryset_for_user,
     get_exam_record,
     get_exam_schedule,
+    get_notified_exam_sitting,
     get_exam_records,
     get_final_decision_history,
     get_final_selection_for_application,
@@ -950,7 +952,9 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
             context["screening_position_reference"] = application.position.position_reference
         if user_can_manage_exam(user, application):
             exam_record = context["current_exam_record"]
-            exam_schedule = get_exam_schedule(application)
+            # The sitting the applicant was told about, even when it was scheduled at an
+            # earlier review stage (the HRM Chief re-checking the Secretariat's exam).
+            exam_schedule = get_notified_exam_sitting(application) or get_exam_schedule(application)
             context["current_exam_schedule"] = exam_schedule
             if exam_record and exam_record.is_finalized:
                 context["exam_locked"] = True
@@ -1262,10 +1266,13 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
         if user.role in NOTIFICATION_MANAGER_ROLES:
             # RD-9: delivery state visible where work happens. NOT shown to
             # HRMPSB — the log's subjects carry applicant names (blinding).
+            # Only the emails that went to the applicant: staff notices (e.g. the panel's
+            # interview notice) belong to the case history, not to a box that offers to
+            # "Send again" to the applicant.
             context["notification_log_entries"] = list(
-                application.notifications.select_related("triggered_by").order_by(
-                    "-created_at"
-                )[:25]
+                application.notifications.select_related("triggered_by")
+                .exclude(notification_type__in=INTERNAL_AUDIENCE_NOTIFICATION_TYPES)
+                .order_by("-created_at")[:25]
             )
         context["can_export"] = user_can_export_application(user, application)
         record_protected_record_access(
@@ -1994,6 +2001,16 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
         candidates = []
         for application in pool:
             exam_record = get_exam_record(application)
+            # At a re-validation stage (HRM Chief re-checking the Secretariat's exam), the
+            # earlier pass's finalized scores are offered for copying — never auto-accepted.
+            prior_record = next(
+                (
+                    record
+                    for record in reversed(list(get_exam_records(application)))
+                    if record.is_finalized and record.review_stage != application.case.current_stage
+                ),
+                None,
+            )
             candidates.append(
                 {
                     "application": application,
@@ -2002,12 +2019,21 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
                     "exam_status": exam_record.exam_status if exam_record else "",
                     "general_score": exam_record.general_score if exam_record else None,
                     "technical_score": exam_record.technical_score if exam_record else None,
-                    "schedule": get_exam_schedule(application),
+                    "schedule": get_notified_exam_sitting(application),
+                    "prior_record": prior_record,
                 }
             )
         weights = entry.assessment_weights_or_default
         candidate_count = len(candidates)
         schedule_sent = bool(candidates) and all(c["schedule"] for c in candidates)
+        # What every candidate was told (the batch sits once): shown at the top of section 1
+        # so nobody re-sends a schedule that already went out.
+        current_sitting = candidates[0]["schedule"] if schedule_sent else None
+        sitting_from_earlier_stage = bool(
+            current_sitting
+            and pool
+            and current_sitting.review_stage != pool[0].case.current_stage
+        )
         finalize_exam_body = (
             f"This locks the recorded exam scores for all {candidate_count} "
             f"candidate{'' if candidate_count == 1 else 's'} and moves the whole pool to the "
@@ -2029,17 +2055,39 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
                 "marked Absent/Waived will not proceed"
             )
         first_exam_record = candidates[0]["exam_record"] if candidates else None
+        withdrawal_requests = [
+            c["application"]
+            for c in candidates
+            if c["application"].withdrawal_requested_at
+            and c["application"].status != RecruitmentApplication.Status.WITHDRAWN
+        ]
         return {
             "finalize_exam_summary_items": finalize_exam_summary_items,
+            "withdrawal_requests": withdrawal_requests,
             "entry": entry,
             "candidates": candidates,
             "candidate_count": candidate_count,
             "schedule_sent": schedule_sent,
+            "current_sitting": current_sitting,
+            "has_prior_scores": any(c["prior_record"] for c in candidates),
+            "sitting_from_earlier_stage": sitting_from_earlier_stage,
             "finalize_exam_body": finalize_exam_body,
             "is_plantilla": entry.branch == PositionPosting.Branch.PLANTILLA,
             "screening_batch": vacancy_screening_batch_status(entry),
             "weights": weights,
-            "schedule_form": schedule_form or ExamScheduleForm(),
+            "schedule_form": schedule_form
+            or ExamScheduleForm(
+                initial=(
+                    {
+                        "scheduled_for": timezone.localtime(current_sitting.scheduled_for).strftime("%Y-%m-%dT%H:%M"),
+                        "venue": current_sitting.venue,
+                        "instructions": current_sitting.instructions,
+                        "notice_delivery": current_sitting.notice_delivery,
+                    }
+                    if current_sitting
+                    else None
+                )
+            ),
             "batch_valid_from": (
                 first_exam_record.valid_from if first_exam_record else None
             ),
@@ -2317,7 +2365,14 @@ class VacancyBatchInterviewView(LoginRequiredMixin, WorkflowProcessorRequiredMix
                 rating_sheet_url = reverse(
                     "interview-rating-sheet", kwargs={"pk": pool[0].pk}
                 )
+        withdrawal_requests = [
+            c["application"]
+            for c in candidates
+            if c["application"].withdrawal_requested_at
+            and c["application"].status != RecruitmentApplication.Status.WITHDRAWN
+        ]
         return {
+            "withdrawal_requests": withdrawal_requests,
             "entry": entry,
             "candidates": candidates,
             "is_plantilla": is_plantilla,

@@ -15,7 +15,7 @@
 <div class="row justify-content-center">
     <div class="col-xl-10">
         <div class="card p-4">
-            <form method="post">
+            <form method="post" data-entry-form>
                 {% csrf_token %}
                 {% if form.non_field_errors %}
                     <div class="alert alert-danger">{{ form.non_field_errors }}</div>
@@ -137,6 +137,16 @@
 </div>
 
 <script>
+// One click, one vacancy: the Save button can't be pressed twice while the page submits.
+(function () {
+    var form = document.querySelector("[data-entry-form]");
+    if (!form) return;
+    form.addEventListener("submit", function () {
+        var btn = form.querySelector('button[type="submit"]');
+        if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
+    });
+})();
+
 (function () {
     var selector = document.getElementById('{{ form.position_reference.id_for_label }}');
     if (!selector) {

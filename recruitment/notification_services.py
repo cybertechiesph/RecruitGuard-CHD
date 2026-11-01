@@ -2,8 +2,10 @@ import functools
 import logging
 import smtplib
 import socket
+from .blinding import blind_text, is_blind_viewer
 from datetime import timedelta
 
+from django.utils.dateparse import parse_datetime
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
@@ -131,6 +133,10 @@ def create_in_app_notification(
 ):
     if not recipient or not getattr(recipient, "is_active", False):
         return None
+    if application is not None and is_blind_viewer(recipient):
+        # The panel never learns who a candidate is, not even from a notice title.
+        title = blind_text(title, application)
+        body = blind_text(body, application)
     return Notification.objects.create(
         recipient=recipient,
         kind=kind,
@@ -849,6 +855,20 @@ def resend_notification(notification_log, actor):
     """
     if actor.role not in NOTIFICATION_MANAGER_ROLES:
         raise ValueError("Only Secretariat or HRM Chief may resend applicant emails.")
+    if _email_audience_for(notification_log.notification_type) != "applicant":
+        # The recipient below is re-resolved from the application, so resending a staff
+        # notice would deliver an internal email to the applicant.
+        raise ValueError("Only emails sent to the applicant can be sent again from here.")
+    if notification_log.notification_type in {
+        NotificationLog.NotificationType.EXAM_INVITATION,
+        NotificationLog.NotificationType.APPLICANT_INTERVIEW_NOTICE,
+    }:
+        scheduled_for = parse_datetime((notification_log.metadata or {}).get("scheduled_for") or "")
+        if scheduled_for and scheduled_for < timezone.now():
+            raise ValueError(
+                "This schedule has already passed, so its notice can't be sent again. "
+                "Schedule a new date if the applicant still needs to attend."
+            )
     application = notification_log.application
     recipient_email = (
         (_recipient_email(application) or "").strip().lower()
@@ -1250,15 +1270,22 @@ def queue_interview_session_scheduled_notifications(
     return notifications
 
 
-def _build_exam_invitation_notification(application, exam_schedule):
-    lines = [
-        gettext("Dear %(name)s,") % {"name": application.applicant_display_name},
-        "",
+def _build_exam_invitation_notification(application, exam_schedule, changed=False):
+    intro = (
         gettext(
+            "The examination for %(title)s has a new schedule. This replaces the schedule we "
+            "sent you earlier. Please note the new details below:"
+        )
+        if changed
+        else gettext(
             "Good news. You passed the initial screening for %(title)s "
             "and are invited to take the examination. Please note the details below:"
         )
-        % {"title": application.position.title},
+    )
+    lines = [
+        gettext("Dear %(name)s,") % {"name": application.applicant_display_name},
+        "",
+        intro % {"title": application.position.title},
         "",
         gettext("Schedule: %(when)s") % {"when": _format_schedule(exam_schedule.scheduled_for)},
         gettext("Venue: %(venue)s") % {"venue": exam_schedule.venue},
@@ -1276,16 +1303,17 @@ def _build_exam_invitation_notification(application, exam_schedule):
             % {"link": build_applicant_status_url(application)},
         ]
     )
-    return (
-        gettext("DOH–CHD CALABARZON Recruitment Portal exam invitation: %(title)s")
-        % {"title": application.position.title},
-        "\n".join(lines),
+    subject = (
+        gettext("DOH–CHD CALABARZON Recruitment Portal exam schedule changed: %(title)s")
+        if changed
+        else gettext("DOH–CHD CALABARZON Recruitment Portal exam invitation: %(title)s")
     )
+    return subject % {"title": application.position.title}, "\n".join(lines)
 
 
 @_in_applicant_language
-def queue_exam_invitation_notification(application, exam_schedule, actor=None):
-    subject, body = _build_exam_invitation_notification(application, exam_schedule)
+def queue_exam_invitation_notification(application, exam_schedule, actor=None, changed=False):
+    subject, body = _build_exam_invitation_notification(application, exam_schedule, changed=changed)
     return queue_notification(
         application,
         notification_type=NotificationLog.NotificationType.EXAM_INVITATION,
@@ -1303,6 +1331,7 @@ def queue_exam_invitation_notification(application, exam_schedule, actor=None):
             "venue": exam_schedule.venue,
             "instructions": (exam_schedule.instructions or "").strip(),
             "status_link": build_applicant_status_url(application),
+            "schedule_changed": changed,
         },
     )
 

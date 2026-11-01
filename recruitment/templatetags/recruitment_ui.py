@@ -5,6 +5,7 @@ from django import template
 from django.conf import settings
 from django.utils.timesince import timesince as django_timesince
 
+from recruitment.blinding import case_ref_for as _case_ref_for, identity_for as _identity_for
 from recruitment.models import (
     audit_action_label as resolve_audit_action_label,
     AuditLog,
@@ -29,6 +30,18 @@ from recruitment.services import (
 )
 
 register = template.Library()
+
+
+@register.filter
+def identity_for(application, user):
+    """Applicant name for staff; "Candidate C-07" for HRMPSB members (blind review)."""
+    return _identity_for(application, user)
+
+
+@register.filter
+def case_ref_for(application, user):
+    """Case reference for staff; the candidate code for HRMPSB members (blind review)."""
+    return _case_ref_for(application, user)
 
 # Apps that open links in their own built-in browser (Facebook, Messenger, Instagram, LINE,
 # WeChat, TikTok). Vacancies are shared on Facebook, so many applicants arrive this way, and

@@ -477,10 +477,25 @@ class PositionPosting(TimestampedModel):
         null=True,
     )
 
+    # A plantilla item can be filled once: only one open (draft, active or suspended)
+    # posting may carry a given item number. Closed and cancelled postings keep theirs.
+    OPEN_ITEM_STATUSES = ("draft", "active", "suspended")
+
     class Meta:
         ordering = ["title"]
         verbose_name = "Recruitment Entry"
         verbose_name_plural = "Recruitment Entries"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["item_number"],
+                condition=(
+                    models.Q(branch="plantilla")
+                    & ~models.Q(item_number="")
+                    & models.Q(status__in=("draft", "active", "suspended"))
+                ),
+                name="one_open_posting_per_plantilla_item",
+            ),
+        ]
 
     @property
     def official_office_label(self):

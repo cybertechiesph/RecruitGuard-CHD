@@ -3824,6 +3824,41 @@ def get_exam_records(application):
     ).order_by("created_at")
 
 
+def event_not_held_yet(when):
+    """True while a scheduled exam/interview is still in the future (results for it can't be
+    finalized yet). One function so both guards, and the test suite, share the rule."""
+    return bool(when and when > timezone.now())
+
+
+def event_held_by(when, day):
+    """True when an event scheduled at `when` had taken place by the date `day`."""
+    return timezone.localtime(when).date() <= day
+
+
+def not_held_yet_message(event, when):
+    """Why results can't be finalized yet: the exam/interview is still in the future."""
+    local = timezone.localtime(when)
+    return (
+        f"The {event} is scheduled for {local:%B} {local.day}, {local.year} at "
+        f"{local:%I:%M %p}".replace(" at 0", " at ")
+        + f". Its results can be finalized once it has taken place; you can save them as a draft until then."
+    )
+
+
+def get_notified_exam_sitting(application):
+    """The exam sitting this applicant was actually told about: the current review stage's
+    notified schedule, or (at a re-validation stage such as the HRM Chief re-checking the
+    Secretariat's exam) the one notified at an earlier stage. One sitting, one notice."""
+    current = get_exam_schedule(application)
+    if current is not None and current.applicant_was_notified:
+        return current
+    return (
+        application.exam_schedules.filter(applicant_notified_at__isnull=False)
+        .order_by("-scheduled_for")
+        .first()
+    )
+
+
 def get_exam_schedule(application, stage=None):
     review_stage = stage or get_current_review_stage(application)
     return application.exam_schedules.select_related(
@@ -5968,7 +6003,14 @@ def save_exam_schedule(application, actor, cleaned_data, record_audit=True):
     exam_schedule.save()
 
     if should_notify and notice_delivery == ExamSchedule.NoticeDelivery.SYSTEM_EMAIL:
-        queue_exam_invitation_notification(application, exam_schedule, actor=actor)
+        # A second send for the same sitting is a change, and says so: the applicant must be
+        # able to tell which of two emails is current.
+        queue_exam_invitation_notification(
+            application,
+            exam_schedule,
+            actor=actor,
+            changed=not created and bool(previous_scheduled_for),
+        )
 
     if record_audit:
         record_audit_event(
@@ -6030,6 +6072,22 @@ def save_exam_record(
             raise ValueError(
                 "Schedule the examination and notify the applicant before recording final results."
             )
+        # Results describe a sitting that has happened: finalizing before the scheduled time
+        # would record (and route on) scores for an exam nobody has taken yet. A waived exam
+        # is an office decision and needs no sitting.
+        sitting = (
+            exam_schedule
+            if exam_schedule and exam_schedule.applicant_was_notified
+            else application.exam_schedules.filter(applicant_notified_at__isnull=False)
+            .order_by("-scheduled_for")
+            .first()
+        )
+        if (
+            (cleaned_data.get("exam_status") or "") != ExamRecord.ExamStatus.WAIVED
+            and sitting is not None
+            and event_not_held_yet(sitting.scheduled_for)
+        ):
+            raise ValueError(not_held_yet_message("exam", sitting.scheduled_for))
 
     created = exam_record is None
     if exam_record is None:
@@ -6415,6 +6473,10 @@ def save_interview_session(
         )
         if not existing_past_schedule_unchanged:
             raise ValueError("The interview can't be scheduled in the past.")
+    if finalize and event_not_held_yet(scheduled_for):
+        # Ratings describe an interview that has happened; finalizing early would lock and
+        # route a session nobody has sat yet.
+        raise ValueError(not_held_yet_message("interview", scheduled_for))
 
     interview_session.recruitment_case = application.case
     interview_session.recruitment_entry = application.position
@@ -7749,6 +7811,22 @@ def generate_comparative_assessment_report(application, actor, cleaned_data, fin
         deliberated_on = cleaned_data.get("deliberated_on")
         if not deliberated_on:
             raise ValueError("Record the deliberation date before finalizing the CAR.")
+        if deliberated_on > timezone.localdate():
+            raise ValueError("The deliberation date can't be in the future.")
+        last_interview = (
+            InterviewSession.objects.filter(recruitment_entry=application.position)
+            .exclude(scheduled_for__isnull=True)
+            .order_by("-scheduled_for")
+            .values_list("scheduled_for", flat=True)
+            .first()
+        )
+        if last_interview and not event_held_by(last_interview, deliberated_on):
+            # The board deliberates on the interview results, so it can't have met before them.
+            raise ValueError(
+                "The deliberation date can't be earlier than the last interview "
+                f"({timezone.localtime(last_interview):%B} {timezone.localtime(last_interview).day}, "
+                f"{timezone.localtime(last_interview).year})."
+            )
         candidate_rows = _car_candidate_rows(
             application.position,
             review_stage,

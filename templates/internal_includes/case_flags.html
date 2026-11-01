@@ -1,0 +1,9 @@
+{% comment %}
+Small status chips on a case row (queue, batch lists). Inputs: application.
+An applicant who asked to withdraw through the portal is flagged everywhere the case is
+listed, so nobody keeps scheduling or emailing them before the request is recorded.
+{% endcomment %}
+{% if application.withdrawal_requested_at and application.status != "withdrawn" %}
+    <span class="rg-pill rg-pill--warning rg-pill--sm" data-flag-withdrawal-requested
+          title="The applicant asked to withdraw on {{ application.withdrawal_requested_at|date:'F j, Y' }}. Open the case to record it.">Withdrawal requested</span>
+{% endif %}
