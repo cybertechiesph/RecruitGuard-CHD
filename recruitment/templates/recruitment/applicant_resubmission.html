@@ -1,86 +1,84 @@
 {% extends "applicant_base.html" %}
-{% load recruitment_ui %}
+{% load i18n recruitment_ui %}
 
-{% block title %}Resubmit documents | Applicant Portal{% endblock %}
+{% block title %}{% translate "Resubmit documents" %} | {% translate "Applicant Portal" %}{% endblock %}
 
 {% block site_header %}
-<header class="rg-topbar rg-public-topbar">
-    <div class="rg-container rg-topbar__inner rg-public-topbar__inner">
-        <a class="rg-brand rg-public-brand" href="{% url 'applicant-portal' %}">
-            <span class="rg-brand-copy">
-                <span class="rg-brand-kicker">Republic of the Philippines</span>
-                <span class="rg-brand-agency">Department of Health &ndash; CHD CALABARZON</span>
-                <span class="rg-brand-title">Applicant Portal</span>
-            </span>
-        </a>
-        <div class="rg-public-topbar__applying">
-            Application<br>
-            <strong>{{ application.position.title }}</strong>
-        </div>
-        {% include "text_size_control.html" %}
-    </div>
-</header>
+{% translate "Application" as header_label %}
+{% include "recruitment/includes/applicant_flow_header.html" with position_title=application.position.title label=header_label %}
 {% endblock %}
 
 {% block content %}
 <div class="rg-pub-wrap" style="max-width:560px; padding-top:1.5rem;">
     {% include "recruitment/includes/in_app_browser_notice.html" %}
-    <h1 class="rg-pub-h1">Resubmit your documents</h1>
+    <h1 class="rg-pub-h1">{% translate "Resubmit your documents" %}</h1>
     <p class="rg-pub-lead">
-        Case Reference: <strong>Case No. {{ application.case_number_short }}</strong>
+        {% blocktranslate trimmed with case=application.case_number_short %}
+        Case Reference: <strong>Case No. {{ case }}</strong>
+        {% endblocktranslate %}
     </p>
     {% if resubmission_deadline %}
         <div class="alert alert-warning" role="status">
-            Please resubmit on or before <strong>{{ resubmission_deadline|date:"F d, Y" }}</strong>.
+            {% blocktranslate trimmed with date=resubmission_deadline|date:"F d, Y" %}
+            Please resubmit on or before <strong>{{ date }}</strong>.
+            {% endblocktranslate %}
         </div>
     {% endif %}
 
     {% if not otp_verified %}
         <div class="alert alert-info" role="status">
-            <strong>{{ requirements|length }} document{{ requirements|length|pluralize }}</strong>
-            need{{ requirements|length|pluralize:"s," }} to be corrected. Verify your email to
+            {% blocktranslate trimmed count counter=requirements|length %}
+            <strong>{{ counter }} document</strong> needs to be corrected. Verify your email to
             see the details and re-upload.
+            {% plural %}
+            <strong>{{ counter }} documents</strong> need to be corrected. Verify your email to
+            see the details and re-upload.
+            {% endblocktranslate %}
         </div>
     {% endif %}
 
     {% if not otp_verified %}
         {# Step 1 — verify the applicant by email before allowing re-upload. #}
         <div class="card p-4 mb-3">
-            <h2 class="h6">Step 1 — Verify your email</h2>
+            <h2 class="h6">{% translate "Step 1 — Verify your email" %}</h2>
             <p class="rg-note">
-                We will send a {{ otp_validity_minutes }}-minute verification code to
-                <strong>{{ application.applicant_email }}</strong>.
+                {% blocktranslate trimmed with minutes=otp_validity_minutes email=application.applicant_email %}
+                We will send a {{ minutes }}-minute verification code to
+                <strong>{{ email }}</strong>.
+                {% endblocktranslate %}
             </p>
             <form method="post" class="mb-2">
                 {% csrf_token %}
                 <button type="submit" name="action" value="request_otp" class="btn btn-rg-primary">
-                    Send verification code
+                    {% translate "Send verification code" %}
                 </button>
             </form>
             <form method="post">
                 {% csrf_token %}
                 {% include "recruitment/includes/form_field.html" with field=otp_form.otp %}
                 <div class="d-flex gap-2 mt-2">
-                    <button type="submit" name="action" value="verify" class="btn btn-rg-primary">Verify code</button>
-                    <button type="submit" name="action" value="resend" class="btn btn-outline-secondary">Resend code</button>
+                    <button type="submit" name="action" value="verify" class="btn btn-rg-primary">{% translate "Verify code" %}</button>
+                    <button type="submit" name="action" value="resend" class="btn btn-outline-secondary">{% translate "Resend code" %}</button>
                 </div>
             </form>
         </div>
     {% else %}
         {# Step 2 — re-upload only the flagged documents. #}
         <div class="card p-4 mb-3">
-            <h2 class="h6">Step 2 — Re-upload the requested documents</h2>
+            <h2 class="h6">{% translate "Step 2 — Re-upload the requested documents" %}</h2>
             <p class="rg-note">
+                {% blocktranslate trimmed %}
                 Only the documents the recruitment team flagged are shown below. Your
                 already-accepted documents do not need to be uploaded again.
+                {% endblocktranslate %}
             </p>
             <form method="post" enctype="multipart/form-data" novalidate>
                 {% csrf_token %}
                 {% for field in resubmission_form %}
                     <div class="rg-resubmit-item mb-4">
                         <div class="alert alert-warning py-2 px-3 mb-2" style="font-size:0.9rem;">
-                            <strong>Why it was returned:</strong>
-                            {{ field.field.resubmission_remarks|default:"The recruitment team asked for a clearer copy of this document." }}
+                            <strong>{% translate "Why it was returned:" %}</strong>
+                            {% if field.field.resubmission_remarks %}{{ field.field.resubmission_remarks }}{% else %}{% translate "The recruitment team asked for a clearer copy of this document." %}{% endif %}
                         </div>
                         {% include "recruitment/includes/form_field.html" with field=field %}
                         {% include "recruitment/includes/requirement_downloads.html" with downloads=field.field.requirement_downloads compact=True %}
@@ -88,10 +86,10 @@
                 {% endfor %}
                 <div class="d-flex gap-2 mt-3">
                     <button type="submit" name="action" value="resubmit" class="btn btn-rg-primary">
-                        Resubmit documents
+                        {% translate "Resubmit documents" %}
                     </button>
                     <a href="{% url 'applicant-status-link' token=application.public_token %}"
-                       class="btn btn-outline-secondary">Cancel</a>
+                       class="btn btn-outline-secondary">{% translate "Cancel" %}</a>
                 </div>
             </form>
         </div>

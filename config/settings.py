@@ -2,6 +2,7 @@ import hashlib
 import os
 from pathlib import Path
 
+from django.conf.locale import LANG_INFO
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
@@ -64,6 +65,7 @@ MIDDLEWARE = [
     # Django's SessionMiddleware, except passive polls don't extend the inactivity timeout.
     "config.middleware.ActivityAwareSessionMiddleware",
     "config.middleware.RateLimitMiddleware",
+    "config.middleware.ApplicantPortalLocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -147,9 +149,15 @@ LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "dashboard"
 LOGOUT_REDIRECT_URL = "login"
 
-LANGUAGE_CODE = "en-us"
+LANGUAGE_CODE = "en"
 TIME_ZONE = os.getenv("DJANGO_TIME_ZONE", "Asia/Manila")
 USE_I18N = True
+# The applicant portal is available in English and Filipino (switch in the page header).
+# Django has no built-in entry for Filipino, so it is registered here. The internal staff
+# portal always stays in English (config.middleware.ApplicantPortalLocaleMiddleware).
+LANG_INFO["fil"] = {"bidi": False, "code": "fil", "name": "Filipino", "name_local": "Filipino"}
+LANGUAGES = [("en", "English"), ("fil", "Filipino")]
+LOCALE_PATHS = [BASE_DIR / "locale"]
 USE_TZ = True
 
 STATIC_URL = "static/"

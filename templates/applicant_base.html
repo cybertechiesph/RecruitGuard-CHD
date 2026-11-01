@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load i18n recruitment_ui %}
 
 {% block title %}Applicant Portal{% endblock %}
 {% block body_class %}applicant-portal-body{% endblock %}
@@ -21,24 +22,25 @@ background:
     <div class="rg-container rg-topbar__inner rg-public-topbar__inner">
         <a class="rg-brand rg-public-brand" href="{% url 'applicant-portal' %}">
             <span class="rg-brand-copy">
-                <span class="rg-brand-kicker">Republic of the Philippines</span>
-                <span class="rg-brand-agency">Department of Health &ndash; CHD CALABARZON</span>
-                <span class="rg-brand-title">Applicant Portal</span>
+                <span class="rg-brand-kicker">{% translate "Republic of the Philippines" %}</span>
+                <span class="rg-brand-agency">{% translate "Department of Health &ndash; CHD CALABARZON" %}</span>
+                <span class="rg-brand-title">{% translate "Applicant Portal" %}</span>
             </span>
         </a>
-        <nav class="rg-nav-actions rg-public-nav" aria-label="Applicant navigation">
+        <nav class="rg-nav-actions rg-public-nav" aria-label="{% translate 'Applicant navigation' %}">
             <a href="{% url 'applicant-portal' %}"
                class="rg-nav-link rg-nav-link--{% if request.resolver_match.url_name == 'applicant-portal' or request.resolver_match.url_name == 'applicant-vacancy-detail' %}primary{% else %}secondary{% endif %}">
-                Job Openings
+                {% translate "Job Openings" %}
             </a>
             <a href="{% url 'applicant-status-lookup' %}"
                class="rg-nav-link rg-nav-link--{% if request.resolver_match.url_name == 'applicant-status-lookup' %}primary{% else %}secondary{% endif %}">
-                Track Application
+                {% translate "Track Application" %}
             </a>
             <a href="{% url 'applicant-help' %}"
                class="rg-nav-link rg-nav-link--{% if request.resolver_match.url_name == 'applicant-help' %}primary{% else %}secondary{% endif %}">
-                Help
+                {% translate "Help" %}
             </a>
+            {% include "recruitment/includes/language_switch.html" %}
             {% include "text_size_control.html" %}
         </nav>
     </div>
@@ -54,11 +56,12 @@ background:
     </div>
     <div class="rg-public-footer__body">
         <p class="rg-public-footer__agency">
-            Department of Health &ndash; Center for Health Development CALABARZON (Region IV-A)
+            {% translate "Department of Health &ndash; Center for Health Development CALABARZON (Region IV-A)" %}
         </p>
         <p class="rg-public-footer__meta">
-            Applicant Portal &middot;
-            <a href="mailto:recruitment@chd4a.doh.gov.ph">recruitment@chd4a.doh.gov.ph</a>
+            {% office_contact as contact %}
+            {% translate "Applicant Portal" %} &middot;
+            {% translate "Questions about an application:" %} <a href="mailto:{{ contact.hrmu.email }}">{{ contact.hrmu.email }}</a>
         </p>
     </div>
 </footer>

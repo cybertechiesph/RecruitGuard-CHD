@@ -144,6 +144,36 @@ After a full applicant walkthrough:
     application pages.
 - Migration `0088_reminders_withdrawal_requests_retention`.
 
+## English / Filipino (November 2026)
+
+- **Language switch:** English / Filipino in the applicant header.
+  - Django's `set_language` remembers the choice in a cookie.
+  - A phone set to Filipino (`fil`) gets Filipino automatically.
+  - `config.middleware.ApplicantPortalLocaleMiddleware` keeps everything outside `/apply/` (staff portal, admin) in English.
+- **What's translated:** the whole applicant journey.
+  - Pages: home, vacancy, start, code, application, receipt, Track Application, resubmission.
+  - Behind them: form labels and errors, upload errors, status and timeline wording, and the application page's script messages (sent as JSON from `application_script_strings()`).
+- **What stays English:**
+  - The Help FAQ and the PDS guide. They show a Filipino notice saying they are English-only for now, and their content is marked `lang="en"` so screen readers pronounce it correctly.
+  - Official document and form names.
+  - Office-entered vacancy text.
+  - The emails.
+- **Translations live in `locale/fil/LC_MESSAGES/django.po`.**
+  - The compiled `django.mo` is committed, so the server needs no gettext tools.
+  - After changing applicant text, run `python manage.py update_translations`. It extracts the strings in pure Python, keeps existing translations and compiles the `.mo`.
+  - Then fill any empty `msgstr ""` and run it again.
+  - `--check` fails while anything is untranslated, and a test runs it.
+  - The current Filipino is a **first draft**. A native speaker at the office should review it before launch.
+- **Contact details:** one source, `recruitment/email_branding.py` (see walkthrough finding 9).
+- **Plain-language help** where jargon appears:
+  - Salary Grade
+  - Eligibility (on the qualification self-check)
+  - Performance rating (IPCR/SPMS)
+  - Plantilla vs Contract of Service (branch explainer)
+- **Leftover wording fixed:**
+  - Submit errors no longer say "before final submission".
+  - The resubmission page's "1 documents need" now has correct singular and plural forms.
+
 ## Still needs people (not code)
 - Test on real phones (a cheap Android on mobile data, an iPhone), including inside Facebook.
 - A 5-person usability test with people who have never seen the portal.

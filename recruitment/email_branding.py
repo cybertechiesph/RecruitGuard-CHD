@@ -18,6 +18,12 @@ EMAIL_LOGO_STATIC_PATH = "img/brand/chd-calabarzon-seal.png"
 CONTACT_UNIT = "Human Resource Management Unit, DOH–CHD CALABARZON"
 CONTACT_PHONE = "(02) 8249-2000 loc. 4477"
 CONTACT_EMAIL = "hrms@ro4a.doh.gov.ph"
+CONTACT_PHONE_TEL = "+6382492000,4477"  # tel: link for CONTACT_PHONE
+# General (non-recruitment) inquiries, as already published on the portal home page.
+PUBLIC_DESK_NAME = "Public Assistance Desk"
+PUBLIC_DESK_PHONE = "(02) 8249-2000 loc. 4400"
+PUBLIC_DESK_PHONE_TEL = "+6382492000,4400"
+PUBLIC_DESK_EMAIL = "chd4a_doh_calabarzon@ro4a.doh.gov.ph"
 OFFICE_NAME = "DOH Regional Office IV-A (CHD CALABARZON)"
 OFFICE_ADDRESS = (
     "Quirino Memorial Medical Center compound, Project 4, Quezon City, 1109 Metro Manila"

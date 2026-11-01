@@ -7,6 +7,7 @@ from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.text import slugify
+from django.utils.translation import gettext as _
 from django.views import View
 from django.utils import timezone
 from django.views.generic import FormView, TemplateView
@@ -89,7 +90,7 @@ def _build_applicant_upcoming_schedules(application):
     if exam_schedule:
         schedules.append(
             {
-                "kind": "Examination",
+                "kind": _("Examination"),
                 "scheduled_for": exam_schedule.scheduled_for,
                 "location": exam_schedule.venue,
                 "instructions": exam_schedule.instructions,
@@ -109,7 +110,7 @@ def _build_applicant_upcoming_schedules(application):
     if interview_session:
         schedules.append(
             {
-                "kind": "Interview",
+                "kind": _("Interview"),
                 "scheduled_for": interview_session.scheduled_for,
                 "location": interview_session.location,
                 "instructions": "",
@@ -150,24 +151,25 @@ def _build_applicant_timeline(application, status_label):
 
     steps = [
         {
-            "label": "Application submitted",
+            "label": _("Application submitted"),
             "state": "done",
             "when": application.submitted_at and timezone.localtime(application.submitted_at),
+            "date_only": True,
         }
     ]
     if phase == 1:
         note = (
-            "Some documents were returned to you to fix."
+            _("Some documents were returned to you to fix.")
             if status == RecruitmentApplication.Status.RETURNED_TO_APPLICANT
-            else "The recruitment team is checking your documents and qualifications."
+            else _("The recruitment team is checking your documents and qualifications.")
         )
-        steps.append({"label": "Document check", "state": "current", "note": note})
+        steps.append({"label": _("Document check"), "state": "current", "note": note})
     else:
-        steps.append({"label": "Document check", "state": "done"})
+        steps.append({"label": _("Document check"), "state": "done"})
 
     announced = (
-        ("Examination", application.exam_schedules, "venue"),
-        ("Interview", application.interview_sessions, "location"),
+        (_("Examination"), application.exam_schedules, "venue"),
+        (_("Interview"), application.interview_sessions, "location"),
     )
     for label, schedules, location_field in announced:
         schedule = (
@@ -188,32 +190,32 @@ def _build_applicant_timeline(application, status_label):
                 "label": label,
                 "state": state,
                 "when": timezone.localtime(schedule.scheduled_for),
-                "note": f"Where: {location}" if state == "current" and location else "",
+                "note": _("Where: %(place)s") % {"place": location} if state == "current" and location else "",
             }
         )
     if phase == 2 and not any(step["state"] == "current" for step in steps):
         steps.append(
             {
-                "label": "Examination and interview",
+                "label": _("Examination and interview"),
                 "state": "current",
-                "note": "If you are invited to an exam or interview, we will email you the schedule.",
+                "note": _("If you are invited to an exam or interview, we will email you the schedule."),
             }
         )
 
     if status == RecruitmentApplication.Status.APPROVED:
-        steps.append({"label": "Decision: Approved", "state": "done"})
+        steps.append({"label": _("Decision: Approved"), "state": "done"})
     elif ended:
-        steps.append({"label": f"Result: {status_label}", "state": "ended"})
+        steps.append({"label": _("Result: %(status)s") % {"status": status_label}, "state": "ended"})
     elif phase == 3:
         steps.append(
             {
-                "label": "Final decision",
+                "label": _("Final decision"),
                 "state": "current",
-                "note": "Your application is with the office for the final decision.",
+                "note": _("Your application is with the office for the final decision."),
             }
         )
     else:
-        steps.append({"label": "Final decision", "state": "upcoming"})
+        steps.append({"label": _("Final decision"), "state": "upcoming"})
     return steps
 
 
@@ -239,7 +241,7 @@ def _build_applicant_completion_checklist(application):
     if not items:
         return None
     return {
-        "label": record.completion_label,
+        "label": _("Appointment") if record.completion_label == "Appointment" else _("Contract"),
         "deadline": record.deadline,
         "items": [
             {
@@ -256,9 +258,9 @@ def _build_applicant_completion_checklist(application):
 
 def _build_applicant_status_context(application):
     status_info = _APPLICANT_STATUS_LABELS.get(application.status)
-    status_label = status_info[0] if status_info else "Received"
+    status_label = status_info[0] if status_info else _("Received")
     status_variant = status_info[1] if status_info else "review"
-    status_description = status_info[2] if status_info else "Your application has been received."
+    status_description = status_info[2] if status_info else _("Your application has been received.")
     case = getattr(application, "case", None)
     awaiting_resubmission = bool(
         case and case.case_status == RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION
@@ -365,8 +367,8 @@ class ApplicantPortalIntakeView(View):
         if not self.entry.is_open_for_intake:
             messages.error(
                 request,
-                "This position is no longer accepting applications. "
-                "You can browse the other open positions below.",
+                _("This position is no longer accepting applications. "
+                "You can browse the other open positions below."),
             )
             return redirect("applicant-portal")
         return super().dispatch(request, *args, **kwargs)
@@ -410,7 +412,7 @@ class ApplicantPortalIntakeView(View):
         except OperationalError:
             form.add_error(
                 None,
-                "We could not start your application right now. Please try again in a few moments.",
+                _("We could not start your application right now. Please try again in a few moments."),
             )
             return self._render_start(form)
         try:
@@ -426,7 +428,7 @@ class ApplicantPortalIntakeView(View):
         except ApplicationOTPDeliveryError:
             messages.error(
                 request,
-                "We could not send the verification code right now. Use Resend the code in a few moments.",
+                _("We could not send the verification code right now. Use Resend the code in a few moments."),
             )
         return redirect("applicant-otp", token=application.public_token)
 
@@ -444,7 +446,7 @@ class ApplicantOTPView(TemplateView):
     def handle_missing_application(self, request):
         messages.error(
             request,
-            "This verification link is no longer available. Please start again from the job openings page.",
+            _("This verification link is no longer available. Please start again from the job openings page."),
         )
         return redirect("applicant-portal")
 
@@ -495,12 +497,12 @@ class ApplicantOTPView(TemplateView):
                 if isinstance(exc, OperationalError):
                     messages.error(
                         request,
-                        "We could not prepare a new verification code right now. Please try again in a few moments.",
+                        _("We could not prepare a new verification code right now. Please try again in a few moments."),
                     )
                 else:
                     messages.error(request, str(exc))
             else:
-                messages.success(request, "A new verification code has been sent to your email address.")
+                messages.success(request, _("A new verification code has been sent to your email address."))
             return redirect("applicant-otp", token=application.public_token)
 
         if action == "verify":
@@ -519,7 +521,7 @@ class ApplicantOTPView(TemplateView):
                 self.get_context_data(application=application, otp_form=otp_form)
             )
 
-        messages.error(request, "This applicant action is not available.")
+        messages.error(request, _("This applicant action is not available."))
         return redirect("applicant-otp", token=application.public_token)
 
 
@@ -570,28 +572,28 @@ class ApplicantDraftAccessMixin:
         )
         if self.application is None:
             if self.json_errors:
-                return JsonResponse({"error": "This application could not be found."}, status=404)
-            messages.error(request, "This application link is no longer available.")
+                return JsonResponse({"error": _("This application could not be found.")}, status=404)
+            messages.error(request, _("This application link is no longer available."))
             return redirect("applicant-portal")
         if self.application.submitted_at:
             if self.json_errors:
-                return JsonResponse({"error": "This application was already submitted."}, status=409)
+                return JsonResponse({"error": _("This application was already submitted.")}, status=409)
             return redirect("applicant-receipt", token=self.application.public_token)
         if not _has_draft_access(request, self.application):
             if self.json_errors:
                 return JsonResponse(
-                    {"error": "Your session ended. Reload the page and verify your email to continue."},
+                    {"error": _("Your session ended. Reload the page and verify your email to continue.")},
                     status=403,
                 )
-            messages.info(request, "Verify your email to continue your application.")
+            messages.info(request, _("Verify your email to continue your application."))
             return redirect("applicant-otp", token=self.application.public_token)
         if not self.application.position.is_open_for_intake:
             if self.json_errors:
-                return JsonResponse({"error": "This position is no longer accepting applications."}, status=409)
+                return JsonResponse({"error": _("This position is no longer accepting applications.")}, status=409)
             messages.error(
                 request,
-                "This position is no longer accepting applications. "
-                "You can browse the other open positions below.",
+                _("This position is no longer accepting applications. "
+                "You can browse the other open positions below."),
             )
             return redirect("applicant-portal")
         return super().dispatch(request, *args, **kwargs)
@@ -602,6 +604,50 @@ class ApplicantDraftAccessMixin:
             == RecruitmentApplication.PerformanceRatingApplicability.APPLICABLE
             and self.application.position.branch == PositionPosting.Branch.PLANTILLA
         )
+
+
+def application_script_strings():
+    """Messages shown by recruitguard-applicant-application.js, in the page's language.
+    {name} placeholders are filled in by the script."""
+    return {
+        "photo_small": _("This photo is small, so the text may be hard to read."),
+        "photo_dark": _("This photo looks dark."),
+        "photo_blurry": _("This photo looks blurry."),
+        "photo_saved_check": _("It was saved. Tap View to check you can read it, and take it again if not."),
+        "ready": _("Ready"),
+        "required": _("Required"),
+        "if_applicable": _("If applicable"),
+        "add_another": _("Add another file"),
+        "add_files": _("Add files"),
+        "too_large": _(
+            "This file is larger than {mb} MB. If it has several pages, add the pages one at a "
+            "time, or take a photo of each page instead."
+        ),
+        "upload_failed": _("The upload did not go through. Try again."),
+        "upload_offline": _("The upload did not go through. Check your connection and try again."),
+        "wrong_type": _("This needs to be a PDF, JPG, or PNG file."),
+        "adding": _("Adding…"),
+        "use_this_file": _("Use this file"),
+        "add_failed": _("That file could not be added."),
+        "add_offline": _("That file could not be added. Check your connection."),
+        "remove_failed": _("That file could not be removed."),
+        "remove_offline": _("That file could not be removed. Check your connection."),
+        "loading": _("Loading…"),
+        "preview_of": _("Preview of {name}"),
+        "your_file": _("your file"),
+        "preview_blank": _("If the preview is blank, your device can't show PDFs here. The file is still saved."),
+        "preview_failed": _("This file couldn't be shown. It is still saved."),
+        "confirm_drop_rating": _("Remove the performance rating files you added?"),
+        "saving": _("Saving…"),
+        "session_ended": _("Your session ended. Copy anything you typed, then reload the page to continue."),
+        "saved": _("Saved"),
+        "needs_attention": _("Some answers need attention before they can be saved."),
+        "save_failed": _("Couldn't save just now. We'll try again."),
+        "wait_uploads": _("Please wait until your files finish uploading."),
+        "submitting": _("Submitting…"),
+        "characters": _("{used} / {limit} characters"),
+        "remove_named": _("Remove {name}"),
+    }
 
 
 class ApplicantApplicationView(ApplicantDraftAccessMixin, TemplateView):
@@ -651,6 +697,7 @@ class ApplicantApplicationView(ApplicantDraftAccessMixin, TemplateView):
                 ),
                 "max_upload_bytes": max_bytes,
                 "max_upload_mb": max_bytes // (1024 * 1024),
+                "script_strings": application_script_strings(),
             }
         )
         return context
@@ -703,7 +750,7 @@ class ApplicantApplicationView(ApplicantDraftAccessMixin, TemplateView):
         save_applicant_application_answers(self.application, form.cleaned_data)
         self._apply_performance_rating_choice()
         if not is_submit:
-            messages.success(request, "Your answers were saved. Files are saved as soon as you add them.")
+            messages.success(request, _("Your answers were saved. Files are saved as soon as you add them."))
             return redirect("applicant-application", token=self.application.public_token)
 
         application = self.application
@@ -725,7 +772,7 @@ class ApplicantApplicationView(ApplicantDraftAccessMixin, TemplateView):
         purge_applicant_document_parts(application)
         _revoke_draft_access(request, application)
         _mark_status_otp_verified(request, application)
-        messages.success(request, "Application submitted successfully.")
+        messages.success(request, _("Application submitted successfully."))
         return redirect("applicant-receipt", token=application.public_token)
 
 
@@ -737,7 +784,7 @@ class ApplicantDocumentPartUploadView(ApplicantDraftAccessMixin, View):
     def post(self, request, *args, **kwargs):
         uploaded_file = request.FILES.get("file")
         if uploaded_file is None:
-            return JsonResponse({"error": "Choose a file to upload."}, status=400)
+            return JsonResponse({"error": _("Choose a file to upload.")}, status=400)
         document_key = kwargs["code"]
         try:
             add_applicant_document_part(self.application, document_key, uploaded_file)
@@ -762,7 +809,7 @@ class ApplicantDocumentReuseView(ApplicantDocumentPartUploadView):
         try:
             evidence_id = int(request.POST.get("evidence_id", ""))
         except ValueError:
-            return JsonResponse({"error": "Choose a document to reuse."}, status=400)
+            return JsonResponse({"error": _("Choose a document to reuse.")}, status=400)
         try:
             reuse_applicant_document(self.application, document_key, evidence_id)
         except ValueError as exc:
@@ -774,7 +821,7 @@ class ApplicantDocumentPartDeleteView(ApplicantDocumentPartUploadView):
     def post(self, request, *args, **kwargs):
         part = get_document_parts(self.application).filter(pk=kwargs["part_id"]).first()
         if part is None:
-            return JsonResponse({"error": "That file is no longer part of this application."}, status=404)
+            return JsonResponse({"error": _("That file is no longer part of this application.")}, status=404)
         document_key = part.document_key
         try:
             remove_applicant_document_part(self.application, part.pk)
@@ -815,7 +862,7 @@ class ApplicantReceiptView(TemplateView):
         if self.application is None:
             messages.error(
                 request,
-                "This receipt link is no longer available. If you already submitted, use Track Application with your Tracking Code and email.",
+                _("This receipt link is no longer available. If you already submitted, use Track Application with your Tracking Code and email."),
             )
             return redirect("applicant-portal")
         return super().get(request, *args, **kwargs)
@@ -846,7 +893,7 @@ class ApplicantReceiptPdfView(View):
         if application is None:
             messages.error(
                 request,
-                "This receipt link is no longer available. If you already submitted, use Track Application with your Tracking Code and email.",
+                _("This receipt link is no longer available. If you already submitted, use Track Application with your Tracking Code and email."),
             )
             return redirect("applicant-portal")
 
@@ -863,7 +910,7 @@ STATUS_OTP_VERIFIED_SESSION_KEY = "status_lookup_verified"
 
 
 def _masked_email(email):
-    local, _, domain = (email or "").partition("@")
+    local, _at, domain = (email or "").partition("@")
     if not domain:
         return email or ""
     visible = local[:1]
@@ -974,7 +1021,7 @@ class ApplicantStatusLookupView(FormView):
         if application is None:
             messages.error(
                 self.request,
-                "Your verification session has ended. Enter your Tracking Code and email again.",
+                _("Your verification session has ended. Enter your Tracking Code and email again."),
             )
             return redirect("applicant-status-lookup")
         otp_form = ApplicantOTPForm(self.request.POST)
@@ -995,7 +1042,7 @@ class ApplicantStatusLookupView(FormView):
         if application is None:
             messages.error(
                 self.request,
-                "Your verification session has ended. Enter your Tracking Code and email again.",
+                _("Your verification session has ended. Enter your Tracking Code and email again."),
             )
             return redirect("applicant-status-lookup")
         try:
@@ -1011,12 +1058,12 @@ class ApplicantStatusLookupView(FormView):
             if isinstance(exc, OperationalError):
                 messages.error(
                     self.request,
-                    "We could not prepare a new verification code right now. Please try again in a few moments.",
+                    _("We could not prepare a new verification code right now. Please try again in a few moments."),
                 )
             else:
                 messages.error(self.request, str(exc))
         else:
-            messages.success(self.request, "A new verification code has been sent to your email address.")
+            messages.success(self.request, _("A new verification code has been sent to your email address."))
         return self._render_otp_step(application)
 
     def form_valid(self, form):
@@ -1032,8 +1079,8 @@ class ApplicantStatusLookupView(FormView):
         if not application:
             form.add_error(
                 None,
-                "We could not find an application with that tracking code and email combination. "
-                "Please check your Tracking Code and email address and try again.",
+                _("We could not find an application with that tracking code and email combination. "
+                "Please check your Tracking Code and email address and try again."),
             )
             return self.form_invalid(form)
         if _status_otp_verified_recently(self.request, application):
@@ -1051,7 +1098,7 @@ class ApplicantStatusLookupView(FormView):
         except OperationalError:
             form.add_error(
                 None,
-                "We could not send a verification code right now. Please try again in a few moments.",
+                _("We could not send a verification code right now. Please try again in a few moments."),
             )
             return self.form_invalid(form)
         except ValueError as exc:
@@ -1061,7 +1108,7 @@ class ApplicantStatusLookupView(FormView):
         else:
             messages.success(
                 self.request,
-                "We emailed a verification code to your address. Enter it below to view your status.",
+                _("We emailed a verification code to your address. Enter it below to view your status."),
             )
         return self._render_otp_step(application, lookup_form=form)
 
@@ -1081,16 +1128,17 @@ class ApplicantStatusLinkView(TemplateView):
         if self.application is None:
             messages.error(
                 request,
-                "This status link is no longer available. Use your Tracking Code and email to check your status.",
+                _("This status link is no longer available. Use your Tracking Code and email to check your status."),
             )
             return redirect("applicant-status-lookup")
         if self.application.submitted_at is None:
             messages.info(
                 request,
-                (
-                    f"Your application for {self.application.position.title} is not finished yet. "
+                _(
+                    "Your application for %(title)s is not finished yet. "
                     "Verify your email to continue, or use Resend the code if the code expired."
-                ),
+                )
+                % {"title": self.application.position.title},
             )
             return redirect("applicant-otp", token=self.application.public_token)
         if _status_otp_verified_recently(request, self.application):
@@ -1113,14 +1161,14 @@ class ApplicantStatusLinkView(TemplateView):
         except OperationalError:
             messages.error(
                 request,
-                "We could not send a verification code right now. Please try again in a few moments.",
+                _("We could not send a verification code right now. Please try again in a few moments."),
             )
         except ValueError as exc:
             messages.info(request, str(exc))
         else:
             messages.success(
                 request,
-                "We emailed a verification code to your address. Enter it below to view your status.",
+                _("We emailed a verification code to your address. Enter it below to view your status."),
             )
         return self.render_to_response(self.get_context_data(**otp_context))
 
@@ -1136,14 +1184,14 @@ class ApplicantWithdrawalRequestView(View):
             .first()
         )
         if application is None:
-            messages.error(request, "This link is no longer available.")
+            messages.error(request, _("This link is no longer available."))
             return redirect("applicant-status-lookup")
         status_url = reverse("applicant-status-link", kwargs={"token": application.public_token})
         if not _status_otp_verified_recently(request, application):
-            messages.info(request, "Verify your email again to continue.")
+            messages.info(request, _("Verify your email again to continue."))
             return redirect(status_url)
         if request.POST.get("confirm") != "on":
-            messages.error(request, "Tick the box to confirm that you want to withdraw.")
+            messages.error(request, _("Tick the box to confirm that you want to withdraw."))
             return redirect(f"{status_url}#withdraw")
         try:
             request_application_withdrawal(application, request.POST.get("reason", ""))
@@ -1152,8 +1200,8 @@ class ApplicantWithdrawalRequestView(View):
         else:
             messages.success(
                 request,
-                "Your request to withdraw was sent to the recruitment office. "
-                "You will get an email once it is recorded.",
+                _("Your request to withdraw was sent to the recruitment office. "
+                "You will get an email once it is recorded."),
             )
         return redirect(status_url)
 
@@ -1175,7 +1223,7 @@ class ApplicantResubmissionView(TemplateView):
     def _missing(self, request):
         messages.error(
             request,
-            "This link is no longer available. Use Track Application with your Tracking Code and email.",
+            _("This link is no longer available. Use Track Application with your Tracking Code and email."),
         )
         return redirect("applicant-status-lookup")
 
@@ -1185,7 +1233,7 @@ class ApplicantResubmissionView(TemplateView):
             return self._missing(request)
         requirements, _deadline, _remarks = get_resubmission_request(application)
         if not requirements:
-            messages.info(request, "There are no documents awaiting resubmission for this application.")
+            messages.info(request, _("There are no documents awaiting resubmission for this application."))
             return redirect("applicant-status-link", token=application.public_token)
         return super().get(request, *args, **kwargs)
 
@@ -1212,7 +1260,7 @@ class ApplicantResubmissionView(TemplateView):
             return self._missing(request)
         requirements, _deadline, remarks_by_code = get_resubmission_request(application)
         if not requirements:
-            messages.info(request, "There are no documents awaiting resubmission for this application.")
+            messages.info(request, _("There are no documents awaiting resubmission for this application."))
             return redirect("applicant-status-link", token=application.public_token)
 
         action = request.POST.get("action")
@@ -1229,12 +1277,12 @@ class ApplicantResubmissionView(TemplateView):
                 if isinstance(exc, OperationalError):
                     messages.error(
                         request,
-                        "We could not send a verification code right now. Please try again in a few moments.",
+                        _("We could not send a verification code right now. Please try again in a few moments."),
                     )
                 else:
                     messages.error(request, str(exc))
             else:
-                messages.success(request, "A verification code has been sent to your email address.")
+                messages.success(request, _("A verification code has been sent to your email address."))
             return redirect("applicant-resubmit", token=application.public_token)
 
         if action == "verify":
@@ -1247,7 +1295,7 @@ class ApplicantResubmissionView(TemplateView):
                 else:
                     messages.success(
                         request,
-                        "Email verified. You can now re-upload the requested documents.",
+                        _("Email verified. You can now re-upload the requested documents."),
                     )
                     return redirect("applicant-resubmit", token=application.public_token)
             return self.render_to_response(
@@ -1256,7 +1304,7 @@ class ApplicantResubmissionView(TemplateView):
 
         if action == "resubmit":
             if not application.otp_is_currently_valid:
-                messages.error(request, "Verify your email before resubmitting your documents.")
+                messages.error(request, _("Verify your email before resubmitting your documents."))
                 return redirect("applicant-resubmit", token=application.public_token)
             resubmission_form = DocumentResubmissionForm(
                 request.POST, request.FILES, requirements=requirements, remarks_by_code=remarks_by_code
@@ -1275,7 +1323,7 @@ class ApplicantResubmissionView(TemplateView):
                             application=application, resubmission_form=resubmission_form
                         )
                     )
-                messages.success(request, "Your documents have been resubmitted for review.")
+                messages.success(request, _("Your documents have been resubmitted for review."))
                 return redirect("applicant-status-link", token=application.public_token)
             return self.render_to_response(
                 self.get_context_data(
@@ -1283,5 +1331,5 @@ class ApplicantResubmissionView(TemplateView):
                 )
             )
 
-        messages.error(request, "This action is not available.")
+        messages.error(request, _("This action is not available."))
         return redirect("applicant-resubmit", token=application.public_token)

@@ -1,6 +1,7 @@
 {% extends "applicant_base.html" %}
+{% load i18n recruitment_ui %}
 
-{% block title %}Track My Application | Applicant Portal{% endblock %}
+{% block title %}{% translate "Track My Application" %} | {% translate "Applicant Portal" %}{% endblock %}
 
 {% block main_class %}{% endblock %}
 
@@ -16,10 +17,12 @@
 
     {% if not application and not otp_step %}
     <div class="rg-ta-intro">
-        <h1 class="rg-ta-intro__title">Track Your Application</h1>
+        <h1 class="rg-ta-intro__title">{% translate "Track Your Application" %}</h1>
         <p class="rg-ta-intro__copy">
+            {% blocktranslate trimmed %}
             Enter the private Tracking Code you received when you submitted your
             application, along with the email address you used.
+            {% endblocktranslate %}
         </p>
     </div>
 
@@ -38,7 +41,7 @@
 
             <div class="rg-pub-field rg-ta-field">
                 <label for="{{ form.tracking_code.id_for_label }}" class="rg-ta-label">
-                    Tracking Code <span class="text-danger" aria-hidden="true">*</span>
+                    {% translate "Tracking Code" %} <span class="text-danger" aria-hidden="true">*</span>
                 </label>
                 {{ form.tracking_code }}
                 {% if form.tracking_code.errors %}
@@ -47,15 +50,17 @@
                 </div>
                 {% endif %}
                 <div class="form-text">
+                    {% blocktranslate trimmed %}
                     Your Tracking Code looks like <strong>TRK-7KQ4-M9X2</strong>.
                     It was shown on your submission receipt and emailed to you —
                     keep it private.
+                    {% endblocktranslate %}
                 </div>
             </div>
 
             <div class="rg-pub-field rg-ta-field">
                 <label for="{{ form.email.id_for_label }}" class="rg-ta-label">
-                    Email Address <span class="text-danger" aria-hidden="true">*</span>
+                    {% translate "Email Address" %} <span class="text-danger" aria-hidden="true">*</span>
                 </label>
                 {{ form.email }}
                 {% if form.email.errors %}
@@ -63,7 +68,7 @@
                     {{ form.email.errors.0 }}
                 </div>
                 {% endif %}
-                <div class="form-text">Use the same email address you submitted with your application.</div>
+                <div class="form-text">{% translate "Use the same email address you submitted with your application." %}</div>
             </div>
 
             {% if form.captcha_answer %}
@@ -84,7 +89,7 @@
             {% endif %}
 
             <button type="submit" class="btn btn-rg-primary btn-lg rg-ta-submit">
-                Check Status &rarr;
+                {% translate "Check Status" %} &rarr;
             </button>
         </form>
     </div>
@@ -94,11 +99,17 @@
     {# ── REV-I: emailed-code step between lookup and status ───────── #}
     {% if otp_step %}
     <div class="rg-ta-intro">
-        <h1 class="rg-ta-intro__title">Check Your Email</h1>
+        <h1 class="rg-ta-intro__title">{% translate "Check Your Email" %}</h1>
         <p class="rg-ta-intro__copy">
-            We sent a verification code to <strong>{{ otp_masked_email }}</strong>.
+            {% blocktranslate trimmed with email=otp_masked_email count minutes=otp_validity_minutes %}
+            We sent a verification code to <strong>{{ email }}</strong>.
             Enter it below to view your application status. The code is valid
-            for {{ otp_validity_minutes }} minute{{ otp_validity_minutes|pluralize }}.
+            for {{ minutes }} minute.
+            {% plural %}
+            We sent a verification code to <strong>{{ email }}</strong>.
+            Enter it below to view your application status. The code is valid
+            for {{ minutes }} minutes.
+            {% endblocktranslate %}
         </p>
     </div>
 
@@ -109,7 +120,7 @@
 
             <div class="rg-pub-field rg-ta-field">
                 <label for="{{ otp_form.otp.id_for_label }}" class="rg-ta-label">
-                    Verification Code <span class="text-danger" aria-hidden="true">*</span>
+                    {% translate "Verification Code" %} <span class="text-danger" aria-hidden="true">*</span>
                 </label>
                 {{ otp_form.otp }}
                 {% if otp_form.otp.errors %}
@@ -117,11 +128,11 @@
                     {{ otp_form.otp.errors.0 }}
                 </div>
                 {% endif %}
-                <div class="form-text">6-digit code from the email we just sent.</div>
+                <div class="form-text">{% translate "6-digit code from the email we just sent." %}</div>
             </div>
 
             <button type="submit" class="btn btn-rg-primary btn-lg rg-ta-submit">
-                View My Status &rarr;
+                {% translate "View My Status" %} &rarr;
             </button>
         </form>
 
@@ -129,7 +140,7 @@
             {% csrf_token %}
             <input type="hidden" name="action" value="resend">
             <button type="submit" class="btn btn-outline-secondary btn-sm">
-                Didn't get it? Resend the code
+                {% translate "Didn't get it? Resend the code" %}
             </button>
         </form>
     </div>
@@ -141,26 +152,26 @@
 
     <div class="rg-ta-result-card rg-ta-result-card--{{ status_variant }}">
         <div class="rg-ta-result-card__head">
-            <p class="rg-ta-result-card__ref">Case No. {{ application.case_number_short }}</p>
+            <p class="rg-ta-result-card__ref">{% blocktranslate with case=application.case_number_short %}Case No. {{ case }}{% endblocktranslate %}</p>
             <h1 class="rg-ta-result-card__applicant">{{ application.applicant_display_name }}</h1>
             <p class="rg-ta-result-card__position">
                 {{ application.position.title }}
                 <span class="rg-ta-sep">&middot;</span>
-                {% if application.branch == "plantilla" %}Permanent (Plantilla){% else %}Contract of Service{% endif %}
+                {% if application.branch == "plantilla" %}{% translate "Permanent (Plantilla)" %}{% else %}{% translate "Contract of Service" %}{% endif %}
             </p>
         </div>
 
         {# ── Step-by-step progress (only what the applicant has been told: no scores). #}
-        <ol class="rg-ta-timeline" aria-label="Application progress" data-status-timeline>
+        <ol class="rg-ta-timeline" aria-label="{% translate 'Application progress' %}" data-status-timeline>
             {% for step in timeline %}
             <li class="rg-ta-timeline__step rg-ta-timeline__step--{{ step.state }}"{% if step.state == "current" %} aria-current="step"{% endif %}>
                 <span class="rg-ta-timeline__dot" aria-hidden="true">{% if step.state == "done" %}&#10003;{% elif step.state == "ended" %}&ndash;{% endif %}</span>
                 <div class="rg-ta-timeline__body">
                     <p class="rg-ta-timeline__label">
                         {{ step.label }}
-                        <span class="visually-hidden">({% if step.state == "done" %}done{% elif step.state == "current" %}in progress{% elif step.state == "ended" %}ended{% else %}not yet{% endif %})</span>
+                        <span class="visually-hidden">({% if step.state == "done" %}{% translate "done" %}{% elif step.state == "current" %}{% translate "in progress" %}{% elif step.state == "ended" %}{% translate "ended" %}{% else %}{% translate "not yet" %}{% endif %})</span>
                     </p>
-                    {% if step.when %}<p class="rg-ta-timeline__when">{{ step.when|date:"F j, Y" }}{% if step.label != "Application submitted" %} at {{ step.when|time:"g:i A" }}{% endif %}</p>{% endif %}
+                    {% if step.when %}<p class="rg-ta-timeline__when">{% if step.date_only %}{{ step.when|date:"F j, Y" }}{% else %}{% blocktranslate with date=step.when|date:"F j, Y" time=step.when|time:"g:i A" %}{{ date }} at {{ time }}{% endblocktranslate %}{% endif %}</p>{% endif %}
                     {% if step.note %}<p class="rg-ta-timeline__note">{{ step.note }}</p>{% endif %}
                 </div>
             </li>
@@ -183,8 +194,10 @@
         {# don't control become grounds for complaints when exceeded.                  #}
         {% if status_variant == "review" or status_variant == "evaluation" %}
         <p class="rg-ta-expectation">
-            We will email you at <strong>{{ application.applicant_email }}</strong>
+            {% blocktranslate trimmed with email=application.applicant_email %}
+            We will email you at <strong>{{ email }}</strong>
             when there is news.
+            {% endblocktranslate %}
         </p>
         {% endif %}
     </div>
@@ -192,18 +205,20 @@
 
     {# ── Upcoming schedule (exam / interview the applicant must attend) ── #}
     {% if upcoming_schedules %}
-    <div class="rg-ta-action-card rg-ta-action-card--rest" aria-label="Your upcoming schedule">
-        <p class="rg-ta-action-card__title">Your upcoming schedule</p>
+    <div class="rg-ta-action-card rg-ta-action-card--rest" aria-label="{% translate 'Your upcoming schedule' %}">
+        <p class="rg-ta-action-card__title">{% translate "Your upcoming schedule" %}</p>
         {% for sched in upcoming_schedules %}
         <p class="rg-ta-action-card__copy">
             <strong>{{ sched.kind }}:</strong>
-            {{ sched.scheduled_for|date:"l, F j, Y" }} at {{ sched.scheduled_for|time:"g:i A" }}<br>
-            Location / medium: {{ sched.location }}
+            {% blocktranslate with date=sched.scheduled_for|date:"l, F j, Y" time=sched.scheduled_for|time:"g:i A" %}{{ date }} at {{ time }}{% endblocktranslate %}<br>
+            {% translate "Location / medium:" %} {{ sched.location }}
             {% if sched.instructions %}<br>{{ sched.instructions }}{% endif %}
         </p>
         {% endfor %}
         <p class="rg-ta-action-card__copy">
-            Please also check your email at <strong>{{ application.applicant_email }}</strong> for the full details.
+            {% blocktranslate trimmed with email=application.applicant_email %}
+            Please also check your email at <strong>{{ email }}</strong> for the full details.
+            {% endblocktranslate %}
         </p>
     </div>
     {% endif %}
@@ -214,63 +229,84 @@
         {% if status_variant == 'returned' %}rg-ta-action-card--needed
         {% elif status_variant == 'approved' %}rg-ta-action-card--good
         {% else %}rg-ta-action-card--rest{% endif %}">
-        <p class="rg-ta-action-card__title">What you need to do</p>
+        <p class="rg-ta-action-card__title">{% translate "What you need to do" %}</p>
         {% if status_variant == "returned" %}
             {% if awaiting_resubmission %}
                 <p class="rg-ta-action-card__copy">
+                    {% blocktranslate trimmed %}
                     Some of your documents need to be corrected and re-uploaded. Tap
                     Resubmit documents to see which ones and why.
+                    {% endblocktranslate %}
                     {% if resubmission_deadline %}
+                        {% blocktranslate trimmed with date=resubmission_deadline|date:"F d, Y" %}
                         Please resubmit on or before
-                        <strong>{{ resubmission_deadline|date:"F d, Y" }}</strong>.
+                        <strong>{{ date }}</strong>.
+                        {% endblocktranslate %}
                     {% endif %}
                 </p>
                 <a href="{% url 'applicant-resubmit' token=application.public_token %}"
-                   class="btn btn-rg-primary">Resubmit documents</a>
+                   class="btn btn-rg-primary">{% translate "Resubmit documents" %}</a>
             {% else %}
                 <p class="rg-ta-action-card__copy">
+                    {% blocktranslate trimmed with email=application.applicant_email %}
                     Your application was returned. Please check your email at
-                    <strong>{{ application.applicant_email }}</strong> for our message
+                    <strong>{{ email }}</strong> for our message
                     about what needs to be fixed or resubmitted.
+                    {% endblocktranslate %}
                 </p>
             {% endif %}
         {% elif status_variant == "approved" %}
             {% if completion_checklist %}
                 <p class="rg-ta-action-card__copy">
-                    Congratulations. To complete your {{ completion_checklist.label|lower }}, bring or send these
-                    to the office{% if completion_checklist.deadline %} on or before
-                    <strong>{{ completion_checklist.deadline|date:"F d, Y" }}</strong>{% endif %}:
+                    {% if completion_checklist.deadline %}
+                        {% blocktranslate trimmed with what=completion_checklist.label|lower date=completion_checklist.deadline|date:"F d, Y" %}
+                        Congratulations. To complete your {{ what }}, bring or send these
+                        to the office on or before <strong>{{ date }}</strong>:
+                        {% endblocktranslate %}
+                    {% else %}
+                        {% blocktranslate trimmed with what=completion_checklist.label|lower %}
+                        Congratulations. To complete your {{ what }}, bring or send these
+                        to the office:
+                        {% endblocktranslate %}
+                    {% endif %}
                 </p>
                 <ul class="rg-ta-checklist" data-completion-checklist>
                     {% for item in completion_checklist.items %}
                     <li class="rg-ta-checklist__item{% if item.received %} is-received{% endif %}">
                         <span class="rg-ta-checklist__mark" aria-hidden="true">{% if item.received %}&#10003;{% endif %}</span>
-                        <span>{{ item.label }}{% if item.received %} <span class="rg-ta-checklist__tag">Received</span>{% endif %}</span>
+                        <span>{{ item.label }}{% if item.received %} <span class="rg-ta-checklist__tag">{% translate "Received" %}</span>{% endif %}</span>
                     </li>
                     {% endfor %}
                 </ul>
                 <p class="rg-ta-action-card__copy">
                     {% if completion_checklist.pending_count %}
+                        {% blocktranslate trimmed with email=application.applicant_email %}
                         Items marked <em>Received</em> are already with us. The email we sent to
-                        <strong>{{ application.applicant_email }}</strong> has the full instructions.
+                        <strong>{{ email }}</strong> has the full instructions.
+                        {% endblocktranslate %}
                     {% else %}
-                        We have received everything on this list. We will email you about the next step.
+                        {% translate "We have received everything on this list. We will email you about the next step." %}
                     {% endif %}
                 </p>
             {% else %}
             <p class="rg-ta-action-card__copy">
-                Congratulations. Watch your email at <strong>{{ application.applicant_email }}</strong>
+                {% blocktranslate trimmed with email=application.applicant_email %}
+                Congratulations. Watch your email at <strong>{{ email }}</strong>
                 for instructions on the next steps and any documents we need from you.
+                {% endblocktranslate %}
             </p>
             {% endif %}
         {% elif status_variant == "not-selected" %}
             <p class="rg-ta-action-card__copy">
+                {% url 'applicant-portal' as portal_url %}
+                {% blocktranslate trimmed with url=portal_url %}
                 Thank you for applying. You are welcome to apply for other open positions
-                from our <a href="{% url 'applicant-portal' %}">Job Openings</a> page.
+                from our <a href="{{ url }}">Job Openings</a> page.
+                {% endblocktranslate %}
             </p>
         {% else %}
             <p class="rg-ta-action-card__copy">
-                Nothing right now &mdash; just wait for our message.
+                {% translate "Nothing right now &mdash; just wait for our message." %}
             </p>
         {% endif %}
     </div>
@@ -279,29 +315,33 @@
     {# ── Withdraw (a request to the office, which records it) ── #}
     {% if application.withdrawal_requested_at %}
     <div class="rg-ta-action-card rg-ta-action-card--rest" id="withdraw" data-withdrawal-requested>
-        <p class="rg-ta-action-card__title">Withdrawal requested</p>
+        <p class="rg-ta-action-card__title">{% translate "Withdrawal requested" %}</p>
         <p class="rg-ta-action-card__copy">
-            You asked to withdraw on {{ application.withdrawal_requested_at|date:"F d, Y" }}. The recruitment
-            office will record it and email you at <strong>{{ application.applicant_email }}</strong>.
+            {% blocktranslate trimmed with date=application.withdrawal_requested_at|date:"F d, Y" email=application.applicant_email %}
+            You asked to withdraw on {{ date }}. The recruitment
+            office will record it and email you at <strong>{{ email }}</strong>.
+            {% endblocktranslate %}
         </p>
     </div>
     {% elif can_request_withdrawal %}
     <details class="rg-ta-withdraw" id="withdraw">
-        <summary>Withdraw my application</summary>
+        <summary>{% translate "Withdraw my application" %}</summary>
         <form method="post" action="{% url 'applicant-withdrawal-request' token=application.public_token %}" data-withdraw-form>
             {% csrf_token %}
             <p class="rg-ta-withdraw__copy">
-                If you no longer want to be considered for <strong>{{ application.position.title }}</strong>, you can
+                {% blocktranslate trimmed with title=application.position.title %}
+                If you no longer want to be considered for <strong>{{ title }}</strong>, you can
                 ask to withdraw here. The office will record it and email you. Withdrawing is not a rejection, and you
                 may apply again to other positions.
+                {% endblocktranslate %}
             </p>
-            <label class="form-label" for="withdraw-reason">Reason <span class="rg-intake-optional">Optional</span></label>
+            <label class="form-label" for="withdraw-reason">{% translate "Reason" %} <span class="rg-intake-optional">{% translate "Optional" %}</span></label>
             <textarea class="form-control" id="withdraw-reason" name="reason" rows="2" maxlength="1000"></textarea>
             <div class="form-check mt-2">
                 <input class="form-check-input" type="checkbox" id="withdraw-confirm" name="confirm" required>
-                <label class="form-check-label" for="withdraw-confirm">I want to withdraw my application. I understand this can't be undone online.</label>
+                <label class="form-check-label" for="withdraw-confirm">{% translate "I want to withdraw my application. I understand this can't be undone online." %}</label>
             </div>
-            <button type="submit" class="btn btn-outline-danger mt-2">Send my withdrawal request</button>
+            <button type="submit" class="btn btn-outline-danger mt-2">{% translate "Send my withdrawal request" %}</button>
         </form>
     </details>
     {% endif %}
@@ -309,41 +349,43 @@
 
     {# ── Facts ────────────────────────────────────────────────────── #}
     <div class="rg-ta-facts">
-        <p class="rg-ta-facts__title">Application details</p>
+        <p class="rg-ta-facts__title">{% translate "Application details" %}</p>
         <dl class="rg-ta-facts__list">
             <div class="rg-ta-facts__row">
-                <dt>Case Reference</dt>
-                <dd><span class="rg-ta-mono">Case No. {{ application.case_number_short }}</span></dd>
+                <dt>{% translate "Case Reference" %}</dt>
+                <dd><span class="rg-ta-mono">{% blocktranslate with case=application.case_number_short %}Case No. {{ case }}{% endblocktranslate %}</span></dd>
             </div>
             <div class="rg-ta-facts__row">
-                <dt>Position</dt>
+                <dt>{% translate "Position" %}</dt>
                 <dd>{{ application.position.title }}</dd>
             </div>
             <div class="rg-ta-facts__row">
-                <dt>Type</dt>
-                <dd>{% if application.branch == "plantilla" %}Permanent (Plantilla){% else %}Contract of Service{% endif %}</dd>
+                <dt>{% translate "Type" %}</dt>
+                <dd>{% if application.branch == "plantilla" %}{% translate "Permanent (Plantilla)" %}{% else %}{% translate "Contract of Service" %}{% endif %}</dd>
             </div>
             <div class="rg-ta-facts__row">
-                <dt>Submitted</dt>
+                <dt>{% translate "Submitted" %}</dt>
                 <dd>{{ application.submitted_at|date:"F j, Y" }}</dd>
             </div>
         </dl>
     </div>
 
 
-    {# ── Help block — phone + email side by side ──────────────────── #}
-    <aside class="rg-ta-help" aria-label="Need help">
-        <p class="rg-ta-help__title">Need help with your application?</p>
+    {# ── Help block: the HR unit handles questions about an application ── #}
+    {% office_contact as contact %}
+    <aside class="rg-ta-help" aria-label="{% translate 'Need help with your application?' %}">
+        <p class="rg-ta-help__title">{% translate "Need help with your application?" %}</p>
         <div class="rg-ta-help__grid">
             <div class="rg-ta-help__channel">
-                <span class="rg-ta-help__channel-label">Call the Public Assistance Desk</span>
-                <a href="tel:+6382492000,4400" class="rg-ta-help__channel-value">8-249-2000 loc. 4400</a>
+                <span class="rg-ta-help__channel-label">{% translate "Call the Human Resource Management Unit (HRMU)" %}</span>
+                <a href="tel:{{ contact.hrmu.tel }}" class="rg-ta-help__channel-value">{{ contact.hrmu.phone }}</a>
             </div>
             <div class="rg-ta-help__channel">
-                <span class="rg-ta-help__channel-label">Email the Public Assistance Desk</span>
-                <a href="mailto:chd4a_doh_calabarzon@ro4a.doh.gov.ph" class="rg-ta-help__channel-value">chd4a_doh_calabarzon@ro4a.doh.gov.ph</a>
+                <span class="rg-ta-help__channel-label">{% translate "Email the HRMU" %}</span>
+                <a href="mailto:{{ contact.hrmu.email }}" class="rg-ta-help__channel-value">{{ contact.hrmu.email }}</a>
             </div>
         </div>
+        <p class="rg-ta-help__note">{% translate "Have your case number ready. Never share your Tracking Code; staff will never ask for it." %}</p>
     </aside>
 
 
@@ -354,7 +396,7 @@
     {% endcomment %}
     <p class="rg-ta-lookup-again-link">
         <a href="{% url 'applicant-status-lookup' %}">
-            Look up a different application &rarr;
+            {% translate "Look up a different application" %} &rarr;
         </a>
     </p>
 
@@ -363,7 +405,7 @@
 
     <div class="rg-ta-back">
         <a href="{% url 'applicant-portal' %}" class="rg-pub-back">
-            &larr; Back to Job Openings
+            &larr; {% translate "Back to Job Openings" %}
         </a>
     </div>
 

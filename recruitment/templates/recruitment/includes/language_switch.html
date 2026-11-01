@@ -1,0 +1,11 @@
+{% load i18n %}{% get_current_language as current_language %}
+{% comment %}
+  English / Filipino switch for applicant pages. Posts to Django's set_language view, which
+  remembers the choice in a cookie and returns to this page.
+{% endcomment %}
+<form class="rg-langswitch" action="{% url 'set_language' %}" method="post" aria-label="{% translate 'Language' %}">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <button type="submit" name="language" value="en" lang="en" class="rg-langswitch__btn{% if current_language == 'en' %} is-current{% endif %}" aria-pressed="{% if current_language == 'en' %}true{% else %}false{% endif %}">English</button>
+    <button type="submit" name="language" value="fil" lang="fil" class="rg-langswitch__btn{% if current_language == 'fil' %} is-current{% endif %}" aria-pressed="{% if current_language == 'fil' %}true{% else %}false{% endif %}">Filipino</button>
+</form>

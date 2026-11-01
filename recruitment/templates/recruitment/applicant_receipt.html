@@ -1,6 +1,7 @@
 {% extends "applicant_base.html" %}
+{% load i18n %}
 
-{% block title %}Application Submitted | Applicant Portal{% endblock %}
+{% block title %}{% translate "Application Submitted" %} | {% translate "Applicant Portal" %}{% endblock %}
 
 {% block main_class %}{% endblock %}
 
@@ -13,23 +14,24 @@
        not a screenshot of a web page. {% endcomment %}
     <div class="rg-receipt-print-head" aria-hidden="true">
         <div class="rg-receipt-print-head__office">
-            Department of Health &mdash; Center for Health Development CALABARZON
+            {% translate "Department of Health &mdash; Center for Health Development CALABARZON" %}
         </div>
-        <div class="rg-receipt-print-head__title">Application Submission Receipt</div>
+        <div class="rg-receipt-print-head__title">{% translate "Application Submission Receipt" %}</div>
         <div class="rg-receipt-print-head__meta">
-            Case No. {{ application.case_number_short }} &middot;
-            Submitted {{ application.submitted_at|date:"F d, Y g:i A" }}
+            {% blocktranslate trimmed with case=application.case_number_short date=application.submitted_at|date:"F d, Y g:i A" %}
+            Case No. {{ case }} &middot; Submitted {{ date }}
+            {% endblocktranslate %}
         </div>
     </div>
 
     {# Success icon + headline #}
     <div style="text-align:center; margin-bottom:2rem;">
-        <div class="rg-pub-success-icon" role="img" aria-label="Success">&#10003;</div>
+        <div class="rg-pub-success-icon" role="img" aria-label="{% translate 'Success' %}">&#10003;</div>
         <h1 style="font-size:1.6rem; font-weight:700; color:#111827; margin:0 0 0.5rem;">
-            Your Application Has Been Submitted
+            {% translate "Your Application Has Been Submitted" %}
         </h1>
         <p style="font-size:0.9375rem; color:#5f6c78; max-width:42ch; margin:0 auto;">
-            Thank you for applying. Your application has been received by DOH&ndash;CHD CALABARZON.
+            {% translate "Thank you for applying. Your application has been received by DOH&ndash;CHD CALABARZON." %}
         </p>
     </div>
 
@@ -38,51 +40,54 @@
        number is the public reference safe to quote to the office. {% endcomment %}
     <div class="rg-pub-receipt-card">
         <p style="font-size:0.8125rem; font-weight:600; color:#5f6c78; margin-bottom:0.35rem; text-transform:uppercase; letter-spacing:0.08em;">
-            Your Tracking Code <span style="text-transform:none; letter-spacing:0; font-weight:500;">(keep private)</span>
+            {% translate "Your Tracking Code" %} <span style="text-transform:none; letter-spacing:0; font-weight:500;">{% translate "(keep private)" %}</span>
         </p>
         <p class="rg-pub-receipt-id">{{ application.tracking_code }}</p>
         <p style="font-size:0.8125rem; color:#5f6c78; margin:0 0 0.75rem;">
+            {% blocktranslate trimmed %}
             Use this code with your email to track your application online.
             Treat it like a password &mdash; don't share it.
+            {% endblocktranslate %}
         </p>
         <button class="btn btn-outline-secondary btn-sm" id="copy-btn" style="margin-bottom:1.25rem;"
-                data-value="{{ application.tracking_code }}">
-            Copy Tracking Code
+                data-value="{{ application.tracking_code }}"
+                data-label="{% translate 'Copy Tracking Code' %}" data-copied-label="{% translate 'Copied!' %}">
+            {% translate "Copy Tracking Code" %}
         </button>
 
         <p style="font-size:0.8125rem; font-weight:600; color:#5f6c78; margin-bottom:0.35rem; text-transform:uppercase; letter-spacing:0.08em;">
-            Case Reference
+            {% translate "Case Reference" %}
         </p>
-        <p class="rg-pub-receipt-id" style="font-size:1.05rem;">Case No. {{ application.case_number_short }}</p>
+        <p class="rg-pub-receipt-id" style="font-size:1.05rem;">{% blocktranslate with case=application.case_number_short %}Case No. {{ case }}{% endblocktranslate %}</p>
         <p style="font-size:0.8125rem; color:#5f6c78; margin:0 0 1rem;">
-            Quote this case number if you call or email the office about your application.
+            {% translate "Quote this case number if you call or email the office about your application." %}
         </p>
 
         <hr style="border-color:#e5e9ed; margin:0 0 1rem;">
 
         <dl class="rg-pub-review-dl" style="text-align:left;">
             <div class="rg-pub-review-row">
-                <dt>Position</dt>
+                <dt>{% translate "Position" %}</dt>
                 <dd>{{ application.position.title }}</dd>
             </div>
             <div class="rg-pub-review-row">
-                <dt>Type</dt>
+                <dt>{% translate "Type" %}</dt>
                 <dd>
-                    {% if application.branch == "plantilla" %}Permanent (Plantilla){% else %}Contract of Service{% endif %}
+                    {% if application.branch == "plantilla" %}{% translate "Permanent (Plantilla)" %}{% else %}{% translate "Contract of Service" %}{% endif %}
                 </dd>
             </div>
             <div class="rg-pub-review-row">
-                <dt>Submitted</dt>
-                <dd>{{ application.submitted_at|date:"F d, Y" }} at {{ application.submitted_at|date:"g:i A" }}</dd>
+                <dt>{% translate "Submitted" %}</dt>
+                <dd>{% blocktranslate with date=application.submitted_at|date:"F d, Y" time=application.submitted_at|date:"g:i A" %}{{ date }} at {{ time }}{% endblocktranslate %}</dd>
             </div>
             <div class="rg-pub-review-row">
-                <dt>Email</dt>
+                <dt>{% translate "Email" %}</dt>
                 <dd>{{ application.applicant_email }}</dd>
             </div>
             <div class="rg-pub-review-row">
-                <dt>Documents</dt>
+                <dt>{% translate "Documents" %}</dt>
                 <dd>
-                    <div>{{ current_applicant_document_count }} file{{ current_applicant_document_count|pluralize }} submitted</div>
+                    <div>{% blocktranslate count counter=current_applicant_document_count %}{{ counter }} file submitted{% plural %}{{ counter }} files submitted{% endblocktranslate %}</div>
                     <ol style="margin:0.45rem 0 0; padding-left:1.25rem;">
                         {% for document in current_applicant_documents %}
                             <li style="margin-bottom:0.25rem;">
@@ -100,22 +105,24 @@
 
     {# What happens next #}
     <div class="card p-4 mb-3">
-        <h2 style="font-size:1rem; font-weight:700; color:#111827; margin:0 0 1rem;">What Happens Next</h2>
+        <h2 style="font-size:1rem; font-weight:700; color:#111827; margin:0 0 1rem;">{% translate "What Happens Next" %}</h2>
         <ol style="padding-left:1.25rem; margin:0; font-size:0.9375rem; color:#374151; line-height:1.7;">
-            <li>Your application will be reviewed by our recruitment team.</li>
-            <li>You may be contacted at your email or phone number for updates or additional requirements.</li>
-            <li>You can check your application status anytime using your Tracking Code.</li>
+            <li>{% translate "Your application will be reviewed by our recruitment team." %}</li>
+            <li>{% translate "You may be contacted at your email or phone number for updates or additional requirements." %}</li>
+            <li>{% translate "You can check your application status anytime using your Tracking Code." %}</li>
         </ol>
     </div>
 
     {# Reminder box #}
     <div class="rg-pub-info-box rg-pub-info-box--warning" style="margin-bottom:1.5rem;">
         <p>
-            <strong>Save your Tracking Code and keep it private.</strong>
-            You will need it to check your application status online.
+            <strong>{% translate "Save your Tracking Code and keep it private." %}</strong>
+            {% translate "You will need it to check your application status online." %}
         </p>
         <p>
-            A confirmation has also been sent to <strong>{{ application.applicant_email }}</strong>.
+            {% blocktranslate trimmed with email=application.applicant_email %}
+            A confirmation has also been sent to <strong>{{ email }}</strong>.
+            {% endblocktranslate %}
         </p>
     </div>
 
@@ -125,17 +132,17 @@
     <div style="display:flex; flex-wrap:wrap; gap:0.75rem; justify-content:center; margin-bottom:1.25rem;">
         <a href="{% url 'applicant-receipt-pdf' application.public_token %}"
            class="btn btn-rg-primary btn-lg">
-            Download Receipt (PDF)
+            {% translate "Download Receipt (PDF)" %}
         </a>
         <a href="{% url 'applicant-status-link' application.public_token %}"
            class="btn btn-outline-secondary btn-lg">
-            Track My Application
+            {% translate "Track My Application" %}
         </a>
         <button type="button" class="btn btn-outline-secondary btn-lg" onclick="window.print()">
-            Print Receipt
+            {% translate "Print Receipt" %}
         </button>
         <a href="{% url 'applicant-portal' %}" class="btn btn-outline-secondary btn-lg">
-            Back to Job Openings
+            {% translate "Back to Job Openings" %}
         </a>
     </div>
 
@@ -173,8 +180,8 @@
         var val = btn.dataset.value;
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(val).then(function () {
-                btn.textContent = 'Copied!';
-                setTimeout(function () { btn.textContent = 'Copy Tracking Code'; }, 2000);
+                btn.textContent = btn.dataset.copiedLabel;
+                setTimeout(function () { btn.textContent = btn.dataset.label; }, 2000);
             });
         } else {
             // Fallback
@@ -186,8 +193,8 @@
             ta.select();
             document.execCommand('copy');
             document.body.removeChild(ta);
-            btn.textContent = 'Copied!';
-            setTimeout(function () { btn.textContent = 'Copy Tracking Code'; }, 2000);
+            btn.textContent = btn.dataset.copiedLabel;
+            setTimeout(function () { btn.textContent = btn.dataset.label; }, 2000);
         }
     });
 })();

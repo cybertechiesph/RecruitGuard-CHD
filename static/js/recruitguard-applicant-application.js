@@ -25,6 +25,16 @@
     var ALLOWED = { "application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png" };
     var csrf = (form.querySelector("input[name=csrfmiddlewaretoken]") || {}).value || "";
 
+    /* Messages in the page's language (English / Filipino), from the server as JSON.
+       t(key, fallback, {name: value}) fills {name} placeholders. */
+    var STRINGS = {};
+    try { STRINGS = JSON.parse(document.getElementById("rg-apply-i18n").textContent); } catch (x) {}
+    function t(key, fallback, values) {
+        var text = STRINGS[key] || fallback;
+        Object.keys(values || {}).forEach(function (name) { text = text.split("{" + name + "}").join(values[name]); });
+        return text;
+    }
+
     /* ── helpers ─────────────────────────────────────────────── */
     function formatSize(bytes) {
         if (bytes < 1024) return bytes + " B";
@@ -105,9 +115,9 @@
         }).catch(function () { return []; });
     }
     var QUALITY_MESSAGES = {
-        small: "This photo is small, so the text may be hard to read.",
-        dark: "This photo looks dark.",
-        blurry: "This photo looks blurry."
+        small: t("photo_small", "This photo is small, so the text may be hard to read."),
+        dark: t("photo_dark", "This photo looks dark."),
+        blurry: t("photo_blurry", "This photo looks blurry.")
     };
     function qualityWarning(card, name, issues) {
         var box = card.querySelector("[data-doc-warning]");
@@ -118,7 +128,7 @@
         strong.textContent = name;
         line.appendChild(strong);
         line.appendChild(document.createTextNode(" — " + issues.map(function (i) { return QUALITY_MESSAGES[i]; }).join(" ") +
-            " It was saved. Tap View to check you can read it, and take it again if not."));
+            " " + t("photo_saved_check", "It was saved. Tap View to check you can read it, and take it again if not.")));
         box.appendChild(line);
         box.hidden = false;
     }
@@ -155,7 +165,7 @@
         li.querySelector(".rg-doc-part__icon").textContent = part.content_type === "application/pdf" ? "PDF" : "IMG";
         li.querySelector("[data-part-name]").textContent = part.filename;
         li.querySelector("[data-part-size]").textContent = formatSize(part.size_bytes);
-        li.querySelector("[data-part-remove]").setAttribute("aria-label", "Remove " + part.filename);
+        li.querySelector("[data-part-remove]").setAttribute("aria-label", t("remove_named", "Remove {name}", { name: part.filename }));
         return li;
     }
 
@@ -169,13 +179,13 @@
         card.classList.toggle("is-ready", !!state.is_ready);
         var status = card.querySelector("[data-doc-status]");
         if (status) {
-            status.textContent = state.is_ready ? "✓ Ready"
-                : (card.getAttribute("data-required") === "true" ? "Required" : "If applicable");
+            status.textContent = state.is_ready ? "✓ " + t("ready", "Ready")
+                : (card.getAttribute("data-required") === "true" ? t("required", "Required") : t("if_applicable", "If applicable"));
         }
         var addLabel = card.querySelector(".rg-doc-card__add");
         if (addLabel) {
             var input = addLabel.querySelector("input");
-            addLabel.textContent = state.parts.length ? "Add another file" : "Add files";
+            addLabel.textContent = state.parts.length ? t("add_another", "Add another file") : t("add_files", "Add files");
             addLabel.insertBefore(input, addLabel.firstChild);
         }
         updateProgress();
@@ -190,8 +200,8 @@
         return shrinkIfPhoto(file).then(function (prepared) {
             if (prepared.size > MAX_BYTES) {
                 row.remove();
-                throw fileError(file.name, "This file is larger than " + MAX_MB + " MB. If it has several pages, " +
-                    "add the pages one at a time, or take a photo of each page instead.");
+                throw fileError(file.name, t("too_large", "This file is larger than {mb} MB. If it has several pages, " +
+                    "add the pages one at a time, or take a photo of each page instead.", { mb: MAX_MB }));
             }
             return new Promise(function (resolve, reject) {
                 var data = new FormData();
@@ -213,11 +223,11 @@
                         resolve();
                         return;
                     }
-                    reject(fileError(file.name, (body && body.error) || "The upload did not go through. Try again."));
+                    reject(fileError(file.name, (body && body.error) || t("upload_failed", "The upload did not go through. Try again.")));
                 });
                 xhr.addEventListener("error", function () {
                     row.remove();
-                    reject(fileError(file.name, "The upload did not go through. Check your connection and try again."));
+                    reject(fileError(file.name, t("upload_offline", "The upload did not go through. Check your connection and try again.")));
                 });
                 xhr.send(data);
             });
@@ -232,13 +242,13 @@
         var chain = Promise.resolve();
         Array.prototype.forEach.call(files, function (file) {
             if (!kindOf(file)) {
-                errors.push(fileError(file.name, "This needs to be a PDF, JPG, or PNG file."));
+                errors.push(fileError(file.name, t("wrong_type", "This needs to be a PDF, JPG, or PNG file.")));
                 return;
             }
             chain = chain.then(function () {
                 return uploadOne(card, file).catch(function (err) {
                     errors.push(err && !(err instanceof Error) && err.message
-                        ? err : fileError(file.name, "The upload did not go through. Try again."));
+                        ? err : fileError(file.name, t("upload_failed", "The upload did not go through. Try again.")));
                 });
             });
         });
@@ -262,7 +272,7 @@
         var data = new FormData();
         data.append("evidence_id", reuseBtn.getAttribute("data-evidence-id"));
         reuseBtn.disabled = true;
-        reuseBtn.textContent = "Adding…";
+        reuseBtn.textContent = t("adding", "Adding…");
         fetch(reuseBtn.getAttribute("data-reuse-url"), {
             method: "POST",
             body: data,
@@ -277,14 +287,14 @@
                   if (box) box.remove();
               } else {
                   reuseBtn.disabled = false;
-                  reuseBtn.textContent = "Use this file";
-                  cardError(card, pair[1].error || "That file could not be added.");
+                  reuseBtn.textContent = t("use_this_file", "Use this file");
+                  cardError(card, pair[1].error || t("add_failed", "That file could not be added."));
               }
           })
           .catch(function () {
               reuseBtn.disabled = false;
-              reuseBtn.textContent = "Use this file";
-              cardError(card, "That file could not be added. Check your connection.");
+              reuseBtn.textContent = t("use_this_file", "Use this file");
+              cardError(card, t("add_offline", "That file could not be added. Check your connection."));
           });
     });
 
@@ -308,9 +318,9 @@
             }).then(function (res) { return res.json().then(function (body) { return [res, body]; }); })
               .then(function (pair) {
                   if (pair[0].ok) { applySlotState(card, pair[1]); cardError(card, ""); }
-                  else { removeBtn.disabled = false; cardError(card, pair[1].error || "That file could not be removed."); }
+                  else { removeBtn.disabled = false; cardError(card, pair[1].error || t("remove_failed", "That file could not be removed.")); }
               })
-              .catch(function () { removeBtn.disabled = false; cardError(card, "That file could not be removed. Check your connection."); });
+              .catch(function () { removeBtn.disabled = false; cardError(card, t("remove_offline", "That file could not be removed. Check your connection.")); });
         } else {
             openPreview(partUrl(previewTemplate, id), card.getAttribute("data-title"),
                         li.querySelector("[data-part-name]").textContent);
@@ -325,7 +335,7 @@
         var body = modalEl.querySelector("[data-preview-body]");
         modalEl.querySelector("[data-preview-title]").textContent = title || "Your file";
         modalEl.querySelector("[data-preview-meta]").textContent = filename || "";
-        body.textContent = "Loading…";
+        body.textContent = t("loading", "Loading…");
         window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
         fetch(url, { credentials: "same-origin" }).then(function (res) {
             if (!res.ok) throw new Error();
@@ -337,21 +347,21 @@
             if (blob.type === "application/pdf") {
                 var frame = document.createElement("iframe");
                 frame.src = previewUrl;
-                frame.title = "Preview of " + (filename || "your file");
+                frame.title = t("preview_of", "Preview of {name}", { name: filename || t("your_file", "your file") });
                 frame.className = "rg-intake-preview__frame";
                 body.appendChild(frame);
                 var hint = document.createElement("p");
                 hint.className = "rg-intake-preview__fallback";
-                hint.textContent = "If the preview is blank, your device can't show PDFs here. The file is still saved.";
+                hint.textContent = t("preview_blank", "If the preview is blank, your device can't show PDFs here. The file is still saved.");
                 body.appendChild(hint);
             } else {
                 var img = document.createElement("img");
                 img.src = previewUrl;
-                img.alt = "Preview of " + (filename || "your file");
+                img.alt = t("preview_of", "Preview of {name}", { name: filename || t("your_file", "your file") });
                 img.className = "rg-intake-preview__image";
                 body.appendChild(img);
             }
-        }).catch(function () { body.textContent = "This file couldn't be shown. It is still saved."; });
+        }).catch(function () { body.textContent = t("preview_failed", "This file couldn't be shown. It is still saved."); });
     }
     if (modalEl) {
         modalEl.addEventListener("hidden.bs.modal", function () {
@@ -400,7 +410,7 @@
             if (!ratingCard || !radio.checked) return;
             var applicable = radio.value === "applicable";
             if (!applicable && ratingCard.querySelector(".rg-doc-part")) {
-                if (!window.confirm("Remove the performance rating files you added?")) {
+                if (!window.confirm(t("confirm_drop_rating", "Remove the performance rating files you added?"))) {
                     var other = root.querySelector("input[name=performance_rating_applicability][value=applicable]");
                     if (other) other.checked = true;
                     return;
@@ -422,7 +432,7 @@
         var data = new FormData(form);
         data.set("action", "autosave");
         data.delete("submission_confirmation");
-        if (statusEl) statusEl.textContent = "Saving…";
+        if (statusEl) statusEl.textContent = t("saving", "Saving…");
         fetch(autosaveUrl, {
             method: "POST",
             body: data,
@@ -431,14 +441,14 @@
             headers: { "X-Requested-With": "XMLHttpRequest" }
         }).then(function (res) {
             if (res.type === "opaqueredirect" || res.status === 403) {
-                if (statusEl) statusEl.textContent = "Your session ended. Copy anything you typed, then reload the page to continue.";
+                if (statusEl) statusEl.textContent = t("session_ended", "Your session ended. Copy anything you typed, then reload the page to continue.");
                 return null;
             }
             return res.json();
         }).then(function (body) {
             if (!body || !statusEl) return;
-            statusEl.textContent = body.ok ? "Saved" : "Some answers need attention before they can be saved.";
-        }).catch(function () { if (statusEl) statusEl.textContent = "Couldn't save just now. We'll try again."; });
+            statusEl.textContent = body.ok ? t("saved", "Saved") : t("needs_attention", "Some answers need attention before they can be saved.");
+        }).catch(function () { if (statusEl) statusEl.textContent = t("save_failed", "Couldn't save just now. We'll try again."); });
     }
     form.querySelectorAll("input[type=text], input[type=tel], textarea, input[type=radio]").forEach(function (el) {
         el.addEventListener(el.type === "radio" ? "change" : "input", function () {
@@ -455,7 +465,7 @@
         if (!limit) return;
         function refresh() {
             var used = field.value.length;
-            counter.textContent = used + " / " + limit + " characters";
+            counter.textContent = t("characters", "{used} / {limit} characters", { used: used, limit: limit });
             counter.classList.toggle("is-over", used > limit);
         }
         field.addEventListener("input", refresh);
@@ -469,12 +479,12 @@
         if (!submitter || submitter.value !== "submit") return;
         if (root.querySelector(".rg-doc-part.is-uploading")) {
             e.preventDefault();
-            window.alert("Please wait until your files finish uploading.");
+            window.alert(t("wait_uploads", "Please wait until your files finish uploading."));
             return;
         }
         if (timer) clearTimeout(timer);
         submitBtn.disabled = true;
-        submitBtn.textContent = "Submitting…";
+        submitBtn.textContent = t("submitting", "Submitting…");
         // Keep the clicked button's value: a disabled submitter is not sent.
         var hidden = document.createElement("input");
         hidden.type = "hidden";

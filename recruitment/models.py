@@ -8,6 +8,7 @@ from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, models, transaction
 from django.utils import timezone
+from django.utils.translation import gettext_noop
 from django.utils.text import slugify
 
 # The Appointing Authority should select from the top five ranked CAR candidates where
@@ -733,7 +734,13 @@ class PositionPosting(TimestampedModel):
             return self.closing_date >= timezone.localdate()
         return True
 
-    QUALIFICATION_LABELS = ("Education", "Training", "Experience", "Eligibility")
+    # Translated where displayed ({% translate label %}); gettext_noop marks them for extraction.
+    QUALIFICATION_LABELS = (
+        gettext_noop("Education"),
+        gettext_noop("Training"),
+        gettext_noop("Experience"),
+        gettext_noop("Eligibility"),
+    )
 
     @property
     def qualification_items(self):

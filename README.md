@@ -186,6 +186,19 @@ looks like `127.0.0.1` and shares one rate-limit budget. Rate limits count per b
 per-IP ceiling of `RATE_LIMIT_SHARED_IP_FACTOR` (default 10) times that, so applicants on the
 same mobile network (carrier-grade NAT) don't lock each other out.
 
+## Filipino translation (applicant portal)
+
+The applicant pages are available in English and Filipino. Translations live in
+`locale/fil/LC_MESSAGES/django.po`. The compiled `django.mo` is committed, so the server needs
+nothing extra. After changing any applicant-facing text:
+
+```bash
+python manage.py update_translations          # extracts strings, keeps existing translations, compiles the .mo
+python manage.py update_translations --check  # fails if any string still needs a Filipino translation
+```
+
+Fill in the empty `msgstr ""` entries in the `.po` file, then run the first command again.
+
 ## First internal account note
 
 `createsuperuser` gives you Django admin access, but the internal portal only allows internal roles. That is why the setup commands above also set the account role to `system_admin`.

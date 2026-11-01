@@ -1,0 +1,3 @@
+{% load i18n %}{% comment %}
+  Live "time left" for the last day (filled in by recruitguard-deadline.js). Needs entry.
+{% endcomment %}<span data-closes-at="{{ entry.intake_closes_at|date:'c' }}" data-closed-label="{% translate 'Applications are now closed.' %}" data-left-hours="{% translate '{hours} hr {minutes} min left' %}" data-left-minutes="{% translate '{minutes} min left' %}"></span>

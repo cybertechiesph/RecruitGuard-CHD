@@ -1,7 +1,7 @@
 {% extends "applicant_base.html" %}
-{% load recruitment_ui %}
+{% load i18n recruitment_ui %}
 
-{% block title %}Verify your email | Applicant Portal{% endblock %}
+{% block title %}{% translate "Verify your email" %} | {% translate "Applicant Portal" %}{% endblock %}
 
 {% block site_header %}
 {% include "recruitment/includes/applicant_flow_header.html" with position_title=application.position.title %}
@@ -31,15 +31,15 @@
     {% endif %}
 
     <div class="rg-pub-otp-card">
-        <h1 class="rg-pub-otp-card__title">Verify your email</h1>
+        <h1 class="rg-pub-otp-card__title">{% translate "Verify your email" %}</h1>
         <p class="rg-pub-otp-card__reassure" style="margin:0 0 0.6rem; color:#4b5563; font-size:0.9rem;">
             {% if has_active_code %}
-                Enter the code we emailed you to continue your application. Anything you already added is saved.
+                {% translate "Enter the code we emailed you to continue your application. Anything you already added is saved." %}
             {% else %}
-                To open your saved application, get a new code below &mdash; we&rsquo;ll send it to your email.
+                {% translate "To open your saved application, get a new code below &mdash; we&rsquo;ll send it to your email." %}
             {% endif %}
         </p>
-        <p class="rg-pub-otp-card__intro">{% if has_active_code %}We sent a 6-digit code to:{% else %}Your email:{% endif %}</p>
+        <p class="rg-pub-otp-card__intro">{% if has_active_code %}{% translate "We sent a 6-digit code to:" %}{% else %}{% translate "Your email:" %}{% endif %}</p>
 
         <div class="rg-pub-otp-email">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
@@ -55,7 +55,7 @@
 
             <div class="rg-pub-field">
                 <label for="{{ otp_form.otp.id_for_label }}" class="rg-pub-otp-label">
-                    Enter the 6-digit code
+                    {% translate "Enter the 6-digit code" %}
                 </label>
                 <input type="text"
                        id="{{ otp_form.otp.id_for_label }}"
@@ -75,20 +75,24 @@
             </div>
 
             <p class="rg-pub-otp-help" id="rg-otp-help">
-                Each code works for {{ otp_validity_minutes }} minute{{ otp_validity_minutes|pluralize }}. If it expires, get a new one below.
+                {% blocktranslate trimmed count minutes=otp_validity_minutes %}
+                Each code works for {{ minutes }} minute. If it expires, get a new one below.
+                {% plural %}
+                Each code works for {{ minutes }} minutes. If it expires, get a new one below.
+                {% endblocktranslate %}
             </p>
 
             <button type="submit" class="btn btn-rg-primary btn-lg w-100">
-                Verify and continue &rarr;
+                {% translate "Verify and continue" %} &rarr;
             </button>
         </form>
 
         <div class="rg-pub-otp-resend">
-            <p class="mb-2"><strong>{% if has_active_code %}Didn&rsquo;t receive the code?{% else %}Need a code?{% endif %}</strong></p>
+            <p class="mb-2"><strong>{% if has_active_code %}{% translate "Didn&rsquo;t receive the code?" %}{% else %}{% translate "Need a code?" %}{% endif %}</strong></p>
             {% if has_active_code %}
             <ul class="rg-pub-otp-tips">
-                <li>Check your <strong>Spam</strong> or <strong>Junk Mail</strong> folder.</li>
-                <li>Make sure the email address above is correct.</li>
+                <li>{% translate "Check your <strong>Spam</strong> or <strong>Junk Mail</strong> folder." %}</li>
+                <li>{% translate "Make sure the email address above is correct." %}</li>
             </ul>
             {% endif %}
 
@@ -96,21 +100,21 @@
                 {% csrf_token %}
                 <input type="hidden" name="action" value="resend">
                 <button type="submit" class="btn {% if has_active_code %}btn-outline-secondary btn-sm{% else %}btn-rg-primary{% endif %}" id="resend-btn">
-                    {% if has_active_code %}Resend the code{% else %}Email me a code{% endif %}
+                    {% if has_active_code %}{% translate "Resend the code" %}{% else %}{% translate "Email me a code" %}{% endif %}
                 </button>
             </form>
             <span id="resend-timer" class="rg-pub-resend-timer"></span>
 
             <p class="rg-pub-otp-wrongmail">
-                Wrong email address?
-                <a href="{% url 'applicant-intake' application.position.pk %}">&larr; Start again with the correct email</a>
+                {% translate "Wrong email address?" %}
+                <a href="{% url 'applicant-intake' application.position.pk %}">&larr; {% translate "Start again with the correct email" %}</a>
             </p>
         </div>
     </div>
 
     <div class="rg-pub-back-row">
         <a href="{% url 'applicant-portal' %}" class="rg-pub-back">
-            &larr; Return to job openings
+            &larr; {% translate "Return to job openings" %}
         </a>
     </div>
 </div>
@@ -129,13 +133,13 @@
             var v = (input.value || "").trim();
             if (v.length === 0) {
                 e.preventDefault();
-                err.textContent = "Enter the 6-digit code from your email.";
+                err.textContent = "{% filter escapejs %}{% translate "Enter the 6-digit code from your email." %}{% endfilter %}";
                 err.style.display = "block";
                 input.classList.add("is-invalid");
                 try { input.focus(); } catch (x) {}
             } else if (!/^\d{6}$/.test(v)) {
                 e.preventDefault();
-                err.textContent = "The code is 6 digits — letters or extra characters won’t work.";
+                err.textContent = "{% filter escapejs %}{% translate "The code is 6 digits — letters or extra characters won’t work." %}{% endfilter %}";
                 err.style.display = "block";
                 input.classList.add("is-invalid");
                 try { input.focus(); } catch (x) {}
@@ -180,7 +184,7 @@
                 resendBtn.disabled = false;
                 return;
             }
-            timerEl.textContent = " (available in " + s + "s)";
+            timerEl.textContent = " " + "{% filter escapejs %}{% translate "(available in {seconds}s)" %}{% endfilter %}".replace("{seconds}", s);
             setTimeout(function () { tick(s - 1); }, 1000);
         }
     }

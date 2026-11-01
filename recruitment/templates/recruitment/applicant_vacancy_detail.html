@@ -1,6 +1,7 @@
 {% extends "applicant_base.html" %}
+{% load static i18n %}
 
-{% block title %}{{ entry.title }} | Applicant Portal{% endblock %}
+{% block title %}{{ entry.title }} | {% translate "Applicant Portal" %}{% endblock %}
 
 {% block main_class %}{% endblock %}
 
@@ -8,10 +9,10 @@
 <div class="rg-pub-wrap">
 
     {# Breadcrumb #}
-    <nav class="rg-pub-breadcrumb" aria-label="Breadcrumb">
-        <a href="{% url 'applicant-portal' %}">Home</a>
+    <nav class="rg-pub-breadcrumb" aria-label="{% translate 'Breadcrumb' %}">
+        <a href="{% url 'applicant-portal' %}">{% translate "Home" %}</a>
         <span class="rg-pub-breadcrumb__sep" aria-hidden="true">/</span>
-        <a href="{% url 'applicant-portal' %}#job-openings">Job Openings</a>
+        <a href="{% url 'applicant-portal' %}#job-openings">{% translate "Job Openings" %}</a>
         <span class="rg-pub-breadcrumb__sep" aria-hidden="true">/</span>
         <span>{{ entry.title }}</span>
     </nav>
@@ -22,48 +23,56 @@
 
         <div class="rg-pub-position-badges">
             {% if entry.branch == "plantilla" %}
-                <span class="rg-pub-badge rg-pub-badge--type">Permanent (Plantilla)</span>
+                <span class="rg-pub-badge rg-pub-badge--type">{% translate "Permanent (Plantilla)" %}</span>
             {% else %}
-                <span class="rg-pub-badge rg-pub-badge--type">Contract of Service</span>
+                <span class="rg-pub-badge rg-pub-badge--type">{% translate "Contract of Service" %}</span>
             {% endif %}
             {% if entry.official_office_label %}
                 <span class="rg-pub-badge">{{ entry.official_office_label }}</span>
             {% endif %}
-            {% if entry.job_code %}<span class="rg-pub-badge" title="Vacancy code">{{ entry.job_code }}</span>{% endif %}
+            {% if entry.job_code %}<span class="rg-pub-badge" title="{% translate 'Vacancy code' %}">{{ entry.job_code }}</span>{% endif %}
             {% if entry.item_number %}
-                <span class="rg-pub-badge" title="Plantilla Item Number">Item No.: {{ entry.item_number }}</span>
+                <span class="rg-pub-badge" title="{% translate 'Plantilla Item Number' %}">{% translate "Item No.:" %} {{ entry.item_number }}</span>
             {% endif %}
-            <span class="rg-pub-badge">Posted {{ entry.plantilla_publication_start_date|date:"M j, Y" }}</span>
+            <span class="rg-pub-badge">{% blocktranslate with date=entry.plantilla_publication_start_date|date:"M j, Y" %}Posted {{ date }}{% endblocktranslate %}</span>
         </div>
         {% include "recruitment/includes/branch_explainer.html" with mode="detail" branch=entry.branch %}
 
         {# Deadline #}
         {% if not can_apply %}
         <div class="rg-pub-deadline-box rg-pub-deadline-box--closed" role="status" data-vacancy-closed>
-            <span><strong>Applications for this position are closed.</strong>
-                {% if entry.closing_date %}The deadline was {{ entry.closing_date|date:"F d, Y" }}.{% endif %}
-                <a href="{% url 'applicant-portal' %}#job-openings">See the positions that are open now</a>.</span>
+            <span><strong>{% translate "Applications for this position are closed." %}</strong>
+                {% if entry.closing_date %}{% blocktranslate with date=entry.closing_date|date:"F d, Y" %}The deadline was {{ date }}.{% endblocktranslate %}{% endif %}
+                <a href="{% url 'applicant-portal' %}#job-openings">{% translate "See the positions that are open now" %}</a>.</span>
         </div>
         {% elif entry.closing_date %}
         <div class="rg-pub-deadline-box {% if is_closing_soon %}rg-pub-deadline-box--urgent{% endif %}">
             <span>
                 {% if is_closing_soon %}
-                    <strong>Closing Soon &mdash;</strong>
+                    <strong>{% translate "Closing Soon" %} &mdash;</strong>
                 {% endif %}
-                Application Deadline: <strong>{{ entry.closing_date|date:"F d, Y" }}{% if entry.intake_closes_at %}, 11:59 PM{% endif %}</strong>{% if entry.intake_closes_at %} (Philippine time){% endif %}
+                {% if entry.intake_closes_at %}
+                    {% blocktranslate trimmed with date=entry.closing_date|date:"F d, Y" %}
+                    Application Deadline: <strong>{{ date }}, 11:59 PM</strong> (Philippine time)
+                    {% endblocktranslate %}
+                {% else %}
+                    {% blocktranslate trimmed with date=entry.closing_date|date:"F d, Y" %}
+                    Application Deadline: <strong>{{ date }}</strong>
+                    {% endblocktranslate %}
+                {% endif %}
                 {% if entry.intake_closes_today %}
-                    <span class="rg-pub-deadline-countdown">Closes today &mdash; <span data-closes-at="{{ entry.intake_closes_at|date:'c' }}"></span></span>
+                    <span class="rg-pub-deadline-countdown">{% translate "Closes today" %} &mdash; {% include "recruitment/includes/deadline_countdown.html" %}</span>
                 {% endif %}
                 {% if entry.deadline_extended %}
                     <span class="rg-pub-deadline-extended">
-                        Deadline extended &mdash; applications reopened until the new date.
+                        {% translate "Deadline extended &mdash; applications reopened until the new date." %}
                     </span>
                 {% endif %}
             </span>
         </div>
         {% else %}
         <div class="rg-pub-deadline-box">
-            <span>Applications are accepted while this position is active.</span>
+            <span>{% translate "Applications are accepted while this position is active." %}</span>
         </div>
         {% endif %}
     </div>
@@ -71,30 +80,31 @@
     {# About #}
     {% if not entry.position_reference and entry.description %}
     <div class="rg-pub-section">
-        <h2 class="rg-pub-section__title">About This Position</h2>
+        <h2 class="rg-pub-section__title">{% translate "About This Position" %}</h2>
         <p class="rg-pub-section__copy">{{ entry.description }}</p>
     </div>
     {% endif %}
 
     {% if entry.position_reference %}
     <div class="rg-pub-section">
-        <h2 class="rg-pub-section__title">Official Position Reference</h2>
+        <h2 class="rg-pub-section__title">{% translate "Official Position Reference" %}</h2>
         <div class="row g-3">
             <div class="col-md-4">
-                <p class="rg-pub-section__copy mb-1"><strong>Salary Grade</strong></p>
-                <p class="rg-pub-section__copy mb-0">{% if entry.position_reference.salary_grade %}SG {{ entry.position_reference.salary_grade }}{% else %}Not recorded{% endif %}</p>
+                <p class="rg-pub-section__copy mb-1"><strong>{% translate "Salary Grade" %}</strong></p>
+                <p class="rg-pub-section__copy mb-0">{% if entry.position_reference.salary_grade %}SG {{ entry.position_reference.salary_grade }}{% else %}{% translate "Not recorded" %}{% endif %}</p>
+                <p class="rg-pub-jargon">{% translate "The government pay level for this job. A higher number means a higher salary." %}</p>
             </div>
         </div>
         <details class="rg-pub-reference-details" style="margin-top:0.85rem;">
-            <summary style="cursor:pointer; font-size:0.9375rem;">Official reference details</summary>
+            <summary style="cursor:pointer; font-size:0.9375rem;">{% translate "Official reference details" %}</summary>
             <div class="row g-3" style="margin-top:0.35rem;">
                 <div class="col-md-6">
-                    <p class="rg-pub-section__copy mb-1"><strong>Level Classification</strong></p>
-                    <p class="rg-pub-section__copy mb-0">{{ entry.position_reference.get_level_classification_display|default:"Not recorded" }}</p>
+                    <p class="rg-pub-section__copy mb-1"><strong>{% translate "Level Classification" %}</strong></p>
+                    <p class="rg-pub-section__copy mb-0">{% if entry.position_reference.get_level_classification_display %}{{ entry.position_reference.get_level_classification_display }}{% else %}{% translate "Not recorded" %}{% endif %}</p>
                 </div>
                 <div class="col-md-6">
-                    <p class="rg-pub-section__copy mb-1"><strong>Class ID</strong></p>
-                    <p class="rg-pub-section__copy mb-0">{{ entry.position_reference.class_id|default:"Not recorded" }}</p>
+                    <p class="rg-pub-section__copy mb-1"><strong>{% translate "Class ID" %}</strong></p>
+                    <p class="rg-pub-section__copy mb-0">{% if entry.position_reference.class_id %}{{ entry.position_reference.class_id }}{% else %}{% translate "Not recorded" %}{% endif %}</p>
                 </div>
             </div>
         </details>
@@ -105,7 +115,7 @@
     {% with qs_items=entry.qualification_items %}
     {% if qs_items or entry.qualification_reference or entry.position_reference and entry.position_reference.qualification_summary or not entry.position_reference and entry.requirements %}
     <div class="rg-pub-section">
-        <h2 class="rg-pub-section__title">Qualifications</h2>
+        <h2 class="rg-pub-section__title">{% translate "Qualifications" %}</h2>
         {% if entry.qualification_reference and not entry.qualification_reference_is_checklist %}
         <p class="rg-pub-section__copy" style="margin-bottom:0.75rem;">{{ entry.qualification_reference }}</p>
         {% endif %}
@@ -116,12 +126,19 @@
           gathering documents (and saves the office from screening clear mismatches).
         {% endcomment %}
         <fieldset class="rg-qs-check" data-qs-check>
-            <legend class="rg-qs-check__legend">Do you meet these? Tick each one that applies to you.</legend>
+            <legend class="rg-qs-check__legend">{% translate "Do you meet these? Tick each one that applies to you." %}</legend>
             {% for label, text in qs_items %}
-            <label class="rg-qs-check__item"><input type="checkbox" data-qs-item> <span><strong>{{ label }}:</strong> {{ text }}</span></label>
+            <label class="rg-qs-check__item"><input type="checkbox" data-qs-item> <span><strong>{% translate label %}:</strong> {{ text }}</span></label>
             {% endfor %}
             <p class="rg-qs-check__result" data-qs-result aria-live="polite"></p>
-            <p class="rg-qs-check__note">This is only for you; nothing here is sent. The recruitment team checks every application against these standards.</p>
+            <p class="rg-qs-check__note">{% translate "This is only for you; nothing here is sent. The recruitment team checks every application against these standards." %}</p>
+            <p class="rg-pub-jargon mb-0">
+                {% blocktranslate trimmed %}
+                <strong>Eligibility</strong> means a Civil Service eligibility (for example, passing the Career Service
+                exam) or a professional license from a board exam (for example, RA 1080 for nurses, CPAs and other
+                professionals).
+                {% endblocktranslate %}
+            </p>
         </fieldset>
         {% elif entry.position_reference and entry.position_reference.qualification_summary %}
         <div class="rg-pub-section__copy">{{ entry.position_reference.qualification_summary|linebreaksbr }}</div>
@@ -134,9 +151,9 @@
 
     {# Documents needed #}
     <div class="rg-pub-section">
-        <h2 class="rg-pub-section__title">Documents Needed</h2>
+        <h2 class="rg-pub-section__title">{% translate "Documents Needed" %}</h2>
         <p class="rg-pub-section__copy" style="margin-bottom:1rem;">
-            Please prepare the following documents as files (PDF, JPG, or PNG) before you start your application.
+            {% translate "Please prepare the following documents as files (PDF, JPG, or PNG) before you start your application." %}
         </p>
         <ul class="rg-pub-doc-list">
             {% for req in document_requirements %}
@@ -151,29 +168,33 @@
 
     {# How to apply #}
     <div class="rg-pub-section">
-        <h2 class="rg-pub-section__title">How to Apply</h2>
+        <h2 class="rg-pub-section__title">{% translate "How to Apply" %}</h2>
         {% if can_apply %}
         <ol class="rg-pub-section__copy rg-howto-steps">
-            <li>Click <strong>&ldquo;Apply for This Position&rdquo;</strong> below and enter your name, email and mobile number.</li>
-            <li>Enter the 6-digit code we email you.</li>
-            <li>Add your documents &mdash; a phone photo is fine, and a document with several pages can be added page by page.</li>
-            <li>Submit. You&rsquo;ll get a receipt and a tracking code right away.</li>
+            <li>{% translate "Click <strong>&ldquo;Apply for This Position&rdquo;</strong> below and enter your name, email and mobile number." %}</li>
+            <li>{% translate "Enter the 6-digit code we email you." %}</li>
+            <li>{% translate "Add your documents &mdash; a phone photo is fine, and a document with several pages can be added page by page." %}</li>
+            <li>{% translate "Submit. You&rsquo;ll get a receipt and a tracking code right away." %}</li>
         </ol>
         <p class="rg-pub-section__copy">
+            {% blocktranslate trimmed %}
             <strong>You don&rsquo;t have to finish in one go.</strong> Everything is saved as you add it; the link in
             your verification email brings you back.
+            {% endblocktranslate %}
         </p>
         {% else %}
-        <p class="rg-pub-section__copy">This vacancy is no longer accepting applications.
-            <a href="{% url 'applicant-portal' %}#job-openings">See the positions that are open now</a>.</p>
+        <p class="rg-pub-section__copy">{% translate "This vacancy is no longer accepting applications." %}
+            <a href="{% url 'applicant-portal' %}#job-openings">{% translate "See the positions that are open now" %}</a>.</p>
         {% endif %}
     </div>
 
     {# Data privacy notice #}
     <div class="rg-pub-info-box rg-pub-info-box--info" style="margin-top:1.75rem; font-size:0.8125rem;">
         <p>
+            {% blocktranslate trimmed %}
             <strong>Data Privacy Notice:</strong> Your personal data will be used solely for recruitment purposes
             in accordance with the Data Privacy Act of 2012 (Republic Act No. 10173).
+            {% endblocktranslate %}
         </p>
     </div>
 
@@ -181,36 +202,40 @@
     {% if can_apply %}
     <div style="margin-top:2rem; text-align:center;">
         <a href="{% url 'applicant-intake' entry.pk %}" class="btn btn-rg-primary btn-lg" style="min-width:320px;" data-apply-link>
-            Apply for This Position &rarr;
+            {% translate "Apply for This Position" %} &rarr;
         </a>
         <p style="margin-top:0.75rem; font-size:0.8125rem; color:#5f6c78;">
-            No account needed &mdash; we just email you a code to confirm your address.
+            {% translate "No account needed &mdash; we just email you a code to confirm your address." %}
         </p>
     </div>
     {% else %}
     <div style="margin-top:2rem; text-align:center;">
         <button class="btn btn-outline-secondary btn-lg" disabled style="min-width:320px;">
-            Applications are not currently open for this position
+            {% translate "Applications are not currently open for this position" %}
         </button>
     </div>
     {% endif %}
 
     <div style="margin-top:1.5rem;">
-        <a href="{% url 'applicant-portal' %}#job-openings" class="rg-pub-back">&larr; Back to Job Openings</a>
+        <a href="{% url 'applicant-portal' %}#job-openings" class="rg-pub-back">&larr; {% translate "Back to Job Openings" %}</a>
     </div>
 
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
-{% load static %}
-<script src="{% static 'js/recruitguard-deadline.js' %}?v=20261101-dl1"></script>
+<script src="{% static 'js/recruitguard-deadline.js' %}?v=20261101-dl2"></script>
 <script>
 (function () {
     var box = document.querySelector("[data-qs-check]");
     if (!box) return;
     var items = box.querySelectorAll("[data-qs-item]");
     var result = box.querySelector("[data-qs-result]");
+    var TEXT = {
+        good: "{% filter escapejs %}{% translate 'You meet the listed standards. You can apply.' %}{% endfilter %}",
+        partial: "{% filter escapejs %}{% translate "{ticked} of {total} ticked. Applicants who don't meet every standard are not shortlisted." %}{% endfilter %}",
+        confirm: "{% filter escapejs %}{% translate "You haven't ticked every qualification standard. Applicants who don't meet all of them are not shortlisted. Apply anyway?" %}{% endfilter %}"
+    };
     function allTicked() {
         return Array.prototype.every.call(items, function (item) { return item.checked; });
     }
@@ -218,10 +243,10 @@
         var ticked = Array.prototype.filter.call(items, function (item) { return item.checked; }).length;
         if (!ticked) { result.textContent = ""; result.className = "rg-qs-check__result"; return; }
         if (allTicked()) {
-            result.textContent = "You meet the listed standards. You can apply.";
+            result.textContent = TEXT.good;
             result.className = "rg-qs-check__result is-good";
         } else {
-            result.textContent = ticked + " of " + items.length + " ticked. Applicants who don't meet every standard are not shortlisted.";
+            result.textContent = TEXT.partial.split("{ticked}").join(ticked).split("{total}").join(items.length);
             result.className = "rg-qs-check__result is-warn";
         }
     }
@@ -230,14 +255,12 @@
     if (apply) {
         apply.addEventListener("click", function (event) {
             if (allTicked()) return;
-            var ok = window.confirm(
-                "You haven't ticked every qualification standard. Applicants who don't meet all " +
-                "of them are not shortlisted. Apply anyway?"
-            );
-            if (!ok) { event.preventDefault(); box.scrollIntoView({ behavior: "smooth", block: "center" }); }
+            if (!window.confirm(TEXT.confirm)) {
+                event.preventDefault();
+                box.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
         });
     }
 })();
 </script>
 {% endblock %}
-

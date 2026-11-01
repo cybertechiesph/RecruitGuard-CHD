@@ -6,6 +6,8 @@ from django.views.generic import RedirectView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    # set_language: the English / Filipino switch on applicant pages (POST, CSRF-protected).
+    path("i18n/", include("django.conf.urls.i18n")),
     path("", RedirectView.as_view(pattern_name="applicant-portal", permanent=False)),
     path("", include("recruitment.urls")),
 ]

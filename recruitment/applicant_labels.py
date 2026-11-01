@@ -6,6 +6,8 @@ status pages) and ``notification_services`` (the applicant emails) read one
 source of truth without importing each other.
 """
 
+from django.utils.translation import gettext_lazy as _
+
 from .models import PositionPosting, RecruitmentApplication
 
 
@@ -14,44 +16,54 @@ from .models import PositionPosting, RecruitmentApplication
 APPLICANT_STATUS_LABELS = {
     RecruitmentApplication.Status.DRAFT: None,  # drafts not shown
     RecruitmentApplication.Status.SECRETARIAT_REVIEW: (
-        "Under Review",
+        _("Under Review"),
         "review",
-        "Your application is currently being reviewed by our recruitment team. "
-        "You will be contacted if additional information is needed.",
+        _(
+            "Your application is currently being reviewed by our recruitment team. "
+            "You will be contacted if additional information is needed."
+        ),
     ),
     RecruitmentApplication.Status.HRM_CHIEF_REVIEW: (
-        "Under Review",
+        _("Under Review"),
         "review",
-        "Your application is currently being reviewed by our recruitment team.",
+        _("Your application is currently being reviewed by our recruitment team."),
     ),
     RecruitmentApplication.Status.HRMPSB_REVIEW: (
-        "Under Evaluation",
+        _("Under Evaluation"),
         "evaluation",
-        "Your application is currently being evaluated. "
-        "You may be contacted for an examination or interview schedule.",
+        _(
+            "Your application is currently being evaluated. "
+            "You may be contacted for an examination or interview schedule."
+        ),
     ),
     RecruitmentApplication.Status.APPOINTING_AUTHORITY_REVIEW: (
-        "Under Processing",
+        _("Under Processing"),
         "review",
-        "Your application is being processed for the next steps. "
-        "You will be contacted with further instructions.",
+        _(
+            "Your application is being processed for the next steps. "
+            "You will be contacted with further instructions."
+        ),
     ),
     RecruitmentApplication.Status.RETURNED_TO_APPLICANT: (
-        "Action Required",
+        _("Action Required"),
         "returned",
-        "Your application has been returned. Please check your email for instructions on what to do next.",
+        _("Your application has been returned. Please check your email for instructions on what to do next."),
     ),
     RecruitmentApplication.Status.APPROVED: (
-        "Approved",
+        _("Approved"),
         "approved",
-        "Congratulations! Your application has been approved. "
-        "You will be contacted with further instructions.",
+        _(
+            "Congratulations! Your application has been approved. "
+            "You will be contacted with further instructions."
+        ),
     ),
     RecruitmentApplication.Status.REJECTED: (
-        "Not Selected",
+        _("Not Selected"),
         "not-selected",
-        "Thank you for your interest. Unfortunately, your application was not selected for this position. "
-        "You are welcome to apply for other open positions.",
+        _(
+            "Thank you for your interest. Unfortunately, your application was not selected for this position. "
+            "You are welcome to apply for other open positions."
+        ),
     ),
     # SL-10: the applicant left of their own accord — the status page should not present
     # that with the same tone as a decision that went against them.
@@ -59,17 +71,21 @@ APPLICANT_STATUS_LABELS = {
     # rather than implying a decision went against them. The variant stays "not-selected"
     # because it only drives the status page's terminal-step styling, which is correct here.
     RecruitmentApplication.Status.WITHDRAWN: (
-        "Withdrawn",
+        _("Withdrawn"),
         "not-selected",
-        "You withdrew this application and the office has recorded it. "
-        "No further action is needed.",
+        _(
+            "You withdrew this application and the office has recorded it. "
+            "No further action is needed."
+        ),
     ),
     # SL-11: the vacancy was cancelled. Nothing about the applicant was decided.
     RecruitmentApplication.Status.VACANCY_CANCELLED: (
-        "Vacancy Cancelled",
+        _("Vacancy Cancelled"),
         "not-selected",
-        "The office cancelled this recruitment, so your application will not proceed. "
-        "This is not an assessment of your qualifications.",
+        _(
+            "The office cancelled this recruitment, so your application will not proceed. "
+            "This is not an assessment of your qualifications."
+        ),
     ),
 }
 
@@ -77,7 +93,7 @@ APPLICANT_STATUS_LABELS = {
 def applicant_status_label(application):
     """Plain-language status shown to applicants (e.g. "Under Review")."""
     info = APPLICANT_STATUS_LABELS.get(application.status)
-    return info[0] if info else "Received"
+    return str(info[0] if info else _("Received"))
 
 
 def applicant_branch_label(application):

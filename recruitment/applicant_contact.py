@@ -1,7 +1,8 @@
 import re
 
+from django.utils.translation import gettext_lazy as _
 
-APPLICANT_MOBILE_ERROR_MESSAGE = (
+APPLICANT_MOBILE_ERROR_MESSAGE = _(
     "Enter a Philippine mobile number, like 0917 123 4567."
 )
 

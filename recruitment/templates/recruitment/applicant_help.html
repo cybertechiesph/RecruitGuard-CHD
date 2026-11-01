@@ -1,11 +1,14 @@
 {% extends "applicant_base.html" %}
+{% load recruitment_ui %}
 
 {% block title %}Help &amp; FAQ | Applicant Portal{% endblock %}
 
 {% block main_class %}{% endblock %}
 
 {% block content %}
-<div class="rg-pub-wrap rg-help-wrap">
+<div class="rg-pub-wrap rg-help-wrap" lang="en">
+    {% include "recruitment/includes/english_only_notice.html" %}
+    {% office_contact as contact %}
 
     <header class="rg-help-intro">
         <h1 class="rg-help-intro__title">Help &amp; Frequently Asked Questions</h1>
@@ -344,8 +347,8 @@
                 </h3>
                 <div id="faq-s4" class="accordion-collapse collapse" aria-labelledby="faq-s4-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>Yes. Our Public Assistance Desk is available at
-                        <a href="tel:+6382492000,4477"><strong>8-249-2000 loc. 4477</strong></a>. Have your case number
+                        <p>Yes. Call the Human Resource Management Unit (HRMU) at
+                        <a href="tel:{{ contact.hrmu.tel }}"><strong>{{ contact.hrmu.phone }}</strong></a>. Have your case number
                         ready so we can look up your case right away &mdash; never share your Tracking Code over
                         the phone; it&rsquo;s not needed for assistance.</p>
                     </div>
@@ -429,17 +432,17 @@
     </section>
 
 
-    {# ── Public Assistance Desk help card ─────────────────────────── #}
-    <aside class="rg-help-pad" aria-label="Public Assistance Desk">
+    {# ── Contact card: the HRMU handles questions about applications ── #}
+    <aside class="rg-help-pad" aria-label="Contact the Human Resource Management Unit">
         <p class="rg-help-pad__title">Still have questions? We&rsquo;re here to help.</p>
         <div class="rg-help-pad__grid">
             <div class="rg-help-pad__channel">
-                <span class="rg-help-pad__channel-label">Call the Public Assistance Desk</span>
-                <a href="tel:+6382492000,4477" class="rg-help-pad__channel-value">8-249-2000 loc. 4477</a>
+                <span class="rg-help-pad__channel-label">Call the Human Resource Management Unit (HRMU)</span>
+                <a href="tel:{{ contact.hrmu.tel }}" class="rg-help-pad__channel-value">{{ contact.hrmu.phone }}</a>
             </div>
             <div class="rg-help-pad__channel">
-                <span class="rg-help-pad__channel-label">Email the Public Assistance Desk</span>
-                <a href="mailto:hrms@ro4a.doh.gov.ph" class="rg-help-pad__channel-value">hrms@ro4a.doh.gov.ph</a>
+                <span class="rg-help-pad__channel-label">Email the HRMU</span>
+                <a href="mailto:{{ contact.hrmu.email }}" class="rg-help-pad__channel-value">{{ contact.hrmu.email }}</a>
             </div>
         </div>
         <p class="rg-help-pad__note">Include your case number if you&rsquo;re asking about a specific application.</p>

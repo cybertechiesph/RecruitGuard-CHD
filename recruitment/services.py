@@ -28,6 +28,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.text import slugify
+from django.utils.translation import gettext, ngettext
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
@@ -2913,10 +2914,10 @@ def request_application_withdrawal(application, reason=""):
     handled by staff. The request and its reason go on the record."""
     application = RecruitmentApplication.objects.select_for_update().get(pk=application.pk)
     if application.withdrawal_requested_at:
-        raise ValueError("You already asked to withdraw this application. The office will confirm by email.")
+        raise ValueError(gettext("You already asked to withdraw this application. The office will confirm by email."))
     if not applicant_can_request_withdrawal(application):
         raise ValueError(
-            "This application can no longer be withdrawn online. Please contact the recruitment office."
+            gettext("This application can no longer be withdrawn online. Please contact the recruitment office.")
         )
     application.withdrawal_requested_at = timezone.now()
     application.withdrawal_request_reason = (reason or "").strip()[:1000]
@@ -8545,8 +8546,10 @@ def _deliver_application_otp(application, otp_code, *, actor=None, otp_expires_a
             application.pk,
         )
         raise ApplicationOTPDeliveryError(
-            "Your application draft and uploaded files were saved, but we could not send "
-            "the verification code right now. Please try again in a few moments."
+            gettext(
+                "Your application draft and uploaded files were saved, but we could not send "
+                "the verification code right now. Please try again in a few moments."
+            )
         ) from exc
     record_audit_event(
         application=application,
@@ -8784,17 +8787,19 @@ def issue_application_otp(
     if purpose == "editing":
         if not application.is_editable_by_applicant:
             raise ValueError(
-                "A verification code can only be issued while the application is in draft or "
-                "awaiting the applicant's resubmission."
+                gettext("A verification code can only be issued while the application is in draft or "
+                "awaiting the applicant's resubmission.")
             )
     elif application.submitted_at is None:
-        raise ValueError("This application has not been submitted yet.")
+        raise ValueError(gettext("This application has not been submitted yet."))
     if enforce_cooldown and application.otp_requested_at:
         elapsed = timezone.now() - application.otp_requested_at
         cooldown_seconds = settings.APPLICATION_OTP_RESEND_COOLDOWN_SECONDS
         if elapsed.total_seconds() < cooldown_seconds:
             remaining = max(1, int(cooldown_seconds - elapsed.total_seconds()))
-            raise ValueError(f"Please wait {remaining} seconds before requesting another code.")
+            raise ValueError(
+                gettext("Please wait %(seconds)s seconds before requesting another code.") % {"seconds": remaining}
+            )
 
     otp_code = _generate_otp_code()
     now = timezone.now()
@@ -8861,15 +8866,15 @@ def _record_application_otp_failure(application, actor, *, reason, locked=False)
 def verify_application_otp(application, otp_code, actor=None, purpose="editing"):
     application = RecruitmentApplication.objects.get(pk=application.pk)
     actor = actor or application.applicant
-    locked_error = "Too many invalid verification attempts. Request a new code."
+    locked_error = gettext("Too many invalid verification attempts. Request a new code.")
     if purpose == "editing" and not application.is_editable_by_applicant:
-        raise ValueError("Email verification is only available before final submission.")
+        raise ValueError(gettext("This application was already submitted, so it can no longer be verified."))
     if not application.otp_hash or not application.otp_expires_at:
         _record_application_otp_failure(application, actor, reason="missing_code")
-        raise ValueError("Request a verification code first.")
+        raise ValueError(gettext("Request a verification code first."))
     if application.otp_expires_at < timezone.now():
         _record_application_otp_failure(application, actor, reason="expired")
-        raise ValueError("The verification code has expired. Request a new code.")
+        raise ValueError(gettext("The verification code has expired. Request a new code."))
     if application.otp_attempt_count >= _application_otp_max_attempts():
         _record_application_otp_failure(application, actor, reason="attempt_limit", locked=True)
         raise ValueError(locked_error)
@@ -8884,8 +8889,12 @@ def verify_application_otp(application, otp_code, actor=None, purpose="editing")
             raise ValueError(locked_error)
         tries_left = _application_otp_max_attempts() - application.otp_attempt_count
         raise ValueError(
-            f"The verification code is invalid. You have {tries_left} "
-            f"{'try' if tries_left == 1 else 'tries'} left."
+            ngettext(
+                "The verification code is invalid. You have %(count)s try left.",
+                "The verification code is invalid. You have %(count)s tries left.",
+                tries_left,
+            )
+            % {"count": tries_left}
         )
 
     application.otp_verified_at = timezone.now()
@@ -8911,7 +8920,7 @@ def start_public_application_draft(entry, cleaned_data):
     types someone else's e-mail must not be able to rewrite that person's draft. The owner
     can correct their details on the application page once verified."""
     if not entry.is_open_for_intake:
-        raise ValueError("The selected recruitment entry is not currently open for intake.")
+        raise ValueError(gettext("The selected recruitment entry is not currently open for intake."))
     applicant_email = normalize_applicant_email(cleaned_data["email"])
     if RecruitmentApplication.objects.filter(
         position=entry,
@@ -8919,7 +8928,7 @@ def start_public_application_draft(entry, cleaned_data):
         submitted_at__isnull=False,
     ).exclude(status__in=REAPPLICATION_ELIGIBLE_TERMINAL_STATUSES).exists():
         raise ValueError(
-            "You have already submitted an application for this position using this email address."
+            gettext("You have already submitted an application for this position using this email address.")
         )
 
     applicant_user = get_portal_applicant_identity_by_email(applicant_email)
@@ -8928,7 +8937,7 @@ def start_public_application_draft(entry, cleaned_data):
         application = get_reusable_public_application_for_applicant(entry, applicant_user)
         if application and application.submitted_at:
             raise ValueError(
-                "You have already submitted an application for this position using this email address."
+                gettext("You have already submitted an application for this position using this email address.")
             )
     if application is None:
         application = get_reusable_public_application_draft(entry, applicant_email)
@@ -8964,7 +8973,7 @@ def start_public_application_draft(entry, cleaned_data):
         if "unique_active_application_per_applicant_position" not in str(exc):
             raise
         raise ValueError(
-            "An application for this recruitment entry already exists for this applicant."
+            gettext("An application for this recruitment entry already exists for this applicant.")
         ) from exc
     record_audit_event(
         application=application,
@@ -8979,7 +8988,7 @@ def start_public_application_draft(entry, cleaned_data):
 def save_applicant_application_answers(application, cleaned_data):
     """Save the typed answers from the application page (after e-mail verification)."""
     if not application.is_editable_by_applicant or application.submitted_at:
-        raise ValueError("This application has already been submitted and can no longer be changed.")
+        raise ValueError(gettext("This application has already been submitted and can no longer be changed."))
     application.applicant_first_name = cleaned_data["first_name"]
     application.applicant_last_name = cleaned_data["last_name"]
     application.applicant_phone = cleaned_data["phone"]
@@ -9366,9 +9375,9 @@ def submit_application(application, actor, *, email_verified_in_session=False):
     if application.applicant_id != actor.id:
         raise ValueError("Only the owning applicant can submit this application.")
     if not application.is_editable_by_applicant:
-        raise ValueError("This application can no longer be submitted.")
+        raise ValueError(gettext("This application can no longer be submitted."))
     if not application.checklist_complete:
-        raise ValueError("Complete the submission checklist before final submission.")
+        raise ValueError(gettext("Tick the confirmation box before you submit."))
     missing_requirements = get_missing_required_applicant_document_requirements(application)
     if missing_requirements:
         # No title enumeration — a plantilla has many required slots and the
@@ -9377,27 +9386,29 @@ def submit_application(application, actor, *, email_verified_in_session=False):
         # highlights exactly which slots are missing when the applicant returns.
         missing_count = len(missing_requirements)
         raise ValueError(
-            "Upload all required documents before final submission. "
-            f"{missing_count} required document{'' if missing_count == 1 else 's'} "
-            f"{'is' if missing_count == 1 else 'are'} still missing."
+            ngettext(
+                "Add all required documents before you submit. %(count)s required document is still missing.",
+                "Add all required documents before you submit. %(count)s required documents are still missing.",
+                missing_count,
+            )
+            % {"count": missing_count}
         )
     duplicate_document_groups = get_duplicate_applicant_document_groups(application)
     if duplicate_document_groups:
         # No enumerated title list — the intake form already flags the specific
         # slots; a short sentence keeps this safety-net error readable.
         raise ValueError(
-            "Each document slot must use a different file before final submission. "
-            "Upload a different file for each affected document."
+            gettext("Some documents use the same file. Use a different file for each document, then submit.")
         )
     if not application.position.is_open_for_intake:
-        raise ValueError("This recruitment entry is not currently open for intake.")
+        raise ValueError(gettext("This position is no longer accepting applications."))
     if email_verified_in_session:
         if not application.otp_verified_at:
-            raise ValueError("Email verification is required before final submission.")
+            raise ValueError(gettext("Verify your email before you submit."))
     elif not application.otp_is_currently_valid:
         if application.otp_expires_at and application.otp_expires_at < timezone.now():
-            raise ValueError("Your email verification has expired. Request a new code before final submission.")
-        raise ValueError("Email verification is required before final submission.")
+            raise ValueError(gettext("Your email verification has expired. Request a new code, then submit."))
+        raise ValueError(gettext("Verify your email before you submit."))
 
     previous_status = application.status
     previous_role = application.current_handler_role
@@ -9731,23 +9742,23 @@ def submit_document_resubmission(application, actor, uploaded_files):
 
 
     if application.applicant_id != getattr(actor, "id", None):
-        raise ValueError("Only the applicant may resubmit documents for this application.")
+        raise ValueError(gettext("Only the applicant may resubmit documents for this application."))
     case = getattr(application, "case", None)
     if case is None or case.case_status != RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION:
-        raise ValueError("This application is not awaiting a document resubmission.")
+        raise ValueError(gettext("This application is not awaiting a document resubmission."))
     review_stage = case.current_stage
     screening_record, flagged = _flagged_resubmission_reviews(application, stage=review_stage)
     if not flagged:
-        raise ValueError("There are no documents awaiting resubmission.")
+        raise ValueError(gettext("There are no documents awaiting resubmission."))
     if screening_record.resubmission_is_overdue:
-        raise ValueError("The resubmission deadline has passed; please contact the recruitment team.")
+        raise ValueError(gettext("The resubmission deadline has passed; please contact the recruitment team."))
     if not application.otp_is_currently_valid:
-        raise ValueError("Verify your email with a fresh code before resubmitting your documents.")
+        raise ValueError(gettext("Verify your email with a fresh code before resubmitting your documents."))
 
     requirements = {req.code: req for req in get_applicant_document_requirements(application)}
     flagged_codes = [row.document_key for row in flagged]
     if any(not uploaded_files.get(code) for code in flagged_codes):
-        raise ValueError("Upload a file for each flagged document before resubmitting.")
+        raise ValueError(gettext("Upload a file for each flagged document before resubmitting."))
 
     for code in flagged_codes:
         requirement = requirements.get(code)

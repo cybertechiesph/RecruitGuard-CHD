@@ -1,27 +1,29 @@
 {% extends "applicant_base.html" %}
-{% load recruitment_ui %}
+{% load i18n recruitment_ui %}
 
 {% block main_class %}{% endblock %}
 
 {% block content %}
 {# ── Photographic institutional hero ──────────────────────────── #}
-<section class="rg-pub-hero rg-pub-hero--photo" aria-label="DOH–CHD CALABARZON recruitment portal">
+<section class="rg-pub-hero rg-pub-hero--photo" aria-label="{% translate 'DOH–CHD CALABARZON recruitment portal' %}">
     <div class="rg-pub-wrap">
-        <span class="rg-pub-hero__eyebrow">Official Online Recruitment</span>
-        <h1 class="rg-pub-hero__title">Apply for a Position at <br>DOH&ndash;CHD CALABARZON</h1>
+        <span class="rg-pub-hero__eyebrow">{% translate "Official Online Recruitment" %}</span>
+        <h1 class="rg-pub-hero__title">{% translate "Apply for a Position at <br>DOH&ndash;CHD CALABARZON" %}</h1>
         <p class="rg-pub-hero__copy">
+            {% blocktranslate trimmed %}
             Browse current job openings, submit your application online,
             and track your status &mdash; all in one secure place.
+            {% endblocktranslate %}
         </p>
         <div class="rg-pub-hero-ctas">
             <a href="#job-openings" class="rg-pub-btn rg-pub-btn--primary" id="browse-cta">
-                Browse Openings
+                {% translate "Browse Openings" %}
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M5 12h14"/><path d="m13 6 6 6-6 6"/>
                 </svg>
             </a>
             <a href="{% url 'applicant-status-lookup' %}" class="rg-pub-btn rg-pub-btn--ghost">
-                Track Application
+                {% translate "Track Application" %}
             </a>
         </div>
     </div>
@@ -29,27 +31,27 @@
 
 {# ── How it works (3-step orientation for first-time visitors) ─ #}
 <section class="rg-pub-wrap rg-pub-howitworks" aria-labelledby="how-it-works-heading">
-    <h2 id="how-it-works-heading" class="rg-pub-howitworks__heading">How it works</h2>
+    <h2 id="how-it-works-heading" class="rg-pub-howitworks__heading">{% translate "How it works" %}</h2>
     <ol class="rg-pub-howitworks__steps">
         <li class="rg-pub-howitworks__step">
             <span class="rg-pub-howitworks__num" aria-hidden="true">1</span>
             <div>
-                <p class="rg-pub-howitworks__title">Browse openings</p>
-                <p class="rg-pub-howitworks__copy">Find a position that fits you.</p>
+                <p class="rg-pub-howitworks__title">{% translate "Browse openings" %}</p>
+                <p class="rg-pub-howitworks__copy">{% translate "Find a position that fits you." %}</p>
             </div>
         </li>
         <li class="rg-pub-howitworks__step">
             <span class="rg-pub-howitworks__num" aria-hidden="true">2</span>
             <div>
-                <p class="rg-pub-howitworks__title">Apply online</p>
-                <p class="rg-pub-howitworks__copy">Verify your email, then add your documents &mdash; phone photos are fine. Finish later if you need to.</p>
+                <p class="rg-pub-howitworks__title">{% translate "Apply online" %}</p>
+                <p class="rg-pub-howitworks__copy">{% translate "Verify your email, then add your documents &mdash; phone photos are fine. Finish later if you need to." %}</p>
             </div>
         </li>
         <li class="rg-pub-howitworks__step">
             <span class="rg-pub-howitworks__num" aria-hidden="true">3</span>
             <div>
-                <p class="rg-pub-howitworks__title">Track your application</p>
-                <p class="rg-pub-howitworks__copy">Check your status anytime with the tracking code we give you when you submit.</p>
+                <p class="rg-pub-howitworks__title">{% translate "Track your application" %}</p>
+                <p class="rg-pub-howitworks__copy">{% translate "Check your status anytime with the tracking code we give you when you submit." %}</p>
             </div>
         </li>
     </ol>
@@ -59,21 +61,21 @@
 <div class="rg-pub-wrap" id="job-openings">
 
     <div class="rg-pub-page-header" style="margin-top:2rem;">
-        <h2 class="rg-pub-page-title">Job Openings</h2>
-        <p class="rg-pub-page-copy">These are the positions currently accepting applications.</p>
+        <h2 class="rg-pub-page-title">{% translate "Job Openings" %}</h2>
+        <p class="rg-pub-page-copy">{% translate "These are the positions currently accepting applications." %}</p>
         {% include "recruitment/includes/branch_explainer.html" with mode="legend" %}
     </div>
 
     {# Filter bar #}
     {% if plantilla_entries or cos_entries %}
     <div class="rg-pub-filters">
-        <label class="visually-hidden" for="rg-job-filter">Filter positions by name</label>
+        <label class="visually-hidden" for="rg-job-filter">{% translate "Filter positions by name" %}</label>
         <input id="rg-job-filter" class="form-control" type="search"
-               placeholder="Type a position name, e.g. Nurse" autocomplete="off" style="max-width:280px;">
-        <select class="form-select" id="filter-type" aria-label="Filter by position type" style="max-width:220px;">
-            <option value="">All Position Types</option>
-            <option value="plantilla">Permanent (Plantilla)</option>
-            <option value="cos">Contract of Service</option>
+               placeholder="{% translate 'Type a position name, e.g. Nurse' %}" autocomplete="off" style="max-width:280px;">
+        <select class="form-select" id="filter-type" aria-label="{% translate 'Filter by position type' %}" style="max-width:220px;">
+            <option value="">{% translate "All Position Types" %}</option>
+            <option value="plantilla">{% translate "Permanent (Plantilla)" %}</option>
+            <option value="cos">{% translate "Contract of Service" %}</option>
         </select>
     </div>
     <p id="rg-job-no-match" class="rg-pub-page-copy" role="status" hidden style="margin:0.75rem 0 0;"></p>
@@ -81,96 +83,28 @@
 
     {# Plantilla entries #}
     {% for entry in plantilla_entries %}
-    <a href="{% url 'applicant-vacancy-detail' entry.pk %}"
-       class="rg-pub-job-card rg-pub-job-card--plantilla js-job-card"
-       data-type="plantilla"
-       aria-label="View details for {{ entry.title }}">
-        <div class="rg-pub-job-card__inner">
-            <div class="rg-pub-job-card__body">
-                <p class="rg-pub-job-card__ref">{{ entry.job_code }}{% if entry.item_number %} &middot; Item No. {{ entry.item_number }}{% endif %}</p>
-                <h3 class="rg-pub-job-card__title">{{ entry.title }}</h3>
-                <div class="rg-pub-job-card__chips">
-                    <span class="rg-pub-chip rg-pub-chip--plantilla">Permanent</span>
-                    <span class="rg-pub-chip rg-pub-chip--level">Level {{ entry.level|roman_numeral }}</span>
-                    {% if entry.salary_grade_display %}
-                        <span class="rg-pub-chip rg-pub-chip--sg">{{ entry.salary_grade_display }}</span>
-                    {% endif %}
-                </div>
-                <p class="rg-pub-job-card__meta">
-                    {{ entry.official_office_label|default:"CHD CALABARZON" }}
-                    <span class="rg-pub-job-card__posted">&middot; Posted {{ entry.plantilla_publication_start_date|date:"M j, Y" }}</span>
-                </p>
-                <p class="rg-pub-job-card__deadline {% if entry.is_closing_soon %}rg-pub-job-card__deadline--urgent{% endif %}">
-                    {% if entry.closing_date %}
-                        {% if entry.is_closing_soon %}
-                            <span class="rg-pub-job-card__urgent">Closing soon</span>
-                        {% endif %}
-                        {% if entry.intake_closes_today %}Closes today, 11:59 PM{% else %}Closes {{ entry.closing_date|date:"F d, Y" }}{% endif %}
-                        {% if entry.deadline_extended %}
-                            <span class="rg-pub-job-card__extended">Deadline extended</span>
-                        {% endif %}
-                    {% else %}
-                        Always accepting applications
-                    {% endif %}
-                </p>
-            </div>
-            <span class="rg-pub-job-card__action" aria-hidden="true">View Details &rarr;</span>
-        </div>
-    </a>
+    {% include "recruitment/includes/job_card.html" with branch="plantilla" %}
     {% endfor %}
 
     {# COS entries #}
     {% for entry in cos_entries %}
-    <a href="{% url 'applicant-vacancy-detail' entry.pk %}"
-       class="rg-pub-job-card rg-pub-job-card--cos js-job-card"
-       data-type="cos"
-       aria-label="View details for {{ entry.title }}">
-        <div class="rg-pub-job-card__inner">
-            <div class="rg-pub-job-card__body">
-                <p class="rg-pub-job-card__ref">{{ entry.job_code }}{% if entry.item_number %} &middot; Item No. {{ entry.item_number }}{% endif %}</p>
-                <h3 class="rg-pub-job-card__title">{{ entry.title }}</h3>
-                <div class="rg-pub-job-card__chips">
-                    <span class="rg-pub-chip rg-pub-chip--cos">Contract of Service</span>
-                    <span class="rg-pub-chip rg-pub-chip--level">Level {{ entry.level|roman_numeral }}</span>
-                    {% if entry.salary_grade_display %}
-                        <span class="rg-pub-chip rg-pub-chip--sg">{{ entry.salary_grade_display }}</span>
-                    {% endif %}
-                </div>
-                <p class="rg-pub-job-card__meta">
-                    {{ entry.official_office_label|default:"CHD CALABARZON" }}
-                    <span class="rg-pub-job-card__posted">&middot; Posted {{ entry.plantilla_publication_start_date|date:"M j, Y" }}</span>
-                </p>
-                <p class="rg-pub-job-card__deadline {% if entry.is_closing_soon %}rg-pub-job-card__deadline--urgent{% endif %}">
-                    {% if entry.closing_date %}
-                        {% if entry.is_closing_soon %}
-                            <span class="rg-pub-job-card__urgent">Closing soon</span>
-                        {% endif %}
-                        {% if entry.intake_closes_today %}Closes today, 11:59 PM{% else %}Closes {{ entry.closing_date|date:"F d, Y" }}{% endif %}
-                        {% if entry.deadline_extended %}
-                            <span class="rg-pub-job-card__extended">Deadline extended</span>
-                        {% endif %}
-                    {% else %}
-                        Always accepting applications
-                    {% endif %}
-                </p>
-            </div>
-            <span class="rg-pub-job-card__action" aria-hidden="true">View Details &rarr;</span>
-        </div>
-    </a>
+    {% include "recruitment/includes/job_card.html" with branch="cos" %}
     {% endfor %}
 
     {# Empty state #}
     {% if not plantilla_entries and not cos_entries %}
     <div class="rg-pub-info-box rg-pub-info-box--info" style="text-align:center; padding:2rem;">
-        <p style="font-weight:600; margin-bottom:0.35rem;">No open positions at this time.</p>
-        <p style="font-size:0.875rem; margin:0;">Please check back later. For questions, email <a href="mailto:recruitment@chd4a.doh.gov.ph">recruitment@chd4a.doh.gov.ph</a>.</p>
+        {% office_contact as contact %}
+        <p style="font-weight:600; margin-bottom:0.35rem;">{% translate "No open positions at this time." %}</p>
+        <p style="font-size:0.875rem; margin:0;">{% translate "Please check back later. For questions, email" %} <a href="mailto:{{ contact.hrmu.email }}">{{ contact.hrmu.email }}</a>.</p>
     </div>
     {% endif %}
 
     <p class="rg-pub-result-count js-result-count" style="margin-top:1rem;" aria-live="polite"></p>
 
-    {# Need help applying? Public Assistance Desk contact. #}
-    <aside class="rg-pub-help-box" aria-label="Need help applying">
+    {# Need help applying? HRMU for applications; Public Assistance Desk for general questions. #}
+    {% office_contact as contact %}
+    <aside class="rg-pub-help-box" aria-label="{% translate 'Need help applying?' %}">
         <div class="rg-pub-help-box__icon" aria-hidden="true">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="9"/>
@@ -179,19 +113,25 @@
             </svg>
         </div>
         <div class="rg-pub-help-box__body">
-            <p class="rg-pub-help-box__title">Need help applying?</p>
+            <p class="rg-pub-help-box__title">{% translate "Need help applying?" %}</p>
             <p class="rg-pub-help-box__copy">
-                Reach the Public Assistance Desk:
-                <a href="tel:+6382492000,4400">8-249-2000 loc. 4400</a>
-                &middot;
-                <a href="mailto:chd4a_doh_calabarzon@ro4a.doh.gov.ph">chd4a_doh_calabarzon@ro4a.doh.gov.ph</a>
+                <strong>{% translate "About an application:" %}</strong>
+                {% translate "Human Resource Management Unit (HRMU)" %} &middot;
+                <a href="tel:{{ contact.hrmu.tel }}">{{ contact.hrmu.phone }}</a> &middot;
+                <a href="mailto:{{ contact.hrmu.email }}">{{ contact.hrmu.email }}</a>
+            </p>
+            <p class="rg-pub-help-box__copy">
+                <strong>{% translate "General questions:" %}</strong>
+                {% translate "Public Assistance Desk" %} &middot;
+                <a href="tel:{{ contact.desk.tel }}">{{ contact.desk.phone }}</a> &middot;
+                <a href="mailto:{{ contact.desk.email }}">{{ contact.desk.email }}</a>
             </p>
         </div>
     </aside>
 
-    <div class="rg-pub-home-footer-notes" aria-label="Recruitment portal notes">
-        <span class="rg-pub-home-footer-notes__item">Official DOH&ndash;CHD CALABARZON portal</span>
-        <span class="rg-pub-home-footer-notes__item">RA 10173 Data Privacy compliant</span>
+    <div class="rg-pub-home-footer-notes" aria-label="{% translate 'Recruitment portal notes' %}">
+        <span class="rg-pub-home-footer-notes__item">{% translate "Official DOH&ndash;CHD CALABARZON portal" %}</span>
+        <span class="rg-pub-home-footer-notes__item">{% translate "RA 10173 Data Privacy compliant" %}</span>
         <span class="rg-pub-home-footer-notes__item">
             <a href="https://ro4a.doh.gov.ph" target="_blank" rel="noopener">ro4a.doh.gov.ph</a>
         </span>
@@ -203,31 +143,41 @@
 <section class="rg-pub-privacy" aria-labelledby="privacy-heading">
     <div class="rg-pub-privacy__inner">
         <div class="rg-pub-privacy__intro">
-            <span class="rg-pub-privacy__eyebrow">Privacy &amp; Data Protection</span>
+            <span class="rg-pub-privacy__eyebrow">{% translate "Privacy &amp; Data Protection" %}</span>
             <h2 id="privacy-heading" class="rg-pub-privacy__title">
-                What we do with your information
+                {% translate "What we do with your information" %}
             </h2>
             <p class="rg-pub-privacy__copy">
+                {% blocktranslate trimmed %}
                 We follow the Data Privacy Act of 2012 (R.A. 10173). What you
                 submit is used only to process your application for this position
                 &mdash; only the recruitment officers and selection board can see
                 it, and we never share it with anyone else unless you allow us to
                 in writing.
+                {% endblocktranslate %}
             </p>
         </div>
         <p class="rg-pub-privacy__footnote">
+            {% blocktranslate trimmed %}
             You can ask to <strong>access</strong>, <strong>correct</strong>, or
             <strong>delete</strong> your information &mdash; or withdraw your
             consent &mdash; at any time by contacting the HRMPSB Secretariat /
             Data Protection Officer of DOH&ndash;CHD CALABARZON. We keep your
             information only for as long as recruitment requires, in line with
             R.A. 10173.
+            {% endblocktranslate %}
         </p>
     </div>
 </section>
 
 <script>
 (function () {
+    var TEXT = {
+        showingOne: "{% filter escapejs %}{% translate 'Showing 1 position' %}{% endfilter %}",
+        showingMany: "{% filter escapejs %}{% translate 'Showing {count} positions' %}{% endfilter %}",
+        noMatchQuery: "{% filter escapejs %}{% translate 'No positions match “{query}”. Clear the search to see all openings.' %}{% endfilter %}",
+        noMatchFilter: "{% filter escapejs %}{% translate 'No positions match the selected filter.' %}{% endfilter %}"
+    };
     var filterType = document.getElementById('filter-type');
     var nameFilter = document.getElementById('rg-job-filter');
     var noMatch = document.getElementById('rg-job-no-match');
@@ -251,13 +201,13 @@
             if (show) visible++;
         });
         if (countEl) {
-            countEl.textContent = 'Showing ' + visible + ' position' + (visible !== 1 ? 's' : '');
+            countEl.textContent = visible === 1 ? TEXT.showingOne : TEXT.showingMany.split('{count}').join(visible);
         }
         if (noMatch) {
             if (visible === 0) {
                 noMatch.textContent = query
-                    ? 'No positions match “' + nameFilter.value.trim() + '”. Clear the search to see all openings.'
-                    : 'No positions match the selected filter.';
+                    ? TEXT.noMatchQuery.split('{query}').join(nameFilter.value.trim())
+                    : TEXT.noMatchFilter;
                 noMatch.hidden = false;
             } else {
                 noMatch.hidden = true;

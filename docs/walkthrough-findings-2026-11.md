@@ -46,7 +46,12 @@ The case page correctly shows only "Candidate C-01", but three other places reve
    - A completion deadline appears only after the handler first saves the completion form.
 
 ### Content and polish
-9. **Two different phone extensions:** the Help page and the PDS guide call **loc. 4477** the Public Assistance Desk; the home page and status page say **loc. 4400** (with a different mailbox). Client to confirm.
+9. ~~**Two different phone extensions.**~~ *Resolved (Nov 2026):*
+   - Applicant pages now read contact details from `recruitment/email_branding.py` (`{% office_contact %}`).
+   - Questions about an application go to the office-confirmed HRMU line (loc. 4477, hrms@ro4a.doh.gov.ph), the same as in the emails.
+   - The home page also lists the Public Assistance Desk (loc. 4400) for general questions.
+   - The unofficial `recruitment@chd4a.doh.gov.ph` address was removed.
+   - Client should still confirm both lines.
 10. **Duplicated browser-tab title** "Internal Portal | Internal Portal" on the New Entry page and the Interview Rating Sheet page (no `internal_title` block).
 11. **Batch page wording:** "1 applicant still need a screening decision" should be "needs".
 12. **COS interview dialog** shows "Candidate Unassigned — *name*", because COS cases have no candidate code.

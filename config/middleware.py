@@ -5,6 +5,8 @@ from django.conf import settings
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.core.cache import cache
 from django.http import HttpResponse
+from django.middleware.locale import LocaleMiddleware
+from django.utils import translation
 
 from config.client_ip import get_client_ip
 
@@ -53,6 +55,29 @@ class ActivityAwareSessionMiddleware(SessionMiddleware):
         ):
             return response
         return super().process_response(request, response)
+
+
+class ApplicantPortalLocaleMiddleware(LocaleMiddleware):
+    """Language switching for the applicant portal only.
+
+    On /apply/ pages the language comes from the applicant's choice (the language cookie)
+    or their browser, as with Django's LocaleMiddleware. Everywhere else (the internal
+    staff portal, admin) English is always used, since only the applicant pages are
+    translated."""
+
+    APPLICANT_PREFIX = "/apply/"
+
+    def process_request(self, request):
+        if (request.path or "").startswith(self.APPLICANT_PREFIX):
+            return super().process_request(request)
+        translation.activate(settings.LANGUAGE_CODE)
+        request.LANGUAGE_CODE = translation.get_language()
+        return None
+
+    def process_response(self, request, response):
+        if (request.path or "").startswith(self.APPLICANT_PREFIX):
+            return super().process_response(request, response)
+        return response
 
 
 class SecurityHeadersMiddleware:

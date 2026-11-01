@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from django.conf import settings
+from django.utils.translation import gettext_lazy as _
 
 
 MAX_APPLICANT_DOCUMENT_UPLOAD_BYTES = 5 * 1024 * 1024
@@ -26,18 +27,18 @@ def clamp_original_filename(filename, max_length=ORIGINAL_FILENAME_MAX_LENGTH):
         return name[:max_length]
     return f"{name[: max_length - len(suffix)]}{suffix}"
 
-UPLOAD_ERROR_TOO_LARGE = "This file is too large. Choose a file that is 5 MB or smaller."
-UPLOAD_ERROR_EMPTY = "This file is empty. Pick a file that has something in it."
-UPLOAD_ERROR_EXTENSION = (
+UPLOAD_ERROR_TOO_LARGE = _("This file is too large. Choose a file that is 5 MB or smaller.")
+UPLOAD_ERROR_EMPTY = _("This file is empty. Pick a file that has something in it.")
+UPLOAD_ERROR_EXTENSION = _(
     "This needs to be a PDF, JPG, or PNG file. Upload one of those."
 )
-UPLOAD_ERROR_SIGNATURE_UNREADABLE = (
+UPLOAD_ERROR_SIGNATURE_UNREADABLE = _(
     "We couldn't read this as a PDF, JPG, or PNG. Save it again, then upload it."
 )
-UPLOAD_ERROR_SIGNATURE_MISMATCH = (
+UPLOAD_ERROR_SIGNATURE_MISMATCH = _(
     "This file's contents don't match a PDF, JPG, or PNG. Save it again, then upload it."
 )
-UPLOAD_ERROR_MIME_MISMATCH = (
+UPLOAD_ERROR_MIME_MISMATCH = _(
     "This file format does not match its filename. Save it again as a PDF, JPG, or PNG, then upload it."
 )
 

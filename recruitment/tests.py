@@ -4928,7 +4928,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
 
         response = self.submit_portal_draft(client, application)
 
-        self.assertContains(response, "Upload all required documents")
+        self.assertContains(response, "Add all required documents before you submit.")
         self.assertContains(response, f'href="#doc-{missing_code}"')
         application.refresh_from_db()
         self.assertIsNone(application.submitted_at)
@@ -5078,7 +5078,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
 
         response = self.submit_portal_draft(client, application)
 
-        self.assertContains(response, "Upload all required documents")
+        self.assertContains(response, "Add all required documents before you submit.")
         performance_slot = next(
             slot for slot in response.context["slots"] if slot["code"] == "performance_rating"
         )
@@ -5285,7 +5285,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.verify_application_for_submission(application)
         with self.assertRaisesMessage(
             ValueError,
-            "Upload all required documents before final submission.",
+            "Add all required documents before you submit.",
         ) as exc:
             submit_application(application, self.applicant)
 
@@ -5340,7 +5340,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.verify_application_for_submission(application)
         with self.assertRaisesMessage(
             ValueError,
-            "Each document slot must use a different file before final submission.",
+            "Some documents use the same file. Use a different file for each document, then submit.",
         ):
             submit_application(application, self.applicant)
 
@@ -22017,3 +22017,81 @@ class ApplicantPortalPolishTests(BaseRecruitmentTestCase):
             (funnel["started"], funnel["verified"], funnel["with_documents"], funnel["submitted"]),
             (3, 2, 1, 1),
         )
+
+
+class ApplicantPortalLanguageTests(BaseRecruitmentTestCase):
+    """English / Filipino on the applicant portal; the staff portal stays English."""
+
+    def setUp(self):
+        super().setUp()
+        cache.clear()
+
+    def filipino_client(self):
+        client = Client()
+        response = client.post(
+            reverse("set_language"), {"language": "fil", "next": reverse("applicant-portal")}
+        )
+        self.assertEqual(response.status_code, 302)
+        return client
+
+    def test_language_switch_shows_the_portal_in_filipino(self):
+        page = self.filipino_client().get(reverse("applicant-portal"))
+        self.assertContains(page, '<html lang="fil">')
+        self.assertContains(page, "Mga Bakanteng Trabaho")
+        self.assertContains(page, "Paano ito gumagana")
+        self.assertContains(page, 'value="fil" lang="fil" class="rg-langswitch__btn is-current"')
+
+    def test_english_is_the_default(self):
+        page = Client().get(reverse("applicant-portal"))
+        self.assertContains(page, '<html lang="en">')
+        self.assertContains(page, "How it works")
+        self.assertNotContains(page, "Paano ito gumagana")
+
+    def test_a_filipino_phone_gets_filipino_automatically(self):
+        page = Client().get(reverse("applicant-portal"), HTTP_ACCEPT_LANGUAGE="fil-PH,fil;q=0.9")
+        self.assertContains(page, "Mga Bakanteng Trabaho")
+
+    def test_staff_pages_stay_in_english(self):
+        client = self.filipino_client()
+        page = client.get(reverse("login"))
+        self.assertContains(page, '<html lang="en">')
+        self.assertNotContains(page, "Mga Bakanteng Trabaho")
+
+    def test_application_flow_messages_follow_the_language(self):
+        client = self.filipino_client()
+        response = client.post(
+            reverse("applicant-intake", kwargs={"pk": self.cos_position.pk}),
+            {"first_name": "", "last_name": "Cruz", "email": "x@example.com", "phone": "09171234567"},
+        )
+        self.assertContains(response, "Ilagay ang iyong pangalan (first name).")
+        self.assertContains(response, "Magbigay ng pahintulot para makapagpatuloy.")
+
+        client, application = self.open_portal_draft("tagalog@example.com", client=client)
+        page = client.get(reverse("applicant-application", kwargs={"token": application.public_token}))
+        self.assertContains(page, "Ang iyong mga dokumento")
+        self.assertEqual(page.context["script_strings"]["saving"], "Sine-save…")
+        upload = self.upload_portal_document(
+            client,
+            application,
+            "personal_data_sheet",
+            SimpleUploadedFile("notes.txt", b"plain text", content_type="text/plain"),
+        )
+        self.assertEqual(upload.status_code, 400)
+        self.assertIn("PDF, JPG, o PNG", upload.json()["error"])
+
+    def test_every_applicant_string_has_a_filipino_translation(self):
+        from django.core.management import call_command
+
+        call_command("update_translations", "--check", stdout=io.StringIO())
+
+    def test_contact_details_come_from_one_place(self):
+        from recruitment import email_branding
+
+        home = Client().get(reverse("applicant-portal"))
+        self.assertContains(home, email_branding.CONTACT_EMAIL)
+        self.assertContains(home, email_branding.CONTACT_PHONE)
+        self.assertContains(home, email_branding.PUBLIC_DESK_PHONE)
+        self.assertNotContains(home, "recruitment@chd4a.doh.gov.ph")
+        help_page = Client().get(reverse("applicant-help"))
+        self.assertContains(help_page, email_branding.CONTACT_EMAIL)
+        self.assertContains(help_page, "Human Resource Management Unit (HRMU)")

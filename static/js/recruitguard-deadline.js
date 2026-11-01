@@ -12,12 +12,15 @@
         function tick() {
             var left = closesAt - Date.now();
             if (left <= 0) {
-                node.textContent = "Applications are now closed.";
+                node.textContent = node.getAttribute("data-closed-label") || "Applications are now closed.";
                 return false;
             }
             var hours = Math.floor(left / 3600000);
             var minutes = Math.floor((left % 3600000) / 60000);
-            node.textContent = (hours ? hours + " hr " : "") + minutes + " min left";
+            var format = hours
+                ? node.getAttribute("data-left-hours") || "{hours} hr {minutes} min left"
+                : node.getAttribute("data-left-minutes") || "{minutes} min left";
+            node.textContent = format.split("{hours}").join(hours).split("{minutes}").join(minutes);
             return true;
         }
         if (tick()) {

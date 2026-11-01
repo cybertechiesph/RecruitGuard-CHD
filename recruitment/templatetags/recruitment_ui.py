@@ -39,6 +39,29 @@ IN_APP_BROWSER_PATTERN = re.compile(
 )
 
 
+@register.simple_tag
+def office_contact():
+    """The office contact details for applicant pages, from the one place they are kept
+    (recruitment/email_branding.py, shared with the emails). ``hrmu`` is for anything about
+    an application; ``desk`` is the general Public Assistance Desk."""
+    from recruitment import email_branding as branding
+
+    return {
+        "hrmu": {
+            "name": "Human Resource Management Unit (HRMU)",
+            "phone": branding.CONTACT_PHONE,
+            "tel": branding.CONTACT_PHONE_TEL,
+            "email": branding.CONTACT_EMAIL,
+        },
+        "desk": {
+            "name": branding.PUBLIC_DESK_NAME,
+            "phone": branding.PUBLIC_DESK_PHONE,
+            "tel": branding.PUBLIC_DESK_PHONE_TEL,
+            "email": branding.PUBLIC_DESK_EMAIL,
+        },
+    }
+
+
 @register.simple_tag(takes_context=True)
 def in_app_browser(context):
     """"facebook", "other" or "" for the visitor's browser, from its user agent."""

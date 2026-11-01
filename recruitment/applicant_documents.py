@@ -26,6 +26,8 @@ from dataclasses import dataclass
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import transaction
+from django.utils.text import format_lazy
+from django.utils.translation import gettext_lazy as _
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pypdf import PdfReader, PdfWriter
 from pypdf.errors import PdfReadError
@@ -56,24 +58,27 @@ PHOTO_JPEG_QUALITY = 85
 # Refuse decompression bombs (a tiny file that expands to an enormous image).
 Image.MAX_IMAGE_PIXELS = 60_000_000
 
-ERROR_TOO_MANY_PARTS = (
-    f"You can add up to {MAX_PARTS_PER_DOCUMENT} files to one document. "
-    "Combine some pages into one PDF, or remove a file first."
+ERROR_TOO_MANY_PARTS = format_lazy(
+    _(
+        "You can add up to {max} files to one document. "
+        "Combine some pages into one PDF, or remove a file first."
+    ),
+    max=MAX_PARTS_PER_DOCUMENT,
 )
-ERROR_COMBINED_TOO_LARGE = (
+ERROR_COMBINED_TOO_LARGE = _(
     "These files are too large together. Remove a file or use smaller photos."
 )
-ERROR_SAME_FILE_HERE = "You already added this file to this document."
-ERROR_SAME_FILE_ELSEWHERE = (
+ERROR_SAME_FILE_HERE = _("You already added this file to this document.")
+ERROR_SAME_FILE_ELSEWHERE = _(
     "This file is already used for another document. Each document needs its own file."
 )
-ERROR_PDF_UNREADABLE = (
+ERROR_PDF_UNREADABLE = _(
     "We couldn't open this PDF. Save it again as a PDF (or take photos of the pages), then upload it."
 )
-ERROR_PDF_PROTECTED = (
+ERROR_PDF_PROTECTED = _(
     "This PDF is password-protected. Save a copy without a password, then upload it."
 )
-ERROR_IMAGE_UNREADABLE = "We couldn't open this photo. Take it again or save it as JPG or PNG."
+ERROR_IMAGE_UNREADABLE = _("We couldn't open this photo. Take it again or save it as JPG or PNG.")
 
 
 @dataclass(frozen=True)
@@ -205,12 +210,12 @@ def _requirement_or_error(application, document_key):
     for requirement in get_applicant_document_requirements(application.position):
         if requirement.code == document_key:
             return requirement
-    raise ValueError("This document is not part of this application.")
+    raise ValueError(_("This document is not part of this application."))
 
 
 def _ensure_editable(application):
     if not application.is_editable_by_applicant or application.submitted_at:
-        raise ValueError("This application has already been submitted and can no longer be changed.")
+        raise ValueError(_("This application has already been submitted and can no longer be changed."))
 
 
 @transaction.atomic
@@ -254,7 +259,7 @@ def remove_applicant_document_part(application, part_id):
     _ensure_editable(application)
     part = get_document_parts(application).filter(pk=part_id).first()
     if part is None:
-        raise ValueError("That file is no longer part of this application.")
+        raise ValueError(_("That file is no longer part of this application."))
     requirement = _requirement_or_error(application, part.document_key)
     part.delete()
     rebuild_applicant_document(application, requirement)
@@ -354,7 +359,7 @@ def reuse_applicant_document(application, document_key, evidence_id):
     (same validation, duplicate checks and audit as a fresh upload)."""
     item = get_reusable_documents(application).get(document_key)
     if item is None or item.pk != evidence_id:
-        raise ValueError("That document can no longer be reused. Add the file instead.")
+        raise ValueError(_("That document can no longer be reused. Add the file instead."))
     upload = SimpleUploadedFile(
         item.original_filename,
         _decrypt_evidence_bytes(item),

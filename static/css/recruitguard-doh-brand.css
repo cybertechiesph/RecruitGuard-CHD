@@ -5092,3 +5092,15 @@ a.rg-sched-event__title { color: var(--rg-brand-green); }
 .rg-qs-check__item input, .rg-ta-withdraw .form-check-input { width: 1.35rem; height: 1.35rem; }
 .rg-pub-radio-list label { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 32px; }
 .rg-intake-optional { font-size: max(0.75rem, 12px) !important; }
+
+/* English / Filipino switch */
+.rg-langswitch { display: inline-flex; border: 1px solid #d1d5db; border-radius: 999px; overflow: hidden; background: #fff; }
+.rg-langswitch__btn { border: 0; background: transparent; padding: 0.3rem 0.7rem; min-height: 32px; font-size: 0.82rem; font-weight: 600; color: #374151; }
+.rg-langswitch__btn.is-current { background: #1e5c2d; color: #fff; }
+.rg-langswitch__btn:focus-visible { outline: 3px solid #1d4ed8; outline-offset: -3px; }
+.rg-public-topbar__tools { display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+
+/* Plain-language explanations of government terms */
+.rg-pub-jargon { margin: 0.3rem 0 0; font-size: 0.82rem; color: #4b5563; }
+
+.rg-pub-english-only { margin: 0 0 1rem; padding: 0.55rem 0.8rem; border-radius: 8px; background: #f1f5f9; border: 1px solid #cbd5e1; color: #334155; font-size: 0.9rem; }

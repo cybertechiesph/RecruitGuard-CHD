@@ -1,4 +1,4 @@
-{% comment %}
+{% load i18n %}{% comment %}
   Simplified top bar used while an applicant is inside the application flow
   (start, verify, application page). Parameters: position_title, label ("Applying for").
 {% endcomment %}
@@ -6,15 +6,18 @@
     <div class="rg-container rg-topbar__inner rg-public-topbar__inner">
         <a class="rg-brand rg-public-brand" href="{% url 'applicant-portal' %}">
             <span class="rg-brand-copy">
-                <span class="rg-brand-kicker">Republic of the Philippines</span>
-                <span class="rg-brand-agency">Department of Health &ndash; CHD CALABARZON</span>
-                <span class="rg-brand-title">Applicant Portal</span>
+                <span class="rg-brand-kicker">{% translate "Republic of the Philippines" %}</span>
+                <span class="rg-brand-agency">{% translate "Department of Health &ndash; CHD CALABARZON" %}</span>
+                <span class="rg-brand-title">{% translate "Applicant Portal" %}</span>
             </span>
         </a>
         <div class="rg-public-topbar__applying">
-            {{ label|default:"Applying for" }}<br>
+            {% if label %}{{ label }}{% else %}{% translate "Applying for" %}{% endif %}<br>
             <strong>{{ position_title }}</strong>
         </div>
-        {% include "text_size_control.html" %}
+        <div class="rg-public-topbar__tools">
+            {% include "recruitment/includes/language_switch.html" %}
+            {% include "text_size_control.html" %}
+        </div>
     </div>
 </header>

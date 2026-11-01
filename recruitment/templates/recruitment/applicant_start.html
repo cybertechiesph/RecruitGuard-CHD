@@ -1,6 +1,7 @@
 {% extends "applicant_base.html" %}
+{% load i18n %}
 
-{% block title %}Apply — {{ entry.title }} | Applicant Portal{% endblock %}
+{% block title %}{% blocktranslate with title=entry.title %}Apply — {{ title }}{% endblocktranslate %} | {% translate "Applicant Portal" %}{% endblock %}
 
 {% block site_header %}
 {% include "recruitment/includes/applicant_flow_header.html" with position_title=entry.title %}
@@ -19,25 +20,27 @@
     {% include "recruitment/includes/in_app_browser_notice.html" %}
 
     <header class="rg-apply-header">
-        <h1 class="rg-apply-header__title">Apply for {{ entry.title }}</h1>
+        <h1 class="rg-apply-header__title">{% blocktranslate with title=entry.title %}Apply for {{ title }}{% endblocktranslate %}</h1>
         {% include "recruitment/includes/branch_explainer.html" with mode="note" branch=entry.branch %}
         <p class="rg-apply-header__copy">
+            {% blocktranslate trimmed %}
             First, tell us who you are. We&rsquo;ll email you a 6-digit code to confirm your address,
             then you can add your documents. <strong>Your progress is saved</strong> &mdash; you can stop
             and finish later using the link in that email.
+            {% endblocktranslate %}
         </p>
     </header>
 
     {% if form.errors %}
         <div class="alert alert-danger" role="alert" tabindex="-1" data-error-summary>
             {% for error in form.non_field_errors %}<p class="mb-1">{{ error }}</p>{% endfor %}
-            {% if form.errors|length > form.non_field_errors|length %}<p class="mb-0">Please fix the highlighted fields below.</p>{% endif %}
+            {% if form.errors|length > form.non_field_errors|length %}<p class="mb-0">{% translate "Please fix the highlighted fields below." %}</p>{% endif %}
         </div>
     {% endif %}
 
     <form method="post" class="rg-apply-card" novalidate data-start-form>
         {% csrf_token %}
-        <h2 class="rg-apply-card__title">Your details</h2>
+        <h2 class="rg-apply-card__title">{% translate "Your details" %}</h2>
         <div class="rg-intake-grid">
             {% for field in form %}
                 {% if field.name != "privacy_consent" and field.name != "captcha_answer" %}
@@ -47,9 +50,9 @@
                     </label>
                     {{ field }}
                     {% if field.name == "email" %}
-                        <div class="form-text">We&rsquo;ll send your code here. Use an email you can open now.</div>
+                        <div class="form-text">{% translate "We&rsquo;ll send your code here. Use an email you can open now." %}</div>
                     {% elif field.name == "phone" %}
-                        <div class="form-text">e.g. 0917 123 4567</div>
+                        <div class="form-text">{% translate "e.g. 0917 123 4567" %}</div>
                     {% endif %}
                     {% for error in field.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
                 </div>
@@ -59,8 +62,11 @@
 
         <div class="rg-apply-consent">
             <p class="rg-apply-consent__notice">
+                {% blocktranslate trimmed %}
                 Your information is used only for this recruitment and is protected under the Data Privacy Act
-                of 2012 (R.A. 10173). <a href="{% url 'applicant-portal' %}#privacy-heading">Read the privacy notice</a>.
+                of 2012 (R.A. 10173).
+                {% endblocktranslate %}
+                <a href="{% url 'applicant-portal' %}#privacy-heading">{% translate "Read the privacy notice" %}</a>.
             </p>
             <div class="form-check">
                 {{ form.privacy_consent }}
@@ -79,19 +85,21 @@
         {% endif %}
 
         <div class="rg-apply-actions">
-            <a href="{% url 'applicant-vacancy-detail' entry.pk %}" class="btn btn-outline-secondary">&larr; Back</a>
-            <button type="submit" class="btn btn-rg-primary btn-lg" data-start-submit>Send my verification code</button>
+            <a href="{% url 'applicant-vacancy-detail' entry.pk %}" class="btn btn-outline-secondary">&larr; {% translate "Back" %}</a>
+            <button type="submit" class="btn btn-rg-primary btn-lg" data-start-submit data-busy-label="{% translate 'Sending your code…' %}">{% translate "Send my verification code" %}</button>
         </div>
     </form>
 
     <section class="rg-apply-card rg-apply-checklist" aria-labelledby="needs-heading">
         <div class="rg-apply-checklist__head">
-            <h2 id="needs-heading" class="rg-apply-card__title mb-0">Documents you&rsquo;ll need</h2>
-            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">Print this list</button>
+            <h2 id="needs-heading" class="rg-apply-card__title mb-0">{% translate "Documents you&rsquo;ll need" %}</h2>
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">{% translate "Print this list" %}</button>
         </div>
         <p class="rg-apply-checklist__copy">
+            {% blocktranslate trimmed %}
             PDF, JPG or PNG. A clear phone photo is fine, and a document with several pages can be added
             page by page &mdash; we combine them for you.
+            {% endblocktranslate %}
         </p>
         <ul class="rg-pub-doc-list">
             {% for req in document_requirements %}
@@ -113,7 +121,7 @@
     if (form && btn) {
         form.addEventListener("submit", function () {
             btn.disabled = true;
-            btn.textContent = "Sending your code…";
+            btn.textContent = btn.getAttribute("data-busy-label");
         });
     }
 })();

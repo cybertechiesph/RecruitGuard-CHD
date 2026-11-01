@@ -1,5 +1,5 @@
 {% extends "applicant_base.html" %}
-{% load static %}
+{% load static recruitment_ui %}
 
 {% block title %}How to Fill Up Your PDS | Applicant Portal{% endblock %}
 
@@ -11,7 +11,9 @@
   Source copy: docs/pds-plain-guide-copy.md (an original rewrite, not a reproduction of the CSC guide).
   Where the two ever disagree, the CSC guide wins - the page says so and links it.
 {% endcomment %}
-<div class="rg-pub-wrap rg-help-wrap rg-pds-guide">
+{% office_contact as contact %}
+<div class="rg-pub-wrap">{% include "recruitment/includes/english_only_notice.html" %}</div>
+<div class="rg-pub-wrap rg-help-wrap rg-pds-guide" lang="en">
 
     <nav class="rg-pub-breadcrumb" aria-label="Breadcrumb">
         <a href="{% url 'applicant-portal' %}">Home</a>
@@ -337,9 +339,9 @@
         <div class="rg-pub-help-box__body">
             <p class="rg-pub-help-box__title">Still stuck?</p>
             <p class="rg-pub-help-box__copy">
-                The Public Assistance Desk can help:
-                <a href="tel:+6382492000,4477">8-249-2000 loc. 4477</a> &middot;
-                <a href="mailto:hrms@ro4a.doh.gov.ph">hrms@ro4a.doh.gov.ph</a>.
+                The Human Resource Management Unit (HRMU) can help:
+                <a href="tel:{{ contact.hrmu.tel }}">{{ contact.hrmu.phone }}</a> &middot;
+                <a href="mailto:{{ contact.hrmu.email }}">{{ contact.hrmu.email }}</a>.
                 Have your case number ready if you already applied.
             </p>
         </div>
