@@ -390,6 +390,10 @@
         var fallbackCount = {{ current_interview_fallback_ratings|length|default:0 }};
         // WF-01 courtesy mirror of the server rule: 3 for Plantilla HRMPSB panels, 1 for COS.
         var minRequiredOutputs = {% if application.branch == "plantilla" %}3{% else %}1{% endif %};
+        // Mirror of the server's 3–5 member HRMPSB cap; COS has no panel cap (0 = no check).
+        // It was referenced below but never declared, so every Finalize click threw a
+        // ReferenceError and did nothing.
+        var maxRequiredOutputs = {% if application.branch == "plantilla" %}5{% else %}0{% endif %};
 
         function clearError() {
             if (window.RGWizardErrors && form) { RGWizardErrors.clearFieldErrors(form); }
@@ -442,10 +446,12 @@
             var probs = collectSaveProblems();
             var totalOutputs = totalRatings + fallbackCount;
             if (maxRequiredOutputs && totalOutputs > maxRequiredOutputs) {
-                revealProblems([
-                    "The HRMPSB is 3–5 members, but this interview carries ratings from " +
-                    totalOutputs + "."
-                ]);
+                revealProblems([{
+                    field: null,
+                    summaryOnly: true,
+                    msg: "The HRMPSB is 3–5 members, but this interview carries ratings from " +
+                         totalOutputs + "."
+                }]);
                 return false;
             }
             if (totalOutputs < minRequiredOutputs) {
