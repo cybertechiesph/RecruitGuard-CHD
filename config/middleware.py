@@ -6,6 +6,8 @@ from django.contrib.sessions.middleware import SessionMiddleware
 from django.core.cache import cache
 from django.http import HttpResponse
 
+from config.client_ip import get_client_ip
+
 PASSIVE_SESSION_REQUEST_ATTR = "_rg_passive_session_request"
 
 
@@ -89,18 +91,18 @@ class RateLimitMiddleware:
 
         now = int(time.time())
         window = now // window_seconds
-        cache_key = self._cache_key(request, rule_name, window)
-        try:
-            if cache.add(cache_key, 1, timeout=window_seconds + 2):
-                count = 1
-            else:
-                count = cache.incr(cache_key)
-        except ValueError:
-            cache.set(cache_key, 1, timeout=window_seconds + 2)
-            count = 1
+        client_ip = get_client_ip(request) or "unknown"
+        # Each browser gets the rule's limit; the IP as a whole gets a much higher ceiling.
+        # Philippine mobile networks put many people behind one shared IP (carrier-grade
+        # NAT), so a per-IP-only limit lets applicants on the same network lock each other
+        # out on a busy closing day. The ceiling still stops a flood from one address,
+        # including one that keeps inventing new cookies.
+        browser_count = self._hit(self._cache_key(rule_name, client_ip, self._browser_id(request), window), window_seconds)
+        ip_limit = limit * max(1, int(getattr(settings, "RATE_LIMIT_SHARED_IP_FACTOR", 10)))
+        ip_count = self._hit(self._cache_key(rule_name, client_ip, "*", window), window_seconds)
 
-        remaining = max(0, limit - count)
-        if count > limit:
+        remaining = max(0, limit - browser_count)
+        if browser_count > limit or ip_count > ip_limit:
             response = HttpResponse(
                 "Too many requests. Please try again shortly.",
                 status=429,
@@ -133,15 +135,26 @@ class RateLimitMiddleware:
                 return "upload"
         return "default"
 
-    def _cache_key(self, request, rule_name, window):
-        client_ip = self._client_ip(request)
-        raw_key = f"{rule_name}:{client_ip}:{window}"
+    @staticmethod
+    def _hit(cache_key, window_seconds):
+        try:
+            if cache.add(cache_key, 1, timeout=window_seconds + 2):
+                return 1
+            return cache.incr(cache_key)
+        except ValueError:
+            cache.set(cache_key, 1, timeout=window_seconds + 2)
+            return 1
+
+    @staticmethod
+    def _browser_id(request):
+        """The session or CSRF cookie identifies one browser behind a shared IP. A request
+        with neither (a first visit, or a script) counts as the IP's anonymous browser."""
+        cookies = getattr(request, "COOKIES", {}) or {}
+        token = cookies.get(settings.SESSION_COOKIE_NAME) or cookies.get(settings.CSRF_COOKIE_NAME) or ""
+        return hashlib.sha256(token.encode("utf-8")).hexdigest()[:16] if token else "anon"
+
+    @staticmethod
+    def _cache_key(rule_name, client_ip, browser_id, window):
+        raw_key = f"{rule_name}:{client_ip}:{browser_id}:{window}"
         digest = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
         return f"recruitguard:rate-limit:{digest}"
-
-    def _client_ip(self, request):
-        if getattr(settings, "RATE_LIMIT_TRUST_X_FORWARDED_FOR", False):
-            forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR", "")
-            if forwarded_for:
-                return forwarded_for.split(",", 1)[0].strip()
-        return request.META.get("REMOTE_ADDR", "") or "unknown"

@@ -33,6 +33,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 
+from config.client_ip import get_client_ip
 from .email_branding import email_branding_context
 from .applicant_contact import normalize_philippine_mobile_number
 from .request_context import current_session_tag
@@ -342,12 +343,7 @@ def record_system_audit_event(actor, action, description, metadata=None):
 
 
 def _request_ip_address(request):
-    if request is None:
-        return None
-    forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR", "")
-    if forwarded_for:
-        return forwarded_for.split(",", 1)[0].strip()
-    return request.META.get("REMOTE_ADDR") or None
+    return get_client_ip(request) or None
 
 
 def _request_user_agent(request):

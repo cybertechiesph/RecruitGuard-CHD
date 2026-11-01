@@ -303,6 +303,8 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 RATE_LIMIT_ENABLED = env_bool("RATE_LIMIT_ENABLED", True)
 RATE_LIMIT_WINDOW_SECONDS = env_int("RATE_LIMIT_WINDOW_SECONDS", 60)
 RATE_LIMIT_TRUST_X_FORWARDED_FOR = env_bool("RATE_LIMIT_TRUST_X_FORWARDED_FOR", False)
+# Per-IP ceiling = a rule's per-browser limit x this factor (shared mobile-network IPs).
+RATE_LIMIT_SHARED_IP_FACTOR = env_int("RATE_LIMIT_SHARED_IP_FACTOR", 10)
 RATE_LIMIT_RULES = {
     "default": {
         "limit": env_int("RATE_LIMIT_DEFAULT_MAX_REQUESTS", 300),

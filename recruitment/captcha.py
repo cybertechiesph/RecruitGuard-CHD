@@ -7,6 +7,8 @@ import urllib.request
 
 from django.conf import settings
 
+from config.client_ip import get_client_ip
+
 
 CAPTCHA_ANSWER_SESSION_KEY = "captcha_{scope}_answer"
 CAPTCHA_PROMPT_SESSION_KEY = "captcha_{scope}_prompt"
@@ -85,12 +87,7 @@ def validate_captcha_answer(request, scope, answer):
 
 
 def _request_ip_address(request):
-    if request is None:
-        return ""
-    forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR", "")
-    if forwarded_for:
-        return forwarded_for.split(",", 1)[0].strip()
-    return request.META.get("REMOTE_ADDR", "")
+    return get_client_ip(request)
 
 
 def _captcha_remote_ip(request):

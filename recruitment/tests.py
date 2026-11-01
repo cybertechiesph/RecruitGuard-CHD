@@ -1835,6 +1835,7 @@ class CaptchaProtectionTests(TestCase):
     TURNSTILE_SECRET_KEY="",
     EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
     RATE_LIMIT_ENABLED=False,
+    RATE_LIMIT_TRUST_X_FORWARDED_FOR=True,
 )
 class TurnstileCaptchaTests(TestCase):
     class FakeResponse(io.BytesIO):
@@ -1987,6 +1988,7 @@ class TurnstileCaptchaTests(TestCase):
     RECAPTCHA_TIMEOUT_SECONDS=5,
     EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
     RATE_LIMIT_ENABLED=False,
+    RATE_LIMIT_TRUST_X_FORWARDED_FOR=True,
 )
 class RecaptchaCaptchaTests(TestCase):
     class FakeResponse(io.BytesIO):
@@ -2130,15 +2132,64 @@ class RateLimitMiddlewareTests(TestCase):
         cache.clear()
 
     def test_default_rate_limit_returns_429_after_threshold(self):
-        self.assertEqual(self.client.get(reverse("login")).status_code, 200)
-        self.assertEqual(self.client.get(reverse("login")).status_code, 200)
+        # Cookieless requests from one IP share one bucket.
+        self.assertEqual(Client().get(reverse("login")).status_code, 200)
+        self.assertEqual(Client().get(reverse("login")).status_code, 200)
 
-        response = self.client.get(reverse("login"))
+        response = Client().get(reverse("login"))
 
         self.assertEqual(response.status_code, 429)
         self.assertEqual(response["X-RateLimit-Limit"], "2")
         self.assertEqual(response["X-RateLimit-Remaining"], "0")
         self.assertIn("Retry-After", response)
+
+    def test_browsers_sharing_one_ip_do_not_lock_each_other_out(self):
+        # Carrier-grade NAT: many phones, one public IP. Each browser has its own budget.
+        for index in range(4):
+            browser = Client()
+            browser.cookies["csrftoken"] = f"browser-{index}"
+            self.assertEqual(browser.get(reverse("login")).status_code, 200)
+            self.assertEqual(browser.get(reverse("login")).status_code, 200)
+
+    @override_settings(RATE_LIMIT_SHARED_IP_FACTOR=2)
+    def test_one_ip_still_has_a_ceiling_even_with_fresh_cookies(self):
+        statuses = []
+        for index in range(6):
+            browser = Client()
+            browser.cookies["csrftoken"] = f"invented-{index}"
+            statuses.append(browser.get(reverse("login")).status_code)
+        self.assertEqual(statuses[:4], [200, 200, 200, 200])
+        self.assertEqual(statuses[4:], [429, 429])
+
+    @override_settings(RATE_LIMIT_TRUST_X_FORWARDED_FOR=True)
+    def test_forged_forwarded_for_entries_do_not_dodge_the_limit(self):
+        # nginx appends the real address on the right; the left side is visitor-controlled.
+        statuses = [
+            Client().get(
+                reverse("login"), HTTP_X_FORWARDED_FOR=f"198.51.100.{index}, 203.0.113.7"
+            ).status_code
+            for index in range(3)
+        ]
+        self.assertEqual(statuses, [200, 200, 429])
+
+
+class ClientIpTests(SimpleTestCase):
+    def request(self, forwarded="", remote="127.0.0.1"):
+        return SimpleNamespace(META={"HTTP_X_FORWARDED_FOR": forwarded, "REMOTE_ADDR": remote})
+
+    @override_settings(RATE_LIMIT_TRUST_X_FORWARDED_FOR=True)
+    def test_behind_the_proxy_the_rightmost_public_address_wins(self):
+        from config.client_ip import get_client_ip
+
+        self.assertEqual(get_client_ip(self.request("1.2.3.4, 203.0.113.7")), "203.0.113.7")
+        self.assertEqual(get_client_ip(self.request("8.8.8.8, 10.0.0.1")), "8.8.8.8")
+        self.assertEqual(get_client_ip(self.request("")), "127.0.0.1")
+
+    @override_settings(RATE_LIMIT_TRUST_X_FORWARDED_FOR=False)
+    def test_without_a_trusted_proxy_the_header_is_ignored(self):
+        from config.client_ip import get_client_ip
+
+        self.assertEqual(get_client_ip(self.request("1.2.3.4", remote="203.0.113.9")), "203.0.113.9")
 
 
 @override_settings(RATE_LIMIT_ENABLED=False)
