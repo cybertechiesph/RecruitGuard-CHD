@@ -35,7 +35,7 @@
         <p class="rg-apply-header__copy">
             {% blocktranslate trimmed %}
             <strong>Everything is saved as you go.</strong> You can close this page and come back later
-            with the link in your verification email.
+            from My Applications or the link in your verification email.
             {% endblocktranslate %}
         </p>
         <p class="rg-apply-header__jump"><a href="#sec-docs">{% translate "Jump to your documents" %} &darr;</a></p>
@@ -55,17 +55,26 @@
             {% for message in messages %}<div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>{% endfor %}
         </div>
     {% endif %}
-    {% if submit_errors or form.errors %}
+    {% if submit_errors or form.errors or missing_documents %}
         <div class="alert alert-danger" role="alert" tabindex="-1" data-error-summary>
+            {% comment %}A failed Submit lists every problem at once (answers and missing
+              documents); a failed "Save and finish later" only says what could not be saved.{% endcomment %}
+            {% if attempted_submit %}
             <strong>{% translate "Your application was not submitted yet." %}</strong>
+            {% else %}
+            <strong>{% translate "Some answers could not be saved. Everything else was saved." %}</strong>
+            {% endif %}
             {% for error in submit_errors %}<p class="mb-0">{{ error }}</p>{% endfor %}
-            {% if form.errors %}
+            {% if form.errors or missing_documents %}
                 <p class="mb-1">{% translate "Please fix these:" %}</p>
                 <ul class="mb-0 rg-apply-error-links">
                     {% for field in form %}{% if field.errors %}
                     <li><a href="#{% if field.name == 'performance_rating_applicability' %}sec-about-rating{% else %}{{ field.id_for_label }}{% endif %}">{{ field.errors.0 }}</a></li>
                     {% endif %}{% endfor %}
                     {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+                    {% for slot in missing_documents %}
+                    <li><a href="#doc-{{ slot.code }}">{% blocktranslate trimmed with title=slot.requirement.title %}Missing document: {{ title }}{% endblocktranslate %}</a></li>
+                    {% endfor %}
                 </ul>
             {% endif %}
         </div>
@@ -277,6 +286,6 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="{% static 'js/recruitguard-applicant-application.js' %}?v=20261101-apply7"></script>
+<script src="{% static 'js/recruitguard-applicant-application.js' %}?v=20261102-walk1"></script>
 <script src="{% static 'js/recruitguard-deadline.js' %}?v=20261101-dl2"></script>
 {% endblock %}

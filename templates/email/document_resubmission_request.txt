@@ -1,6 +1,6 @@
 {% load i18n %}{% blocktranslate with name=application.applicant_display_name %}Dear {{ name }},{% endblocktranslate %}
 
-{% blocktranslate with title=application.position.title %}Your application for {{ title }} needs corrected or updated document submission.{% endblocktranslate %}
+{% blocktranslate with title=application.position.title %}Some documents in your application for {{ title }} need to be corrected and uploaded again.{% endblocktranslate %}
 
 {% blocktranslate with case=application.case_number_short %}Case Reference: Case No. {{ case }}{% endblocktranslate %}
 
@@ -8,17 +8,10 @@
 {% for document in requested_documents %}
 - {{ document.requirement_title }}
   {% blocktranslate with remarks=document.remarks %}Instruction: {{ remarks }}{% endblocktranslate %}
-{% endfor %}
-{% if resubmission_deadline %}
-{% if deadline_was_extended %}{% translate "The resubmission deadline has been extended." %}{% endif %}
-{% blocktranslate with date=resubmission_deadline|date:"F d, Y" %}Please resubmit on or before {{ date }}.{% endblocktranslate %}
-{% endif %}
-{% if workflow_remarks %}
-
+{% endfor %}{% if resubmission_deadline %}
+{% if deadline_was_extended %}{% translate "The resubmission deadline has been extended." %} {% endif %}{% blocktranslate with date=resubmission_deadline|date:"F j, Y" %}Please resubmit on or before {{ date }}.{% endblocktranslate %}
+{% endif %}{% if workflow_remarks %}
 {% translate "Additional note from the recruitment team:" %}
 {{ workflow_remarks }}
 {% endif %}
-
-{% translate "Please follow the instructions from the recruitment team and keep your private Tracking Code for status checking." %}
-
-{% blocktranslate with link=status_link %}Check your application status anytime: {{ link }}{% endblocktranslate %}
+{% blocktranslate with link=resubmit_link %}Upload the corrected documents here: {{ link }}{% endblocktranslate %}

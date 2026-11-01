@@ -72,10 +72,10 @@ def issue_hub_code(email):
 
 def _send_hub_code(email, code):
     minutes = settings.APPLICATION_OTP_VALIDITY_MINUTES
-    subject = gettext("Your code to see your applications")
+    subject = gettext("DOH–CHD CALABARZON Recruitment Portal: your code for My Applications")
     text_body = gettext(
         "Your code is %(code)s. It works for %(minutes)s minutes.\n\n"
-        "Enter it on the My applications page to see every application you made with this email.\n\n"
+        "Enter it on the My Applications page to see every application you made with this email.\n\n"
         "Do not share this code. DOH–CHD CALABARZON staff will never ask for it."
     ) % {"code": code, "minutes": minutes}
     try:
@@ -112,7 +112,7 @@ def verify_hub_code(email, code):
         record.save(update_fields=["attempt_count", "updated_at"])
         if record.attempt_count >= max_attempts:
             raise ValueError(gettext("Too many invalid verification attempts. Request a new code."))
-        raise ValueError(gettext("The verification code is invalid."))
+        raise ValueError(gettext("That code doesn't match. Check the latest email from us and try again."))
     record.code_hash = ""
     record.attempt_count = 0
     record.save(update_fields=["code_hash", "attempt_count", "updated_at"])

@@ -33,8 +33,10 @@
     <div class="rg-pub-otp-card">
         <h1 class="rg-pub-otp-card__title">{% translate "Verify your email" %}</h1>
         <p class="rg-pub-otp-card__reassure" style="margin:0 0 0.6rem; color:#4b5563; font-size:0.9rem;">
-            {% if has_active_code %}
+            {% if has_active_code and has_progress %}
                 {% translate "Enter the code we emailed you to continue your application. Anything you already added is saved." %}
+            {% elif has_active_code %}
+                {% translate "Enter the code we emailed you. Then you can add your documents." %}
             {% else %}
                 {% translate "To open your saved application, get a new code below &mdash; we&rsquo;ll send it to your email." %}
             {% endif %}
@@ -99,7 +101,7 @@
             <form method="post" class="d-inline">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="resend">
-                <button type="submit" class="btn {% if has_active_code %}btn-outline-secondary btn-sm{% else %}btn-rg-primary{% endif %}" id="resend-btn">
+                <button type="submit" class="btn {% if has_active_code %}btn-outline-secondary btn-sm{% else %}btn-rg-primary{% endif %}" id="resend-btn" data-wait-seconds="{{ resend_wait_seconds }}">
                     {% if has_active_code %}{% translate "Resend the code" %}{% else %}{% translate "Email me a code" %}{% endif %}
                 </button>
             </form>
@@ -161,22 +163,12 @@
     }
 
     /* ── Resend cooldown countdown ─────────────────────────────── */
-    var COOLDOWN = 60;
     var timerEl = document.getElementById("resend-timer");
     var resendBtn = document.getElementById("resend-btn");
     if (timerEl && resendBtn) {
-        var stored = sessionStorage.getItem("rg_otp_sent_at");
-        if (stored) {
-            var elapsed = Math.floor((Date.now() - parseInt(stored, 10)) / 1000);
-            var remaining = COOLDOWN - elapsed;
-            if (remaining > 0) startCountdown(remaining);
-        }
-        var resendForm = resendBtn.closest("form");
-        if (resendForm) {
-            resendForm.addEventListener("submit", function () {
-                sessionStorage.setItem("rg_otp_sent_at", Date.now().toString());
-            });
-        }
+        // Seconds left on the server's resend cooldown, worked out when the page was made.
+        var remaining = parseInt(resendBtn.getAttribute("data-wait-seconds") || "0", 10);
+        if (remaining > 0) startCountdown(remaining);
         function startCountdown(seconds) {
             resendBtn.disabled = true;
             tick(seconds);

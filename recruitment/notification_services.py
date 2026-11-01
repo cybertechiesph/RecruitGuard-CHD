@@ -256,17 +256,25 @@ def _completion_label(application):
 def _format_deadline(deadline):
     if not deadline:
         return ""
-    return deadline.strftime("%B %d, %Y")
+    return f"{deadline:%B} {deadline.day}, {deadline.year}"
 
 
 def _format_schedule(value):
     if not value:
         return ""
-    return timezone.localtime(value).strftime("%B %d, %Y at %I:%M %p")
+    local = timezone.localtime(value)
+    return f"{local:%B} {local.day}, {local.year} at {local:%I:%M %p}".replace(" at 0", " at ")
 
 
 def build_applicant_status_url(application):
     path = reverse("applicant-status-link", kwargs={"token": application.public_token})
+    base_url = (getattr(settings, "APPLICANT_PORTAL_BASE_URL", "") or "").strip().rstrip("/")
+    return f"{base_url}{path}" if base_url else path
+
+
+def build_applicant_resubmit_url(application):
+    """Absolute link to the page where the applicant re-uploads returned documents."""
+    path = reverse("applicant-resubmit", kwargs={"token": application.public_token})
     base_url = (getattr(settings, "APPLICANT_PORTAL_BASE_URL", "") or "").strip().rstrip("/")
     return f"{base_url}{path}" if base_url else path
 
@@ -321,12 +329,16 @@ def _build_submission_acknowledgment(application):
         gettext("Dear %(name)s,") % {"name": application.applicant_display_name},
         "",
         gettext("Your application has been received by the DOH–CHD CALABARZON Recruitment Portal."),
-        gettext("Application ID: %(ref)s") % {"ref": application.reference_number},
+        gettext("Case No. %(ref)s") % {"ref": application.case_number_short or application.reference_label},
         gettext("Position: %(title)s") % {"title": application.position.title},
         gettext("Position type: %(type)s") % {"type": applicant_branch_label(application)},
         gettext("Current status: %(status)s") % {"status": applicant_status_label(application)},
         "",
-        gettext("Keep your Application ID so you can check your application status."),
+        gettext("Your private Tracking Code: %(code)s") % {"code": application.tracking_code},
+        gettext(
+            "Keep it private. You can also see every application you made on My Applications "
+            "with just your email."
+        ),
     ]
     _append_status_link(lines, application)
     return (
@@ -344,7 +356,7 @@ def _build_selected_notification(application):
         % {"title": application.position.title, "branch": application.position.get_branch_display()},
         gettext("The next step is %(step)s within the scope of this recruitment process.")
         % {"step": _completion_label(application).lower()},
-        gettext("Application ID: %(ref)s") % {"ref": application.reference_number},
+        gettext("Case No. %(ref)s") % {"ref": application.case_number_short or application.reference_label},
         "",
         gettext("Please wait for the requirement checklist or any additional office instructions."),
     ]
@@ -424,7 +436,7 @@ def _build_non_selected_notification(application, cut_at_screening=False, exam_s
             )
     lines.extend(
         [
-            gettext("Application ID: %(ref)s") % {"ref": application.reference_number},
+            gettext("Case No. %(ref)s") % {"ref": application.case_number_short or application.reference_label},
             "",
             closing,
         ]
@@ -447,7 +459,7 @@ def _build_selection_under_review_notification(application):
             "The office is re-deliberating the vacancy. You will be informed when a "
             "new decision is recorded."
         ),
-        gettext("Application ID: %(ref)s") % {"ref": application.reference_number},
+        gettext("Case No. %(ref)s") % {"ref": application.case_number_short or application.reference_label},
     ]
     _append_status_link(lines, application)
     return (
@@ -469,7 +481,7 @@ def _build_applicant_contact_updated_notification(application, *, is_new_address
     lines.extend(
         [
             gettext("If you did not request or expect this correction, contact the HRM Unit promptly."),
-            gettext("Application ID: %(ref)s") % {"ref": application.reference_number},
+            gettext("Case No. %(ref)s") % {"ref": application.case_number_short or application.reference_label},
         ]
     )
     _append_status_link(lines, application)
@@ -515,10 +527,13 @@ def _build_document_resubmission_fallback_body(
     lines = [
         gettext("Dear %(name)s,") % {"name": application.applicant_display_name},
         "",
-        gettext("Your application for %(title)s needs corrected or updated document submission.")
+        gettext(
+            "Some documents in your application for %(title)s need to be corrected and "
+            "uploaded again."
+        )
         % {"title": application.position.title},
         "",
-        gettext("Application ID: %(ref)s") % {"ref": application.reference_label},
+        gettext("Case No. %(ref)s") % {"ref": application.case_number_short or application.reference_label},
         "",
         ngettext(
             "Please review the document item below:",
@@ -539,7 +554,7 @@ def _build_document_resubmission_fallback_body(
                     else ""
                 )
                 + gettext("Please resubmit on or before %(date)s.")
-                % {"date": f"{resubmission_deadline:%B %d, %Y}"},
+                % {"date": _format_deadline(resubmission_deadline)},
             ]
         )
     remarks = (workflow_remarks or "").strip()
@@ -548,13 +563,8 @@ def _build_document_resubmission_fallback_body(
     lines.extend(
         [
             "",
-            gettext(
-                "Please follow the instructions from the recruitment team and "
-                "keep your Application ID for status checking."
-            ),
-            "",
-            gettext("Check your application status anytime: %(link)s")
-            % {"link": build_applicant_status_url(application)},
+            gettext("Upload the corrected documents here: %(link)s")
+            % {"link": build_applicant_resubmit_url(application)},
         ]
     )
     return "\n".join(lines)
@@ -583,6 +593,7 @@ def _build_document_resubmission_request_notification(
                 "requested_documents": requested_documents,
                 "workflow_remarks": (workflow_remarks or "").strip(),
                 "status_link": build_applicant_status_url(application),
+                "resubmit_link": build_applicant_resubmit_url(application),
                 "resubmission_deadline": resubmission_deadline,
                 "deadline_was_extended": deadline_was_extended,
             },
@@ -632,7 +643,7 @@ def _build_requirement_checklist_notification(
     lines.extend(
         [
             "",
-            gettext("Application ID: %(ref)s") % {"ref": application.reference_number},
+            gettext("Case No. %(ref)s") % {"ref": application.case_number_short or application.reference_label},
             gettext("Check your application status anytime: %(link)s")
             % {"link": build_applicant_status_url(application)},
         ]
@@ -649,7 +660,7 @@ def _build_reminder_notification(application, reminder_subject, reminder_message
         gettext("Dear %(name)s,") % {"name": application.applicant_display_name},
         "",
         reminder_message.strip(),
-        gettext("Application ID: %(ref)s") % {"ref": application.reference_number},
+        gettext("Case No. %(ref)s") % {"ref": application.case_number_short or application.reference_label},
         gettext("Current status: %(status)s") % {"status": applicant_status_label(application)},
     ]
     if deadline:
@@ -715,6 +726,7 @@ def _render_notification_html(notification):
         "status_link": (
             metadata.get("status_link") or build_applicant_status_url(application)
         ),
+        "resubmit_link": build_applicant_resubmit_url(application),
         "status_label": applicant_status_label(application),
         "position_type_label": applicant_branch_label(application),
         "meta": metadata,
@@ -1026,7 +1038,7 @@ def _build_withdrawal_acknowledgement(application, reason=""):
             "%(branch)s recruitment, as you requested."
         )
         % {"title": application.position.title, "branch": application.position.get_branch_display()},
-        gettext("Application ID: %(ref)s") % {"ref": application.reference_number},
+        gettext("Case No. %(ref)s") % {"ref": application.case_number_short or application.reference_label},
         "",
         gettext(
             "No further action is needed from you for this application, and your record "
@@ -1076,7 +1088,7 @@ def _build_vacancy_cancellation_notice(application, reason=""):
             "by the office, so your application will not proceed."
         )
         % {"title": application.position.title, "branch": application.position.get_branch_display()},
-        gettext("Application ID: %(ref)s") % {"ref": application.reference_number},
+        gettext("Case No. %(ref)s") % {"ref": application.case_number_short or application.reference_label},
         "",
         gettext(
             "This is not an assessment of your qualifications — no candidate was selected "
@@ -1259,7 +1271,7 @@ def _build_exam_invitation_notification(application, exam_schedule):
     lines.extend(
         [
             "",
-            gettext("Application ID: %(ref)s") % {"ref": application.reference_number},
+            gettext("Case No. %(ref)s") % {"ref": application.case_number_short or application.reference_label},
             gettext("Check your application status anytime: %(link)s")
             % {"link": build_applicant_status_url(application)},
         ]
@@ -1311,7 +1323,7 @@ def _build_applicant_interview_notice_notification(application, interview_sessio
     lines.extend(
         [
             "",
-            gettext("Application ID: %(ref)s") % {"ref": application.reference_number},
+            gettext("Case No. %(ref)s") % {"ref": application.case_number_short or application.reference_label},
             gettext("Check your application status anytime: %(link)s")
             % {"link": build_applicant_status_url(application)},
         ]
@@ -1385,7 +1397,7 @@ def queue_document_resubmission_request_notification(
                 resubmission_deadline.isoformat() if resubmission_deadline else ""
             ),
             "resubmission_deadline_display": (
-                resubmission_deadline.strftime("%B %d, %Y")
+                _format_deadline(resubmission_deadline)
                 if resubmission_deadline
                 else ""
             ),

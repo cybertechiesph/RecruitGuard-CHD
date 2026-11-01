@@ -8920,8 +8920,8 @@ def verify_application_otp(application, otp_code, actor=None, purpose="editing")
         tries_left = _application_otp_max_attempts() - application.otp_attempt_count
         raise ValueError(
             ngettext(
-                "The verification code is invalid. You have %(count)s try left.",
-                "The verification code is invalid. You have %(count)s tries left.",
+                "That code doesn't match. Check the latest email from us and try again. You have %(count)s try left.",
+                "That code doesn't match. Check the latest email from us and try again. You have %(count)s tries left.",
                 tries_left,
             )
             % {"count": tries_left}
@@ -9019,11 +9019,19 @@ def save_applicant_application_answers(application, cleaned_data):
     """Save the typed answers from the application page (after e-mail verification)."""
     if not application.is_editable_by_applicant or application.submitted_at:
         raise ValueError(gettext("This application has already been submitted and can no longer be changed."))
-    application.applicant_first_name = cleaned_data["first_name"]
-    application.applicant_last_name = cleaned_data["last_name"]
-    application.applicant_phone = cleaned_data["phone"]
-    application.qualification_summary = cleaned_data.get("qualification_summary", "")
-    application.cover_letter = cleaned_data.get("cover_letter", "")
+    # cleaned_data may hold only the fields that passed validation (a draft saves what it
+    # can). A blank name or mobile number never overwrites the one already on file.
+    for key, attribute in (
+        ("first_name", "applicant_first_name"),
+        ("last_name", "applicant_last_name"),
+        ("phone", "applicant_phone"),
+    ):
+        if cleaned_data.get(key):
+            setattr(application, attribute, cleaned_data[key])
+    if "qualification_summary" in cleaned_data:
+        application.qualification_summary = cleaned_data["qualification_summary"]
+    if "cover_letter" in cleaned_data:
+        application.cover_letter = cleaned_data["cover_letter"]
     application.performance_rating_applicability = (
         cleaned_data.get("performance_rating_applicability")
         or application.performance_rating_applicability
@@ -9757,7 +9765,7 @@ def get_resubmission_request(application):
 
 
 @transaction.atomic
-def submit_document_resubmission(application, actor, uploaded_files):
+def submit_document_resubmission(application, actor, uploaded_files, *, email_verified_in_session=False):
     """Applicant re-uploads the flagged documents from Track Application. Re-uploads land on the
     applicant-intake version chain (so they replace the originals and stay in the document map),
     the flagged screening rows reopen for re-review while already-Meets rows stay accepted, and
@@ -9767,6 +9775,10 @@ def submit_document_resubmission(application, actor, uploaded_files):
 
     ``uploaded_files`` maps each flagged document code to an UploadedFile, or to a list of
     them: one file is stored as-is, several are combined (in order) into one PDF.
+
+    ``email_verified_in_session`` is set by the portal when this browser already proved the
+    applicant's email recently (My Applications or the status-page code), so the applicant is
+    not asked for yet another code.
     """
     from .applicant_documents import combine_uploaded_files
 
@@ -9782,7 +9794,7 @@ def submit_document_resubmission(application, actor, uploaded_files):
         raise ValueError(gettext("There are no documents awaiting resubmission."))
     if screening_record.resubmission_is_overdue:
         raise ValueError(gettext("The resubmission deadline has passed; please contact the recruitment team."))
-    if not application.otp_is_currently_valid:
+    if not (email_verified_in_session or application.otp_is_currently_valid):
         raise ValueError(gettext("Verify your email with a fresh code before resubmitting your documents."))
 
     requirements = {req.code: req for req in get_applicant_document_requirements(application)}
@@ -11941,7 +11953,7 @@ def _draw_application_receipt_header(pdf, *, left, right, page_height):
 
     pdf.setFillColor(_RECEIPT_MUTE)
     pdf.setFont("Helvetica", 8.5)
-    pdf.drawString(text_x, top - 6, "REPUBLIC OF THE PHILIPPINES")
+    pdf.drawString(text_x, top - 6, gettext("REPUBLIC OF THE PHILIPPINES"))
     pdf.setFillColor(_RECEIPT_GREEN_INK)
     pdf.setFont("Helvetica-Bold", 13)
     pdf.drawString(text_x, top - 22, "Department of Health")
@@ -11966,8 +11978,8 @@ def _application_receipt_requirement_groups(documents):
     """Build wrapped label/filename lines before drawing for page-height checks."""
     groups = []
     for index, document in enumerate(documents, start=1):
-        label_text = f"{index}. {document.label or 'Submitted requirement'}"
-        filename_text = f"— {document.original_filename or 'File'}"
+        label_text = f"{index}. {document.label or gettext('Submitted requirement')}"
+        filename_text = f"— {document.original_filename or gettext('File')}"
         label_lines = textwrap.wrap(label_text, width=68) or [label_text]
         filename_lines = textwrap.wrap(filename_text, width=88) or [filename_text]
         lines = [(line, "") for line in label_lines]
@@ -11995,7 +12007,7 @@ def _application_receipt_requirement_item_height(lines):
 def _draw_application_receipt_requirements_heading(pdf, *, left, top, continued=False):
     pdf.setFont("Helvetica-Bold", 10.5)
     pdf.setFillColor(_RECEIPT_GREEN_INK)
-    heading = "Requirements Submitted (continued)" if continued else "Requirements Submitted"
+    heading = gettext("Requirements Submitted (continued)") if continued else gettext("Requirements Submitted")
     pdf.drawString(left, top, heading)
     return top - _RECEIPT_REQUIREMENT_HEADING_HEIGHT
 
@@ -12033,22 +12045,37 @@ def _draw_application_receipt_footer(pdf, *, left, right, generated_at):
     pdf.drawString(
         left,
         _RECEIPT_FOOTER_Y - 14,
-        f"Generated {generated_at:%B %d, %Y at %I:%M %p}. This is a system-generated receipt and needs no signature.",
+        gettext("Generated %(when)s. This is a system-generated receipt and needs no signature.")
+        % {"when": _receipt_datetime(generated_at)},
     )
     pdf.drawString(
         left,
         _RECEIPT_FOOTER_Y - 25,
-        "Keep your Tracking Code private — treat it like a password.",
+        gettext("Keep your Tracking Code private — treat it like a password."),
     )
 
 
+def _receipt_datetime(value):
+    local = timezone.localtime(value)
+    return f"{local:%B} {local.day}, {local.year}, {local:%I:%M %p}".replace(", 0", ", ")
+
+
 def _build_application_receipt_pdf(application, *, generated_at=None):
+    # The receipt is written in the language the applicant used on the portal.
+    language = getattr(application, "preferred_language", "") or settings.LANGUAGE_CODE
+    if language not in dict(settings.LANGUAGES):
+        language = settings.LANGUAGE_CODE
+    with translation.override(language):
+        return _render_application_receipt_pdf(application, generated_at=generated_at)
+
+
+def _render_application_receipt_pdf(application, *, generated_at=None):
     generated_at = generated_at or timezone.now()
     branch_value = getattr(application, "branch", "")
     engagement = (
-        "Permanent (Plantilla)"
+        gettext("Permanent (Plantilla)")
         if branch_value == PositionPosting.Branch.PLANTILLA
-        else "Contract of Service"
+        else gettext("Contract of Service")
     )
     submitted_at = application.submitted_at
     documents = list(get_current_applicant_document_items(application))
@@ -12075,13 +12102,13 @@ def _build_application_receipt_pdf(application, *, generated_at=None):
     title_y = rule_y - 32
     pdf.setFillColor(_RECEIPT_GREEN_INK)
     pdf.setFont("Helvetica-Bold", 17)
-    pdf.drawCentredString(page_width / 2, title_y, "Application Submission Receipt")
+    pdf.drawCentredString(page_width / 2, title_y, gettext("Application Submission Receipt"))
     pdf.setFont("Helvetica", 9.5)
     pdf.setFillColor(_RECEIPT_MUTE)
     pdf.drawCentredString(
         page_width / 2,
         title_y - 15,
-        "Official proof of a received application. Please keep this copy.",
+        gettext("Official proof of a received application. Please keep this copy."),
     )
 
     # ── Identifier panel: tracking code + case reference ───────────────
@@ -12103,8 +12130,8 @@ def _build_application_receipt_pdf(application, *, generated_at=None):
     label_y = panel_top - 22
     pdf.setFont("Helvetica-Bold", 8.5)
     pdf.setFillColor(_RECEIPT_GREEN_INK)
-    pdf.drawString(col_l, label_y, "TRACKING CODE  (keep private)")
-    pdf.drawString(col_r, label_y, "CASE REFERENCE")
+    pdf.drawString(col_l, label_y, gettext("TRACKING CODE  (keep private)"))
+    pdf.drawString(col_r, label_y, gettext("CASE REFERENCE"))
 
     pdf.setFont("Helvetica-Bold", 20)
     pdf.setFillColor(_RECEIPT_GREEN_INK)
@@ -12113,27 +12140,30 @@ def _build_application_receipt_pdf(application, *, generated_at=None):
 
     pdf.setFont("Helvetica", 8)
     pdf.setFillColor(_RECEIPT_MUTE)
-    pdf.drawString(col_l, label_y - 44, "Use with your email to track online.")
-    pdf.drawString(col_r, label_y - 44, "Quote this when you contact the office.")
+    pdf.drawString(col_l, label_y - 44, gettext("Never share it. Staff will never ask for it."))
+    pdf.drawString(col_r, label_y - 44, gettext("Quote this when you contact the office."))
 
     # ── Details table ──────────────────────────────────────────────────
     rows = [
-        ("Applicant", application.applicant_display_name or "—"),
-        ("Position", application.position.title),
-        ("Reference / Job Code", application.position.job_code),
-        ("Engagement", engagement),
+        (gettext("Applicant"), application.applicant_display_name or "—"),
+        (gettext("Position"), application.position.title),
+        (gettext("Reference / Job Code"), application.position.job_code),
+        (gettext("Engagement"), engagement),
         (
-            "Date Submitted",
-            f"{submitted_at:%B %d, %Y at %I:%M %p}" if submitted_at else "—",
+            gettext("Date Submitted"),
+            _receipt_datetime(submitted_at) if submitted_at else "—",
         ),
-        ("Registered Email", application.applicant_email or "—"),
-        ("Documents Submitted", f"{document_count} file{'' if document_count == 1 else 's'}"),
+        (gettext("Registered Email"), application.applicant_email or "—"),
+        (
+            gettext("Documents Submitted"),
+            ngettext("%(count)s file", "%(count)s files", document_count) % {"count": document_count},
+        ),
     ]
     row_height = 23
     table_top = panel_bottom - 26
     pdf.setFont("Helvetica-Bold", 10.5)
     pdf.setFillColor(_RECEIPT_GREEN_INK)
-    pdf.drawString(left, table_top, "Application Details")
+    pdf.drawString(left, table_top, gettext("Application Details"))
     table_top -= 8
 
     y = table_top
@@ -12158,9 +12188,9 @@ def _build_application_receipt_pdf(application, *, generated_at=None):
     requirement_groups = _application_receipt_requirement_groups(documents)
     requirements_top = y - 30
     steps = [
-        "Your application will be reviewed by the recruitment team.",
-        "You may be contacted by email or phone for updates or additional requirements.",
-        "Check your application status anytime using your Tracking Code and email.",
+        gettext("Your application will be reviewed by the recruitment team."),
+        gettext("You may be contacted by email or phone for updates or additional requirements."),
+        gettext("Check your status anytime on My Applications with just your email."),
     ]
 
     first_item_height = (
@@ -12267,7 +12297,7 @@ def _build_application_receipt_pdf(application, *, generated_at=None):
         next_top = continued_rule_y - 30
     pdf.setFont("Helvetica-Bold", 10.5)
     pdf.setFillColor(_RECEIPT_GREEN_INK)
-    pdf.drawString(left, next_top, "What Happens Next")
+    pdf.drawString(left, next_top, gettext("What Happens Next"))
     pdf.setFont("Helvetica", 9.5)
     step_y = next_top - 16
     for number, step in enumerate(steps, start=1):
@@ -12294,13 +12324,13 @@ def _build_application_receipt_pdf(application, *, generated_at=None):
     pdf.line(left + 1.5, reminder_bottom + 5, left + 1.5, reminder_top - 5)
     pdf.setFillColor(colors.HexColor("#8a5a00"))
     pdf.setFont("Helvetica-Bold", 9.5)
-    pdf.drawString(left + 16, reminder_top - 18, "Keep this receipt and your Tracking Code safe.")
+    pdf.drawString(left + 16, reminder_top - 18, gettext("Keep this receipt and your Tracking Code safe."))
     pdf.setFont("Helvetica", 9)
     pdf.setFillColor(_RECEIPT_INK)
-    reminder_text = (
-        f"You will need your Tracking Code to check your status online. A confirmation was also "
-        f"sent to {application.applicant_email or 'your registered email'}."
-    )
+    reminder_text = gettext(
+        "Staff will never ask for your Tracking Code; give your case number instead. A "
+        "confirmation was also sent to %(email)s."
+    ) % {"email": application.applicant_email or gettext("your registered email")}
     text_y = reminder_top - 34
     for wrapped in textwrap.wrap(reminder_text, width=98):
         pdf.drawString(left + 16, text_y, wrapped)

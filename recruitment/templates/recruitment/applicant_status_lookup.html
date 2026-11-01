@@ -1,7 +1,7 @@
 {% extends "applicant_base.html" %}
 {% load i18n recruitment_ui %}
 
-{% block title %}{% translate "Track My Application" %} | {% translate "Applicant Portal" %}{% endblock %}
+{% block title %}{% if application %}{% translate "Application Status" %}{% else %}{% translate "Track Your Application" %}{% endif %} | {% translate "Applicant Portal" %}{% endblock %}
 
 {% block main_class %}{% endblock %}
 
@@ -242,7 +242,7 @@
                     Resubmit documents to see which ones and why.
                     {% endblocktranslate %}
                     {% if resubmission_deadline %}
-                        {% blocktranslate trimmed with date=resubmission_deadline|date:"F d, Y" %}
+                        {% blocktranslate trimmed with date=resubmission_deadline|date:"F j, Y" %}
                         Please resubmit on or before
                         <strong>{{ date }}</strong>.
                         {% endblocktranslate %}
@@ -263,13 +263,13 @@
             {% if completion_checklist %}
                 <p class="rg-ta-action-card__copy">
                     {% if completion_checklist.deadline %}
-                        {% blocktranslate trimmed with what=completion_checklist.label|lower date=completion_checklist.deadline|date:"F d, Y" %}
-                        Congratulations. To complete your {{ what }}, bring or send these
+                        {% blocktranslate trimmed with what=completion_checklist.label|lower date=completion_checklist.deadline|date:"F j, Y" %}
+                        To complete your {{ what }}, bring or send these
                         to the office on or before <strong>{{ date }}</strong>:
                         {% endblocktranslate %}
                     {% else %}
                         {% blocktranslate trimmed with what=completion_checklist.label|lower %}
-                        Congratulations. To complete your {{ what }}, bring or send these
+                        To complete your {{ what }}, bring or send these
                         to the office:
                         {% endblocktranslate %}
                     {% endif %}
@@ -295,7 +295,7 @@
             {% else %}
             <p class="rg-ta-action-card__copy">
                 {% blocktranslate trimmed with email=application.applicant_email %}
-                Congratulations. Watch your email at <strong>{{ email }}</strong>
+                Watch your email at <strong>{{ email }}</strong>
                 for instructions on the next steps and any documents we need from you.
                 {% endblocktranslate %}
             </p>
@@ -321,7 +321,7 @@
     <div class="rg-ta-action-card rg-ta-action-card--rest" id="withdraw" data-withdrawal-requested>
         <p class="rg-ta-action-card__title">{% translate "Withdrawal requested" %}</p>
         <p class="rg-ta-action-card__copy">
-            {% blocktranslate trimmed with date=application.withdrawal_requested_at|date:"F d, Y" email=application.applicant_email %}
+            {% blocktranslate trimmed with date=application.withdrawal_requested_at|date:"F j, Y" email=application.applicant_email %}
             You asked to withdraw on {{ date }}. The recruitment
             office will record it and email you at <strong>{{ email }}</strong>.
             {% endblocktranslate %}
@@ -394,13 +394,12 @@
 
 
     {% comment %}
-    Simple link back to the canonical lookup form. Avoids duplicate-form
-    rendering on this page and works under both routes (form-POST and
-    token-magic-link).
+    Back to the list of every application made with this email (My Applications keeps the
+    applicant signed in, so this is one tap when they came from there).
     {% endcomment %}
     <p class="rg-ta-lookup-again-link">
-        <a href="{% url 'applicant-status-lookup' %}">
-            {% translate "Look up a different application" %} &rarr;
+        <a href="{% url 'applicant-my-applications' %}">
+            &larr; {% translate "See all my applications" %}
         </a>
     </p>
 

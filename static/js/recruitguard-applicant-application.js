@@ -124,6 +124,7 @@
         if (!box || !message) return;
         var line = document.createElement("p");
         line.className = "rg-doc-card__error-line";
+        line.setAttribute("data-warning-file", name);
         var strong = document.createElement("strong");
         strong.textContent = name;
         line.appendChild(strong);
@@ -131,11 +132,21 @@
         box.appendChild(line);
         box.hidden = false;
     }
+    function dropWarnings(card, name) {
+        // A removed file takes its warnings (old PDS, dark photo...) with it.
+        var box = card.querySelector("[data-doc-warning]");
+        if (!box) return;
+        box.querySelectorAll("[data-warning-file]").forEach(function (line) {
+            if (line.getAttribute("data-warning-file") === name) line.remove();
+        });
+        if (!box.querySelector("[data-warning-file]")) { box.textContent = ""; box.hidden = true; }
+    }
     function qualityWarning(card, name, issues) {
         var box = card.querySelector("[data-doc-warning]");
         if (!box || !issues.length) return;
         var line = document.createElement("p");
         line.className = "rg-doc-card__error-line";
+        line.setAttribute("data-warning-file", name);
         var strong = document.createElement("strong");
         strong.textContent = name;
         line.appendChild(strong);
@@ -330,7 +341,11 @@
                 headers: { "X-CSRFToken": csrf, "X-Requested-With": "XMLHttpRequest" }
             }).then(function (res) { return res.json().then(function (body) { return [res, body]; }); })
               .then(function (pair) {
-                  if (pair[0].ok) { applySlotState(card, pair[1]); cardError(card, ""); }
+                  if (pair[0].ok) {
+                      dropWarnings(card, li.querySelector("[data-part-name]").textContent);
+                      applySlotState(card, pair[1]);
+                      cardError(card, "");
+                  }
                   else { removeBtn.disabled = false; cardError(card, pair[1].error || t("remove_failed", "That file could not be removed.")); }
               })
               .catch(function () { removeBtn.disabled = false; cardError(card, t("remove_offline", "That file could not be removed. Check your connection.")); });
@@ -365,8 +380,15 @@
                 body.appendChild(frame);
                 var hint = document.createElement("p");
                 hint.className = "rg-intake-preview__fallback";
-                hint.textContent = t("preview_blank", "If the preview is blank, your device can't show PDFs here. The file is still saved.");
-                body.appendChild(hint);
+                hint.textContent = t("preview_blank", "If the preview is blank, your device can't show PDFs here. The file is still saved.") + " ";
+                var open = document.createElement("a");
+                open.href = previewUrl;
+                open.target = "_blank";
+                open.rel = "noopener";
+                open.download = filename || "";
+                open.textContent = t("open_file", "Open the file");
+                hint.appendChild(open);
+                body.insertBefore(hint, frame);
             } else {
                 var img = document.createElement("img");
                 img.src = previewUrl;
@@ -460,7 +482,22 @@
             return res.json();
         }).then(function (body) {
             if (!body || !statusEl) return;
-            statusEl.textContent = body.ok ? t("saved", "Saved") : t("needs_attention", "Some answers need attention before they can be saved.");
+            // Valid answers are saved either way; a field the server refused is marked so
+            // the applicant can see which one to fix.
+            form.querySelectorAll("[data-autosave-invalid]").forEach(function (el) {
+                el.removeAttribute("data-autosave-invalid");
+                el.removeAttribute("aria-invalid");
+            });
+            if (body.ok) { statusEl.textContent = t("saved", "Saved"); return; }
+            var first = null;
+            Object.keys(body.errors || {}).forEach(function (name) {
+                var field = form.querySelector('[name="' + name + '"]');
+                if (!field || field.type === "radio") return;
+                field.setAttribute("aria-invalid", "true");
+                field.setAttribute("data-autosave-invalid", "");
+                if (!first) first = body.errors[name][0];
+            });
+            statusEl.textContent = t("needs_attention", "Saved, except one answer that needs fixing:") + (first ? " " + first : "");
         }).catch(function () { if (statusEl) statusEl.textContent = t("save_failed", "Couldn't save just now. We'll try again."); });
     }
     form.querySelectorAll("input[type=text], input[type=tel], textarea, input[type=radio]").forEach(function (el) {

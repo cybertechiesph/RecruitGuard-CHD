@@ -41,6 +41,7 @@ from .models import (
     RecruitmentCase,
 )
 from .applicant_hub import applications_for_email, issue_hub_code, verify_hub_code
+from .applicant_contact import display_philippine_mobile_number
 from .applicant_labels import APPLICANT_STATUS_LABELS as _APPLICANT_STATUS_LABELS
 from .applicant_labels import applicant_status_label
 from .requirements import (
@@ -53,6 +54,7 @@ from .requirements import (
     get_applicant_document_requirements,
 )
 from .services import (
+    normalize_applicant_email,
     ApplicationOTPDeliveryError,
     applicant_can_request_withdrawal,
     request_application_withdrawal,
@@ -482,6 +484,16 @@ class ApplicantOTPView(TemplateView):
         )
         context["otp_form"] = kwargs.get("otp_form") or ApplicantOTPForm()
         context["otp_validity_minutes"] = settings.APPLICATION_OTP_VALIDITY_MINUTES
+        # The resend countdown starts from the server's own clock, so the button is never
+        # clickable while the server would still refuse it (and never shows a wrong count).
+        wait = 0
+        if application.otp_requested_at:
+            elapsed = (timezone.now() - application.otp_requested_at).total_seconds()
+            wait = max(0, int(settings.APPLICATION_OTP_RESEND_COOLDOWN_SECONDS - elapsed))
+        context["resend_wait_seconds"] = wait
+        context["has_progress"] = bool(
+            application.qualification_summary or get_document_parts(application).exists()
+        )
         return context
 
     def post(self, request, *args, **kwargs):
@@ -550,6 +562,21 @@ def _grant_draft_access(request, application):
     access = dict(request.session.get(APPLICANT_DRAFT_ACCESS_SESSION_KEY) or {})
     access[str(application.public_token)] = timezone.now().isoformat()
     request.session[APPLICANT_DRAFT_ACCESS_SESSION_KEY] = access
+    _sign_in_hub(request, application.applicant_email)
+
+
+def _sign_in_hub(request, email):
+    """This browser just proved it can read ``email`` (a code), so My Applications opens
+    without asking for the email and another code. An existing sign-in for the same email
+    keeps its original time: opening an application is not a new proof."""
+    email = normalize_applicant_email(email or "")
+    if not email or _hub_email(request) == email:
+        return
+    request.session[APPLICANT_HUB_SESSION_KEY] = {
+        "email": email,
+        "verified_at": timezone.now().isoformat(),
+    }
+    request.session.pop(APPLICANT_HUB_PENDING_SESSION_KEY, None)
 
 
 def _revoke_draft_access(request, application):
@@ -653,11 +680,12 @@ def application_script_strings():
         "your_file": _("your file"),
         "preview_blank": _("If the preview is blank, your device can't show PDFs here. The file is still saved."),
         "preview_failed": _("This file couldn't be shown. It is still saved."),
+        "open_file": _("Open the file"),
         "confirm_drop_rating": _("Remove the performance rating files you added?"),
         "saving": _("Saving…"),
         "session_ended": _("Your session ended. Copy anything you typed, then reload the page to continue."),
         "saved": _("Saved"),
-        "needs_attention": _("Some answers need attention before they can be saved."),
+        "needs_attention": _("Saved, except one answer that needs fixing:"),
         "save_failed": _("Couldn't save just now. We'll try again."),
         "wait_uploads": _("Please wait until your files finish uploading."),
         "submitting": _("Submitting…"),
@@ -677,13 +705,15 @@ class ApplicantApplicationView(ApplicantDraftAccessMixin, TemplateView):
         return {
             "first_name": application.applicant_first_name,
             "last_name": application.applicant_last_name,
-            "phone": application.applicant_phone,
+            "phone": display_philippine_mobile_number(application.applicant_phone),
             "qualification_summary": application.qualification_summary,
             "cover_letter": application.cover_letter,
             "performance_rating_applicability": application.performance_rating_applicability,
         }
 
-    def get_context_data(self, form=None, submit_errors=None, **kwargs):
+    def get_context_data(
+        self, form=None, submit_errors=None, attempted_submit=False, missing_documents=None, **kwargs
+    ):
         context = super().get_context_data(**kwargs)
         application = self.application
         form = form or ApplicantApplicationForm(initial=self._initial(), entry=application.position)
@@ -707,6 +737,8 @@ class ApplicantApplicationView(ApplicantDraftAccessMixin, TemplateView):
                 "required_total": len(required),
                 "required_ready": sum(1 for slot in required if slot["is_ready"]),
                 "submit_errors": submit_errors or [],
+                "attempted_submit": attempted_submit,
+                "missing_documents": missing_documents or [],
                 "deadline_soon": bool(
                     application.position.intake_closes_at
                     and application.position.intake_closes_at - timezone.now() <= timedelta(days=3)
@@ -728,19 +760,18 @@ class ApplicantApplicationView(ApplicantDraftAccessMixin, TemplateView):
                 self.application, PERFORMANCE_RATING, "Marked not applicable by applicant"
             )
 
-    def _save_rating_answer_only(self, value):
-        """Keep the Plantilla rating answer even when another field has an error, so the
-        rating document card on the re-rendered page matches the choice shown."""
-        application = self.application
-        if (
-            application.position.branch != PositionPosting.Branch.PLANTILLA
-            or value not in RecruitmentApplication.PerformanceRatingApplicability.values
-            or value == application.performance_rating_applicability
-        ):
-            return
-        application.performance_rating_applicability = value
-        application.save(update_fields=["performance_rating_applicability", "updated_at"])
+    def _save_answers(self, form):
+        """Save every answer that passed validation, even when another field has an error,
+        so one unfinished or mistyped field never costs the applicant the rest of what they
+        typed (and the rating document card matches the choice shown)."""
+        save_applicant_application_answers(self.application, form.cleaned_data)
         self._apply_performance_rating_choice()
+
+    def _missing_required_documents(self):
+        slots = build_document_slot_states(
+            self.application, performance_rating_applicable=self.performance_rating_applicable()
+        )
+        return [slot for slot in slots if slot["required_now"] and not slot["is_ready"]]
 
     def post(self, request, *args, **kwargs):
         action = request.POST.get("action", "save")
@@ -751,24 +782,27 @@ class ApplicantApplicationView(ApplicantDraftAccessMixin, TemplateView):
             entry=self.application.position,
             require_confirmation=is_submit,
         )
+        is_valid = form.is_valid()
+        self._save_answers(form)
         if action == "autosave":
-            if not form.is_valid():
-                self._save_rating_answer_only(request.POST.get("performance_rating_applicability"))
+            if not is_valid:
                 return JsonResponse(
                     {"ok": False, "errors": {k: [str(e) for e in v] for k, v in form.errors.items()}}
                 )
-            save_applicant_application_answers(self.application, form.cleaned_data)
-            self._apply_performance_rating_choice()
             return JsonResponse({"ok": True})
 
-        if not form.is_valid():
-            self._save_rating_answer_only(request.POST.get("performance_rating_applicability"))
-            return self.render_to_response(self.get_context_data(form=form))
-        save_applicant_application_answers(self.application, form.cleaned_data)
-        self._apply_performance_rating_choice()
         if not is_submit:
+            if not is_valid:
+                return self.render_to_response(self.get_context_data(form=form))
             messages.success(request, _("Your answers were saved. Files are saved as soon as you add them."))
             return redirect("applicant-application", token=self.application.public_token)
+
+        # One round of errors: missing documents are listed together with any form errors.
+        missing = self._missing_required_documents()
+        if not is_valid or missing:
+            return self.render_to_response(
+                self.get_context_data(form=form, attempted_submit=True, missing_documents=missing)
+            )
 
         application = self.application
         application.checklist_privacy_consent = True
@@ -785,7 +819,9 @@ class ApplicantApplicationView(ApplicantDraftAccessMixin, TemplateView):
         try:
             submit_application(application, application.applicant, email_verified_in_session=True)
         except ValueError as exc:
-            return self.render_to_response(self.get_context_data(form=form, submit_errors=[str(exc)]))
+            return self.render_to_response(
+                self.get_context_data(form=form, submit_errors=[str(exc)], attempted_submit=True)
+            )
         purge_applicant_document_parts(application)
         _revoke_draft_access(request, application)
         _mark_status_otp_verified(request, application)
@@ -959,6 +995,7 @@ def _mark_status_otp_verified(request, application):
     stamps[str(application.pk)] = timezone.now().isoformat()
     request.session[STATUS_OTP_VERIFIED_SESSION_KEY] = stamps
     request.session.pop(STATUS_OTP_PENDING_SESSION_KEY, None)
+    _sign_in_hub(request, application.applicant_email)
 
 
 def _pending_status_otp_application(request):
@@ -1260,6 +1297,10 @@ def _hub_rows(email):
                 "awaiting_resubmission": bool(
                     case and case.case_status == RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION
                 ),
+                "withdrawal_requested": bool(
+                    application.withdrawal_requested_at
+                    and application.status != RecruitmentApplication.Status.WITHDRAWN
+                ),
             }
         )
     return rows
@@ -1319,7 +1360,16 @@ class ApplicantMyApplicationsView(View):
                     request.session.pop(APPLICANT_HUB_PENDING_SESSION_KEY, None)
                     return redirect("applicant-my-applications")
             return self._render(request, otp_form=otp_form)
-        if action == "change_email":
+        if action == "resend":
+            pending = request.session.get(APPLICANT_HUB_PENDING_SESSION_KEY)
+            if pending:
+                try:
+                    issue_hub_code(pending)
+                except ValueError as exc:
+                    messages.error(request, str(exc))
+                else:
+                    messages.info(request, _("If this email has applications with us, we sent it a new code."))
+        elif action == "change_email":
             request.session.pop(APPLICANT_HUB_PENDING_SESSION_KEY, None)
         elif action == "sign_out":
             request.session.pop(APPLICANT_HUB_SESSION_KEY, None)
@@ -1372,9 +1422,16 @@ class ApplicantResubmissionView(TemplateView):
     def _missing(self, request):
         messages.error(
             request,
-            _("This link is no longer available. Use Track Application with your Tracking Code and email."),
+            _("This link is no longer available. Open My Applications and enter your email."),
         )
-        return redirect("applicant-status-lookup")
+        return redirect("applicant-my-applications")
+
+    def _email_verified(self, application):
+        # A code entered on this page, or this browser proving the email recently through My
+        # Applications or the status page, so the applicant is not asked for a third code.
+        return application.otp_is_currently_valid or _status_otp_verified_recently(
+            self.request, application
+        )
 
     def get(self, request, *args, **kwargs):
         application = self.get_application()
@@ -1395,7 +1452,13 @@ class ApplicantResubmissionView(TemplateView):
         context["application"] = application
         context["requirements"] = requirements
         context["resubmission_deadline"] = deadline
-        context["otp_verified"] = application.otp_is_currently_valid
+        context["otp_verified"] = self._email_verified(application)
+        context["has_active_code"] = bool(
+            application.otp_hash
+            and application.otp_expires_at
+            and application.otp_expires_at >= timezone.now()
+            and not application.otp_verified_at
+        )
         context["otp_form"] = kwargs.get("otp_form") or ApplicantOTPForm()
         context["resubmission_form"] = kwargs.get("resubmission_form") or DocumentResubmissionForm(
             requirements=requirements, remarks_by_code=remarks_by_code
@@ -1442,6 +1505,7 @@ class ApplicantResubmissionView(TemplateView):
                 except ValueError as exc:
                     otp_form.add_error("otp", str(exc))
                 else:
+                    _mark_status_otp_verified(request, application)
                     messages.success(
                         request,
                         _("Email verified. You can now re-upload the requested documents."),
@@ -1452,7 +1516,8 @@ class ApplicantResubmissionView(TemplateView):
             )
 
         if action == "resubmit":
-            if not application.otp_is_currently_valid:
+            session_verified = _status_otp_verified_recently(request, application)
+            if not (session_verified or application.otp_is_currently_valid):
                 messages.error(request, _("Verify your email before resubmitting your documents."))
                 return redirect("applicant-resubmit", token=application.public_token)
             resubmission_form = DocumentResubmissionForm(
@@ -1464,6 +1529,7 @@ class ApplicantResubmissionView(TemplateView):
                         application,
                         application.applicant,
                         resubmission_form.get_uploads(),
+                        email_verified_in_session=session_verified,
                     )
                 except ValueError as exc:
                     messages.error(request, str(exc))

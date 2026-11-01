@@ -18,7 +18,7 @@
         </div>
         <div class="rg-receipt-print-head__title">{% translate "Application Submission Receipt" %}</div>
         <div class="rg-receipt-print-head__meta">
-            {% blocktranslate trimmed with case=application.case_number_short date=application.submitted_at|date:"F d, Y g:i A" %}
+            {% blocktranslate trimmed with case=application.case_number_short date=application.submitted_at|date:"F j, Y g:i A" %}
             Case No. {{ case }} &middot; Submitted {{ date }}
             {% endblocktranslate %}
         </div>
@@ -45,8 +45,8 @@
         <p class="rg-pub-receipt-id">{{ application.tracking_code }}</p>
         <p style="font-size:0.8125rem; color:#5f6c78; margin:0 0 0.75rem;">
             {% blocktranslate trimmed %}
-            Use this code with your email to track your application online.
-            Treat it like a password &mdash; don't share it.
+            Use this code with your email to check your status, or open My Applications with just your
+            email. Treat the code like a password &mdash; don't share it.
             {% endblocktranslate %}
         </p>
         <button class="btn btn-outline-secondary btn-sm" id="copy-btn" style="margin-bottom:1.25rem;"
@@ -78,7 +78,7 @@
             </div>
             <div class="rg-pub-review-row">
                 <dt>{% translate "Submitted" %}</dt>
-                <dd>{% blocktranslate with date=application.submitted_at|date:"F d, Y" time=application.submitted_at|date:"g:i A" %}{{ date }} at {{ time }}{% endblocktranslate %}</dd>
+                <dd>{% blocktranslate with date=application.submitted_at|date:"F j, Y" time=application.submitted_at|date:"g:i A" %}{{ date }} at {{ time }}{% endblocktranslate %}</dd>
             </div>
             <div class="rg-pub-review-row">
                 <dt>{% translate "Email" %}</dt>
@@ -109,15 +109,15 @@
         <ol style="padding-left:1.25rem; margin:0; font-size:0.9375rem; color:#374151; line-height:1.7;">
             <li>{% translate "Your application will be reviewed by our recruitment team." %}</li>
             <li>{% translate "You may be contacted at your email or phone number for updates or additional requirements." %}</li>
-            <li>{% translate "You can check your application status anytime using your Tracking Code." %}</li>
+            <li>{% translate "Check your status anytime on My Applications &mdash; just your email, no tracking code needed." %}</li>
         </ol>
     </div>
 
     {# Reminder box #}
     <div class="rg-pub-info-box rg-pub-info-box--warning" style="margin-bottom:1.5rem;">
         <p>
-            <strong>{% translate "Save your Tracking Code and keep it private." %}</strong>
-            {% translate "You will need it to check your application status online." %}
+            <strong>{% translate "Keep your Tracking Code private." %}</strong>
+            {% translate "Staff will never ask for it. If you contact the office, give your case number instead." %}
         </p>
         <p>
             {% blocktranslate trimmed with email=application.applicant_email %}
@@ -136,14 +136,11 @@
         </a>
         <a href="{% url 'applicant-status-link' application.public_token %}"
            class="btn btn-outline-secondary btn-lg">
-            {% translate "Track My Application" %}
+            {% translate "Check my status" %}
         </a>
         <button type="button" class="btn btn-outline-secondary btn-lg" onclick="window.print()">
             {% translate "Print Receipt" %}
         </button>
-        <a href="{% url 'applicant-my-applications' %}" class="btn btn-outline-secondary btn-lg">
-            {% translate "My Applications" %}
-        </a>
         <a href="{% url 'applicant-portal' %}" class="btn btn-outline-secondary btn-lg">
             {% translate "Back to Job Openings" %}
         </a>

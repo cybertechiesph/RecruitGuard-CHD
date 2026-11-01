@@ -15,7 +15,7 @@
 
 <div class="rg-pub-wrap rg-help-wrap rg-pds-guide">
 
-    <nav class="rg-pub-breadcrumb" aria-label="Breadcrumb">
+    <nav class="rg-pub-breadcrumb" aria-label="{% translate 'Breadcrumb' %}">
         {% url 'applicant-portal' as link6 %}{% url 'applicant-help' as link7 %}{% blocktranslate trimmed %}<a href="{{ link6 }}">Home</a>
         <span class="rg-pub-breadcrumb__sep" aria-hidden="true">/</span>
         <a href="{{ link7 }}">Help</a>
@@ -335,7 +335,7 @@
         </div>
     </section>
 
-    <aside class="rg-pub-help-box" aria-label="Still need help">
+    <aside class="rg-pub-help-box" aria-label="{% translate 'Still need help' %}">
         <div class="rg-pub-help-box__body">
             <p class="rg-pub-help-box__title">{% blocktranslate trimmed %}Still stuck?{% endblocktranslate %}</p>
             <p class="rg-pub-help-box__copy">

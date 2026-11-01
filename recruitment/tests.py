@@ -4294,7 +4294,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         form = response.context["form"]
         self.assertEqual(form["first_name"].value(), "Maria")
         self.assertEqual(form["last_name"].value(), "Santos")
-        self.assertEqual(form["phone"].value(), "+639991234567")
+        self.assertEqual(form["phone"].value(), "0999 123 4567")  # shown the way applicants write it
         self.assertEqual(form["qualification_summary"].value(), "Saved qualification summary.")
         self.assertEqual(form["cover_letter"].value(), "Saved cover letter note.")
         self.assertEqual(
@@ -4643,7 +4643,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         )
 
         application.refresh_from_db()
-        self.assertContains(response, "The verification code is invalid.")
+        self.assertContains(response, "That code doesn&#x27;t match.")
         self.assertIsNone(application.otp_verified_at)
 
     @override_settings(APPLICATION_OTP_MAX_ATTEMPTS=2)
@@ -4661,7 +4661,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
             {"action": "verify", "otp": "000000"},
             follow=True,
         )
-        self.assertContains(response, "The verification code is invalid.")
+        self.assertContains(response, "That code doesn&#x27;t match.")
 
         response = client.post(
             reverse("applicant-otp", kwargs={"token": application.public_token}),
@@ -4928,7 +4928,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
 
         response = self.submit_portal_draft(client, application)
 
-        self.assertContains(response, "Add all required documents before you submit.")
+        self.assertContains(response, "Missing document:")
         self.assertContains(response, f'href="#doc-{missing_code}"')
         application.refresh_from_db()
         self.assertIsNone(application.submitted_at)
@@ -5078,7 +5078,8 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
 
         response = self.submit_portal_draft(client, application)
 
-        self.assertContains(response, "Add all required documents before you submit.")
+        self.assertContains(response, "Missing document:")
+        self.assertContains(response, 'href="#doc-performance_rating"')
         performance_slot = next(
             slot for slot in response.context["slots"] if slot["code"] == "performance_rating"
         )
@@ -12588,7 +12589,7 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         self.assertIn("Upload a signed and readable copy.", mail.outbox[0].body)
         self.assertIn("Please resubmit the corrected document.", mail.outbox[0].body)
         self.assertIn(
-            reverse("applicant-status-link", kwargs={"token": application.public_token}),
+            reverse("applicant-resubmit", kwargs={"token": application.public_token}),
             mail.outbox[0].body,
         )
 
@@ -13157,7 +13158,7 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         self.assertIn("Upload a signed and readable copy.", body)
         self.assertIn("Please resubmit the corrected document.", body)
         self.assertIn(
-            reverse("applicant-status-link", kwargs={"token": application.public_token}),
+            reverse("applicant-resubmit", kwargs={"token": application.public_token}),
             body,
         )
 
@@ -21760,9 +21761,28 @@ class StepByStepApplicantIntakeTests(BaseRecruitmentTestCase):
         client, application = self.verified_client("links@example.com")
         response = client.post(
             reverse("applicant-application", kwargs={"token": application.public_token}),
-            {**self.answers(first_name=""), "action": "save"},
+            {**self.answers(first_name=""), "action": "submit"},
         )
         self.assertContains(response, 'href="#id_first_name"')
+
+    def test_save_keeps_valid_answers_when_another_is_blank_or_wrong(self):
+        client, application = self.verified_client("partial.save@example.com")
+        url = reverse("applicant-application", kwargs={"token": application.public_token})
+        # A blank summary is fine for a draft: "Save and finish later" just saves.
+        response = client.post(url, {**self.answers(qualification_summary=""), "action": "save"})
+        self.assertEqual(response.status_code, 302)
+        original_phone = RecruitmentApplication.objects.get(pk=application.pk).applicant_phone
+        self.assertEqual(original_phone, "+639171234567")
+        # A mistyped number is refused, but the rest of what was typed is kept.
+        response = client.post(
+            url,
+            {**self.answers(phone="12345", cover_letter="Kept even though the number is wrong."), "action": "save"},
+        )
+        self.assertContains(response, "Some answers could not be saved. Everything else was saved.")
+        self.assertNotContains(response, "Your application was not submitted yet.")
+        application.refresh_from_db()
+        self.assertEqual(application.cover_letter, "Kept even though the number is wrong.")
+        self.assertEqual(application.applicant_phone, original_phone)
 
     def test_wrong_code_says_how_many_tries_are_left(self):
         client = Client()
@@ -21774,7 +21794,7 @@ class StepByStepApplicantIntakeTests(BaseRecruitmentTestCase):
             reverse("applicant-otp", kwargs={"token": application.public_token}),
             {"action": "verify", "otp": wrong},
         )
-        self.assertContains(response, "The verification code is invalid. You have")
+        self.assertContains(response, "That code doesn&#x27;t match. Check the latest email from us and try again. You have")
         self.assertContains(response, "left.")
         self.assertNotContains(response, "before final submission")
 
@@ -21973,6 +21993,8 @@ class ApplicantPortalPolishTests(BaseRecruitmentTestCase):
         reusable = slots["personal_data_sheet"]["reusable"]
         self.assertIsNotNone(reusable)
         self.assertContains(page, "Use this file")
+        # The signed letter names the earlier position, so it is never offered.
+        self.assertIsNone(slots["signed_cover_letter"]["reusable"])
 
         reuse_url = reverse(
             "applicant-document-reuse",
@@ -22151,7 +22173,7 @@ class MyApplicationsAndLanguageEmailTests(BaseRecruitmentTestCase):
         client = Client()
         client.post(self.hub_url(), {"action": "request", "email": "hub.guard@example.com"})
         response = client.post(self.hub_url(), {"action": "verify", "otp": "000000"})
-        self.assertContains(response, "The verification code is invalid.")
+        self.assertContains(response, "That code doesn&#x27;t match.")
         self.assertNotContains(response, "data-hub-list")
 
     def test_someone_elses_application_cannot_be_opened_from_the_hub(self):

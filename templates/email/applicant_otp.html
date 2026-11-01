@@ -21,7 +21,7 @@
     </p>
     {% if otp_expires_at %}
     <p style="margin:6px 0 0; color:#7b8794; font-size:12px; line-height:1.5; text-align:center;">
-        {% blocktranslate trimmed with time=otp_expires_at|date:"M d, Y h:i A" %}Valid until {{ time }}.{% endblocktranslate %}
+        {% blocktranslate trimmed with time=otp_expires_at|date:"M j, Y g:i A" %}Valid until {{ time }} (Philippine time).{% endblocktranslate %}
     </p>
     {% endif %}
 

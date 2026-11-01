@@ -212,6 +212,36 @@ After a full applicant walkthrough:
     "Lost your tracking code?"), and My Applications is highlighted on it.
   - The home page button and "How it works" point to My Applications.
 
+## Second full walkthrough fixes (November 2026)
+A second end-to-end walkthrough (English and Filipino, phone size) found these, all fixed:
+- **Drafts save what they can.** Name, mobile number and summary are only required at Submit.
+  Autosave and "Save and finish later" keep every valid answer, never blank a stored name or
+  number, and say "Some answers could not be saved" (not "not submitted yet").
+- **One round of Submit errors.** Missing documents are listed by name, with links, together
+  with any form errors. Fields with errors get a red edge (`aria-invalid`).
+- **No more "you need your tracking code".** Receipt page and PDF, the confirmation and
+  resubmission emails, Help, and the status page all point to My Applications. Emails say
+  "Case No." instead of "Application ID". The resubmission email links straight to the upload
+  page.
+- **Reuse never offers the signed letter:** it names the job it was written for.
+- **Fewer codes.** Verifying any code in a browser signs it into My Applications. The resubmit
+  page accepts a recent verification from My Applications or the status page instead of asking
+  for a third code. It also has a "take a photo" picker, a back link and the HRMU contact.
+- **Small fixes:**
+  - The resend countdown comes from the server.
+  - First-timers get their own code-page wording, and the wrong-code message is friendlier.
+  - An old-PDS or photo warning goes away when its file is removed.
+  - The PDF preview has an "Open the file" link.
+  - Mobile numbers show as "0917 555 0101".
+  - Dates have no leading zero, and the code expiry says "(Philippine time)".
+  - The hub shows "Withdrawal requested", its code screen has Spam/resend help, and its email
+    subject names the office.
+- **Receipt PDF in the applicant's language.** Filipino Help quotes the real Filipino button
+  names, and the header says "Republika ng Pilipinas".
+- **Cleanup:** removed a duplicated block in `recruitment/forms.py`. A copy of the
+  internal/applicant forms (about 435 lines) had been pasted in twice by the i18n commit; the
+  second copy silently replaced the first.
+
 ## Still needs people (not code)
 - Test on real phones (a cheap Android on mobile data, an iPhone), including inside Facebook.
 - A 5-person usability test with people who have never seen the portal.

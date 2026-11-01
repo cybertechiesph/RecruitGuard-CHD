@@ -37,7 +37,7 @@ from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 
 from .models import ApplicantDocumentPart, AuditLog, EvidenceVaultItem, RecruitmentCase
-from .requirements import get_applicant_document_requirements
+from .requirements import SIGNED_COVER_LETTER, get_applicant_document_requirements
 from .services import (
     ARTIFACT_TYPE_APPLICANT_DOCUMENT,
     _archive_applicant_document_key,
@@ -344,12 +344,22 @@ def rebuild_applicant_document(application, requirement):
     return evidence
 
 
+NON_REUSABLE_DOCUMENT_KEYS = frozenset({SIGNED_COVER_LETTER})
+
+
 def get_reusable_documents(application):
     """{document_key: EvidenceVaultItem}: for each of this draft's requirements, the newest
     current document the SAME applicant (same verified email identity) already submitted in
     another application. Lets someone applying to several vacancies skip re-uploading their
-    PDS, diploma, etc. Documents still out for correction elsewhere are not offered."""
-    codes = {requirement.code for requirement in get_applicant_document_requirements(application.position)}
+    PDS, diploma, etc. Documents still out for correction elsewhere are not offered.
+
+    The signed cover/application letter is never offered: it names the position it was
+    written for, so reusing it would send a letter for the wrong job."""
+    codes = {
+        requirement.code
+        for requirement in get_applicant_document_requirements(application.position)
+        if requirement.code not in NON_REUSABLE_DOCUMENT_KEYS
+    }
     items = (
         EvidenceVaultItem.objects.filter(
             application__applicant=application.applicant,

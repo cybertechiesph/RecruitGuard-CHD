@@ -18,3 +18,13 @@ def normalize_philippine_mobile_number(value):
     if _APPLICANT_INTERNATIONAL_MOBILE_RE.fullmatch(compact_value):
         return compact_value if compact_value.startswith("+") else f"+{compact_value}"
     raise ValueError(APPLICANT_MOBILE_ERROR_MESSAGE)
+
+
+def display_philippine_mobile_number(value):
+    """+639171234567 -> "0917 123 4567", the way applicants write it (and the hint shows).
+    Anything that is not a stored PH mobile number is returned unchanged."""
+    value = (value or "").strip()
+    if len(value) == 13 and value.startswith("+639") and value[1:].isdigit():
+        local = "0" + value[3:]
+        return f"{local[:4]} {local[4:7]} {local[7:]}"
+    return value

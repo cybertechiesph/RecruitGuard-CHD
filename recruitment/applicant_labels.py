@@ -47,7 +47,7 @@ APPLICANT_STATUS_LABELS = {
     RecruitmentApplication.Status.RETURNED_TO_APPLICANT: (
         _("Action Required"),
         "returned",
-        _("Your application has been returned. Please check your email for instructions on what to do next."),
+        _("Something in your application needs your action. See “What you need to do” below."),
     ),
     RecruitmentApplication.Status.APPROVED: (
         _("Approved"),

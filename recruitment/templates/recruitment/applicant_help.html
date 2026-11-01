@@ -53,7 +53,9 @@
                     <div class="accordion-body rg-faq__body">
                         <p>{% blocktranslate trimmed %}Yes. Your answers are saved as you type, and each document is saved the moment it
                         finishes uploading. You can close the page at any time.{% endblocktranslate %}</p>
-                        <p>{% blocktranslate trimmed %}To come back, open the <strong>verification email</strong> we sent you and tap
+                        <p>{% url 'applicant-my-applications' as link_hub %}{% blocktranslate trimmed %}To come back, open
+                        <a href="{{ link_hub }}">My Applications</a> and enter your email, or open the
+                        <strong>verification email</strong> we sent you and tap
                         <strong>&ldquo;Continue your application&rdquo;</strong>. We&rsquo;ll send a fresh code
                         to confirm it&rsquo;s you, then everything you added is waiting. Remember to submit before
                         the application deadline.{% endblocktranslate %}</p>
@@ -312,11 +314,11 @@
                 </h3>
                 <div id="faq-s2" class="accordion-collapse collapse" aria-labelledby="faq-s2-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>{% blocktranslate trimmed %}Yes. Your Tracking Code was sent to your email when you submitted &mdash; search your
-                        inbox (and Spam folder) for messages from us. The subject line includes &ldquo;DOH–CHD CALABARZON Recruitment Portal&rdquo;.{% endblocktranslate %}</p>
-                        <p>{% blocktranslate trimmed %}If you still can&rsquo;t find it, contact the HRMU (below) with your
-                        full name, the position you applied for, and the email address you used. We&rsquo;ll look it
-                        up for you.{% endblocktranslate %}</p>
+                        <p>{% url 'applicant-my-applications' as link_hub %}{% blocktranslate trimmed %}You don&rsquo;t need it. Open
+                        <a href="{{ link_hub }}">My Applications</a> and enter the email you applied with. We send you a
+                        6-digit code, then you see every application you made, with its status and receipt.{% endblocktranslate %}</p>
+                        <p>{% blocktranslate trimmed %}Your Tracking Code is also in the confirmation email we sent when you submitted. Its
+                        subject line includes &ldquo;DOH–CHD CALABARZON Recruitment Portal&rdquo;.{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -371,7 +373,7 @@
                     <div class="accordion-body rg-faq__body">
                         <p>{% url 'applicant-status-lookup' as link4 %}{% blocktranslate trimmed %}Yes &mdash; but only someone you trust. A family member with your Tracking Code and the
                         email address you used can check your status on the
-                        <a href="{{ link4 }}">Track Application</a> page. This is useful if
+                        <a href="{{ link4 }}">tracking code page</a>. This is useful if
                         you&rsquo;re overseas (OFW) or working in an area without good internet. Share the code only
                         with someone checking on your behalf.{% endblocktranslate %}</p>
                         <p>{% blocktranslate trimmed %}The status page does not show personal information beyond your name and the position. We
@@ -390,9 +392,10 @@
                 </h3>
                 <div id="faq-s6" class="accordion-collapse collapse" aria-labelledby="faq-s6-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>{% blocktranslate trimmed %}The Track Application page does not yet show your uploaded documents back to you. If you
-                        want to confirm what we received, contact the HRMU with your case
-                        number and we&rsquo;ll send you a list of the files attached to your application.{% endblocktranslate %}</p>
+                        <p>{% url 'applicant-my-applications' as link_hub %}{% blocktranslate trimmed %}You can see the list. Your receipt names
+                        every file we received &mdash; open <a href="{{ link_hub }}">My Applications</a> and tap
+                        <strong>Receipt (PDF)</strong>. For your privacy, the files themselves are not shown again online.
+                        If something looks wrong, contact the HRMU with your case number.{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -407,10 +410,11 @@
                 </h3>
                 <div id="faq-s7" class="accordion-collapse collapse" aria-labelledby="faq-s7-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>{% blocktranslate trimmed %}This means our recruitment team has sent your application back because something needs
-                        to be addressed &mdash; for example, a missing document or additional information.
-                        Check your email for instructions. If you didn&rsquo;t receive an email, contact the Public
-                        Assistance Desk (below) with your case number.{% endblocktranslate %}</p>
+                        <p>{% blocktranslate trimmed %}It means something in your application needs your action &mdash; usually a document
+                        that has to be corrected. Open your status page (from My Applications or the link in our email)
+                        and follow &ldquo;What you need to do&rdquo;. If documents were returned, tap
+                        <strong>Resubmit documents</strong> there. Questions? Contact the HRMU (below) with your case
+                        number.{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -437,7 +441,7 @@
 
 
     {# ── Contact card: the HRMU handles questions about applications ── #}
-    <aside class="rg-help-pad" aria-label="Contact the Human Resource Management Unit">
+    <aside class="rg-help-pad" aria-label="{% translate 'Contact the Human Resource Management Unit' %}">
         <p class="rg-help-pad__title">{% blocktranslate trimmed %}Still have questions? We&rsquo;re here to help.{% endblocktranslate %}</p>
         <div class="rg-help-pad__grid">
             <div class="rg-help-pad__channel">

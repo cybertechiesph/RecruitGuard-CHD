@@ -5118,3 +5118,15 @@ a.rg-sched-event__title { color: var(--rg-brand-green); }
 .rg-hub-item__actions .btn { min-height: 40px; display: inline-flex; align-items: center; }
 
 .rg-hub-alt { margin: 0.75rem 0 0; font-size: 0.9rem; color: #4b5563; text-align: center; }
+
+/* Fields the server (or autosave) refused get a visible red edge, so "fix the highlighted
+   fields" points at something; Django marks them with aria-invalid. */
+.applicant-portal-body .form-control[aria-invalid="true"],
+.applicant-portal-body .form-select[aria-invalid="true"] {
+    border-color: #b42318;
+    box-shadow: 0 0 0 0.2rem rgba(180, 35, 24, 0.12);
+}
+.applicant-portal-body .form-check-input[aria-invalid="true"] {
+    border-color: #b42318;
+    box-shadow: 0 0 0 0.2rem rgba(180, 35, 24, 0.12);
+}

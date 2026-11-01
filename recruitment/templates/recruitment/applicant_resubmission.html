@@ -19,7 +19,7 @@
     </p>
     {% if resubmission_deadline %}
         <div class="alert alert-warning" role="status">
-            {% blocktranslate trimmed with date=resubmission_deadline|date:"F d, Y" %}
+            {% blocktranslate trimmed with date=resubmission_deadline|date:"F j, Y" %}
             Please resubmit on or before <strong>{{ date }}</strong>.
             {% endblocktranslate %}
         </div>
@@ -41,26 +41,36 @@
         {# Step 1 — verify the applicant by email before allowing re-upload. #}
         <div class="card p-4 mb-3">
             <h2 class="h6">{% translate "Step 1 — Verify your email" %}</h2>
+            {% if has_active_code %}
+            <p class="rg-note">
+                {% blocktranslate trimmed with email=application.applicant_email %}
+                Enter the 6-digit code we sent to <strong>{{ email }}</strong>.
+                {% endblocktranslate %}
+            </p>
+            <form method="post" novalidate>
+                {% csrf_token %}
+                {% include "recruitment/includes/form_field.html" with field=otp_form.otp %}
+                <button type="submit" name="action" value="verify" class="btn btn-rg-primary mt-2">{% translate "Verify code" %}</button>
+            </form>
+            <p class="rg-note mt-3 mb-1">{% translate "Didn&rsquo;t receive the code? Check your Spam or Junk Mail folder." %}</p>
+            <form method="post">
+                {% csrf_token %}
+                <button type="submit" name="action" value="resend" class="btn btn-outline-secondary btn-sm">{% translate "Resend the code" %}</button>
+            </form>
+            {% else %}
             <p class="rg-note">
                 {% blocktranslate trimmed with minutes=otp_validity_minutes email=application.applicant_email %}
                 We will send a {{ minutes }}-minute verification code to
                 <strong>{{ email }}</strong>.
                 {% endblocktranslate %}
             </p>
-            <form method="post" class="mb-2">
+            <form method="post">
                 {% csrf_token %}
                 <button type="submit" name="action" value="request_otp" class="btn btn-rg-primary">
                     {% translate "Send verification code" %}
                 </button>
             </form>
-            <form method="post">
-                {% csrf_token %}
-                {% include "recruitment/includes/form_field.html" with field=otp_form.otp %}
-                <div class="d-flex gap-2 mt-2">
-                    <button type="submit" name="action" value="verify" class="btn btn-rg-primary">{% translate "Verify code" %}</button>
-                    <button type="submit" name="action" value="resend" class="btn btn-outline-secondary">{% translate "Resend code" %}</button>
-                </div>
-            </form>
+            {% endif %}
         </div>
     {% else %}
         {# Step 2 — re-upload only the flagged documents. #}
@@ -81,6 +91,9 @@
                             {% if field.field.resubmission_remarks %}{{ field.field.resubmission_remarks }}{% else %}{% translate "The recruitment team asked for a clearer copy of this document." %}{% endif %}
                         </div>
                         {% include "recruitment/includes/form_field.html" with field=field %}
+                        {# Same field name, so photos taken here are sent with the files picked above. #}
+                        <label class="form-label rg-note mt-2 mb-1" for="{{ field.id_for_label }}_camera">{% translate "Or take a photo with your phone:" %}</label>
+                        <input type="file" class="form-control" id="{{ field.id_for_label }}_camera" name="{{ field.html_name }}" accept="image/*" capture="environment">
                         {% include "recruitment/includes/requirement_downloads.html" with downloads=field.field.requirement_downloads compact=True %}
                     </div>
                 {% endfor %}
@@ -94,5 +107,18 @@
             </form>
         </div>
     {% endif %}
+
+    {% office_contact as contact %}
+    <p class="rg-note">
+        {% blocktranslate trimmed with email=contact.hrmu.email phone=contact.hrmu.phone %}
+        Questions about what to fix? Contact the HRMU at {{ phone }} or
+        <a href="mailto:{{ email }}">{{ email }}</a> and give your case number.
+        {% endblocktranslate %}
+    </p>
+    <div class="rg-pub-back-row">
+        <a href="{% url 'applicant-status-link' token=application.public_token %}" class="rg-pub-back">
+            &larr; {% translate "Back to my application status" %}
+        </a>
+    </div>
 </div>
 {% endblock %}
