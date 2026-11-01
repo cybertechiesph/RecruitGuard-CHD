@@ -106,7 +106,6 @@ from .permissions import WORKFLOW_PROCESSOR_ROLES
 from .requirements import (
     APPLICANT_DOCUMENT_REQUIREMENTS_BY_BRANCH,
     MIN_REQUIRED_DOCUMENT_CODES,
-    PERFORMANCE_RATING,
     get_applicant_document_requirements,
     get_required_applicant_document_requirements,
 )
@@ -8415,152 +8414,6 @@ def _archive_applicant_document_key(application, document_key, actor, archive_ta
     return evidence_items
 
 
-def _upsert_public_application_draft(
-    entry,
-    cleaned_data,
-    requirement_uploads,
-    *,
-    issue_otp=False,
-    created_description="Applicant created an accountless application draft.",
-    updated_description="Applicant reused and refreshed an existing accountless application draft.",
-):
-    applicant_email = normalize_applicant_email(cleaned_data["email"])
-    existing_submitted_application = RecruitmentApplication.objects.filter(
-        position=entry,
-        applicant_email__iexact=applicant_email,
-        submitted_at__isnull=False,
-    ).exclude(status__in=REAPPLICATION_ELIGIBLE_TERMINAL_STATUSES).exists()
-    if existing_submitted_application:
-        raise ValueError(
-            "You have already submitted an application for this position using this email address."
-        )
-
-    applicant_user = get_portal_applicant_identity_by_email(applicant_email)
-    application = None
-    if applicant_user is not None:
-        application = get_reusable_public_application_for_applicant(entry, applicant_user)
-        if application and application.submitted_at:
-            raise ValueError(
-                "You have already submitted an application for this position using this email address."
-            )
-    if application is None:
-        application = get_reusable_public_application_draft(entry, applicant_email)
-    created = application is None
-    if application is None:
-        if applicant_user is None:
-            applicant_user = create_portal_applicant_identity(
-                first_name=cleaned_data["first_name"],
-                last_name=cleaned_data["last_name"],
-                email=applicant_email,
-                phone=cleaned_data["phone"],
-            )
-        else:
-            _sync_portal_applicant_identity(
-                applicant_user,
-                first_name=cleaned_data["first_name"],
-                last_name=cleaned_data["last_name"],
-                email=applicant_email,
-            )
-        application = RecruitmentApplication(applicant=applicant_user, position=entry)
-    else:
-        applicant_user = application.applicant
-        _sync_portal_applicant_identity(
-            applicant_user,
-            first_name=cleaned_data["first_name"],
-            last_name=cleaned_data["last_name"],
-            email=applicant_email,
-        )
-
-    application.applicant = applicant_user
-    application.position = entry
-    application.status = RecruitmentApplication.Status.DRAFT
-    application.current_handler_role = ""
-    application.qualification_summary = cleaned_data["qualification_summary"]
-    application.cover_letter = cleaned_data.get("cover_letter", "")
-    application.applicant_first_name = cleaned_data["first_name"]
-    application.applicant_last_name = cleaned_data["last_name"]
-    application.applicant_email = applicant_email
-    application.applicant_phone = cleaned_data["phone"]
-    application.performance_rating_applicability = (
-        cleaned_data.get("performance_rating_applicability")
-        or application.performance_rating_applicability
-    )
-    application.checklist_privacy_consent = bool(
-        cleaned_data.get("checklist_privacy_consent")
-    )
-    application.checklist_documents_complete = bool(
-        cleaned_data.get("checklist_documents_complete")
-    )
-    application.checklist_information_certified = bool(
-        cleaned_data.get("checklist_information_certified")
-    )
-    application.submission_hash = ""
-    application.submitted_at = None
-    application.closed_at = None
-    try:
-        application.save()
-    except IntegrityError as exc:
-        if "unique_active_application_per_applicant_position" not in str(exc):
-            raise
-        raise ValueError(
-            "An application for this recruitment entry already exists for this applicant."
-        ) from exc
-    if (
-        application.performance_rating_applicability
-        == RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
-    ):
-        requirement_uploads.pop(PERFORMANCE_RATING, None)
-        _archive_applicant_document_key(
-            application,
-            PERFORMANCE_RATING,
-            applicant_user,
-            "Marked not applicable by applicant",
-        )
-    requirement_catalog = {
-        requirement.code: requirement
-        for requirement in get_applicant_document_requirements(entry)
-    }
-    for requirement_code, uploaded_file in requirement_uploads.items():
-        requirement = requirement_catalog[requirement_code]
-        upload_evidence_item(
-            application=application,
-            actor=applicant_user,
-            label=requirement.title,
-            uploaded_file=uploaded_file,
-            document_key=requirement.code,
-            artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
-            artifact_type=ARTIFACT_TYPE_APPLICANT_DOCUMENT,
-        )
-    record_audit_event(
-        application=application,
-        actor=applicant_user,
-        action=AuditLog.Action.APPLICATION_CREATED if created else AuditLog.Action.APPLICATION_UPDATED,
-        description=created_description if created else updated_description,
-        metadata={
-            "public_token": str(application.public_token),
-            "reused_draft": not created,
-            "applicant_identity_id": applicant_user.id,
-            "saved_requirement_codes": sorted(requirement_uploads.keys()),
-            "otp_requested": bool(issue_otp),
-        },
-    )
-    if issue_otp:
-        issue_application_otp(application, actor=applicant_user)
-    return application
-
-
-@transaction.atomic
-def save_public_application_draft_progress(entry, cleaned_data, requirement_uploads):
-    return _upsert_public_application_draft(
-        entry,
-        cleaned_data,
-        requirement_uploads,
-        issue_otp=False,
-        created_description="Applicant saved valid requirement-coded files to a draft while correcting the form.",
-        updated_description="Applicant updated a draft with valid requirement-coded files while correcting the form.",
-    )
-
-
 def _hash_application_otp(application, otp_code):
     payload = "|".join(
         [
@@ -8853,27 +8706,14 @@ def verify_application_otp(application, otp_code, actor=None, purpose="editing")
 
 
 @transaction.atomic
-def create_public_application_draft(entry, cleaned_data, requirement_uploads):
-    if not entry.is_open_for_intake:
-        raise ValueError("The selected recruitment entry is not currently open for intake.")
-    return _upsert_public_application_draft(
-        entry,
-        cleaned_data,
-        requirement_uploads,
-        issue_otp=False,
-    )
-
-
-@transaction.atomic
 def start_public_application_draft(entry, cleaned_data):
     """Step 1 of the redesigned intake: find or create the applicant's draft from their name,
     e-mail and mobile number only, before the e-mail is verified.
 
     An existing unsubmitted draft for the same e-mail is returned UNCHANGED. Until the code
     sent to that inbox is verified, nobody has shown they own the address, so a stranger who
-    types someone else's e-mail must not be able to rewrite that person's draft (the
-    one-request flow updates the draft first and verifies afterwards). The owner can correct
-    their details on the application page once verified."""
+    types someone else's e-mail must not be able to rewrite that person's draft. The owner
+    can correct their details on the application page once verified."""
     if not entry.is_open_for_intake:
         raise ValueError("The selected recruitment entry is not currently open for intake.")
     applicant_email = normalize_applicant_email(cleaned_data["email"])
@@ -9325,7 +9165,8 @@ def submit_application(application, actor, *, email_verified_in_session=False):
     lets the applicant work on the application for as long as their browser session stays
     verified (it lapses after the normal inactivity timeout). The view passes True only when
     that session marker is present; the email must still have been verified for this draft.
-    The one-request flow keeps the stricter "code verified within its validity window" rule."""
+    Without it (direct service calls), the stricter "code verified within its validity
+    window" rule applies."""
     if application.applicant_id != actor.id:
         raise ValueError("Only the owning applicant can submit this application.")
     if not application.is_editable_by_applicant:

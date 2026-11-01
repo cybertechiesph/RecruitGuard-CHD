@@ -45,8 +45,9 @@ from .forms import (
     APPLICANT_NAME_MAX_LENGTH,
     APPLICANT_QUALIFICATION_SUMMARY_LENGTH_ERROR_MESSAGE,
     APPLICANT_QUALIFICATION_SUMMARY_MAX_LENGTH,
+    ApplicantApplicationForm,
     ApplicantOTPForm,
-    ApplicantPortalIntakeForm,
+    ApplicantStartForm,
     CaseHandoffForm,
     ExamRecordForm,
     FinalSelectionForm,
@@ -112,6 +113,7 @@ from .requirements import (
     get_required_applicant_document_requirements,
 )
 from .services import (
+    get_current_applicant_document_map,
     ARTIFACT_TYPE_COMPARATIVE_ASSESSMENT_REPORT,
     IDENTIFIER_GENERATION_RETRIES,
     assign_candidate_code,
@@ -437,6 +439,128 @@ class BaseRecruitmentTestCase(TestCase):
                 payload,
                 **kwargs,
             )
+
+    # -- the step-by-step applicant portal (details -> verify -> documents -> submit) --
+    def real_pdf_upload(self, label, filename=None):
+        """A small, genuinely parseable PDF (the portal opens every uploaded PDF)."""
+        from reportlab.pdfgen import canvas as rl_canvas
+
+        buffer = io.BytesIO()
+        pdf = rl_canvas.Canvas(buffer)
+        pdf.drawString(72, 720, f"Test document: {label}")
+        pdf.showPage()
+        pdf.save()
+        return SimpleUploadedFile(
+            filename or f"{label}.pdf", buffer.getvalue(), content_type="application/pdf"
+        )
+
+    def start_portal_draft(self, client, position, email, **details):
+        """Step 1: name, email, mobile and consent. Emails a code; returns the response."""
+        payload = {
+            "first_name": "Pat",
+            "last_name": "Applicant",
+            "email": email,
+            "phone": "09171234567",
+            "privacy_consent": "on",
+        }
+        payload.update(details)
+        return self.post_portal_intake(client, position, payload)
+
+    def verify_portal_draft(self, client, application):
+        """Step 2: enter the code from the last email (gives this client the draft)."""
+        return client.post(
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            {"action": "verify", "otp": self.extract_otp_from_last_email()},
+        )
+
+    def portal_answers(self, position, **overrides):
+        answers = {
+            "first_name": "Pat",
+            "last_name": "Applicant",
+            "phone": "09171234567",
+            "qualification_summary": "Qualified applicant with complete supporting credentials.",
+            "cover_letter": "Please consider this application.",
+            "performance_rating_applicability": (
+                RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
+                if position.branch == PositionPosting.Branch.COS
+                else RecruitmentApplication.PerformanceRatingApplicability.APPLICABLE
+            ),
+        }
+        answers.update(overrides)
+        return answers
+
+    def save_portal_answers(self, client, application, **overrides):
+        return client.post(
+            reverse("applicant-application", kwargs={"token": application.public_token}),
+            {**self.portal_answers(application.position, **overrides), "action": "autosave"},
+        )
+
+    def upload_portal_document(self, client, application, code, uploaded_file=None):
+        return client.post(
+            reverse(
+                "applicant-document-part-upload",
+                kwargs={"token": application.public_token, "code": code},
+            ),
+            {"file": uploaded_file or self.real_pdf_upload(f"{application.pk}-{code}")},
+        )
+
+    def upload_required_portal_documents(self, client, application, skip=()):
+        from recruitment.applicant_documents import build_document_slot_states
+
+        application.refresh_from_db()
+        rating_applies = (
+            application.position.branch == PositionPosting.Branch.PLANTILLA
+            and application.performance_rating_applicability
+            == RecruitmentApplication.PerformanceRatingApplicability.APPLICABLE
+        )
+        codes = [
+            slot["code"]
+            for slot in build_document_slot_states(
+                application, performance_rating_applicable=rating_applies
+            )
+            if slot["required_now"] and slot["code"] not in skip
+        ]
+        for code in codes:
+            response = self.upload_portal_document(client, application, code)
+            self.assertEqual(response.status_code, 200, response.content)
+        return codes
+
+    def submit_portal_draft(self, client, application, **answer_overrides):
+        with self.captureOnCommitCallbacks(execute=True):
+            return client.post(
+                reverse("applicant-application", kwargs={"token": application.public_token}),
+                {
+                    **self.portal_answers(application.position, **answer_overrides),
+                    "submission_confirmation": "on",
+                    "action": "submit",
+                },
+                follow=True,
+            )
+
+    def open_portal_draft(self, email, position=None, client=None, **details):
+        """Start + verify. Returns (client, draft)."""
+        position = position or self.level1_position
+        client = client or Client()
+        mail.outbox.clear()
+        response = self.start_portal_draft(client, position, email, **details)
+        self.assertEqual(response.status_code, 302)
+        application = (
+            RecruitmentApplication.objects.filter(position=position, applicant_email__iexact=email)
+            .order_by("-created_at", "-pk")
+            .first()
+        )
+        self.verify_portal_draft(client, application)
+        return client, application
+
+    def apply_through_portal(self, email, position=None, **answer_overrides):
+        """The whole applicant journey. Returns (client, application, receipt response)."""
+        client, application = self.open_portal_draft(email, position)
+        self.save_portal_answers(client, application, **answer_overrides)
+        self.upload_required_portal_documents(client, application)
+        response = self.submit_portal_draft(client, application, **answer_overrides)
+        application.refresh_from_db()
+        self.assertIsNotNone(application.submitted_at, response.content[:2000])
+        return client, application, response
 
     def make_application(self, position):
         performance_rating_applicability = (
@@ -3579,97 +3703,16 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
 
 
 class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
-    def portal_payload(self, *, position=None, **overrides):
-        position = position or self.level1_position
-        performance_rating_applicability = overrides.pop(
-            "performance_rating_applicability",
-            (
-                RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
-                if position.branch == PositionPosting.Branch.COS
-                else RecruitmentApplication.PerformanceRatingApplicability.APPLICABLE
-            ),
-        )
-        payload = {
-            "first_name": "Pat",
-            "last_name": "Applicant",
-            "email": "portal.applicant@example.com",
-            "phone": "09171234567",
-            "qualification_summary": "Qualified applicant with complete supporting credentials.",
-            "cover_letter": "Please consider this application.",
-            "performance_rating_applicability": performance_rating_applicability,
-            "checklist_privacy_consent": "on",
-            "checklist_documents_complete": "on",
-            "checklist_information_certified": "on",
-        }
-        for requirement in get_required_applicant_document_requirements(
-            branch=position.branch,
-            performance_rating_not_applicable=(
-                performance_rating_applicability
-                == RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
-            )
-        ):
-            payload[requirement.code] = self.build_valid_applicant_document_upload(
-                requirement.code,
-                content_prefix="portal",
-            )
-        payload.update(overrides)
-        return payload
+
 
     def open_verified_application(self, email, position=None):
-        """Redesigned intake: start (details only) -> verify the e-mailed code. Returns the
-        client (now holding a verified session for the draft) and the draft."""
-        position = position or self.level1_position
-        client = Client()
-        mail.outbox.clear()
-        response = self.post_portal_intake(
-            client,
-            position,
-            {
-                "first_name": "Pat",
-                "last_name": "Applicant",
-                "email": email,
-                "phone": "09171234567",
-                "privacy_consent": "on",
-            },
-        )
-        self.assertEqual(response.status_code, 302)
-        application = RecruitmentApplication.objects.get(position=position, applicant_email=email)
-        client.post(
-            reverse("applicant-otp", kwargs={"token": application.public_token}),
-            {"action": "verify", "otp": self.extract_otp_from_last_email()},
-        )
-        return client, application
+        """Start (details only) -> verify the emailed code. Returns the client (now holding a
+        verified session for the draft) and the draft."""
+        return self.open_portal_draft(email, position)
 
     def submit_portal_application(self, email):
-        client = Client()
-        mail.outbox.clear()
-        response = self.post_portal_intake(
-            client,
-            self.level1_position,
-            self.portal_payload(email=email),
-        )
-        self.assertEqual(response.status_code, 302)
-        application = (
-            RecruitmentApplication.objects.filter(
-                position=self.level1_position,
-                applicant_email__iexact=email,
-            )
-            .order_by("-created_at", "-pk")
-            .first()
-        )
-        otp = self.extract_otp_from_last_email()
-        client.post(
-            reverse("applicant-otp", kwargs={"token": application.public_token}),
-            {"action": "verify", "otp": otp},
-        )
-        response = client.post(
-            reverse("applicant-otp", kwargs={"token": application.public_token}),
-            {"action": "finalize"},
-            follow=True,
-        )
+        _client, application, response = self.apply_through_portal(email)
         self.assertEqual(response.status_code, 200)
-        application.refresh_from_db()
-        self.assertIsNotNone(application.submitted_at)
         return application
 
     def add_receipt_documents_until(self, application, target_count):
@@ -3694,21 +3737,31 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         return list(get_current_applicant_document_items(application))
 
     def intake_field_validation_form(self, **overrides):
-        data = {
-            "first_name": "Pat",
-            "last_name": "Applicant",
-            "email": "portal.validation@example.com",
-            "phone": "09171234567",
-            "qualification_summary": "Qualified applicant.",
-            "performance_rating_applicability": (
-                RecruitmentApplication.PerformanceRatingApplicability.APPLICABLE
-            ),
-            "checklist_privacy_consent": "on",
-            "checklist_documents_complete": "on",
-            "checklist_information_certified": "on",
-        }
-        data.update(overrides)
-        form = ApplicantPortalIntakeForm(data=data, entry=self.level1_position)
+        """Identity fields are checked on the start form; the qualification summary and note
+        on the application form. Returns whichever form owns the overridden field."""
+        start_fields = {"first_name", "last_name", "email", "phone"}
+        if not overrides or set(overrides) & start_fields:
+            data = {
+                "first_name": "Pat",
+                "last_name": "Applicant",
+                "email": "portal.validation@example.com",
+                "phone": "09171234567",
+                "privacy_consent": "on",
+            }
+            data.update(overrides)
+            form = ApplicantStartForm(data=data, entry=self.level1_position)
+        else:
+            data = {
+                "first_name": "Pat",
+                "last_name": "Applicant",
+                "phone": "09171234567",
+                "qualification_summary": "Qualified applicant.",
+                "performance_rating_applicability": (
+                    RecruitmentApplication.PerformanceRatingApplicability.APPLICABLE
+                ),
+            }
+            data.update(overrides)
+            form = ApplicantApplicationForm(data=data, entry=self.level1_position)
         form.is_valid()
         return form
 
@@ -3769,13 +3822,8 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
                 self.assertEqual(form.cleaned_data["phone"], "+639171234567")
 
     def test_intake_stores_normalized_mobile_number(self):
-        self.post_portal_intake(
-            self.client,
-            self.level1_position,
-            self.portal_payload(
-                email="normalized.mobile@example.com",
-                phone="(0917) 123-4567",
-            ),
+        self.start_portal_draft(
+            self.client, self.level1_position, "normalized.mobile@example.com", phone="(0917) 123-4567"
         )
 
         application = RecruitmentApplication.objects.get(
@@ -3812,7 +3860,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
                 )
 
     def test_intake_renders_name_maxlength_attribute(self):
-        form = ApplicantPortalIntakeForm(entry=self.level1_position)
+        form = ApplicantStartForm(entry=self.level1_position)
         for field_name in ("first_name", "last_name"):
             with self.subTest(field_name=field_name):
                 self.assertEqual(
@@ -4013,14 +4061,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
 
     def test_plantilla_public_submission_requires_valid_otp_before_finalization(self):
         client = Client()
-        response = self.post_portal_intake(
-            client,
-            self.level1_position,
-            self.portal_payload(email="plantilla.portal@example.com"),
-            follow=True,
-        )
-
-        self.assertEqual(response.status_code, 200)
+        self.start_portal_draft(client, self.level1_position, "plantilla.portal@example.com")
         application = RecruitmentApplication.objects.get(
             position=self.level1_position,
             applicant_email="plantilla.portal@example.com",
@@ -4029,31 +4070,32 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertTrue(application.otp_hash)
         self.assertIsNone(application.submitted_at)
 
+        # Without the code, neither the page nor a submit gets through.
+        otp_url = reverse("applicant-otp", kwargs={"token": application.public_token})
+        page_url = reverse("applicant-application", kwargs={"token": application.public_token})
+        self.assertRedirects(client.get(page_url), otp_url, fetch_redirect_response=False)
         response = client.post(
-            reverse("applicant-otp", kwargs={"token": application.public_token}),
-            {"action": "finalize"},
-            follow=True,
+            page_url,
+            {**self.portal_answers(self.level1_position), "submission_confirmation": "on", "action": "submit"},
         )
-        self.assertContains(response, "Email verification is required before final submission.")
+        self.assertRedirects(response, otp_url, fetch_redirect_response=False)
         application.refresh_from_db()
         self.assertIsNone(application.submitted_at)
 
         response = client.post(
-            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            otp_url,
             {"action": "verify", "otp": self.extract_otp_from_last_email()},
             follow=True,
         )
         self.assertEqual(response.status_code, 200)
         application.refresh_from_db()
         self.assertIsNotNone(application.otp_verified_at)
-        # Redesigned intake: verifying opens the application page with its single Submit.
+        # Verifying opens the application page with its single Submit.
         self.assertContains(response, "data-submit-application")
 
-        response = client.post(
-            reverse("applicant-otp", kwargs={"token": application.public_token}),
-            {"action": "finalize"},
-            follow=True,
-        )
+        self.save_portal_answers(client, application)
+        self.upload_required_portal_documents(client, application)
+        response = self.submit_portal_draft(client, application)
         application.refresh_from_db()
         self.assertContains(response, application.tracking_code)
         self.assertContains(response, application.case_number_short)
@@ -4083,65 +4125,41 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertNotContains(response, "rg-pub-resend-link")
 
     def test_verified_otp_summary_counts_only_current_active_applicant_documents(self):
-        client = Client()
-        self.post_portal_intake(
-            client,
-            self.level1_position,
-            self.portal_payload(email="document.count@example.com"),
-            follow=True,
-        )
-        application = RecruitmentApplication.objects.get(
-            position=self.level1_position,
-            applicant_email="document.count@example.com",
-        )
-        first_document = application.evidence_items.filter(
-            artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
-            artifact_type="applicant_document",
-            document_key="signed_cover_letter",
-            is_current_version=True,
-            is_archived=False,
-        ).get()
+        client, application = self.open_portal_draft("document.count@example.com")
+        self.save_portal_answers(client, application)
+        self.upload_required_portal_documents(client, application)
+        # A newer version of one document replaces it (it still counts once).
         upload_evidence_item(
             application=application,
             actor=application.applicant,
-            label=first_document.label,
-            uploaded_file=self.build_valid_applicant_document_upload(
-                "signed_cover_letter",
-                content_prefix="replacement",
-            ),
+            label="Signed cover letter",
+            uploaded_file=self.real_pdf_upload("replacement-cover-letter"),
             document_key="signed_cover_letter",
             artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
             artifact_type="applicant_document",
         )
-        application.evidence_items.filter(
-            artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
-            artifact_type="applicant_document",
-            document_key="performance_rating",
-        ).update(is_archived=True, archive_tag="Marked not applicable by applicant")
-        application.performance_rating_applicability = (
-            RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
-        )
-        application.save(update_fields=["performance_rating_applicability", "updated_at"])
-
-        client.post(
-            reverse("applicant-otp", kwargs={"token": application.public_token}),
-            {"action": "verify", "otp": self.extract_otp_from_last_email()},
-            follow=True,
+        # "No rating" archives the rating document, which then doesn't count at all.
+        self.save_portal_answers(
+            client,
+            application,
+            performance_rating_applicability=(
+                RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
+            ),
         )
         response = client.get(
             reverse("applicant-application", kwargs={"token": application.public_token})
         )
         self.assertEqual(response.status_code, 200)
         ready_slots = [slot for slot in response.context["slots"] if slot["is_ready"]]
-        # 8 current documents: the replaced cover letter counts once, the archived
-        # performance rating not at all.
         self.assertEqual(len(ready_slots), 8)
         self.assertNotIn("performance_rating", {slot["code"] for slot in ready_slots})
 
-        receipt_response = client.post(
-            reverse("applicant-otp", kwargs={"token": application.public_token}),
-            {"action": "finalize"},
-            follow=True,
+        receipt_response = self.submit_portal_draft(
+            client,
+            application,
+            performance_rating_applicability=(
+                RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
+            ),
         )
         self.assertContains(receipt_response, "8 files submitted")
         self.assertNotContains(receipt_response, "10 files submitted")
@@ -4154,46 +4172,41 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
                 "recruitment.services.EmailMultiAlternatives.send",
                 side_effect=PermissionError("denied"),
             ):
-                response = self.post_portal_intake(
-                    client,
-                    self.level1_position,
-                    self.portal_payload(email="otp.delivery.fail@example.com"),
+                response = self.start_portal_draft(
+                    client, self.level1_position, "otp.delivery.fail@example.com"
                 )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "could not send the verification code right now")
         application = RecruitmentApplication.objects.get(
             position=self.level1_position,
             applicant_email="otp.delivery.fail@example.com",
         )
+        self.assertRedirects(
+            response,
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            fetch_redirect_response=False,
+        )
+        page = client.get(response["Location"])
+        self.assertContains(page, "could not send the verification code right now")
         self.assertTrue(application.otp_hash)
         self.assertIsNone(application.submitted_at)
-        form = response.context["form"]
-        self.assertTrue(form.saved_draft_notice)
-        self.assertIn("signed_cover_letter", form.existing_documents_by_code)
 
     def test_intake_get_rehydrates_existing_draft_from_token(self):
-        client = Client()
-        self.post_portal_intake(
+        client, application = self.open_portal_draft(
+            "rehydrate.draft@example.com", first_name="Maria", last_name="Santos", phone="09991234567"
+        )
+        self.save_portal_answers(
             client,
-            self.level1_position,
-            self.portal_payload(
-                email="rehydrate.draft@example.com",
-                first_name="Maria",
-                last_name="Santos",
-                phone="09991234567",
-                qualification_summary="Saved qualification summary.",
-                cover_letter="Saved cover letter note.",
-                performance_rating_applicability=(
-                    RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
-                ),
+            application,
+            first_name="Maria",
+            last_name="Santos",
+            phone="09991234567",
+            qualification_summary="Saved qualification summary.",
+            cover_letter="Saved cover letter note.",
+            performance_rating_applicability=(
+                RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
             ),
-            follow=True,
         )
-        application = RecruitmentApplication.objects.get(
-            position=self.level1_position,
-            applicant_email="rehydrate.draft@example.com",
-        )
+        self.upload_portal_document(client, application, "signed_cover_letter")
 
         # A bare draft link no longer opens the draft: it goes to e-mail verification first.
         fresh_client = Client()
@@ -4222,10 +4235,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
                 reverse("applicant-otp", kwargs={"token": application.public_token}),
                 {"action": "resend"},
             )
-        fresh_client.post(
-            reverse("applicant-otp", kwargs={"token": application.public_token}),
-            {"action": "verify", "otp": self.extract_otp_from_last_email()},
-        )
+        self.verify_portal_draft(fresh_client, application)
         response = fresh_client.get(
             reverse("applicant-application", kwargs={"token": application.public_token})
         )
@@ -4245,12 +4255,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
 
     def test_intake_reuses_identity_draft_when_application_email_drifted(self):
         client = Client()
-        self.post_portal_intake(
-            client,
-            self.level1_position,
-            self.portal_payload(email="identity.old@example.com"),
-            follow=True,
-        )
+        self.start_portal_draft(client, self.level1_position, "identity.old@example.com")
         application = RecruitmentApplication.objects.get(
             position=self.level1_position,
             applicant_email="identity.old@example.com",
@@ -4259,54 +4264,29 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         application.applicant.email = "identity.new@example.com"
         application.applicant.save(update_fields=["email"])
 
-        response = self.post_portal_intake(
-            client,
-            self.level1_position,
-            self.portal_payload(email="identity.new@example.com"),
-            follow=True,
-        )
+        response = self.start_portal_draft(client, self.level1_position, "identity.new@example.com")
 
+        # The identity's draft is found (no second draft, no server error) and is NOT
+        # changed before its email is verified.
         application.refresh_from_db()
-        self.assertEqual(response.status_code, 200)
+        self.assertRedirects(
+            response,
+            reverse("applicant-otp", kwargs={"token": original_token}),
+            fetch_redirect_response=False,
+        )
         self.assertEqual(
             RecruitmentApplication.objects.filter(position=self.level1_position).count(),
             1,
         )
         self.assertEqual(application.public_token, original_token)
-        self.assertEqual(application.applicant_email, "identity.new@example.com")
-        self.assertContains(response, "Resend the code")
+        self.assertEqual(application.applicant_email, "identity.old@example.com")
 
     def test_intake_blocks_submitted_identity_duplicate_without_server_error(self):
-        client = Client()
-        self.post_portal_intake(
-            client,
-            self.level1_position,
-            self.portal_payload(email="submitted.old@example.com"),
-            follow=True,
-        )
-        application = RecruitmentApplication.objects.get(
-            position=self.level1_position,
-            applicant_email="submitted.old@example.com",
-        )
-        client.post(
-            reverse("applicant-otp", kwargs={"token": application.public_token}),
-            {"action": "verify", "otp": self.extract_otp_from_last_email()},
-            follow=True,
-        )
-        client.post(
-            reverse("applicant-otp", kwargs={"token": application.public_token}),
-            {"action": "finalize"},
-            follow=True,
-        )
-        application.refresh_from_db()
+        _client, application, _response = self.apply_through_portal("submitted.old@example.com")
         application.applicant.email = "submitted.new@example.com"
         application.applicant.save(update_fields=["email"])
 
-        response = self.post_portal_intake(
-            client,
-            self.level1_position,
-            self.portal_payload(email="submitted.new@example.com"),
-        )
+        response = self.start_portal_draft(Client(), self.level1_position, "submitted.new@example.com")
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(
@@ -4387,10 +4367,8 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
                 "updated_at",
             ]
         )
-        response = self.post_portal_intake(
-            Client(),
-            self.level1_position,
-            self.portal_payload(email="reapply.rejected@example.com"),
+        response = self.start_portal_draft(
+            Client(), self.level1_position, "reapply.rejected@example.com"
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(
@@ -4407,12 +4385,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
 
     def test_intake_get_ignores_invalid_or_mismatched_draft_token(self):
         client = Client()
-        self.post_portal_intake(
-            client,
-            self.level1_position,
-            self.portal_payload(email="wrong.position.token@example.com"),
-            follow=True,
-        )
+        self.start_portal_draft(client, self.level1_position, "wrong.position.token@example.com")
         application = RecruitmentApplication.objects.get(
             position=self.level1_position,
             applicant_email="wrong.position.token@example.com",
@@ -4429,29 +4402,10 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertNotIn("qualification_summary", form.fields)
 
     def test_cos_public_submission_completes_and_status_lookup_works(self):
-        client = Client()
-        self.post_portal_intake(
-            client,
-            self.cos_position,
-            self.portal_payload(position=self.cos_position, email="cos.portal@example.com"),
-            follow=True,
-        )
-        application = RecruitmentApplication.objects.get(
-            position=self.cos_position,
-            applicant_email="cos.portal@example.com",
-        )
-        client.post(
-            reverse("applicant-otp", kwargs={"token": application.public_token}),
-            {"action": "verify", "otp": self.extract_otp_from_last_email()},
-            follow=True,
-        )
-        receipt_response = client.post(
-            reverse("applicant-otp", kwargs={"token": application.public_token}),
-            {"action": "finalize"},
-            follow=True,
+        _client, application, receipt_response = self.apply_through_portal(
+            "cos.portal@example.com", self.cos_position
         )
 
-        application.refresh_from_db()
         self.assertContains(receipt_response, application.tracking_code)
         self.assertContains(receipt_response, application.case_number_short)
         self.assertContains(
@@ -4514,28 +4468,9 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertContains(bad_verify, "invalid")
 
     def test_applicant_status_magic_link_renders_status_page(self):
-        submission_client = Client()
-        self.post_portal_intake(
-            submission_client,
-            self.cos_position,
-            self.portal_payload(position=self.cos_position, email="magic.status@example.com"),
-            follow=True,
+        _client, application, _response = self.apply_through_portal(
+            "magic.status@example.com", self.cos_position
         )
-        application = RecruitmentApplication.objects.get(
-            position=self.cos_position,
-            applicant_email="magic.status@example.com",
-        )
-        submission_client.post(
-            reverse("applicant-otp", kwargs={"token": application.public_token}),
-            {"action": "verify", "otp": self.extract_otp_from_last_email()},
-            follow=True,
-        )
-        submission_client.post(
-            reverse("applicant-otp", kwargs={"token": application.public_token}),
-            {"action": "finalize"},
-            follow=True,
-        )
-        application.refresh_from_db()
         application.otp_requested_at = timezone.now() - timedelta(
             seconds=settings.APPLICATION_OTP_RESEND_COOLDOWN_SECONDS + 1
         )
@@ -4606,32 +4541,10 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertEqual(len(mail.outbox), mail_count)
 
     def test_submission_finalize_stamps_status_lookup_session(self):
-        client = Client()
-        self.post_portal_intake(
-            client,
-            self.cos_position,
-            self.portal_payload(
-                position=self.cos_position,
-                email="finalize.status.session@example.com",
-            ),
-            follow=True,
-        )
-        application = RecruitmentApplication.objects.get(
-            position=self.cos_position,
-            applicant_email="finalize.status.session@example.com",
-        )
-        client.post(
-            reverse("applicant-otp", kwargs={"token": application.public_token}),
-            {"action": "verify", "otp": self.extract_otp_from_last_email()},
-            follow=True,
-        )
-        finalize_response = client.post(
-            reverse("applicant-otp", kwargs={"token": application.public_token}),
-            {"action": "finalize"},
-            follow=True,
+        client, application, finalize_response = self.apply_through_portal(
+            "finalize.status.session@example.com", self.cos_position
         )
         self.assertContains(finalize_response, "Application submitted successfully")
-        application.refresh_from_db()
 
         mail_count = len(mail.outbox)
         response = client.get(
@@ -4646,12 +4559,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
 
     def test_unfinished_draft_status_link_redirects_to_otp(self):
         client = Client()
-        self.post_portal_intake(
-            client,
-            self.level1_position,
-            self.portal_payload(email="draft.status.link@example.com"),
-            follow=True,
-        )
+        self.start_portal_draft(client, self.level1_position, "draft.status.link@example.com")
         application = RecruitmentApplication.objects.get(
             position=self.level1_position,
             applicant_email="draft.status.link@example.com",
@@ -4671,12 +4579,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
 
     def test_invalid_otp_is_rejected(self):
         client = Client()
-        self.post_portal_intake(
-            client,
-            self.level1_position,
-            self.portal_payload(email="invalid.otp@example.com"),
-            follow=True,
-        )
+        self.start_portal_draft(client, self.level1_position, "invalid.otp@example.com")
         application = RecruitmentApplication.objects.get(
             position=self.level1_position,
             applicant_email="invalid.otp@example.com",
@@ -4695,12 +4598,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
     @override_settings(APPLICATION_OTP_MAX_ATTEMPTS=2)
     def test_applicant_otp_locks_after_too_many_invalid_attempts_until_resend(self):
         client = Client()
-        self.post_portal_intake(
-            client,
-            self.level1_position,
-            self.portal_payload(email="otp.lockout@example.com"),
-            follow=True,
-        )
+        self.start_portal_draft(client, self.level1_position, "otp.lockout@example.com")
         application = RecruitmentApplication.objects.get(
             position=self.level1_position,
             applicant_email="otp.lockout@example.com",
@@ -4771,12 +4669,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
 
     def test_applicant_otp_resend_respects_server_cooldown(self):
         client = Client()
-        self.post_portal_intake(
-            client,
-            self.level1_position,
-            self.portal_payload(email="otp.cooldown@example.com"),
-            follow=True,
-        )
+        self.start_portal_draft(client, self.level1_position, "otp.cooldown@example.com")
         application = RecruitmentApplication.objects.get(
             position=self.level1_position,
             applicant_email="otp.cooldown@example.com",
@@ -4977,39 +4870,27 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertContains(response, "This receipt link is no longer available.")
 
     def test_portal_intake_requires_requirement_coded_documents(self):
-        client = Client()
-        missing_requirement = get_required_applicant_document_requirements(
-            branch=self.level1_position.branch
-        )[0]
-        payload = self.portal_payload(email="missing.requirement@example.com")
-        payload.pop(missing_requirement.code)
+        client, application = self.open_portal_draft("missing.requirement@example.com")
+        self.save_portal_answers(client, application)
+        missing_code = "personal_data_sheet"
+        uploaded = self.upload_required_portal_documents(client, application, skip={missing_code})
 
-        response = self.post_portal_intake(
-            client,
-            self.level1_position,
-            payload,
-        )
+        response = self.submit_portal_draft(client, application)
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(
-            response,
-            f"Upload the required document for {missing_requirement.title}.",
-        )
-        draft = RecruitmentApplication.objects.get(
-            position=self.level1_position,
-            applicant_email="missing.requirement@example.com",
-        )
+        self.assertContains(response, "Upload all required documents")
+        self.assertContains(response, f'href="#doc-{missing_code}"')
+        application.refresh_from_db()
+        self.assertIsNone(application.submitted_at)
         saved_codes = set(
-            draft.evidence_items.filter(
+            application.evidence_items.filter(
                 artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
                 artifact_type="applicant_document",
                 is_current_version=True,
                 is_archived=False,
             ).values_list("document_key", flat=True)
         )
-        self.assertNotIn(missing_requirement.code, saved_codes)
-        self.assertTrue(saved_codes)
-        self.assertContains(response, "Your valid files were saved to this draft.")
+        self.assertNotIn(missing_code, saved_codes)
+        self.assertEqual(saved_codes, set(uploaded))
 
     def test_requirement_catalog_drives_required_and_if_applicable_labels_in_public_pages(self):
         requirements = {
@@ -5119,88 +5000,47 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         )
 
     def test_cos_submission_does_not_require_performance_rating_or_training_certificates(self):
-        client = Client()
-        response = self.post_portal_intake(
-            client,
-            self.cos_position,
-            self.portal_payload(position=self.cos_position, email="cos.no.rating@example.com"),
-            follow=True,
+        _client, application, response = self.apply_through_portal(
+            "cos.no.rating@example.com", self.cos_position
         )
 
         self.assertEqual(response.status_code, 200)
-        application = RecruitmentApplication.objects.get(
-            position=self.cos_position,
-            applicant_email="cos.no.rating@example.com",
-        )
         self.assertEqual(
             application.performance_rating_applicability,
             RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE,
         )
-        self.assertFalse(
-            application.evidence_items.filter(
-                artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
-                artifact_type="applicant_document",
-                document_key="performance_rating",
-                is_current_version=True,
-                is_archived=False,
-            ).exists()
-        )
-        self.assertFalse(
-            application.evidence_items.filter(
-                artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
-                artifact_type="applicant_document",
-                document_key="training_certificates",
-                is_current_version=True,
-                is_archived=False,
-            ).exists()
-        )
+        for code in ("performance_rating", "training_certificates"):
+            self.assertFalse(
+                application.evidence_items.filter(
+                    artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
+                    artifact_type="applicant_document",
+                    document_key=code,
+                    is_current_version=True,
+                    is_archived=False,
+                ).exists()
+            )
 
     def test_performance_rating_requires_upload_when_marked_applicable(self):
-        client = Client()
-        payload = self.portal_payload(email="rating.required@example.com")
-        payload.pop("performance_rating")
+        client, application = self.open_portal_draft("rating.required@example.com")
+        self.save_portal_answers(client, application)
+        self.upload_required_portal_documents(client, application, skip={"performance_rating"})
 
-        response = self.post_portal_intake(
-            client,
-            self.level1_position,
-            payload,
-        )
+        response = self.submit_portal_draft(client, application)
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(
-            response,
-            "Upload the required document for Performance Rating in the last rating period.",
-        )
+        self.assertContains(response, "Upload all required documents")
         performance_slot = next(
-            slot
-            for slot in response.context["form"].document_slots
-            if slot["requirement"].code == "performance_rating"
+            slot for slot in response.context["slots"] if slot["code"] == "performance_rating"
         )
-        self.assertTrue(performance_slot["is_required_now"])
+        self.assertTrue(performance_slot["required_now"])
+        self.assertFalse(performance_slot["is_ready"])
 
     def test_performance_rating_not_applicable_allows_submission_without_file(self):
-        client = Client()
-        response = self.post_portal_intake(
-            client,
-            self.level1_position,
-            self.portal_payload(
-                email="no.rating@example.com",
-                performance_rating_applicability=(
-                    RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
-                ),
-            ),
-            follow=True,
+        not_applicable = RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
+        _client, application, receipt_response = self.apply_through_portal(
+            "no.rating@example.com", performance_rating_applicability=not_applicable
         )
 
-        self.assertEqual(response.status_code, 200)
-        application = RecruitmentApplication.objects.get(
-            position=self.level1_position,
-            applicant_email="no.rating@example.com",
-        )
-        self.assertEqual(
-            application.performance_rating_applicability,
-            RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE,
-        )
+        self.assertEqual(application.performance_rating_applicability, not_applicable)
         self.assertFalse(
             application.evidence_items.filter(
                 artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
@@ -5210,42 +5050,14 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
                 is_archived=False,
             ).exists()
         )
-
-        client.post(
-            reverse("applicant-otp", kwargs={"token": application.public_token}),
-            {"action": "verify", "otp": self.extract_otp_from_last_email()},
-            follow=True,
-        )
-        receipt_response = client.post(
-            reverse("applicant-otp", kwargs={"token": application.public_token}),
-            {"action": "finalize"},
-            follow=True,
-        )
-
-        application.refresh_from_db()
-        self.assertIsNotNone(application.submitted_at)
         self.assertContains(receipt_response, application.tracking_code)
         self.assertContains(receipt_response, application.case_number_short)
 
     def test_performance_rating_not_applicable_archives_saved_rating_evidence(self):
-        client = Client()
-        applicant_email = "saved.rating.not.applicable@example.com"
-        duplicate_bytes = self.build_valid_applicant_document_bytes(
-            "duplicate-rating",
-            content_prefix="same-file",
-        )
-        first_payload = self.portal_payload(email=applicant_email)
-        first_payload["performance_rating"] = SimpleUploadedFile(
-            "performance-rating.pdf",
-            duplicate_bytes,
-            content_type="application/pdf",
-        )
-
-        self.post_portal_intake(client, self.level1_position, first_payload, follow=True)
-        application = RecruitmentApplication.objects.get(
-            position=self.level1_position,
-            applicant_email=applicant_email,
-        )
+        client, application = self.open_portal_draft("saved.rating.not.applicable@example.com")
+        self.save_portal_answers(client, application)
+        rating_file = self.real_pdf_upload("same-file")
+        self.upload_portal_document(client, application, "performance_rating", rating_file)
         self.assertTrue(
             application.evidence_items.filter(
                 artifact_scope=EvidenceVaultItem.OwnerScope.APPLICATION,
@@ -5256,23 +5068,12 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
             ).exists()
         )
 
-        second_payload = self.portal_payload(
-            email=applicant_email,
+        self.save_portal_answers(
+            client,
+            application,
             performance_rating_applicability=(
                 RecruitmentApplication.PerformanceRatingApplicability.NOT_APPLICABLE
             ),
-        )
-        second_payload["diploma"] = SimpleUploadedFile(
-            "diploma.pdf",
-            duplicate_bytes,
-            content_type="application/pdf",
-        )
-
-        response = self.post_portal_intake(
-            client,
-            self.level1_position,
-            second_payload,
-            follow=True,
         )
 
         application.refresh_from_db()
@@ -5298,28 +5099,31 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
                 archive_tag="Marked not applicable by applicant",
             ).exists()
         )
-        self.assertNotContains(response, "Performance Rating in the last rating period")
+        # The dropped rating file no longer blocks reusing that file elsewhere.
+        rating_file.seek(0)
+        reused = self.upload_portal_document(
+            client,
+            application,
+            "diploma",
+            SimpleUploadedFile("diploma.pdf", rating_file.read(), content_type="application/pdf"),
+        )
+        self.assertEqual(reused.status_code, 200)
 
     def test_invalid_submission_preserves_non_file_inputs_and_saved_valid_uploads(self):
-        client = Client()
-        payload = self.portal_payload(
-            email="preserved.inputs@example.com",
+        client, application = self.open_portal_draft("preserved.inputs@example.com")
+        self.save_portal_answers(
+            client, application, qualification_summary="Persistent qualifications for validation retry."
+        )
+        self.upload_portal_document(client, application, "signed_cover_letter")
+
+        response = self.submit_portal_draft(
+            client,
+            application,
             qualification_summary="Persistent qualifications for validation retry.",
         )
-        missing_requirement = get_required_applicant_document_requirements(
-            branch=self.level1_position.branch
-        )[-1]
-        payload.pop(missing_requirement.code)
 
-        response = self.post_portal_intake(
-            client,
-            self.level1_position,
-            payload,
-        )
-
-        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Your application was not submitted yet.")
         form = response.context["form"]
-        self.assertEqual(form["email"].value(), "preserved.inputs@example.com")
         self.assertEqual(
             form["qualification_summary"].value(),
             "Persistent qualifications for validation retry.",
@@ -5328,10 +5132,9 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
             form["performance_rating_applicability"].value(),
             RecruitmentApplication.PerformanceRatingApplicability.APPLICABLE,
         )
-        self.assertTrue(form.saved_draft_notice)
-        self.assertIn("signed_cover_letter", form.existing_documents_by_code)
-        self.assertNotIn(missing_requirement.code, form.existing_documents_by_code)
-        self.assertContains(response, "Saved to this draft")
+        slots = {slot["code"]: slot for slot in response.context["slots"]}
+        self.assertTrue(slots["signed_cover_letter"]["is_ready"])
+        self.assertFalse(slots["diploma"]["is_ready"])
 
     def test_empty_portal_submission_returns_validation_errors_without_crashing(self):
         client = Client()
@@ -5349,132 +5152,50 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
             RecruitmentApplication.objects.filter(position=self.level1_position).exists()
         )
 
-    def test_blank_browser_file_input_is_ignored_by_duplicate_warning_builder(self):
-        class BrowserEmptyUpload:
-            name = ""
-            size = 1
-            content_type = "application/octet-stream"
-
-            def __bool__(self):
-                return True
-
-            def read(self):
-                return b"browser-empty-file-input"
-
-            def seek(self, position):
-                return None
-
-        form = ApplicantPortalIntakeForm(data={}, entry=self.level1_position)
-        form.cleaned_data = {
-            requirement.file_field_name: None
-            for requirement in form.document_requirements
-        }
-        form.cleaned_data["signed_cover_letter"] = BrowserEmptyUpload()
-
-        self.assertIsNone(form._normalize_requirement_upload(BrowserEmptyUpload()))
-        self.assertEqual(form._build_duplicate_document_warnings(), [])
-
     def test_duplicate_applicant_document_file_blocks_intake(self):
-        client = Client()
-        duplicate_bytes = b"%PDF-1.4\nshared-applicant-document\n%%EOF\n"
-        payload = self.portal_payload(email="duplicate.file@example.com")
-        payload["signed_cover_letter"] = SimpleUploadedFile(
-            "shared-document.pdf",
-            duplicate_bytes,
-            content_type="application/pdf",
-        )
-        payload["personal_data_sheet"] = SimpleUploadedFile(
-            "shared-document-again.pdf",
-            duplicate_bytes,
-            content_type="application/pdf",
-        )
-
-        response = self.post_portal_intake(
+        client, application = self.open_portal_draft("duplicate.file@example.com")
+        shared = self.real_pdf_upload("shared-document")
+        first = self.upload_portal_document(client, application, "signed_cover_letter", shared)
+        self.assertEqual(first.status_code, 200)
+        shared.seek(0)
+        second = self.upload_portal_document(
             client,
-            self.level1_position,
-            payload,
-            follow=True,
+            application,
+            "personal_data_sheet",
+            SimpleUploadedFile("shared-document-again.pdf", shared.read(), content_type="application/pdf"),
         )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(
-            response,
-            "The same file is used for more than one document",
+        self.assertEqual(second.status_code, 400)
+        self.assertIn("already used for another document", second.json()["error"])
+        self.assertIsNone(
+            get_current_applicant_document_map(application).get("personal_data_sheet")
         )
-        self.assertContains(response, "rg-pub-upload-slot--error")
-        self.assertFalse(mail.outbox)
-        application = RecruitmentApplication.objects.filter(
-            position=self.level1_position,
-            applicant_email="duplicate.file@example.com",
-        ).first()
-        if application is not None:
-            self.assertFalse(application.otp_hash)
 
     def test_duplicate_document_messages_are_concise_and_titleless(self):
         # Regression for the applicant feedback that the duplicate-file error
         # ballooned by listing every conflicting document's long formal title.
-        client = Client()
-        duplicate_bytes = b"%PDF-1.4\nshared-applicant-document\n%%EOF\n"
-        payload = self.portal_payload(email="concise.duplicate@example.com")
-        payload["signed_cover_letter"] = SimpleUploadedFile(
-            "shared.pdf", duplicate_bytes, content_type="application/pdf"
-        )
-        payload["personal_data_sheet"] = SimpleUploadedFile(
-            "shared-again.pdf", duplicate_bytes, content_type="application/pdf"
-        )
+        from recruitment.applicant_documents import ERROR_SAME_FILE_ELSEWHERE
 
-        response = self.post_portal_intake(
-            client, self.level1_position, payload, follow=True
+        client, application = self.open_portal_draft("concise.duplicate@example.com")
+        shared = self.real_pdf_upload("shared")
+        self.upload_portal_document(client, application, "signed_cover_letter", shared)
+        shared.seek(0)
+        response = self.upload_portal_document(
+            client,
+            application,
+            "personal_data_sheet",
+            SimpleUploadedFile("shared-again.pdf", shared.read(), content_type="application/pdf"),
         )
-        self.assertEqual(response.status_code, 200)
-        form = response.context["form"]
-
-        # One short summary line, computed during clean() and stored.
-        self.assertEqual(
-            form.duplicate_document_errors,
-            [
-                "The same file is used for more than one document. "
-                "Upload a different file for each one."
-            ],
-        )
-
-        field_error = form.errors["signed_cover_letter"][0]
-        self.assertEqual(
-            field_error,
-            "This file is already used for 1 other document. "
-            "Upload a different file for each one.",
-        )
-        # No long, formal document titles are spliced into the messages.
+        error = response.json()["error"]
+        self.assertEqual(error, ERROR_SAME_FILE_ELSEWHERE)
         long_titles = [
             requirement.title
-            for requirement in form.document_requirements
+            for requirement in get_applicant_document_requirements(self.level1_position)
             if len(requirement.title) > 40
         ]
         self.assertTrue(long_titles)  # sanity: the fixtures do have long titles
         for title in long_titles:
-            self.assertNotIn(title, field_error)
-            self.assertNotIn(title, form.duplicate_document_errors[0])
-
-    def test_out_of_scope_draft_digests_do_not_produce_phantom_duplicate(self):
-        # A digest shared only by stale/out-of-requirement draft documents must
-        # NOT surface a group: otherwise the count underflows ("0 other
-        # documents") or a "Duplicate file detected" banner shows with no slot
-        # highlighted. Guard is on the in-scope code list, not the raw set.
-        class _Evidence:
-            def __init__(self, digest):
-                self.sha256_digest = digest
-
-        form = ApplicantPortalIntakeForm(data={}, entry=self.level1_position)
-        form.cleaned_data = {}
-        form.existing_documents_by_code = {
-            "retired_requirement_a": _Evidence("shared-digest"),
-            "retired_requirement_b": _Evidence("shared-digest"),
-        }
-        # Neither code is a current requirement.
-        self.assertNotIn("retired_requirement_a", form.document_requirements_by_code)
-
-        self.assertEqual(form._build_duplicate_document_groups(), [])
-        self.assertEqual(form._build_duplicate_document_warnings(), [])
+            self.assertNotIn(title, error)
 
     def test_final_submission_uses_requirement_codes_not_arbitrary_file_count(self):
         application = RecruitmentApplication.objects.create(
@@ -5576,35 +5297,23 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertIsNone(application.submitted_at)
 
     def test_portal_reuses_existing_draft_and_requirement_documents_for_same_entry_email(self):
-        client = Client()
-        initial_response = self.post_portal_intake(
-            client,
-            self.level1_position,
-            self.portal_payload(email="reused.draft@example.com"),
-        )
-        self.assertEqual(initial_response.status_code, 302)
-        original_application = RecruitmentApplication.objects.get(
-            position=self.level1_position,
-            applicant_email="reused.draft@example.com",
-        )
+        client, original_application = self.open_portal_draft("reused.draft@example.com")
+        self.upload_portal_document(client, original_application, "signed_cover_letter")
         applicant_id = original_application.applicant_id
 
-        payload = self.portal_payload(
-            email="reused.draft@example.com",
-            qualification_summary="Updated qualifications for the same draft.",
+        # Starting again with the same email finds the same draft (and keeps its files).
+        followup_response = self.start_portal_draft(
+            Client(), self.level1_position, "reused.draft@example.com", first_name="Someone"
         )
-        for requirement in get_required_applicant_document_requirements(
-            branch=self.level1_position.branch
-        ):
-            payload.pop(requirement.code)
-
-        followup_response = self.post_portal_intake(
-            client,
-            self.level1_position,
-            payload,
+        self.assertRedirects(
+            followup_response,
+            reverse("applicant-otp", kwargs={"token": original_application.public_token}),
+            fetch_redirect_response=False,
+        )
+        self.save_portal_answers(
+            client, original_application, qualification_summary="Updated qualifications for the same draft."
         )
 
-        self.assertEqual(followup_response.status_code, 302)
         refreshed_application = RecruitmentApplication.objects.get(
             position=self.level1_position,
             applicant_email="reused.draft@example.com",
@@ -5612,9 +5321,13 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertEqual(RecruitmentApplication.objects.filter(position=self.level1_position).count(), 1)
         self.assertEqual(refreshed_application.pk, original_application.pk)
         self.assertEqual(refreshed_application.applicant_id, applicant_id)
+        self.assertEqual(refreshed_application.applicant_first_name, "Pat")
         self.assertEqual(
             refreshed_application.qualification_summary,
             "Updated qualifications for the same draft.",
+        )
+        self.assertIsNotNone(
+            get_current_applicant_document_map(refreshed_application).get("signed_cover_letter")
         )
         self.assertEqual(
             RecruitmentUser.objects.filter(
@@ -5623,32 +5336,18 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
             ).count(),
             1,
         )
-        self.assertTrue(
-            AuditLog.objects.filter(
-                application=refreshed_application,
-                action=AuditLog.Action.APPLICATION_UPDATED,
-            ).exists()
-        )
 
     def test_portal_reuses_existing_applicant_identity_by_email_across_entries(self):
         client = Client()
         shared_email = "shared.identity@example.com"
-        first_response = self.post_portal_intake(
-            client,
-            self.level1_position,
-            self.portal_payload(email=shared_email),
-        )
+        first_response = self.start_portal_draft(client, self.level1_position, shared_email)
         self.assertEqual(first_response.status_code, 302)
         first_application = RecruitmentApplication.objects.get(
             position=self.level1_position,
             applicant_email=shared_email,
         )
 
-        second_response = self.post_portal_intake(
-            client,
-            self.cos_position,
-            self.portal_payload(position=self.cos_position, email=shared_email),
-        )
+        second_response = self.start_portal_draft(client, self.cos_position, shared_email)
         self.assertEqual(second_response.status_code, 302)
         second_application = RecruitmentApplication.objects.get(
             position=self.cos_position,
@@ -5666,12 +5365,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
 
     def test_expired_otp_cannot_be_used_to_verify_or_finalize(self):
         client = Client()
-        self.post_portal_intake(
-            client,
-            self.level1_position,
-            self.portal_payload(email="expired.otp@example.com"),
-            follow=True,
-        )
+        self.start_portal_draft(client, self.level1_position, "expired.otp@example.com")
         application = RecruitmentApplication.objects.get(
             position=self.level1_position,
             applicant_email="expired.otp@example.com",
@@ -5680,22 +5374,20 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         application.otp_expires_at = timezone.now() - timedelta(minutes=1)
         application.save(update_fields=["otp_expires_at", "updated_at"])
 
-        response = client.post(
-            reverse("applicant-otp", kwargs={"token": application.public_token}),
-            {"action": "verify", "otp": otp_code},
-            follow=True,
-        )
+        otp_url = reverse("applicant-otp", kwargs={"token": application.public_token})
+        response = client.post(otp_url, {"action": "verify", "otp": otp_code}, follow=True)
         self.assertContains(response, "The verification code has expired.")
 
+        # An old verification on record is not a way in: submitting needs THIS browser to
+        # have verified, so the submit is sent back to the code page.
         application.refresh_from_db()
         application.otp_verified_at = timezone.now() - timedelta(minutes=2)
         application.save(update_fields=["otp_verified_at", "updated_at"])
         response = client.post(
-            reverse("applicant-otp", kwargs={"token": application.public_token}),
-            {"action": "finalize"},
-            follow=True,
+            reverse("applicant-application", kwargs={"token": application.public_token}),
+            {**self.portal_answers(self.level1_position), "submission_confirmation": "on", "action": "submit"},
         )
-        self.assertContains(response, "Your email verification has expired.")
+        self.assertRedirects(response, otp_url, fetch_redirect_response=False)
         application.refresh_from_db()
         self.assertIsNone(application.submitted_at)
 
@@ -21981,3 +21673,38 @@ class StepByStepApplicantIntakeTests(BaseRecruitmentTestCase):
         self.level1_position.save(update_fields=["closing_date", "updated_at"])
         self.verified_client("later@example.com", position=self.level1_position)
         self.assertEqual(find_drafts_due_for_reminder(), [])
+
+    # -- the old one-step path is gone -------------------------------------
+    def test_old_one_step_post_cannot_change_someone_elses_draft(self):
+        self.start(Client(), self.cos_position, "victim@example.com", first_name="Maria")
+        draft = RecruitmentApplication.objects.get(applicant_email="victim@example.com")
+        with self.captureOnCommitCallbacks(execute=True):
+            Client().post(
+                reverse("applicant-intake", kwargs={"pk": self.cos_position.pk}),
+                {
+                    "first_name": "Intruder",
+                    "last_name": "Person",
+                    "email": "victim@example.com",
+                    "phone": "09171234567",
+                    "privacy_consent": "on",
+                    "qualification_summary": "Overwritten summary.",
+                    "checklist_privacy_consent": "on",
+                    "personal_data_sheet": self.pdf_upload("intruder-pds"),
+                },
+            )
+        draft.refresh_from_db()
+        self.assertEqual(draft.applicant_first_name, "Maria")
+        self.assertEqual(draft.qualification_summary, "")
+        self.assertIsNone(self.current_document(draft, "personal_data_sheet"))
+        self.assertEqual(RecruitmentApplication.objects.filter(applicant_email="victim@example.com").count(), 1)
+
+    def test_code_page_no_longer_has_a_finalize_action(self):
+        client, application = self.verified_client("no.finalize@example.com")
+        response = client.post(
+            reverse("applicant-otp", kwargs={"token": application.public_token}),
+            {"action": "finalize"},
+            follow=True,
+        )
+        self.assertContains(response, "This applicant action is not available.")
+        application.refresh_from_db()
+        self.assertIsNone(application.submitted_at)

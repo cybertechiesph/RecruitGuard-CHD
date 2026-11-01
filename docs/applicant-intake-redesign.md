@@ -44,10 +44,12 @@ endpoint requires the verified browser session.
 - Migration `0086_applicant_document_parts`. New dependency: **`pypdf`** (added to
   `requirements.txt`; run `pip install -r requirements.txt` on the server).
 
-## Kept for compatibility
-The original single-request submission (all answers and files in one POST to the same apply
-URL) still works and is what the older tests exercise. The code page's hidden `finalize`
-action also still works under its original rules. Neither is linked from the portal pages.
+## Old one-step path removed
+The original one-step submission is gone. It accepted all answers and files in one POST to
+the apply URL, and saved them before checking the email. The code page's hidden `finalize`
+action is gone too, so the only way in is now: details, then verify, then the application
+page. The old tests were moved onto the new flow: see the `start_portal_draft` /
+`apply_through_portal` helpers in `recruitment/tests.py`.
 
 ## Walkthrough improvements (November 2026)
 

@@ -23,7 +23,6 @@ from .applicant_documents import (
 from .forms import (
     ApplicantApplicationForm,
     ApplicantOTPForm,
-    ApplicantPortalIntakeForm,
     ApplicantStartForm,
     ApplicantStatusLookupForm,
     DocumentResubmissionForm,
@@ -46,14 +45,12 @@ from .requirements import (
 )
 from .services import (
     ApplicationOTPDeliveryError,
-    create_public_application_draft,
     _build_application_receipt_pdf,
     get_current_applicant_document_items,
     get_public_recruitment_entries,
     get_resubmission_request,
     issue_application_otp,
     save_applicant_application_answers,
-    save_public_application_draft_progress,
     start_public_application_draft,
     submit_application,
     submit_document_resubmission,
@@ -350,9 +347,9 @@ class ApplicantPdsGuideView(TemplateView):
         return context
 
 
-class ApplicantPortalIntakeView(FormView):
-    template_name = "recruitment/applicant_intake_form.html"
-    form_class = ApplicantPortalIntakeForm
+class ApplicantPortalIntakeView(View):
+    """Step 1 of applying: name, email, mobile and consent. Creates (or finds) the draft and
+    emails a code; everything else happens after the email is verified."""
 
     def dispatch(self, request, *args, **kwargs):
         self.entry = get_object_or_404(
@@ -368,56 +365,16 @@ class ApplicantPortalIntakeView(FormView):
             return redirect("applicant-portal")
         return super().dispatch(request, *args, **kwargs)
 
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs["entry"] = self.entry
-        kwargs["request"] = self.request
-        return kwargs
-
     def get_draft_from_token(self):
         token = (self.request.GET.get("token") or "").strip()
         if not token:
             return None
-        return (
-            RecruitmentApplication.objects.filter(
-                public_token=token,
-                position=self.entry,
-                submitted_at__isnull=True,
-                status=RecruitmentApplication.Status.DRAFT,
-            )
-            .prefetch_related("evidence_items")
-            .first()
-        )
-
-    def get_initial_from_draft(self, draft):
-        return {
-            "first_name": draft.applicant_first_name,
-            "last_name": draft.applicant_last_name,
-            "email": draft.applicant_email,
-            "phone": draft.applicant_phone,
-            "qualification_summary": draft.qualification_summary,
-            "cover_letter": draft.cover_letter,
-            "performance_rating_applicability": draft.performance_rating_applicability,
-            "submission_confirmation": draft.checklist_complete,
-            "checklist_privacy_consent": draft.checklist_privacy_consent,
-            "checklist_documents_complete": draft.checklist_documents_complete,
-            "checklist_information_certified": draft.checklist_information_certified,
-        }
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["entry"] = self.entry
-        max_bytes = min(
-            getattr(
-                settings,
-                "MAX_EVIDENCE_UPLOAD_BYTES",
-                MAX_APPLICANT_DOCUMENT_UPLOAD_BYTES,
-            ),
-            MAX_APPLICANT_DOCUMENT_UPLOAD_BYTES,
-        )
-        context["max_upload_bytes"] = max_bytes
-        context["max_upload_mb"] = max_bytes // (1024 * 1024)
-        return context
+        return RecruitmentApplication.objects.filter(
+            public_token=token,
+            position=self.entry,
+            submitted_at__isnull=True,
+            status=RecruitmentApplication.Status.DRAFT,
+        ).first()
 
     def _render_start(self, form, status=200):
         context = {
@@ -428,21 +385,14 @@ class ApplicantPortalIntakeView(FormView):
         return render(self.request, "recruitment/applicant_start.html", context, status=status)
 
     def get(self, request, *args, **kwargs):
-        # Redesigned intake: this page is only "who you are". An old "?token=" draft link
-        # now sends the applicant to verify their e-mail first; a token alone no longer opens
-        # a draft's contents.
+        # An old "?token=" draft link sends the applicant to verify their email first; a
+        # token alone never opens a draft's contents.
         draft = self.get_draft_from_token()
         if draft is not None:
             return redirect("applicant-otp", token=draft.public_token)
         return self._render_start(ApplicantStartForm(entry=self.entry, request=request))
 
     def post(self, request, *args, **kwargs):
-        # A full application in a single request (all answers + files) is still accepted —
-        # the original one-step flow, kept for back-compatibility and covered by the test
-        # suite. The portal's own pages use the step-by-step flow below.
-        if "qualification_summary" in request.POST or request.FILES:
-            return super().post(request, *args, **kwargs)
-
         form = ApplicantStartForm(request.POST, entry=self.entry, request=request)
         if not form.is_valid():
             return self._render_start(form)
@@ -473,78 +423,6 @@ class ApplicantPortalIntakeView(FormView):
                 "We could not send the verification code right now. Use Resend the code in a few moments.",
             )
         return redirect("applicant-otp", token=application.public_token)
-
-    def form_valid(self, form):
-        try:
-            application = create_public_application_draft(
-                entry=self.entry,
-                cleaned_data=form.cleaned_data,
-                requirement_uploads=form.get_requirement_uploads(),
-            )
-        except ValueError as exc:
-            form.add_error(None, str(exc))
-            return self.form_invalid(form)
-        except OperationalError:
-            form.add_error(
-                None,
-                "We could not save your application draft right now. Please try again in a few moments.",
-            )
-            return self.form_invalid(form)
-
-        try:
-            issue_application_otp(
-                application,
-                actor=application.applicant,
-                defer_delivery=False,
-            )
-        except ApplicationOTPDeliveryError as exc:
-            form.add_error(None, str(exc))
-            form.attach_existing_draft(
-                application,
-                saved_notice=(
-                    "Your application draft and uploaded files were saved. "
-                    "You only need to retry sending the verification code."
-                ),
-            )
-            return self.render_to_response(self.get_context_data(form=form))
-
-        messages.success(
-            self.request,
-            "Your application draft is ready. Check your email for the verification code.",
-        )
-        return redirect("applicant-otp", token=application.public_token)
-
-    def form_invalid(self, form):
-        valid_requirement_uploads = form.get_valid_requirement_uploads()
-        if (
-            valid_requirement_uploads
-            and form.can_persist_draft_uploads()
-            and "email" not in form.errors
-            and "captcha_answer" not in form.errors
-            and not form.non_field_errors()
-        ):
-            try:
-                draft = save_public_application_draft_progress(
-                    entry=self.entry,
-                    cleaned_data=form.cleaned_data,
-                    requirement_uploads=valid_requirement_uploads,
-                )
-            except ValueError as exc:
-                form.add_error(None, str(exc))
-            except OperationalError:
-                form.add_error(
-                    None,
-                    "We could not save your uploaded files right now. Please try again in a few moments.",
-                )
-            else:
-                form.attach_existing_draft(
-                    draft,
-                    saved_notice=(
-                        "Your valid files were saved to this draft. "
-                        "You only need to reselect the missing or invalid document slots."
-                    ),
-                )
-        return super().form_invalid(form)
 
 
 class ApplicantOTPView(TemplateView):
@@ -588,9 +466,6 @@ class ApplicantOTPView(TemplateView):
         )
         context["otp_form"] = kwargs.get("otp_form") or ApplicantOTPForm()
         context["otp_validity_minutes"] = settings.APPLICATION_OTP_VALIDITY_MINUTES
-        context["current_applicant_document_count"] = (
-            get_current_applicant_document_items(application).count()
-        )
         return context
 
     def post(self, request, *args, **kwargs):
@@ -637,16 +512,6 @@ class ApplicantOTPView(TemplateView):
             return self.render_to_response(
                 self.get_context_data(application=application, otp_form=otp_form)
             )
-
-        if action == "finalize":
-            try:
-                submit_application(application, application.applicant)
-            except ValueError as exc:
-                messages.error(request, str(exc))
-                return redirect("applicant-otp", token=application.public_token)
-            _mark_status_otp_verified(request, application)
-            messages.success(request, "Application submitted successfully.")
-            return redirect("applicant-receipt", token=application.public_token)
 
         messages.error(request, "This applicant action is not available.")
         return redirect("applicant-otp", token=application.public_token)
