@@ -83,7 +83,7 @@
     {% elif not screening_batch.is_ready %}
         <div class="alert alert-warning" role="status">
             Screening batch is on hold: <strong>{{ screening_batch.pending }}</strong>
-            applicant{{ screening_batch.pending|pluralize }} still need a screening decision
+            applicant{{ screening_batch.pending|pluralize }} still need{{ screening_batch.pending|pluralize:"s," }} a screening decision
             (awaiting resubmission or not yet finalized). Finish screening or remove them from the
             batch before the exam can start.
         </div>
@@ -124,7 +124,7 @@
                         </td>
                         <td class="col-actions">
                             <div class="rg-itbl-actions">
-                                <a href="{% url 'application-detail' application.pk %}"
+                                <a href="{% url 'application-detail' application.pk %}?from=batch"
                                    class="btn btn-outline-secondary btn-sm">Open case</a>
                             </div>
                         </td>

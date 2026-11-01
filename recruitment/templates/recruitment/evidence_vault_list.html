@@ -79,7 +79,7 @@
                             <td style="font-size:.75rem;">
                                 {% if item.uploaded_by %}{{ item.uploaded_by.get_full_name|default:item.uploaded_by.username }}{% else %}System{% endif %}
                             </td>
-                            <td style="font-size:.75rem;">{{ item.created_at|date:"M d, Y H:i" }}</td>
+                            <td style="font-size:.75rem;">{{ item.created_at|date:"M j, Y g:i A" }}</td>
                             <td style="font-size:.75rem;">{{ item.version_label }}</td>
                             <td style="font-size:.75rem;font-family:monospace;">
                                 <span title="{{ item.sha256_digest }}">{{ item.sha256_digest|truncatechars:14 }}</span>

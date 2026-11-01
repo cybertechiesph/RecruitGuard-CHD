@@ -1,6 +1,8 @@
 {% extends "internal_base.html" %}
 {% load recruitment_ui %}
 
+{% block internal_title %}Assessment Weights{% endblock %}
+
 {% block content %}
 <div class="rg-page-header">
     <div>
@@ -111,7 +113,7 @@
 
 {% if weights.updated_at %}
 <p class="rg-note mt-3">
-    Last updated {{ weights.updated_at|date:"M d, Y H:i" }}{% if weights.updated_by %}
+    Last updated {{ weights.updated_at|date:"M j, Y g:i A" }}{% if weights.updated_by %}
     by {{ weights.updated_by.get_full_name|default:weights.updated_by.username }}{% endif %}.
 </p>
 {% endif %}

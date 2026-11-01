@@ -27,6 +27,8 @@ from recruitment.notification_services import (
 from recruitment.services import (
     application_awaiting_car_preparation,
     get_current_workflow_section,
+    get_exam_record,
+    get_interview_session,
 )
 
 register = template.Library()
@@ -440,33 +442,6 @@ def workflow_stage_state(branch, current_stage, step_value, case_status=""):
     return "future"
 
 
-PIPELINE_STAGES = [
-    {"key": "screening", "label": "Screening"},
-    {"key": "exam", "label": "Exam"},
-    {"key": "interview", "label": "Interview"},
-    {"key": "deliberation", "label": "Deliberation"},
-    {"key": "decision", "label": "Decision"},
-    {"key": "completion", "label": "Completion"},
-]
-
-PIPELINE_STAGE_MAP = {
-    RecruitmentCase.Stage.SECRETARIAT_REVIEW: "screening",
-    RecruitmentCase.Stage.HRM_CHIEF_REVIEW: "screening",
-    RecruitmentCase.Stage.HRMPSB_REVIEW: "deliberation",
-    RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW: "decision",
-    RecruitmentCase.Stage.COMPLETION: "completion",
-    RecruitmentCase.Stage.CLOSED: "completion",
-}
-
-PIPELINE_SECTION_MAP = {
-    "screening": "screening",
-    "exam": "exam",
-    "interview": "interview",
-    "deliberation": "deliberation",
-    "decision": "decision",
-    "completion": "completion",
-}
-
 QUEUE_TASK_LABELS = {
     "overview": "Overview",
     "screening": "Screening",
@@ -490,55 +465,129 @@ QUEUE_TASK_THEMES = {
 }
 
 
-@register.simple_tag
-def pipeline_stages():
-    return PIPELINE_STAGES
+CASE_STEPS_PLANTILLA = [
+    ("screening", "Screening"),
+    ("exam", "Exam"),
+    ("interview", "Interview"),
+    ("car", "Comparative Assessment"),
+    ("decision", "Decision"),
+    ("completion", "Completion"),
+]
+CASE_STEPS_COS = [
+    ("screening", "Screening"),
+    ("exam", "Exam"),
+    ("chief_recheck", "HRM Chief re-check"),
+    ("interview", "Interview"),
+    ("selection", "Selection"),
+    ("completion", "Completion"),
+]
+ENDED_CASE_STATUS_PHRASES = {
+    RecruitmentCase.CaseStatus.WITHDRAWN: "Withdrawn at",
+    RecruitmentCase.CaseStatus.VACANCY_CANCELLED: "Vacancy cancelled at",
+    RecruitmentCase.CaseStatus.REJECTED: "Ended at",
+}
+
+
+def _case_step_keys(application):
+    if application.branch != PositionPosting.Branch.COS:
+        return CASE_STEPS_PLANTILLA
+    # Only a Level 1 COS case gets the HRM Chief's second pass; Level 2 starts with the Chief.
+    if application.position.level == PositionPosting.Level.LEVEL_1:
+        return CASE_STEPS_COS
+    return [step for step in CASE_STEPS_COS if step[0] != "chief_recheck"]
+
+
+def _case_step_for_stage(application, stage, section):
+    """Which progress step a (stage, section) pair belongs to, per branch."""
+    Stage = RecruitmentCase.Stage
+    is_cos = application.branch == PositionPosting.Branch.COS
+    if stage in {Stage.COMPLETION, Stage.CLOSED}:
+        return "completion"
+    if stage == Stage.APPOINTING_AUTHORITY_REVIEW:
+        return "decision"
+    if stage == Stage.HRMPSB_REVIEW:
+        return "car" if section == "car" else "interview"
+    if is_cos and stage == Stage.HRM_CHIEF_REVIEW:
+        if section in {"deliberation", "decision"}:
+            return "selection"
+        if section == "interview":
+            return "interview"
+        if application.position.level == PositionPosting.Level.LEVEL_1:
+            return "chief_recheck"
+    return "exam" if section == "exam" else "screening"
+
+
+def _ended_case_step(application, case):
+    """Where a withdrawn, cancelled or not-selected case stopped, from the stage it was
+    closed in (``locked_stage``) and the records it had reached there."""
+    stage = case.locked_stage or RecruitmentCase.Stage.SECRETARIAT_REVIEW
+    Stage = RecruitmentCase.Stage
+    if stage == Stage.HRMPSB_REVIEW:
+        session = get_interview_session(application, stage=stage)
+        section = "car" if session and session.is_finalized else "interview"
+    elif application.branch == PositionPosting.Branch.COS and stage == Stage.HRM_CHIEF_REVIEW:
+        session = get_interview_session(application, stage=stage)
+        if session and session.is_finalized:
+            section = "deliberation"
+        elif session:
+            section = "interview"
+        else:
+            section = "exam" if get_exam_record(application, stage=stage) else "screening"
+    elif stage in {Stage.SECRETARIAT_REVIEW, Stage.HRM_CHIEF_REVIEW}:
+        section = "exam" if get_exam_record(application, stage=stage) else "screening"
+    else:
+        section = ""
+    return _case_step_for_stage(application, stage, section)
 
 
 @register.simple_tag
-def pipeline_stage_state(application, case_status, step_key):
-    recruitment_case = getattr(application, "case", None)
-    current_stage = getattr(recruitment_case, "current_stage", "")
-    if not current_stage:
-        return "future"
-
-    current_section = get_current_workflow_section(application)
-    mapped = PIPELINE_SECTION_MAP.get(current_section) or PIPELINE_STAGE_MAP.get(
-        current_stage,
-        "screening",
+def case_progress(application):
+    """The case's progress bar: this branch's own steps, each marked complete, current,
+    ended or future, plus the one-line summary shown when the bar is collapsed."""
+    steps = _case_step_keys(application)
+    keys = [key for key, _ in steps]
+    case = getattr(application, "case", None)
+    ended_phrase = ENDED_CASE_STATUS_PHRASES.get(getattr(case, "case_status", ""))
+    finished = (
+        case is not None
+        and case.current_stage == RecruitmentCase.Stage.CLOSED
+        and case.case_status == RecruitmentCase.CaseStatus.APPROVED
     )
-    order = [s["key"] for s in PIPELINE_STAGES]
+    if case is None:
+        current_key = None
+    elif ended_phrase:
+        current_key = _ended_case_step(application, case)
+    else:
+        current_key = _case_step_for_stage(
+            application, case.current_stage, get_current_workflow_section(application)
+        )
+    current_idx = keys.index(current_key) if current_key in keys else -1
 
-    try:
-        current_idx = order.index(mapped)
-    except ValueError:
-        current_idx = 0
+    rows = []
+    for idx, (key, label) in enumerate(steps):
+        if finished or (current_idx >= 0 and idx < current_idx):
+            state = "complete"
+        elif idx == current_idx:
+            state = "ended" if ended_phrase else "current"
+        else:
+            state = "future"
+        rows.append({"key": key, "label": label, "state": state, "number": idx + 1})
 
-    try:
-        step_idx = order.index(step_key)
-    except ValueError:
-        return "future"
-
-    if case_status == RecruitmentCase.CaseStatus.REJECTED:
-        terminal_idx = order.index("decision")
-        if step_idx < terminal_idx:
-            return "complete"
-        if step_idx == terminal_idx:
-            return "current"
-        return "future"
-    if case_status == RecruitmentCase.CaseStatus.APPROVED:
-        terminal_idx = order.index("completion")
-        if step_idx < terminal_idx:
-            return "complete"
-        if step_idx == terminal_idx:
-            return "current"
-        return "future"
-
-    if step_idx < current_idx:
-        return "complete"
-    if step_idx == current_idx:
-        return "current"
-    return "future"
+    if finished:
+        summary_step, summary_label = "Done", "All steps complete"
+    elif ended_phrase and current_idx >= 0:
+        if (
+            case.case_status == RecruitmentCase.CaseStatus.REJECTED
+            and current_key in {"decision", "selection", "car"}
+        ):
+            ended_phrase = "Not selected at"
+        summary_step, summary_label = "Closed", f"{ended_phrase} {steps[current_idx][1]}"
+    elif current_idx >= 0:
+        summary_step = f"Step {current_idx + 1} of {len(steps)}"
+        summary_label = steps[current_idx][1]
+    else:
+        summary_step, summary_label = "", ""
+    return {"steps": rows, "summary_step": summary_step, "summary_label": summary_label}
 
 
 def _queue_task_display(application):
@@ -619,14 +668,23 @@ def stage_sla_context(recruitment_case):
     return recruitment_case.stage_sla_context
 
 
+STAGE_SLA_OWNER_PHRASES = {
+    RecruitmentCase.Stage.SECRETARIAT_REVIEW: "With the Secretariat",
+    RecruitmentCase.Stage.HRM_CHIEF_REVIEW: "With the HRM Chief",
+    RecruitmentCase.Stage.HRMPSB_REVIEW: "At the HRMPSB stage",
+    RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW: "With the Appointing Authority",
+    RecruitmentCase.Stage.COMPLETION: "At Completion",
+}
+
+
 @register.simple_tag
 def stage_sla_label(recruitment_case):
+    """What the stage clock measures: time with the office that holds the case. It covers
+    every step inside that stage (screening and exam together), so naming one step would
+    understate it."""
     if not recruitment_case:
-        return "current step"
-    application = getattr(recruitment_case, "application", None)
-    if application:
-        return _queue_task_display(application)[0]
-    return stage_label(recruitment_case.current_stage)
+        return "At the current step"
+    return STAGE_SLA_OWNER_PHRASES.get(recruitment_case.current_stage, "At the current step")
 
 
 @register.inclusion_tag("internal_includes/notifications_bell.html", takes_context=True)

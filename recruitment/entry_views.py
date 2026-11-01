@@ -20,6 +20,8 @@ from .permissions import EntryManagerRequiredMixin
 from .services import (
     cancel_recruitment_entry,
     get_office_policy,
+    ENDED_ENTRY_STATUSES,
+    ENTRY_LIST_FILTERS,
     get_manageable_recruitment_entries,
     persist_recruitment_entry,
     record_system_audit_event,
@@ -43,13 +45,30 @@ class RecruitmentEntryListView(LoginRequiredMixin, EntryManagerRequiredMixin, Li
     template_name = "recruitment/recruitment_entry_list.html"
     context_object_name = "entries"
 
+    def _status_filter(self):
+        requested = self.request.GET.get("status", "open")
+        return requested if requested in ENTRY_LIST_FILTERS else "open"
+
     def get_queryset(self):
-        return get_manageable_recruitment_entries(self.request.user)
+        return get_manageable_recruitment_entries(self.request.user, self._status_filter())
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         entries = list(context["entries"])
         today = timezone.localdate()
+        context["status_filter"] = self._status_filter()
+        everything = get_manageable_recruitment_entries(self.request.user, "all")
+        ended = everything.filter(status__in=ENDED_ENTRY_STATUSES).count()
+        total = everything.count()
+        context["entry_filter_counts"] = {"open": total - ended, "closed": ended, "all": total}
+        # An active vacancy past its closing date no longer takes applications (the
+        # applicant portal already treats it as closed); say so and offer the close.
+        for entry in entries:
+            entry.intake_deadline_passed = bool(
+                entry.status == PositionPosting.EntryStatus.ACTIVE
+                and entry.closing_date
+                and entry.closing_date < today
+            )
         context["entry_active_count"] = sum(
             1 for e in entries if e.status == PositionPosting.EntryStatus.ACTIVE
         )

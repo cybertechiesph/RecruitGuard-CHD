@@ -1222,9 +1222,20 @@ class CompletionTrackingForm(BootstrapFormMixin, forms.ModelForm):
         # reminders read, so the client-confirmed two-week default lives here
         # (it used to sit on the email dialog, letting the two dates diverge).
         if not self.instance.pk or not self.instance.deadline:
-            self.fields["deadline"].initial = timezone.localdate() + timedelta(days=14)
+            # Two weeks from the day the case reached Completion (the selection), so the
+            # suggested date stays put instead of moving forward each time the page opens.
+            case = getattr(application, "case", None)
+            start = (
+                timezone.localdate(case.stage_entered_at)
+                if case is not None
+                and case.current_stage == RecruitmentCase.Stage.COMPLETION
+                and case.stage_entered_at
+                else timezone.localdate()
+            )
+            self.fields["deadline"].initial = start + timedelta(days=14)
             self.fields["deadline"].help_text = (
-                "Defaults to two weeks from today; adjust if the office set a different window."
+                f"Suggested: two weeks from {start:%B} {start.day}, {start:%Y}, when the case "
+                "reached Completion. Change it if the office set a different window."
             )
         self.fields["remarks"].required = False
         # SL-13: moving a deadline is a deliberate act, so it asks for a reason. Required
@@ -1693,6 +1704,15 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
         ):
             evidence = current_documents.get(requirement.code)
             existing_review = existing_reviews.get(requirement.code)
+            # The applicant replaced the file this review was about (a resubmission): the
+            # earlier verdict and note were for the old file, so the row starts fresh and
+            # the old note is shown for reference rather than sitting in the box.
+            is_resubmitted = bool(
+                evidence is not None
+                and existing_review is not None
+                and existing_review.evidence_item_id
+                and existing_review.evidence_item_id != evidence.pk
+            )
             is_not_applicable = (
                 requirement.conditional_on_performance_rating
                 and self.application.performance_rating_not_applicable
@@ -1712,6 +1732,9 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
             elif evidence is None:
                 initial_status = ScreeningDocumentReview.ReviewStatus.NOT_APPLICABLE
                 status_is_fixed = True
+            elif is_resubmitted:
+                initial_status = ScreeningDocumentReview.ReviewStatus.NOT_REVIEWED
+                status_is_fixed = False
             elif existing_review is not None:
                 initial_status = existing_review.status
                 status_is_fixed = False
@@ -1743,7 +1766,11 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
             )
             self.fields[remarks_field_name] = forms.CharField(
                 required=False,
-                initial=existing_review.remarks if existing_review is not None else "",
+                initial=(
+                    existing_review.remarks
+                    if existing_review is not None and not is_resubmitted
+                    else ""
+                ),
                 label=f"Remarks for {requirement.title}",
                 widget=forms.Textarea(
                     attrs={
@@ -1768,6 +1795,8 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
                 "initial_status_label": status_labels.get(initial_status, initial_status),
                 "status_is_fixed": status_is_fixed,
                 "display_order": display_order,
+                "is_resubmitted": is_resubmitted,
+                "earlier_note": existing_review.remarks if is_resubmitted else "",
             }
             self._document_review_field_metadata.append(metadata)
             self.document_review_fields.append(
@@ -2644,8 +2673,14 @@ class InterviewFallbackUploadForm(BootstrapFormMixin, forms.Form):
         help_text="Required when the rating is below 75 or above 98.",
     )
     remarks = forms.CharField(
-        label="Upload Remarks",
-        widget=forms.Textarea(attrs={"rows": 3}),
+        label="Notes",
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 2}),
+    )
+    replace_existing = forms.BooleanField(
+        label="Replace this member's earlier sheet",
+        required=False,
+        help_text="Only if this member already has a sheet on record and this one supersedes it.",
     )
 
     def __init__(self, *args, panel_members=None, **kwargs):
@@ -3104,6 +3139,16 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
             return PositionReference.objects.filter(pk=selected_value).first()
         except (TypeError, ValueError):
             return None
+
+    def _post_clean(self):
+        # One problem, one message: when this form has already explained a field, the
+        # model's own check of the same rule (or of the value the form just rejected)
+        # would only repeat it in different words.
+        form_errors = {field: list(errors) for field, errors in self._errors.items()}
+        super()._post_clean()
+        for field, errors in form_errors.items():
+            if field in self._errors and len(self._errors[field]) > len(errors):
+                self._errors[field] = self.error_class(errors)
 
     def clean(self):
         cleaned_data = super().clean()

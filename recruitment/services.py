@@ -1459,14 +1459,31 @@ def _user_has_closed_application_access(user, application):
     return user.role in EXPORT_ROLES
 
 
-def get_manageable_recruitment_entries(user):
+ENTRY_LIST_FILTERS = ("open", "closed", "all")
+ENDED_ENTRY_STATUSES = (
+    PositionPosting.EntryStatus.CLOSED,
+    PositionPosting.EntryStatus.CANCELLED,
+)
+
+
+def get_manageable_recruitment_entries(user, status_filter=None):
+    """Vacancies the user manages. ``status_filter``: "open" (not closed or cancelled),
+    "closed" (closed or cancelled, the past vacancies), "all", or None for the
+    long-standing default of everything except closed."""
     if user.role not in ENTRY_MANAGER_ROLES:
         return PositionPosting.objects.none()
-    return PositionPosting.objects.select_related(
+    entries = PositionPosting.objects.select_related(
         "position_reference",
         "created_by",
         "updated_by",
-    ).exclude(status=PositionPosting.EntryStatus.CLOSED).order_by("-updated_at")
+    ).order_by("-updated_at")
+    if status_filter == "open":
+        return entries.exclude(status__in=ENDED_ENTRY_STATUSES)
+    if status_filter == "closed":
+        return entries.filter(status__in=ENDED_ENTRY_STATUSES)
+    if status_filter == "all":
+        return entries
+    return entries.exclude(status=PositionPosting.EntryStatus.CLOSED)
 
 
 def user_can_view_application(user, application):
@@ -1917,7 +1934,7 @@ def _auto_route_application(application, actor, *, next_role, next_status, descr
         application,
         actor,
         next_role,
-        title=f"{application.reference_label} assigned to you",
+        title=f"{application.reference_label} is now in your queue",
         body=description,
     )
     if previous_role == RecruitmentUser.Role.SECRETARIAT:
@@ -7117,6 +7134,20 @@ def save_competency_rating_sheet(template, template_form, formset, publish=False
     ``publish`` is set the sheet is opened to the HRMPSB panel."""
     if template.is_locked:
         raise ValueError("This rating sheet is locked because scoring has started.")
+    if publish:
+        # The standard sheet only carries the Core and Organizational competencies; the panel
+        # can't rate the job itself until the position's Technical ones are added.
+        has_technical = any(
+            (getattr(form, "cleaned_data", None) or {}).get("group") == "technical"
+            and ((form.cleaned_data.get("name") or "").strip())
+            and not form.cleaned_data.get("DELETE")
+            for form in formset.forms
+        )
+        if not has_technical:
+            raise ValueError(
+                "Add at least one Technical competency for this position before making the "
+                "sheet available to the panel. You can save it as a draft in the meantime."
+            )
 
     template = template_form.save(commit=False)
     order = 0
@@ -7157,6 +7188,7 @@ def upload_interview_fallback_rating(
     rated_by=None,
     rating_score=None,
     justification="",
+    replace_existing=False,
 ):
     """Encode one HRMPSB member's paper rating sheet.
 
@@ -7187,6 +7219,16 @@ def upload_interview_fallback_rating(
         )
     if rating_score in (None, ""):
         raise ValueError("Record the numeric rating from the sheet.")
+    earlier = InterviewFallbackRating.objects.filter(
+        interview_session=interview_session, rated_by=rated_by
+    ).first()
+    if earlier is not None and not replace_existing:
+        # Each member counts once; a second sheet replaces the first, so it must be deliberate.
+        raise ValueError(
+            f"{rated_by.get_full_name() or rated_by.username} already has a paper sheet on record "
+            f"(rating {earlier.rating_score}). To replace it, tick "
+            "\u201cReplace this member's earlier sheet\u201d and save again."
+        )
 
     validate_applicant_document_upload(uploaded_file)
 
@@ -7656,6 +7698,7 @@ def get_comparative_assessment_readiness(application):
         "can_prepare_draft": False,
         "can_finalize": False,
         "draft_candidate_count": 0,
+        "draft_candidate_cases": [],
         "final_candidate_count": 0,
         "prepare_block_message": "",
         "finalize_block_message": "",
@@ -7686,6 +7729,8 @@ def get_comparative_assessment_readiness(application):
     else:
         readiness["can_prepare_draft"] = True
         readiness["draft_candidate_count"] = len(draft_rows)
+        # So the ETE boxes can be filled before the first draft exists.
+        readiness["draft_candidate_cases"] = [row["recruitment_case"] for row in draft_rows]
 
     latest_draft_report = get_latest_draft_comparative_assessment_report(
         application,
@@ -8167,7 +8212,7 @@ def _upsert_recruitment_case_for_submission(application, actor, next_role, next_
         application,
         actor,
         next_role,
-        title=f"{application.reference_label} assigned to you",
+        title=f"{application.reference_label} is now in your queue",
         body="A new application is ready for review.",
         tab="screening",
     )

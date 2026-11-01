@@ -67,6 +67,19 @@ generator.
         {% endwith %}
     {% endif %}
 </section>
+{% elif current_interview_session and current_interview_session.is_finalized and current_interview_fallback_ratings %}
+{# The panel rated on paper and the office typed the sheets in: those ARE the ratings. #}
+<section class="rg-icard rg-del-panel-summary" data-paper-ratings>
+    <p class="rg-del-panel-summary__notice mb-2">
+        The panel rated on paper. {{ current_interview_fallback_ratings|length }} signed
+        sheet{{ current_interview_fallback_ratings|length|pluralize }} {{ current_interview_fallback_ratings|length|pluralize:"was,were" }} entered:
+    </p>
+    <ul class="mb-0">
+        {% for rating in current_interview_fallback_ratings %}
+            <li>{% if request.user.role == "hrmpsb_member" %}Panel member {{ forloop.counter }}{% else %}{{ rating.rated_by.get_full_name|default:rating.rated_by.username }}{% endif %} &mdash; {{ rating.rating_score }}</li>
+        {% endfor %}
+    </ul>
+</section>
 {% elif current_interview_session and current_interview_session.is_finalized %}
 <section class="rg-icard rg-del-panel-summary rg-del-panel-summary--empty">
     <div class="rg-del-panel-summary__notice">
@@ -75,8 +88,7 @@ generator.
             <path d="M8 5v3" stroke-linecap="round"/>
             <circle cx="8" cy="11" r="0.75" fill="currentColor"/>
         </svg>
-        Interview session is finalized but no digital ratings were submitted.
-        Check Secured Files for a fallback rating sheet if one was uploaded.
+        The interview is finalized, but no ratings are on record for this candidate.
     </div>
 </section>
 {% endif %}

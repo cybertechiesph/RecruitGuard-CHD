@@ -3013,6 +3013,22 @@ body.applicant-portal-body {
     background: var(--rg-brand-gold);
     box-shadow: 0 0 0 2px rgba(253, 184, 19, 0.18);
 }
+/* A withdrawn, cancelled or not-selected case: the step where it stopped. */
+.rg-pipeline-summary__tick.is-ended {
+    background: #8a94a3;
+}
+.rg-pipeline__stage.is-ended .rg-pipeline__circle {
+    background: #8a94a3 !important;
+    color: #fff !important;
+    border-color: #8a94a3 !important;
+}
+.rg-pipeline__stage.is-ended .rg-pipeline__label {
+    color: #4b5563;
+    font-weight: 700;
+}
+html[data-theme="dark"] .rg-pipeline__stage.is-ended .rg-pipeline__label {
+    color: #cbd5e1;
+}
 
 .rg-pipeline-summary__copy {
     display: flex;

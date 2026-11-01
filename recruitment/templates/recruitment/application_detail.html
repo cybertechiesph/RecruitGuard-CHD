@@ -17,7 +17,6 @@
 
 {% block content %}
 {% workflow_stages application.branch as workflow_steps %}
-{% pipeline_stages as pipe_stages %}
 
 
 {% include "internal_includes/case_header.html" %}
@@ -25,7 +24,7 @@
 {% if next_batch_case %}
 <div class="alert alert-info d-flex flex-wrap align-items-center gap-2 mt-2 mb-0" role="status">
     <span>Next in this batch: <strong>{% if request.user.role == "hrmpsb_member" %}Candidate {{ next_batch_case.candidate_code_label }}{% else %}Case No. {{ next_batch_case.case_number_short }}{% endif %}</strong></span>
-    <a class="btn btn-rg-primary btn-sm" href="{% url 'application-detail' next_batch_case.pk %}">Open next case</a>
+    <a class="btn btn-rg-primary btn-sm" href="{% url 'application-detail' next_batch_case.pk %}?from=batch">Open next case</a>
 </div>
 {% endif %}
 
@@ -64,7 +63,7 @@
                 <span class="rg-applicant-panel__label">Submitted</span>
                 <strong>
                     {% if application.submitted_at %}
-                        {{ application.submitted_at|date:"M d, Y H:i" }}
+                        {{ application.submitted_at|date:"M j, Y g:i A" }}
                     {% else %}&mdash;{% endif %}
                 </strong>
             </div>
@@ -327,7 +326,12 @@
             
             {% if current_detail_tab.key == "completion" %}
             <div class="rg-cws-stage-section" id="cws-completion">
-                {% include "internal_includes/stage_titlebar.html" with title="Completion" locked=completion_record %}
+                {% if completion_form or closure_form %}
+                    {# Still being worked on, so no Locked badge even when a record exists. #}
+                    {% include "internal_includes/stage_titlebar.html" with title="Completion" %}
+                {% else %}
+                    {% include "internal_includes/stage_titlebar.html" with title="Completion" locked=completion_record %}
+                {% endif %}
 
                 {% if completion_form or closure_form %}
                     
@@ -383,7 +387,7 @@
                                                 {{ item.original_filename }} &mdash; {{ item.version_label }}
                                             </div>
                                         </div>
-                                        <span class="rg-note">{{ item.created_at|date:"M d, Y H:i" }}</span>
+                                        <span class="rg-note">{{ item.created_at|date:"M j, Y g:i A" }}</span>
                                     </div>
                                     <div class="d-flex flex-wrap gap-2 mb-2">
                                         <span class="rg-pill rg-pill--neutral rg-pill--sm">
@@ -468,7 +472,7 @@
                                         <div class="rg-record__header">
                                             <strong>{{ entry.action|audit_action_label }}</strong>
                                             <span class="rg-note">
-                                                {{ entry.created_at|date:"M d, Y H:i" }}
+                                                {{ entry.created_at|date:"M j, Y g:i A" }}
                                             </span>
                                         </div>
                                         <p class="mb-1">{{ entry.description }}</p>

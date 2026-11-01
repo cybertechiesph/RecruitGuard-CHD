@@ -130,6 +130,13 @@ Inputs:
                 <div class="invalid-feedback d-block">{{ error }}</div>
             {% endfor %}
         </div>
+        <div class="form-check mb-2">
+            {{ interview_fallback_form.replace_existing }}
+            <label class="form-check-label" for="{{ interview_fallback_form.replace_existing.id_for_label }}">
+                {{ interview_fallback_form.replace_existing.label }}
+            </label>
+            <div class="form-text">{{ interview_fallback_form.replace_existing.help_text }}</div>
+        </div>
         <div class="rg-int-fallback-actions">
             <button type="submit" class="btn btn-sm btn-outline-secondary">
                 Encode this rating sheet

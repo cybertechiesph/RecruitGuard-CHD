@@ -19,10 +19,21 @@
     </div>
 </div>
 
+<nav class="rg-seg mb-3" aria-label="Show entries">
+    {% with counts=entry_filter_counts %}
+    <a href="?status=open" class="btn btn-sm {% if status_filter == 'open' %}btn-rg-primary{% else %}btn-outline-secondary{% endif %}"
+       {% if status_filter == 'open' %}aria-current="page"{% endif %}>Open ({{ counts.open }})</a>
+    <a href="?status=closed" class="btn btn-sm {% if status_filter == 'closed' %}btn-rg-primary{% else %}btn-outline-secondary{% endif %}"
+       {% if status_filter == 'closed' %}aria-current="page"{% endif %}>Closed or cancelled ({{ counts.closed }})</a>
+    <a href="?status=all" class="btn btn-sm {% if status_filter == 'all' %}btn-rg-primary{% else %}btn-outline-secondary{% endif %}"
+       {% if status_filter == 'all' %}aria-current="page"{% endif %}>All ({{ counts.all }})</a>
+    {% endwith %}
+</nav>
+
 <div class="rg-istat-row">
     <div class="rg-istat">
         <span class="rg-istat__value">{{ entries|length }}</span>
-        <span class="rg-istat__label">Total entries</span>
+        <span class="rg-istat__label">{% if status_filter == "closed" %}Closed or cancelled{% elif status_filter == "all" %}All entries{% else %}Open entries{% endif %}</span>
     </div>
     <div class="rg-istat-row__divider"></div>
     <div class="rg-istat">
@@ -39,7 +50,13 @@
 {% url 'recruitment-entry-create' as create_entry_url %}
 {% if not entries %}
     <div class="rg-icard">
-        {% include "internal_includes/state_empty.html" with title="No recruitment entries recorded yet" copy="Create a Plantilla or COS entry to begin managing applications for a position." action_url=create_entry_url action_label="Create First Entry" %}
+        {% if status_filter == "closed" %}
+            {% include "internal_includes/state_empty.html" with title="No closed vacancies yet" copy="Vacancies you close or cancel will be listed here." %}
+        {% elif entry_filter_counts.all %}
+            {% include "internal_includes/state_empty.html" with title="No open vacancies" copy="Every vacancy is closed or cancelled. Create a new entry to start another recruitment." action_url=create_entry_url action_label="New Entry" %}
+        {% else %}
+            {% include "internal_includes/state_empty.html" with title="No recruitment entries recorded yet" copy="Create a Plantilla or COS entry to begin managing applications for a position." action_url=create_entry_url action_label="Create First Entry" %}
+        {% endif %}
     </div>
 {% else %}
     <div class="rg-itbl rg-itbl--sticky">
@@ -109,6 +126,14 @@
                                 <span class="rg-pill rg-pill--{{ entry.status|status_theme }} rg-pill--sm">
                                     {{ entry.get_status_display }}
                                 </span>
+                                {% if entry.intake_deadline_passed %}
+                                    <div class="mt-1" data-intake-deadline-passed>
+                                        <span class="rg-pill rg-pill--warning rg-pill--sm"
+                                              title="The closing date has passed, so the applicant portal no longer accepts applications.">
+                                            Applications closed (deadline passed)
+                                        </span>
+                                    </div>
+                                {% endif %}
                             </td>
                             <td>
                                 <div class="rg-imeta" style="flex-direction:column;gap:0.1rem;align-items:flex-start;">
@@ -195,12 +220,12 @@
                                                     {% csrf_token %}
                                                 </form>
                                                 <button type="button"
-                                                        class="btn btn-rg-destructive btn-sm"
+                                                        class="btn {% if entry.intake_deadline_passed %}btn-rg-primary{% else %}btn-rg-destructive{% endif %} btn-sm"
                                                         data-bs-toggle="modal"
                                                         data-bs-target="#closeModal{{ entry.pk }}">
-                                                    Close
+                                                    {% if entry.intake_deadline_passed %}Close intake{% else %}Close{% endif %}
                                                 </button>
-                                                {% include "internal_includes/modal_confirm.html" with modal_id=entry.pk|dom_id:"closeModal" variant="destructive" title="Close this recruitment entry?" body="Closing will stop accepting new applications for this entry and, for Plantilla vacancies, marks the applicant pool ready for HRMPSB deliberation/CAR. Existing cases in the workflow will not be affected." confirm_label="Close Entry" form_id=entry.pk|dom_id:"closeForm" reason_label="Reason for closing" reason_id=entry.pk|dom_id:"close-reason-" reason_name="reason" %}
+                                                {% include "internal_includes/modal_confirm.html" with modal_id=entry.pk|dom_id:"closeModal" variant="destructive" title="Close this recruitment entry?" body="No new applications will be accepted. For a Plantilla vacancy, the applicant pool is then final, so the Comparative Assessment can be prepared. Cases already in progress continue as normal." confirm_label="Close Entry" form_id=entry.pk|dom_id:"closeForm" reason_label="Reason for closing" reason_id=entry.pk|dom_id:"close-reason-" reason_name="reason" %}
                                             {% else %}
                                                 <form method="post"
                                                       action="{% url 'recruitment-entry-status' entry.pk 'closed' %}"
@@ -208,12 +233,12 @@
                                                     {% csrf_token %}
                                                 </form>
                                                 <button type="button"
-                                                        class="btn btn-rg-destructive btn-sm"
+                                                        class="btn {% if entry.intake_deadline_passed %}btn-rg-primary{% else %}btn-rg-destructive{% endif %} btn-sm"
                                                         data-bs-toggle="modal"
                                                         data-bs-target="#closeModal{{ entry.pk }}">
-                                                    Close
+                                                    {% if entry.intake_deadline_passed %}Close intake{% else %}Close{% endif %}
                                                 </button>
-                                                {% include "internal_includes/modal_confirm.html" with modal_id=entry.pk|dom_id:"closeModal" variant="destructive" title="Close this recruitment entry?" body="Closing will stop accepting new applications for this entry and, for Plantilla vacancies, marks the applicant pool ready for HRMPSB deliberation/CAR. Existing cases in the workflow will not be affected." confirm_label="Close Entry" form_id=entry.pk|dom_id:"closeForm" %}
+                                                {% include "internal_includes/modal_confirm.html" with modal_id=entry.pk|dom_id:"closeModal" variant="destructive" title="Close this recruitment entry?" body="No new applications will be accepted. For a Plantilla vacancy, the applicant pool is then final, so the Comparative Assessment can be prepared. Cases already in progress continue as normal." confirm_label="Close Entry" form_id=entry.pk|dom_id:"closeForm" %}
                                             {% endif %}
                                         {% endif %}
                                     {% endif %}

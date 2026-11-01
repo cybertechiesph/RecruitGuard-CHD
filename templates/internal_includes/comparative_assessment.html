@@ -31,7 +31,7 @@ HRM Chief on COS). Two states:
         {% if current_comparative_assessment_report %}
         <div class="rg-del-car__version">
             <span class="rg-pill rg-pill--neutral rg-pill--sm">
-                Version {{ current_comparative_assessment_report.version_number }}
+                {% if current_comparative_assessment_report.is_finalized %}Version {{ current_comparative_assessment_report.official_version }}{% else %}Draft{% endif %}
             </span>
             {% if current_comparative_assessment_report.generated_by %}
                 <div class="rg-del-car__author">
@@ -149,6 +149,11 @@ HRM Chief on COS). Two states:
             </li>
             {% endfor %}
         </ul>
+    {% elif car_ete_rows %}
+        <p class="rg-del-car__empty">
+            Enter each candidate's ETE scores below, then click <strong>Prepare draft CAR</strong>.
+            It saves the scores and ranks the candidates using their exam and interview results.
+        </p>
     {% else %}
         <p class="rg-del-car__empty">
             Click <strong>Prepare draft CAR</strong> below to compile the finalized screening, exam, and interview outputs for this position.
@@ -162,7 +167,7 @@ HRM Chief on COS). Two states:
         {% csrf_token %}
         <input type="hidden" name="operation" id="car-op-field" value="save">
 
-        {% if current_comparative_assessment_report_items %}
+        {% if car_ete_rows %}
         <div class="rg-field">
             <label class="form-label">ETE ratings (Education, Training, Experience)</label>
             <div class="form-text">
@@ -172,7 +177,8 @@ HRM Chief on COS). Two states:
                 education {{ ete_component_weight_display.education }}%,
                 training {{ ete_component_weight_display.training }}%,
                 experience {{ ete_component_weight_display.experience }}%.
-                Press <strong>Update draft CAR</strong> to recompute the overall score and ranking.
+                Press <strong>{% if current_comparative_assessment_report %}Update draft CAR{% else %}Prepare draft CAR{% endif %}</strong>
+                to save the scores and work out the overall score and ranking.
             </div>
 
             {% comment %}
@@ -183,7 +189,7 @@ HRM Chief on COS). Two states:
             {% endcomment %}
             {% include "internal_includes/qualification_standards.html" %}
             <div class="rg-car-ete-grid">
-                {% for item in current_comparative_assessment_report_items %}
+                {% for item in car_ete_rows %}
                 {% with ete=item.application.ete_rating %}
                 <div class="rg-car-ete-row" style="display:block;padding:0.6rem 0;border-bottom:1px solid #eef1f4;">
                     <div class="rg-car-ete-row__name mb-1">
@@ -279,7 +285,7 @@ HRM Chief on COS). Two states:
                 <span class="rg-int-optional">Optional</span>
             </label>
             {{ car_form.summary_notes }}
-            <div class="form-text">Add HRMS preparation notes to accompany the generated CAR draft or final document.</div>
+            <div class="form-text">Notes from the HRMU that go with the CAR draft and the final report.</div>
             {% for error in car_form.summary_notes.errors %}
                 <div class="invalid-feedback d-block">{{ error }}</div>
             {% endfor %}

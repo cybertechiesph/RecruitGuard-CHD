@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -72,6 +74,7 @@ from .forms import (
 )
 from .models import (
     AUDIT_ACTION_CATEGORIES,
+    COMPLETION_SLA_OVERDUE_THRESHOLD,
     STAGE_SLA_OVERDUE_THRESHOLD,
     AUDIT_CATEGORY_BY_ACTION,
     AttendanceException,
@@ -474,8 +477,19 @@ class DashboardView(LoginRequiredMixin, InternalUserRequiredMixin, TemplateView)
                 for value, label in RecruitmentCase.Stage.choices
                 if value != RecruitmentCase.Stage.CLOSED
             ]
+            # Same per-stage targets as the case badge (Completion has two weeks).
+            now = timezone.now()
             context["overdue_case_count"] = open_cases.filter(
-                stage_entered_at__lt=timezone.now() - STAGE_SLA_OVERDUE_THRESHOLD
+                (
+                    ~Q(current_stage=RecruitmentCase.Stage.COMPLETION)
+                    & Q(stage_entered_at__lt=now - STAGE_SLA_OVERDUE_THRESHOLD)
+                )
+                | Q(
+                    current_stage=RecruitmentCase.Stage.COMPLETION,
+                    stage_entered_at__lt=now - COMPLETION_SLA_OVERDUE_THRESHOLD,
+                )
+            ).exclude(
+                case_status=RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION
             ).count()
 
             context["audit_week_summary"] = summarize_audit_logs(
@@ -848,11 +862,6 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
             if current_car
             else application.position.assessment_weights_or_default
         )
-        # SL-08A: the QS and each candidate's screened credentials, so the ETE verdict is
-        # made against the record rather than from memory.
-        context["car_candidate_facts"] = get_car_candidate_fact_rows(
-            comparative_assessment_items
-        )
         ete_weights = ETE_COMPONENT_WEIGHTS_BY_BRANCH.get(
             application.branch,
             ETE_COMPONENT_WEIGHTS_BY_BRANCH[PositionPosting.Branch.PLANTILLA],
@@ -868,6 +877,20 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
             user, application.position
         )
         context["car_readiness"] = get_comparative_assessment_readiness(application)
+        # The ETE grid lists the draft's rows; before the first draft it lists the pool,
+        # so the scores can be typed first and one "Prepare draft CAR" saves and ranks.
+        car_ete_rows = comparative_assessment_items or [
+            SimpleNamespace(
+                recruitment_case_id=pool_case.id,
+                application=pool_case.application,
+                candidate_label=pool_case.application.candidate_code_label,
+            )
+            for pool_case in context["car_readiness"].get("draft_candidate_cases", [])
+        ]
+        context["car_ete_rows"] = car_ete_rows
+        # SL-08A: the QS and each candidate's screened credentials, so the ETE verdict is
+        # made against the record rather than from memory.
+        context["car_candidate_facts"] = get_car_candidate_fact_rows(car_ete_rows)
         context["car_requires_deliberation"] = False
         context["car_requires_finalized_deliberation"] = False
         context["car_finalize_block_message"] = context["car_readiness"].get(
@@ -2371,12 +2394,36 @@ class VacancyBatchInterviewView(LoginRequiredMixin, WorkflowProcessorRequiredMix
             if c["application"].withdrawal_requested_at
             and c["application"].status != RecruitmentApplication.Status.WITHDRAWN
         ]
+        # Only the role that runs the interview sends its schedule (the Secretariat for
+        # Level 1, the HRM Chief for Level 2 or COS); everyone else sees what was sent.
+        can_schedule = bool(pool) and all(
+            user_can_manage_interview_session(request.user, application) for application in pool
+        )
+        sessions = [c["session"] for c in candidates]
+        current_interview = (
+            sessions[0]
+            if sessions and all(s and s.scheduled_for for s in sessions)
+            else None
+        )
         return {
             "withdrawal_requests": withdrawal_requests,
+            "can_schedule": can_schedule,
+            "current_interview": current_interview,
             "entry": entry,
             "candidates": candidates,
             "is_plantilla": is_plantilla,
-            "schedule_form": schedule_form or InterviewSessionForm(),
+            "schedule_form": schedule_form
+            or InterviewSessionForm(
+                initial=(
+                    {
+                        "scheduled_for": timezone.localtime(current_interview.scheduled_for).strftime("%Y-%m-%dT%H:%M"),
+                        "location": current_interview.location,
+                        "session_notes": current_interview.session_notes,
+                    }
+                    if current_interview
+                    else None
+                )
+            ),
             "rating_sheet_published": rating_sheet_published,
             "rating_sheet_url": rating_sheet_url,
         }
@@ -2539,7 +2586,16 @@ class VacancyBatchInterviewView(LoginRequiredMixin, WorkflowProcessorRequiredMix
             except (ValueError, ValidationError) as exc:
                 messages.error(request, str(exc))
                 return redirect("vacancy-batch-interview", pk=entry.pk)
-            messages.success(request, "Interview batch finalized — the pool moved on together.")
+            # Land on this vacancy's batch page, which lists what comes next, while this user
+            # still has cases there; otherwise the batches list.
+            next_step = (
+                "Next: prepare the Comparative Assessment Report from any candidate's case."
+                if entry.branch == PositionPosting.Branch.PLANTILLA
+                else "Next: the HRM Chief's deliberation and selection."
+            )
+            messages.success(request, f"Interview batch finalized for every candidate. {next_step}")
+            if get_queue_for_user(request.user).filter(position_id=entry.pk).exists():
+                return redirect("vacancy-batch-detail", pk=entry.pk)
             return redirect("vacancy-batches")
 
         messages.error(request, "This action is not available.")
@@ -3772,20 +3828,26 @@ class InterviewFallbackUploadView(LoginRequiredMixin, WorkflowProcessorRequiredM
                     rated_by=form.cleaned_data["rated_by"],
                     rating_score=form.cleaned_data["rating_score"],
                     justification=form.cleaned_data.get("justification", ""),
+                    replace_existing=form.cleaned_data.get("replace_existing", False),
                 )
             except (ValueError, ValidationError) as exc:
                 messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
             else:
+                member = form.cleaned_data["rated_by"]
                 messages.success(
                     request,
-                    "Paper rating sheet encoded — the panel member and their score are on "
-                    "record, and the scan is retained with the secured files.",
+                    f"Paper rating sheet saved for {member.get_full_name() or member.username} "
+                    f"({form.cleaned_data['rating_score']}). The scan is kept with the case files.",
                 )
         else:
-            messages.error(
-                request,
-                "Name the panel member, record their score, and attach the scanned sheet.",
-            )
+            # Say exactly what is wrong (a missing justification, a score over 100, ...)
+            # instead of one generic line.
+            problems = [
+                error
+                for field_errors in form.errors.values()
+                for error in field_errors
+            ]
+            messages.error(request, "The rating sheet wasn't saved: " + " ".join(problems))
         return redirect("application-detail", pk=pk)
 
 
@@ -3891,16 +3953,27 @@ class ComparativeAssessmentReportView(LoginRequiredMixin, WorkflowProcessorRequi
                 if is_autosave:
                     return _autosave_response()
                 if report.is_finalized:
-                    messages.success(request, "Comparative Assessment Report finalized and locked.")
+                    messages.success(
+                        request,
+                        "Comparative Assessment Report finalized. The candidates' cases are now "
+                        "with the Appointing Authority for the decision. The CAR filing copy "
+                        "is on Recruitment Entries.",
+                    )
                 else:
-                    messages.success(request, "CAR draft prepared with the current ratings.")
+                    messages.success(
+                        request,
+                        "Draft CAR ready with the current scores. Check the ranking, then "
+                        "finalize it after the board's deliberation.",
+                    )
         else:
             if is_autosave:
                 return _autosave_response(False)
             messages.error(request, "Provide the CAR notes before generating the report.")
         application.refresh_from_db()
         if not user_can_view_application(request.user, application):
-            return redirect("workflow-queue")
+            # Finalizing hands the pool to the Appointing Authority; the vacancy's batch
+            # list is the preparer's next place to look, as after the other batch steps.
+            return redirect("vacancy-batches")
         return redirect("application-detail", pk=pk)
 
 

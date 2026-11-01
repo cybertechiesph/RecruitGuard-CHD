@@ -84,7 +84,13 @@
                         <td>
                             {% if item.evidence %}
                                 <div class="rg-scr-file-name">{{ item.evidence.original_filename }}</div>
-                                <div class="rg-scr-doc-meta">Uploaded {{ item.evidence.created_at|date:"M d, Y H:i" }}</div>
+                                <div class="rg-scr-doc-meta">
+                                    {% if item.is_resubmitted %}<span class="rg-pill rg-pill--info rg-pill--sm" data-resubmitted>Re-uploaded</span>{% endif %}
+                                    Uploaded {{ item.evidence.created_at|date:"M j, Y g:i A" }}
+                                </div>
+                                {% if item.earlier_note %}
+                                    <div class="rg-scr-doc-meta" data-earlier-note>Your earlier note: &ldquo;{{ item.earlier_note }}&rdquo;</div>
+                                {% endif %}
                             {% elif item.is_not_applicable %}
                                 <div class="rg-scr-doc-meta">Applicant marked not applicable.</div>
                             {% else %}

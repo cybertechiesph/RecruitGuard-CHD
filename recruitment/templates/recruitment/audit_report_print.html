@@ -100,7 +100,7 @@
             <tbody>
                 {% for entry in entries %}
                 <tr>
-                    <td>{{ entry.created_at|date:"M d, Y H:i" }}</td>
+                    <td>{{ entry.created_at|date:"M j, Y g:i A" }}</td>
                     <td>{{ entry.actor.get_full_name|default:entry.actor.username|default:"System" }}</td>
                     <td>{{ entry.action|audit_action_label }}</td>
                     <td>{{ entry.case_reference|default:"—" }}</td>

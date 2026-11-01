@@ -158,7 +158,7 @@ tracks (SLA thresholds, the REV-F audit summary engine, REV-D archives).
                     <div class="rg-dash-sysad-event">
                         <span class="rg-dash-sysad-event__action">{{ entry.action|audit_action_label }}</span>
                         <span class="rg-dash-sysad-event__desc">{{ entry.description }} — {{ entry.actor|default:"System" }}</span>
-                        <span class="rg-dash-sysad-event__time">{{ entry.created_at|date:"M d, Y H:i" }}</span>
+                        <span class="rg-dash-sysad-event__time">{{ entry.created_at|date:"M j, Y g:i A" }}</span>
                     </div>
                 {% endfor %}
             {% else %}

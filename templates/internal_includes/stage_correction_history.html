@@ -27,7 +27,7 @@ Input:
             <div class="rg-record">
                 <div class="rg-record__header">
                     <strong>{{ version.record_type_label }} &mdash; version {{ version.version_number }}</strong>
-                    <span class="rg-note">{{ version.reopened_at|date:"M d, Y H:i" }}</span>
+                    <span class="rg-note">{{ version.reopened_at|date:"M j, Y g:i A" }}</span>
                 </div>
                 <p class="mb-1">
                     Reopened at {{ version.review_stage|stage_label }} by

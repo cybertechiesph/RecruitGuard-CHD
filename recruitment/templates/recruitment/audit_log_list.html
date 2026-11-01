@@ -235,7 +235,7 @@
                             </div>
                         </div>
                         <div class="d-flex flex-column align-items-end gap-1">
-                            <span class="rg-note">{{ log.created_at|date:"M d, Y H:i" }}</span>
+                            <span class="rg-note">{{ log.created_at|date:"M j, Y g:i A" }}</span>
                             {% if review_scope != "application" and log.session_tag and log.action == "internal_login" and not session_tag %}
                                 <a class="btn btn-outline-secondary btn-sm"
                                    href="{% url 'audit-log-list' %}?session={{ log.session_tag }}">

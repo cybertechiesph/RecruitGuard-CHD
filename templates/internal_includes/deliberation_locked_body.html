@@ -90,7 +90,7 @@
             <div class="rg-exam-locked-field">
                 <div class="rg-exam-locked-field__label">CAR draft reviewed</div>
                 <div class="rg-exam-locked-field__value">
-                    Version {{ current_deliberation_record.comparative_assessment_report.version_number }}
+                    Version {{ current_deliberation_record.comparative_assessment_report.official_version|default:"draft" }}
                 </div>
             </div>
             {% endif %}
@@ -276,7 +276,7 @@
             <h3 class="rg-icard__title">Comparative Assessment Report</h3>
             <p class="rg-icard__subtitle">
                 Finalized CAR for this position posting — version
-                {{ current_comparative_assessment_report.version_number }}.
+                {{ current_comparative_assessment_report.official_version }}.
             </p>
         </div>
         <span class="rg-pill rg-pill--neutral rg-pill--sm"
@@ -397,7 +397,7 @@
             {{ current_comparative_assessment_report.finalized_by_role|role_label }}
         {% endif %}
         <span class="rg-imeta__sep"></span>
-        Version {{ current_comparative_assessment_report.version_number }}
+        Version {{ current_comparative_assessment_report.official_version|default:"draft" }}
     </div>
 </div>
 {% endif %}
@@ -426,7 +426,7 @@
                     The case is advancing to the
                     <strong>Decision / Submission Packet</strong> step for Appointing Authority review.
                     {% else %}
-                    HRMPSB endorsement is finalized. HRMS must finalize the Comparative Assessment Report
+                    HRMPSB endorsement is finalized. The HRMU must finalize the Comparative Assessment Report
                     before the case can advance to Appointing Authority review.
                     {% endif %}
                 {% else %}

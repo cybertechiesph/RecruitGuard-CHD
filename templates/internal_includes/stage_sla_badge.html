@@ -11,30 +11,30 @@ Renders nothing if there is no case or the case is closed.
     {% stage_sla_label recruitment_case as stage_name %}
     <span class="rg-sla-badge rg-sla-badge--{{ sla.state }}{% if variant %} rg-sla-badge--{{ variant }}{% endif %}"
           {% if sla.is_paused %}
-              title="The SLA clock is paused while this case is with the applicant."
+              title="The clock is paused while the applicant sends corrected documents."
           {% elif sla.is_overdue %}
-              title="In {{ stage_name }} for {{ sla.elapsed_days }} day{{ sla.elapsed_days|pluralize }} — over the {{ sla.overdue_days }}-day target."
+              title="{{ stage_name }} for {{ sla.elapsed_days }} day{{ sla.elapsed_days|pluralize }}, past the {{ sla.overdue_days }}-day target."
           {% elif sla.is_warning %}
-              title="In {{ stage_name }} for {{ sla.elapsed_days }} day{{ sla.elapsed_days|pluralize }} — approaching the {{ sla.overdue_days }}-day target."
+              title="{{ stage_name }} for {{ sla.elapsed_days }} day{{ sla.elapsed_days|pluralize }}. The target is {{ sla.overdue_days }} days."
           {% else %}
-              title="In {{ stage_name }} for {{ sla.elapsed_days }} day{{ sla.elapsed_days|pluralize }}."
+              title="{{ stage_name }} for {{ sla.elapsed_days }} day{{ sla.elapsed_days|pluralize }}. The target is {{ sla.overdue_days }} days."
           {% endif %}>
         <span class="rg-sla-badge__dot" aria-hidden="true"></span>
         <span class="rg-sla-badge__text">
             {% if sla.is_paused %}
-                Paused with applicant
+                Waiting for the applicant
             {% else %}
                 {% if sla.elapsed_days == 0 %}
-                    In {{ stage_name }} today
+                    {{ stage_name }} since today
                 {% elif sla.elapsed_days == 1 %}
-                    In {{ stage_name }} for 1 day
+                    {{ stage_name }} for 1 day
                 {% else %}
-                    In {{ stage_name }} for {{ sla.elapsed_days }} days
+                    {{ stage_name }} for {{ sla.elapsed_days }} days
                 {% endif %}
                 {% if sla.is_overdue %}
-                    · <strong>Overdue</strong><span class="visually-hidden"> — over the {{ sla.overdue_days }}-day target</span>
+                    · <strong>Overdue</strong><span class="visually-hidden">, past the {{ sla.overdue_days }}-day target</span>
                 {% elif sla.is_warning %}
-                    · <strong>Due soon</strong><span class="visually-hidden"> — approaching the {{ sla.overdue_days }}-day target</span>
+                    · <strong>Due soon</strong><span class="visually-hidden">, the target is {{ sla.overdue_days }} days</span>
                 {% endif %}
             {% endif %}
         </span>

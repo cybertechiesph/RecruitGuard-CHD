@@ -29,6 +29,10 @@ ENTRY_CODE_PATTERN = re.compile(
 )
 STAGE_SLA_WARNING_THRESHOLD = timedelta(days=5)
 STAGE_SLA_OVERDUE_THRESHOLD = timedelta(days=7)
+# Completion has its own agreed two-week window (hard-copy requirements), so a case in its
+# second week there is on time, not overdue. Keyed by stage value: (warning, overdue).
+COMPLETION_SLA_WARNING_THRESHOLD = timedelta(days=10)
+COMPLETION_SLA_OVERDUE_THRESHOLD = timedelta(days=14)
 
 
 def build_unique_position_slug(model_class, source_value, *, instance_pk=None):
@@ -1136,15 +1140,23 @@ class RecruitmentCase(TimestampedModel):
         return max(self.time_in_current_stage, timedelta(0))
 
     @property
+    def stage_sla_thresholds(self):
+        """(warning, overdue) for the stage the case is in."""
+        if self.current_stage == self.Stage.COMPLETION:
+            return COMPLETION_SLA_WARNING_THRESHOLD, COMPLETION_SLA_OVERDUE_THRESHOLD
+        return STAGE_SLA_WARNING_THRESHOLD, STAGE_SLA_OVERDUE_THRESHOLD
+
+    @property
     def stage_sla_state(self):
         if self.current_stage == self.Stage.CLOSED:
             return "ok"
         if self.case_status == self.CaseStatus.AWAITING_RESUBMISSION:
             return "paused"
         elapsed = self.stage_sla_elapsed
-        if elapsed >= STAGE_SLA_OVERDUE_THRESHOLD:
+        warning, overdue = self.stage_sla_thresholds
+        if elapsed >= overdue:
             return "overdue"
-        if elapsed >= STAGE_SLA_WARNING_THRESHOLD:
+        if elapsed >= warning:
             return "warning"
         return "ok"
 
@@ -1159,8 +1171,8 @@ class RecruitmentCase(TimestampedModel):
             "is_paused": state == "paused",
             "is_overdue": state == "overdue",
             "is_warning": state == "warning",
-            "warning_days": STAGE_SLA_WARNING_THRESHOLD.days,
-            "overdue_days": STAGE_SLA_OVERDUE_THRESHOLD.days,
+            "warning_days": self.stage_sla_thresholds[0].days,
+            "overdue_days": self.stage_sla_thresholds[1].days,
         }
 
     def __str__(self):
@@ -3712,6 +3724,20 @@ class ComparativeAssessmentReport(TimestampedModel):
                 name="unique_active_finalized_car_per_entry_stage",
             ),
         ]
+
+    @property
+    def official_version(self):
+        """The version people talk about: 1 for the first finalized CAR of this vacancy and
+        stage, 2 after a return and re-finalize. Each "Update draft" also stores a record (and
+        its PDF, for the audit trail), so the raw version_number climbs with every draft."""
+        if not self.is_finalized:
+            return None
+        return ComparativeAssessmentReport.objects.filter(
+            recruitment_entry_id=self.recruitment_entry_id,
+            review_stage=self.review_stage,
+            is_finalized=True,
+            pk__lte=self.pk,
+        ).count()
 
     def clean(self):
         errors = {}

@@ -38,7 +38,60 @@ What changed:
 - **P1-6:** a "Withdrawal requested" chip on My Queue, the batch list, and the exam and
   interview rows, plus a warning on the batch exam and interview pages.
 
-The P2 and P3 items below are still open.
+### Second round: P2 and P3 (office decisions applied)
+
+Office decisions used: the Secretariat's "archive" means past records (finished cases, their
+files and history, past vacancies), while the system audit log stays with the System Admin.
+No claim/lock marker on cases. Default time targets: 14 days at Completion, 7 days elsewhere.
+Applicant email codes keep their 10-minute life. Internal pages stay in English, in plain, professional wording.
+
+- **Archive:** a "Past Records" link in the sidebar (Secretariat and HRM Chief) opens the
+  finished cases, each with its files, history and export, and links to closed vacancies.
+- **P2-2 follow-up:** the batch interview schedule form only appears for the office that runs
+  the interview (Level 1 Secretariat, otherwise the HRM Chief). Everyone else sees what was
+  sent. Sending or changing it asks for confirmation.
+- **P2-3:** a second paper sheet for the same panel member is refused unless "Replace this
+  member's earlier sheet" is ticked. An invalid sheet says exactly what is wrong. Notes are
+  optional.
+- **P2-4:**
+  - The ETE boxes appear before the first draft, so one "Prepare draft CAR" saves the scores
+    and ranks the candidates.
+  - Pages show the official version (finalized reports only), so a CAR prepared once is
+    "Version 1" however many drafts were saved.
+  - When the panel rated on paper, the deliberation summary lists the encoded sheets instead
+    of "no digital ratings… check Secured Files".
+- **P2-5:** the rating sheet can't be made available without a Technical competency.
+- **P2-7:** the progress bar follows the branch. Plantilla: Screening, Exam, Interview,
+  Comparative Assessment, Decision, Completion. COS: Screening, Exam, HRM Chief re-check
+  (Level 1 only), Interview, Selection, Completion. A closed case shows where it stopped
+  ("Withdrawn at Screening", "Not selected at Decision"). The editable Completion card no
+  longer says "Locked".
+- **P2-8:** Completion warns at 10 days and is overdue at 14; other stages keep 5 and 7. The
+  badge reads "With the Secretariat for N days", since the clock covers the whole stage. The
+  completion deadline defaults to two weeks from the day the case reached Completion.
+- **P2-9:** Recruitment Entries has Open / Closed or cancelled / All. An active vacancy past
+  its closing date shows "Applications closed (deadline passed)" and a "Close intake" button.
+- **P2-10:**
+  - After finalizing the interview batch you stay on the vacancy's batch page with the next
+    step named.
+  - After finalizing the CAR you land on Batches, told the cases are now with the Appointing
+    Authority.
+  - Closing a case is one button and one confirmation (the notes are in the dialog).
+  - The sidebar highlights Batches for a case opened from a batch, and Past Records for a
+    closed case.
+- **P3:**
+  - "HRMU" everywhere (no more HRMO/HRMS).
+  - Grammar fixes.
+  - One error per problem on the entry form.
+  - Page titles on the rating sheet, entry form and weights pages.
+  - Staff notices say "is now in your queue".
+  - Internal dates use "Nov 1, 2026, 2:49 PM".
+  - A re-uploaded document is marked "Re-uploaded" and starts unreviewed, with the earlier
+    note shown for reference.
+
+Still open: one case-number format everywhere (P3), and moving the rating sheet from a case
+URL to the vacancy (P3). The proposed single home for the Secretariat (section 6) is not
+built.
 
 ## 1. How this was tested
 

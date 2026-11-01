@@ -373,34 +373,18 @@ Bootstrap Icons CSS).
             <div>
                 <h3 class="rg-icard__title">Step 2 &mdash; Close and archive the case</h3>
                 <p class="rg-icard__subtitle">
-                    Every requirement is resolved. Add closure notes and confirm to permanently close and archive this case.
-                    <strong>This can't be undone.</strong>
+                    Every requirement is resolved. Use <strong>Close and archive the case</strong> below:
+                    you add the closure notes and confirm in one step. <strong>This can't be undone.</strong>
                 </p>
             </div>
             <span class="rg-pkt-section__badge rg-pkt-section__badge--ok">Ready to close</span>
         </div>
-
+        {# The notes field lives in the confirmation dialog (form="closure-form"). #}
         <form id="closure-form"
               method="post"
               action="{% url 'case-close' application.pk %}"
               novalidate>
             {% csrf_token %}
-            <div class="rg-field">
-                <label class="form-label fw-semibold" for="{{ closure_form.closure_notes.id_for_label }}">
-                    {{ closure_form.closure_notes.label }}
-                    <span class="text-danger" aria-hidden="true">*</span>
-                </label>
-                <textarea
-                    name="{{ closure_form.closure_notes.html_name }}"
-                    id="{{ closure_form.closure_notes.id_for_label }}"
-                    class="form-control{% if closure_form.closure_notes.errors %} is-invalid{% endif %}"
-                    rows="4"
-                    placeholder="Summarise the completion of this recruitment process and any final remarks for the official record.">{{ closure_form.closure_notes.value|default:"" }}</textarea>
-                <div class="form-text">Notes are preserved permanently in the closure record and audit log.</div>
-                {% for error in closure_form.closure_notes.errors %}
-                    <div class="invalid-feedback d-block">{{ error }}</div>
-                {% endfor %}
-            </div>
         </form>
     </div>
     {% endif %}
@@ -418,10 +402,7 @@ Bootstrap Icons CSS).
             Save progress
         </button>
         {% if closure_form %}
-        <button type="button" id="cmp-next-btn" class="btn btn-rg-primary btn-sm">
-            Next: Close and archive
-        </button>
-        <button type="button" id="cmp-finalize-btn" class="btn-rg-finalize" hidden>
+        <button type="button" id="cmp-finalize-btn" class="btn-rg-finalize">
             Close and archive the case
         </button>
         {% endif %}
@@ -455,6 +436,24 @@ Bootstrap Icons CSS).
                     <li><strong>Position:</strong> {{ application.position.title }}</li>
                     <li><strong>Branch / type:</strong> {{ application.get_branch_display }}</li>
                 </ul>
+                <div class="rg-field">
+                    <label class="form-label fw-semibold" for="{{ closure_form.closure_notes.id_for_label }}">
+                        {{ closure_form.closure_notes.label }}
+                        <span class="text-danger" aria-hidden="true">*</span>
+                    </label>
+                    <textarea
+                        name="{{ closure_form.closure_notes.html_name }}"
+                        id="{{ closure_form.closure_notes.id_for_label }}"
+                        form="closure-form"
+                        class="form-control{% if closure_form.closure_notes.errors %} is-invalid{% endif %}"
+                        rows="3"
+                        placeholder="e.g. Oath taken and all requirements received; appointment completed.">{{ closure_form.closure_notes.value|default:"" }}</textarea>
+                    <div class="form-text">Kept permanently with the closure record and the audit log.</div>
+                    <div class="invalid-feedback" id="closure-notes-error">Add closure notes before you close the case.</div>
+                    {% for error in closure_form.closure_notes.errors %}
+                        <div class="invalid-feedback d-block" data-closure-server-error>{{ error }}</div>
+                    {% endfor %}
+                </div>
                 <div class="rg-dec-permanence-warning">
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                         <path d="M8 2L14.5 13H1.5L8 2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
@@ -521,7 +520,8 @@ Bootstrap Icons CSS).
     var errorBox = document.getElementById("cmp-step-error");
 
     var closureForm = document.getElementById("closure-form");
-    var closureNotes = closureForm ? closureForm.querySelector("textarea[name$='closure_notes']") : null;
+    var closureNotes = document.querySelector("textarea[form='closure-form']");
+    var closureNotesError = document.getElementById("closure-notes-error");
     var closureModalEl = document.getElementById("closureConfirmModal");
     var confirmBtn = document.getElementById("closure-confirm-btn");
 
@@ -554,7 +554,6 @@ Bootstrap Icons CSS).
         });
         if (backBtn) backBtn.hidden = idx === 0;
         if (nextBtn) nextBtn.hidden = idx === STEPS.length - 1 || !step2Available;
-        if (finalizeBtn) finalizeBtn.hidden = idx !== STEPS.length - 1;
         clearError();
         if (sections[currentStep]) sections[currentStep].scrollIntoView({ behavior: "smooth", block: "start" });
     }
@@ -585,27 +584,32 @@ Bootstrap Icons CSS).
         });
     });
 
-    if (finalizeBtn) {
-        finalizeBtn.addEventListener("click", function () {
+    function openClosureModal() {
+        if (closureModalEl && window.bootstrap) bootstrap.Modal.getOrCreateInstance(closureModalEl).show();
+    }
+    if (finalizeBtn) finalizeBtn.addEventListener("click", openClosureModal);
+    if (confirmBtn && closureForm) {
+        confirmBtn.addEventListener("click", function () {
             if (!closureNotes || closureNotes.value.trim() === "") {
-                revealProblems([{ field: closureNotes, msg: "Add closure notes before you close and archive the case." }]);
+                if (closureNotes) { closureNotes.classList.add("is-invalid"); closureNotes.focus(); }
+                if (closureNotesError) closureNotesError.classList.add("d-block");
                 return;
             }
-            if (closureModalEl && window.bootstrap) bootstrap.Modal.getOrCreateInstance(closureModalEl).show();
+            closureForm.submit();
         });
     }
-    if (confirmBtn && closureForm) {
-        confirmBtn.addEventListener("click", function () { closureForm.submit(); });
+    if (closureNotes) {
+        closureNotes.addEventListener("input", function () {
+            closureNotes.classList.remove("is-invalid");
+            if (closureNotesError) closureNotesError.classList.remove("d-block");
+        });
     }
 
-    if (closureNotes) closureNotes.addEventListener("input", clearError);
-
-    /* On reload with server-side error in closure form, jump to Step 2. */
-    var startStep = "track";
-    if (sections["close"] && sections["close"].querySelector(".invalid-feedback")) {
-        startStep = "close";
-    }
-    currentStep = startStep;
+    currentStep = "track";
     renderStep();
+    /* A server-side error on the closure notes: reopen the dialog with it showing. */
+    if (closureModalEl && closureModalEl.querySelector("[data-closure-server-error]")) {
+        openClosureModal();
+    }
 })();
 </script>

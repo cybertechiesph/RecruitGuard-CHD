@@ -64,7 +64,7 @@ because it's a small read-only card.
     </svg>
     <div>
         <div class="rg-int-banner__title">CAR draft required first</div>
-        <p>HRMS prepares the CAR draft before HRMPSB can deliberate against it. The CAR is finalized after the panel endorses its recommendation.</p>
+        <p>The HRMU prepares the CAR draft before the HRMPSB deliberates on it. The CAR is finalized after the board endorses its recommendation.</p>
     </div>
 </div>
 {% endif %}
@@ -131,7 +131,7 @@ because it's a small read-only card.
             <span class="rg-del-locked__label">Deliberated at</span>
             <strong>
                 {% if current_deliberation_record.deliberated_at %}
-                    {{ current_deliberation_record.deliberated_at|date:"M d, Y H:i" }}
+                    {{ current_deliberation_record.deliberated_at|date:"M j, Y g:i A" }}
                 {% else %}—{% endif %}
             </strong>
         </div>
@@ -149,7 +149,7 @@ because it's a small read-only card.
             {% if current_deliberation_record.comparative_assessment_report %}
             <div>
                 <span class="rg-del-locked__label">CAR draft</span>
-                <strong>Version {{ current_deliberation_record.comparative_assessment_report.version_number }}</strong>
+                <strong>Version {{ current_deliberation_record.comparative_assessment_report.official_version|default:"draft" }}</strong>
             </div>
             {% endif %}
         {% endif %}

@@ -16,7 +16,7 @@
 {% if withdrawal_requests %}
     <div class="alert alert-warning" role="status" data-withdrawal-requests>
         <strong>{{ withdrawal_requests|length }} applicant{{ withdrawal_requests|length|pluralize }} asked to withdraw:</strong>
-        {% for application in withdrawal_requests %}<a href="{% url 'application-detail' application.pk %}">{{ application|case_ref_for:request.user }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}.
+        {% for application in withdrawal_requests %}<a href="{% url 'application-detail' application.pk %}?from=batch">{{ application|case_ref_for:request.user }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}.
         Record the withdrawal on the case first, so they aren't sent this batch's schedule.
     </div>
 {% endif %}
@@ -41,7 +41,17 @@
 {# ── One schedule for the whole batch ─────────────────────────── #}
 <div class="card p-4 mb-3">
     <h2 class="h6 mb-1">1 — Schedule the interview (applies to every candidate)</h2>
-    <p class="rg-note mb-3">The whole pool is interviewed together. Each applicant is notified.</p>
+    {% if current_interview %}
+        <div class="alert alert-success mb-3" role="status" data-current-interview>
+            <strong>Sent to {{ candidates|length }} candidate{{ candidates|length|pluralize }}:</strong>
+            {{ current_interview.scheduled_for|date:"F j, Y" }} at {{ current_interview.scheduled_for|date:"g:i A" }},
+            {{ current_interview.location }}.
+        </div>
+    {% elif can_schedule %}
+        <p class="rg-note mb-3">The whole pool is interviewed together. Each applicant is notified.</p>
+    {% else %}
+        <p class="rg-note mb-3">Not scheduled yet. The office will set the date and notify everyone.</p>
+    {% endif %}
     {% if is_plantilla and not rating_sheet_published %}
         <div class="alert alert-warning" role="status">
             No rating sheet is published for this vacancy yet — the panel can't rate until it is.
@@ -50,7 +60,9 @@
             {% endif %}
         </div>
     {% endif %}
-    <form method="post">
+    {% if can_schedule %}
+    {% if current_interview %}<details class="mb-1"><summary class="btn btn-outline-secondary btn-sm">Change the schedule</summary>{% endif %}
+    <form method="post" id="interviewScheduleForm" class="mt-3">
         {% csrf_token %}
         <input type="hidden" name="operation" value="save_schedule">
         <div class="row g-3">
@@ -59,9 +71,18 @@
             <div class="col-md-8">{% include "recruitment/includes/form_field.html" with field=schedule_form.session_notes %}</div>
         </div>
         <div class="rg-form-actions mt-3">
-            <button type="submit" class="btn btn-rg-primary">Send schedule to batch</button>
+            <button type="button" class="btn btn-rg-primary" data-bs-toggle="modal" data-bs-target="#confirmSendInterviewSchedule">
+                {% if current_interview %}Send the changed schedule{% else %}Send schedule to batch{% endif %}
+            </button>
         </div>
     </form>
+    {% if current_interview %}</details>{% endif %}
+    {% if current_interview %}
+        {% include "internal_includes/modal_confirm.html" with modal_id="confirmSendInterviewSchedule" title="Send a changed interview schedule?" body="Every candidate in this batch, and the panel, gets the new date, time and place. It replaces the schedule they already have." confirm_label="Send the changed schedule" cancel_label="Cancel" form_id="interviewScheduleForm" %}
+    {% else %}
+        {% include "internal_includes/modal_confirm.html" with modal_id="confirmSendInterviewSchedule" title="Send the interview schedule?" body="Every candidate in this batch, and the panel, is notified of this date, time and place." confirm_label="Send schedule to batch" cancel_label="Cancel" form_id="interviewScheduleForm" %}
+    {% endif %}
+    {% endif %}
 </div>
 
 {% if is_plantilla %}
@@ -94,7 +115,7 @@
                             </td>
                             <td>
                                 {% if candidate.session and candidate.session.scheduled_for %}
-                                    <div style="font-size:0.8125rem;color:#374151;">{{ candidate.session.scheduled_for|date:"M d, Y H:i" }}</div>
+                                    <div style="font-size:0.8125rem;color:#374151;">{{ candidate.session.scheduled_for|date:"M j, Y g:i A" }}</div>
                                 {% else %}
                                     <span class="rg-imeta">Not scheduled</span>
                                 {% endif %}
@@ -113,7 +134,7 @@
                             </td>
                             <td class="col-actions">
                                 <div class="d-flex flex-column align-items-end gap-2">
-                                    <a href="{% url 'application-detail' candidate.application.pk %}"
+                                    <a href="{% url 'application-detail' candidate.application.pk %}?from=batch"
                                        class="btn btn-outline-secondary btn-sm">Open case</a>
                                     {% if candidate.can_mark_absent %}
                                         <form method="post" class="d-flex flex-column align-items-end gap-1">
@@ -159,7 +180,7 @@
 <div class="card p-4 mb-3">
     <h2 class="h6 mb-1">2 — Record interview scores</h2>
     <p class="rg-note mb-3">
-        Enter each candidate's end-user / HRMS interview score (0–100). Add a justification when a
+        Enter each candidate's end-user / HRMU interview score (0–100). Add a justification when a
         score lands below 75 or above 98.
     </p>
     <form method="post" id="cosInterviewForm">

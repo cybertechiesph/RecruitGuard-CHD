@@ -6873,7 +6873,7 @@ class RecruitmentCaseWorkflowTests(BaseRecruitmentTestCase):
         self.assertContains(response, 'Step 1 of 6')
         self.assertContains(response, '<details class="rg-applicant-panel" open>')
         self.assertContains(response, "Applicant Profile &amp; Submission")
-        for label in ["Screening", "Exam", "Interview", "Deliberation", "Decision", "Completion"]:
+        for label in ["Screening", "Exam", "Interview", "Comparative Assessment", "Decision", "Completion"]:
             self.assertContains(
                 response,
                 f'<span class="rg-pipeline__label">{label}</span>',
@@ -14928,7 +14928,7 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
 
         client = Client()
         self.force_login_with_mfa(client, self.hrm_chief)
-        response = client.get(reverse("recruitment-entry-list"))
+        response = client.get(reverse("recruitment-entry-list") + "?status=closed")
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, self.level1_position.job_code)
@@ -15548,6 +15548,8 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
                 remarks=f"Rescan {index}.",
                 rated_by=self.hrmpsb,
                 rating_score=Decimal("91.00"),
+                # Re-encoding the same member is a deliberate replacement.
+                replace_existing=index > 0,
             )
         session = get_interview_session(application)
         self.assertEqual(session.fallback_ratings.count(), 1)
@@ -21297,7 +21299,7 @@ class ClosedCaseLookupTests(BaseRecruitmentTestCase):
 
     def test_page_is_titled_closed_cases(self):
         response = self.client_sec.get(reverse("workflow-closed"))
-        self.assertContains(response, "<title>Closed Cases | Internal Portal</title>", html=False)
+        self.assertContains(response, "<title>Past Records | Internal Portal</title>", html=False)
         self.assertContains(response, "data-closed-filters")
 
 
@@ -22591,3 +22593,232 @@ class SecretariatEssentialsTests(BaseRecruitmentTestCase):
             self.assertContains(response, "data-flag-withdrawal-requested", msg_prefix=url)
         page = client.get(reverse("vacancy-batch-exam", args=[self.level1_position.pk]))
         self.assertContains(page, "asked to withdraw")
+
+
+class SecretariatImprovementsTests(BaseRecruitmentTestCase):
+    """The P2/P3 round from docs/secretariat-walkthrough-2026-11.md."""
+
+    _plantilla_session_awaiting_ratings = InterviewManagementTests._plantilla_session_awaiting_ratings
+    session_payload = InterviewManagementTests.session_payload
+    _two_qualified = BatchExamTests._two_qualified
+    _submit = BatchExamTests._submit
+    _extra_submitted_application = BatchExamTests._extra_submitted_application
+
+    def _sheet(self, name="sheet.pdf"):
+        return SimpleUploadedFile(name, b"%PDF-1.4 sheet", content_type="application/pdf")
+
+    def _staff_client(self, user):
+        client = Client()
+        self.force_login_with_mfa(client, user)
+        return client
+
+    def _submitted(self, position):
+        application = self.make_application(position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        application.refresh_from_db()
+        return application
+
+    # Archive: past records are one click away
+    def test_past_records_is_in_the_secretariat_sidebar(self):
+        client = self._staff_client(self.secretariat)
+        page = client.get(reverse("workflow-queue"))
+        self.assertContains(page, f'href="{reverse("workflow-closed")}"')
+        self.assertContains(page, "Past Records")
+        closed = client.get(reverse("workflow-closed"))
+        self.assertContains(closed, "<title>Past Records | Internal Portal</title>")
+        self.assertContains(closed, "?status=closed")
+
+    # P2-3: a paper sheet replaces an earlier one only on purpose
+    def test_a_second_paper_sheet_for_the_same_member_needs_the_replace_box(self):
+        application = self._plantilla_session_awaiting_ratings()
+        upload_interview_fallback_rating(
+            application=application, actor=self.secretariat, uploaded_file=self._sheet(),
+            remarks="", rated_by=self.hrmpsb, rating_score=Decimal("80.00"),
+        )
+        with self.assertRaisesMessage(ValueError, "already has a paper sheet on record (rating 80.00)"):
+            upload_interview_fallback_rating(
+                application=application, actor=self.secretariat, uploaded_file=self._sheet("b.pdf"),
+                remarks="", rated_by=self.hrmpsb, rating_score=Decimal("85.00"),
+            )
+        upload_interview_fallback_rating(
+            application=application, actor=self.secretariat, uploaded_file=self._sheet("c.pdf"),
+            remarks="", rated_by=self.hrmpsb, rating_score=Decimal("85.00"), replace_existing=True,
+        )
+        session = get_interview_session(application)
+        self.assertEqual(session.fallback_ratings.count(), 1)
+        self.assertEqual(session.fallback_ratings.get().rating_score, Decimal("85.00"))
+
+    def test_an_invalid_paper_sheet_says_what_is_wrong(self):
+        application = self._plantilla_session_awaiting_ratings()
+        client = self._staff_client(self.secretariat)
+        response = client.post(
+            reverse("interview-fallback-upload", kwargs={"pk": application.pk}),
+            {"rated_by": self.hrmpsb.pk, "rating_score": "150", "uploaded_file": self._sheet()},
+            follow=True,
+        )
+        self.assertContains(response, "The rating sheet wasn&#x27;t saved:")
+        self.assertFalse(get_interview_session(application).fallback_ratings.exists())
+
+    # P2-5: no publishing a rating sheet without the position's own competencies
+    def test_a_rating_sheet_without_technical_competencies_cannot_be_published(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        client = self._staff_client(self.secretariat)
+        url = reverse("interview-rating-sheet", kwargs={"pk": application.pk})
+        client.post(url, {"operation": "create"})
+        template = get_competency_rating_template(self.level1_position)
+        existing = list(template.competencies.order_by("order"))
+        data = {
+            "operation": "publish",
+            "scale_max": "4",
+            "instructions": "Score each competency.",
+            "competencies-TOTAL_FORMS": str(len(existing)),
+            "competencies-INITIAL_FORMS": str(len(existing)),
+            "competencies-MIN_NUM_FORMS": "0",
+            "competencies-MAX_NUM_FORMS": "1000",
+        }
+        for index, competency in enumerate(existing):
+            data[f"competencies-{index}-id"] = str(competency.id)
+            data[f"competencies-{index}-group"] = competency.group
+            data[f"competencies-{index}-name"] = competency.name
+            data[f"competencies-{index}-weight"] = "1.00"
+        response = client.post(url, data, follow=True)
+        self.assertContains(response, "Add at least one Technical competency")
+        template.refresh_from_db()
+        self.assertEqual(template.status, CompetencyRatingTemplate.Status.DRAFT)
+        page = client.get(url)
+        self.assertContains(page, "<title>Interview Rating Sheet | Internal Portal</title>")
+
+    # P2-4: the version people see counts finalized reports, not drafts
+    def test_car_drafts_do_not_raise_the_official_version(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb, rating_score="91.25")
+        self.finalize_applicant_pool_for_test(application.position)
+        for note in ("First draft.", "Second draft."):
+            report = generate_comparative_assessment_report(
+                application=application, actor=self.secretariat,
+                cleaned_data={"summary_notes": note}, finalize=False,
+            )
+        self.assertEqual(report.version_number, 2)
+        self.assertIsNone(report.official_version)
+        ComparativeAssessmentReport.objects.filter(pk=report.pk).update(is_finalized=True)
+        report.refresh_from_db()
+        self.assertEqual(report.official_version, 1)
+
+    def test_ete_scores_can_be_entered_before_the_first_car_draft(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb, rating_score="91.25")
+        self.finalize_applicant_pool_for_test(application.position)
+        client = self._staff_client(self.secretariat)
+        page = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
+        self.assertContains(page, f'name="ete_education_{application.case.id}"')
+        payload = {"operation": "save", "summary_notes": ""}
+        for part in ("education", "training", "experience"):
+            payload[f"ete_{part}_{application.case.id}"] = "80"
+            payload[f"ete_{part}_basis_{application.case.id}"] = "Meets the standard."
+        client.post(reverse("comparative-assessment-report", kwargs={"pk": application.pk}), payload)
+        report = ComparativeAssessmentReport.objects.get(recruitment_entry=self.level1_position)
+        item = report.items.get(recruitment_case=application.case)
+        self.assertIsNotNone(item.assessment_score)
+        self.assertEqual(item.rank_order, 1)
+
+    # Only the office running the interview schedules it
+    def test_interview_schedule_form_is_only_for_the_scheduling_office(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_applicant_pool_for_test(self.level1_position)
+        url = reverse("vacancy-batch-interview", args=[self.level1_position.pk])
+        sec_page = self._staff_client(self.secretariat).get(url)
+        self.assertContains(sec_page, 'id="interviewScheduleForm"')
+        psb_page = self._staff_client(self.hrmpsb).get(url)
+        if psb_page.status_code == 200:
+            self.assertNotContains(psb_page, 'id="interviewScheduleForm"')
+
+    # P2-7: each branch shows its own steps
+    def test_progress_bar_follows_the_branch(self):
+        plantilla = self._submitted(self.level1_position)
+        cos = self._submitted(self.cos_position)
+        client = self._staff_client(self.secretariat)
+        cos_page = client.get(reverse("application-detail", kwargs={"pk": cos.pk}))
+        self.assertContains(cos_page, '<span class="rg-pipeline__label">HRM Chief re-check</span>')
+        self.assertContains(cos_page, '<span class="rg-pipeline__label">Selection</span>')
+        self.assertNotContains(cos_page, '<span class="rg-pipeline__label">Decision</span>')
+        plantilla_page = client.get(reverse("application-detail", kwargs={"pk": plantilla.pk}))
+        self.assertContains(plantilla_page, '<span class="rg-pipeline__label">Decision</span>')
+        self.assertNotContains(plantilla_page, "HRM Chief re-check")
+
+    def test_a_withdrawn_case_shows_where_it_ended(self):
+        application = self._submitted(self.level1_position)
+        with self.captureOnCommitCallbacks(execute=True):
+            record_application_withdrawal(application, self.secretariat, "The applicant took another job.")
+        page = self._staff_client(self.secretariat).get(
+            reverse("application-detail", kwargs={"pk": application.pk})
+        )
+        self.assertContains(page, "Withdrawn at Screening")
+        self.assertContains(page, "rg-pipeline__stage is-ended")
+        self.assertNotContains(page, "Step 6 of 6")
+
+    # P2-8: Completion has its own two-week target; the deadline does not drift
+    def test_completion_uses_the_two_week_target(self):
+        case = self._submitted(self.level1_position).case
+        case.current_stage = RecruitmentCase.Stage.COMPLETION
+        for days, expected in ((8, "ok"), (11, "warning"), (15, "overdue")):
+            case.stage_entered_at = timezone.now() - timedelta(days=days)
+            self.assertEqual(case.stage_sla_state, expected, days)
+        case.current_stage = RecruitmentCase.Stage.SECRETARIAT_REVIEW
+        case.stage_entered_at = timezone.now() - timedelta(days=8)
+        self.assertEqual(case.stage_sla_state, "overdue")
+        self.assertEqual(case.stage_sla_context["overdue_days"], 7)
+
+    def test_completion_deadline_counts_from_the_selection(self):
+        from .forms import CompletionTrackingForm
+
+        application = self._submitted(self.level1_position)
+        selected_on = timezone.now() - timedelta(days=20)
+        RecruitmentCase.objects.filter(pk=application.case.pk).update(
+            current_stage=RecruitmentCase.Stage.COMPLETION, stage_entered_at=selected_on
+        )
+        application = RecruitmentApplication.objects.get(pk=application.pk)
+        form = CompletionTrackingForm(application=application, actor=self.secretariat)
+        self.assertEqual(
+            form.fields["deadline"].initial,
+            timezone.localdate(selected_on) + timedelta(days=14),
+        )
+
+    # P2-9: closed vacancies are listed on request; lapsed ones are flagged
+    def test_entries_list_filters_and_flags_a_lapsed_deadline(self):
+        PositionPosting.objects.filter(pk=self.level1_position.pk).update(
+            closing_date=timezone.localdate() - timedelta(days=1)
+        )
+        PositionPosting.objects.filter(pk=self.cos_position.pk).update(
+            status=PositionPosting.EntryStatus.CLOSED
+        )
+        client = self._staff_client(self.secretariat)
+        open_list = client.get(reverse("recruitment-entry-list"))
+        self.assertContains(open_list, "data-intake-deadline-passed")
+        self.assertContains(open_list, "Close intake")
+        self.assertNotContains(open_list, self.cos_position.job_code)
+        closed_list = client.get(reverse("recruitment-entry-list") + "?status=closed")
+        self.assertContains(closed_list, self.cos_position.job_code)
+        self.assertNotContains(closed_list, self.level1_position.job_code)
+        all_list = client.get(reverse("recruitment-entry-list") + "?status=all")
+        self.assertContains(all_list, self.cos_position.job_code)
+        self.assertContains(all_list, self.level1_position.job_code)
+
+    # P3: one problem, one message on the entry form
+    def test_entry_form_reports_each_problem_once(self):
+        form = RecruitmentEntryForm(
+            data={
+                "position_reference": self.admin_aide_position.pk,
+                "branch": PositionPosting.Branch.COS,
+                "status": PositionPosting.EntryStatus.ACTIVE,
+                "intake_mode": PositionPosting.IntakeMode.FIXED_PERIOD,
+                "opening_date": timezone.localdate().isoformat(),
+                "closing_date": (timezone.localdate() + timedelta(days=14)).isoformat(),
+            }
+        )
+        self.assertFalse(form.is_valid())
+        self.assertEqual(len(form.errors["intake_mode"]), 1)

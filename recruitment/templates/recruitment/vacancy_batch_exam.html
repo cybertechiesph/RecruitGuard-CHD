@@ -33,7 +33,7 @@
 {% if withdrawal_requests %}
     <div class="alert alert-warning" role="status" data-withdrawal-requests>
         <strong>{{ withdrawal_requests|length }} applicant{{ withdrawal_requests|length|pluralize }} asked to withdraw:</strong>
-        {% for application in withdrawal_requests %}<a href="{% url 'application-detail' application.pk %}">{{ application|case_ref_for:request.user }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}.
+        {% for application in withdrawal_requests %}<a href="{% url 'application-detail' application.pk %}?from=batch">{{ application|case_ref_for:request.user }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}.
         Record the withdrawal on the case first, so they aren't sent this batch's schedule.
     </div>
 {% endif %}
@@ -133,7 +133,7 @@
     <p class="rg-note mb-3">
         Enter each candidate's General Ability and Technical scores (0–100). The overall is
         computed from the weights above.
-        {% if not is_plantilla %}COS scores are encoded by the HRMO.{% endif %}
+        {% if not is_plantilla %}COS scores are entered by the HRMU.{% endif %}
     </p>
     <form method="post" id="examScoreForm" novalidate>
         {% csrf_token %}

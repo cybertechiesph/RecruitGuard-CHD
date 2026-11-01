@@ -1,24 +1,30 @@
 {% extends "internal_base.html" %}
 {% load recruitment_ui %}
 
-{% block internal_title %}{% if is_queue %}My Queue{% elif is_closed_list %}Closed Cases{% else %}Cases I Can View{% endif %}{% endblock %}
+{% block internal_title %}{% if is_queue %}My Queue{% elif is_closed_list %}Past Records{% else %}Cases I Can View{% endif %}{% endblock %}
 
 {% block breadcrumb %}
 <span class="rg-breadcrumb-sep">&rsaquo;</span>
-<span class="rg-breadcrumb-current">{% if is_queue %}My Queue{% elif is_closed_list %}Closed Cases{% else %}Applications{% endif %}</span>
+<span class="rg-breadcrumb-current">{% if is_queue %}My Queue{% elif is_closed_list %}Past Records{% else %}Applications{% endif %}</span>
 {% endblock %}
 
 {% block content %}
 <div class="rg-page-header">
     <div>
-        <h1 class="rg-page-title">{% if is_queue %}My Queue{% elif is_closed_list %}Closed Cases{% else %}Cases I Can View{% endif %}</h1>
+        <h1 class="rg-page-title">{% if is_queue %}My Queue{% elif is_closed_list %}Past Records{% else %}Cases I Can View{% endif %}</h1>
         {% if is_closed_list %}
-            <p class="rg-imeta mt-1">Approved, not-selected, withdrawn and cancelled cases you retain access to, for records requests.</p>
+            <p class="rg-imeta mt-1">
+                Finished cases &mdash; selected, not selected, withdrawn or cancelled. Open a case to see its
+                documents and history, or to export it.
+                {% if user.role == "secretariat" or user.role == "hrm_chief" %}
+                    For past vacancies, see <a href="{% url 'recruitment-entry-list' %}?status=closed">closed recruitment entries</a>.
+                {% endif %}
+            </p>
         {% endif %}
     </div>
     <div class="rg-page-actions">
         {% if is_queue %}
-            <a href="{% url 'workflow-closed' %}" class="btn btn-outline-secondary btn-sm">Closed cases &rarr;</a>
+            <a href="{% url 'workflow-closed' %}" class="btn btn-outline-secondary btn-sm">Past records &rarr;</a>
         {% else %}
             <a href="{% url 'workflow-queue' %}" class="btn btn-rg-primary btn-sm">&larr; Back to My Queue</a>
         {% endif %}
@@ -103,7 +109,7 @@
         {% elif is_queue %}
             {% include "internal_includes/state_empty.html" with title="You're all caught up" copy="No cases need your action right now. New assignments will appear here." %}
         {% elif is_closed_list %}
-            {% include "internal_includes/state_empty.html" with title="No closed cases" copy="Closed cases you can view will appear here." %}
+            {% include "internal_includes/state_empty.html" with title="No past records yet" copy="Finished cases you can view will appear here." %}
         {% else %}
             {% include "internal_includes/state_empty.html" with title="No cases to show" copy="Cases you are allowed to view will appear here." %}
         {% endif %}
