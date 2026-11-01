@@ -1,26 +1,25 @@
 {% extends "applicant_base.html" %}
-{% load recruitment_ui %}
+{% load i18n recruitment_ui %}
 
-{% block title %}Help &amp; FAQ | Applicant Portal{% endblock %}
+{% block title %}{% translate "Help &amp; FAQ" %} | {% translate "Applicant Portal" %}{% endblock %}
 
 {% block main_class %}{% endblock %}
 
 {% block content %}
-<div class="rg-pub-wrap rg-help-wrap" lang="en">
-    {% include "recruitment/includes/english_only_notice.html" %}
+<div class="rg-pub-wrap rg-help-wrap">
     {% office_contact as contact %}
 
     <header class="rg-help-intro">
-        <h1 class="rg-help-intro__title">Help &amp; Frequently Asked Questions</h1>
+        <h1 class="rg-help-intro__title">{% blocktranslate trimmed %}Help &amp; Frequently Asked Questions{% endblocktranslate %}</h1>
         <p class="rg-help-intro__copy">
-            Answers to common questions about applying for positions at DOH&ndash;CHD CALABARZON.
-            If you can&rsquo;t find what you need below, our Public Assistance Desk is happy to help.
+            {% blocktranslate trimmed %}Answers to common questions about applying for positions at DOH&ndash;CHD CALABARZON.
+            If you can&rsquo;t find what you need below, the Human Resource Management Unit (HRMU) is happy to help.{% endblocktranslate %}
         </p>
     </header>
 
     {# ── Section: Applying ───────────────────────────────────────── #}
     <section class="rg-help-section" aria-labelledby="hp-sec-applying">
-        <h2 id="hp-sec-applying" class="rg-help-section__title">Applying for a position</h2>
+        <h2 id="hp-sec-applying" class="rg-help-section__title">{% blocktranslate trimmed %}Applying for a position{% endblocktranslate %}</h2>
 
         <div class="accordion" id="faq-applying">
 
@@ -29,15 +28,15 @@
                     <button class="accordion-button rg-faq__button" type="button"
                             data-bs-toggle="collapse" data-bs-target="#faq-a1"
                             aria-expanded="true" aria-controls="faq-a1">
-                        Do I need to create an account to apply?
+                        {% blocktranslate trimmed %}Do I need to create an account to apply?{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="faq-a1" class="accordion-collapse collapse show" aria-labelledby="faq-a1-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>No. You don&rsquo;t need an account. You only need a valid email address.
+                        <p>{% blocktranslate trimmed %}No. You don&rsquo;t need an account. You only need a valid email address.
                         When you start, we send a 6-digit code to that email; entering it confirms the address
-                        and opens your application.</p>
-                        <p>Each code works for {{ otp_validity_minutes }} minute{{ otp_validity_minutes|pluralize }}.</p>
+                        and opens your application.{% endblocktranslate %}</p>
+                        <p>{% blocktranslate trimmed count minutes=otp_validity_minutes %}Each code works for {{ minutes }} minute.{% plural %}Each code works for {{ minutes }} minutes.{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -47,17 +46,17 @@
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#faq-save"
                             aria-expanded="false" aria-controls="faq-save">
-                        Can I save my application and finish later?
+                        {% blocktranslate trimmed %}Can I save my application and finish later?{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="faq-save" class="accordion-collapse collapse" aria-labelledby="faq-save-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>Yes. Your answers are saved as you type, and each document is saved the moment it
-                        finishes uploading. You can close the page at any time.</p>
-                        <p>To come back, open the <strong>verification email</strong> we sent you and tap
+                        <p>{% blocktranslate trimmed %}Yes. Your answers are saved as you type, and each document is saved the moment it
+                        finishes uploading. You can close the page at any time.{% endblocktranslate %}</p>
+                        <p>{% blocktranslate trimmed %}To come back, open the <strong>verification email</strong> we sent you and tap
                         <strong>&ldquo;Continue your application&rdquo;</strong>. We&rsquo;ll send a fresh code
                         to confirm it&rsquo;s you, then everything you added is waiting. Remember to submit before
-                        the application deadline.</p>
+                        the application deadline.{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -67,21 +66,21 @@
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#faq-a2"
                             aria-expanded="false" aria-controls="faq-a2">
-                        What documents do I need to prepare?
+                        {% blocktranslate trimmed %}What documents do I need to prepare?{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="faq-a2" class="accordion-collapse collapse" aria-labelledby="faq-a2-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>The required documents are listed on each position&rsquo;s detail page before you start applying.
-                        Requirements differ between Plantilla and COS entries, but common documents include:</p>
+                        <p>{% blocktranslate trimmed %}The required documents are listed on each position&rsquo;s detail page before you start applying.
+                        Requirements differ between Plantilla and COS entries, but common documents include:{% endblocktranslate %}</p>
                         <ul>
-                            <li>Signed application or cover letter for the selected position</li>
-                            <li>Personal Data Sheet (CS Form No. 212, Revised 2026) with Work Experience Sheet</li>
-                            <li>Eligibility, rating, or license documents where required by the posting</li>
-                            <li>Diploma and transcript of records</li>
-                            <li>Employment and training certificates where applicable to the selected branch</li>
+                            <li>{% blocktranslate trimmed %}Signed application or cover letter for the selected position{% endblocktranslate %}</li>
+                            <li>{% blocktranslate trimmed %}Personal Data Sheet (CS Form No. 212, Revised 2026) with Work Experience Sheet{% endblocktranslate %}</li>
+                            <li>{% blocktranslate trimmed %}Eligibility, rating, or license documents where required by the posting{% endblocktranslate %}</li>
+                            <li>{% blocktranslate trimmed %}Diploma and transcript of records{% endblocktranslate %}</li>
+                            <li>{% blocktranslate trimmed %}Employment and training certificates where applicable to the selected branch{% endblocktranslate %}</li>
                         </ul>
-                        <p>Documents should be saved as <strong>PDF, JPG, or PNG</strong> files, with a maximum size of 5 MB per file.</p>
+                        <p>{% blocktranslate trimmed %}Documents should be saved as <strong>PDF, JPG, or PNG</strong> files, with a maximum size of 5 MB per file.{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -91,16 +90,16 @@
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#faq-forms"
                             aria-expanded="false" aria-controls="faq-forms">
-                        Where do I get the blank PDS and Work Experience Sheet?
+                        {% blocktranslate trimmed %}Where do I get the blank PDS and Work Experience Sheet?{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="faq-forms" class="accordion-collapse collapse" aria-labelledby="faq-forms-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>You can download the official Civil Service Commission forms here &mdash; no need to search
-                        online. Fill them up on a computer, then save or scan the finished forms as PDF before uploading.</p>
+                        <p>{% blocktranslate trimmed %}You can download the official Civil Service Commission forms here &mdash; no need to search
+                        online. Fill them up on a computer, then save or scan the finished forms as PDF before uploading.{% endblocktranslate %}</p>
                         {% include "recruitment/includes/requirement_downloads.html" with downloads=form_downloads %}
-                        <p class="mb-0">New to the PDS? Read our
-                        <a href="{% url 'applicant-pds-guide' %}">plain-language guide to filling up your PDS</a>.</p>
+                        <p class="mb-0">{% url 'applicant-pds-guide' as link1 %}{% blocktranslate trimmed %}New to the PDS? Read our
+                        <a href="{{ link1 }}">plain-language guide to filling up your PDS</a>.{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -110,13 +109,15 @@
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#faq-a3"
                             aria-expanded="false" aria-controls="faq-a3">
-                        Can I apply for more than one position?
+                        {% blocktranslate trimmed %}Can I apply for more than one position?{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="faq-a3" class="accordion-collapse collapse" aria-labelledby="faq-a3-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>Yes. You may apply for multiple open positions. Each position requires a separate application
-                        submission. You will receive a unique Tracking Code and case number for each one.</p>
+                        {% url 'applicant-my-applications' as my_applications_url %}
+                        <p>{% blocktranslate trimmed with url=my_applications_url %}Yes. You may apply for multiple open positions. Each position requires a separate application
+                        submission, with its own Tracking Code and case number. To see all of them in one place, open
+                        <a href="{{ url }}">My Applications</a> and enter your email.{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -126,7 +127,7 @@
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#faq-a4"
                             aria-expanded="false" aria-controls="faq-a4">
-                        What&rsquo;s the difference between Plantilla and Contract of Service?
+                        {% blocktranslate trimmed %}What&rsquo;s the difference between Plantilla and Contract of Service?{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="faq-a4" class="accordion-collapse collapse" aria-labelledby="faq-a4-hd">
@@ -141,18 +142,18 @@
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#faq-a5"
                             aria-expanded="false" aria-controls="faq-a5">
-                        What if I don&rsquo;t have a personal email address?
+                        {% blocktranslate trimmed %}What if I don&rsquo;t have a personal email address?{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="faq-a5" class="accordion-collapse collapse" aria-labelledby="faq-a5-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>You will need a working email address you can check, because we send the verification code
-                        and all status updates there.</p>
-                        <p>If you don&rsquo;t have one yet, free email accounts from Gmail, Yahoo, or Outlook take a
+                        <p>{% blocktranslate trimmed %}You will need a working email address you can check, because we send the verification code
+                        and all status updates there.{% endblocktranslate %}</p>
+                        <p>{% blocktranslate trimmed %}If you don&rsquo;t have one yet, free email accounts from Gmail, Yahoo, or Outlook take a
                         few minutes to create on a phone or computer. If you really cannot create one, you may use
                         a trusted family member&rsquo;s email &mdash; just remember to use the same address every
-                        time you check your status.</p>
-                        <p>For help, contact the Public Assistance Desk (number below).</p>
+                        time you check your status.{% endblocktranslate %}</p>
+                        <p>{% blocktranslate trimmed %}For help, contact the HRMU (details below).{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -162,23 +163,23 @@
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#faq-a6"
                             aria-expanded="false" aria-controls="faq-a6">
-                        My file is too large to upload. What do I do?
+                        {% blocktranslate trimmed %}My file is too large to upload. What do I do?{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="faq-a6" class="accordion-collapse collapse" aria-labelledby="faq-a6-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>Each file must be 5 MB or smaller. Most people won&rsquo;t hit this:</p>
+                        <p>{% blocktranslate trimmed %}Each file must be 5 MB or smaller. Most people won&rsquo;t hit this:{% endblocktranslate %}</p>
                         <ul>
-                            <li><strong>Photos:</strong> large phone photos are shrunk automatically before they upload.</li>
-                            <li><strong>Several pages:</strong> you don&rsquo;t need one big file &mdash; add the pages
-                            one by one (or as several photos) and we combine them for you.</li>
-                            <li><strong>Scanned PDFs:</strong> if one PDF is still too large, scan at a lower resolution
-                            (200&ndash;300 DPI is enough), or split it and add the parts separately.</li>
-                            <li><strong>Multi-page PDFs:</strong> some scanners produce huge files because each page
-                            is saved as an image. Use a PDF compressor (iLovePDF, Smallpdf) to reduce the file size.</li>
-                            <li><strong>Long documents:</strong> if a single document genuinely needs to be larger,
-                            email us at the Public Assistance Desk and we&rsquo;ll guide you through an alternate
-                            submission.</li>
+                            <li>{% blocktranslate trimmed %}<strong>Photos:</strong> large phone photos are shrunk automatically before they upload.{% endblocktranslate %}</li>
+                            <li>{% blocktranslate trimmed %}<strong>Several pages:</strong> you don&rsquo;t need one big file &mdash; add the pages
+                            one by one (or as several photos) and we combine them for you.{% endblocktranslate %}</li>
+                            <li>{% blocktranslate trimmed %}<strong>Scanned PDFs:</strong> if one PDF is still too large, scan at a lower resolution
+                            (200&ndash;300 DPI is enough), or split it and add the parts separately.{% endblocktranslate %}</li>
+                            <li>{% blocktranslate trimmed %}<strong>Multi-page PDFs:</strong> some scanners produce huge files because each page
+                            is saved as an image. Use a PDF compressor (iLovePDF, Smallpdf) to reduce the file size.{% endblocktranslate %}</li>
+                            <li>{% blocktranslate trimmed %}<strong>Long documents:</strong> if a single document genuinely needs to be larger,
+                            email the HRMU and we&rsquo;ll guide you through an alternate
+                            submission.{% endblocktranslate %}</li>
                         </ul>
                     </div>
                 </div>
@@ -189,14 +190,15 @@
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#faq-a7"
                             aria-expanded="false" aria-controls="faq-a7">
-                        Can I edit or withdraw my application after submitting?
+                        {% blocktranslate trimmed %}Can I edit or withdraw my application after submitting?{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="faq-a7" class="accordion-collapse collapse" aria-labelledby="faq-a7-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>Once you click <strong>&ldquo;Submit My Application&rdquo;</strong> and it is confirmed,
-                        your application cannot be edited online. If you need to make a correction or withdraw, please
-                        contact the Public Assistance Desk (below) with your case number.</p>
+                        <p>{% blocktranslate trimmed %}Once you click <strong>&ldquo;Submit my application&rdquo;</strong>, your application
+                        can no longer be edited online. To withdraw, open your status page and use
+                        <strong>&ldquo;Withdraw my application&rdquo;</strong>; the office will record it and email you. For a
+                        correction, contact the HRMU (below) with your case number.{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -207,7 +209,7 @@
 
     {# ── Section: Email Verification ─────────────────────────────── #}
     <section class="rg-help-section" aria-labelledby="hp-sec-email">
-        <h2 id="hp-sec-email" class="rg-help-section__title">Email verification</h2>
+        <h2 id="hp-sec-email" class="rg-help-section__title">{% blocktranslate trimmed %}Email verification{% endblocktranslate %}</h2>
 
         <div class="accordion" id="faq-email">
 
@@ -216,19 +218,19 @@
                     <button class="accordion-button rg-faq__button" type="button"
                             data-bs-toggle="collapse" data-bs-target="#faq-e1"
                             aria-expanded="true" aria-controls="faq-e1">
-                        I didn&rsquo;t receive the verification code. What should I do?
+                        {% blocktranslate trimmed %}I didn&rsquo;t receive the verification code. What should I do?{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="faq-e1" class="accordion-collapse collapse show" aria-labelledby="faq-e1-hd">
                     <div class="accordion-body rg-faq__body">
                         <ol>
-                            <li>Check your <strong>Spam</strong> or <strong>Junk Mail</strong> folder. The email
-                            comes from a government recruitment address and may be filtered.</li>
-                            <li>Make sure the email address you entered is correct &mdash; go back and check.</li>
-                            <li>Tap <strong>&ldquo;Resend the code&rdquo;</strong> on the verification page to request
-                            a new code. You can resend once every 60 seconds.</li>
-                            <li>If you still don&rsquo;t receive it after a few minutes, try a different email address
-                            and start a new application.</li>
+                            <li>{% blocktranslate trimmed %}Check your <strong>Spam</strong> or <strong>Junk Mail</strong> folder. The email
+                            comes from a government recruitment address and may be filtered.{% endblocktranslate %}</li>
+                            <li>{% blocktranslate trimmed %}Make sure the email address you entered is correct &mdash; go back and check.{% endblocktranslate %}</li>
+                            <li>{% blocktranslate trimmed %}Tap <strong>&ldquo;Resend the code&rdquo;</strong> on the verification page to request
+                            a new code. You can resend once every 60 seconds.{% endblocktranslate %}</li>
+                            <li>{% blocktranslate trimmed %}If you still don&rsquo;t receive it after a few minutes, try a different email address
+                            and start a new application.{% endblocktranslate %}</li>
                         </ol>
                     </div>
                 </div>
@@ -239,13 +241,14 @@
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#faq-e2"
                             aria-expanded="false" aria-controls="faq-e2">
-                        How long is the verification code valid?
+                        {% blocktranslate trimmed %}How long is the verification code valid?{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="faq-e2" class="accordion-collapse collapse" aria-labelledby="faq-e2-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>Each 6-digit code works for {{ otp_validity_minutes }} minute{{ otp_validity_minutes|pluralize }} after it is sent.
-                        If it expires, tap <strong>&ldquo;Resend the code&rdquo;</strong> to get a fresh one.</p>
+                        <p>{% blocktranslate trimmed count minutes=otp_validity_minutes %}Each 6-digit code works for {{ minutes }} minute after it is sent.
+                        If it expires, tap <strong>&ldquo;Resend the code&rdquo;</strong> to get a fresh one.{% plural %}Each 6-digit code works for {{ minutes }} minutes after it is sent.
+                        If it expires, tap <strong>&ldquo;Resend the code&rdquo;</strong> to get a fresh one.{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -255,15 +258,15 @@
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#faq-e3"
                             aria-expanded="false" aria-controls="faq-e3">
-                        I entered the wrong email address. Can I correct it?
+                        {% blocktranslate trimmed %}I entered the wrong email address. Can I correct it?{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="faq-e3" class="accordion-collapse collapse" aria-labelledby="faq-e3-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>Yes. On the verification page, tap
+                        <p>{% blocktranslate trimmed %}Yes. On the verification page, tap
                         <strong>&ldquo;Start again with the correct email&rdquo;</strong> and enter the right address.
                         The code goes to the new address. Nothing was uploaded yet at that point, so you don&rsquo;t
-                        lose any documents.</p>
+                        lose any documents.{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -274,7 +277,7 @@
 
     {# ── Section: After Submitting ──────────────────────────────── #}
     <section class="rg-help-section" aria-labelledby="hp-sec-after">
-        <h2 id="hp-sec-after" class="rg-help-section__title">After submitting</h2>
+        <h2 id="hp-sec-after" class="rg-help-section__title">{% blocktranslate trimmed %}After submitting{% endblocktranslate %}</h2>
 
         <div class="accordion" id="faq-after">
 
@@ -283,18 +286,18 @@
                     <button class="accordion-button rg-faq__button" type="button"
                             data-bs-toggle="collapse" data-bs-target="#faq-s1"
                             aria-expanded="true" aria-controls="faq-s1">
-                        What are the Tracking Code and Case Reference?
+                        {% blocktranslate trimmed %}What are the Tracking Code and Case Reference?{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="faq-s1" class="accordion-collapse collapse show" aria-labelledby="faq-s1-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>When you submit, you receive two references with different jobs. Your
+                        <p>{% url 'applicant-status-lookup' as link2 %}{% blocktranslate trimmed %}When you submit, you receive two references with different jobs. Your
                         <strong>Tracking Code</strong> (looks like <strong>TRK-7KQ4-M9X2</strong>) is private &mdash;
                         together with your email it lets you
-                        <a href="{% url 'applicant-status-lookup' %}">track your application</a> online. Treat it
+                        <a href="{{ link2 }}">track your application</a> online. Treat it
                         like a password. Your <strong>case number</strong> (looks like <strong>Case No. 2026-0147</strong>)
                         is the reference you quote when you call or email the office. Both are shown on your
-                        confirmation page and sent to your email.</p>
+                        confirmation page and sent to your email.{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -304,16 +307,16 @@
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#faq-s2"
                             aria-expanded="false" aria-controls="faq-s2">
-                        I lost my Tracking Code. Can you help?
+                        {% blocktranslate trimmed %}I lost my Tracking Code. Can you help?{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="faq-s2" class="accordion-collapse collapse" aria-labelledby="faq-s2-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>Yes. Your Tracking Code was sent to your email when you submitted &mdash; search your
-                        inbox (and Spam folder) for messages from us. The subject line includes &ldquo;DOH–CHD CALABARZON Recruitment Portal&rdquo;.</p>
-                        <p>If you still can&rsquo;t find it, contact the Public Assistance Desk (below) with your
+                        <p>{% blocktranslate trimmed %}Yes. Your Tracking Code was sent to your email when you submitted &mdash; search your
+                        inbox (and Spam folder) for messages from us. The subject line includes &ldquo;DOH–CHD CALABARZON Recruitment Portal&rdquo;.{% endblocktranslate %}</p>
+                        <p>{% blocktranslate trimmed %}If you still can&rsquo;t find it, contact the HRMU (below) with your
                         full name, the position you applied for, and the email address you used. We&rsquo;ll look it
-                        up for you.</p>
+                        up for you.{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -323,16 +326,16 @@
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#faq-s3"
                             aria-expanded="false" aria-controls="faq-s3">
-                        How do I check my application status?
+                        {% blocktranslate trimmed %}How do I check my application status?{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="faq-s3" class="accordion-collapse collapse" aria-labelledby="faq-s3-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>Go to the <a href="{% url 'applicant-status-lookup' %}">Track Application</a> page
+                        <p>{% url 'applicant-status-lookup' as link3 %}{% blocktranslate trimmed %}Go to the <a href="{{ link3 }}">Track Application</a> page
                         and enter your Tracking Code and email address. The portal will show your current status
-                        in plain language.</p>
-                        <p>Easier: every status update email we send includes a direct link straight to your
-                        status page &mdash; just click that.</p>
+                        in plain language.{% endblocktranslate %}</p>
+                        <p>{% blocktranslate trimmed %}Easier: every status update email we send includes a direct link straight to your
+                        status page &mdash; just click that.{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -342,15 +345,15 @@
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#faq-s4"
                             aria-expanded="false" aria-controls="faq-s4">
-                        Can I follow up by phone?
+                        {% blocktranslate trimmed %}Can I follow up by phone?{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="faq-s4" class="accordion-collapse collapse" aria-labelledby="faq-s4-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>Yes. Call the Human Resource Management Unit (HRMU) at
-                        <a href="tel:{{ contact.hrmu.tel }}"><strong>{{ contact.hrmu.phone }}</strong></a>. Have your case number
+                        <p>{% blocktranslate trimmed with tel=contact.hrmu.tel phone=contact.hrmu.phone %}Yes. Call the Human Resource Management Unit (HRMU) at
+                        <a href="tel:{{ tel }}"><strong>{{ phone }}</strong></a>. Have your case number
                         ready so we can look up your case right away &mdash; never share your Tracking Code over
-                        the phone; it&rsquo;s not needed for assistance.</p>
+                        the phone; it&rsquo;s not needed for assistance.{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -360,18 +363,18 @@
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#faq-s5"
                             aria-expanded="false" aria-controls="faq-s5">
-                        Can someone else check my application status for me?
+                        {% blocktranslate trimmed %}Can someone else check my application status for me?{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="faq-s5" class="accordion-collapse collapse" aria-labelledby="faq-s5-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>Yes &mdash; but only someone you trust. A family member with your Tracking Code and the
+                        <p>{% url 'applicant-status-lookup' as link4 %}{% blocktranslate trimmed %}Yes &mdash; but only someone you trust. A family member with your Tracking Code and the
                         email address you used can check your status on the
-                        <a href="{% url 'applicant-status-lookup' %}">Track Application</a> page. This is useful if
+                        <a href="{{ link4 }}">Track Application</a> page. This is useful if
                         you&rsquo;re overseas (OFW) or working in an area without good internet. Share the code only
-                        with someone checking on your behalf.</p>
-                        <p>The status page does not show personal information beyond your name and the position. We
-                        don&rsquo;t send full application data over phone or email to people other than you.</p>
+                        with someone checking on your behalf.{% endblocktranslate %}</p>
+                        <p>{% blocktranslate trimmed %}The status page does not show personal information beyond your name and the position. We
+                        don&rsquo;t send full application data over phone or email to people other than you.{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -381,14 +384,14 @@
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#faq-s6"
                             aria-expanded="false" aria-controls="faq-s6">
-                        Can I view the documents I submitted?
+                        {% blocktranslate trimmed %}Can I view the documents I submitted?{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="faq-s6" class="accordion-collapse collapse" aria-labelledby="faq-s6-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>The Track Application page does not yet show your uploaded documents back to you. If you
-                        want to confirm what we received, contact the Public Assistance Desk with your case
-                        number and we&rsquo;ll send you a list of the files attached to your application.</p>
+                        <p>{% blocktranslate trimmed %}The Track Application page does not yet show your uploaded documents back to you. If you
+                        want to confirm what we received, contact the HRMU with your case
+                        number and we&rsquo;ll send you a list of the files attached to your application.{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -398,15 +401,15 @@
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#faq-s7"
                             aria-expanded="false" aria-controls="faq-s7">
-                        What does &ldquo;Action Required&rdquo; mean?
+                        {% blocktranslate trimmed %}What does &ldquo;Action Required&rdquo; mean?{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="faq-s7" class="accordion-collapse collapse" aria-labelledby="faq-s7-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>This means our recruitment team has sent your application back because something needs
+                        <p>{% blocktranslate trimmed %}This means our recruitment team has sent your application back because something needs
                         to be addressed &mdash; for example, a missing document or additional information.
                         Check your email for instructions. If you didn&rsquo;t receive an email, contact the Public
-                        Assistance Desk (below) with your case number.</p>
+                        Assistance Desk (below) with your case number.{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -416,14 +419,14 @@
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#faq-s8"
                             aria-expanded="false" aria-controls="faq-s8">
-                        How long does the recruitment process take?
+                        {% blocktranslate trimmed %}How long does the recruitment process take?{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="faq-s8" class="accordion-collapse collapse" aria-labelledby="faq-s8-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>We will email you when there is news on your application &mdash; you don&rsquo;t need to
+                        <p>{% blocktranslate trimmed %}We will email you when there is news on your application &mdash; you don&rsquo;t need to
                         follow up unless your status shows &ldquo;Action Required.&rdquo; The timeline depends on the
-                        position, the number of applicants, and Civil Service Commission processes.</p>
+                        position, the number of applicants, and Civil Service Commission processes.{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -434,24 +437,24 @@
 
     {# ── Contact card: the HRMU handles questions about applications ── #}
     <aside class="rg-help-pad" aria-label="Contact the Human Resource Management Unit">
-        <p class="rg-help-pad__title">Still have questions? We&rsquo;re here to help.</p>
+        <p class="rg-help-pad__title">{% blocktranslate trimmed %}Still have questions? We&rsquo;re here to help.{% endblocktranslate %}</p>
         <div class="rg-help-pad__grid">
             <div class="rg-help-pad__channel">
-                <span class="rg-help-pad__channel-label">Call the Human Resource Management Unit (HRMU)</span>
-                <a href="tel:{{ contact.hrmu.tel }}" class="rg-help-pad__channel-value">{{ contact.hrmu.phone }}</a>
+                {% blocktranslate trimmed with tel=contact.hrmu.tel phone=contact.hrmu.phone %}<span class="rg-help-pad__channel-label">Call the Human Resource Management Unit (HRMU)</span>
+                <a href="tel:{{ tel }}" class="rg-help-pad__channel-value">{{ phone }}</a>{% endblocktranslate %}
             </div>
             <div class="rg-help-pad__channel">
-                <span class="rg-help-pad__channel-label">Email the HRMU</span>
-                <a href="mailto:{{ contact.hrmu.email }}" class="rg-help-pad__channel-value">{{ contact.hrmu.email }}</a>
+                {% blocktranslate trimmed with email=contact.hrmu.email %}<span class="rg-help-pad__channel-label">Email the HRMU</span>
+                <a href="mailto:{{ email }}" class="rg-help-pad__channel-value">{{ email }}</a>{% endblocktranslate %}
             </div>
         </div>
-        <p class="rg-help-pad__note">Include your case number if you&rsquo;re asking about a specific application.</p>
+        <p class="rg-help-pad__note">{% blocktranslate trimmed %}Include your case number if you&rsquo;re asking about a specific application.{% endblocktranslate %}</p>
     </aside>
 
     <div class="rg-help-back">
-        <a href="{% url 'applicant-portal' %}" class="rg-pub-back">
+        {% url 'applicant-portal' as link5 %}{% blocktranslate trimmed %}<a href="{{ link5 }}" class="rg-pub-back">
             &larr; Back to Job Openings
-        </a>
+        </a>{% endblocktranslate %}
     </div>
 
 </div>

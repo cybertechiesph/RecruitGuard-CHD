@@ -1,7 +1,7 @@
 {% extends "applicant_base.html" %}
-{% load static recruitment_ui %}
+{% load static i18n recruitment_ui %}
 
-{% block title %}How to Fill Up Your PDS | Applicant Portal{% endblock %}
+{% block title %}{% translate "How to Fill Up Your PDS" %} | {% translate "Applicant Portal" %}{% endblock %}
 
 {% block main_class %}{% endblock %}
 
@@ -12,29 +12,29 @@
   Where the two ever disagree, the CSC guide wins - the page says so and links it.
 {% endcomment %}
 {% office_contact as contact %}
-<div class="rg-pub-wrap">{% include "recruitment/includes/english_only_notice.html" %}</div>
-<div class="rg-pub-wrap rg-help-wrap rg-pds-guide" lang="en">
+
+<div class="rg-pub-wrap rg-help-wrap rg-pds-guide">
 
     <nav class="rg-pub-breadcrumb" aria-label="Breadcrumb">
-        <a href="{% url 'applicant-portal' %}">Home</a>
+        {% url 'applicant-portal' as link6 %}{% url 'applicant-help' as link7 %}{% blocktranslate trimmed %}<a href="{{ link6 }}">Home</a>
         <span class="rg-pub-breadcrumb__sep" aria-hidden="true">/</span>
-        <a href="{% url 'applicant-help' %}">Help</a>
+        <a href="{{ link7 }}">Help</a>
         <span class="rg-pub-breadcrumb__sep" aria-hidden="true">/</span>
-        <span>How to fill up your PDS</span>
+        <span>How to fill up your PDS</span>{% endblocktranslate %}
     </nav>
 
     <header class="rg-help-intro">
-        <h1 class="rg-help-intro__title">How to fill up your Personal Data Sheet (PDS)</h1>
+        <h1 class="rg-help-intro__title">{% blocktranslate trimmed %}How to fill up your Personal Data Sheet (PDS){% endblocktranslate %}</h1>
         <p class="rg-help-intro__copy">
-            The Personal Data Sheet (CS Form No. 212) is the standard government form that tells us who you are,
+            {% blocktranslate trimmed %}The Personal Data Sheet (CS Form No. 212) is the standard government form that tells us who you are,
             where you studied, and what work you have done. Every applicant submits one. This page explains it in
             plain language and points out the mistakes we see most often. It follows the Civil Service
-            Commission&rsquo;s official guide &mdash; if anything here is ever unclear, the CSC guide is the final word.
+            Commission&rsquo;s official guide &mdash; if anything here is ever unclear, the CSC guide is the final word.{% endblocktranslate %}
         </p>
     </header>
 
     <section class="rg-help-section rg-pds-guide__downloads" aria-labelledby="pds-dl">
-        <h2 id="pds-dl" class="rg-help-section__title">Download first</h2>
+        <h2 id="pds-dl" class="rg-help-section__title">{% blocktranslate trimmed %}Download first{% endblocktranslate %}</h2>
         <ul class="rg-req-downloads" data-requirement-downloads>
             <li>
                 <a href="{% static pds_form.static_path %}" class="rg-req-downloads__link" download>{{ pds_form.label }}</a>
@@ -52,57 +52,57 @@
     </section>
 
     <section class="rg-help-section" aria-labelledby="pds-before">
-        <h2 id="pds-before" class="rg-help-section__title">Before you start</h2>
+        <h2 id="pds-before" class="rg-help-section__title">{% blocktranslate trimmed %}Before you start{% endblocktranslate %}</h2>
         <div class="rg-pds-guide__body">
-            <p>You will need:</p>
+            <p>{% blocktranslate trimmed %}You will need:{% endblocktranslate %}</p>
             <ul>
-                <li><strong>A computer with Microsoft Excel.</strong> The PDS must be typed, not handwritten.
+                <li>{% blocktranslate trimmed %}<strong>A computer with Microsoft Excel.</strong> The PDS must be typed, not handwritten.
                     Free programs such as LibreOffice can open the file, but they may break its tick boxes and
                     page layout &mdash; check every page carefully if you use one. Filling it up on a phone is not
-                    practical; use a computer, or ask a computer shop for help.</li>
-                <li>Your school records, eligibility or license details, and job history &mdash; including exact dates.</li>
-                <li>A recent passport-size photo (4.5&nbsp;cm &times; 3.5&nbsp;cm), taken within the last six months,
-                    with no filters. A digital photo is fine.</li>
-                <li>Any valid government ID.</li>
+                    practical; use a computer, or ask a computer shop for help.{% endblocktranslate %}</li>
+                <li>{% blocktranslate trimmed %}Your school records, eligibility or license details, and job history &mdash; including exact dates.{% endblocktranslate %}</li>
+                <li>{% blocktranslate trimmed %}A recent passport-size photo (4.5&nbsp;cm &times; 3.5&nbsp;cm), taken within the last six months,
+                    with no filters. A digital photo is fine.{% endblocktranslate %}</li>
+                <li>{% blocktranslate trimmed %}Any valid government ID.{% endblocktranslate %}</li>
             </ul>
-            <p class="mb-0">Take your time. It is normal for this to take an hour or two the first time. Save your file as you go.</p>
+            <p class="mb-0">{% blocktranslate trimmed %}Take your time. It is normal for this to take an hour or two the first time. Save your file as you go.{% endblocktranslate %}</p>
         </div>
     </section>
 
     <section class="rg-help-section" aria-labelledby="pds-rules">
-        <h2 id="pds-rules" class="rg-help-section__title">The five rules that cause the most corrections</h2>
+        <h2 id="pds-rules" class="rg-help-section__title">{% blocktranslate trimmed %}The five rules that cause the most corrections{% endblocktranslate %}</h2>
         <ol class="rg-pds-guide__rules">
-            <li><strong>Write your name in this order: SURNAME, FIRST NAME, NAME EXTENSION, MIDDLE NAME.</strong>
+            <li>{% blocktranslate trimmed %}<strong>Write your name in this order: SURNAME, FIRST NAME, NAME EXTENSION, MIDDLE NAME.</strong>
                 Name extension means Jr., Sr., III &mdash; leave it blank if you have none. Use the same order for your
-                spouse and your parents.</li>
-            <li><strong>Dates are day/month/year (dd/mm/yyyy).</strong> 5 March 2001 is <code>05/03/2001</code>, not
-                <code>03/05/2001</code>.</li>
-            <li><strong>Never leave a box empty. Write <code>N/A</code> if it does not apply to you.</strong> A blank box
-                looks like a forgotten answer; <code>N/A</code> shows you read the question.</li>
-            <li><strong>Do not abbreviate.</strong> Write the complete name of every school, office, and organization
-                &mdash; <em>Civil Service Commission</em>, not <em>CSC</em>; <em>BS Psychology</em>, not <em>BSP</em>.</li>
-            <li><strong>Answer everything truthfully.</strong> The form carries a legal warning: a false statement in the
-                PDS can be grounds for an administrative or criminal case.</li>
+                spouse and your parents.{% endblocktranslate %}</li>
+            <li>{% blocktranslate trimmed %}<strong>Dates are day/month/year (dd/mm/yyyy).</strong> 5 March 2001 is <code>05/03/2001</code>, not
+                <code>03/05/2001</code>.{% endblocktranslate %}</li>
+            <li>{% blocktranslate trimmed %}<strong>Never leave a box empty. Write <code>N/A</code> if it does not apply to you.</strong> A blank box
+                looks like a forgotten answer; <code>N/A</code> shows you read the question.{% endblocktranslate %}</li>
+            <li>{% blocktranslate trimmed %}<strong>Do not abbreviate.</strong> Write the complete name of every school, office, and organization
+                &mdash; <em>Civil Service Commission</em>, not <em>CSC</em>; <em>BS Psychology</em>, not <em>BSP</em>.{% endblocktranslate %}</li>
+            <li>{% blocktranslate trimmed %}<strong>Answer everything truthfully.</strong> The form carries a legal warning: a false statement in the
+                PDS can be grounds for an administrative or criminal case.{% endblocktranslate %}</li>
         </ol>
     </section>
 
     <section class="rg-help-section" aria-labelledby="pds-sections">
-        <h2 id="pds-sections" class="rg-help-section__title">Section by section</h2>
+        <h2 id="pds-sections" class="rg-help-section__title">{% blocktranslate trimmed %}Section by section{% endblocktranslate %}</h2>
         <div class="accordion" id="pds-guide-sections">
             <div class="accordion-item rg-faq">
                 <h3 class="accordion-header" id="pds-s1-hd">
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#pds-s1"
                             aria-expanded="false" aria-controls="pds-s1">
-                        I. Personal information
+                        {% blocktranslate trimmed %}I. Personal information{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="pds-s1" class="accordion-collapse collapse" aria-labelledby="pds-s1-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>Your full name, birth date and birthplace, sex, civil status, height, weight, citizenship, addresses,
+                        <p>{% blocktranslate trimmed %}Your full name, birth date and birthplace, sex, civil status, height, weight, citizenship, addresses,
                         and contact details. If your civil status is &ldquo;Others&rdquo;, say what it is. If you hold dual or foreign
                         citizenship, pick the country from the list in the form. &ldquo;Agency employee number&rdquo; means your employee ID in
-                        the office where you work now &mdash; write <code>N/A</code> if you are not a government employee.</p>
+                        the office where you work now &mdash; write <code>N/A</code> if you are not a government employee.{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -112,16 +112,16 @@
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#pds-s2"
                             aria-expanded="false" aria-controls="pds-s2">
-                        II. Family background
+                        {% blocktranslate trimmed %}II. Family background{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="pds-s2" class="accordion-collapse collapse" aria-labelledby="pds-s2-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>Your spouse, your parents, and <strong>all</strong> your children with their birth dates. Two things people miss:</p>
+                        <p>{% blocktranslate trimmed %}Your spouse, your parents, and <strong>all</strong> your children with their birth dates. Two things people miss:{% endblocktranslate %}</p>
                         <ul>
-                            <li>Your mother&rsquo;s name here is her <strong>maiden name</strong> &mdash; her name before she married
-                                (<em>pangalan bago ikasal</em>).</li>
-                            <li>List every child, even those who are adults or no longer living with you.</li>
+                            <li>{% blocktranslate trimmed %}Your mother&rsquo;s name here is her <strong>maiden name</strong> &mdash; her name before she married
+                                (<em>pangalan bago ikasal</em>).{% endblocktranslate %}</li>
+                            <li>{% blocktranslate trimmed %}List every child, even those who are adults or no longer living with you.{% endblocktranslate %}</li>
                         </ul>
                     </div>
                 </div>
@@ -132,23 +132,23 @@
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#pds-s3"
                             aria-expanded="false" aria-controls="pds-s3">
-                        III. Educational background
+                        {% blocktranslate trimmed %}III. Educational background{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="pds-s3" class="accordion-collapse collapse" aria-labelledby="pds-s3-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>For each level &mdash; elementary, secondary, vocational, college, graduate studies:</p>
+                        <p>{% blocktranslate trimmed %}For each level &mdash; elementary, secondary, vocational, college, graduate studies:{% endblocktranslate %}</p>
                         <ul>
-                            <li>The <strong>full</strong> name of the school.</li>
-                            <li>The course, written in full.</li>
-                            <li>The school years you attended, like <code>2015-2019</code>.</li>
-                            <li>If you finished, the year you graduated. <strong>If you did not finish, write the highest grade, level, or
-                                number of units you earned</strong> &mdash; that is a valid answer, not a blank.</li>
-                            <li>Any scholarship or academic honor you received.</li>
+                            <li>{% blocktranslate trimmed %}The <strong>full</strong> name of the school.{% endblocktranslate %}</li>
+                            <li>{% blocktranslate trimmed %}The course, written in full.{% endblocktranslate %}</li>
+                            <li>{% blocktranslate trimmed %}The school years you attended, like <code>2015-2019</code>.{% endblocktranslate %}</li>
+                            <li>{% blocktranslate trimmed %}If you finished, the year you graduated. <strong>If you did not finish, write the highest grade, level, or
+                                number of units you earned</strong> &mdash; that is a valid answer, not a blank.{% endblocktranslate %}</li>
+                            <li>{% blocktranslate trimmed %}Any scholarship or academic honor you received.{% endblocktranslate %}</li>
                         </ul>
-                        <p class="mb-0">For elementary, write <em>PRIMARY EDUCATION</em> if you graduated. For high school, write
+                        <p class="mb-0">{% blocktranslate trimmed %}For elementary, write <em>PRIMARY EDUCATION</em> if you graduated. For high school, write
                         <em>HIGH SCHOOL</em> if you finished under the old curriculum, or <em>JUNIOR HIGH SCHOOL</em> /
-                        <em>SENIOR HIGH SCHOOL</em> under K-12.</p>
+                        <em>SENIOR HIGH SCHOOL</em> under K-12.{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -158,16 +158,16 @@
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#pds-s4"
                             aria-expanded="false" aria-controls="pds-s4">
-                        IV. Civil service eligibility
+                        {% blocktranslate trimmed %}IV. Civil service eligibility{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="pds-s4" class="accordion-collapse collapse" aria-labelledby="pds-s4-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>Every eligibility you hold, with your rating, and the date and place of the examination or conferment.
+                        <p>{% blocktranslate trimmed %}Every eligibility you hold, with your rating, and the date and place of the examination or conferment.
                         This includes eligibilities granted by law, not only exams &mdash; honor graduate, barangay official, veteran
                         preference, and similar. If your eligibility is a professional license (RA 1080), add the license number and its
-                        expiry date.</p>
-                        <p class="mb-0">Write <code>N/A</code> if you have none. Not having an eligibility does not disqualify you from every position.</p>
+                        expiry date.{% endblocktranslate %}</p>
+                        <p class="mb-0">{% blocktranslate trimmed %}Write <code>N/A</code> if you have none. Not having an eligibility does not disqualify you from every position.{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -177,19 +177,19 @@
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#pds-s5"
                             aria-expanded="false" aria-controls="pds-s5">
-                        V. Work experience
+                        {% blocktranslate trimmed %}V. Work experience{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="pds-s5" class="accordion-collapse collapse" aria-labelledby="pds-s5-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p>All your jobs &mdash; government and private &mdash; <strong>starting with your current or most recent one</strong>.
+                        <p>{% blocktranslate trimmed %}All your jobs &mdash; government and private &mdash; <strong>starting with your current or most recent one</strong>.
                         For each: exact start and end dates, the complete position title, the complete name of the office or company, your
                         monthly salary in figures (for example <code>P21,877.00</code>), salary grade and step increment if you had one
                         (written like <code>24-2</code>), your employment status (permanent, temporary, casual, contractual), and whether it
-                        was government service (yes or no).</p>
-                        <p class="mb-0"><strong>Important for job applicants:</strong> the CSC also asks for a separate <strong>Work Experience
+                        was government service (yes or no).{% endblocktranslate %}</p>
+                        <p class="mb-0">{% blocktranslate trimmed %}<strong>Important for job applicants:</strong> the CSC also asks for a separate <strong>Work Experience
                         Sheet (WES)</strong> when you apply for a vacant position. It lists only the experience relevant to the job you are
-                        applying for, and it is submitted together with your PDS. You can download the blank WES at the top of this page.</p>
+                        applying for, and it is submitted together with your PDS. You can download the blank WES at the top of this page.{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -199,14 +199,14 @@
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#pds-s6"
                             aria-expanded="false" aria-controls="pds-s6">
-                        VI. Voluntary work
+                        {% blocktranslate trimmed %}VI. Voluntary work{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="pds-s6" class="accordion-collapse collapse" aria-labelledby="pds-s6-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p class="mb-0">Any volunteer work with an organization &mdash; the organization&rsquo;s complete name and address, your
+                        <p class="mb-0">{% blocktranslate trimmed %}Any volunteer work with an organization &mdash; the organization&rsquo;s complete name and address, your
                         dates, the number of hours, and what you did there. Barangay, church, school, and community volunteer work all count.
-                        Write <code>N/A</code> if you have none.</p>
+                        Write <code>N/A</code> if you have none.{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -216,14 +216,14 @@
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#pds-s7"
                             aria-expanded="false" aria-controls="pds-s7">
-                        VII. Learning and development (trainings and seminars)
+                        {% blocktranslate trimmed %}VII. Learning and development (trainings and seminars){% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="pds-s7" class="accordion-collapse collapse" aria-labelledby="pds-s7-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p class="mb-0">Trainings, seminars, and workshops you attended, <strong>most recent first</strong>: the full title of the
+                        <p class="mb-0">{% blocktranslate trimmed %}Trainings, seminars, and workshops you attended, <strong>most recent first</strong>: the full title of the
                         program, the dates, the number of hours, the type (managerial, supervisory, technical), and the complete name of the
-                        office or institution that ran it.</p>
+                        office or institution that ran it.{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -233,13 +233,13 @@
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#pds-s8"
                             aria-expanded="false" aria-controls="pds-s8">
-                        VIII. Other information
+                        {% blocktranslate trimmed %}VIII. Other information{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="pds-s8" class="accordion-collapse collapse" aria-labelledby="pds-s8-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p class="mb-0">Your special skills and hobbies; any non-academic awards, recognitions or distinctions, written out in
-                        full; and any professional association you belong to, also written in full.</p>
+                        <p class="mb-0">{% blocktranslate trimmed %}Your special skills and hobbies; any non-academic awards, recognitions or distinctions, written out in
+                        full; and any professional association you belong to, also written in full.{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -249,14 +249,14 @@
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#pds-s9"
                             aria-expanded="false" aria-controls="pds-s9">
-                        Questions 34 to 40
+                        {% blocktranslate trimmed %}Questions 34 to 40{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="pds-s9" class="accordion-collapse collapse" aria-labelledby="pds-s9-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p class="mb-0">These are the sworn questions &mdash; about relationships to people in the agency, administrative or
+                        <p class="mb-0">{% blocktranslate trimmed %}These are the sworn questions &mdash; about relationships to people in the agency, administrative or
                         criminal cases, convictions, separation from service, election candidacy, and indigenous or PWD status. Answer every
-                        one, and <strong>whenever you answer &ldquo;Yes&rdquo;, give the details</strong> in the space provided.</p>
+                        one, and <strong>whenever you answer &ldquo;Yes&rdquo;, give the details</strong> in the space provided.{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -266,13 +266,13 @@
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#pds-s10"
                             aria-expanded="false" aria-controls="pds-s10">
-                        Question 41 &mdash; references
+                        {% blocktranslate trimmed %}Question 41 &mdash; references{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="pds-s10" class="accordion-collapse collapse" aria-labelledby="pds-s10-hd">
                     <div class="accordion-body rg-faq__body">
-                        <p class="mb-0">Three people who can vouch for you, and who are <strong>not related to you</strong>. Give each one&rsquo;s
-                        complete name, their office or home address, and a contact number or email. Tell them you listed them.</p>
+                        <p class="mb-0">{% blocktranslate trimmed %}Three people who can vouch for you, and who are <strong>not related to you</strong>. Give each one&rsquo;s
+                        complete name, their office or home address, and a contact number or email. Tell them you listed them.{% endblocktranslate %}</p>
                     </div>
                 </div>
             </div>
@@ -282,16 +282,16 @@
                     <button class="accordion-button rg-faq__button collapsed" type="button"
                             data-bs-toggle="collapse" data-bs-target="#pds-s11"
                             aria-expanded="false" aria-controls="pds-s11">
-                        Question 42 &mdash; the last step
+                        {% blocktranslate trimmed %}Question 42 &mdash; the last step{% endblocktranslate %}
                     </button>
                 </h3>
                 <div id="pds-s11" class="accordion-collapse collapse" aria-labelledby="pds-s11-hd">
                     <div class="accordion-body rg-faq__body">
                         <ul class="mb-0">
-                            <li>Sign the form &mdash; an e-signature is accepted. If you are unable to sign, use your right thumbmark instead.</li>
-                            <li>Write your government ID number and the date it was issued.</li>
-                            <li>Attach your passport-size photo (a digital photo is fine).</li>
-                            <li>Put your signature and the date on the bottom of every page.</li>
+                            <li>{% blocktranslate trimmed %}Sign the form &mdash; an e-signature is accepted. If you are unable to sign, use your right thumbmark instead.{% endblocktranslate %}</li>
+                            <li>{% blocktranslate trimmed %}Write your government ID number and the date it was issued.{% endblocktranslate %}</li>
+                            <li>{% blocktranslate trimmed %}Attach your passport-size photo (a digital photo is fine).{% endblocktranslate %}</li>
+                            <li>{% blocktranslate trimmed %}Put your signature and the date on the bottom of every page.{% endblocktranslate %}</li>
                         </ul>
                     </div>
                 </div>
@@ -300,55 +300,55 @@
     </section>
 
     <section class="rg-help-section" aria-labelledby="pds-finish">
-        <h2 id="pds-finish" class="rg-help-section__title">Finishing and uploading your PDS</h2>
+        <h2 id="pds-finish" class="rg-help-section__title">{% blocktranslate trimmed %}Finishing and uploading your PDS{% endblocktranslate %}</h2>
         <div class="rg-pds-guide__body">
-            <p>This portal accepts <strong>PDF, JPG, and PNG</strong> files only &mdash; not Excel files. Choose one way:</p>
+            <p>{% blocktranslate trimmed %}This portal accepts <strong>PDF, JPG, and PNG</strong> files only &mdash; not Excel files. Choose one way:{% endblocktranslate %}</p>
             <div class="rg-pds-guide__ways">
                 <div class="rg-pds-guide__way">
-                    <h3 class="rg-pds-guide__way-title">Option A &mdash; all on the computer</h3>
+                    <h3 class="rg-pds-guide__way-title">{% blocktranslate trimmed %}Option A &mdash; all on the computer{% endblocktranslate %}</h3>
                     <ol>
-                        <li>Add your e-signature (or digital certificate) and the date at the bottom of every page.</li>
-                        <li>Add your digital passport-size photo in the photo box.</li>
-                        <li>Save the finished file as PDF: in Excel, <em>File &rarr; Save as</em> (or <em>Export</em>) and choose PDF.</li>
+                        <li>{% blocktranslate trimmed %}Add your e-signature (or digital certificate) and the date at the bottom of every page.{% endblocktranslate %}</li>
+                        <li>{% blocktranslate trimmed %}Add your digital passport-size photo in the photo box.{% endblocktranslate %}</li>
+                        <li>{% blocktranslate trimmed %}Save the finished file as PDF: in Excel, <em>File &rarr; Save as</em> (or <em>Export</em>) and choose PDF.{% endblocktranslate %}</li>
                     </ol>
                 </div>
                 <div class="rg-pds-guide__way">
-                    <h3 class="rg-pds-guide__way-title">Option B &mdash; print and sign</h3>
+                    <h3 class="rg-pds-guide__way-title">{% blocktranslate trimmed %}Option B &mdash; print and sign{% endblocktranslate %}</h3>
                     <ol>
-                        <li>Print the filled-up form.</li>
-                        <li>Sign it and write the date at the bottom of every page, and attach your photo.</li>
-                        <li>Scan it, or take a clear, straight photo of every page.</li>
+                        <li>{% blocktranslate trimmed %}Print the filled-up form.{% endblocktranslate %}</li>
+                        <li>{% blocktranslate trimmed %}Sign it and write the date at the bottom of every page, and attach your photo.{% endblocktranslate %}</li>
+                        <li>{% blocktranslate trimmed %}Scan it, or take a clear, straight photo of every page.{% endblocktranslate %}</li>
                     </ol>
                 </div>
             </div>
-            <p class="mt-3">Either way:</p>
+            <p class="mt-3">{% blocktranslate trimmed %}Either way:{% endblocktranslate %}</p>
             <ul>
-                <li><strong>Include only the extra sheets you actually used.</strong> The workbook has continuation
-                    sheets (C5 to C11) for people who need more rows. If you did not use one, leave it out.</li>
-                <li>Check that your name, dates, and school names read exactly as they do on your other documents.
-                    Mismatches are the most common reason we return an application for correction.</li>
-                <li>Upload it on the application form under <strong>Personal Data Sheet</strong>, and the Work Experience
-                    Sheet under <strong>Work Experience Sheet</strong>.</li>
+                <li>{% blocktranslate trimmed %}<strong>Include only the extra sheets you actually used.</strong> The workbook has continuation
+                    sheets (C5 to C11) for people who need more rows. If you did not use one, leave it out.{% endblocktranslate %}</li>
+                <li>{% blocktranslate trimmed %}Check that your name, dates, and school names read exactly as they do on your other documents.
+                    Mismatches are the most common reason we return an application for correction.{% endblocktranslate %}</li>
+                <li>{% blocktranslate trimmed %}Upload it on the application form under <strong>Personal Data Sheet</strong>, and the Work Experience
+                    Sheet under <strong>Work Experience Sheet</strong>.{% endblocktranslate %}</li>
             </ul>
-            <p class="mb-0">If a document is returned for correction, you will get an email that says what to fix and by
-                when. You can re-upload from the same link &mdash; you do not start over.</p>
+            <p class="mb-0">{% blocktranslate trimmed %}If a document is returned for correction, you will get an email that says what to fix and by
+                when. You can re-upload from the same link &mdash; you do not start over.{% endblocktranslate %}</p>
         </div>
     </section>
 
     <aside class="rg-pub-help-box" aria-label="Still need help">
         <div class="rg-pub-help-box__body">
-            <p class="rg-pub-help-box__title">Still stuck?</p>
+            <p class="rg-pub-help-box__title">{% blocktranslate trimmed %}Still stuck?{% endblocktranslate %}</p>
             <p class="rg-pub-help-box__copy">
-                The Human Resource Management Unit (HRMU) can help:
-                <a href="tel:{{ contact.hrmu.tel }}">{{ contact.hrmu.phone }}</a> &middot;
-                <a href="mailto:{{ contact.hrmu.email }}">{{ contact.hrmu.email }}</a>.
-                Have your case number ready if you already applied.
+                {% blocktranslate trimmed with tel=contact.hrmu.tel phone=contact.hrmu.phone email=contact.hrmu.email %}The Human Resource Management Unit (HRMU) can help:
+                <a href="tel:{{ tel }}">{{ phone }}</a> &middot;
+                <a href="mailto:{{ email }}">{{ email }}</a>.
+                Have your case number ready if you already applied.{% endblocktranslate %}
             </p>
         </div>
     </aside>
 
     <div class="rg-pub-back-row">
-        <a href="{% url 'applicant-help' %}" class="rg-pub-back">&larr; Back to Help</a>
+        {% url 'applicant-help' as link8 %}{% blocktranslate trimmed %}<a href="{{ link8 }}" class="rg-pub-back">&larr; Back to Help</a>{% endblocktranslate %}
     </div>
 </div>
 {% endblock %}

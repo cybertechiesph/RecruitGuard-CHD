@@ -1,13 +1,14 @@
 {% extends "email/base.html" %}
-{% block title %}Application Update{% endblock %}
-{% block preheader %}The office is reviewing the selection for {{ application.position.title }} again.{% endblock %}
+{% load i18n %}
+{% block title %}{% blocktranslate trimmed %}Application Update{% endblocktranslate %}{% endblock %}
+{% block preheader %}{% blocktranslate trimmed with title=application.position.title %}The office is reviewing the selection for {{ title }} again.{% endblocktranslate %}{% endblock %}
 {% block body %}
-    <h1 style="margin:0; color:#111827; font-size:21px; line-height:1.3; font-weight:700;">Selection under review</h1>
+    <h1 style="margin:0; color:#111827; font-size:21px; line-height:1.3; font-weight:700;">{% blocktranslate trimmed %}Selection under review{% endblocktranslate %}</h1>
     <p style="margin:10px 0 0; color:#5f6c78; font-size:14px; line-height:1.65;">
-        Dear {{ application.applicant_display_name }}, the earlier selection notice for your application for {{ application.position.title }} is no longer final.
+        {% blocktranslate trimmed with name=application.applicant_display_name title=application.position.title %}Dear {{ name }}, the earlier selection notice for your application for {{ title }} is no longer final.{% endblocktranslate %}
     </p>
     <p style="margin:16px 0 0; color:#374151; font-size:14px; line-height:1.65;">
-        The office is re-deliberating the vacancy. You will be informed when a new decision is recorded.
+        {% blocktranslate trimmed %}The office is re-deliberating the vacancy. You will be informed when a new decision is recorded.{% endblocktranslate %}
     </p>
-    {% include "email/_button.html" with button_url=status_link button_label="Check application status" %}
+    {% translate "Check application status" as cta_label %}{% include "email/_button.html" with button_url=status_link button_label=cta_label %}
 {% endblock %}

@@ -1,3 +1,4 @@
+import functools
 import logging
 import smtplib
 import socket
@@ -8,7 +9,8 @@ from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
 from django.template.loader import render_to_string
 from django.urls import reverse
-from django.utils import timezone
+from django.utils import timezone, translation
+from django.utils.translation import gettext, ngettext
 
 from .email_branding import (
     REPORTING_INSTRUCTIONS,
@@ -277,11 +279,28 @@ def build_applicant_otp_url(application):
     return f"{base_url}{path}" if base_url else path
 
 
+def applicant_email_language(application):
+    """The language for an applicant's emails: the one they used on the portal."""
+    return (getattr(application, "preferred_language", "") or settings.LANGUAGE_CODE)
+
+
+def _in_applicant_language(func):
+    """Build (and queue) an applicant email in the applicant's portal language."""
+
+    @functools.wraps(func)
+    def wrapper(application, *args, **kwargs):
+        with translation.override(applicant_email_language(application)):
+            return func(application, *args, **kwargs)
+
+    return wrapper
+
+
 def _append_status_link(lines, application):
     lines.extend(
         [
             "",
-            f"Check your application status anytime: {build_applicant_status_url(application)}",
+            gettext("Check your application status anytime: %(link)s")
+            % {"link": build_applicant_status_url(application)},
         ]
     )
 
@@ -299,42 +318,40 @@ def _record_notification_audit(application, actor, action, description, metadata
 
 def _build_submission_acknowledgment(application):
     lines = [
-        f"Dear {application.applicant_display_name},",
+        gettext("Dear %(name)s,") % {"name": application.applicant_display_name},
         "",
-        "Your application has been received by the DOH–CHD CALABARZON Recruitment Portal.",
-        f"Application ID: {application.reference_number}",
-        f"Position: {application.position.title}",
-        f"Position type: {applicant_branch_label(application)}",
-        f"Current status: {applicant_status_label(application)}",
+        gettext("Your application has been received by the DOH–CHD CALABARZON Recruitment Portal."),
+        gettext("Application ID: %(ref)s") % {"ref": application.reference_number},
+        gettext("Position: %(title)s") % {"title": application.position.title},
+        gettext("Position type: %(type)s") % {"type": applicant_branch_label(application)},
+        gettext("Current status: %(status)s") % {"status": applicant_status_label(application)},
         "",
-        "Keep your Application ID so you can check your application status.",
+        gettext("Keep your Application ID so you can check your application status."),
     ]
     _append_status_link(lines, application)
     return (
-        f"DOH–CHD CALABARZON Recruitment Portal application received: {application.reference_number}",
+        gettext("DOH–CHD CALABARZON Recruitment Portal application received: %(ref)s")
+        % {"ref": application.reference_number},
         "\n".join(lines),
     )
 
 
 def _build_selected_notification(application):
     lines = [
-        f"Dear {application.applicant_display_name},",
+        gettext("Dear %(name)s,") % {"name": application.applicant_display_name},
         "",
-        (
-            f"You have been selected for {application.position.title} "
-            f"under {application.position.get_branch_display()} recruitment."
-        ),
-        (
-            f"The next step is { _completion_label(application).lower() } "
-            "within the scope of this recruitment process."
-        ),
-        f"Application ID: {application.reference_number}",
+        gettext("You have been selected for %(title)s under %(branch)s recruitment.")
+        % {"title": application.position.title, "branch": application.position.get_branch_display()},
+        gettext("The next step is %(step)s within the scope of this recruitment process.")
+        % {"step": _completion_label(application).lower()},
+        gettext("Application ID: %(ref)s") % {"ref": application.reference_number},
         "",
-        "Please wait for the requirement checklist or any additional office instructions.",
+        gettext("Please wait for the requirement checklist or any additional office instructions."),
     ]
     _append_status_link(lines, application)
     return (
-        f"DOH–CHD CALABARZON Recruitment Portal application result: {application.position.title}",
+        gettext("DOH–CHD CALABARZON Recruitment Portal application result: %(title)s")
+        % {"title": application.position.title},
         "\n".join(lines),
     )
 
@@ -343,45 +360,37 @@ def _build_non_selected_notification(application, cut_at_screening=False, exam_s
     # exam_status carries ExamRecord.ExamStatus values ("absent" / "waived") when the
     # application was closed at exam finalization because the candidate did not take
     # (or was waived from) the scheduled examination (judgment item A).
+    names = {"title": application.position.title, "branch": application.position.get_branch_display()}
+    other_positions = gettext(
+        "Thank you for your interest. You are welcome to apply for other open positions "
+        "that match your qualifications."
+    )
     if exam_status == "absent":
-        result_line = (
-            f"Your application for {application.position.title} "
-            f"under {application.position.get_branch_display()} recruitment did not proceed "
+        result_line = gettext(
+            "Your application for %(title)s under %(branch)s recruitment did not proceed "
             "because you did not take the scheduled examination."
-        )
-        closing = (
-            "Thank you for your interest. You are welcome to apply for other open positions "
-            "that match your qualifications."
-        )
+        ) % names
+        closing = other_positions
     elif exam_status == "waived":
-        result_line = (
-            f"For your application for {application.position.title} "
-            f"under {application.position.get_branch_display()} recruitment, "
+        result_line = gettext(
+            "For your application for %(title)s under %(branch)s recruitment, "
             "your examination was waived and the application did not proceed."
-        )
-        closing = (
-            "Thank you for your interest. You are welcome to apply for other open positions "
-            "that match your qualifications."
-        )
+        ) % names
+        closing = other_positions
     elif cut_at_screening:
-        result_line = (
-            f"After the initial screening of qualifications for {application.position.title} "
-            f"under {application.position.get_branch_display()} recruitment, your application "
-            "did not meet the Qualification Standards (QS) for this position and will not "
-            "proceed to the examination."
-        )
-        closing = (
-            "Thank you for your interest. You are welcome to apply for other open positions "
-            "that match your qualifications."
-        )
+        result_line = gettext(
+            "After the initial screening of qualifications for %(title)s under %(branch)s "
+            "recruitment, your application did not meet the Qualification Standards (QS) for "
+            "this position and will not proceed to the examination."
+        ) % names
+        closing = other_positions
     else:
-        result_line = (
-            f"Your application for {application.position.title} "
-            f"under {application.position.get_branch_display()} recruitment was not selected."
-        )
-        closing = "Thank you for your interest in this recruitment opportunity."
+        result_line = gettext(
+            "Your application for %(title)s under %(branch)s recruitment was not selected."
+        ) % names
+        closing = gettext("Thank you for your interest in this recruitment opportunity.")
     lines = [
-        f"Dear {application.applicant_display_name},",
+        gettext("Dear %(name)s,") % {"name": application.applicant_display_name},
         "",
         result_line,
     ]
@@ -409,66 +418,63 @@ def _build_non_selected_notification(application, cut_at_screening=False, exam_s
             lines.extend(
                 [
                     "",
-                    (
-                        "The review also noted deficiencies in "
-                        f"{deficient_count} submitted document(s)."
-                    ),
+                    gettext("The review also noted deficiencies in %(count)s submitted document(s).")
+                    % {"count": deficient_count},
                 ]
             )
     lines.extend(
         [
-            f"Application ID: {application.reference_number}",
+            gettext("Application ID: %(ref)s") % {"ref": application.reference_number},
             "",
             closing,
         ]
     )
     _append_status_link(lines, application)
     return (
-        f"DOH–CHD CALABARZON Recruitment Portal application result: {application.position.title}",
+        gettext("DOH–CHD CALABARZON Recruitment Portal application result: %(title)s")
+        % {"title": application.position.title},
         "\n".join(lines),
     )
 
 
 def _build_selection_under_review_notification(application):
     lines = [
-        f"Dear {application.applicant_display_name},",
+        gettext("Dear %(name)s,") % {"name": application.applicant_display_name},
         "",
-        (
-            f"The earlier selection notice for your application for "
-            f"{application.position.title} is no longer final."
-        ),
-        (
+        gettext("The earlier selection notice for your application for %(title)s is no longer final.")
+        % {"title": application.position.title},
+        gettext(
             "The office is re-deliberating the vacancy. You will be informed when a "
             "new decision is recorded."
         ),
-        f"Application ID: {application.reference_number}",
+        gettext("Application ID: %(ref)s") % {"ref": application.reference_number},
     ]
     _append_status_link(lines, application)
     return (
-        f"Update on your application for {application.position.title}",
+        gettext("Update on your application for %(title)s") % {"title": application.position.title},
         "\n".join(lines),
     )
 
 
 def _build_applicant_contact_updated_notification(application, *, is_new_address):
     lines = [
-        f"Dear {application.applicant_display_name},",
+        gettext("Dear %(name)s,") % {"name": application.applicant_display_name},
         "",
-        "The contact information on your recruitment application was corrected by the office.",
+        gettext("The contact information on your recruitment application was corrected by the office."),
     ]
     if is_new_address:
-        lines.append("Future recruitment notices will be sent using the updated contact details.")
+        lines.append(gettext("Future recruitment notices will be sent using the updated contact details."))
     else:
-        lines.append("Future recruitment notices will no longer be sent to this email address.")
+        lines.append(gettext("Future recruitment notices will no longer be sent to this email address."))
     lines.extend(
         [
-            "If you did not request or expect this correction, contact the HRM Unit promptly.",
-            f"Application ID: {application.reference_number}",
+            gettext("If you did not request or expect this correction, contact the HRM Unit promptly."),
+            gettext("Application ID: %(ref)s") % {"ref": application.reference_number},
         ]
     )
     _append_status_link(lines, application)
     return (
-        f"Contact information updated for {application.position.title}",
+        gettext("Contact information updated for %(title)s") % {"title": application.position.title},
         "\n".join(lines),
     )
 
@@ -506,46 +512,49 @@ def _build_document_resubmission_fallback_body(
     resubmission_deadline=None,
     deadline_was_extended=False,
 ):
-    item_label = "item" if len(requested_documents) == 1 else "items"
     lines = [
-        f"Dear {application.applicant_display_name},",
+        gettext("Dear %(name)s,") % {"name": application.applicant_display_name},
         "",
-        (
-            f"Your application for {application.position.title} "
-            "needs corrected or updated document submission."
+        gettext("Your application for %(title)s needs corrected or updated document submission.")
+        % {"title": application.position.title},
+        "",
+        gettext("Application ID: %(ref)s") % {"ref": application.reference_label},
+        "",
+        ngettext(
+            "Please review the document item below:",
+            "Please review the document items below:",
+            len(requested_documents),
         ),
-        "",
-        f"Application ID: {application.reference_label}",
-        "",
-        f"Please review the document {item_label} below:",
     ]
     for document in requested_documents:
         lines.append(f"- {document['requirement_title']}")
-        lines.append(f"  Instruction: {document['remarks']}")
+        lines.append("  " + gettext("Instruction: %(remarks)s") % {"remarks": document["remarks"]})
     if resubmission_deadline:
         lines.extend(
             [
                 "",
                 (
-                    "The resubmission deadline has been extended. "
+                    gettext("The resubmission deadline has been extended. ")
                     if deadline_was_extended
                     else ""
                 )
-                + f"Please resubmit on or before {resubmission_deadline:%B %d, %Y}.",
+                + gettext("Please resubmit on or before %(date)s.")
+                % {"date": f"{resubmission_deadline:%B %d, %Y}"},
             ]
         )
     remarks = (workflow_remarks or "").strip()
     if remarks:
-        lines.extend(["", "Additional note from the recruitment team:", remarks])
+        lines.extend(["", gettext("Additional note from the recruitment team:"), remarks])
     lines.extend(
         [
             "",
-            (
+            gettext(
                 "Please follow the instructions from the recruitment team and "
                 "keep your Application ID for status checking."
             ),
             "",
-            f"Check your application status anytime: {build_applicant_status_url(application)}",
+            gettext("Check your application status anytime: %(link)s")
+            % {"link": build_applicant_status_url(application)},
         ]
     )
     return "\n".join(lines)
@@ -596,7 +605,8 @@ def _build_document_resubmission_request_notification(
             deadline_was_extended=deadline_was_extended,
         )
     return (
-        f"DOH–CHD CALABARZON Recruitment Portal document resubmission needed: {application.position.title}",
+        gettext("DOH–CHD CALABARZON Recruitment Portal document resubmission needed: %(title)s")
+        % {"title": application.position.title},
         body,
         requested_documents,
     )
@@ -609,41 +619,41 @@ def _build_requirement_checklist_notification(
     additional_message="",
 ):
     lines = [
-        f"Dear {application.applicant_display_name},",
+        gettext("Dear %(name)s,") % {"name": application.applicant_display_name},
         "",
-        (
-            f"You have been selected for {application.position.title}. "
-            f"Please complete the following {_completion_label(application).lower()} requirements:"
-        ),
+        gettext("You have been selected for %(title)s. Please complete the following %(what)s requirements:")
+        % {"title": application.position.title, "what": _completion_label(application).lower()},
         checklist_items.strip(),
     ]
     if deadline:
-        lines.extend(["", f"Submission deadline: {_format_deadline(deadline)}"])
+        lines.extend(["", gettext("Submission deadline: %(date)s") % {"date": _format_deadline(deadline)}])
     if additional_message:
         lines.extend(["", additional_message.strip()])
     lines.extend(
         [
             "",
-            f"Application ID: {application.reference_number}",
-            f"Check your application status anytime: {build_applicant_status_url(application)}",
+            gettext("Application ID: %(ref)s") % {"ref": application.reference_number},
+            gettext("Check your application status anytime: %(link)s")
+            % {"link": build_applicant_status_url(application)},
         ]
     )
     return (
-        f"DOH–CHD CALABARZON Recruitment Portal requirement checklist: {application.position.title}",
+        gettext("DOH–CHD CALABARZON Recruitment Portal requirement checklist: %(title)s")
+        % {"title": application.position.title},
         "\n".join(lines),
     )
 
 
 def _build_reminder_notification(application, reminder_subject, reminder_message, deadline=None):
     lines = [
-        f"Dear {application.applicant_display_name},",
+        gettext("Dear %(name)s,") % {"name": application.applicant_display_name},
         "",
         reminder_message.strip(),
-        f"Application ID: {application.reference_number}",
-        f"Current status: {application.get_status_display()}",
+        gettext("Application ID: %(ref)s") % {"ref": application.reference_number},
+        gettext("Current status: %(status)s") % {"status": applicant_status_label(application)},
     ]
     if deadline:
-        lines.append(f"Reminder deadline: {_format_deadline(deadline)}")
+        lines.append(gettext("Reminder deadline: %(date)s") % {"date": _format_deadline(deadline)})
     _append_status_link(lines, application)
     return reminder_subject.strip(), "\n".join(lines)
 
@@ -711,8 +721,12 @@ def _render_notification_html(notification):
         "reporting_instructions": REPORTING_INSTRUCTIONS,
         **email_branding_context(audience),
     }
+    language = (
+        applicant_email_language(application) if audience == "applicant" else settings.LANGUAGE_CODE
+    )
     try:
-        return render_to_string(template_name, context).strip()
+        with translation.override(language):
+            return render_to_string(template_name, context).strip()
     except Exception:
         # The HTML body is only a richer alternative to the plain-text message that is
         # already set as the email body. If a template is missing or raises while
@@ -866,6 +880,7 @@ def resend_notification(notification_log, actor):
     return resent
 
 
+@_in_applicant_language
 def queue_submission_acknowledgment_notification(application, actor=None):
     subject, body = _build_submission_acknowledgment(application)
     return queue_notification(
@@ -883,6 +898,7 @@ def queue_submission_acknowledgment_notification(application, actor=None):
     )
 
 
+@_in_applicant_language
 def queue_selected_applicant_notification(application, actor=None):
     subject, body = _build_selected_notification(application)
     return queue_notification(
@@ -901,6 +917,7 @@ def queue_selected_applicant_notification(application, actor=None):
     )
 
 
+@_in_applicant_language
 def queue_non_selected_applicant_notification(
     application, actor=None, cut_at_screening=False, exam_status=""
 ):
@@ -924,6 +941,7 @@ def queue_non_selected_applicant_notification(
     )
 
 
+@_in_applicant_language
 def queue_selection_under_review_notification(application, actor=None):
     subject, body = _build_selection_under_review_notification(application)
     return queue_notification(
@@ -941,6 +959,7 @@ def queue_selection_under_review_notification(application, actor=None):
     )
 
 
+@_in_applicant_language
 def queue_applicant_contact_updated_notifications(
     application,
     *,
@@ -1000,32 +1019,34 @@ def _build_withdrawal_acknowledgement(application, reason=""):
     This is not a rejection notice and must not read like one — the applicant left of
     their own accord, and the copy says exactly that."""
     lines = [
-        f"Dear {application.applicant_display_name},",
+        gettext("Dear %(name)s,") % {"name": application.applicant_display_name},
         "",
-        (
-            f"We have recorded your withdrawal from the recruitment for "
-            f"{application.position.title} under "
-            f"{application.position.get_branch_display()} recruitment, as you requested."
-        ),
-        f"Application ID: {application.reference_number}",
+        gettext(
+            "We have recorded your withdrawal from the recruitment for %(title)s under "
+            "%(branch)s recruitment, as you requested."
+        )
+        % {"title": application.position.title, "branch": application.position.get_branch_display()},
+        gettext("Application ID: %(ref)s") % {"ref": application.reference_number},
         "",
-        (
+        gettext(
             "No further action is needed from you for this application, and your record "
             "is closed as withdrawn — not as a rejection."
         ),
         "",
-        (
+        gettext(
             "Thank you for your interest. You are welcome to apply for other open "
             "positions that match your qualifications."
         ),
     ]
     _append_status_link(lines, application)
     return (
-        f"DOH–CHD CALABARZON Recruitment Portal: withdrawal recorded for {application.position.title}",
+        gettext("DOH–CHD CALABARZON Recruitment Portal: withdrawal recorded for %(title)s")
+        % {"title": application.position.title},
         "\n".join(lines),
     )
 
 
+@_in_applicant_language
 def queue_withdrawal_acknowledgement_notification(application, actor=None, reason=""):
     subject, body = _build_withdrawal_acknowledgement(application, reason=reason)
     return queue_notification(
@@ -1048,26 +1069,26 @@ def _build_vacancy_cancellation_notice(application, reason=""):
     """SL-11: the vacancy was cancelled. The applicant was never judged, and the notice
     must not read as though they were."""
     lines = [
-        f"Dear {application.applicant_display_name},",
+        gettext("Dear %(name)s,") % {"name": application.applicant_display_name},
         "",
-        (
-            f"The recruitment for {application.position.title} under "
-            f"{application.position.get_branch_display()} recruitment has been cancelled "
+        gettext(
+            "The recruitment for %(title)s under %(branch)s recruitment has been cancelled "
             "by the office, so your application will not proceed."
-        ),
-        f"Application ID: {application.reference_number}",
+        )
+        % {"title": application.position.title, "branch": application.position.get_branch_display()},
+        gettext("Application ID: %(ref)s") % {"ref": application.reference_number},
         "",
-        (
+        gettext(
             "This is not an assessment of your qualifications — no candidate was selected "
             "for this vacancy."
         ),
     ]
     if reason:
-        lines.extend(["", f"Reason: {reason}"])
+        lines.extend(["", gettext("Reason: %(reason)s") % {"reason": reason}])
     lines.extend(
         [
             "",
-            (
+            gettext(
                 "Thank you for your interest. You are welcome to apply for other open "
                 "positions, including this one should it be published again."
             ),
@@ -1075,11 +1096,13 @@ def _build_vacancy_cancellation_notice(application, reason=""):
     )
     _append_status_link(lines, application)
     return (
-        f"DOH–CHD CALABARZON Recruitment Portal: {application.position.title} recruitment cancelled",
+        gettext("DOH–CHD CALABARZON Recruitment Portal: %(title)s recruitment cancelled")
+        % {"title": application.position.title},
         "\n".join(lines),
     )
 
 
+@_in_applicant_language
 def queue_vacancy_cancellation_notification(application, actor=None, reason=""):
     subject, body = _build_vacancy_cancellation_notice(application, reason=reason)
     return queue_notification(
@@ -1217,34 +1240,38 @@ def queue_interview_session_scheduled_notifications(
 
 def _build_exam_invitation_notification(application, exam_schedule):
     lines = [
-        f"Dear {application.applicant_display_name},",
+        gettext("Dear %(name)s,") % {"name": application.applicant_display_name},
         "",
-        (
-            f"Good news. You passed the initial screening for {application.position.title} "
+        gettext(
+            "Good news. You passed the initial screening for %(title)s "
             "and are invited to take the examination. Please note the details below:"
-        ),
+        )
+        % {"title": application.position.title},
         "",
-        f"Schedule: {_format_schedule(exam_schedule.scheduled_for)}",
-        f"Venue: {exam_schedule.venue}",
+        gettext("Schedule: %(when)s") % {"when": _format_schedule(exam_schedule.scheduled_for)},
+        gettext("Venue: %(venue)s") % {"venue": exam_schedule.venue},
     ]
     if exam_schedule.instructions:
-        lines.extend(["", "Instructions:", exam_schedule.instructions.strip()])
+        lines.extend(["", gettext("Instructions:"), exam_schedule.instructions.strip()])
     lines.append("")
-    lines.append("Reporting instructions:")
+    lines.append(gettext("Reporting instructions:"))
     lines.extend(f"- {item}" for item in REPORTING_INSTRUCTIONS)
     lines.extend(
         [
             "",
-            f"Application ID: {application.reference_number}",
-            f"Check your application status anytime: {build_applicant_status_url(application)}",
+            gettext("Application ID: %(ref)s") % {"ref": application.reference_number},
+            gettext("Check your application status anytime: %(link)s")
+            % {"link": build_applicant_status_url(application)},
         ]
     )
     return (
-        f"DOH–CHD CALABARZON Recruitment Portal exam invitation: {application.position.title}",
+        gettext("DOH–CHD CALABARZON Recruitment Portal exam invitation: %(title)s")
+        % {"title": application.position.title},
         "\n".join(lines),
     )
 
 
+@_in_applicant_language
 def queue_exam_invitation_notification(application, exam_schedule, actor=None):
     subject, body = _build_exam_invitation_notification(application, exam_schedule)
     return queue_notification(
@@ -1270,32 +1297,33 @@ def queue_exam_invitation_notification(application, exam_schedule, actor=None):
 
 def _build_applicant_interview_notice_notification(application, interview_session):
     lines = [
-        f"Dear {application.applicant_display_name},",
+        gettext("Dear %(name)s,") % {"name": application.applicant_display_name},
         "",
-        (
-            f"You are scheduled for an interview for {application.position.title}. "
-            "Please note the details below:"
-        ),
+        gettext("You are scheduled for an interview for %(title)s. Please note the details below:")
+        % {"title": application.position.title},
         "",
-        f"Schedule: {_format_schedule(interview_session.scheduled_for)}",
-        f"Location / medium: {interview_session.location}",
+        gettext("Schedule: %(when)s") % {"when": _format_schedule(interview_session.scheduled_for)},
+        gettext("Location / medium: %(place)s") % {"place": interview_session.location},
     ]
     lines.append("")
-    lines.append("Reporting instructions:")
+    lines.append(gettext("Reporting instructions:"))
     lines.extend(f"- {item}" for item in REPORTING_INSTRUCTIONS)
     lines.extend(
         [
             "",
-            f"Application ID: {application.reference_number}",
-            f"Check your application status anytime: {build_applicant_status_url(application)}",
+            gettext("Application ID: %(ref)s") % {"ref": application.reference_number},
+            gettext("Check your application status anytime: %(link)s")
+            % {"link": build_applicant_status_url(application)},
         ]
     )
     return (
-        f"DOH–CHD CALABARZON Recruitment Portal interview schedule: {application.position.title}",
+        gettext("DOH–CHD CALABARZON Recruitment Portal interview schedule: %(title)s")
+        % {"title": application.position.title},
         "\n".join(lines),
     )
 
 
+@_in_applicant_language
 def queue_applicant_interview_notice_notification(application, interview_session, actor=None):
     subject, body = _build_applicant_interview_notice_notification(application, interview_session)
     return queue_notification(
@@ -1318,6 +1346,7 @@ def queue_applicant_interview_notice_notification(application, interview_session
     )
 
 
+@_in_applicant_language
 def queue_document_resubmission_request_notification(
     application,
     actor=None,
@@ -1365,6 +1394,7 @@ def queue_document_resubmission_request_notification(
     )
 
 
+@_in_applicant_language
 def send_requirement_checklist_notification(
     application,
     actor,
@@ -1444,6 +1474,7 @@ def send_requirement_checklist_notification(
     )
 
 
+@_in_applicant_language
 def send_reminder_notification(
     application,
     actor,

@@ -153,6 +153,9 @@
                     </span>
                 </div>
                 <p class="rg-doc-card__hint">{{ slot.requirement.help_text }}</p>
+                {% if slot.code == "personal_data_sheet" %}
+                <p class="rg-doc-card__note" data-pds-version-note>{% translate "Use the <strong>Revised 2026</strong> PDS. The old 2017 form may be returned to you." %}</p>
+                {% endif %}
                 {% include "recruitment/includes/requirement_downloads.html" with downloads=slot.requirement.downloads compact=True %}
 
                 {% if slot.legacy_document %}
@@ -274,6 +277,6 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="{% static 'js/recruitguard-applicant-application.js' %}?v=20261101-apply6"></script>
+<script src="{% static 'js/recruitguard-applicant-application.js' %}?v=20261101-apply7"></script>
 <script src="{% static 'js/recruitguard-deadline.js' %}?v=20261101-dl2"></script>
 {% endblock %}

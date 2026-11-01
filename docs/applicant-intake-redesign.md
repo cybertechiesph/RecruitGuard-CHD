@@ -175,6 +175,37 @@ After a full applicant walkthrough:
   - Submit errors no longer say "before final submission".
   - The resubmission page's "1 documents need" now has correct singular and plural forms.
 
+## My Applications, Filipino emails, old-PDS warning (November 2026)
+
+- **My Applications** (`/apply/my/`, linked in the header, on the receipt and on the code
+  page):
+  - Enter an email, get a 6-digit code, then see every draft and submitted application made
+    with it, with **Continue application**, **View status** and **Receipt (PDF)**. No
+    tracking code is needed.
+  - The request page gives the same answer whether or not the email has applications, and
+    a code is only sent to an address that has one, so it can't be used to find out who
+    applied.
+  - Codes are stored hashed (`ApplicantEmailCode`), with the usual expiry, attempt limit
+    and resend cooldown.
+  - Logic is in `recruitment/applicant_hub.py`; the views are `ApplicantMyApplications*View`.
+- **Emails in the applicant's language:**
+  - Each application remembers the portal language (`preferred_language`).
+  - Every applicant email is written in it: the text and subject (`@_in_applicant_language`
+    on the queue/send functions), the HTML part (rendered at send time), the footer, and
+    the scheduled draft and resubmission reminders.
+  - The verification code email uses the language the applicant is viewing in.
+  - Staff emails stay English.
+  - The reminder email now shows the applicant-friendly status ("Under Review"), not the
+    internal one.
+- **Help FAQ and PDS guide are translated.** The English-only notice is gone.
+  - Help answers now point to the HRMU, not the Public Assistance Desk.
+  - They mention My Applications and the online withdrawal request.
+- **Old PDS warning:**
+  - The PDS card reminds people to use the Revised 2026 form.
+  - Uploading a typed PDF whose footer says "Revised 2017" shows a warning straight away.
+  - Scans and photos aren't judged.
+- Migration `0089_applicant_hub_and_language`.
+
 ## Still needs people (not code)
 - Test on real phones (a cheap Android on mobile data, an iPhone), including inside Facebook.
 - A 5-person usability test with people who have never seen the portal.

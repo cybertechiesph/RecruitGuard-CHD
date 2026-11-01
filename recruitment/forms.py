@@ -1227,6 +1227,28 @@ class DocumentResubmissionForm(BootstrapFormMixin, forms.Form):
         }
 
 
+class ApplicantHubEmailForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form):
+    """'My applications': the email to send a sign-in code to."""
+
+    captcha_scope = "applicant_hub"
+
+    email = forms.EmailField(
+        label=_("Email address"),
+        error_messages={
+            "required": _("Enter your email address."),
+            "invalid": _("Enter a valid email address, like juan@example.com."),
+        },
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
+        self.fields["email"].widget.attrs.update({"autocomplete": "email", "inputmode": "email"})
+
+    def clean_email(self):
+        return self.cleaned_data["email"].strip().lower()
+
+
 class ApplicantStatusLookupForm(CaptchaFormMixin, BootstrapFormMixin, forms.Form):
     captcha_scope = "applicant_status_lookup"
 

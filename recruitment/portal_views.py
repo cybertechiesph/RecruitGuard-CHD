@@ -18,6 +18,7 @@ from .applicant_documents import (
     clear_applicant_document_parts,
     get_document_parts,
     get_reusable_documents,
+    looks_like_old_pds,
     purge_applicant_document_parts,
     read_applicant_document_part,
     remove_applicant_document_part,
@@ -25,6 +26,7 @@ from .applicant_documents import (
     slot_state_payload,
 )
 from .forms import (
+    ApplicantHubEmailForm,
     ApplicantApplicationForm,
     ApplicantOTPForm,
     ApplicantStartForm,
@@ -38,12 +40,15 @@ from .models import (
     RecruitmentApplication,
     RecruitmentCase,
 )
+from .applicant_hub import applications_for_email, issue_hub_code, verify_hub_code
 from .applicant_labels import APPLICANT_STATUS_LABELS as _APPLICANT_STATUS_LABELS
+from .applicant_labels import applicant_status_label
 from .requirements import (
     ALL_FORM_DOWNLOADS,
     PDS_FORM_DOWNLOAD,
     PDS_OFFICIAL_GUIDE_DOWNLOAD,
     PERFORMANCE_RATING,
+    PERSONAL_DATA_SHEET,
     WES_FORM_DOWNLOAD,
     get_applicant_document_requirements,
 )
@@ -415,6 +420,9 @@ class ApplicantPortalIntakeView(View):
                 _("We could not start your application right now. Please try again in a few moments."),
             )
             return self._render_start(form)
+        if not application.preferred_language:
+            # An existing draft isn't changed before its email is verified (not even this).
+            _remember_language(request, application)
         try:
             issue_application_otp(
                 application,
@@ -523,6 +531,14 @@ class ApplicantOTPView(TemplateView):
 
         messages.error(request, _("This applicant action is not available."))
         return redirect("applicant-otp", token=application.public_token)
+
+
+def _remember_language(request, application):
+    """Keep the portal language the applicant is using, so their emails match it."""
+    language = (getattr(request, "LANGUAGE_CODE", "") or "")[:8]
+    if language and application.preferred_language != language:
+        application.preferred_language = language
+        application.save(update_fields=["preferred_language", "updated_at"])
 
 
 APPLICANT_DRAFT_ACCESS_SESSION_KEY = "applicant_draft_access"
@@ -729,6 +745,7 @@ class ApplicantApplicationView(ApplicantDraftAccessMixin, TemplateView):
     def post(self, request, *args, **kwargs):
         action = request.POST.get("action", "save")
         is_submit = action == "submit"
+        _remember_language(request, self.application)
         form = ApplicantApplicationForm(
             request.POST,
             entry=self.application.position,
@@ -787,10 +804,17 @@ class ApplicantDocumentPartUploadView(ApplicantDraftAccessMixin, View):
             return JsonResponse({"error": _("Choose a file to upload.")}, status=400)
         document_key = kwargs["code"]
         try:
-            add_applicant_document_part(self.application, document_key, uploaded_file)
+            part = add_applicant_document_part(self.application, document_key, uploaded_file)
         except ValueError as exc:
             return JsonResponse({"error": str(exc)}, status=400)
-        return JsonResponse(self._slot_payload(document_key))
+        payload = self._slot_payload(document_key)
+        if document_key == PERSONAL_DATA_SHEET and looks_like_old_pds(part):
+            payload["warning"] = _(
+                "This looks like the old PDS (Revised 2017). The office needs the Revised 2026 form, "
+                "so this may be returned to you. Download the 2026 form from this card, fill it in, "
+                "and upload it instead."
+            )
+        return JsonResponse(payload)
 
     def _slot_payload(self, document_key):
         for slot in build_document_slot_states(
@@ -1204,6 +1228,131 @@ class ApplicantWithdrawalRequestView(View):
                 "You will get an email once it is recorded."),
             )
         return redirect(status_url)
+
+
+APPLICANT_HUB_SESSION_KEY = "applicant_hub"
+APPLICANT_HUB_PENDING_SESSION_KEY = "applicant_hub_pending"
+
+
+def _hub_email(request):
+    """The email this browser verified for My applications, within the status window."""
+    data = request.session.get(APPLICANT_HUB_SESSION_KEY) or {}
+    try:
+        verified_at = datetime.fromisoformat(data.get("verified_at", ""))
+    except ValueError:
+        return None
+    if timezone.now() - verified_at > timedelta(minutes=settings.STATUS_LOOKUP_SESSION_MINUTES):
+        return None
+    return data.get("email")
+
+
+def _hub_rows(email):
+    rows = []
+    for application in applications_for_email(email):
+        submitted = application.submitted_at is not None
+        case = getattr(application, "case", None)
+        rows.append(
+            {
+                "application": application,
+                "submitted": submitted,
+                "status_label": applicant_status_label(application) if submitted else _("Not submitted yet"),
+                "can_continue": not submitted and application.position.is_open_for_intake,
+                "awaiting_resubmission": bool(
+                    case and case.case_status == RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION
+                ),
+            }
+        )
+    return rows
+
+
+class ApplicantMyApplicationsView(View):
+    """My applications: verify an email once, then see every application made with it."""
+
+    template_name = "recruitment/applicant_my_applications.html"
+
+    def _render(self, request, form=None, otp_form=None):
+        email = _hub_email(request)
+        context = {
+            "hub_email": email,
+            "rows": _hub_rows(email) if email else [],
+            "pending_email": None if email else request.session.get(APPLICANT_HUB_PENDING_SESSION_KEY),
+            "form": form or ApplicantHubEmailForm(request=request),
+            "otp_form": otp_form or ApplicantOTPForm(),
+            "otp_validity_minutes": settings.APPLICATION_OTP_VALIDITY_MINUTES,
+        }
+        return render(request, self.template_name, context)
+
+    def get(self, request, *args, **kwargs):
+        return self._render(request)
+
+    def post(self, request, *args, **kwargs):
+        action = request.POST.get("action")
+        if action == "request":
+            form = ApplicantHubEmailForm(request.POST, request=request)
+            if not form.is_valid():
+                return self._render(request, form=form)
+            email = form.cleaned_data["email"]
+            try:
+                issue_hub_code(email)
+            except ValueError as exc:
+                messages.error(request, str(exc))
+            request.session[APPLICANT_HUB_PENDING_SESSION_KEY] = email
+            # Same answer whether or not the email has applications (no enumeration).
+            messages.info(
+                request,
+                _("If this email has applications with us, we sent it a 6-digit code. Enter it below."),
+            )
+            return redirect("applicant-my-applications")
+        if action == "verify":
+            pending = request.session.get(APPLICANT_HUB_PENDING_SESSION_KEY)
+            otp_form = ApplicantOTPForm(request.POST)
+            if pending and otp_form.is_valid():
+                try:
+                    email = verify_hub_code(pending, otp_form.cleaned_data["otp"])
+                except ValueError as exc:
+                    otp_form.add_error("otp", str(exc))
+                else:
+                    request.session[APPLICANT_HUB_SESSION_KEY] = {
+                        "email": email,
+                        "verified_at": timezone.now().isoformat(),
+                    }
+                    request.session.pop(APPLICANT_HUB_PENDING_SESSION_KEY, None)
+                    return redirect("applicant-my-applications")
+            return self._render(request, otp_form=otp_form)
+        if action == "change_email":
+            request.session.pop(APPLICANT_HUB_PENDING_SESSION_KEY, None)
+        elif action == "sign_out":
+            request.session.pop(APPLICANT_HUB_SESSION_KEY, None)
+        return redirect("applicant-my-applications")
+
+
+class ApplicantMyApplicationOpenView(View):
+    """From My applications: continue a draft or open a submitted application's status,
+    without another code (the email was just verified)."""
+
+    def post(self, request, *args, **kwargs):
+        email = _hub_email(request)
+        if not email:
+            messages.info(request, _("Verify your email again to continue."))
+            return redirect("applicant-my-applications")
+        application = next(
+            (a for a in applications_for_email(email) if str(a.public_token) == str(kwargs["token"])),
+            None,
+        )
+        if application is None:
+            messages.error(request, _("This application could not be found."))
+            return redirect("applicant-my-applications")
+        if application.submitted_at:
+            _mark_status_otp_verified(request, application)
+            return redirect("applicant-status-link", token=application.public_token)
+        if not application.position.is_open_for_intake:
+            messages.error(request, _("This position is no longer accepting applications."))
+            return redirect("applicant-my-applications")
+        if not application.otp_verified_at:
+            application.otp_verified_at = timezone.now()
+            application.save(update_fields=["otp_verified_at", "updated_at"])
+        _grant_draft_access(request, application)
+        return redirect("applicant-application", token=application.public_token)
 
 
 class ApplicantResubmissionView(TemplateView):

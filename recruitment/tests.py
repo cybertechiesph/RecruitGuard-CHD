@@ -22095,3 +22095,133 @@ class ApplicantPortalLanguageTests(BaseRecruitmentTestCase):
         help_page = Client().get(reverse("applicant-help"))
         self.assertContains(help_page, email_branding.CONTACT_EMAIL)
         self.assertContains(help_page, "Human Resource Management Unit (HRMU)")
+
+
+class MyApplicationsAndLanguageEmailTests(BaseRecruitmentTestCase):
+    """My Applications (one page per email), emails in the applicant's language, the old-PDS
+    warning, and the translated Help page."""
+
+    def setUp(self):
+        super().setUp()
+        cache.clear()
+
+    def hub_url(self):
+        return reverse("applicant-my-applications")
+
+    def sign_in_to_hub(self, email, client=None):
+        client = client or Client()
+        mail.outbox.clear()
+        client.post(self.hub_url(), {"action": "request", "email": email})
+        code = re.search(r"\b(\d{6})\b", mail.outbox[-1].body).group(1) if mail.outbox else "000000"
+        client.post(self.hub_url(), {"action": "verify", "otp": code})
+        return client
+
+    def test_my_applications_lists_every_application_for_the_email(self):
+        _client, submitted, _response = self.apply_through_portal("hub.person@example.com")
+        _c2, draft = self.open_portal_draft("hub.person@example.com", position=self.cos_position)
+        client = self.sign_in_to_hub("hub.person@example.com")
+        page = client.get(self.hub_url())
+        self.assertContains(page, "data-hub-list")
+        self.assertContains(page, self.level1_position.title)
+        self.assertContains(page, self.cos_position.title)
+        self.assertContains(page, "Continue application")
+        self.assertContains(page, "View status")
+
+        # Continue the draft without another code.
+        response = client.post(reverse("applicant-my-application-open", kwargs={"token": draft.public_token}))
+        self.assertRedirects(
+            response,
+            reverse("applicant-application", kwargs={"token": draft.public_token}),
+            fetch_redirect_response=False,
+        )
+        self.assertEqual(client.get(response["Location"]).status_code, 200)
+        # Open the submitted one's status without the tracking code.
+        response = client.post(reverse("applicant-my-application-open", kwargs={"token": submitted.public_token}))
+        status_page = client.get(response["Location"])
+        self.assertContains(status_page, "Application details")
+
+    def test_unknown_email_gets_the_same_answer_and_no_email(self):
+        mail.outbox.clear()
+        response = Client().post(self.hub_url(), {"action": "request", "email": "nobody@example.com"}, follow=True)
+        self.assertContains(response, "If this email has applications with us")
+        self.assertEqual(mail.outbox, [])
+
+    def test_wrong_code_does_not_open_the_list(self):
+        self.apply_through_portal("hub.guard@example.com")
+        client = Client()
+        client.post(self.hub_url(), {"action": "request", "email": "hub.guard@example.com"})
+        response = client.post(self.hub_url(), {"action": "verify", "otp": "000000"})
+        self.assertContains(response, "The verification code is invalid.")
+        self.assertNotContains(response, "data-hub-list")
+
+    def test_someone_elses_application_cannot_be_opened_from_the_hub(self):
+        _c, other, _r = self.apply_through_portal("hub.other@example.com")
+        self.apply_through_portal("hub.mine@example.com", position=self.cos_position)
+        client = self.sign_in_to_hub("hub.mine@example.com")
+        response = client.post(
+            reverse("applicant-my-application-open", kwargs={"token": other.public_token}), follow=True
+        )
+        self.assertContains(response, "This application could not be found.")
+
+    def test_emails_follow_the_language_the_applicant_used(self):
+        client = Client()
+        client.post(reverse("set_language"), {"language": "fil", "next": reverse("applicant-portal")})
+        client, application = self.open_portal_draft("tagalog.mail@example.com", client=client)
+        application.refresh_from_db()
+        self.assertEqual(application.preferred_language, "fil")
+        self.save_portal_answers(client, application)
+        self.upload_required_portal_documents(client, application)
+        mail.outbox.clear()
+        self.submit_portal_draft(client, application)
+        received = mail.outbox[-1]
+        self.assertIn("natanggap ang application", received.subject)
+        self.assertIn("Natanggap na ng DOH–CHD CALABARZON Recruitment Portal ang application mo.", received.body)
+        html = received.alternatives[0][0]
+        self.assertIn("Natanggap ang Application", html)
+        self.assertIn('lang="fil"', html)
+
+        # A staff action (English request) still emails this applicant in Filipino.
+        from recruitment.notification_services import queue_selection_under_review_notification
+
+        application.refresh_from_db()
+        mail.outbox.clear()
+        with self.captureOnCommitCallbacks(execute=True):
+            queue_selection_under_review_notification(application, actor=self.secretariat)
+        self.assertIn("Update sa application mo", mail.outbox[-1].subject)
+
+    def test_english_applicants_still_get_english_emails(self):
+        _client, application, _response = self.apply_through_portal("english.mail@example.com")
+        self.assertIn(application.preferred_language, ("", "en"))
+        from recruitment.notification_services import queue_selection_under_review_notification
+
+        mail.outbox.clear()
+        with self.captureOnCommitCallbacks(execute=True):
+            queue_selection_under_review_notification(application, actor=self.secretariat)
+        self.assertIn("Update on your application for", mail.outbox[-1].subject)
+
+    def test_old_2017_pds_gets_a_warning(self):
+        from reportlab.pdfgen import canvas as rl_canvas
+
+        buffer = io.BytesIO()
+        pdf = rl_canvas.Canvas(buffer)
+        pdf.drawString(72, 720, "PERSONAL DATA SHEET")
+        pdf.drawString(72, 60, "CS FORM 212 (Revised 2017), Page 1 of 4")
+        pdf.showPage()
+        pdf.save()
+        old_pds = SimpleUploadedFile("pds-2017.pdf", buffer.getvalue(), content_type="application/pdf")
+
+        client, application = self.open_portal_draft("old.pds@example.com")
+        response = self.upload_portal_document(client, application, "personal_data_sheet", old_pds)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Revised 2017", response.json()["warning"])
+        fresh = self.upload_portal_document(client, application, "diploma")
+        self.assertNotIn("warning", fresh.json())
+
+    def test_help_page_is_translated(self):
+        client = Client()
+        client.post(reverse("set_language"), {"language": "fil", "next": reverse("applicant-help")})
+        page = client.get(reverse("applicant-help"))
+        self.assertContains(page, "Mga Madalas na Tanong")
+        self.assertNotContains(page, "data-english-only")
+        guide = client.get(reverse("applicant-pds-guide"))
+        self.assertContains(guide, "Paano mag-fill up ng Personal Data Sheet (PDS)")

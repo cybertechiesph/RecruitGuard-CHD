@@ -10,6 +10,7 @@ if a value is unknown, omit it rather than guessing.
 """
 
 from django.conf import settings
+from django.utils.translation import gettext, gettext_lazy
 
 # Static path (relative to STATIC_URL) of the agency seal used in the email header.
 EMAIL_LOGO_STATIC_PATH = "img/brand/chd-calabarzon-seal.png"
@@ -29,7 +30,7 @@ OFFICE_ADDRESS = (
     "Quirino Memorial Medical Center compound, Project 4, Quezon City, 1109 Metro Manila"
 )
 
-DATA_PRIVACY_NOTICE = (
+DATA_PRIVACY_NOTICE = gettext_lazy(
     "In compliance with the Data Privacy Act of 2012 (R.A. No. 10173), the personal "
     "information you provide is collected and processed solely for this recruitment and "
     "selection process and is handled with strict confidentiality."
@@ -37,7 +38,7 @@ DATA_PRIVACY_NOTICE = (
 
 # Do-not-reply line. Applicants are pointed to the HRM Unit printed in their footer;
 # internal staff messages do not carry the HRMU contact block, so they use a generic line.
-DO_NOT_REPLY_APPLICANT = (
+DO_NOT_REPLY_APPLICANT = gettext_lazy(
     "This is a system-generated message from the DOH–CHD CALABARZON Recruitment Portal. Please do not reply to this "
     "email. For inquiries, contact the Human Resource Management Unit using the details above."
 )
@@ -47,11 +48,13 @@ DO_NOT_REPLY_INTERNAL = (
 
 # Reporting instructions shown only on the applicant exam-invitation and interview-notice.
 REPORTING_INSTRUCTIONS = (
-    "Bring at least one (1) valid government-issued identification card.",
-    "Report at least fifteen (15) minutes before your scheduled time.",
-    "If you are unable to attend on the scheduled date, submit a written letter of intent "
-    "to reschedule to the Human Resource Management Unit (details below) before your "
-    "scheduled date.",
+    gettext_lazy("Bring at least one (1) valid government-issued identification card."),
+    gettext_lazy("Report at least fifteen (15) minutes before your scheduled time."),
+    gettext_lazy(
+        "If you are unable to attend on the scheduled date, submit a written letter of intent "
+        "to reschedule to the Human Resource Management Unit (details below) before your "
+        "scheduled date."
+    ),
 )
 
 
@@ -80,15 +83,15 @@ def email_portal_url():
 
 def _applicant_footer_text_lines():
     lines = [
-        "For inquiries:",
+        gettext("For inquiries:"),
         CONTACT_UNIT,
-        f"Tel: {CONTACT_PHONE}  |  Email: {CONTACT_EMAIL}",
+        gettext("Tel: %(phone)s  |  Email: %(email)s") % {"phone": CONTACT_PHONE, "email": CONTACT_EMAIL},
         f"{OFFICE_NAME}, {OFFICE_ADDRESS}",
     ]
     portal = email_portal_url()
     if portal:
-        lines.append(f"Portal: {portal}")
-    lines += ["", DATA_PRIVACY_NOTICE, "", DO_NOT_REPLY_APPLICANT]
+        lines.append(gettext("Portal: %(url)s") % {"url": portal})
+    lines += ["", str(DATA_PRIVACY_NOTICE), "", str(DO_NOT_REPLY_APPLICANT)]
     return lines
 
 

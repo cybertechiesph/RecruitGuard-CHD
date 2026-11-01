@@ -25,7 +25,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Count, Max, Min, Q
 from django.template.loader import render_to_string
 from django.urls import reverse
-from django.utils import timezone
+from django.utils import timezone, translation
 from django.utils.formats import date_format
 from django.utils.text import slugify
 from django.utils.translation import gettext, ngettext
@@ -8486,13 +8486,14 @@ def _generate_otp_code():
 
 def _deliver_application_otp(application, otp_code, *, actor=None, otp_expires_at=None):
     otp_expires_at = otp_expires_at or application.otp_expires_at
-    subject = "DOH–CHD CALABARZON Recruitment Portal applicant verification code"
-    text_body = (
+    # Sent while the applicant is on the portal, so the active language is theirs.
+    subject = gettext("DOH–CHD CALABARZON Recruitment Portal applicant verification code")
+    text_body = gettext(
         "DOH–CHD CALABARZON Recruitment Portal applicant verification code\n\n"
-        f"Your verification code is {otp_code}.\n"
-        f"It expires in {settings.APPLICATION_OTP_VALIDITY_MINUTES} minutes.\n\n"
+        "Your verification code is %(code)s.\n"
+        "It expires in %(minutes)s minutes.\n\n"
         "Do not share this code. DOH–CHD CALABARZON staff will never ask for it."
-    )
+    ) % {"code": otp_code, "minutes": settings.APPLICATION_OTP_VALIDITY_MINUTES}
     # Draft applicants land on the OTP page; give them a way back if they close the
     # tab there (drafts have no reference_number yet, so this link is their only
     # recovery). Resubmission-state OTP emails deliberately omit it — that flow
@@ -8503,10 +8504,10 @@ def _deliver_application_otp(application, otp_code, *, actor=None, otp_expires_a
         else ""
     )
     if continue_url:
-        text_body += (
-            f"\n\nKeep this email. Your progress is saved, and this link brings you back to your "
-            f"application for {application.position.title} anytime:\n{continue_url}"
-        )
+        text_body += "\n\n" + gettext(
+            "Keep this email. Your progress is saved, and this link brings you back to your "
+            "application for %(title)s anytime:\n%(link)s"
+        ) % {"title": application.position.title, "link": continue_url}
     try:
         html_body = render_to_string(
             "email/applicant_otp.html",
@@ -8584,22 +8585,35 @@ def find_drafts_due_for_reminder(days_before=DRAFT_REMINDER_DEFAULT_DAYS_BEFORE,
 
 
 def send_draft_reminder(application):
-    """One reminder email for an unsubmitted draft; stamps draft_reminder_sent_at."""
+    """One reminder email for an unsubmitted draft; stamps draft_reminder_sent_at.
+    Sent from a scheduled command, so it switches to the applicant's portal language."""
+    from .notification_services import applicant_email_language
+
+    with translation.override(applicant_email_language(application)):
+        return _send_draft_reminder(application)
+
+
+def _send_draft_reminder(application):
     from .notification_services import build_applicant_otp_url
 
     position = application.position
     continue_url = build_applicant_otp_url(application)
     closing = date_format(position.closing_date, "F j, Y")
-    subject = f"Your application for {position.title} is not submitted yet"
-    text_body = (
-        f"Hello {application.applicant_first_name or 'applicant'},\n\n"
-        f"You started an application for {position.title}, but it has not been submitted yet. "
-        f"Applications close on {closing}.\n\n"
+    subject = gettext("Your application for %(title)s is not submitted yet") % {"title": position.title}
+    text_body = gettext(
+        "Hello %(name)s,\n\n"
+        "You started an application for %(title)s, but it has not been submitted yet. "
+        "Applications close on %(date)s.\n\n"
         "Everything you added is saved. Open this link, enter the code we email you, and "
-        f"submit when your documents are ready:\n{continue_url}\n\n"
+        "submit when your documents are ready:\n%(link)s\n\n"
         "If you no longer wish to apply, you can ignore this email.\n\n"
         "DOH–CHD CALABARZON Recruitment Portal"
-    )
+    ) % {
+        "name": application.applicant_first_name or gettext("applicant"),
+        "title": position.title,
+        "date": closing,
+        "link": continue_url,
+    }
     try:
         html_body = render_to_string(
             "email/applicant_draft_reminder.html",
@@ -8664,22 +8678,38 @@ def find_resubmissions_due_for_reminder(
 
 
 def send_resubmission_reminder(screening_record):
-    """One reminder email for a pending resubmission; stamps resubmission_reminder_sent_at."""
+    """One reminder email for a pending resubmission; stamps resubmission_reminder_sent_at.
+    Sent from a scheduled command, so it switches to the applicant's portal language."""
+    from .notification_services import applicant_email_language
+
+    with translation.override(applicant_email_language(screening_record.application)):
+        return _send_resubmission_reminder(screening_record)
+
+
+def _send_resubmission_reminder(screening_record):
     application = screening_record.application
     position = application.position
     path = reverse("applicant-resubmit", kwargs={"token": application.public_token})
     base_url = (getattr(settings, "APPLICANT_PORTAL_BASE_URL", "") or "").strip().rstrip("/")
     resubmit_url = f"{base_url}{path}" if base_url else path
     deadline = date_format(screening_record.resubmission_deadline, "F j, Y")
-    subject = f"Reminder: send your corrected documents for {position.title} by {deadline}"
-    text_body = (
-        f"Hello {application.applicant_first_name or 'applicant'},\n\n"
-        f"The recruitment team is still waiting for the corrected documents for your application "
-        f"for {position.title} (Case No. {application.case_number_short}). "
-        f"Please send them on or before {deadline}.\n\n"
-        f"Open this link to see which documents and why, then upload them:\n{resubmit_url}\n\n"
+    subject = gettext("Reminder: send your corrected documents for %(title)s by %(date)s") % {
+        "title": position.title,
+        "date": deadline,
+    }
+    text_body = gettext(
+        "Hello %(name)s,\n\n"
+        "The recruitment team is still waiting for the corrected documents for your application "
+        "for %(title)s (Case No. %(case)s). Please send them on or before %(date)s.\n\n"
+        "Open this link to see which documents and why, then upload them:\n%(link)s\n\n"
         "DOH–CHD CALABARZON Recruitment Portal"
-    )
+    ) % {
+        "name": application.applicant_first_name or gettext("applicant"),
+        "title": position.title,
+        "case": application.case_number_short,
+        "date": deadline,
+        "link": resubmit_url,
+    }
     try:
         html_body = render_to_string(
             "email/resubmission_reminder.html",

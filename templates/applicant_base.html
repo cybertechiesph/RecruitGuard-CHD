@@ -36,6 +36,10 @@ background:
                class="rg-nav-link rg-nav-link--{% if request.resolver_match.url_name == 'applicant-status-lookup' %}primary{% else %}secondary{% endif %}">
                 {% translate "Track Application" %}
             </a>
+            <a href="{% url 'applicant-my-applications' %}"
+               class="rg-nav-link rg-nav-link--{% if request.resolver_match.url_name == 'applicant-my-applications' %}primary{% else %}secondary{% endif %}">
+                {% translate "My Applications" %}
+            </a>
             <a href="{% url 'applicant-help' %}"
                class="rg-nav-link rg-nav-link--{% if request.resolver_match.url_name == 'applicant-help' %}primary{% else %}secondary{% endif %}">
                 {% translate "Help" %}

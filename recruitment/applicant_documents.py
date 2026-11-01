@@ -21,6 +21,7 @@ application is submitted.
 
 import hashlib
 import io
+import re
 from dataclasses import dataclass
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -125,6 +126,23 @@ def _check_pdf(raw_bytes):
             raise ValueError(ERROR_PDF_UNREADABLE)
     except (PdfReadError, OSError, KeyError, TypeError) as exc:
         raise ValueError(ERROR_PDF_UNREADABLE) from exc
+
+
+OLD_PDS_PATTERN = re.compile(r"revised\s*2017", re.IGNORECASE)
+CURRENT_PDS_PATTERN = re.compile(r"revised\s*2026", re.IGNORECASE)
+
+
+def looks_like_old_pds(part):
+    """True when an uploaded PDS is a typed PDF of the superseded 2017 form (its footer reads
+    "CS FORM 212 (Revised 2017)"). Scans and photos have no text, so they are not judged."""
+    if part.content_type != "application/pdf":
+        return False
+    try:
+        reader = PdfReader(io.BytesIO(read_applicant_document_part(part)))
+        text = " ".join((page.extract_text() or "") for page in reader.pages[:2])
+    except Exception:  # unreadable text layer: say nothing rather than guess
+        return False
+    return bool(OLD_PDS_PATTERN.search(text)) and not CURRENT_PDS_PATTERN.search(text)
 
 
 def prepare_part_upload(uploaded_file):

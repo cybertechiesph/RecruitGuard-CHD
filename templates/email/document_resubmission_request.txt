@@ -1,24 +1,24 @@
-Dear {{ application.applicant_display_name }},
+{% load i18n %}{% blocktranslate with name=application.applicant_display_name %}Dear {{ name }},{% endblocktranslate %}
 
-Your application for {{ application.position.title }} needs corrected or updated document submission.
+{% blocktranslate with title=application.position.title %}Your application for {{ title }} needs corrected or updated document submission.{% endblocktranslate %}
 
-Case Reference: Case No. {{ application.case_number_short }}
+{% blocktranslate with case=application.case_number_short %}Case Reference: Case No. {{ case }}{% endblocktranslate %}
 
-Please review the document item{{ requested_documents|length|pluralize }} below:
+{% blocktranslate count counter=requested_documents|length %}Please review the document item below:{% plural %}Please review the document items below:{% endblocktranslate %}
 {% for document in requested_documents %}
 - {{ document.requirement_title }}
-  Instruction: {{ document.remarks }}
+  {% blocktranslate with remarks=document.remarks %}Instruction: {{ remarks }}{% endblocktranslate %}
 {% endfor %}
 {% if resubmission_deadline %}
-{% if deadline_was_extended %}The resubmission deadline has been extended.{% endif %}
-Please resubmit on or before {{ resubmission_deadline|date:"F d, Y" }}.
+{% if deadline_was_extended %}{% translate "The resubmission deadline has been extended." %}{% endif %}
+{% blocktranslate with date=resubmission_deadline|date:"F d, Y" %}Please resubmit on or before {{ date }}.{% endblocktranslate %}
 {% endif %}
 {% if workflow_remarks %}
 
-Additional note from the recruitment team:
+{% translate "Additional note from the recruitment team:" %}
 {{ workflow_remarks }}
 {% endif %}
 
-Please follow the instructions from the recruitment team and keep your private Tracking Code for status checking.
+{% translate "Please follow the instructions from the recruitment team and keep your private Tracking Code for status checking." %}
 
-Check your application status anytime: {{ status_link }}
+{% blocktranslate with link=status_link %}Check your application status anytime: {{ link }}{% endblocktranslate %}

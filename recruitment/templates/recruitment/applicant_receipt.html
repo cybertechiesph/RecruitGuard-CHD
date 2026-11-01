@@ -141,6 +141,9 @@
         <button type="button" class="btn btn-outline-secondary btn-lg" onclick="window.print()">
             {% translate "Print Receipt" %}
         </button>
+        <a href="{% url 'applicant-my-applications' %}" class="btn btn-outline-secondary btn-lg">
+            {% translate "My Applications" %}
+        </a>
         <a href="{% url 'applicant-portal' %}" class="btn btn-outline-secondary btn-lg">
             {% translate "Back to Job Openings" %}
         </a>

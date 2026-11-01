@@ -125,7 +125,7 @@ def extract_entries(base_dir):
 
     template_roots = [base_dir / "templates", base_dir / "recruitment" / "templates"]
     for root in template_roots:
-        for path in sorted(root.rglob("*.html")):
+        for path in sorted([*root.rglob("*.html"), *root.rglob("*.txt")]):
             source = path.read_text(encoding="utf-8")
             if "{% load i18n" not in source and "{% load static i18n" not in source:
                 continue

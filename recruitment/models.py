@@ -951,6 +951,8 @@ class RecruitmentApplication(TimestampedModel):
     # When the "your application isn't submitted yet" email went out (send_draft_reminders),
     # so a draft is reminded at most once.
     draft_reminder_sent_at = models.DateTimeField(blank=True, null=True)
+    # The portal language the applicant used ("en" or "fil"); applicant emails are sent in it.
+    preferred_language = models.CharField(max_length=8, blank=True, default="")
     # The applicant asked (from Track Application) to withdraw. Staff still record the
     # withdrawal itself, so the case, batches and schedules are handled by the office.
     withdrawal_requested_at = models.DateTimeField(blank=True, null=True)
@@ -5016,6 +5018,20 @@ class ApplicantDocumentPart(TimestampedModel):
 
     def __str__(self):
         return f"{self.document_key} part {self.sort_order} ({self.original_filename})"
+
+
+class ApplicantEmailCode(TimestampedModel):
+    """One-time code for "My applications": proves the visitor owns an email address before
+    listing every application made with it. Only a hash of the code is stored."""
+
+    email = models.EmailField(unique=True)
+    code_hash = models.CharField(max_length=64, blank=True)
+    expires_at = models.DateTimeField(blank=True, null=True)
+    requested_at = models.DateTimeField(blank=True, null=True)
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+
+    def __str__(self):
+        return f"My applications code for {self.email}"
 
 
 class AuditLog(TimestampedModel):

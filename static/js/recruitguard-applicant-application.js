@@ -119,6 +119,18 @@
         dark: t("photo_dark", "This photo looks dark."),
         blurry: t("photo_blurry", "This photo looks blurry.")
     };
+    function cardWarning(card, name, message) {
+        var box = card.querySelector("[data-doc-warning]");
+        if (!box || !message) return;
+        var line = document.createElement("p");
+        line.className = "rg-doc-card__error-line";
+        var strong = document.createElement("strong");
+        strong.textContent = name;
+        line.appendChild(strong);
+        line.appendChild(document.createTextNode(" — " + message));
+        box.appendChild(line);
+        box.hidden = false;
+    }
     function qualityWarning(card, name, issues) {
         var box = card.querySelector("[data-doc-warning]");
         if (!box || !issues.length) return;
@@ -219,6 +231,7 @@
                     try { body = JSON.parse(xhr.responseText); } catch (x) {}
                     if (xhr.status === 200 && body) {
                         applySlotState(card, body);
+                        if (body.warning) cardWarning(card, file.name, body.warning);
                         checkPhotoQuality(prepared).then(function (issues) { qualityWarning(card, file.name, issues); });
                         resolve();
                         return;
