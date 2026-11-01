@@ -22037,25 +22037,25 @@ class ApplicantPortalLanguageTests(BaseRecruitmentTestCase):
     def test_language_switch_shows_the_portal_in_filipino(self):
         page = self.filipino_client().get(reverse("applicant-portal"))
         self.assertContains(page, '<html lang="fil">')
-        self.assertContains(page, "Mga Bakanteng Trabaho")
-        self.assertContains(page, "Paano ito gumagana")
+        self.assertContains(page, "I-track ang Application")
+        self.assertContains(page, "Paano mag-apply")
         self.assertContains(page, 'value="fil" lang="fil" class="rg-langswitch__btn is-current"')
 
     def test_english_is_the_default(self):
         page = Client().get(reverse("applicant-portal"))
         self.assertContains(page, '<html lang="en">')
         self.assertContains(page, "How it works")
-        self.assertNotContains(page, "Paano ito gumagana")
+        self.assertNotContains(page, "Paano mag-apply")
 
     def test_a_filipino_phone_gets_filipino_automatically(self):
         page = Client().get(reverse("applicant-portal"), HTTP_ACCEPT_LANGUAGE="fil-PH,fil;q=0.9")
-        self.assertContains(page, "Mga Bakanteng Trabaho")
+        self.assertContains(page, "I-track ang Application")
 
     def test_staff_pages_stay_in_english(self):
         client = self.filipino_client()
         page = client.get(reverse("login"))
         self.assertContains(page, '<html lang="en">')
-        self.assertNotContains(page, "Mga Bakanteng Trabaho")
+        self.assertNotContains(page, "I-track ang Application")
 
     def test_application_flow_messages_follow_the_language(self):
         client = self.filipino_client()
@@ -22063,13 +22063,13 @@ class ApplicantPortalLanguageTests(BaseRecruitmentTestCase):
             reverse("applicant-intake", kwargs={"pk": self.cos_position.pk}),
             {"first_name": "", "last_name": "Cruz", "email": "x@example.com", "phone": "09171234567"},
         )
-        self.assertContains(response, "Ilagay ang iyong pangalan (first name).")
-        self.assertContains(response, "Magbigay ng pahintulot para makapagpatuloy.")
+        self.assertContains(response, "Ilagay ang first name mo.")
+        self.assertContains(response, "Pumayag muna para makapagpatuloy.")
 
         client, application = self.open_portal_draft("tagalog@example.com", client=client)
         page = client.get(reverse("applicant-application", kwargs={"token": application.public_token}))
-        self.assertContains(page, "Ang iyong mga dokumento")
-        self.assertEqual(page.context["script_strings"]["saving"], "Sine-save…")
+        self.assertContains(page, "Ang documents mo")
+        self.assertEqual(page.context["script_strings"]["saving"], "Nagse-save…")
         upload = self.upload_portal_document(
             client,
             application,

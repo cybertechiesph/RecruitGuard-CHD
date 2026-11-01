@@ -11,11 +11,11 @@ msgstr ""
 
 #: templates/applicant_base.html recruitment/templates/recruitment/includes/applicant_flow_header.html
 msgid "Republic of the Philippines"
-msgstr "Republika ng Pilipinas"
+msgstr "Republic of the Philippines"
 
 #: templates/applicant_base.html recruitment/templates/recruitment/includes/applicant_flow_header.html
 msgid "Department of Health &ndash; CHD CALABARZON"
-msgstr "Kagawaran ng Kalusugan &ndash; CHD CALABARZON"
+msgstr "Department of Health &ndash; CHD CALABARZON"
 
 #: templates/applicant_base.html recruitment/templates/recruitment/applicant_application.html recruitment/templates/recruitment/applicant_otp.html recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_resubmission.html recruitment/templates/recruitment/applicant_start.html recruitment/templates/recruitment/applicant_status_lookup.html recruitment/templates/recruitment/applicant_vacancy_detail.html recruitment/templates/recruitment/includes/applicant_flow_header.html
 msgid "Applicant Portal"
@@ -23,15 +23,15 @@ msgstr "Applicant Portal"
 
 #: templates/applicant_base.html
 msgid "Applicant navigation"
-msgstr "Navigation para sa aplikante"
+msgstr "Menu ng applicant"
 
 #: templates/applicant_base.html recruitment/templates/recruitment/applicant_portal.html recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Job Openings"
-msgstr "Mga Bakanteng Trabaho"
+msgstr "Job Openings"
 
 #: templates/applicant_base.html recruitment/templates/recruitment/applicant_portal.html
 msgid "Track Application"
-msgstr "I-track ang Aplikasyon"
+msgstr "I-track ang Application"
 
 #: templates/applicant_base.html
 msgid "Help"
@@ -39,55 +39,55 @@ msgstr "Tulong"
 
 #: templates/applicant_base.html
 msgid "Department of Health &ndash; Center for Health Development CALABARZON (Region IV-A)"
-msgstr "Kagawaran ng Kalusugan &ndash; Center for Health Development CALABARZON (Rehiyon IV-A)"
+msgstr "Department of Health &ndash; Center for Health Development CALABARZON (Region IV-A)"
 
 #: templates/applicant_base.html
 msgid "Questions about an application:"
-msgstr "Mga tanong tungkol sa aplikasyon:"
+msgstr "May tanong tungkol sa application mo?"
 
 #: templates/text_size_control.html
 msgid "Text size"
-msgstr "Laki ng teksto"
+msgstr "Laki ng text"
 
 #: templates/text_size_control.html
 msgid "Default text size"
-msgstr "Karaniwang laki ng teksto"
+msgstr "Normal na laki ng text"
 
 #: templates/text_size_control.html
 msgid "Large text"
-msgstr "Malaking teksto"
+msgstr "Malaking text"
 
 #: templates/text_size_control.html
 msgid "Larger text"
-msgstr "Mas malaking teksto"
+msgstr "Mas malaking text"
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "Your application — %(title)s"
-msgstr "Ang iyong aplikasyon — %(title)s"
+msgstr "Application mo — %(title)s"
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "Your application for %(title)s"
-msgstr "Ang iyong aplikasyon para sa %(title)s"
+msgstr "Ang application mo para sa %(title)s"
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "<strong>Everything is saved as you go.</strong> You can close this page and come back later with the link in your verification email."
-msgstr "<strong>Awtomatikong nase-save ang lahat.</strong> Puwede mong isara ang page na ito at bumalik mamaya gamit ang link sa iyong verification email."
+msgstr "<strong>Automatic na nase-save lahat.</strong> Puwede mong isara ito at bumalik mamaya gamit ang link sa verification email mo."
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "Jump to your documents"
-msgstr "Pumunta sa iyong mga dokumento"
+msgstr "Pumunta sa documents mo"
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "<strong>Submit by 11:59 PM on %(day)s</strong> (Philippine time)."
-msgstr "<strong>Isumite bago mag-11:59 PM sa %(day)s</strong> (oras sa Pilipinas)."
+msgstr "<strong>I-submit bago mag-11:59 PM ng %(day)s</strong> (oras sa Pilipinas)."
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "After that, unsubmitted applications can no longer be sent."
-msgstr "Pagkatapos nito, hindi na maipapadala ang mga aplikasyong hindi pa naisusumite."
+msgstr "Pagkatapos nito, hindi na puwedeng i-submit ang application na hindi pa tapos."
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "Your application was not submitted yet."
-msgstr "Hindi pa naisusumite ang iyong aplikasyon."
+msgstr "Hindi pa na-submit ang application mo."
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "Please fix these:"
@@ -95,7 +95,7 @@ msgstr "Pakiayos ang mga ito:"
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "1. Your details"
-msgstr "1. Ang iyong impormasyon"
+msgstr "1. Ang details mo"
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "Email:"
@@ -103,51 +103,51 @@ msgstr "Email:"
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "Verified"
-msgstr "Na-verify"
+msgstr "Verified"
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "2. About your qualifications"
-msgstr "2. Tungkol sa iyong mga kwalipikasyon"
+msgstr "2. Tungkol sa qualifications mo"
 
 #: recruitment/templates/recruitment/applicant_application.html recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Optional"
-msgstr "Opsyonal"
+msgstr "Optional"
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "This is the rating your current or last government office gave you (for example an IPCR or SPMS rating). If you haven&rsquo;t worked in government, choose that you don&rsquo;t have one."
-msgstr "Ito ang rating na ibinigay sa iyo ng kasalukuyan o huling opisina mo sa gobyerno (halimbawa, IPCR o SPMS rating). Kung hindi ka pa nagtrabaho sa gobyerno, piliin na wala kang rating."
+msgstr "Ito ang rating na binigay sa iyo ng current o huling government office mo (halimbawa, IPCR o SPMS rating). Kung hindi ka pa nakapagtrabaho sa gobyerno, piliin na wala kang rating."
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "3. Your documents"
-msgstr "3. Ang iyong mga dokumento"
+msgstr "3. Ang documents mo"
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "Add each document as a PDF, JPG or PNG (up to %(mb)s MB per file). A document with several pages? Add the pages one by one, or as several photos &mdash; we combine them into one file for the reviewers. Each file is saved the moment it finishes uploading."
-msgstr "Idagdag ang bawat dokumento bilang PDF, JPG o PNG (hanggang %(mb)s MB bawat file). May ilang pahina ang dokumento? Idagdag ang mga pahina isa-isa, o bilang ilang litrato &mdash; pagsasamahin namin ang mga ito sa isang file para sa mga reviewer. Nase-save ang bawat file sa sandaling matapos itong ma-upload."
+msgstr "I-upload ang bawat document bilang PDF, JPG o PNG (hanggang %(mb)s MB bawat file). Maraming pages ang document? I-upload ang pages isa-isa, o picturan isa-isa &mdash; kami na ang magsasama sa isang file para sa mga reviewer. Nase-save agad ang bawat file pagkatapos ma-upload."
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "<strong data-doc-ready>%(ready)s</strong> of <strong data-doc-total>%(total)s</strong> required documents ready"
-msgstr "<strong data-doc-ready>%(ready)s</strong> sa <strong data-doc-total>%(total)s</strong> kailangang dokumento ang handa na"
+msgstr "<strong data-doc-ready>%(ready)s</strong> sa <strong data-doc-total>%(total)s</strong> required documents ang ready na"
 
 #: recruitment/templates/recruitment/applicant_application.html recruitment/portal_views.py
 msgid "Ready"
-msgstr "Handa na"
+msgstr "Ready na"
 
 #: recruitment/templates/recruitment/applicant_application.html recruitment/portal_views.py recruitment/requirements.py
 msgid "Required"
-msgstr "Kailangan"
+msgstr "Required"
 
 #: recruitment/templates/recruitment/applicant_application.html recruitment/portal_views.py recruitment/requirements.py
 msgid "If applicable"
-msgstr "Kung naaangkop"
+msgstr "Kung meron"
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "Saved earlier: <strong>%(name)s</strong>. Add new files below only if you want to replace it."
-msgstr "Na-save dati: <strong>%(name)s</strong>. Magdagdag lang ng bagong file sa ibaba kung gusto mo itong palitan."
+msgstr "Na-save dati: <strong>%(name)s</strong>. Mag-upload lang ng bagong file sa baba kung gusto mo itong palitan."
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "You sent this with your application for <strong>%(title)s</strong> (%(date)s):"
-msgstr "Ipinadala mo ito kasama ng aplikasyon mo para sa <strong>%(title)s</strong> (%(date)s):"
+msgstr "Ipinasa mo ito sa application mo para sa <strong>%(title)s</strong> (%(date)s):"
 
 #: recruitment/templates/recruitment/applicant_application.html recruitment/portal_views.py
 msgid "Use this file"
@@ -155,31 +155,31 @@ msgstr "Gamitin ang file na ito"
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "Check it&rsquo;s still current (e.g. the PDS form version)."
-msgstr "Siguraduhing updated pa ito (halimbawa, ang bersyon ng PDS form)."
+msgstr "I-check kung updated pa ito (halimbawa, ang version ng PDS form)."
 
 #: recruitment/templates/recruitment/applicant_application.html recruitment/portal_views.py
 msgid "Add another file"
-msgstr "Magdagdag ng isa pang file"
+msgstr "Mag-upload ng isa pang file"
 
 #: recruitment/templates/recruitment/applicant_application.html recruitment/portal_views.py
 msgid "Add files"
-msgstr "Magdagdag ng mga file"
+msgstr "Mag-upload ng file"
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "Take a photo"
-msgstr "Kumuha ng litrato"
+msgstr "Picturan gamit ang phone"
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "4. Submit your application"
-msgstr "4. Isumite ang iyong aplikasyon"
+msgstr "4. I-submit ang application mo"
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "Still needed before you can submit:"
-msgstr "Kailangan pa bago ka makapagsumite:"
+msgstr "Kulang pa bago ka maka-submit:"
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "After you submit, you can no longer change your application. You&rsquo;ll get a receipt and a tracking code right away."
-msgstr "Kapag naisumite mo na, hindi mo na mababago ang iyong aplikasyon. Makakatanggap ka agad ng resibo at tracking code."
+msgstr "Kapag na-submit mo na, hindi mo na mapapalitan ang application mo. Makakatanggap ka agad ng resibo at tracking code."
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "Save and finish later"
@@ -187,23 +187,23 @@ msgstr "I-save at tapusin mamaya"
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "Submit my application"
-msgstr "Isumite ang aking aplikasyon"
+msgstr "I-submit ang application ko"
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "<strong data-doc-ready-sticky>%(ready)s</strong> of <span data-doc-total-sticky>%(total)s</span> documents ready"
-msgstr "<strong data-doc-ready-sticky>%(ready)s</strong> sa <span data-doc-total-sticky>%(total)s</span> dokumento ang handa na"
+msgstr "<strong data-doc-ready-sticky>%(ready)s</strong> sa <span data-doc-total-sticky>%(total)s</span> documents ang ready na"
 
 #: recruitment/templates/recruitment/applicant_application.html recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/includes/applicant_journey.html
 msgid "Documents"
-msgstr "Mga Dokumento"
+msgstr "Documents"
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "Submit"
-msgstr "Isumite"
+msgstr "I-submit"
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "Your file"
-msgstr "Ang iyong file"
+msgstr "File mo"
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "Close preview"
@@ -211,7 +211,7 @@ msgstr "Isara ang preview"
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "Is this the right document, and is the text easy to read?"
-msgstr "Ito ba ang tamang dokumento, at madali bang basahin ang teksto?"
+msgstr "Ito ba ang tamang document, at malinaw bang mabasa?"
 
 #: recruitment/templates/recruitment/applicant_application.html
 msgid "Close"
@@ -223,45 +223,45 @@ msgstr "Tingnan"
 
 #: recruitment/templates/recruitment/applicant_application.html recruitment/templates/recruitment/includes/applicant_document_part.html
 msgid "Remove"
-msgstr "Alisin"
+msgstr "Tanggalin"
 
 #: recruitment/templates/recruitment/applicant_otp.html
 msgid "Verify your email"
-msgstr "I-verify ang iyong email"
+msgstr "I-verify ang email mo"
 
 #: recruitment/templates/recruitment/applicant_otp.html
 msgid "Enter the code we emailed you to continue your application. Anything you already added is saved."
-msgstr "Ilagay ang code na in-email namin sa iyo para maituloy ang iyong aplikasyon. Naka-save ang anumang naidagdag mo na."
+msgstr "Ilagay ang code na in-email namin para ituloy ang application mo. Naka-save ang lahat ng nailagay mo na."
 
 #: recruitment/templates/recruitment/applicant_otp.html
 msgid "To open your saved application, get a new code below &mdash; we&rsquo;ll send it to your email."
-msgstr "Para mabuksan ang naka-save mong aplikasyon, humingi ng bagong code sa ibaba &mdash; ipapadala namin ito sa iyong email."
+msgstr "Para mabuksan ang naka-save mong application, humingi ng bagong code sa baba &mdash; ipapadala namin ito sa email mo."
 
 #: recruitment/templates/recruitment/applicant_otp.html
 msgid "We sent a 6-digit code to:"
-msgstr "Nagpadala kami ng 6-digit na code sa:"
+msgstr "Nagpadala kami ng 6-digit code sa:"
 
 #: recruitment/templates/recruitment/applicant_otp.html
 msgid "Your email:"
-msgstr "Ang iyong email:"
+msgstr "Email mo:"
 
 #: recruitment/templates/recruitment/applicant_otp.html
 msgid "Enter the 6-digit code"
-msgstr "Ilagay ang 6-digit na code"
+msgstr "Ilagay ang 6-digit code"
 
 #: recruitment/templates/recruitment/applicant_otp.html
 msgid "Each code works for %(minutes)s minute. If it expires, get a new one below."
 msgid_plural "Each code works for %(minutes)s minutes. If it expires, get a new one below."
-msgstr[0] "Gumagana ang bawat code nang %(minutes)s minuto. Kung mag-expire ito, humingi ng bago sa ibaba."
-msgstr[1] "Gumagana ang bawat code nang %(minutes)s minuto. Kung mag-expire ito, humingi ng bago sa ibaba."
+msgstr[0] "Valid ang bawat code nang %(minutes)s minuto. Kapag nag-expire, humingi ng bago sa baba."
+msgstr[1] "Valid ang bawat code nang %(minutes)s minuto. Kapag nag-expire, humingi ng bago sa baba."
 
 #: recruitment/templates/recruitment/applicant_otp.html
 msgid "Verify and continue"
-msgstr "I-verify at magpatuloy"
+msgstr "I-verify at ituloy"
 
 #: recruitment/templates/recruitment/applicant_otp.html
 msgid "Didn&rsquo;t receive the code?"
-msgstr "Hindi natanggap ang code?"
+msgstr "Hindi mo natanggap ang code?"
 
 #: recruitment/templates/recruitment/applicant_otp.html
 msgid "Need a code?"
@@ -269,15 +269,15 @@ msgstr "Kailangan ng code?"
 
 #: recruitment/templates/recruitment/applicant_otp.html
 msgid "Check your <strong>Spam</strong> or <strong>Junk Mail</strong> folder."
-msgstr "Tingnan ang iyong <strong>Spam</strong> o <strong>Junk Mail</strong> folder."
+msgstr "I-check ang <strong>Spam</strong> o <strong>Junk Mail</strong> folder mo."
 
 #: recruitment/templates/recruitment/applicant_otp.html
 msgid "Make sure the email address above is correct."
-msgstr "Siguraduhing tama ang email address sa itaas."
+msgstr "Siguraduhing tama ang email sa itaas."
 
 #: recruitment/templates/recruitment/applicant_otp.html
 msgid "Resend the code"
-msgstr "Ipadala ulit ang code"
+msgstr "I-resend ang code"
 
 #: recruitment/templates/recruitment/applicant_otp.html
 msgid "Email me a code"
@@ -285,27 +285,27 @@ msgstr "I-email sa akin ang code"
 
 #: recruitment/templates/recruitment/applicant_otp.html
 msgid "Wrong email address?"
-msgstr "Mali ang email address?"
+msgstr "Mali ang email?"
 
 #: recruitment/templates/recruitment/applicant_otp.html
 msgid "Start again with the correct email"
-msgstr "Magsimula ulit gamit ang tamang email"
+msgstr "Ulitin gamit ang tamang email"
 
 #: recruitment/templates/recruitment/applicant_otp.html
 msgid "Return to job openings"
-msgstr "Bumalik sa mga bakanteng trabaho"
+msgstr "Bumalik sa job openings"
 
 #: recruitment/templates/recruitment/applicant_otp.html recruitment/forms.py
 msgid "Enter the 6-digit code from your email."
-msgstr "Ilagay ang 6-digit na code mula sa iyong email."
+msgstr "Ilagay ang 6-digit code mula sa email mo."
 
 #: recruitment/templates/recruitment/applicant_otp.html
 msgid "The code is 6 digits — letters or extra characters won’t work."
-msgstr "6 na numero ang code — hindi gagana ang mga letra o sobrang character."
+msgstr "6 na numbers ang code — hindi puwede ang letters o ibang characters."
 
 #: recruitment/templates/recruitment/applicant_otp.html
 msgid "(available in {seconds}s)"
-msgstr "(puwede na sa loob ng {seconds}s)"
+msgstr "(puwede na ulit sa loob ng {seconds}s)"
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "DOH–CHD CALABARZON recruitment portal"
@@ -313,31 +313,31 @@ msgstr "Recruitment portal ng DOH–CHD CALABARZON"
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "Official Online Recruitment"
-msgstr "Opisyal na Online Recruitment"
+msgstr "Official na Online Recruitment"
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "Apply for a Position at <br>DOH&ndash;CHD CALABARZON"
-msgstr "Mag-apply ng Trabaho sa <br>DOH&ndash;CHD CALABARZON"
+msgstr "Mag-apply ng trabaho sa <br>DOH&ndash;CHD CALABARZON"
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "Browse current job openings, submit your application online, and track your status &mdash; all in one secure place."
-msgstr "Tingnan ang mga bakanteng trabaho, mag-apply online, at alamin ang status ng iyong aplikasyon &mdash; lahat sa iisang ligtas na lugar."
+msgstr "Tingnan ang job openings, mag-apply online, at i-track ang status ng application mo &mdash; lahat dito na."
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "Browse Openings"
-msgstr "Tingnan ang mga Bakante"
+msgstr "Tingnan ang Job Openings"
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "How it works"
-msgstr "Paano ito gumagana"
+msgstr "Paano mag-apply"
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "Browse openings"
-msgstr "Tingnan ang mga bakante"
+msgstr "Tingnan ang openings"
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "Find a position that fits you."
-msgstr "Humanap ng trabahong bagay sa iyo."
+msgstr "Hanapin ang position na bagay sa iyo."
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "Apply online"
@@ -345,39 +345,39 @@ msgstr "Mag-apply online"
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "Verify your email, then add your documents &mdash; phone photos are fine. Finish later if you need to."
-msgstr "I-verify ang iyong email, saka idagdag ang iyong mga dokumento &mdash; puwede ang litrato mula sa phone. Puwede mo itong tapusin mamaya."
+msgstr "I-verify ang email mo, tapos i-upload ang documents mo &mdash; puwede ang picture galing sa phone. Puwede mo ring tapusin mamaya."
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "Track your application"
-msgstr "I-track ang iyong aplikasyon"
+msgstr "I-track ang application mo"
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "Check your status anytime with the tracking code we give you when you submit."
-msgstr "Alamin ang iyong status anumang oras gamit ang tracking code na ibibigay namin pagkasumite mo."
+msgstr "Alamin ang status mo anytime gamit ang tracking code na ibibigay namin pagka-submit mo."
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "These are the positions currently accepting applications."
-msgstr "Ito ang mga posisyong kasalukuyang tumatanggap ng aplikasyon."
+msgstr "Ito ang mga position na tumatanggap ng applicants ngayon."
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "Filter positions by name"
-msgstr "Hanapin ang posisyon ayon sa pangalan"
+msgstr "Hanapin ang position ayon sa pangalan"
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "Type a position name, e.g. Nurse"
-msgstr "I-type ang pangalan ng posisyon, hal. Nurse"
+msgstr "I-type ang position, hal. Nurse"
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "Filter by position type"
-msgstr "Salain ayon sa uri ng posisyon"
+msgstr "Piliin ang klase ng position"
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "All Position Types"
-msgstr "Lahat ng Uri ng Posisyon"
+msgstr "Lahat ng klase ng position"
 
 #: recruitment/templates/recruitment/applicant_portal.html recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_status_lookup.html recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Permanent (Plantilla)"
-msgstr "Permanente (Plantilla)"
+msgstr "Permanent (Plantilla)"
 
 #: recruitment/templates/recruitment/applicant_portal.html recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_status_lookup.html recruitment/templates/recruitment/applicant_vacancy_detail.html recruitment/templates/recruitment/includes/branch_explainer.html recruitment/templates/recruitment/includes/job_card.html
 msgid "Contract of Service"
@@ -385,11 +385,11 @@ msgstr "Contract of Service"
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "No open positions at this time."
-msgstr "Wala pang bakanteng posisyon sa ngayon."
+msgstr "Wala pang job openings sa ngayon."
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "Please check back later. For questions, email"
-msgstr "Pakibalikan mamaya. Para sa mga tanong, mag-email sa"
+msgstr "Bumalik na lang ulit mamaya. May tanong? Mag-email sa"
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "Need help applying?"
@@ -397,7 +397,7 @@ msgstr "Kailangan ng tulong sa pag-apply?"
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "About an application:"
-msgstr "Tungkol sa aplikasyon:"
+msgstr "Tungkol sa application:"
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "Human Resource Management Unit (HRMU)"
@@ -405,7 +405,7 @@ msgstr "Human Resource Management Unit (HRMU)"
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "General questions:"
-msgstr "Pangkalahatang tanong:"
+msgstr "Ibang tanong:"
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "Public Assistance Desk"
@@ -417,7 +417,7 @@ msgstr "Mga paalala tungkol sa portal"
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "Official DOH&ndash;CHD CALABARZON portal"
-msgstr "Opisyal na portal ng DOH&ndash;CHD CALABARZON"
+msgstr "Official na portal ng DOH&ndash;CHD CALABARZON"
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "RA 10173 Data Privacy compliant"
@@ -425,83 +425,83 @@ msgstr "Sumusunod sa RA 10173 (Data Privacy)"
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "Privacy &amp; Data Protection"
-msgstr "Privacy &amp; Proteksyon ng Datos"
+msgstr "Privacy &amp; Data Protection"
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "What we do with your information"
-msgstr "Ano ang ginagawa namin sa iyong impormasyon"
+msgstr "Ano ang ginagawa namin sa info mo"
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "We follow the Data Privacy Act of 2012 (R.A. 10173). What you submit is used only to process your application for this position &mdash; only the recruitment officers and selection board can see it, and we never share it with anyone else unless you allow us to in writing."
-msgstr "Sinusunod namin ang Data Privacy Act of 2012 (R.A. 10173). Ang isusumite mo ay gagamitin lamang para iproseso ang iyong aplikasyon sa posisyong ito &mdash; ang mga recruitment officer at selection board lang ang makakakita nito, at hindi namin ito ibabahagi kaninuman maliban kung papayagan mo kami nang nakasulat."
+msgstr "Sumusunod kami sa Data Privacy Act of 2012 (R.A. 10173). Gagamitin lang namin ang ipapasa mo para i-process ang application mo sa position na ito &mdash; ang recruitment officers at selection board lang ang makakakita nito, at hindi namin ito ibibigay sa iba maliban kung pumayag ka nang nakasulat."
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "You can ask to <strong>access</strong>, <strong>correct</strong>, or <strong>delete</strong> your information &mdash; or withdraw your consent &mdash; at any time by contacting the HRMPSB Secretariat / Data Protection Officer of DOH&ndash;CHD CALABARZON. We keep your information only for as long as recruitment requires, in line with R.A. 10173."
-msgstr "Puwede mong hilingin na <strong>makita</strong>, <strong>itama</strong>, o <strong>burahin</strong> ang iyong impormasyon &mdash; o bawiin ang iyong pahintulot &mdash; anumang oras sa pamamagitan ng HRMPSB Secretariat / Data Protection Officer ng DOH&ndash;CHD CALABARZON. Itinatago lang namin ang iyong impormasyon hangga&rsquo;t kailangan sa recruitment, alinsunod sa R.A. 10173."
+msgstr "Puwede mong hilinging <strong>makita</strong>, <strong>itama</strong>, o <strong>burahin</strong> ang info mo &mdash; o bawiin ang pahintulot mo &mdash; anytime, sa pamamagitan ng HRMPSB Secretariat / Data Protection Officer ng DOH&ndash;CHD CALABARZON. Itinatago lang namin ang info mo habang kailangan pa sa recruitment, ayon sa R.A. 10173."
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "Showing 1 position"
-msgstr "Ipinapakita ang 1 posisyon"
+msgstr "1 position ang nakikita"
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "Showing {count} positions"
-msgstr "Ipinapakita ang {count} posisyon"
+msgstr "{count} positions ang nakikita"
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "No positions match “{query}”. Clear the search to see all openings."
-msgstr "Walang posisyong tugma sa “{query}”. I-clear ang hinahanap para makita ang lahat ng bakante."
+msgstr "Walang position na tugma sa “{query}”. I-clear ang search para makita lahat."
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "No positions match the selected filter."
-msgstr "Walang posisyong tugma sa napiling filter."
+msgstr "Walang position na tugma sa napili mong filter."
 
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "Application Submitted"
-msgstr "Naisumite na ang Aplikasyon"
+msgstr "Na-submit na ang Application"
 
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "Department of Health &mdash; Center for Health Development CALABARZON"
-msgstr "Kagawaran ng Kalusugan &mdash; Center for Health Development CALABARZON"
+msgstr "Department of Health &mdash; Center for Health Development CALABARZON"
 
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "Application Submission Receipt"
-msgstr "Resibo ng Pagsumite ng Aplikasyon"
+msgstr "Resibo ng Application"
 
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "Case No. %(case)s &middot; Submitted %(date)s"
-msgstr "Case No. %(case)s &middot; Naisumite noong %(date)s"
+msgstr "Case No. %(case)s &middot; Na-submit noong %(date)s"
 
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "Success"
-msgstr "Tagumpay"
+msgstr "Success"
 
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "Your Application Has Been Submitted"
-msgstr "Naisumite na ang Iyong Aplikasyon"
+msgstr "Na-submit na ang Application Mo"
 
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "Thank you for applying. Your application has been received by DOH&ndash;CHD CALABARZON."
-msgstr "Salamat sa pag-apply. Natanggap na ng DOH&ndash;CHD CALABARZON ang iyong aplikasyon."
+msgstr "Salamat sa pag-apply. Natanggap na ng DOH&ndash;CHD CALABARZON ang application mo."
 
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "Your Tracking Code"
-msgstr "Ang Iyong Tracking Code"
+msgstr "Ang Tracking Code Mo"
 
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "(keep private)"
-msgstr "(huwag ibahagi)"
+msgstr "(huwag ipakita sa iba)"
 
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "Use this code with your email to track your application online. Treat it like a password &mdash; don't share it."
-msgstr "Gamitin ang code na ito kasama ng iyong email para i-track ang iyong aplikasyon online. Ituring itong parang password &mdash; huwag itong ibahagi."
+msgstr "Gamitin ang code na ito kasama ng email mo para i-track ang application mo online. Parang password ito &mdash; huwag ibigay sa iba."
 
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "Copy Tracking Code"
-msgstr "Kopyahin ang Tracking Code"
+msgstr "I-copy ang Tracking Code"
 
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "Copied!"
-msgstr "Nakopya na!"
+msgstr "Na-copy na!"
 
 #: recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Case Reference"
@@ -513,19 +513,19 @@ msgstr "Case No. %(case)s"
 
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "Quote this case number if you call or email the office about your application."
-msgstr "Banggitin ang case number na ito kapag tumawag o nag-email ka sa opisina tungkol sa iyong aplikasyon."
+msgstr "Sabihin ang case number na ito kapag tumawag o nag-email ka sa office tungkol sa application mo."
 
 #: recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Position"
-msgstr "Posisyon"
+msgstr "Position"
 
 #: recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Type"
-msgstr "Uri"
+msgstr "Klase"
 
 #: recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_status_lookup.html recruitment/templates/recruitment/includes/applicant_journey.html
 msgid "Submitted"
-msgstr "Naisumite"
+msgstr "Na-submit"
 
 #: recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "%(date)s at %(time)s"
@@ -538,8 +538,8 @@ msgstr "Email"
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "%(counter)s file submitted"
 msgid_plural "%(counter)s files submitted"
-msgstr[0] "%(counter)s file ang naisumite"
-msgstr[1] "%(counter)s file ang naisumite"
+msgstr[0] "%(counter)s file ang na-submit"
+msgstr[1] "%(counter)s files ang na-submit"
 
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "What Happens Next"
@@ -547,27 +547,27 @@ msgstr "Ano ang Susunod"
 
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "Your application will be reviewed by our recruitment team."
-msgstr "Rerepasuhin ng aming recruitment team ang iyong aplikasyon."
+msgstr "Ire-review ng recruitment team namin ang application mo."
 
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "You may be contacted at your email or phone number for updates or additional requirements."
-msgstr "Maaari ka naming kontakin sa iyong email o numero ng telepono para sa mga update o karagdagang requirement."
+msgstr "Puwede ka naming i-contact sa email o phone number mo para sa updates o dagdag na requirements."
 
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "You can check your application status anytime using your Tracking Code."
-msgstr "Puwede mong alamin ang status ng iyong aplikasyon anumang oras gamit ang iyong Tracking Code."
+msgstr "Puwede mong i-check ang status ng application mo anytime gamit ang Tracking Code mo."
 
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "Save your Tracking Code and keep it private."
-msgstr "I-save ang iyong Tracking Code at huwag itong ibahagi."
+msgstr "I-save ang Tracking Code mo at huwag ibigay sa iba."
 
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "You will need it to check your application status online."
-msgstr "Kakailanganin mo ito para malaman ang status ng iyong aplikasyon online."
+msgstr "Kailangan mo ito para ma-check ang status ng application mo online."
 
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "A confirmation has also been sent to <strong>%(email)s</strong>."
-msgstr "Nagpadala rin kami ng kumpirmasyon sa <strong>%(email)s</strong>."
+msgstr "Nagpadala rin kami ng confirmation sa <strong>%(email)s</strong>."
 
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "Download Receipt (PDF)"
@@ -575,7 +575,7 @@ msgstr "I-download ang Resibo (PDF)"
 
 #: recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Track My Application"
-msgstr "I-track ang Aking Aplikasyon"
+msgstr "I-track ang Application Ko"
 
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "Print Receipt"
@@ -583,19 +583,19 @@ msgstr "I-print ang Resibo"
 
 #: recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_status_lookup.html recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Back to Job Openings"
-msgstr "Bumalik sa mga Bakanteng Trabaho"
+msgstr "Bumalik sa Job Openings"
 
 #: recruitment/templates/recruitment/applicant_resubmission.html recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Resubmit documents"
-msgstr "Ipadala ulit ang mga dokumento"
+msgstr "I-resubmit ang documents"
 
 #: recruitment/templates/recruitment/applicant_resubmission.html
 msgid "Application"
-msgstr "Aplikasyon"
+msgstr "Application"
 
 #: recruitment/templates/recruitment/applicant_resubmission.html
 msgid "Resubmit your documents"
-msgstr "Ipadala ulit ang iyong mga dokumento"
+msgstr "I-resubmit ang documents mo"
 
 #: recruitment/templates/recruitment/applicant_resubmission.html
 msgid "Case Reference: <strong>Case No. %(case)s</strong>"
@@ -603,21 +603,21 @@ msgstr "Case Reference: <strong>Case No. %(case)s</strong>"
 
 #: recruitment/templates/recruitment/applicant_resubmission.html recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Please resubmit on or before <strong>%(date)s</strong>."
-msgstr "Pakipadala ulit bago o sa <strong>%(date)s</strong>."
+msgstr "Paki-resubmit hanggang <strong>%(date)s</strong>."
 
 #: recruitment/templates/recruitment/applicant_resubmission.html
 msgid "<strong>%(counter)s document</strong> needs to be corrected. Verify your email to see the details and re-upload."
 msgid_plural "<strong>%(counter)s documents</strong> need to be corrected. Verify your email to see the details and re-upload."
-msgstr[0] "<strong>%(counter)s dokumento</strong> ang kailangang itama. I-verify ang iyong email para makita ang detalye at makapag-upload ulit."
-msgstr[1] "<strong>%(counter)s dokumento</strong> ang kailangang itama. I-verify ang iyong email para makita ang detalye at makapag-upload ulit."
+msgstr[0] "<strong>%(counter)s document</strong> ang kailangang ayusin. I-verify ang email mo para makita ang details at makapag-upload ulit."
+msgstr[1] "<strong>%(counter)s documents</strong> ang kailangang ayusin. I-verify ang email mo para makita ang details at makapag-upload ulit."
 
 #: recruitment/templates/recruitment/applicant_resubmission.html
 msgid "Step 1 — Verify your email"
-msgstr "Hakbang 1 — I-verify ang iyong email"
+msgstr "Step 1 — I-verify ang email mo"
 
 #: recruitment/templates/recruitment/applicant_resubmission.html
 msgid "We will send a %(minutes)s-minute verification code to <strong>%(email)s</strong>."
-msgstr "Magpapadala kami ng verification code na gumagana nang %(minutes)s minuto sa <strong>%(email)s</strong>."
+msgstr "Magpapadala kami ng verification code (valid nang %(minutes)s minuto) sa <strong>%(email)s</strong>."
 
 #: recruitment/templates/recruitment/applicant_resubmission.html
 msgid "Send verification code"
@@ -629,27 +629,27 @@ msgstr "I-verify ang code"
 
 #: recruitment/templates/recruitment/applicant_resubmission.html
 msgid "Resend code"
-msgstr "Ipadala ulit ang code"
+msgstr "I-resend ang code"
 
 #: recruitment/templates/recruitment/applicant_resubmission.html
 msgid "Step 2 — Re-upload the requested documents"
-msgstr "Hakbang 2 — I-upload ulit ang mga hinihinging dokumento"
+msgstr "Step 2 — I-upload ulit ang hinihinging documents"
 
 #: recruitment/templates/recruitment/applicant_resubmission.html
 msgid "Only the documents the recruitment team flagged are shown below. Your already-accepted documents do not need to be uploaded again."
-msgstr "Ang mga dokumentong minarkahan lang ng recruitment team ang nasa ibaba. Hindi na kailangang i-upload ulit ang mga dokumentong tinanggap na."
+msgstr "Ang documents lang na ibinalik ng recruitment team ang nasa baba. Hindi na kailangang i-upload ulit ang documents na tanggap na."
 
 #: recruitment/templates/recruitment/applicant_resubmission.html
 msgid "Why it was returned:"
-msgstr "Bakit ito ibinalik:"
+msgstr "Bakit ibinalik:"
 
 #: recruitment/templates/recruitment/applicant_resubmission.html
 msgid "The recruitment team asked for a clearer copy of this document."
-msgstr "Humingi ang recruitment team ng mas malinaw na kopya ng dokumentong ito."
+msgstr "Humingi ang recruitment team ng mas malinaw na kopya ng document na ito."
 
 #: recruitment/templates/recruitment/applicant_resubmission.html
 msgid "Cancel"
-msgstr "Kanselahin"
+msgstr "Cancel"
 
 #: recruitment/templates/recruitment/applicant_start.html
 msgid "Apply — %(title)s"
@@ -661,19 +661,19 @@ msgstr "Mag-apply para sa %(title)s"
 
 #: recruitment/templates/recruitment/applicant_start.html
 msgid "First, tell us who you are. We&rsquo;ll email you a 6-digit code to confirm your address, then you can add your documents. <strong>Your progress is saved</strong> &mdash; you can stop and finish later using the link in that email."
-msgstr "Una, sabihin mo sa amin kung sino ka. Mag-e-email kami ng 6-digit na code para makumpirma ang iyong address, saka mo maidadagdag ang iyong mga dokumento. <strong>Naka-save ang iyong progreso</strong> &mdash; puwede kang huminto at tapusin ito mamaya gamit ang link sa email na iyon."
+msgstr "Una, sabihin mo kung sino ka. Mag-e-email kami ng 6-digit code para ma-confirm ang email mo, tapos puwede mo nang i-upload ang documents mo. <strong>Naka-save ang progress mo</strong> &mdash; puwede kang tumigil at ituloy mamaya gamit ang link sa email na iyon."
 
 #: recruitment/templates/recruitment/applicant_start.html
 msgid "Please fix the highlighted fields below."
-msgstr "Pakiayos ang mga naka-highlight na field sa ibaba."
+msgstr "Pakiayos ang mga naka-highlight sa baba."
 
 #: recruitment/templates/recruitment/applicant_start.html recruitment/templates/recruitment/includes/applicant_journey.html
 msgid "Your details"
-msgstr "Ang iyong impormasyon"
+msgstr "Ang details mo"
 
 #: recruitment/templates/recruitment/applicant_start.html
 msgid "We&rsquo;ll send your code here. Use an email you can open now."
-msgstr "Dito namin ipapadala ang iyong code. Gumamit ng email na mabubuksan mo ngayon."
+msgstr "Dito namin ipapadala ang code mo. Gumamit ng email na mabubuksan mo ngayon."
 
 #: recruitment/templates/recruitment/applicant_start.html
 msgid "e.g. 0917 123 4567"
@@ -681,7 +681,7 @@ msgstr "hal. 0917 123 4567"
 
 #: recruitment/templates/recruitment/applicant_start.html
 msgid "Your information is used only for this recruitment and is protected under the Data Privacy Act of 2012 (R.A. 10173)."
-msgstr "Gagamitin lang ang iyong impormasyon para sa recruitment na ito at protektado ito sa ilalim ng Data Privacy Act of 2012 (R.A. 10173)."
+msgstr "Gagamitin lang ang info mo para sa recruitment na ito at protektado ito ng Data Privacy Act of 2012 (R.A. 10173)."
 
 #: recruitment/templates/recruitment/applicant_start.html
 msgid "Read the privacy notice"
@@ -693,31 +693,31 @@ msgstr "Bumalik"
 
 #: recruitment/templates/recruitment/applicant_start.html
 msgid "Sending your code…"
-msgstr "Ipinapadala ang iyong code…"
+msgstr "Pinapadala ang code mo…"
 
 #: recruitment/templates/recruitment/applicant_start.html
 msgid "Send my verification code"
-msgstr "Ipadala ang aking verification code"
+msgstr "Ipadala ang verification code ko"
 
 #: recruitment/templates/recruitment/applicant_start.html
 msgid "Documents you&rsquo;ll need"
-msgstr "Mga dokumentong kakailanganin mo"
+msgstr "Mga documents na kailangan mo"
 
 #: recruitment/templates/recruitment/applicant_start.html
 msgid "Print this list"
-msgstr "I-print ang listahang ito"
+msgstr "I-print ang listahan"
 
 #: recruitment/templates/recruitment/applicant_start.html
 msgid "PDF, JPG or PNG. A clear phone photo is fine, and a document with several pages can be added page by page &mdash; we combine them for you."
-msgstr "PDF, JPG o PNG. Puwede ang malinaw na litrato mula sa phone, at puwedeng idagdag nang isa-isa ang mga pahina ng dokumentong maraming pahina &mdash; kami na ang magsasama-sama sa mga ito."
+msgstr "PDF, JPG o PNG. Puwede ang malinaw na picture galing sa phone. Kung maraming pages ang document, puwede mo itong i-upload page by page &mdash; kami na ang magsasama-sama."
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Track Your Application"
-msgstr "I-track ang Iyong Aplikasyon"
+msgstr "I-track ang Application Mo"
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Enter the private Tracking Code you received when you submitted your application, along with the email address you used."
-msgstr "Ilagay ang pribadong Tracking Code na natanggap mo nang isumite mo ang iyong aplikasyon, kasama ang email address na ginamit mo."
+msgstr "Ilagay ang Tracking Code na natanggap mo noong nag-submit ka, at ang email na ginamit mo."
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html recruitment/forms.py
 msgid "Tracking Code"
@@ -725,7 +725,7 @@ msgstr "Tracking Code"
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Your Tracking Code looks like <strong>TRK-7KQ4-M9X2</strong>. It was shown on your submission receipt and emailed to you — keep it private."
-msgstr "Ganito ang hitsura ng Tracking Code: <strong>TRK-7KQ4-M9X2</strong>. Ipinakita ito sa iyong resibo at in-email sa iyo — huwag itong ibahagi."
+msgstr "Ganito ang itsura ng Tracking Code: <strong>TRK-7KQ4-M9X2</strong>. Nakalagay ito sa resibo mo at in-email din sa iyo — huwag ibigay sa iba."
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Email Address"
@@ -733,21 +733,21 @@ msgstr "Email Address"
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Use the same email address you submitted with your application."
-msgstr "Gamitin ang parehong email address na ginamit mo sa iyong aplikasyon."
+msgstr "Gamitin ang parehong email na ginamit mo sa application."
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Check Status"
-msgstr "Alamin ang Status"
+msgstr "I-check ang Status"
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Check Your Email"
-msgstr "Tingnan ang Iyong Email"
+msgstr "I-check ang Email Mo"
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "We sent a verification code to <strong>%(email)s</strong>. Enter it below to view your application status. The code is valid for %(minutes)s minute."
 msgid_plural "We sent a verification code to <strong>%(email)s</strong>. Enter it below to view your application status. The code is valid for %(minutes)s minutes."
-msgstr[0] "Nagpadala kami ng verification code sa <strong>%(email)s</strong>. Ilagay ito sa ibaba para makita ang status ng iyong aplikasyon. Gumagana ang code nang %(minutes)s minuto."
-msgstr[1] "Nagpadala kami ng verification code sa <strong>%(email)s</strong>. Ilagay ito sa ibaba para makita ang status ng iyong aplikasyon. Gumagana ang code nang %(minutes)s minuto."
+msgstr[0] "Nagpadala kami ng verification code sa <strong>%(email)s</strong>. Ilagay ito sa baba para makita ang status ng application mo. Valid ang code nang %(minutes)s minuto."
+msgstr[1] "Nagpadala kami ng verification code sa <strong>%(email)s</strong>. Ilagay ito sa baba para makita ang status ng application mo. Valid ang code nang %(minutes)s minuto."
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html recruitment/forms.py
 msgid "Verification Code"
@@ -755,19 +755,19 @@ msgstr "Verification Code"
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "6-digit code from the email we just sent."
-msgstr "6-digit na code mula sa email na kapapadala lang namin."
+msgstr "6-digit code galing sa email na kakapadala lang namin."
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "View My Status"
-msgstr "Tingnan ang Aking Status"
+msgstr "Tingnan ang Status Ko"
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Didn't get it? Resend the code"
-msgstr "Hindi natanggap? Ipadala ulit ang code"
+msgstr "Hindi natanggap? I-resend ang code"
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Application progress"
-msgstr "Progreso ng aplikasyon"
+msgstr "Progress ng application"
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "done"
@@ -775,11 +775,11 @@ msgstr "tapos na"
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "in progress"
-msgstr "kasalukuyang ginagawa"
+msgstr "ongoing"
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "ended"
-msgstr "natapos"
+msgstr "natapos na"
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "not yet"
@@ -787,19 +787,19 @@ msgstr "hindi pa"
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "We will email you at <strong>%(email)s</strong> when there is news."
-msgstr "I-e-email ka namin sa <strong>%(email)s</strong> kapag may balita."
+msgstr "I-e-email ka namin sa <strong>%(email)s</strong> kapag may update."
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Your upcoming schedule"
-msgstr "Ang iyong susunod na iskedyul"
+msgstr "Ang susunod mong schedule"
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Location / medium:"
-msgstr "Lugar / paraan:"
+msgstr "Lugar / paano:"
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Please also check your email at <strong>%(email)s</strong> for the full details."
-msgstr "Tingnan din ang iyong email sa <strong>%(email)s</strong> para sa buong detalye."
+msgstr "I-check din ang email mo sa <strong>%(email)s</strong> para sa buong details."
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "What you need to do"
@@ -807,19 +807,19 @@ msgstr "Ang kailangan mong gawin"
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Some of your documents need to be corrected and re-uploaded. Tap Resubmit documents to see which ones and why."
-msgstr "May ilang dokumento mong kailangang itama at i-upload ulit. I-tap ang Ipadala ulit ang mga dokumento para makita kung alin at bakit."
+msgstr "May ilang documents mo na kailangang ayusin at i-upload ulit. I-tap ang I-resubmit ang documents para makita kung alin at bakit."
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Your application was returned. Please check your email at <strong>%(email)s</strong> for our message about what needs to be fixed or resubmitted."
-msgstr "Ibinalik ang iyong aplikasyon. Pakitingnan ang iyong email sa <strong>%(email)s</strong> para sa aming mensahe tungkol sa kailangang ayusin o ipadala ulit."
+msgstr "Ibinalik ang application mo. Paki-check ang email mo sa <strong>%(email)s</strong> para sa message namin kung ano ang aayusin o ire-resubmit."
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Congratulations. To complete your %(what)s, bring or send these to the office on or before <strong>%(date)s</strong>:"
-msgstr "Binabati ka namin. Para makumpleto ang iyong %(what)s, dalhin o ipadala ang mga ito sa opisina bago o sa <strong>%(date)s</strong>:"
+msgstr "Congratulations! Para makumpleto ang %(what)s mo, dalhin o ipadala ang mga ito sa office hanggang <strong>%(date)s</strong>:"
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Congratulations. To complete your %(what)s, bring or send these to the office:"
-msgstr "Binabati ka namin. Para makumpleto ang iyong %(what)s, dalhin o ipadala ang mga ito sa opisina:"
+msgstr "Congratulations! Para makumpleto ang %(what)s mo, dalhin o ipadala ang mga ito sa office:"
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html recruitment/applicant_labels.py recruitment/portal_views.py
 msgid "Received"
@@ -827,39 +827,39 @@ msgstr "Natanggap na"
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Items marked <em>Received</em> are already with us. The email we sent to <strong>%(email)s</strong> has the full instructions."
-msgstr "Nasa amin na ang mga item na may markang <em>Natanggap na</em>. Nasa email na ipinadala namin sa <strong>%(email)s</strong> ang buong instruksyon."
+msgstr "Nasa amin na ang mga item na may <em>Natanggap na</em>. Nasa email na pinadala namin sa <strong>%(email)s</strong> ang buong instructions."
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "We have received everything on this list. We will email you about the next step."
-msgstr "Natanggap na namin ang lahat ng nasa listahang ito. I-e-email ka namin tungkol sa susunod na hakbang."
+msgstr "Natanggap na namin lahat ng nasa listahan. I-e-email ka namin para sa susunod na step."
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Congratulations. Watch your email at <strong>%(email)s</strong> for instructions on the next steps and any documents we need from you."
-msgstr "Binabati ka namin. Abangan ang email sa <strong>%(email)s</strong> para sa mga susunod na hakbang at sa mga dokumentong kailangan namin mula sa iyo."
+msgstr "Congratulations! Abangan ang email sa <strong>%(email)s</strong> para sa susunod na steps at sa documents na kailangan namin."
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Thank you for applying. You are welcome to apply for other open positions from our <a href=\"%(url)s\">Job Openings</a> page."
-msgstr "Salamat sa pag-apply. Malugod kang inaanyayahang mag-apply sa iba pang bakanteng posisyon sa aming page ng <a href=\"%(url)s\">Mga Bakanteng Trabaho</a>."
+msgstr "Salamat sa pag-apply. Puwede ka ring mag-apply sa ibang bakanteng position sa <a href=\"%(url)s\">Job Openings</a> page namin."
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Nothing right now &mdash; just wait for our message."
-msgstr "Wala pa sa ngayon &mdash; hintayin lang ang aming mensahe."
+msgstr "Wala pa sa ngayon &mdash; hintayin lang ang message namin."
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Withdrawal requested"
-msgstr "Humiling ng pag-withdraw"
+msgstr "Nag-request ng withdrawal"
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "You asked to withdraw on %(date)s. The recruitment office will record it and email you at <strong>%(email)s</strong>."
-msgstr "Humiling kang mag-withdraw noong %(date)s. Itatala ito ng recruitment office at i-e-email ka sa <strong>%(email)s</strong>."
+msgstr "Nag-request kang mag-withdraw noong %(date)s. Ire-record ito ng recruitment office at i-e-email ka sa <strong>%(email)s</strong>."
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Withdraw my application"
-msgstr "I-withdraw ang aking aplikasyon"
+msgstr "I-withdraw ang application ko"
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "If you no longer want to be considered for <strong>%(title)s</strong>, you can ask to withdraw here. The office will record it and email you. Withdrawing is not a rejection, and you may apply again to other positions."
-msgstr "Kung ayaw mo nang maisaalang-alang para sa <strong>%(title)s</strong>, puwede kang humiling na mag-withdraw dito. Itatala ito ng opisina at i-e-email ka. Ang pag-withdraw ay hindi pagtanggi sa iyo, at puwede ka pa ring mag-apply sa ibang posisyon."
+msgstr "Kung ayaw mo nang ituloy ang application mo para sa <strong>%(title)s</strong>, puwede kang mag-request na mag-withdraw dito. Ire-record ito ng office at i-e-email ka. Hindi ito rejection, at puwede ka pa ring mag-apply sa ibang position."
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Reason"
@@ -867,19 +867,19 @@ msgstr "Dahilan"
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "I want to withdraw my application. I understand this can't be undone online."
-msgstr "Gusto kong i-withdraw ang aking aplikasyon. Naiintindihan kong hindi na ito maibabalik online."
+msgstr "Gusto kong i-withdraw ang application ko. Alam kong hindi na ito mababawi online."
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Send my withdrawal request"
-msgstr "Ipadala ang aking kahilingang mag-withdraw"
+msgstr "Ipadala ang withdrawal request ko"
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Application details"
-msgstr "Detalye ng aplikasyon"
+msgstr "Details ng application"
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Need help with your application?"
-msgstr "Kailangan ng tulong sa iyong aplikasyon?"
+msgstr "Kailangan ng tulong sa application mo?"
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Call the Human Resource Management Unit (HRMU)"
@@ -891,11 +891,11 @@ msgstr "Mag-email sa HRMU"
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Have your case number ready. Never share your Tracking Code; staff will never ask for it."
-msgstr "Ihanda ang iyong case number. Huwag kailanman ibahagi ang iyong Tracking Code; hindi ito kailanman hihingin ng staff."
+msgstr "Ihanda ang case number mo. Huwag ibigay ang Tracking Code mo; hindi ito hihingin ng staff."
 
 #: recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Look up a different application"
-msgstr "Maghanap ng ibang aplikasyon"
+msgstr "Mag-check ng ibang application"
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Breadcrumb"
@@ -919,11 +919,11 @@ msgstr "Item No.:"
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html recruitment/templates/recruitment/includes/job_card.html
 msgid "Posted %(date)s"
-msgstr "Nai-post noong %(date)s"
+msgstr "Na-post noong %(date)s"
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Applications for this position are closed."
-msgstr "Sarado na ang aplikasyon para sa posisyong ito."
+msgstr "Sarado na ang applications para sa position na ito."
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "The deadline was %(date)s."
@@ -931,7 +931,7 @@ msgstr "Ang deadline ay noong %(date)s."
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "See the positions that are open now"
-msgstr "Tingnan ang mga posisyong bukas ngayon"
+msgstr "Tingnan ang mga position na bukas ngayon"
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Closing Soon"
@@ -939,11 +939,11 @@ msgstr "Malapit nang Magsara"
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Application Deadline: <strong>%(date)s, 11:59 PM</strong> (Philippine time)"
-msgstr "Deadline ng Aplikasyon: <strong>%(date)s, 11:59 PM</strong> (oras sa Pilipinas)"
+msgstr "Deadline: <strong>%(date)s, 11:59 PM</strong> (oras sa Pilipinas)"
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Application Deadline: <strong>%(date)s</strong>"
-msgstr "Deadline ng Aplikasyon: <strong>%(date)s</strong>"
+msgstr "Deadline: <strong>%(date)s</strong>"
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Closes today"
@@ -951,19 +951,19 @@ msgstr "Magsasara ngayong araw"
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Deadline extended &mdash; applications reopened until the new date."
-msgstr "Pinalawig ang deadline &mdash; muling binuksan ang aplikasyon hanggang sa bagong petsa."
+msgstr "Na-extend ang deadline &mdash; bukas ulit ang applications hanggang sa bagong petsa."
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Applications are accepted while this position is active."
-msgstr "Tumatanggap ng aplikasyon habang aktibo ang posisyong ito."
+msgstr "Tumatanggap ng applicants habang active ang position na ito."
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "About This Position"
-msgstr "Tungkol sa Posisyong Ito"
+msgstr "Tungkol sa Position"
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Official Position Reference"
-msgstr "Opisyal na Reference ng Posisyon"
+msgstr "Official Position Reference"
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Salary Grade"
@@ -971,15 +971,15 @@ msgstr "Salary Grade"
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Not recorded"
-msgstr "Hindi nakatala"
+msgstr "Wala pang record"
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "The government pay level for this job. A higher number means a higher salary."
-msgstr "Ang antas ng sahod sa gobyerno para sa trabahong ito. Mas mataas ang numero, mas mataas ang sahod."
+msgstr "Ito ang sahod level ng trabaho sa gobyerno. Mas mataas ang number, mas mataas ang sahod."
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Official reference details"
-msgstr "Mga detalye ng opisyal na reference"
+msgstr "Official reference details"
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Level Classification"
@@ -991,27 +991,27 @@ msgstr "Class ID"
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Qualifications"
-msgstr "Mga Kwalipikasyon"
+msgstr "Qualifications"
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Do you meet these? Tick each one that applies to you."
-msgstr "Pasok ka ba sa mga ito? I-tick ang bawat isang naaangkop sa iyo."
+msgstr "Pasok ka ba dito? I-check ang bawat isa na meron ka."
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "This is only for you; nothing here is sent. The recruitment team checks every application against these standards."
-msgstr "Para sa iyo lang ito; walang ipinapadala mula rito. Sinusuri ng recruitment team ang bawat aplikasyon batay sa mga pamantayang ito."
+msgstr "Para sa iyo lang ito; walang ipapadala. Chine-check ng recruitment team ang bawat application base sa qualifications na ito."
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "<strong>Eligibility</strong> means a Civil Service eligibility (for example, passing the Career Service exam) or a professional license from a board exam (for example, RA 1080 for nurses, CPAs and other professionals)."
-msgstr "Ang <strong>Eligibility</strong> ay Civil Service eligibility (halimbawa, pagpasa sa Career Service exam) o lisensyang propesyonal mula sa board exam (halimbawa, RA 1080 para sa mga nurse, CPA at iba pang propesyonal)."
+msgstr "Ang <strong>Eligibility</strong> ay Civil Service eligibility (halimbawa, pumasa sa Career Service exam) o professional license galing sa board exam (halimbawa, RA 1080 para sa nurses, CPAs at iba pang professionals)."
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Documents Needed"
-msgstr "Mga Kailangang Dokumento"
+msgstr "Mga Kailangang Documents"
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Please prepare the following documents as files (PDF, JPG, or PNG) before you start your application."
-msgstr "Pakihanda ang mga sumusunod na dokumento bilang file (PDF, JPG, o PNG) bago mo simulan ang iyong aplikasyon."
+msgstr "Ihanda ang mga documents na ito bilang file (PDF, JPG, o PNG) bago ka magsimula mag-apply."
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "How to Apply"
@@ -1019,59 +1019,59 @@ msgstr "Paano Mag-apply"
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Click <strong>&ldquo;Apply for This Position&rdquo;</strong> below and enter your name, email and mobile number."
-msgstr "I-click ang <strong>&ldquo;Mag-apply sa Posisyong Ito&rdquo;</strong> sa ibaba at ilagay ang iyong pangalan, email at mobile number."
+msgstr "I-click ang <strong>&ldquo;Mag-apply sa Position na Ito&rdquo;</strong> sa baba at ilagay ang pangalan, email at mobile number mo."
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Enter the 6-digit code we email you."
-msgstr "Ilagay ang 6-digit na code na i-e-email namin sa iyo."
+msgstr "Ilagay ang 6-digit code na i-e-email namin sa iyo."
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Add your documents &mdash; a phone photo is fine, and a document with several pages can be added page by page."
-msgstr "Idagdag ang iyong mga dokumento &mdash; puwede ang litrato mula sa phone, at puwedeng idagdag nang isa-isa ang mga pahina ng dokumentong maraming pahina."
+msgstr "I-upload ang documents mo &mdash; puwede ang picture galing sa phone, at puwedeng i-upload page by page ang document na maraming pages."
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Submit. You&rsquo;ll get a receipt and a tracking code right away."
-msgstr "Isumite. Makakatanggap ka agad ng resibo at tracking code."
+msgstr "I-submit. Makakatanggap ka agad ng resibo at tracking code."
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "<strong>You don&rsquo;t have to finish in one go.</strong> Everything is saved as you add it; the link in your verification email brings you back."
-msgstr "<strong>Hindi mo kailangang tapusin nang isang upuan.</strong> Nase-save ang lahat habang nagdadagdag ka; ibabalik ka ng link sa iyong verification email."
+msgstr "<strong>Hindi kailangang tapusin agad.</strong> Nase-save lahat habang naglalagay ka; babalikan mo lang gamit ang link sa verification email mo."
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "This vacancy is no longer accepting applications."
-msgstr "Hindi na tumatanggap ng aplikasyon ang bakanteng ito."
+msgstr "Hindi na tumatanggap ng applicants ang vacancy na ito."
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "<strong>Data Privacy Notice:</strong> Your personal data will be used solely for recruitment purposes in accordance with the Data Privacy Act of 2012 (Republic Act No. 10173)."
-msgstr "<strong>Paalala sa Data Privacy:</strong> Gagamitin lamang ang iyong personal na datos para sa recruitment, alinsunod sa Data Privacy Act of 2012 (Republic Act No. 10173)."
+msgstr "<strong>Data Privacy Notice:</strong> Gagamitin lang ang personal data mo para sa recruitment, ayon sa Data Privacy Act of 2012 (Republic Act No. 10173)."
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Apply for This Position"
-msgstr "Mag-apply sa Posisyong Ito"
+msgstr "Mag-apply sa Position na Ito"
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "No account needed &mdash; we just email you a code to confirm your address."
-msgstr "Hindi kailangan ng account &mdash; mag-e-email lang kami ng code para makumpirma ang iyong address."
+msgstr "Hindi kailangan ng account &mdash; mag-e-email lang kami ng code para ma-confirm ang email mo."
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Applications are not currently open for this position"
-msgstr "Hindi pa bukas ang aplikasyon para sa posisyong ito"
+msgstr "Hindi pa bukas ang applications para sa position na ito"
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "You meet the listed standards. You can apply."
-msgstr "Pasok ka sa mga nakalistang pamantayan. Puwede kang mag-apply."
+msgstr "Pasok ka sa qualifications. Puwede kang mag-apply."
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "{ticked} of {total} ticked. Applicants who don't meet every standard are not shortlisted."
-msgstr "{ticked} sa {total} ang naka-tick. Hindi isinasama sa shortlist ang mga aplikanteng hindi pasok sa lahat ng pamantayan."
+msgstr "{ticked} sa {total} ang naka-check. Hindi isinasama sa shortlist ang applicants na hindi pasok sa lahat ng qualifications."
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "You haven't ticked every qualification standard. Applicants who don't meet all of them are not shortlisted. Apply anyway?"
-msgstr "Hindi mo na-tick ang lahat ng qualification standard. Hindi isinasama sa shortlist ang mga aplikanteng hindi pasok sa lahat ng ito. Mag-apply pa rin?"
+msgstr "Hindi mo na-check lahat ng qualifications. Hindi isinasama sa shortlist ang applicants na hindi pasok sa lahat. Mag-apply pa rin?"
 
 #: recruitment/templates/recruitment/includes/applicant_document_part.html
 msgid "Remove %(name)s"
-msgstr "Alisin ang %(name)s"
+msgstr "Tanggalin ang %(name)s"
 
 #: recruitment/templates/recruitment/includes/applicant_flow_header.html
 msgid "Applying for"
@@ -1079,7 +1079,7 @@ msgstr "Nag-a-apply para sa"
 
 #: recruitment/templates/recruitment/includes/applicant_journey.html
 msgid "Application steps"
-msgstr "Mga hakbang sa pag-apply"
+msgstr "Steps sa pag-apply"
 
 #: recruitment/templates/recruitment/includes/applicant_journey.html
 msgid "Verify email"
@@ -1087,7 +1087,7 @@ msgstr "I-verify ang email"
 
 #: recruitment/templates/recruitment/includes/branch_explainer.html
 msgid "What does &ldquo;Permanent (Plantilla)&rdquo; mean?"
-msgstr "Ano ang ibig sabihin ng &ldquo;Permanente (Plantilla)&rdquo;?"
+msgstr "Ano ang ibig sabihin ng &ldquo;Permanent (Plantilla)&rdquo;?"
 
 #: recruitment/templates/recruitment/includes/branch_explainer.html
 msgid "What does &ldquo;Contract of Service&rdquo; mean?"
@@ -1095,43 +1095,43 @@ msgstr "Ano ang ibig sabihin ng &ldquo;Contract of Service&rdquo;?"
 
 #: recruitment/templates/recruitment/includes/branch_explainer.html
 msgid "This is a <strong>regular government post</strong> with full Civil Service tenure and full government benefits. It follows the standard Civil Service Commission appointment process and is funded by a regular plantilla item."
-msgstr "Ito ay <strong>regular na posisyon sa gobyerno</strong> na may buong Civil Service tenure at buong benepisyo ng gobyerno. Sumusunod ito sa karaniwang proseso ng appointment ng Civil Service Commission at pinopondohan ng regular na plantilla item."
+msgstr "Ito ay <strong>regular na trabaho sa gobyerno</strong> na may Civil Service tenure at kumpletong government benefits. Dumadaan ito sa normal na appointment process ng Civil Service Commission at may regular na plantilla item."
 
 #: recruitment/templates/recruitment/includes/branch_explainer.html
 msgid "Not looking for a permanent post? <strong>Contract of Service</strong> openings are time-bound engagements for specific work or projects."
-msgstr "Hindi naghahanap ng permanenteng posisyon? Ang mga bakanteng <strong>Contract of Service</strong> ay may takdang panahon at para sa partikular na trabaho o proyekto."
+msgstr "Hindi naghahanap ng permanent? Ang <strong>Contract of Service</strong> openings ay may takdang panahon at para sa specific na trabaho o project."
 
 #: recruitment/templates/recruitment/includes/branch_explainer.html
 msgid "This is a <strong>time-bound engagement</strong> for specific work or projects. It does not carry tenure or Civil Service eligibility, and the benefits package differs from a permanent appointment."
-msgstr "Ito ay <strong>trabahong may takdang panahon</strong> para sa partikular na gawain o proyekto. Wala itong tenure o Civil Service eligibility, at iba ang benepisyo kumpara sa permanenteng appointment."
+msgstr "Ito ay <strong>trabahong may takdang panahon</strong> para sa specific na trabaho o project. Wala itong tenure o Civil Service eligibility, at iba ang benefits kumpara sa permanent na appointment."
 
 #: recruitment/templates/recruitment/includes/branch_explainer.html
 msgid "Looking for a permanent post? <strong>Plantilla</strong> openings are regular government posts with Civil Service tenure and full government benefits."
-msgstr "Naghahanap ng permanenteng posisyon? Ang mga bakanteng <strong>Plantilla</strong> ay regular na posisyon sa gobyerno na may Civil Service tenure at buong benepisyo ng gobyerno."
+msgstr "Naghahanap ng permanent? Ang <strong>Plantilla</strong> openings ay regular na trabaho sa gobyerno na may Civil Service tenure at kumpletong government benefits."
 
 #: recruitment/templates/recruitment/includes/branch_explainer.html
 msgid "You are applying for a <strong>Permanent (Plantilla)</strong> position &mdash; a regular government post with Civil Service tenure and full government benefits."
-msgstr "Nag-a-apply ka para sa posisyong <strong>Permanente (Plantilla)</strong> &mdash; regular na posisyon sa gobyerno na may Civil Service tenure at buong benepisyo ng gobyerno."
+msgstr "Nag-a-apply ka para sa <strong>Permanent (Plantilla)</strong> na position &mdash; regular na trabaho sa gobyerno na may Civil Service tenure at kumpletong government benefits."
 
 #: recruitment/templates/recruitment/includes/branch_explainer.html
 msgid "You are applying for a <strong>Contract of Service</strong> position &mdash; a time-bound engagement for specific work or projects, without Civil Service tenure."
-msgstr "Nag-a-apply ka para sa posisyong <strong>Contract of Service</strong> &mdash; trabahong may takdang panahon para sa partikular na gawain o proyekto, walang Civil Service tenure."
+msgstr "Nag-a-apply ka para sa <strong>Contract of Service</strong> na position &mdash; trabahong may takdang panahon para sa specific na trabaho o project, walang Civil Service tenure."
 
 #: recruitment/templates/recruitment/includes/branch_explainer.html recruitment/templates/recruitment/includes/job_card.html
 msgid "Permanent"
-msgstr "Permanente"
+msgstr "Permanent"
 
 #: recruitment/templates/recruitment/includes/branch_explainer.html
 msgid "Regular government post (plantilla) with Civil Service tenure and full government benefits."
-msgstr "Regular na posisyon sa gobyerno (plantilla) na may Civil Service tenure at buong benepisyo ng gobyerno."
+msgstr "Regular na trabaho sa gobyerno (plantilla) na may Civil Service tenure at kumpletong government benefits."
 
 #: recruitment/templates/recruitment/includes/branch_explainer.html
 msgid "Time-bound engagement for specific work or projects, without Civil Service tenure."
-msgstr "Trabahong may takdang panahon para sa partikular na gawain o proyekto, walang Civil Service tenure."
+msgstr "Trabahong may takdang panahon para sa specific na trabaho o project, walang Civil Service tenure."
 
 #: recruitment/templates/recruitment/includes/deadline_countdown.html
 msgid "Applications are now closed."
-msgstr "Sarado na ang aplikasyon."
+msgstr "Sarado na ang applications."
 
 #: recruitment/templates/recruitment/includes/deadline_countdown.html
 msgid "{hours} hr {minutes} min left"
@@ -1143,7 +1143,7 @@ msgstr "{minutes} minuto pa"
 
 #: recruitment/templates/recruitment/includes/english_only_notice.html
 msgid "This page is available in English only for now. Your application pages are in Filipino."
-msgstr "English pa lang ang page na ito sa ngayon. Nasa Filipino ang mga page ng iyong aplikasyon."
+msgstr "English pa lang ang page na ito sa ngayon. Nasa Filipino ang mga page ng application mo."
 
 #: recruitment/templates/recruitment/includes/in_app_browser_notice.html
 msgid "You opened this page inside Facebook."
@@ -1155,11 +1155,11 @@ msgstr "Binuksan mo ang page na ito sa loob ng isang app."
 
 #: recruitment/templates/recruitment/includes/in_app_browser_notice.html
 msgid "If adding files or taking a photo doesn&rsquo;t work, open this page in Chrome or Safari: tap <strong>&middot;&middot;&middot;</strong> or <strong>&#8942;</strong> (top right) and choose <strong>Open in browser</strong>. Anything you already saved stays saved."
-msgstr "Kung hindi gumagana ang pagdagdag ng file o pagkuha ng litrato, buksan ang page na ito sa Chrome o Safari: i-tap ang <strong>&middot;&middot;&middot;</strong> o <strong>&#8942;</strong> (sa kanang itaas) at piliin ang <strong>Open in browser</strong>. Mananatiling naka-save ang anumang na-save mo na."
+msgstr "Kung ayaw gumana ng pag-upload o pag-picture, buksan ang page na ito sa Chrome o Safari: i-tap ang <strong>&middot;&middot;&middot;</strong> o <strong>&#8942;</strong> (sa kanang taas) at piliin ang <strong>Open in browser</strong>. Naka-save pa rin ang lahat ng na-save mo na."
 
 #: recruitment/templates/recruitment/includes/job_card.html
 msgid "View details for %(title)s"
-msgstr "Tingnan ang detalye ng %(title)s"
+msgstr "Tingnan ang details ng %(title)s"
 
 #: recruitment/templates/recruitment/includes/job_card.html
 msgid "Item No."
@@ -1183,111 +1183,111 @@ msgstr "Magsasara sa %(date)s"
 
 #: recruitment/templates/recruitment/includes/job_card.html
 msgid "Deadline extended"
-msgstr "Pinalawig ang deadline"
+msgstr "Na-extend ang deadline"
 
 #: recruitment/templates/recruitment/includes/job_card.html
 msgid "Always accepting applications"
-msgstr "Laging tumatanggap ng aplikasyon"
+msgstr "Laging tumatanggap ng applicants"
 
 #: recruitment/templates/recruitment/includes/job_card.html
 msgid "View Details"
-msgstr "Tingnan ang Detalye"
+msgstr "Tingnan ang Details"
 
 #: recruitment/templates/recruitment/includes/language_switch.html
 msgid "Language"
-msgstr "Wika"
+msgstr "Language"
 
 #: recruitment/applicant_contact.py
 msgid "Enter a Philippine mobile number, like 0917 123 4567."
-msgstr "Maglagay ng mobile number sa Pilipinas, gaya ng 0917 123 4567."
+msgstr "Maglagay ng Philippine mobile number, gaya ng 0917 123 4567."
 
 #: recruitment/applicant_documents.py
 msgid "These files are too large together. Remove a file or use smaller photos."
-msgstr "Masyadong malaki ang mga file na ito kapag pinagsama. Mag-alis ng isang file o gumamit ng mas maliliit na litrato."
+msgstr "Masyadong malaki ang mga file kapag pinagsama. Magtanggal ng isang file o gumamit ng mas maliit na pictures."
 
 #: recruitment/applicant_documents.py
 msgid "You already added this file to this document."
-msgstr "Naidagdag mo na ang file na ito sa dokumentong ito."
+msgstr "Na-upload mo na ang file na ito sa document na ito."
 
 #: recruitment/applicant_documents.py
 msgid "This file is already used for another document. Each document needs its own file."
-msgstr "Ginamit na ang file na ito sa ibang dokumento. Kailangan ng sariling file ang bawat dokumento."
+msgstr "Nagamit na ang file na ito sa ibang document. Dapat iba-iba ang file ng bawat document."
 
 #: recruitment/applicant_documents.py
 msgid "We couldn't open this PDF. Save it again as a PDF (or take photos of the pages), then upload it."
-msgstr "Hindi namin mabuksan ang PDF na ito. I-save ito ulit bilang PDF (o kunan ng litrato ang mga pahina), saka i-upload."
+msgstr "Hindi namin mabuksan ang PDF na ito. I-save ulit bilang PDF (o picturan ang mga pages), tapos i-upload."
 
 #: recruitment/applicant_documents.py
 msgid "This PDF is password-protected. Save a copy without a password, then upload it."
-msgstr "May password ang PDF na ito. Mag-save ng kopyang walang password, saka i-upload."
+msgstr "May password ang PDF na ito. Mag-save ng kopya na walang password, tapos i-upload."
 
 #: recruitment/applicant_documents.py
 msgid "We couldn't open this photo. Take it again or save it as JPG or PNG."
-msgstr "Hindi namin mabuksan ang litratong ito. Kunan ito ulit o i-save bilang JPG o PNG."
+msgstr "Hindi namin mabuksan ang picture na ito. Picturan ulit o i-save bilang JPG o PNG."
 
 #: recruitment/applicant_documents.py
 msgid "You can add up to {max} files to one document. Combine some pages into one PDF, or remove a file first."
-msgstr "Hanggang {max} file lang ang puwedeng idagdag sa isang dokumento. Pagsamahin ang ilang pahina sa isang PDF, o mag-alis muna ng isang file."
+msgstr "Hanggang {max} files lang ang puwede sa isang document. Pagsamahin ang ilang pages sa isang PDF, o magtanggal muna ng isang file."
 
 #: recruitment/applicant_documents.py
 msgid "This document is not part of this application."
-msgstr "Hindi bahagi ng aplikasyong ito ang dokumentong ito."
+msgstr "Hindi kasama ang document na ito sa application na ito."
 
 #: recruitment/applicant_documents.py recruitment/services.py
 msgid "This application has already been submitted and can no longer be changed."
-msgstr "Naisumite na ang aplikasyong ito at hindi na ito mababago."
+msgstr "Na-submit na ang application na ito at hindi na mapapalitan."
 
 #: recruitment/applicant_documents.py recruitment/portal_views.py
 msgid "That file is no longer part of this application."
-msgstr "Hindi na bahagi ng aplikasyong ito ang file na iyon."
+msgstr "Wala na sa application na ito ang file na iyon."
 
 #: recruitment/applicant_documents.py
 msgid "That document can no longer be reused. Add the file instead."
-msgstr "Hindi na magagamit ulit ang dokumentong iyon. Idagdag na lang ang file."
+msgstr "Hindi na puwedeng gamitin ulit ang document na iyon. I-upload na lang ang file."
 
 #: recruitment/applicant_labels.py
 msgid "Under Review"
-msgstr "Nirerepaso"
+msgstr "Under Review"
 
 #: recruitment/applicant_labels.py
 msgid "Your application is currently being reviewed by our recruitment team. You will be contacted if additional information is needed."
-msgstr "Kasalukuyang nirerepaso ng aming recruitment team ang iyong aplikasyon. Kokontakin ka namin kung may kailangang dagdag na impormasyon."
+msgstr "Nire-review na ng recruitment team namin ang application mo. Ico-contact ka namin kung may kailangan pang info."
 
 #: recruitment/applicant_labels.py
 msgid "Your application is currently being reviewed by our recruitment team."
-msgstr "Kasalukuyang nirerepaso ng aming recruitment team ang iyong aplikasyon."
+msgstr "Nire-review na ng recruitment team namin ang application mo."
 
 #: recruitment/applicant_labels.py
 msgid "Under Evaluation"
-msgstr "Sinusuri"
+msgstr "Under Evaluation"
 
 #: recruitment/applicant_labels.py
 msgid "Your application is currently being evaluated. You may be contacted for an examination or interview schedule."
-msgstr "Kasalukuyang sinusuri ang iyong aplikasyon. Maaari kang kontakin para sa iskedyul ng exam o interview."
+msgstr "Ine-evaluate na ang application mo. Puwede kang i-contact para sa schedule ng exam o interview."
 
 #: recruitment/applicant_labels.py
 msgid "Under Processing"
-msgstr "Pinoproseso"
+msgstr "Under Processing"
 
 #: recruitment/applicant_labels.py
 msgid "Your application is being processed for the next steps. You will be contacted with further instructions."
-msgstr "Pinoproseso ang iyong aplikasyon para sa mga susunod na hakbang. Kokontakin ka namin para sa karagdagang instruksyon."
+msgstr "Pino-process na ang application mo para sa susunod na steps. Ico-contact ka namin para sa instructions."
 
 #: recruitment/applicant_labels.py
 msgid "Action Required"
-msgstr "May Kailangang Gawin"
+msgstr "May Kailangan Kang Gawin"
 
 #: recruitment/applicant_labels.py
 msgid "Your application has been returned. Please check your email for instructions on what to do next."
-msgstr "Ibinalik ang iyong aplikasyon. Pakitingnan ang iyong email para sa instruksyon kung ano ang susunod na gagawin."
+msgstr "Ibinalik ang application mo. Paki-check ang email mo para sa instructions kung ano ang susunod na gagawin."
 
 #: recruitment/applicant_labels.py
 msgid "Approved"
-msgstr "Aprobado"
+msgstr "Approved"
 
 #: recruitment/applicant_labels.py
 msgid "Congratulations! Your application has been approved. You will be contacted with further instructions."
-msgstr "Binabati ka namin! Naaprobahan ang iyong aplikasyon. Kokontakin ka namin para sa karagdagang instruksyon."
+msgstr "Congratulations! Approved ang application mo. Ico-contact ka namin para sa susunod na instructions."
 
 #: recruitment/applicant_labels.py
 msgid "Not Selected"
@@ -1295,7 +1295,7 @@ msgstr "Hindi Napili"
 
 #: recruitment/applicant_labels.py
 msgid "Thank you for your interest. Unfortunately, your application was not selected for this position. You are welcome to apply for other open positions."
-msgstr "Salamat sa iyong interes. Ikinalulungkot naming hindi napili ang iyong aplikasyon para sa posisyong ito. Malugod kang inaanyayahang mag-apply sa iba pang bakanteng posisyon."
+msgstr "Salamat sa interes mo. Sa kasamaang palad, hindi napili ang application mo para sa position na ito. Puwede ka pa ring mag-apply sa ibang bakanteng position."
 
 #: recruitment/applicant_labels.py
 msgid "Withdrawn"
@@ -1303,59 +1303,59 @@ msgstr "Na-withdraw"
 
 #: recruitment/applicant_labels.py
 msgid "You withdrew this application and the office has recorded it. No further action is needed."
-msgstr "In-withdraw mo ang aplikasyong ito at naitala na ito ng opisina. Wala ka nang kailangang gawin."
+msgstr "Na-withdraw mo na ang application na ito at na-record na ng office. Wala ka nang kailangang gawin."
 
 #: recruitment/applicant_labels.py
 msgid "Vacancy Cancelled"
-msgstr "Kinansela ang Bakante"
+msgstr "Na-cancel ang Vacancy"
 
 #: recruitment/applicant_labels.py
 msgid "The office cancelled this recruitment, so your application will not proceed. This is not an assessment of your qualifications."
-msgstr "Kinansela ng opisina ang recruitment na ito, kaya hindi na magpapatuloy ang iyong aplikasyon. Hindi ito pagtatasa sa iyong mga kwalipikasyon."
+msgstr "Kinansela ng office ang recruitment na ito, kaya hindi na tuloy ang application mo. Hindi ito dahil sa qualifications mo."
 
 #: recruitment/forms.py
 msgid "Please enter your name using letters only."
-msgstr "Pakilagay ang iyong pangalan gamit lamang ang mga letra."
+msgstr "Letters lang ang gamitin sa pangalan mo."
 
 #: recruitment/forms.py
 msgid "Please shorten this to 1,000 characters or less."
-msgstr "Paikliin ito sa 1,000 character o mas kaunti."
+msgstr "Paikliin hanggang 1,000 characters lang."
 
 #: recruitment/forms.py
 msgid "Please shorten this to 80 characters or less."
-msgstr "Paikliin ito sa 80 character o mas kaunti."
+msgstr "Paikliin hanggang 80 characters lang."
 
 #: recruitment/forms.py
 msgid "Please shorten this to 1,500 characters or less."
-msgstr "Paikliin ito sa 1,500 character o mas kaunti."
+msgstr "Paikliin hanggang 1,500 characters lang."
 
 #: recruitment/forms.py
 msgid "Complete the security check correctly."
-msgstr "Sagutin nang tama ang security check."
+msgstr "Sagutan nang tama ang security check."
 
 #: recruitment/forms.py
 msgid "Enter your first name."
-msgstr "Ilagay ang iyong pangalan (first name)."
+msgstr "Ilagay ang first name mo."
 
 #: recruitment/forms.py
 msgid "Enter your last name."
-msgstr "Ilagay ang iyong apelyido."
+msgstr "Ilagay ang last name mo."
 
 #: recruitment/forms.py
 msgid "Enter your email address."
-msgstr "Ilagay ang iyong email address."
+msgstr "Ilagay ang email address mo."
 
 #: recruitment/forms.py
 msgid "Enter your mobile number."
-msgstr "Ilagay ang iyong mobile number."
+msgstr "Ilagay ang mobile number mo."
 
 #: recruitment/forms.py
 msgid "Write a short summary of your qualifications."
-msgstr "Sumulat ng maikling buod ng iyong mga kwalipikasyon."
+msgstr "Sumulat ng maikling summary ng qualifications mo."
 
 #: recruitment/forms.py
 msgid "Choose whether you have a performance rating."
-msgstr "Piliin kung mayroon kang performance rating."
+msgstr "Piliin kung may performance rating ka."
 
 #: recruitment/forms.py
 msgid "Security check"
@@ -1367,11 +1367,11 @@ msgstr "Security check: %(question)s"
 
 #: recruitment/forms.py
 msgid "First name"
-msgstr "Pangalan (first name)"
+msgstr "First name"
 
 #: recruitment/forms.py
 msgid "Last name"
-msgstr "Apelyido"
+msgstr "Last name"
 
 #: recruitment/forms.py
 msgid "Email address"
@@ -1383,91 +1383,91 @@ msgstr "Mobile number"
 
 #: recruitment/forms.py
 msgid "I consent to DOH–CHD CALABARZON using the information I submit for this recruitment, as described in the privacy notice."
-msgstr "Pumapayag ako na gamitin ng DOH–CHD CALABARZON ang impormasyong isusumite ko para sa recruitment na ito, ayon sa privacy notice."
+msgstr "Pumapayag ako na gamitin ng DOH–CHD CALABARZON ang info na ipapasa ko para sa recruitment na ito, ayon sa privacy notice."
 
 #: recruitment/forms.py
 msgid "Summary of your qualifications"
-msgstr "Buod ng iyong mga kwalipikasyon"
+msgstr "Summary ng qualifications mo"
 
 #: recruitment/forms.py
 msgid "The education, experience, training and eligibility that best match this position."
-msgstr "Ang edukasyon, karanasan, training at eligibility mo na pinakaangkop sa posisyong ito."
+msgstr "Ang education, experience, training at eligibility mo na pinakatugma sa position na ito."
 
 #: recruitment/forms.py
 msgid "Note to the recruitment team"
-msgstr "Mensahe sa recruitment team"
+msgstr "Message sa recruitment team"
 
 #: recruitment/forms.py
 msgid "Do you have a performance rating for the last rating period?"
-msgstr "Mayroon ka bang performance rating para sa huling rating period?"
+msgstr "May performance rating ka ba para sa huling rating period?"
 
 #: recruitment/forms.py
 msgid "I certify that my information and uploaded documents are true and complete, and I consent to their use for this recruitment."
-msgstr "Pinatutunayan kong totoo at kumpleto ang aking impormasyon at mga in-upload na dokumento, at pumapayag ako na gamitin ang mga ito para sa recruitment na ito."
+msgstr "Pinapatunayan ko na totoo at kumpleto ang info at documents na ipinasa ko, at pumapayag akong gamitin ang mga ito para sa recruitment na ito."
 
 #: recruitment/forms.py
 msgid "Applicant email"
-msgstr "Email ng aplikante"
+msgstr "Email ng applicant"
 
 #: recruitment/forms.py
 msgid "Answer this question before continuing."
-msgstr "Sagutin ang tanong na ito bago magpatuloy."
+msgstr "Sagutan muna ito bago magpatuloy."
 
 #: recruitment/forms.py
 msgid "Enter a valid email address, like juan@example.com."
-msgstr "Maglagay ng tamang email address, gaya ng juan@example.com."
+msgstr "Maglagay ng tamang email, gaya ng juan@example.com."
 
 #: recruitment/forms.py
 msgid "Give your consent to continue."
-msgstr "Magbigay ng pahintulot para makapagpatuloy."
+msgstr "Pumayag muna para makapagpatuloy."
 
 #: recruitment/forms.py recruitment/portal_views.py recruitment/services.py
 msgid "This position is no longer accepting applications."
-msgstr "Hindi na tumatanggap ng aplikasyon ang posisyong ito."
+msgstr "Hindi na tumatanggap ng applicants ang position na ito."
 
 #: recruitment/forms.py
 msgid "Tick this box to submit your application."
-msgstr "I-tick ang box na ito para maisumite ang iyong aplikasyon."
+msgstr "I-check ang box para ma-submit ang application mo."
 
 #: recruitment/forms.py
 msgid "The code is 6 digits."
-msgstr "6 na numero ang code."
+msgstr "6 na numbers ang code."
 
 #: recruitment/forms.py
 msgid "Enter your Tracking Code."
-msgstr "Ilagay ang iyong Tracking Code."
+msgstr "Ilagay ang Tracking Code mo."
 
 #: recruitment/forms.py
 msgid "Google reCAPTCHA protects this form from automated abuse."
-msgstr "Pinoprotektahan ng Google reCAPTCHA ang form na ito laban sa automated na pang-aabuso."
+msgstr "Pinoprotektahan ng Google reCAPTCHA ang form na ito laban sa spam at bots."
 
 #: recruitment/forms.py
 msgid "Cloudflare Turnstile protects this form from automated abuse."
-msgstr "Pinoprotektahan ng Cloudflare Turnstile ang form na ito laban sa automated na pang-aabuso."
+msgstr "Pinoprotektahan ng Cloudflare Turnstile ang form na ito laban sa spam at bots."
 
 #: recruitment/forms.py recruitment/services.py
 msgid "You have already submitted an application for this position using this email address."
-msgstr "Nakapagsumite ka na ng aplikasyon para sa posisyong ito gamit ang email address na ito."
+msgstr "Nakapag-submit ka na ng application para sa position na ito gamit ang email na ito."
 
 #: recruitment/forms.py
 msgid "I have a performance rating for the last rating period"
-msgstr "Mayroon akong performance rating para sa huling rating period"
+msgstr "Meron akong performance rating para sa huling rating period"
 
 #: recruitment/forms.py
 msgid "I do not have an applicable performance rating"
-msgstr "Wala akong naaangkop na performance rating"
+msgstr "Wala akong performance rating na puwedeng gamitin"
 
 #: recruitment/forms.py
 msgid "Upload a clear, readable PDF, JPG, or PNG. Several pages? Select all of them (or several photos) and we combine them into one file."
-msgstr "Mag-upload ng malinaw at nababasang PDF, JPG, o PNG. Ilang pahina? Piliin ang lahat ng ito (o ilang litrato) at pagsasamahin namin sa isang file."
+msgstr "Mag-upload ng malinaw na PDF, JPG, o PNG. Maraming pages? Piliin lahat (o ilang pictures) at pagsasamahin namin sa isang file."
 
 #: recruitment/forms.py
 msgid "Add a file for this document."
-msgstr "Magdagdag ng file para sa dokumentong ito."
+msgstr "Mag-upload ng file para sa document na ito."
 
 #: recruitment/models.py
 msgid "Education"
-msgstr "Edukasyon"
+msgstr "Education"
 
 #: recruitment/models.py
 msgid "Training"
@@ -1475,7 +1475,7 @@ msgstr "Training"
 
 #: recruitment/models.py
 msgid "Experience"
-msgstr "Karanasan"
+msgstr "Experience"
 
 #: recruitment/models.py
 msgid "Eligibility"
@@ -1483,63 +1483,63 @@ msgstr "Eligibility"
 
 #: recruitment/portal_views.py
 msgid "Your application has been received."
-msgstr "Natanggap na ang iyong aplikasyon."
+msgstr "Natanggap na ang application mo."
 
 #: recruitment/portal_views.py
 msgid "This photo is small, so the text may be hard to read."
-msgstr "Maliit ang litratong ito, kaya maaaring mahirap basahin ang teksto."
+msgstr "Maliit ang picture na ito, kaya baka mahirap basahin."
 
 #: recruitment/portal_views.py
 msgid "This photo looks dark."
-msgstr "Madilim ang litratong ito."
+msgstr "Madilim ang picture na ito."
 
 #: recruitment/portal_views.py
 msgid "This photo looks blurry."
-msgstr "Malabo ang litratong ito."
+msgstr "Malabo ang picture na ito."
 
 #: recruitment/portal_views.py
 msgid "It was saved. Tap View to check you can read it, and take it again if not."
-msgstr "Na-save na ito. I-tap ang Tingnan para masiguradong nababasa mo ito, at kunan ulit kung hindi."
+msgstr "Na-save na ito. I-tap ang Tingnan para ma-check kung nababasa, at picturan ulit kung hindi."
 
 #: recruitment/portal_views.py
 msgid "This file is larger than {mb} MB. If it has several pages, add the pages one at a time, or take a photo of each page instead."
-msgstr "Mas malaki sa {mb} MB ang file na ito. Kung ilang pahina ito, idagdag ang mga pahina isa-isa, o kunan ng litrato ang bawat pahina."
+msgstr "Mas malaki sa {mb} MB ang file na ito. Kung maraming pages, i-upload ang pages isa-isa, o picturan ang bawat page."
 
 #: recruitment/portal_views.py
 msgid "The upload did not go through. Try again."
-msgstr "Hindi natuloy ang pag-upload. Subukan ulit."
+msgstr "Hindi natuloy ang upload. Subukan ulit."
 
 #: recruitment/portal_views.py
 msgid "The upload did not go through. Check your connection and try again."
-msgstr "Hindi natuloy ang pag-upload. Tingnan ang iyong koneksyon at subukan ulit."
+msgstr "Hindi natuloy ang upload. I-check ang internet mo at subukan ulit."
 
 #: recruitment/portal_views.py
 msgid "This needs to be a PDF, JPG, or PNG file."
-msgstr "Kailangang PDF, JPG, o PNG file ito."
+msgstr "Dapat PDF, JPG, o PNG ang file."
 
 #: recruitment/portal_views.py
 msgid "Adding…"
-msgstr "Idinadagdag…"
+msgstr "Inaa-add…"
 
 #: recruitment/portal_views.py
 msgid "That file could not be added."
-msgstr "Hindi naidagdag ang file na iyon."
+msgstr "Hindi na-add ang file na iyon."
 
 #: recruitment/portal_views.py
 msgid "That file could not be added. Check your connection."
-msgstr "Hindi naidagdag ang file na iyon. Tingnan ang iyong koneksyon."
+msgstr "Hindi na-add ang file na iyon. I-check ang internet mo."
 
 #: recruitment/portal_views.py
 msgid "That file could not be removed."
-msgstr "Hindi naalis ang file na iyon."
+msgstr "Hindi natanggal ang file na iyon."
 
 #: recruitment/portal_views.py
 msgid "That file could not be removed. Check your connection."
-msgstr "Hindi naalis ang file na iyon. Tingnan ang iyong koneksyon."
+msgstr "Hindi natanggal ang file na iyon. I-check ang internet mo."
 
 #: recruitment/portal_views.py
 msgid "Loading…"
-msgstr "Nilo-load…"
+msgstr "Loading…"
 
 #: recruitment/portal_views.py
 msgid "Preview of {name}"
@@ -1547,11 +1547,11 @@ msgstr "Preview ng {name}"
 
 #: recruitment/portal_views.py
 msgid "your file"
-msgstr "iyong file"
+msgstr "file mo"
 
 #: recruitment/portal_views.py
 msgid "If the preview is blank, your device can't show PDFs here. The file is still saved."
-msgstr "Kung blangko ang preview, hindi kayang ipakita ng iyong device ang PDF dito. Naka-save pa rin ang file."
+msgstr "Kung blangko ang preview, hindi kaya ng device mo na ipakita ang PDF dito. Naka-save pa rin ang file."
 
 #: recruitment/portal_views.py
 msgid "This file couldn't be shown. It is still saved."
@@ -1559,15 +1559,15 @@ msgstr "Hindi maipakita ang file na ito. Naka-save pa rin ito."
 
 #: recruitment/portal_views.py
 msgid "Remove the performance rating files you added?"
-msgstr "Alisin ang mga performance rating file na idinagdag mo?"
+msgstr "Tanggalin ang performance rating files na inilagay mo?"
 
 #: recruitment/portal_views.py
 msgid "Saving…"
-msgstr "Sine-save…"
+msgstr "Nagse-save…"
 
 #: recruitment/portal_views.py
 msgid "Your session ended. Copy anything you typed, then reload the page to continue."
-msgstr "Natapos ang iyong session. Kopyahin ang anumang na-type mo, saka i-reload ang page para magpatuloy."
+msgstr "Na-end na ang session mo. I-copy ang mga na-type mo, tapos i-reload ang page para ituloy."
 
 #: recruitment/portal_views.py
 msgid "Saved"
@@ -1579,35 +1579,35 @@ msgstr "May ilang sagot na kailangang ayusin bago ma-save."
 
 #: recruitment/portal_views.py
 msgid "Couldn't save just now. We'll try again."
-msgstr "Hindi ma-save ngayon. Susubukan namin ulit."
+msgstr "Hindi ma-save ngayon. Susubukan ulit namin."
 
 #: recruitment/portal_views.py
 msgid "Please wait until your files finish uploading."
-msgstr "Pakihintay na matapos ma-upload ang iyong mga file."
+msgstr "Pakihintay matapos ang upload ng mga file mo."
 
 #: recruitment/portal_views.py
 msgid "Submitting…"
-msgstr "Isinusumite…"
+msgstr "Sine-submit…"
 
 #: recruitment/portal_views.py
 msgid "{used} / {limit} characters"
-msgstr "{used} / {limit} character"
+msgstr "{used} / {limit} characters"
 
 #: recruitment/portal_views.py
 msgid "Remove {name}"
-msgstr "Alisin ang {name}"
+msgstr "Tanggalin ang {name}"
 
 #: recruitment/portal_views.py
 msgid "Application submitted"
-msgstr "Naisumite ang aplikasyon"
+msgstr "Na-submit ang application"
 
 #: recruitment/portal_views.py
 msgid "Some documents were returned to you to fix."
-msgstr "May ilang dokumentong ibinalik sa iyo para ayusin."
+msgstr "May ilang documents na ibinalik sa iyo para ayusin."
 
 #: recruitment/portal_views.py
 msgid "The recruitment team is checking your documents and qualifications."
-msgstr "Sinusuri ng recruitment team ang iyong mga dokumento at kwalipikasyon."
+msgstr "Chine-check ng recruitment team ang documents at qualifications mo."
 
 #: recruitment/portal_views.py
 msgid "Examination"
@@ -1623,31 +1623,31 @@ msgstr "appointment"
 
 #: recruitment/portal_views.py
 msgid "Contract"
-msgstr "kontrata"
+msgstr "contract"
 
 #: recruitment/portal_views.py
 msgid "This verification link is no longer available. Please start again from the job openings page."
-msgstr "Hindi na magagamit ang verification link na ito. Pakisimulan ulit mula sa page ng mga bakanteng trabaho."
+msgstr "Hindi na gumagana ang verification link na ito. Magsimula ulit sa job openings page."
 
 #: recruitment/portal_views.py
 msgid "This applicant action is not available."
-msgstr "Hindi magagamit ang aksyong ito."
+msgstr "Hindi puwede ang action na ito."
 
 #: recruitment/portal_views.py
 msgid "Application submitted successfully."
-msgstr "Matagumpay na naisumite ang aplikasyon."
+msgstr "Na-submit na ang application mo."
 
 #: recruitment/portal_views.py
 msgid "This link is no longer available. Use Track Application with your Tracking Code and email."
-msgstr "Hindi na magagamit ang link na ito. Gamitin ang I-track ang Aplikasyon kasama ang iyong Tracking Code at email."
+msgstr "Hindi na gumagana ang link na ito. Gamitin ang I-track ang Application gamit ang Tracking Code at email mo."
 
 #: recruitment/portal_views.py
 msgid "This action is not available."
-msgstr "Hindi magagamit ang aksyong ito."
+msgstr "Hindi puwede ang action na ito."
 
 #: recruitment/portal_views.py
 msgid "Document check"
-msgstr "Pagsusuri ng dokumento"
+msgstr "Document check"
 
 #: recruitment/portal_views.py
 msgid "Examination and interview"
@@ -1655,79 +1655,79 @@ msgstr "Exam at interview"
 
 #: recruitment/portal_views.py
 msgid "If you are invited to an exam or interview, we will email you the schedule."
-msgstr "Kung maimbitahan ka sa exam o interview, i-e-email namin sa iyo ang iskedyul."
+msgstr "Kung ma-invite ka sa exam o interview, i-e-email namin sa iyo ang schedule."
 
 #: recruitment/portal_views.py
 msgid "Decision: Approved"
-msgstr "Desisyon: Aprobado"
+msgstr "Desisyon: Approved"
 
 #: recruitment/portal_views.py
 msgid "This position is no longer accepting applications. You can browse the other open positions below."
-msgstr "Hindi na tumatanggap ng aplikasyon ang posisyong ito. Puwede mong tingnan ang iba pang bakanteng posisyon sa ibaba."
+msgstr "Hindi na tumatanggap ng applicants ang position na ito. Puwede mong tingnan ang ibang job openings sa baba."
 
 #: recruitment/portal_views.py
 msgid "This application link is no longer available."
-msgstr "Hindi na magagamit ang link ng aplikasyong ito."
+msgstr "Hindi na gumagana ang link ng application na ito."
 
 #: recruitment/portal_views.py
 msgid "Verify your email to continue your application."
-msgstr "I-verify ang iyong email para maituloy ang iyong aplikasyon."
+msgstr "I-verify ang email mo para ituloy ang application mo."
 
 #: recruitment/portal_views.py
 msgid "Your answers were saved. Files are saved as soon as you add them."
-msgstr "Na-save ang iyong mga sagot. Nase-save ang mga file sa sandaling idagdag mo ang mga ito."
+msgstr "Na-save ang mga sagot mo. Nase-save agad ang files pagka-upload."
 
 #: recruitment/portal_views.py
 msgid "This receipt link is no longer available. If you already submitted, use Track Application with your Tracking Code and email."
-msgstr "Hindi na magagamit ang link ng resibong ito. Kung nakapagsumite ka na, gamitin ang I-track ang Aplikasyon kasama ang iyong Tracking Code at email."
+msgstr "Hindi na gumagana ang link ng resibo na ito. Kung naka-submit ka na, gamitin ang I-track ang Application gamit ang Tracking Code at email mo."
 
 #: recruitment/portal_views.py
 msgid "Your verification session has ended. Enter your Tracking Code and email again."
-msgstr "Natapos na ang iyong verification session. Ilagay ulit ang iyong Tracking Code at email."
+msgstr "Na-end na ang verification session mo. Ilagay ulit ang Tracking Code at email mo."
 
 #: recruitment/portal_views.py
 msgid "A new verification code has been sent to your email address."
-msgstr "Nagpadala kami ng bagong verification code sa iyong email address."
+msgstr "Nagpadala kami ng bagong verification code sa email mo."
 
 #: recruitment/portal_views.py
 msgid "We could not find an application with that tracking code and email combination. Please check your Tracking Code and email address and try again."
-msgstr "Wala kaming nakitang aplikasyon na tugma sa tracking code at email na iyon. Pakisuri ang iyong Tracking Code at email address at subukan ulit."
+msgstr "Wala kaming nakitang application na tugma sa tracking code at email na iyan. Paki-check ang Tracking Code at email mo at subukan ulit."
 
 #: recruitment/portal_views.py
 msgid "We emailed a verification code to your address. Enter it below to view your status."
-msgstr "Nag-email kami ng verification code sa iyong address. Ilagay ito sa ibaba para makita ang iyong status."
+msgstr "Nag-email kami ng verification code. Ilagay ito sa baba para makita ang status mo."
 
 #: recruitment/portal_views.py
 msgid "This status link is no longer available. Use your Tracking Code and email to check your status."
-msgstr "Hindi na magagamit ang status link na ito. Gamitin ang iyong Tracking Code at email para malaman ang iyong status."
+msgstr "Hindi na gumagana ang status link na ito. Gamitin ang Tracking Code at email mo para ma-check ang status."
 
 #: recruitment/portal_views.py
 msgid "This link is no longer available."
-msgstr "Hindi na magagamit ang link na ito."
+msgstr "Hindi na gumagana ang link na ito."
 
 #: recruitment/portal_views.py
 msgid "Verify your email again to continue."
-msgstr "I-verify ulit ang iyong email para magpatuloy."
+msgstr "I-verify ulit ang email mo para ituloy."
 
 #: recruitment/portal_views.py
 msgid "Tick the box to confirm that you want to withdraw."
-msgstr "I-tick ang box para kumpirmahing gusto mong mag-withdraw."
+msgstr "I-check ang box para ma-confirm na gusto mong mag-withdraw."
 
 #: recruitment/portal_views.py
 msgid "Your request to withdraw was sent to the recruitment office. You will get an email once it is recorded."
-msgstr "Naipadala na sa recruitment office ang iyong kahilingang mag-withdraw. Makakatanggap ka ng email kapag naitala na ito."
+msgstr "Naipadala na sa recruitment office ang withdrawal request mo. Makakatanggap ka ng email kapag na-record na ito."
 
 #: recruitment/portal_views.py
 msgid "There are no documents awaiting resubmission for this application."
-msgstr "Walang dokumentong naghihintay na maipadala ulit para sa aplikasyong ito."
+msgstr "Walang documents na kailangang i-resubmit para sa application na ito."
 
 #: recruitment/portal_views.py
 msgid "We could not start your application right now. Please try again in a few moments."
-msgstr "Hindi namin masimulan ang iyong aplikasyon ngayon. Pakisubukan ulit maya-maya."
+msgstr "Hindi namin masimulan ang application mo ngayon. Subukan ulit maya-maya."
 
 #: recruitment/portal_views.py
 msgid "We could not send the verification code right now. Use Resend the code in a few moments."
-msgstr "Hindi namin maipadala ang verification code ngayon. Gamitin ang Ipadala ulit ang code maya-maya."
+msgstr "Hindi namin maipadala ang verification code ngayon. I-tap ang I-resend ang code maya-maya."
 
 #: recruitment/portal_views.py
 msgid "Choose a file to upload."
@@ -1735,23 +1735,23 @@ msgstr "Pumili ng file na ia-upload."
 
 #: recruitment/portal_views.py
 msgid "We could not send a verification code right now. Please try again in a few moments."
-msgstr "Hindi kami makapagpadala ng verification code ngayon. Pakisubukan ulit maya-maya."
+msgstr "Hindi kami makapagpadala ng verification code ngayon. Subukan ulit maya-maya."
 
 #: recruitment/portal_views.py
 msgid "Your application for %(title)s is not finished yet. Verify your email to continue, or use Resend the code if the code expired."
-msgstr "Hindi pa tapos ang iyong aplikasyon para sa %(title)s. I-verify ang iyong email para magpatuloy, o gamitin ang Ipadala ulit ang code kung nag-expire na ang code."
+msgstr "Hindi pa tapos ang application mo para sa %(title)s. I-verify ang email mo para ituloy, o i-tap ang I-resend ang code kung nag-expire na ang code."
 
 #: recruitment/portal_views.py
 msgid "A verification code has been sent to your email address."
-msgstr "Nagpadala kami ng verification code sa iyong email address."
+msgstr "Nagpadala kami ng verification code sa email mo."
 
 #: recruitment/portal_views.py
 msgid "Verify your email before resubmitting your documents."
-msgstr "I-verify ang iyong email bago ipadala ulit ang iyong mga dokumento."
+msgstr "I-verify muna ang email mo bago i-resubmit ang documents mo."
 
 #: recruitment/portal_views.py
 msgid "Your documents have been resubmitted for review."
-msgstr "Naipadala na ulit ang iyong mga dokumento para marepaso."
+msgstr "Na-resubmit na ang documents mo para ma-review."
 
 #: recruitment/portal_views.py
 msgid "Where: %(place)s"
@@ -1763,43 +1763,43 @@ msgstr "Resulta: %(status)s"
 
 #: recruitment/portal_views.py
 msgid "Final decision"
-msgstr "Pinal na desisyon"
+msgstr "Final decision"
 
 #: recruitment/portal_views.py
 msgid "Your application is with the office for the final decision."
-msgstr "Nasa opisina na ang iyong aplikasyon para sa pinal na desisyon."
+msgstr "Nasa office na ang application mo para sa final decision."
 
 #: recruitment/portal_views.py
 msgid "This application could not be found."
-msgstr "Hindi mahanap ang aplikasyong ito."
+msgstr "Hindi mahanap ang application na ito."
 
 #: recruitment/portal_views.py
 msgid "This application was already submitted."
-msgstr "Naisumite na ang aplikasyong ito."
+msgstr "Na-submit na ang application na ito."
 
 #: recruitment/portal_views.py
 msgid "Your session ended. Reload the page and verify your email to continue."
-msgstr "Natapos ang iyong session. I-reload ang page at i-verify ang iyong email para magpatuloy."
+msgstr "Na-end na ang session mo. I-reload ang page at i-verify ang email mo para ituloy."
 
 #: recruitment/portal_views.py
 msgid "Choose a document to reuse."
-msgstr "Pumili ng dokumentong gagamitin ulit."
+msgstr "Pumili ng document na gagamitin ulit."
 
 #: recruitment/portal_views.py
 msgid "We could not prepare a new verification code right now. Please try again in a few moments."
-msgstr "Hindi kami makapaghanda ng bagong verification code ngayon. Pakisubukan ulit maya-maya."
+msgstr "Hindi kami makagawa ng bagong verification code ngayon. Subukan ulit maya-maya."
 
 #: recruitment/portal_views.py
 msgid "Email verified. You can now re-upload the requested documents."
-msgstr "Na-verify na ang email. Puwede mo nang i-upload ulit ang mga hinihinging dokumento."
+msgstr "Verified na ang email mo. Puwede mo nang i-upload ulit ang hinihinging documents."
 
 #: recruitment/requirements.py
 msgid "Upload the signed cover letter for this application."
-msgstr "I-upload ang pirmadong cover letter para sa aplikasyong ito."
+msgstr "I-upload ang pirmadong cover letter para sa application na ito."
 
 #: recruitment/requirements.py
 msgid "Upload the completed Personal Data Sheet with the required photo attached."
-msgstr "I-upload ang kumpletong Personal Data Sheet na may kalakip na kinakailangang litrato."
+msgstr "I-upload ang kumpletong Personal Data Sheet na may kasamang picture."
 
 #: recruitment/requirements.py
 msgid "Upload the Work Experience Sheet that accompanies the Personal Data Sheet."
@@ -1807,11 +1807,11 @@ msgstr "I-upload ang Work Experience Sheet na kasama ng Personal Data Sheet."
 
 #: recruitment/requirements.py
 msgid "Upload your latest performance rating only when you have an applicable rating for the last rating period."
-msgstr "I-upload lang ang pinakabago mong performance rating kung mayroon kang naaangkop na rating para sa huling rating period."
+msgstr "I-upload lang ang pinakabagong performance rating mo kung meron kang rating para sa huling rating period."
 
 #: recruitment/requirements.py
 msgid "Upload the eligibility, rating, or license document relevant to this application."
-msgstr "I-upload ang dokumento ng eligibility, rating, o lisensya na may kaugnayan sa aplikasyong ito."
+msgstr "I-upload ang eligibility, rating, o license mo na related sa application na ito."
 
 #: recruitment/requirements.py
 msgid "Upload the authenticated Transcript of Records."
@@ -1819,15 +1819,15 @@ msgstr "I-upload ang authenticated na Transcript of Records."
 
 #: recruitment/requirements.py
 msgid "Upload a copy of your diploma."
-msgstr "Mag-upload ng kopya ng iyong diploma."
+msgstr "Mag-upload ng kopya ng diploma mo."
 
 #: recruitment/requirements.py
 msgid "Upload your certificate or certificates of employment."
-msgstr "I-upload ang iyong certificate (o mga certificate) of employment."
+msgstr "I-upload ang certificate (o mga certificate) of employment mo."
 
 #: recruitment/requirements.py
 msgid "Upload your certificate or certificates for completed training courses."
-msgstr "I-upload ang iyong certificate (o mga certificate) ng mga natapos na training."
+msgstr "I-upload ang certificate (o mga certificate) ng mga natapos mong training."
 
 #: recruitment/requirements.py
 msgid "Upload the signed application letter for this COS application."
@@ -1835,31 +1835,31 @@ msgstr "I-upload ang pirmadong application letter para sa COS application na ito
 
 #: recruitment/requirements.py
 msgid "Upload the eligibility, rating, or license document required for this COS application."
-msgstr "I-upload ang dokumento ng eligibility, rating, o lisensya na kailangan para sa COS application na ito."
+msgstr "I-upload ang eligibility, rating, o license na kailangan para sa COS application na ito."
 
 #: recruitment/requirements.py
 msgid "Upload a copy of your Transcript of Records."
-msgstr "Mag-upload ng kopya ng iyong Transcript of Records."
+msgstr "Mag-upload ng kopya ng Transcript of Records mo."
 
 #: recruitment/requirements.py
 msgid "Upload your training certificates when they apply to this COS application."
-msgstr "I-upload ang iyong mga training certificate kung naaangkop sa COS application na ito."
+msgstr "I-upload ang training certificates mo kung kailangan para sa COS application na ito."
 
 #: recruitment/services.py
 msgid "Too many invalid verification attempts. Request a new code."
-msgstr "Masyadong maraming maling verification code. Humingi ng bagong code."
+msgstr "Masyadong maraming maling code. Humingi ng bagong code."
 
 #: recruitment/services.py
 msgid "You already asked to withdraw this application. The office will confirm by email."
-msgstr "Humiling ka na ng pag-withdraw sa aplikasyong ito. Kukumpirmahin ito ng opisina sa pamamagitan ng email."
+msgstr "Nakapag-request ka na ng withdrawal para sa application na ito. Ico-confirm ito ng office sa email."
 
 #: recruitment/services.py
 msgid "This application can no longer be withdrawn online. Please contact the recruitment office."
-msgstr "Hindi na maaaring i-withdraw online ang aplikasyong ito. Pakikontak ang recruitment office."
+msgstr "Hindi na puwedeng i-withdraw online ang application na ito. Paki-contact ang recruitment office."
 
 #: recruitment/services.py
 msgid "This application was already submitted, so it can no longer be verified."
-msgstr "Naisumite na ang aplikasyong ito, kaya hindi na ito mave-verify."
+msgstr "Na-submit na ang application na ito, kaya hindi na ito kailangang i-verify."
 
 #: recruitment/services.py
 msgid "Request a verification code first."
@@ -1871,83 +1871,83 @@ msgstr "Nag-expire na ang verification code. Humingi ng bagong code."
 
 #: recruitment/services.py
 msgid "The selected recruitment entry is not currently open for intake."
-msgstr "Hindi na tumatanggap ng aplikasyon ang posisyong ito."
+msgstr "Hindi na tumatanggap ng applicants ang position na ito."
 
 #: recruitment/services.py
 msgid "This application can no longer be submitted."
-msgstr "Hindi na maisusumite ang aplikasyong ito."
+msgstr "Hindi na puwedeng i-submit ang application na ito."
 
 #: recruitment/services.py
 msgid "Tick the confirmation box before you submit."
-msgstr "I-tick ang confirmation box bago magsumite."
+msgstr "I-check muna ang confirmation box bago mag-submit."
 
 #: recruitment/services.py
 msgid "Some documents use the same file. Use a different file for each document, then submit."
-msgstr "May mga dokumentong pareho ang file. Gumamit ng ibang file para sa bawat dokumento, saka isumite."
+msgstr "May documents na pareho ang file. Gumamit ng ibang file sa bawat document, tapos i-submit."
 
 #: recruitment/services.py
 msgid "Only the applicant may resubmit documents for this application."
-msgstr "Ang aplikante lang ang puwedeng magpadala ulit ng mga dokumento para sa aplikasyong ito."
+msgstr "Ang applicant lang ang puwedeng mag-resubmit ng documents para sa application na ito."
 
 #: recruitment/services.py
 msgid "This application is not awaiting a document resubmission."
-msgstr "Hindi naghihintay ng ipapadalang dokumento ang aplikasyong ito."
+msgstr "Walang hinihintay na documents para sa application na ito."
 
 #: recruitment/services.py
 msgid "There are no documents awaiting resubmission."
-msgstr "Walang dokumentong naghihintay na maipadala ulit."
+msgstr "Walang documents na kailangang i-resubmit."
 
 #: recruitment/services.py
 msgid "The resubmission deadline has passed; please contact the recruitment team."
-msgstr "Lumipas na ang deadline ng pagpapadala ulit; pakikontak ang recruitment team."
+msgstr "Lumampas na ang deadline ng resubmission; paki-contact ang recruitment team."
 
 #: recruitment/services.py
 msgid "Verify your email with a fresh code before resubmitting your documents."
-msgstr "I-verify ang iyong email gamit ang bagong code bago ipadala ulit ang iyong mga dokumento."
+msgstr "I-verify muna ang email mo gamit ang bagong code bago i-resubmit ang documents mo."
 
 #: recruitment/services.py
 msgid "Upload a file for each flagged document before resubmitting."
-msgstr "Mag-upload ng file para sa bawat minarkahang dokumento bago ipadala ulit."
+msgstr "Mag-upload ng file sa bawat document na ibinalik bago mag-resubmit."
 
 #: recruitment/services.py
 msgid "Your application draft and uploaded files were saved, but we could not send the verification code right now. Please try again in a few moments."
-msgstr "Na-save ang iyong draft at mga in-upload na file, pero hindi namin maipadala ang verification code ngayon. Pakisubukan ulit maya-maya."
+msgstr "Na-save ang draft at files mo, pero hindi namin maipadala ang verification code ngayon. Subukan ulit maya-maya."
 
 #: recruitment/services.py
 msgid "A verification code can only be issued while the application is in draft or awaiting the applicant's resubmission."
-msgstr "Makakapagpadala lang ng verification code habang draft pa ang aplikasyon o habang hinihintay ang ipapadala ulit na dokumento ng aplikante."
+msgstr "Puwede lang magpadala ng verification code habang draft pa ang application o habang hinihintay ang resubmission ng applicant."
 
 #: recruitment/services.py
 msgid "This application has not been submitted yet."
-msgstr "Hindi pa naisusumite ang aplikasyong ito."
+msgstr "Hindi pa na-submit ang application na ito."
 
 #: recruitment/services.py
 msgid "The verification code is invalid. You have %(count)s try left."
 msgid_plural "The verification code is invalid. You have %(count)s tries left."
-msgstr[0] "Mali ang verification code. May %(count)s subok ka pa."
-msgstr[1] "Mali ang verification code. May %(count)s subok ka pa."
+msgstr[0] "Mali ang verification code. %(count)s try na lang ang natitira."
+msgstr[1] "Mali ang verification code. %(count)s tries na lang ang natitira."
 
 #: recruitment/services.py
 msgid "An application for this recruitment entry already exists for this applicant."
-msgstr "Mayroon nang aplikasyon ang aplikanteng ito para sa recruitment na ito."
+msgstr "May application na ang applicant na ito para sa recruitment na ito."
 
 #: recruitment/services.py
 msgid "Add all required documents before you submit. %(count)s required document is still missing."
 msgid_plural "Add all required documents before you submit. %(count)s required documents are still missing."
-msgstr[0] "Idagdag ang lahat ng kailangang dokumento bago magsumite. %(count)s kailangang dokumento ang kulang pa."
-msgstr[1] "Idagdag ang lahat ng kailangang dokumento bago magsumite. %(count)s kailangang dokumento ang kulang pa."
+msgstr[0] "I-upload muna lahat ng required documents bago mag-submit. %(count)s required document pa ang kulang."
+msgstr[1] "I-upload muna lahat ng required documents bago mag-submit. %(count)s required documents pa ang kulang."
 
 #: recruitment/services.py
 msgid "Verify your email before you submit."
-msgstr "I-verify ang iyong email bago magsumite."
+msgstr "I-verify muna ang email mo bago mag-submit."
 
 #: recruitment/services.py
 msgid "Please wait %(seconds)s seconds before requesting another code."
-msgstr "Pakihintay ng %(seconds)s segundo bago humingi ng panibagong code."
+msgstr "Maghintay ng %(seconds)s segundo bago humingi ulit ng code."
 
 #: recruitment/services.py
 msgid "Your email verification has expired. Request a new code, then submit."
-msgstr "Nag-expire na ang verification ng iyong email. Humingi ng bagong code, saka magsumite."
+msgstr "Nag-expire na ang verification ng email mo. Humingi ng bagong code, tapos i-submit."
 
 #: recruitment/upload_validation.py
 msgid "This file is too large. Choose a file that is 5 MB or smaller."
@@ -1959,16 +1959,16 @@ msgstr "Walang laman ang file na ito. Pumili ng file na may laman."
 
 #: recruitment/upload_validation.py
 msgid "This needs to be a PDF, JPG, or PNG file. Upload one of those."
-msgstr "Kailangang PDF, JPG, o PNG file ito. Mag-upload ng isa sa mga iyon."
+msgstr "Dapat PDF, JPG, o PNG ang file. Mag-upload ng isa sa mga iyan."
 
 #: recruitment/upload_validation.py
 msgid "We couldn't read this as a PDF, JPG, or PNG. Save it again, then upload it."
-msgstr "Hindi namin ito mabasa bilang PDF, JPG, o PNG. I-save ito ulit, saka i-upload."
+msgstr "Hindi namin mabasa ito bilang PDF, JPG, o PNG. I-save ulit, tapos i-upload."
 
 #: recruitment/upload_validation.py
 msgid "This file's contents don't match a PDF, JPG, or PNG. Save it again, then upload it."
-msgstr "Hindi tugma ang laman ng file na ito sa PDF, JPG, o PNG. I-save ito ulit, saka i-upload."
+msgstr "Hindi tugma ang laman ng file na ito sa PDF, JPG, o PNG. I-save ulit, tapos i-upload."
 
 #: recruitment/upload_validation.py
 msgid "This file format does not match its filename. Save it again as a PDF, JPG, or PNG, then upload it."
-msgstr "Hindi tugma ang format ng file na ito sa pangalan nito. I-save ito ulit bilang PDF, JPG, o PNG, saka i-upload."
+msgstr "Hindi tugma ang format ng file na ito sa pangalan nito. I-save ulit bilang PDF, JPG, o PNG, tapos i-upload."

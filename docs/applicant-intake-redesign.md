@@ -163,7 +163,8 @@ After a full applicant walkthrough:
   - After changing applicant text, run `python manage.py update_translations`. It extracts the strings in pure Python, keeps existing translations and compiles the `.mo`.
   - Then fill any empty `msgstr ""` and run it again.
   - `--check` fails while anything is untranslated, and a test runs it.
-  - The current Filipino is a **first draft**. A native speaker at the office should review it before launch.
+  - **Style: everyday office Taglish, not formal Tagalog.** Common work and government words stay in English (apply, submit, upload, file, documents, requirements, status, deadline, schedule, exam, interview, qualifications, tracking code). The sentence and instructions are in Filipino, kept short. Keep new strings in the same style.
+  - It's still a draft. Someone at the office should read it through before launch.
 - **Contact details:** one source, `recruitment/email_branding.py` (see walkthrough finding 9).
 - **Plain-language help** where jargon appears:
   - Salary Grade
