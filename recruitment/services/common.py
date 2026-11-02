@@ -72,7 +72,7 @@ def _workflow_lock_target(args, kwargs, *names):
     return None
 
 
-def locks_workflow_row(scope):
+def locks_workflow_row(scope, *, refresh=True):
     """Serialize workflow writes. Two people (or one double click) finalizing the same step
     used to race: both read "not finalized yet", both wrote, and the loser hit a unique
     constraint as an error page. The decorated function now locks the row first and
@@ -81,6 +81,8 @@ def locks_workflow_row(scope):
 
     ``scope`` is "case" (lock the application's case), "vacancy" (the first argument is the
     vacancy) or "vacancy_of_application" (pool-wide steps called with one application).
+    ``refresh=False`` takes the lock without re-reading the application, for a function that
+    runs after its caller has already read and changed it (`routing.transition_case`).
     Always sits under @transaction.atomic. On SQLite (tests) the lock is a no-op."""
 
     def decorate(func):
@@ -94,7 +96,7 @@ def locks_workflow_row(scope):
                         .filter(application_id=target.pk)
                         .values_list("pk", flat=True)
                     )
-                    if case_ids:
+                    if case_ids and refresh:
                         target.refresh_from_db()
                 else:
                     posting = target if scope == "vacancy" else target.position

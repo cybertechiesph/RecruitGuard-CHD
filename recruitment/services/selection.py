@@ -808,18 +808,14 @@ def return_car_for_reassessment(application, actor, remarks):
                 ]
             )
 
-        case_transition = routing._sync_case_after_workflow_action(
-            application=target_application,
-            actor=actor,
-            next_role=RecruitmentUser.Role.HRMPSB_MEMBER,
-            next_status=RecruitmentApplication.Status.HRMPSB_REVIEW,
-            remarks=remarks,
-        )
-        target_application.current_handler_role = RecruitmentUser.Role.HRMPSB_MEMBER
-        target_application.status = RecruitmentApplication.Status.HRMPSB_REVIEW
-        target_application.closed_at = None
-        target_application.save(
-            update_fields=["current_handler_role", "status", "closed_at", "updated_at"]
+        case_transition = routing.transition_case(
+            target_application,
+            actor,
+            to_status=RecruitmentApplication.Status.HRMPSB_REVIEW,
+            to_role=RecruitmentUser.Role.HRMPSB_MEMBER,
+            route_type=RoutingHistory.RouteType.REOPEN,
+            description="Returned from Appointing Authority to HRMPSB for ETE and recommendation correction.",
+            notes=remarks,
         )
 
         audit.record_audit_event(
@@ -844,22 +840,6 @@ def return_car_for_reassessment(application, actor, remarks):
                 "from_case_status": case_transition["previous_case_status"],
                 "to_case_status": target_application.case.case_status,
             },
-        )
-        routing.record_routing_history_event(
-            application=target_application,
-            actor=actor,
-            route_type=RoutingHistory.RouteType.REOPEN,
-            description=(
-                "Returned from Appointing Authority to HRMPSB for ETE and recommendation correction."
-            ),
-            recruitment_case=target_application.case,
-            from_handler_role=previous_role,
-            to_handler_role=target_application.current_handler_role,
-            from_status=previous_status,
-            to_status=target_application.status,
-            from_stage=case_transition["previous_stage"],
-            to_stage=target_application.case.current_stage,
-            notes=remarks,
         )
         case_notices._emit_case_assignment_notification(
             target_application,
@@ -893,18 +873,14 @@ def _close_car_item_as_non_selected(
     target_application = item.application
     previous_role = target_application.current_handler_role
     previous_status = target_application.status
-    case_transition = routing._sync_case_after_workflow_action(
-        application=target_application,
-        actor=actor,
-        next_role="",
-        next_status=RecruitmentApplication.Status.REJECTED,
-        remarks=decision_notes,
-    )
-    target_application.current_handler_role = ""
-    target_application.status = RecruitmentApplication.Status.REJECTED
-    target_application.closed_at = timezone.now()
-    target_application.save(
-        update_fields=["current_handler_role", "status", "closed_at", "updated_at"]
+    case_transition = routing.transition_case(
+        target_application,
+        actor,
+        to_status=RecruitmentApplication.Status.REJECTED,
+        to_role="",
+        route_type=RoutingHistory.RouteType.CLOSE,
+        description=routing_description,
+        notes=decision_notes,
     )
 
     metadata = {
@@ -936,20 +912,6 @@ def _close_car_item_as_non_selected(
         action=AuditLog.Action.DECISION_RECORDED,
         description=description,
         metadata=metadata,
-    )
-    routing.record_routing_history_event(
-        application=target_application,
-        actor=actor,
-        route_type=RoutingHistory.RouteType.CLOSE,
-        description=routing_description,
-        recruitment_case=target_application.case,
-        from_handler_role=previous_role,
-        to_handler_role="",
-        from_status=previous_status,
-        to_status=target_application.status,
-        from_stage=case_transition["previous_stage"],
-        to_stage=target_application.case.current_stage,
-        notes=decision_notes,
     )
     queue_non_selected_applicant_notification(target_application, actor=actor)
     return target_application
@@ -1122,21 +1084,18 @@ def record_final_selection(application, actor, cleaned_data):
         )
         previous_role = target_application.current_handler_role
         previous_status = target_application.status
-        case_transition = routing._sync_case_after_workflow_action(
-            application=target_application,
-            actor=actor,
-            next_role=next_role,
-            next_status=next_status,
-            remarks=selection.decision_notes,
+        case_transition = routing.transition_case(
+            target_application,
+            actor,
+            to_status=next_status,
+            to_role=next_role,
+            route_type=RoutingHistory.RouteType.FORWARD,
+            description=(
+                f"Selected from CAR and routed to {RecruitmentUser.Role(next_role).label} "
+                "for completion handling."
+            ),
+            notes=selection.decision_notes,
         )
-        target_application.current_handler_role = next_role
-        target_application.status = next_status
-        target_application.closed_at = (
-            timezone.now()
-            if target_application.case.current_stage == RecruitmentCase.Stage.CLOSED
-            else None
-        )
-        target_application.save(update_fields=["current_handler_role", "status", "closed_at", "updated_at"])
 
         if selected:
             _reset_voided_completion_record_for_reselection(target_application)
@@ -1177,7 +1136,6 @@ def record_final_selection(application, actor, cleaned_data):
         )
 
         if selected:
-            next_role_label = RecruitmentUser.Role(next_role).label
             audit.record_audit_event(
                 application=target_application,
                 actor=actor,
@@ -1188,20 +1146,6 @@ def record_final_selection(application, actor, cleaned_data):
                     "current_handler_role": next_role,
                     **routing._case_timeline_metadata(target_application.case),
                 },
-            )
-            routing.record_routing_history_event(
-                application=target_application,
-                actor=actor,
-                route_type=RoutingHistory.RouteType.FORWARD,
-                description=f"Selected from CAR and routed to {next_role_label} for completion handling.",
-                recruitment_case=target_application.case,
-                from_handler_role=previous_role,
-                to_handler_role=next_role,
-                from_status=previous_status,
-                to_status=next_status,
-                from_stage=case_transition["previous_stage"],
-                to_stage=target_application.case.current_stage,
-                notes=selection.decision_notes,
             )
             case_notices._emit_case_assignment_notification(
                 target_application,
@@ -1287,18 +1231,11 @@ def rescind_final_selection(selection, actor, reason, *, reference=""):
             continue
         previous_status = application.status
         previous_case_status = case.case_status
-        routing._sync_case_after_workflow_action(
-            application=application,
-            actor=actor,
-            next_role=RecruitmentUser.Role.APPOINTING_AUTHORITY,
-            next_status=RecruitmentApplication.Status.APPOINTING_AUTHORITY_REVIEW,
-            remarks=f"Selection rescinded: {reason}",
-        )
-        application.current_handler_role = RecruitmentUser.Role.APPOINTING_AUTHORITY
-        application.status = RecruitmentApplication.Status.APPOINTING_AUTHORITY_REVIEW
-        application.closed_at = None
-        application.save(
-            update_fields=["current_handler_role", "status", "closed_at", "updated_at"]
+        routing.transition_case(
+            application,
+            actor,
+            to_status=RecruitmentApplication.Status.APPOINTING_AUTHORITY_REVIEW,
+            to_role=RecruitmentUser.Role.APPOINTING_AUTHORITY,
         )
         audit.record_audit_event(
             application=application,
@@ -1443,17 +1380,15 @@ def record_final_decision(application, actor, cleaned_data):
     next_role = routing._completion_handler_role(application) if decision.is_selected else ""
     previous_role = application.current_handler_role
     previous_status = application.status
-    case_transition = routing._sync_case_after_workflow_action(
-        application=application,
-        actor=actor,
-        next_role=next_role,
-        next_status=next_status,
-        remarks=decision.decision_notes,
+    case_transition = routing.transition_case(
+        application,
+        actor,
+        to_status=next_status,
+        to_role=next_role,
+        route_type=RoutingHistory.RouteType.FORWARD if next_role else None,
+        description=f"Application routed to {next_role} for completion handling.",
+        notes=decision.decision_notes,
     )
-    application.current_handler_role = next_role
-    application.status = next_status
-    application.closed_at = timezone.now() if application.case.current_stage == RecruitmentCase.Stage.CLOSED else None
-    application.save(update_fields=["current_handler_role", "status", "closed_at", "updated_at"])
 
     audit.record_audit_event(
         application=application,
@@ -1499,20 +1434,6 @@ def record_final_decision(application, actor, cleaned_data):
                 "current_handler_role": next_role,
                 **routing._case_timeline_metadata(application.case),
             },
-        )
-        routing.record_routing_history_event(
-            application=application,
-            actor=actor,
-            route_type=RoutingHistory.RouteType.FORWARD,
-            description=f"Application routed to {next_role} for completion handling.",
-            recruitment_case=application.case,
-            from_handler_role=previous_role,
-            to_handler_role=next_role,
-            from_status=previous_status,
-            to_status=next_status,
-            from_stage=case_transition["previous_stage"],
-            to_stage=application.case.current_stage,
-            notes=decision.decision_notes,
         )
         case_notices._emit_case_assignment_notification(
             application,

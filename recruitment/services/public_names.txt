@@ -214,7 +214,6 @@ _send_resubmission_reminder
 _stage_record_field_snapshot
 _stage_record_value
 _submission_packet_json
-_sync_case_after_workflow_action
 _sync_portal_applicant_identity
 _sync_screening_document_reviews
 _transition_case_stage
@@ -445,6 +444,7 @@ store_generated_evidence_item
 submit_application
 submit_document_resubmission
 summarize_audit_logs
+transition_case
 unlock_vacancy_assessment_weights
 update_applicant_contact
 update_evidence_archive_status

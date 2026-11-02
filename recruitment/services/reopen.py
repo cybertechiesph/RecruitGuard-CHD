@@ -12,7 +12,6 @@ from ..models import (
     AuditLog,
     FinalDecision,
     Notification,
-    RecruitmentCase,
     RecruitmentUser,
     RoutingHistory,
     StageRecordVersion,
@@ -364,40 +363,23 @@ def reopen_recruitment_case(application, actor, reason):
             "can't be reopened while the selection stands."
         )
 
-    previous_stage = case.current_stage
-    previous_role = application.current_handler_role
-    previous_status = application.status
     reopened_stage = case.locked_stage
     reopened_status = routing._application_status_from_stage(reopened_stage)
     if not reopened_status:
         raise ValueError("This finalized case does not point to a step that can be reopened.")
 
-    routing._transition_case_stage(case, reopened_stage)
-    case.current_handler_role = routing._handler_role_from_stage(reopened_stage, application=application)
-    case.case_status = RecruitmentCase.CaseStatus.ACTIVE
-    case.is_stage_locked = False
-    case.locked_stage = ""
-    case.closed_at = None
-    case.reopened_at = timezone.now()
-    case.save(
-        update_fields=[
-            "branch",
-            "current_stage",
-            "stage_entered_at",
-            "current_handler_role",
-            "case_status",
-            "is_stage_locked",
-            "locked_stage",
-            "closed_at",
-            "reopened_at",
-            "updated_at",
-        ]
+    reopened_role = routing._handler_role_from_stage(reopened_stage, application=application)
+    routing.transition_case(
+        application,
+        actor,
+        to_status=reopened_status,
+        to_role=reopened_role,
+        route_type=RoutingHistory.RouteType.REOPEN,
+        description=f"Case reopened and assigned to {RecruitmentUser.Role(reopened_role).label}.",
+        notes=reason,
     )
-
-    application.status = reopened_status
-    application.current_handler_role = case.current_handler_role
-    application.closed_at = None
-    application.save(update_fields=["status", "current_handler_role", "closed_at", "updated_at"])
+    case.reopened_at = timezone.now()
+    case.save(update_fields=["reopened_at", "updated_at"])
 
     # SL-12: reopen the decision, not just the envelope around it. Unlocking the case while
     # its finalized screening/exam/interview record kept refusing every write handed the
@@ -444,20 +426,6 @@ def reopen_recruitment_case(application, actor, reason):
             "current_handler_role": application.current_handler_role,
             **routing._case_timeline_metadata(case),
         },
-    )
-    routing.record_routing_history_event(
-        application=application,
-        actor=actor,
-        route_type=RoutingHistory.RouteType.REOPEN,
-        description=f"Case reopened and assigned to {RecruitmentUser.Role(case.current_handler_role).label}.",
-        recruitment_case=case,
-        from_handler_role=previous_role,
-        to_handler_role=application.current_handler_role,
-        from_status=previous_status,
-        to_status=application.status,
-        from_stage=previous_stage,
-        to_stage=case.current_stage,
-        notes=reason,
     )
     case_notices._emit_case_assignment_notification(
         application,

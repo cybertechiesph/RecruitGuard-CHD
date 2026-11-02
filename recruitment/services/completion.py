@@ -3,7 +3,6 @@
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.utils import timezone
 
 from ..models import (
     AuditLog,
@@ -239,34 +238,19 @@ def close_recruitment_case(application, actor, closure_notes):
     if not completion_record.has_completion_date_for_closure:
         raise ValueError(f"Record the {completion_label} date before closing the case.")
 
-    previous_role = application.current_handler_role
     previous_stage = case.current_stage
     previous_case_status = case.case_status
-    closed_at = timezone.now()
 
-    routing._transition_case_stage(case, RecruitmentCase.Stage.CLOSED)
-    case.case_status = RecruitmentCase.CaseStatus.APPROVED
-    case.current_handler_role = ""
-    case.is_stage_locked = True
-    case.locked_stage = RecruitmentCase.Stage.COMPLETION
-    case.closed_at = closed_at
-    case.save(
-        update_fields=[
-            "branch",
-            "current_stage",
-            "stage_entered_at",
-            "current_handler_role",
-            "case_status",
-            "is_stage_locked",
-            "locked_stage",
-            "closed_at",
-            "updated_at",
-        ]
+    # The application status stays Approved; the case leaves Completion for Closed.
+    routing.transition_case(
+        application,
+        actor,
+        to_status=application.status,
+        to_role="",
+        route_type=RoutingHistory.RouteType.CLOSE,
+        description="Recruitment case closed after completion tracking.",
+        notes=closure_notes,
     )
-
-    application.current_handler_role = ""
-    application.closed_at = closed_at
-    application.save(update_fields=["current_handler_role", "closed_at", "updated_at"])
 
     audit.record_audit_event(
         application=application,
@@ -283,19 +267,5 @@ def close_recruitment_case(application, actor, closure_notes):
             "requirement_count": completion_record.total_requirement_count,
             "resolved_requirement_count": completion_record.completed_requirement_count,
         },
-    )
-    routing.record_routing_history_event(
-        application=application,
-        actor=actor,
-        route_type=RoutingHistory.RouteType.CLOSE,
-        description="Recruitment case closed after completion tracking.",
-        recruitment_case=case,
-        from_handler_role=previous_role,
-        to_handler_role="",
-        from_status=application.status,
-        to_status=application.status,
-        from_stage=previous_stage,
-        to_stage=case.current_stage,
-        notes=closure_notes,
     )
     return case

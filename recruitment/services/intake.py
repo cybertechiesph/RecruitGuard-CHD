@@ -156,18 +156,14 @@ def record_application_withdrawal(
     previous_case_status = case.case_status
     previous_stage = case.current_stage
     previous_role = application.current_handler_role
-    case_transition = routing._sync_case_after_workflow_action(
-        application=application,
-        actor=actor,
-        next_role="",
-        next_status=RecruitmentApplication.Status.WITHDRAWN,
-        remarks=reason,
-    )
-    application.current_handler_role = ""
-    application.status = RecruitmentApplication.Status.WITHDRAWN
-    application.closed_at = timezone.now()
-    application.save(
-        update_fields=["current_handler_role", "status", "closed_at", "updated_at"]
+    routing.transition_case(
+        application,
+        actor,
+        to_status=RecruitmentApplication.Status.WITHDRAWN,
+        to_role="",
+        route_type=RoutingHistory.RouteType.CLOSE,
+        description="Closed as withdrawn at the applicant's request.",
+        notes=reason,
     )
     audit.record_audit_event(
         application=application,
@@ -187,20 +183,6 @@ def record_application_withdrawal(
             "from_case_status": previous_case_status,
             "to_case_status": case.case_status,
         },
-    )
-    routing.record_routing_history_event(
-        application=application,
-        actor=actor,
-        route_type=RoutingHistory.RouteType.CLOSE,
-        description="Closed as withdrawn at the applicant's request.",
-        recruitment_case=case,
-        from_handler_role=previous_role,
-        to_handler_role="",
-        from_status=previous_status,
-        to_status=application.status,
-        from_stage=case_transition["previous_stage"],
-        to_stage=case.current_stage,
-        notes=reason,
     )
     queue_withdrawal_acknowledgement_notification(application, actor=actor, reason=reason)
     return application
@@ -1583,15 +1565,15 @@ def submit_document_resubmission(application, actor, uploaded_files, *, email_ve
 
     # Return the case to the reviewing role for re-review and restart its stage clock.
     reviewing_role = case.current_handler_role
-    case.case_status = RecruitmentCase.CaseStatus.ACTIVE
-    case.stage_entered_at = timezone.now()
-    case.reopened_at = timezone.now()
-    case.save(
-        update_fields=["case_status", "stage_entered_at", "reopened_at", "updated_at"]
+    routing.transition_case(
+        application,
+        actor,
+        to_status=routing._application_status_from_stage(review_stage),
+        to_role=reviewing_role,
+        restart_stage_clock=True,
     )
-    application.status = routing._application_status_from_stage(review_stage)
-    application.current_handler_role = reviewing_role
-    application.save(update_fields=["status", "current_handler_role", "updated_at"])
+    case.reopened_at = timezone.now()
+    case.save(update_fields=["reopened_at", "updated_at"])
 
     audit.record_audit_event(
         application=application,

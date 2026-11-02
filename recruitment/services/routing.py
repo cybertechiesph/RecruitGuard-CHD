@@ -211,32 +211,24 @@ def recall_vacancy_batch(posting, actor, remarks):
             application.overrides.filter(is_active=True).update(
                 is_active=False, revoked_at=timezone.now()
             )
-        case.current_handler_role = actor.role
-        case.save(update_fields=["current_handler_role", "updated_at"])
-        application.current_handler_role = actor.role
-        application.save(update_fields=["current_handler_role", "updated_at"])
         description = f"Batch recalled by the {RecruitmentUser.Role(actor.role).label}."
+        # The case keeps its step (and a pending resubmission stays pending); only the
+        # handler changes back to the office that lent it.
+        transition_case(
+            application,
+            actor,
+            to_status=application.status,
+            to_role=actor.role,
+            route_type=RoutingHistory.RouteType.FORWARD,
+            description=description,
+            notes=remarks,
+        )
         audit.record_audit_event(
             application=application,
             actor=actor,
             action=AuditLog.Action.ROUTED,
             description=description,
             metadata={"remarks": remarks, "from_role": previous_role, "to_role": actor.role, "recall": True},
-        )
-        record_routing_history_event(
-            application=application,
-            actor=actor,
-            route_type=RoutingHistory.RouteType.FORWARD,
-            description=description,
-            recruitment_case=case,
-            from_handler_role=previous_role,
-            to_handler_role=actor.role,
-            from_status=application.status,
-            to_status=application.status,
-            from_stage=case.current_stage,
-            to_stage=case.current_stage,
-            notes=remarks,
-            is_override=False,
         )
         case_notices._emit_case_assignment_notification(
             application,
@@ -373,15 +365,21 @@ def route_case_between_secretariat_and_hrm_chief(application, actor, target_role
     previous_stage = case.current_stage
     previous_case_status = case.case_status
 
-    case.current_handler_role = target_role
-    case.case_status = RecruitmentCase.CaseStatus.ACTIVE
-    case.save(update_fields=["current_handler_role", "case_status", "updated_at"])
-
-    application.current_handler_role = target_role
-    application.status = _handoff_target_status(application)
-    application.save(update_fields=["current_handler_role", "status", "updated_at"])
-
     description = _case_handoff_description(actor.role, target_role, application)
+    transition_case(
+        application,
+        actor,
+        to_status=_handoff_target_status(application),
+        to_role=target_role,
+        route_type=(
+            RoutingHistory.RouteType.OVERRIDE
+            if is_level2_secretariat_handoff
+            else RoutingHistory.RouteType.FORWARD
+        ),
+        description=description,
+        notes=remarks,
+        is_override=is_level2_secretariat_handoff,
+    )
     if override:
         audit.record_audit_event(
             application=application,
@@ -422,25 +420,6 @@ def route_case_between_secretariat_and_hrm_chief(application, actor, target_role
             "to_case_status": case.case_status,
             "case_locked": case.is_stage_locked,
         },
-    )
-    record_routing_history_event(
-        application=application,
-        actor=actor,
-        route_type=(
-            RoutingHistory.RouteType.OVERRIDE
-            if is_level2_secretariat_handoff
-            else RoutingHistory.RouteType.FORWARD
-        ),
-        description=description,
-        recruitment_case=case,
-        from_handler_role=previous_role,
-        to_handler_role=target_role,
-        from_status=previous_status,
-        to_status=application.status,
-        from_stage=previous_stage,
-        to_stage=case.current_stage,
-        notes=remarks,
-        is_override=is_level2_secretariat_handoff,
     )
     case_notices._emit_case_assignment_notification(
         application,
@@ -485,17 +464,15 @@ def _auto_route_application(application, actor, *, next_role, next_status, descr
 
     previous_role = application.current_handler_role
     previous_status = application.status
-    case_transition = _sync_case_after_workflow_action(
-        application=application,
-        actor=actor,
-        next_role=next_role,
-        next_status=next_status,
-        remarks=remarks,
+    case_transition = transition_case(
+        application,
+        actor,
+        to_status=next_status,
+        to_role=next_role,
+        route_type=RoutingHistory.RouteType.FORWARD,
+        description=description,
+        notes=remarks,
     )
-    application.current_handler_role = next_role
-    application.status = next_status
-    application.closed_at = None
-    application.save(update_fields=["current_handler_role", "status", "closed_at", "updated_at"])
 
     audit.record_audit_event(
         application=application,
@@ -515,20 +492,6 @@ def _auto_route_application(application, actor, *, next_role, next_status, descr
             "to_case_status": application.case.case_status,
             "case_locked": application.case.is_stage_locked,
         },
-    )
-    record_routing_history_event(
-        application=application,
-        actor=actor,
-        route_type=RoutingHistory.RouteType.FORWARD,
-        description=description,
-        recruitment_case=application.case,
-        from_handler_role=previous_role,
-        to_handler_role=next_role,
-        from_status=previous_status,
-        to_status=next_status,
-        from_stage=case_transition["previous_stage"],
-        to_stage=application.case.current_stage,
-        notes=remarks,
     )
     case_notices._emit_case_assignment_notification(
         application,
@@ -907,25 +870,56 @@ def _workflow_progress_block_message(application, section_key=None):
     return "Complete the current workflow task before proceeding."
 
 
-def _sync_case_after_workflow_action(application, actor, next_role, next_status, remarks):
+@common.locks_workflow_row("case", refresh=False)
+def transition_case(
+    application,
+    actor,
+    *,
+    to_status,
+    to_role,
+    route_type=None,
+    description="",
+    notes="",
+    is_override=False,
+    restart_stage_clock=False,
+):
+    """The only way a case changes stage, case status or handler (F15 round 2).
+
+    Locks the case row, derives the case's stage and status from the application status
+    it is moving to, writes the case and the application's status, handler and closed time,
+    and, when ``route_type`` is given, records the RoutingHistory row. The caller records
+    its own audit event (the action and metadata differ by step) from the returned
+    before-state. ``restart_stage_clock`` restarts the stage's SLA clock when the stage
+    itself does not change (an applicant's resubmission).
+    """
     case = application.case
     _ensure_case_stage_alignment(application, case)
     previous_stage = case.current_stage
     previous_case_status = case.case_status
+    previous_role = application.current_handler_role
+    previous_status = application.status
 
-    next_stage = _review_stage_from_application_status(next_status)
+    next_stage = _review_stage_from_application_status(to_status)
     if next_stage:
         _transition_case_stage(case, next_stage)
         case.case_status = RecruitmentCase.CaseStatus.ACTIVE
-        case.current_handler_role = next_role
+        case.current_handler_role = to_role
         case.is_stage_locked = False
         case.locked_stage = ""
         case.closed_at = None
-    elif next_status == RecruitmentApplication.Status.APPROVED:
-        if next_role:
+    elif to_status == RecruitmentApplication.Status.RETURNED_TO_APPLICANT:
+        # A resubmission request: the case keeps its stage and reviewing handler but waits
+        # for the applicant, which pauses the stage clock and flags it in the batch console.
+        case.case_status = RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION
+        case.current_handler_role = to_role
+        case.is_stage_locked = False
+        case.locked_stage = ""
+        case.closed_at = None
+    elif to_status == RecruitmentApplication.Status.APPROVED:
+        if to_role:
             _transition_case_stage(case, RecruitmentCase.Stage.COMPLETION)
             case.case_status = RecruitmentCase.CaseStatus.ACTIVE
-            case.current_handler_role = next_role
+            case.current_handler_role = to_role
             case.is_stage_locked = False
             case.locked_stage = ""
             case.closed_at = None
@@ -936,14 +930,14 @@ def _sync_case_after_workflow_action(application, actor, next_role, next_status,
             case.is_stage_locked = True
             case.locked_stage = previous_stage
             case.closed_at = timezone.now()
-    elif next_status == RecruitmentApplication.Status.REJECTED:
+    elif to_status == RecruitmentApplication.Status.REJECTED:
         _transition_case_stage(case, RecruitmentCase.Stage.CLOSED)
         case.case_status = RecruitmentCase.CaseStatus.REJECTED
         case.current_handler_role = ""
         case.is_stage_locked = True
         case.locked_stage = previous_stage
         case.closed_at = timezone.now()
-    elif next_status == RecruitmentApplication.Status.VACANCY_CANCELLED:
+    elif to_status == RecruitmentApplication.Status.VACANCY_CANCELLED:
         # SL-11: terminal, and explicitly not a merit outcome.
         _transition_case_stage(case, RecruitmentCase.Stage.CLOSED)
         case.case_status = RecruitmentCase.CaseStatus.VACANCY_CANCELLED
@@ -951,7 +945,7 @@ def _sync_case_after_workflow_action(application, actor, next_role, next_status,
         case.is_stage_locked = True
         case.locked_stage = previous_stage
         case.closed_at = timezone.now()
-    elif next_status == RecruitmentApplication.Status.WITHDRAWN:
+    elif to_status == RecruitmentApplication.Status.WITHDRAWN:
         # SL-10: terminal like a rejection in mechanics, distinct from it in meaning. The
         # case leaves every active pool but the record never says the office turned this
         # person down.
@@ -963,6 +957,8 @@ def _sync_case_after_workflow_action(application, actor, next_role, next_status,
         case.closed_at = timezone.now()
     else:
         raise ValueError("Unsupported recruitment case transition target.")
+    if restart_stage_clock and case.current_stage == previous_stage:
+        case.stage_entered_at = timezone.now()
 
     case.save(
         update_fields=[
@@ -977,9 +973,34 @@ def _sync_case_after_workflow_action(application, actor, next_role, next_status,
             "updated_at",
         ]
     )
+    application.current_handler_role = case.current_handler_role
+    application.status = to_status
+    application.closed_at = (
+        case.closed_at if case.current_stage == RecruitmentCase.Stage.CLOSED else None
+    )
+    application.save(update_fields=["current_handler_role", "status", "closed_at", "updated_at"])
+
+    if route_type:
+        record_routing_history_event(
+            application=application,
+            actor=actor,
+            route_type=route_type,
+            description=description,
+            recruitment_case=case,
+            from_handler_role=previous_role,
+            to_handler_role=application.current_handler_role,
+            from_status=previous_status,
+            to_status=to_status,
+            from_stage=previous_stage,
+            to_stage=case.current_stage,
+            notes=notes,
+            is_override=is_override,
+        )
     return {
         "previous_stage": previous_stage,
         "previous_case_status": previous_case_status,
+        "previous_role": previous_role,
+        "previous_status": previous_status,
         "case": case,
     }
 
@@ -1054,18 +1075,11 @@ def remove_applicant_from_batch(application, actor, reason):
     previous_case_status = case.case_status
 
     # Reuse the terminal rejected/closed transition so queue-exclusion + lock semantics are shared.
-    _sync_case_after_workflow_action(
-        application=application,
-        actor=actor,
-        next_role="",
-        next_status=RecruitmentApplication.Status.REJECTED,
-        remarks=reason,
-    )
-    application.current_handler_role = ""
-    application.status = RecruitmentApplication.Status.REJECTED
-    application.closed_at = timezone.now()
-    application.save(
-        update_fields=["current_handler_role", "status", "closed_at", "updated_at"]
+    transition_case(
+        application,
+        actor,
+        to_status=RecruitmentApplication.Status.REJECTED,
+        to_role="",
     )
     audit.record_audit_event(
         application=application,
@@ -1134,23 +1148,12 @@ def process_workflow_action(application, actor, action, remarks):
     next_role, next_status, description = _transition_target(application, effective_role, action)
     previous_role = application.current_handler_role
     previous_status = application.status
-    case_transition = _sync_case_after_workflow_action(
-        application=application,
-        actor=actor,
-        next_role=next_role,
-        next_status=next_status,
-        remarks=remarks,
+    case_transition = transition_case(
+        application,
+        actor,
+        to_status=next_status,
+        to_role=next_role,
     )
-    application.current_handler_role = next_role
-    application.status = next_status
-    if application.case.current_stage == RecruitmentCase.Stage.CLOSED and next_status in {
-        RecruitmentApplication.Status.APPROVED,
-        RecruitmentApplication.Status.REJECTED,
-    }:
-        application.closed_at = timezone.now()
-    else:
-        application.closed_at = None
-    application.save(update_fields=["current_handler_role", "status", "closed_at", "updated_at"])
 
     audit.record_audit_event(
         application=application,

@@ -533,18 +533,11 @@ def cancel_recruitment_entry(entry, actor, reason):
         previous_case_status = application.case.case_status
         previous_application_status = application.status
         previous_role = application.current_handler_role
-        routing._sync_case_after_workflow_action(
-            application=application,
-            actor=actor,
-            next_role="",
-            next_status=RecruitmentApplication.Status.VACANCY_CANCELLED,
-            remarks=reason,
-        )
-        application.current_handler_role = ""
-        application.status = RecruitmentApplication.Status.VACANCY_CANCELLED
-        application.closed_at = timezone.now()
-        application.save(
-            update_fields=["current_handler_role", "status", "closed_at", "updated_at"]
+        routing.transition_case(
+            application,
+            actor,
+            to_status=RecruitmentApplication.Status.VACANCY_CANCELLED,
+            to_role="",
         )
         audit.record_audit_event(
             application=application,

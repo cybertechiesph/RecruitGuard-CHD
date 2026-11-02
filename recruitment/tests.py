@@ -22680,6 +22680,7 @@ class SecretariatRoundATests(BaseRecruitmentTestCase):
             "record_no_appointment",
             "save_completion_tracking",
             "close_recruitment_case",
+            "transition_case",
         ):
             with self.subTest(name=name):
                 self.assertTrue(
@@ -23385,3 +23386,45 @@ class ServicesPackageArchitectureTests(SimpleTestCase):
                 }
                 with self.subTest(module=name, scope=table.get_name()):
                     self.assertEqual(hidden, set(), "rename the local; it hides a sibling module")
+
+    def test_only_transition_case_moves_a_case(self):
+        """F15 round 2: every change of a case's stage, status, handler or lock goes through
+        services.routing.transition_case, so each movement is locked and recorded alike."""
+        guarded = {"current_stage", "case_status", "current_handler_role", "is_stage_locked", "locked_stage"}
+        allowed = {
+            ("routing", "transition_case"),
+            ("routing", "_transition_case_stage"),
+            # Birth, not a movement: the application is routed before its case exists.
+            ("intake", "submit_application"),
+        }
+        app_dir = self.package_dir.parent
+        for path in sorted(app_dir.rglob("*.py")):
+            relative = path.relative_to(app_dir)
+            if relative.parts[0] == "migrations" or path.name == "tests.py":
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for function in ast.walk(tree):
+                if not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                if (path.stem, function.name) in allowed:
+                    continue
+                for node in ast.walk(function):
+                    targets = []
+                    if isinstance(node, ast.Assign):
+                        targets = node.targets
+                    elif isinstance(node, (ast.AugAssign, ast.AnnAssign)):
+                        targets = [node.target]
+                    for target in targets:
+                        for part in ast.walk(target):
+                            if isinstance(part, ast.Attribute) and part.attr in guarded:
+                                self.fail(
+                                    f"{relative}:{node.lineno} {function.name} sets "
+                                    f".{part.attr}; call routing.transition_case instead"
+                                )
+                    if (
+                        isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Attribute)
+                        and node.func.attr == "update"
+                        and guarded & {keyword.arg for keyword in node.keywords}
+                    ):
+                        self.fail(f"{relative}:{node.lineno} {function.name} bulk-updates a case field")

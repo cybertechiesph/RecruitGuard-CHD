@@ -780,18 +780,11 @@ def rescind_cos_vacancy_deliberation(pick, actor, reason, *, reference=""):
             continue
         previous_status = application.status
         previous_case_status = case.case_status
-        routing._sync_case_after_workflow_action(
-            application=application,
-            actor=actor,
-            next_role=RecruitmentUser.Role.HRM_CHIEF,
-            next_status=RecruitmentApplication.Status.HRM_CHIEF_REVIEW,
-            remarks=f"COS deliberation pick rescinded: {reason}",
-        )
-        application.current_handler_role = RecruitmentUser.Role.HRM_CHIEF
-        application.status = RecruitmentApplication.Status.HRM_CHIEF_REVIEW
-        application.closed_at = None
-        application.save(
-            update_fields=["current_handler_role", "status", "closed_at", "updated_at"]
+        routing.transition_case(
+            application,
+            actor,
+            to_status=RecruitmentApplication.Status.HRM_CHIEF_REVIEW,
+            to_role=RecruitmentUser.Role.HRM_CHIEF,
         )
         audit.record_audit_event(
             application=application,
@@ -900,22 +893,14 @@ def _close_cos_round_unpicked(selection_round, actor, *, notes=""):
     for sibling in siblings:
         previous_role = sibling.current_handler_role
         previous_status = sibling.status
-        case_transition = routing._sync_case_after_workflow_action(
-            application=sibling,
-            actor=actor,
-            next_role="",
-            next_status=RecruitmentApplication.Status.REJECTED,
-            remarks="Not selected — another applicant was chosen for this COS vacancy.",
-        )
-        sibling.current_handler_role = ""
-        sibling.status = RecruitmentApplication.Status.REJECTED
-        sibling.closed_at = (
-            timezone.now()
-            if sibling.case.current_stage == RecruitmentCase.Stage.CLOSED
-            else None
-        )
-        sibling.save(
-            update_fields=["current_handler_role", "status", "closed_at", "updated_at"]
+        case_transition = routing.transition_case(
+            sibling,
+            actor,
+            to_status=RecruitmentApplication.Status.REJECTED,
+            to_role="",
+            route_type=RoutingHistory.RouteType.CLOSE,
+            description="Closed as not selected after the COS deliberation pick's selection was recorded.",
+            notes=decision_notes,
         )
         audit.record_audit_event(
             application=sibling,
@@ -947,20 +932,6 @@ def _close_cos_round_unpicked(selection_round, actor, *, notes=""):
                 "to_case_status": sibling.case.case_status,
                 "case_locked": sibling.case.is_stage_locked,
             },
-        )
-        routing.record_routing_history_event(
-            application=sibling,
-            actor=actor,
-            route_type=RoutingHistory.RouteType.CLOSE,
-            description="Closed as not selected after the COS deliberation pick's selection was recorded.",
-            recruitment_case=sibling.case,
-            from_handler_role=previous_role,
-            to_handler_role="",
-            from_status=previous_status,
-            to_status=sibling.status,
-            from_stage=case_transition["previous_stage"],
-            to_stage=sibling.case.current_stage,
-            notes=decision_notes,
         )
         queue_non_selected_applicant_notification(sibling, actor=actor)
         closed.append(sibling)

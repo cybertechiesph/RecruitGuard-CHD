@@ -112,7 +112,7 @@ from .routing import (
     get_current_workflow_section_label,
     get_application_detail_tab,
     _workflow_progress_block_message,
-    _sync_case_after_workflow_action,
+    transition_case,
     get_available_actions,
     _transition_target,
     remove_applicant_from_batch,

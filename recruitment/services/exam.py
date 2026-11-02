@@ -84,18 +84,11 @@ def _close_absent_or_waived_exam_application(application, actor, exam_record):
     )
     previous_status = application.status
     previous_case_status = application.case.case_status
-    routing._sync_case_after_workflow_action(
-        application=application,
-        actor=actor,
-        next_role="",
-        next_status=RecruitmentApplication.Status.REJECTED,
-        remarks=reason,
-    )
-    application.current_handler_role = ""
-    application.status = RecruitmentApplication.Status.REJECTED
-    application.closed_at = timezone.now()
-    application.save(
-        update_fields=["current_handler_role", "status", "closed_at", "updated_at"]
+    routing.transition_case(
+        application,
+        actor,
+        to_status=RecruitmentApplication.Status.REJECTED,
+        to_role="",
     )
     audit.record_audit_event(
         application=application,
@@ -312,18 +305,11 @@ def _close_after_attendance_absence(exception, actor):
     )
     previous_status = application.status
     previous_case_status = application.case.case_status
-    routing._sync_case_after_workflow_action(
-        application=application,
-        actor=actor,
-        next_role="",
-        next_status=RecruitmentApplication.Status.REJECTED,
-        remarks=reason,
-    )
-    application.current_handler_role = ""
-    application.status = RecruitmentApplication.Status.REJECTED
-    application.closed_at = timezone.now()
-    application.save(
-        update_fields=["current_handler_role", "status", "closed_at", "updated_at"]
+    routing.transition_case(
+        application,
+        actor,
+        to_status=RecruitmentApplication.Status.REJECTED,
+        to_role="",
     )
     audit.record_audit_event(
         application=application,

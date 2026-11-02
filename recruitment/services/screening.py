@@ -637,21 +637,17 @@ def request_document_resubmission(application, actor, remarks):
 
     # The case stays at its reviewing stage with the reviewing handler, unlocked, but flagged as
     # awaiting the applicant's resubmission so the SLA pauses and the batch console surfaces it.
-    case.case_status = RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION
-    case.is_stage_locked = False
-    case.locked_stage = ""
-    case.closed_at = None
-    case.save(
-        update_fields=["case_status", "is_stage_locked", "locked_stage", "closed_at", "updated_at"]
+    # The application becomes applicant-editable (RETURNED_TO_APPLICANT) so the scoped
+    # re-upload + OTP work, but it KEEPS the reviewing role as handler so it stays in that
+    # role's queue.
+    routing.transition_case(
+        application,
+        actor,
+        to_status=RecruitmentApplication.Status.RETURNED_TO_APPLICANT,
+        to_role=reviewing_role,
     )
-
-    # Application is applicant-editable (RETURNED_TO_APPLICANT) so the scoped re-upload + OTP
-    # work, but it KEEPS the reviewing role as handler so it stays in that role's queue.
     # Invalidate any leftover OTP (e.g. from the original submission) so the applicant must
     # verify a fresh code before resubmitting.
-    application.status = RecruitmentApplication.Status.RETURNED_TO_APPLICANT
-    application.current_handler_role = reviewing_role
-    application.closed_at = None
     application.otp_hash = ""
     application.otp_requested_at = None
     application.otp_expires_at = None
@@ -659,9 +655,6 @@ def request_document_resubmission(application, actor, remarks):
     application.otp_attempt_count = 0
     application.save(
         update_fields=[
-            "status",
-            "current_handler_role",
-            "closed_at",
             "otp_hash",
             "otp_requested_at",
             "otp_expires_at",
