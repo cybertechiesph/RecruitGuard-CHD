@@ -6,7 +6,7 @@ perspectives. This is the third pass: it follows the walkthrough
 ([secretariat-walkthrough-2026-11.md](secretariat-walkthrough-2026-11.md)), the six essential
 fixes (`f74ad22`) and the second round (`03a8524`). No code was changed for this review.
 
-## Status: Round A done (F1–F6)
+## Status: Round A done (F1–F6), Round B done (F7–F14, P3)
 
 | | Fix | Verified |
 |---|---|---|
@@ -17,7 +17,10 @@ fixes (`f74ad22`) and the second round (`03a8524`). No code was changed for this
 | **F5** | "Send again" refuses a second copy of the same email within a minute (the row is locked, so two simultaneous clicks are covered), and the button disables after the first click. | Test + live probe (two clicks → one copy). |
 | **F6** | **Corrected finding.** The count in F6 below was wrong: the batch already sends one digest per panel member per vacancy (the six notices on one case were the six members' digests). Reading the email exposed the real problem: it listed each candidate's **name and case number** next to the code, to every panel member. The panel's interview emails (batch digest, single-case notice, HTML version) now show candidate codes only; the HTML digest also gained its missing schedule and location. | Test that renders subject, text and HTML for every panel recipient. Not sent live (no Plantilla batch at the interview step in the demo data). |
 
-Still open: F7–F15 and the P3 list. The "every HRMPSB account receives every notice" part of F6 remains until the office decides on a panel per vacancy (section 7).
+**Round B (2026-11-03):** F7–F14 and this review's P3 list are done, together with the HRM
+Chief review's Round B; see the status table in `docs/hrm-chief-review-2026-11.md` section 8.
+The rest of F6 is closed too: a panel per vacancy means an HRMPSB member is notified only about
+their own vacancies. Still open: F15 and the office questions.
 
 ## 0. How this was tested
 

@@ -87,7 +87,7 @@ that gets signed and filed. Generating it is recorded in the case audit trail.
             {% if entry.item_number %}<div><span>Plantilla Item Number:</span> {{ entry.item_number }}</div>{% endif %}
             <div><span>Candidates assessed:</span> {{ items|length }}</div>
             {% if report.members_present %}<div><span>Members present:</span> {{ report.members_present }}</div>{% endif %}
-            {% if report.deliberated_on %}<div><span>Date of deliberation:</span> {{ report.deliberated_on|date:"F d, Y" }}</div>{% endif %}
+            {% if report.deliberated_on %}<div><span>Date of deliberation:</span> {{ report.deliberated_on|date:"F j, Y" }}</div>{% endif %}
         </div>
 
         <div class="qs">
@@ -172,7 +172,7 @@ that gets signed and filed. Generating it is recorded in the case audit trail.
 
         <div class="doc-meta" style="margin-top:22px;">
             <div><span>Date of Interview:</span> ______________________</div>
-            <div><span>Date of Deliberation:</span> {{ report.deliberated_on|date:"F d, Y" }}</div>
+            <div><span>Date of Deliberation:</span> {{ report.deliberated_on|date:"F j, Y" }}</div>
         </div>
 
         <div class="print-meta">

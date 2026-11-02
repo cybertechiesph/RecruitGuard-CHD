@@ -41,7 +41,7 @@
             <p class="rg-imeta" style="margin:0;">
                 Move audit entries older than a cutoff into an encrypted archive file, then
                 remove them from the live log. Entries newer than six months
-                (after {{ archive_latest_cutoff|date:"M d, Y" }}) cannot be archived.
+                (after {{ archive_latest_cutoff|date:"M j, Y" }}) cannot be archived.
             </p>
         </div>
     </div>
@@ -64,8 +64,8 @@
             <div>
                 This will archive <strong>{{ archive_preview.count }}</strong>
                 entr{{ archive_preview.count|pluralize:"y,ies" }} from
-                <strong>{{ archive_preview.range_start|date:"M d, Y" }}</strong> to
-                <strong>{{ archive_preview.range_end|date:"M d, Y" }}</strong>, then remove them
+                <strong>{{ archive_preview.range_start|date:"M j, Y" }}</strong> to
+                <strong>{{ archive_preview.range_end|date:"M j, Y" }}</strong>, then remove them
                 from the live log. The entries are deleted only after the archive file is
                 saved and verified.
             </div>
@@ -97,8 +97,8 @@
                 <tr>
                     <td style="font-family:ui-monospace,Consolas,monospace;">{{ archive.file_name }}</td>
                     <td>{{ archive.entry_count }}</td>
-                    <td>{{ archive.range_start|date:"M d, Y" }} &ndash; {{ archive.range_end|date:"M d, Y" }}</td>
-                    <td>{{ archive.created_at|date:"M d, Y" }} by {{ archive.created_by.get_full_name|default:archive.created_by.username }}</td>
+                    <td>{{ archive.range_start|date:"M j, Y" }} &ndash; {{ archive.range_end|date:"M j, Y" }}</td>
+                    <td>{{ archive.created_at|date:"M j, Y" }} by {{ archive.created_by.get_full_name|default:archive.created_by.username }}</td>
                     <td><a href="{% url 'audit-archive-download' archive.pk %}" class="btn btn-outline-secondary btn-sm">Download</a></td>
                 </tr>
                 {% endfor %}

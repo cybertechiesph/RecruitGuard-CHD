@@ -35,10 +35,50 @@
     </div>
 </div>
 
+{% if loaned_out %}
+<div class="alert alert-warning d-flex flex-wrap align-items-start gap-3" role="status" data-batch-on-loan>
+    <div class="flex-grow-1">
+        <strong>{{ loaned_out|length }} case{{ loaned_out|length|pluralize }} on loan to the {{ loaned_to_label }}.</strong>
+        You can follow them here and take the batch back at any step.
+    </div>
+    <form method="post" action="{% url 'vacancy-batch-handoff' entry.pk %}" class="d-flex gap-2 align-items-start">
+        {% csrf_token %}
+        <input type="hidden" name="operation" value="recall">
+        <input type="text" name="remarks" class="form-control form-control-sm" placeholder="Reason (required)" required aria-label="Reason for recalling the batch">
+        <button type="submit" class="btn btn-outline-secondary btn-sm">Recall the batch</button>
+    </form>
+</div>
+{% endif %}
+{% if can_send_batch %}
+<details class="rg-icard mb-3" data-send-batch>
+    <summary class="rg-icard__title" style="cursor:pointer;">Send the batch to the {{ send_target_label }}</summary>
+    <p class="rg-imeta mt-2">Every case of this vacancy you hold moves together, so the exam and interview stay one batch. You keep sight of it and can recall it.</p>
+    <form method="post" action="{% url 'vacancy-batch-handoff' entry.pk %}" class="d-flex flex-wrap gap-2 align-items-start">
+        {% csrf_token %}
+        <input type="hidden" name="operation" value="send">
+        <textarea name="remarks" rows="2" class="form-control form-control-sm" style="max-width:32rem;" placeholder="Reason (required, kept in the case history)" required aria-label="Reason for sending the batch"></textarea>
+        <button type="submit" class="btn btn-rg-primary btn-sm">Send the batch</button>
+    </form>
+</details>
+{% endif %}
+{% if on_loan_only %}
+<p class="rg-queue-count" aria-live="polite">
+    <strong>{{ applications|length }}</strong> case{{ applications|length|pluralize }} in this vacancy, held by the {{ loaned_to_label }}.
+</p>
+{% elif following_only %}
+<div class="alert alert-info" role="status" data-following-vacancy>
+    You're following this Level 2 vacancy. The Secretariat prepares the Comparative Assessment
+    Report and the Appointing Authority decides; the selected case returns to you for completion.
+</div>
+<p class="rg-queue-count" aria-live="polite">
+    <strong>{{ applications|length }}</strong> case{{ applications|length|pluralize }} in this vacancy.
+</p>
+{% else %}
 <p class="rg-queue-count" aria-live="polite">
     <strong>{{ applications|length }}</strong> case{{ applications|length|pluralize }}
     in this vacancy's batch awaiting your action.
 </p>
+{% endif %}
 
 {% if batch_pool_block_message %}
     {% comment %}
@@ -46,7 +86,7 @@
     timely later applicant would miss the sitting. Say when it unlocks instead of offering
     a link that bounces straight back.
     {% endcomment %}
-    <div class="alert alert-warning" role="status">
+    <div class="alert alert-info" role="status">
         {{ batch_pool_block_message }}
     </div>
 {% endif %}
@@ -81,11 +121,10 @@
             {% endif %}
         </div>
     {% elif not screening_batch.is_ready %}
-        <div class="alert alert-warning" role="status">
-            Screening batch is on hold: <strong>{{ screening_batch.pending }}</strong>
-            applicant{{ screening_batch.pending|pluralize }} still need{{ screening_batch.pending|pluralize:"s," }} a screening decision
-            (awaiting resubmission or not yet finalized). Finish screening or remove them from the
-            batch before the exam can start.
+        <div class="alert alert-info" role="status">
+            Screening: <strong>{{ screening_batch.qualified|add:screening_batch.terminal }}</strong> of
+            {{ screening_batch.total }} decided. The exam opens once the other
+            {{ screening_batch.pending }} {{ screening_batch.pending|pluralize:"has,have" }} a decision.
         </div>
     {% endif %}
 {% endif %}
@@ -120,7 +159,7 @@
                         </td>
                         <td>
                             <div style="font-size:0.8125rem;color:#374151;">{{ application.updated_at|timesince_short }} ago</div>
-                            <div class="rg-imeta mt-1">{{ application.updated_at|date:"M d, Y" }}</div>
+                            <div class="rg-imeta mt-1">{{ application.updated_at|date:"M j, Y" }}</div>
                         </td>
                         <td class="col-actions">
                             <div class="rg-itbl-actions">

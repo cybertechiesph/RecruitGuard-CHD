@@ -59,7 +59,7 @@
     {% endif %}
     <div class="rg-cws-meta-row">
         <span class="rg-cws-meta-row__label">Submitted</span>
-        <span class="rg-cws-meta-row__value">{{ application.submitted_at|date:"M d, Y" }}</span>
+        <span class="rg-cws-meta-row__value">{{ application.submitted_at|date:"M j, Y" }}</span>
     </div>
 
     {% if application.active_secretariat_override %}
@@ -173,7 +173,7 @@
             {{ entry.action|audit_action_label }}
         </div>
         <div class="rg-imeta" style="margin-top:0.2rem;">
-            {{ entry.created_at|date:"M d, Y" }}
+            {{ entry.created_at|date:"M j, Y" }}
             {% if entry.actor_role %}
                 <span class="rg-imeta__sep"></span>
                 {{ entry.actor_role|role_label }}

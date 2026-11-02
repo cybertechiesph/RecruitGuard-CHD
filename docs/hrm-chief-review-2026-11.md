@@ -261,6 +261,22 @@ Implement in this order, test-first, against `147c4b8` or later. Don't touch F15
 
 Commit when the suite is green; re-verify C1–C3 live on the demo database.
 
+### Round B implementation status (2026-11-03)
+
+All of Round B is implemented, test-first; F15 untouched.
+
+| Item | What shipped |
+|---|---|
+| C1 | `pooling` merged into `continuous`, now labelled **Open Pool** (the other COS mode is **One Batch** and needs a closing date). Migration 0092 moved the four demo pooling vacancies. Open pools examine and interview in batches (office answer); a pick with no open round opens a one-slot round. Live: CASE-2026-0033 on VAC-COS-2026-901 was picked as round 2; CASE-2026-0034 stays in the pool. |
+| C2 | The Chief follows Level 2 cases read-only from the interview on (batch page "Following", CAR read-only); the Level 2 completion page shows a CAR summary with the official version; the interview-finalize message names who acts next. Live: case 543 shows the summary. |
+| C3 | Activate is refused while a selection stands, before the QS check; Activate, Suspend and Cancel are hidden on those rows. Live: VAC-PLT-2026-902 refused, row shows Edit and Weights only. |
+| C4 + F9 | Handoff is per batch (send and recall, with a reason, audit-logged), refused while a held case awaits resubmission. The lending office keeps read access; the case header shows a loan badge. Single-case handoff is retired: every case now sits in a vacancy batch, so "cases outside a batch" no longer exist. |
+| 4a | Office Policy holds the standing core panel; the rating sheet (now `/vacancies/<pk>/rating-sheet/`) adds end users per vacancy. Members see, are notified about and count for only their vacancies. With no panel configured, every HRMPSB member is the panel (safe default). A member who already rated cannot be removed. |
+| C5 | A case page shows a pick only from a round the case was in. |
+| F10 | A Plantilla vacancy needs Education, Training and Experience (on the position reference or written in the vacancy's QS field) before it goes Active; enforced in the form and the status change. |
+| F7, F8, F11–F14 | Interview card shows the earlier records; the rating error says what is wrong; the next screening case is offered after a finalize; CAR drafts export as working copies and the final as `car-official-version-N.pdf`; 0–100 checks on exam and rating scores plus two case indexes (migration 0094); rotating log file, error emails and `docs/operations-runbook.md`. |
+| P3 + C7 | Hold banners are informational and the count reads "is/are"; dates read "Nov 2, 2026, 9:53 AM" everywhere internal; completion notices say "is now in your queue for completion"; the CAR step header names the Secretariat; titles use the case number; both exam finalizes land on the vacancy's batch page while the user still has cases there; Office Policy explains what its switches change. The "73 days overdue" completions were walkthrough actions from July–August, not seed data; the next reseed clears them. |
+
 ## 7. What remains unverified
 
 - The Chief's reopen success path (code: `user_can_reopen_case` + the "selection stands" guard;

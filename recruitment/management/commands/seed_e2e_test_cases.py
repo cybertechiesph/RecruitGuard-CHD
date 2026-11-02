@@ -303,7 +303,7 @@ class Command(BaseCommand):
             intake_mode=(
                 PositionPosting.IntakeMode.FIXED_PERIOD
                 if branch == PositionPosting.Branch.PLANTILLA
-                else PositionPosting.IntakeMode.POOLING
+                else PositionPosting.IntakeMode.CONTINUOUS
             ),
             status=PositionPosting.EntryStatus.ACTIVE,
             opening_date=timezone.localdate(),

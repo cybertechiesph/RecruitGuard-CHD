@@ -190,6 +190,16 @@ from .services import (
     user_can_open_cos_selection_round,
     user_can_close_cos_selection_round_short,
     vacancy_uses_cos_selection_rounds,
+    get_followed_applications,
+    user_can_follow_level_two_case,
+    get_cos_round_pick_for_case,
+    set_vacancy_panel_end_users,
+    vacancy_panel_member_ids,
+    case_is_on_loan,
+    get_loaned_out_applications,
+    hand_off_vacancy_batch,
+    recall_vacancy_batch,
+    user_can_send_vacancy_batch,
     cos_eligible_pool,
     cos_deliberation_pool,
     save_cos_vacancy_deliberation,
@@ -730,6 +740,14 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
         context["applicant_document_review_items"] = get_applicant_document_review_items(application)
         context["exam_records"] = get_exam_records(application)
         context["current_exam_record"] = get_exam_record(application)
+        # F7: at the interview the current stage has no screening/exam of its own; the card
+        # shows the latest finalized ones from the earlier stage.
+        context["earlier_screening_record"] = (
+            application.screening_records.filter(is_finalized=True).order_by("-finalized_at", "-id").first()
+        )
+        context["earlier_exam_record"] = (
+            application.exam_records.filter(is_finalized=True).order_by("-finalized_at", "-id").first()
+        )
         context["interview_sessions"] = get_interview_sessions(application)
         context["current_interview_session"] = get_interview_session(application)
         context["current_interview_ratings"] = get_interview_ratings(application)
@@ -1121,7 +1139,7 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
         ):
             # COS deliberation is one per-vacancy pick recorded on the console (spec §6.3).
             context["cos_deliberation_section"] = True
-            context["cos_deliberation_pick"] = get_cos_vacancy_deliberation(application.position)
+            context["cos_deliberation_pick"] = get_cos_round_pick_for_case(application.case)
         if not applicant_pool_is_blocked and user_can_manage_comparative_assessment_report(user, application):
             report = context["current_comparative_assessment_report"]
             if report and report.is_finalized:
@@ -1137,6 +1155,14 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
         ):
             # The HRMPSB board gets a read-only ranked CAR to deliberate off-system (spec §5.4).
             context["car_readonly"] = True
+        elif (
+            user_can_follow_level_two_case(user, application)
+            and get_current_workflow_section(application) == "car"
+            and context["current_comparative_assessment_report"]
+        ):
+            # C2: the HRM Chief follows the Level 2 CAR the Secretariat prepares.
+            context["car_readonly"] = True
+            context["car_readonly_following"] = True
         # When the CAR card would otherwise be blank for this viewer (e.g. an HRMPSB member whose
         # board is still waiting on the Secretariat/HRM Chief to prepare the CAR), surface a
         # "CAR in preparation" state instead of an empty titlebar. Does not change access.
@@ -1189,19 +1215,24 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
                 context["batch_url"] = reverse(
                     "vacancy-batch-detail", kwargs={"pk": application.position_id}
                 )
+                others = [c for c in scoped_batch if c.pk != application.pk]
                 if not user_can_process_application(user, application):
+                    context["next_batch_case"] = others[0] if others else None
+                elif get_current_workflow_section(application) != "screening":
+                    # F11: this case's own (per-case) work is done and the rest happens as a
+                    # batch, so point at the next case that still needs screening.
                     context["next_batch_case"] = next(
-                        (c for c in scoped_batch if c.pk != application.pk), None
+                        (c for c in others if get_current_workflow_section(c) == "screening"),
+                        None,
                     )
+                    context["next_batch_case_in_screening"] = context["next_batch_case"] is not None
         if application.branch == PositionPosting.Branch.COS:
             # SL-01: the COS selection is made once, on the deliberation console. The case's
             # Decision surface shows that authoritative pick — it never offers a second,
             # independent choice.
             # SL-02: show the pick from the round THIS case was actually considered in —
             # a candidate the pool is still holding has not been decided by anyone's round.
-            pick = get_cos_pick_for_case(application.case) or get_cos_vacancy_deliberation(
-                application.position
-            )
+            pick = get_cos_round_pick_for_case(application.case)
             # SL-14 (COS): is_effective, not is_finalized — a rescinded pick keeps its
             # finalization (that history is the point), so testing is_finalized here would
             # present a voided pick as "the authoritative selection" during the exact
@@ -1259,8 +1290,8 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
                             status=ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
                         ).order_by("display_order", "created_at")
                     )
-        if get_case_handoff_options(application, user):
-            context["case_handoff_form"] = CaseHandoffForm(application=application, user=user)
+        # C4: cases are lent as a whole batch from the vacancy page; the header only says so.
+        context["case_on_loan"] = case_is_on_loan(application)
         if context["recruitment_case"] and user_can_reopen_case(user, context["recruitment_case"]):
             context["reopen_form"] = WorkflowReopenForm()
         if user_can_send_requirement_checklist_notification(user, application):
@@ -1870,7 +1901,22 @@ class VacancyBatchConsoleView(LoginRequiredMixin, WorkflowProcessorRequiredMixin
         )
         for group in vacancies:
             group["count"] = len(group["applications"])
-        context["vacancies"] = vacancies
+            group["following"] = False
+        # C2: Level 2 vacancies the HRM Chief follows while others hold the cases.
+        followed = {}
+        for application in get_followed_applications(self.request.user):
+            if application.position_id in groups:
+                continue
+            group = followed.setdefault(
+                application.position_id,
+                {"entry": application.position, "applications": [], "following": True},
+            )
+            group["applications"].append(application)
+        for group in followed.values():
+            group["count"] = len(group["applications"])
+        context["vacancies"] = vacancies + sorted(
+            followed.values(), key=lambda g: (g["entry"].title or "").lower()
+        )
         context["total_applications"] = sum(group["count"] for group in vacancies)
         # TI-5: the next seven days from the schedule calendar, on the landing page.
         today = timezone.localdate()
@@ -1939,6 +1985,12 @@ class VacancyBatchDetailView(LoginRequiredMixin, WorkflowProcessorRequiredMixin,
         pk = self.kwargs["pk"]
         if get_queue_for_user(request.user).filter(position_id=pk).exists():
             return super().get(request, *args, **kwargs)
+        if get_followed_applications(request.user).filter(position_id=pk).exists():
+            # C2: the HRM Chief follows a Level 2 vacancy through the CAR and decision.
+            return super().get(request, *args, **kwargs)
+        if get_loaned_out_applications(request.user).filter(position_id=pk).exists():
+            # C4: the office that lent the batch follows it and can recall it.
+            return super().get(request, *args, **kwargs)
         # Nothing queued here, for one of two very different reasons: the vacancy's cases are
         # all finished (this user worked them through to closure), or the vacancy was never
         # theirs (FRS scoping — a Secretariat must not see a Level-2 batch). Only the first
@@ -1962,12 +2014,30 @@ class VacancyBatchDetailView(LoginRequiredMixin, WorkflowProcessorRequiredMixin,
             for application in get_queue_for_user(self.request.user)
             if application.position_id == pk
         ]
+        context["following_only"] = False
+        loaned = list(get_loaned_out_applications(self.request.user).filter(position_id=pk))
+        context["loaned_out"] = loaned
+        if loaned:
+            context["loaned_to_label"] = (
+                "HRM Chief" if self.request.user.role == RecruitmentUser.Role.SECRETARIAT else "Secretariat"
+            )
+        context["on_loan_only"] = False
+        if not applications and loaned:
+            applications = loaned
+            context["on_loan_only"] = True
+        if not applications:
+            applications = list(get_followed_applications(self.request.user).filter(position_id=pk))
+            context["following_only"] = bool(applications)
         if not applications:
             # Defensive net — get() already resolved the empty-queue case above.
             raise Http404("No batch is available for this vacancy.")
         entry = applications[0].position
         context["entry"] = entry
         context["applications"] = applications
+        context["can_send_batch"] = user_can_send_vacancy_batch(self.request.user, entry)
+        context["send_target_label"] = (
+            "HRM Chief" if self.request.user.role == RecruitmentUser.Role.SECRETARIAT else "Secretariat"
+        )
         context["screening_batch"] = vacancy_screening_batch_status(entry)
         # SL-09: the batch waits for a final applicant pool — say when it unlocks rather
         # than offering a link that bounces straight back.
@@ -2311,6 +2381,14 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
                 # _batch_pool_empty_redirect) rather than a 404.
                 if saved and user_can_manage_interview_session(request.user, saved[0]):
                     return redirect("vacancy-batch-interview", pk=entry.pk)
+                # Round B P3: the same landing rule as the interview finalize, so both
+                # branches agree: this vacancy's batch page while the user still holds or
+                # follows cases in it, otherwise the batches list.
+                if (
+                    get_queue_for_user(request.user).filter(position_id=entry.pk).exists()
+                    or get_followed_applications(request.user).filter(position_id=entry.pk).exists()
+                ):
+                    return redirect("vacancy-batch-detail", pk=entry.pk)
                 return redirect("vacancy-batches")
             messages.success(request, "Exam scores saved.")
             return redirect("vacancy-batch-exam", pk=entry.pk)
@@ -2384,10 +2462,7 @@ class VacancyBatchInterviewView(LoginRequiredMixin, WorkflowProcessorRequiredMix
         if is_plantilla:
             rating_sheet_published = get_published_competency_rating_template(entry) is not None
             if not rating_sheet_published and pool:
-                # The builder edits the per-position template — any case's URL reaches it.
-                rating_sheet_url = reverse(
-                    "interview-rating-sheet", kwargs={"pk": pool[0].pk}
-                )
+                rating_sheet_url = reverse("vacancy-rating-sheet", kwargs={"pk": entry.pk})
         withdrawal_requests = [
             c["application"]
             for c in candidates
@@ -2588,18 +2663,31 @@ class VacancyBatchInterviewView(LoginRequiredMixin, WorkflowProcessorRequiredMix
                 return redirect("vacancy-batch-interview", pk=entry.pk)
             # Land on this vacancy's batch page, which lists what comes next, while this user
             # still has cases there; otherwise the batches list.
-            next_step = (
-                "Next: prepare the Comparative Assessment Report from any candidate's case."
-                if entry.branch == PositionPosting.Branch.PLANTILLA
-                else "Next: the HRM Chief's deliberation and selection."
+            messages.success(
+                request,
+                f"Interview batch finalized for every candidate. {_interview_finalize_next_step(entry, request.user)}",
             )
-            messages.success(request, f"Interview batch finalized for every candidate. {next_step}")
-            if get_queue_for_user(request.user).filter(position_id=entry.pk).exists():
+            if (
+                get_queue_for_user(request.user).filter(position_id=entry.pk).exists()
+                or get_followed_applications(request.user).filter(position_id=entry.pk).exists()
+            ):
                 return redirect("vacancy-batch-detail", pk=entry.pk)
             return redirect("vacancy-batches")
 
         messages.error(request, "This action is not available.")
         return redirect("vacancy-batch-interview", pk=entry.pk)
+
+
+def _interview_finalize_next_step(entry, user):
+    """What happens after the interview batch, said to the person who finalized it (C2)."""
+    if entry.branch != PositionPosting.Branch.PLANTILLA:
+        return "Next: the HRM Chief's deliberation and selection."
+    if user.role == RecruitmentUser.Role.HRM_CHIEF:
+        return (
+            "Next: the Secretariat prepares the Comparative Assessment Report. You can follow "
+            "it from this vacancy's page."
+        )
+    return "Next: prepare the Comparative Assessment Report from any candidate's case."
 
 
 class VacancyBatchCosDeliberationView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
@@ -2842,32 +2930,60 @@ class CaseHandoffView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
             messages.error(request, COMPLETION_HANDOFF_MESSAGE)
             return redirect("application-detail", pk=pk)
 
-        form = CaseHandoffForm(request.POST, application=application, user=request.user)
-        if form.is_valid():
-            target_role = form.cleaned_data["target_role"]
-            try:
-                route_case_between_secretariat_and_hrm_chief(
-                    application=application,
-                    actor=request.user,
-                    target_role=target_role,
-                    remarks=form.cleaned_data["remarks"],
-                )
-            except ValueError as exc:
-                messages.error(request, str(exc))
-            else:
-                recipient = (
-                    "HRM Chief"
-                    if target_role == RecruitmentUser.Role.HRM_CHIEF
-                    else "Secretariat"
-                )
-                messages.success(request, f"Case sent to {recipient}.")
-        else:
-            messages.error(request, "Add remarks before sending the case.")
+        # C4 + F9 (office decision): cases move between the Secretariat and the HRM Chief as a
+        # whole batch, so one case never splits a batch exam or interview between offices.
+        messages.error(
+            request,
+            "Cases are sent as a whole batch now. Use “Send the batch” on the vacancy's page.",
+        )
+        return redirect("application-detail", pk=pk)
 
-        application.refresh_from_db()
-        if user_can_view_application(request.user, application):
-            return redirect("application-detail", pk=pk)
-        return redirect("workflow-queue")
+
+class VacancyRatingSheetView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
+    """P3: the rating sheet belongs to the vacancy. This address opens it through any case of
+    the vacancy the user may manage (the builder edits the per-position template)."""
+
+    def get(self, request, pk):
+        entry = get_object_or_404(PositionPosting, pk=pk)
+        for application in RecruitmentApplication.objects.filter(position=entry).select_related("case"):
+            if getattr(application, "case", None) and user_can_manage_interview_session(request.user, application):
+                return redirect("interview-rating-sheet", pk=application.pk)
+        raise Http404("No rating sheet you can open for this vacancy.")
+
+
+class VacancyBatchHandoffView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
+    """C4: lend a vacancy's batch to the other office, or recall it."""
+
+    def post(self, request, pk):
+        entry = get_object_or_404(PositionPosting, pk=pk)
+        operation = request.POST.get("operation", "")
+        remarks = request.POST.get("remarks", "")
+        try:
+            if operation == "send":
+                moved = hand_off_vacancy_batch(entry, request.user, remarks)
+                target = "HRM Chief" if request.user.role == RecruitmentUser.Role.SECRETARIAT else "Secretariat"
+                messages.success(
+                    request,
+                    f"Sent {len(moved)} case{'' if len(moved) == 1 else 's'} to the {target}. "
+                    "You can still follow the batch here and recall it.",
+                )
+            elif operation == "recall":
+                moved = recall_vacancy_batch(entry, request.user, remarks)
+                messages.success(
+                    request,
+                    f"Recalled {len(moved)} case{'' if len(moved) == 1 else 's'}. The batch is back with you.",
+                )
+            else:
+                messages.error(request, "This action is not available.")
+        except (ValueError, ValidationError) as exc:
+            messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
+        if (
+            get_queue_for_user(request.user).filter(position_id=pk).exists()
+            or get_loaned_out_applications(request.user).filter(position_id=pk).exists()
+            or get_followed_applications(request.user).filter(position_id=pk).exists()
+        ):
+            return redirect("vacancy-batch-detail", pk=pk)
+        return redirect("vacancy-batches")
 
 
 class ScreeningReviewView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
@@ -3182,12 +3298,26 @@ class InterviewRatingSheetView(LoginRequiredMixin, WorkflowProcessorRequiredMixi
         return application
 
     def _context(self, application, template, template_form=None, formset=None):
+        entry = application.position
+        core_ids = set(get_office_policy().core_panel_members.values_list("pk", flat=True))
+        members = RecruitmentUser.objects.filter(
+            is_active=True, role=RecruitmentUser.Role.HRMPSB_MEMBER
+        ).order_by("last_name", "first_name", "username")
+        chosen = set(entry.panel_end_users.values_list("pk", flat=True))
         return {
             "application": application,
-            "entry": application.position,
+            "entry": entry,
             "rating_sheet": template,
             "template_form": template_form,
             "competency_formset": formset,
+            # 4a: who sits on this vacancy's panel.
+            "core_panel": [member for member in members if member.pk in core_ids],
+            "end_user_choices": [
+                {"user": member, "checked": member.pk in chosen}
+                for member in members
+                if member.pk not in core_ids
+            ],
+            "panel_is_everyone": vacancy_panel_member_ids(entry) is None,
         }
 
     def get(self, request, pk):
@@ -3209,6 +3339,18 @@ class InterviewRatingSheetView(LoginRequiredMixin, WorkflowProcessorRequiredMixi
         template = get_competency_rating_template(entry)
         operation = request.POST.get("operation", "save")
 
+        if operation == "save_panel":
+            try:
+                set_vacancy_panel_end_users(
+                    application.position,
+                    request.user,
+                    request.POST.getlist("panel_end_users"),
+                )
+            except ValueError as exc:
+                messages.error(request, str(exc))
+            else:
+                messages.success(request, "Panel saved for this vacancy.")
+            return redirect("interview-rating-sheet", pk=pk)
         if operation == "create":
             if template:
                 messages.info(request, "This vacancy already has an interview rating sheet.")
@@ -3574,7 +3716,10 @@ class InterviewRatingView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, Vi
             else:
                 messages.success(request, "Interview rating saved.")
         else:
-            messages.error(request, "Complete the required interview rating fields before saving.")
+            # F8: name what is missing (often the justification a 75-or-below / above-98
+            # rating needs) instead of one generic line.
+            problems = [error for field_errors in form.errors.values() for error in field_errors]
+            messages.error(request, "The rating wasn't saved: " + " ".join(problems))
         return redirect("application-detail", pk=pk)
 
 

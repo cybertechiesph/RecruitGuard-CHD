@@ -490,7 +490,7 @@ HRM Chief on COS). Two states:
             <p class="rg-icard__subtitle">
                 Finalized
                 {% if current_comparative_assessment_report.finalized_at %}
-                    on {{ current_comparative_assessment_report.finalized_at|date:"M d, Y" }}
+                    on {{ current_comparative_assessment_report.finalized_at|date:"M j, Y" }}
                 {% endif %}.
                 The case proceeds to Final Selection / Decision.
             </p>
@@ -596,7 +596,7 @@ HRM Chief on COS). Two states:
             <strong>Quorum:</strong> Met
             &middot; {{ current_comparative_assessment_report.members_present }} member{{ current_comparative_assessment_report.members_present|pluralize }} present
             {% if current_comparative_assessment_report.deliberated_on %}
-                &middot; Deliberated {{ current_comparative_assessment_report.deliberated_on|date:"M d, Y" }}
+                &middot; Deliberated {{ current_comparative_assessment_report.deliberated_on|date:"M j, Y" }}
             {% endif %}
         </p>
     {% endif %}
@@ -627,8 +627,13 @@ HRM Chief on COS). Two states:
         <div>
             <h3 class="rg-icard__title">Comparative Assessment Report</h3>
             <p class="rg-icard__subtitle">
-                Ranked candidates for the board's review. The HRMPSB deliberates off-system; the
-                secretariat records the board's recommended applicant when finalizing the CAR.
+                {% if car_readonly_following %}
+                    Prepared by the Secretariat. You're following this Level 2 vacancy; the
+                    Secretariat makes any change and the Appointing Authority decides.
+                {% else %}
+                    Ranked candidates for the board's review. The HRMPSB deliberates off-system; the
+                    secretariat records the board's recommended applicant when finalizing the CAR.
+                {% endif %}
             </p>
         </div>
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:0.4rem;">

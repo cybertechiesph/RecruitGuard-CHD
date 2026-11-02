@@ -1,0 +1,25 @@
+{% load recruitment_ui %}
+{% comment %}
+C2: the finalized CAR at a glance on the completion page, so the office tracking the
+appointment (the HRM Chief for Level 2) sees how the selection was ranked.
+{% endcomment %}
+<details class="rg-icard mb-3" data-car-summary>
+    <summary class="rg-icard__title" style="cursor:pointer;">
+        Comparative Assessment Report &mdash; Version {{ current_comparative_assessment_report.official_version }}
+    </summary>
+    <table class="table table-sm align-middle mt-2 mb-0">
+        <thead>
+            <tr><th>Rank</th><th>Candidate</th><th class="text-end">Overall score</th><th></th></tr>
+        </thead>
+        <tbody>
+            {% for item in current_comparative_assessment_report_items %}
+            <tr>
+                <td>#{{ item.rank_order|default:"—" }}</td>
+                <td>{{ item.application|identity_for:request.user }}</td>
+                <td class="text-end">{{ item.assessment_score|default:"—" }}</td>
+                <td>{% if item.application.pk == application.pk %}<span class="rg-pill rg-pill--success rg-pill--sm">Selected</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</details>

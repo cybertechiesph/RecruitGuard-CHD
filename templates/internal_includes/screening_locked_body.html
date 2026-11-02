@@ -37,8 +37,8 @@
         {% if current_screening_record.finalized_at %}
         <div class="rg-scr-elig-bar__meta">
             Finished
-            {{ current_screening_record.finalized_at|date:"M d, Y" }}
-            at {{ current_screening_record.finalized_at|date:"H:i" }}
+            {{ current_screening_record.finalized_at|date:"M j, Y" }}
+            at {{ current_screening_record.finalized_at|date:"g:i A" }}
             {% if current_screening_record.finalized_by_role %}
                 &mdash; {{ current_screening_record.finalized_by_role|role_label }}
             {% endif %}
@@ -240,8 +240,8 @@
                 </svg>
                 Finished
                 {% if current_screening_record.finalized_at %}
-                    {{ current_screening_record.finalized_at|date:"M d, Y" }}
-                    at {{ current_screening_record.finalized_at|date:"H:i" }}
+                    {{ current_screening_record.finalized_at|date:"M j, Y" }}
+                    at {{ current_screening_record.finalized_at|date:"g:i A" }}
                 {% endif %}
                 {% if current_screening_record.finalized_by_role %}
                     <span class="rg-imeta__sep"></span>

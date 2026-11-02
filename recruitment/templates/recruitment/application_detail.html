@@ -23,7 +23,7 @@
 
 {% if next_batch_case %}
 <div class="alert alert-info d-flex flex-wrap align-items-center gap-2 mt-2 mb-0" role="status">
-    <span>Next in this batch: <strong>{% if request.user.role == "hrmpsb_member" %}Candidate {{ next_batch_case.candidate_code_label }}{% else %}Case No. {{ next_batch_case.case_number_short }}{% endif %}</strong></span>
+    <span>Next in this batch: <strong>{% if request.user.role == "hrmpsb_member" %}Candidate {{ next_batch_case.candidate_code_label }}{% else %}{{ next_batch_case.reference_label }}{% endif %}</strong>{% if next_batch_case_in_screening %}, still in screening{% endif %}</span>
     <a class="btn btn-rg-primary btn-sm" href="{% url 'application-detail' next_batch_case.pk %}?from=batch">Open next case</a>
 </div>
 {% endif %}
@@ -199,7 +199,7 @@
                         </summary>
                         <p class="rg-icard__subtitle">
                             Current deadline:
-                            <strong>{{ current_screening_record.resubmission_deadline|date:"F d, Y" }}</strong>.
+                            <strong>{{ current_screening_record.resubmission_deadline|date:"F j, Y" }}</strong>.
                             The new date and reason are recorded, and the applicant receives one reminder.
                         </p>
                         <form method="post"
@@ -333,6 +333,9 @@
                     {% include "internal_includes/stage_titlebar.html" with title="Completion" locked=completion_record %}
                 {% endif %}
 
+                {% if application.branch == "plantilla" and current_comparative_assessment_report.is_finalized %}
+                    {% include "internal_includes/car_summary.html" %}
+                {% endif %}
                 {% if completion_form or closure_form %}
                     
                     {% include "internal_includes/completion_body.html" %}

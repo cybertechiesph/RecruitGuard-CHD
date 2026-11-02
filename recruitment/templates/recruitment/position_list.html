@@ -57,7 +57,7 @@
                 {% endif %}
                 <p class="mt-3 mb-0 rg-note">
                     {% if position.closing_date %}
-                        Open until {{ position.closing_date|date:"M d, Y" }}
+                        Open until {{ position.closing_date|date:"M j, Y" }}
                     {% else %}
                         Intake remains open while the entry is active.
                     {% endif %}

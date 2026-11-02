@@ -22,6 +22,7 @@ from .services import (
     get_office_policy,
     ENDED_ENTRY_STATUSES,
     ENTRY_LIST_FILTERS,
+    entry_selection_stands,
     get_manageable_recruitment_entries,
     persist_recruitment_entry,
     record_system_audit_event,
@@ -64,6 +65,8 @@ class RecruitmentEntryListView(LoginRequiredMixin, EntryManagerRequiredMixin, Li
         # An active vacancy past its closing date no longer takes applications (the
         # applicant portal already treats it as closed); say so and offer the close.
         for entry in entries:
+            # C3: a filled vacancy offers no Activate.
+            entry.selection_stands = entry_selection_stands(entry)
             entry.intake_deadline_passed = bool(
                 entry.status == PositionPosting.EntryStatus.ACTIVE
                 and entry.closing_date

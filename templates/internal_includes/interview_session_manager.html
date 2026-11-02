@@ -105,8 +105,8 @@
                 <span class="rg-int-readout-grid__label">Date &amp; time</span>
                 <strong>
                     {% if current_interview_session.scheduled_for %}
-                        {{ current_interview_session.scheduled_for|date:"M d, Y" }}
-                        at {{ current_interview_session.scheduled_for|date:"H:i" }}
+                        {{ current_interview_session.scheduled_for|date:"M j, Y" }}
+                        at {{ current_interview_session.scheduled_for|date:"g:i A" }}
                     {% else %}
                         <span class="rg-int-prev-step__empty">Not set</span>
                     {% endif %}
@@ -128,8 +128,8 @@
                 </svg>
                 Finalized
                 {% if current_interview_session.finalized_at %}
-                    {{ current_interview_session.finalized_at|date:"M d, Y" }}
-                    at {{ current_interview_session.finalized_at|date:"H:i" }}
+                    {{ current_interview_session.finalized_at|date:"M j, Y" }}
+                    at {{ current_interview_session.finalized_at|date:"g:i A" }}
                 {% endif %}
                 {% if current_interview_session.finalized_by_role %}
                     · {{ current_interview_session.finalized_by_role|role_label }}

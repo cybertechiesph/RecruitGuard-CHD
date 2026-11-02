@@ -93,7 +93,7 @@ tracks (SLA thresholds, the REV-F audit summary engine, REV-D archives).
             <p class="rg-imeta mb-0">
                 {% if latest_audit_archive %}
                     {{ audit_archive_count }} audit archive{{ audit_archive_count|pluralize }} —
-                    latest {{ latest_audit_archive.created_at|date:"M d, Y" }}
+                    latest {{ latest_audit_archive.created_at|date:"M j, Y" }}
                     ({{ latest_audit_archive.entry_count }} entries).
                 {% else %}
                     No audit archives yet — entries older than six months can be

@@ -194,7 +194,7 @@
                                 </td>
                                 <td>
                                     {% if application.closed_at %}
-                                        <div style="font-size:0.8125rem;color:#374151;">{{ application.closed_at|date:"M d, Y" }}</div>
+                                        <div style="font-size:0.8125rem;color:#374151;">{{ application.closed_at|date:"M j, Y" }}</div>
                                         <div class="rg-imeta mt-1">{{ application.closed_at|timesince_short }} ago</div>
                                     {% else %}
                                         <div class="rg-imeta">Not recorded</div>
@@ -236,7 +236,7 @@
                                 <div style="font-size:0.8125rem;color:#374151;">
                                     {{ application.updated_at|timesince_short }} ago
                                 </div>
-                                <div class="rg-imeta mt-1">{{ application.updated_at|date:"M d, Y" }}</div>
+                                <div class="rg-imeta mt-1">{{ application.updated_at|date:"M j, Y" }}</div>
                             </td>
                             {% endif %}
                             <td class="col-actions">

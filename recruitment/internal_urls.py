@@ -79,6 +79,8 @@ from .views import (
     VacancyBatchCosDeliberationView,
     VacancyBatchDetailView,
     VacancyBatchExamView,
+    VacancyBatchHandoffView,
+    VacancyRatingSheetView,
     VacancyBatchInterviewView,
     ClosedCaseListView,
     WorkflowActionView,
@@ -295,6 +297,8 @@ urlpatterns = [
     path("vacancies/", VacancyBatchConsoleView.as_view(), name="vacancy-batches"),
     path("vacancies/<int:pk>/", VacancyBatchDetailView.as_view(), name="vacancy-batch-detail"),
     path("vacancies/<int:pk>/exam/", VacancyBatchExamView.as_view(), name="vacancy-batch-exam"),
+    path("vacancies/<int:pk>/handoff/", VacancyBatchHandoffView.as_view(), name="vacancy-batch-handoff"),
+    path("vacancies/<int:pk>/rating-sheet/", VacancyRatingSheetView.as_view(), name="vacancy-rating-sheet"),
     path(
         "vacancies/<int:pk>/interview/",
         VacancyBatchInterviewView.as_view(),

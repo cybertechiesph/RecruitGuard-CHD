@@ -24,8 +24,8 @@ conflict with anything.
             <span class="rg-int-readout-grid__label">Schedule</span>
             <strong>
                 {% if current_exam_schedule and current_exam_schedule.scheduled_for %}
-                    {{ current_exam_schedule.scheduled_for|date:"M d, Y" }}
-                    at {{ current_exam_schedule.scheduled_for|date:"H:i" }}
+                    {{ current_exam_schedule.scheduled_for|date:"M j, Y" }}
+                    at {{ current_exam_schedule.scheduled_for|date:"g:i A" }}
                 {% else %}
                     Not yet scheduled
                 {% endif %}

@@ -382,9 +382,12 @@ class PositionPosting(TimestampedModel):
 
     class IntakeMode(models.TextChoices):
         FIXED_PERIOD = "fixed_period", "Fixed Period"
-        OPENING_BASED = "opening_based", "Opening Based"
-        CONTINUOUS = "continuous", "Continuous"
-        POOLING = "pooling", "Pooling"
+        # COS has two modes (Chief review C1, decided 2026-11-02): one batch with a closing
+        # date, or an open pool hired from round by round. The office's own word for the
+        # latter was "pooling"; the old separate POOLING mode (one batch, no closing date)
+        # stranded every later batch and was merged into CONTINUOUS (migration 0092).
+        OPENING_BASED = "opening_based", "One Batch"
+        CONTINUOUS = "continuous", "Open Pool"
 
     class EntryStatus(models.TextChoices):
         DRAFT = "draft", "Draft"
@@ -452,6 +455,13 @@ class PositionPosting(TimestampedModel):
     positions_to_fill = models.PositiveSmallIntegerField(
         default=1,
         help_text="Number of people this COS posting is intended to engage.",
+    )
+    # 4a: the end-user members who join the standing core panel for this vacancy only.
+    panel_end_users = models.ManyToManyField(
+        "RecruitmentUser",
+        blank=True,
+        related_name="panel_vacancies",
+        limit_choices_to={"role": "hrmpsb_member"},
     )
     status = models.CharField(
         max_length=20,
@@ -671,12 +681,11 @@ class PositionPosting(TimestampedModel):
         elif self.branch == self.Branch.COS:
             self.item_number = ""
             if self.intake_mode == self.IntakeMode.FIXED_PERIOD:
-                errors["intake_mode"] = "COS entries must use opening-based, continuous, or pooling intake."
-            if (
-                self.intake_mode in {self.IntakeMode.CONTINUOUS, self.IntakeMode.POOLING}
-                and self.closing_date
-            ):
-                errors["closing_date"] = "Continuous or pooling COS entries must not set a fixed closing date."
+                errors["intake_mode"] = "COS entries are either one batch or an open pool."
+            if self.intake_mode == self.IntakeMode.CONTINUOUS and self.closing_date:
+                errors["closing_date"] = "An open pool has no closing date; close the entry when the office stops hiring from it."
+            if self.intake_mode == self.IntakeMode.OPENING_BASED and not self.closing_date:
+                errors["closing_date"] = "A one-batch COS entry needs a closing date, so its batch has a clear end."
 
         if self.branch != self.Branch.COS:
             self.positions_to_fill = 1
@@ -789,9 +798,11 @@ class PositionPosting(TimestampedModel):
         ]
         return len(reference_items) < 2 and bool(self._qualification_items_from_entry_text())
 
-    def _qualification_items_from_entry_text(self):
-        pattern = re.compile(r"\b(" + "|".join(self.QUALIFICATION_LABELS) + r")\s*:", re.IGNORECASE)
-        source = self.qualification_reference or ""
+    @classmethod
+    def parse_qualification_text(cls, source):
+        """[(label, text)] for every "Education: …" style line in a vacancy's QS text."""
+        pattern = re.compile(r"\b(" + "|".join(cls.QUALIFICATION_LABELS) + r")\s*:", re.IGNORECASE)
+        source = source or ""
         matches = list(pattern.finditer(source))
         items = []
         for index, match in enumerate(matches):
@@ -799,7 +810,32 @@ class PositionPosting(TimestampedModel):
             text = source[match.end():end].strip().rstrip(";").strip()
             if text:
                 items.append((match.group(1).capitalize(), text))
+        return items
+
+    def _qualification_items_from_entry_text(self):
+        items = self.parse_qualification_text(self.qualification_reference)
         return items if len(items) >= 2 else []
+
+    # F10 (office decision 2026-11-02): a Plantilla vacancy goes Active only with these on file.
+    REQUIRED_QUALIFICATION_LABELS = ("Education", "Training", "Experience")
+
+    @classmethod
+    def missing_qualification_standards_for(cls, reference, text):
+        """The required QS labels found neither on the position reference nor in the vacancy's
+        own QS text."""
+        from_text = {label for label, _ in cls.parse_qualification_text(text)}
+        missing = []
+        for label in cls.REQUIRED_QUALIFICATION_LABELS:
+            on_reference = reference is not None and (getattr(reference, f"qs_{label.lower()}") or "").strip()
+            if not on_reference and label not in from_text:
+                missing.append(label)
+        return missing
+
+    @property
+    def missing_qualification_standards(self):
+        return self.missing_qualification_standards_for(
+            self.position_reference, self.qualification_reference
+        )
 
     @property
     def intake_closes_at(self):
@@ -1115,6 +1151,11 @@ class RecruitmentCase(TimestampedModel):
 
     class Meta:
         ordering = ["-updated_at"]
+        # F13: every queue, batch and overdue query filters on these.
+        indexes = [
+            models.Index(fields=["current_stage", "case_status"], name="case_stage_status_idx"),
+            models.Index(fields=["stage_entered_at"], name="case_stage_entered_idx"),
+        ]
 
     def save(self, *args, **kwargs):
         self.branch = self.application.branch
@@ -1856,6 +1897,16 @@ class OfficePolicy(TimestampedModel):
             "Require the user to record a reason before suspending or closing a vacancy."
         ),
     )
+    # 4a (decided 2026-11-02): the HRMPSB's standing members (chair, vice chair, HR) sit on
+    # every vacancy's panel; end-user members are added per vacancy. Empty, together with a
+    # vacancy that has no end users, means every active HRMPSB member is the panel.
+    core_panel_members = models.ManyToManyField(
+        "RecruitmentUser",
+        blank=True,
+        related_name="core_panel_policies",
+        limit_choices_to={"role": "hrmpsb_member"},
+        help_text="The HRMPSB members who sit on every vacancy's panel.",
+    )
 
     class Meta:
         verbose_name = "Office policy"
@@ -1994,7 +2045,19 @@ class ExamRecord(TimestampedModel):
             models.UniqueConstraint(
                 fields=["application", "review_stage"],
                 name="unique_exam_record_per_application_stage",
-            )
+            ),
+            models.CheckConstraint(
+                condition=models.Q(exam_score__isnull=True) | models.Q(exam_score__gte=0, exam_score__lte=100),
+                name="exam_score_0_100",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(technical_score__isnull=True) | models.Q(technical_score__gte=0, technical_score__lte=100),
+                name="exam_technical_score_0_100",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(general_score__isnull=True) | models.Q(general_score__gte=0, general_score__lte=100),
+                name="exam_general_score_0_100",
+            ),
         ]
 
     def clean(self):
@@ -2525,7 +2588,12 @@ class InterviewRating(TimestampedModel):
             models.UniqueConstraint(
                 fields=["interview_session", "rated_by"],
                 name="unique_interview_rating_per_session_evaluator",
-            )
+            ),
+            # F13: the last line of defence for a score typed outside 0-100.
+            models.CheckConstraint(
+                condition=models.Q(rating_score__isnull=True) | models.Q(rating_score__gte=0, rating_score__lte=100),
+                name="interview_rating_score_0_100",
+            ),
         ]
 
     def clean(self):
@@ -2771,7 +2839,11 @@ class InterviewFallbackRating(TimestampedModel):
             models.UniqueConstraint(
                 fields=["interview_session", "rated_by"],
                 name="unique_fallback_rating_per_session_rater",
-            )
+            ),
+            models.CheckConstraint(
+                condition=models.Q(rating_score__isnull=True) | models.Q(rating_score__gte=0, rating_score__lte=100),
+                name="fallback_rating_score_0_100",
+            ),
         ]
 
     def clean(self):
@@ -3326,16 +3398,18 @@ class DeliberationRecord(TimestampedModel):
 class CosSelectionRound(TimestampedModel):
     """SL-02 — one need-based COS selection cycle.
 
-    A continuous COS vacancy accumulates candidates: people apply, are screened and
-    examined per case, and wait. When the office actually needs to hire, it opens a
+    A continuous ("open pool") COS vacancy accumulates candidates: people apply, are
+    screened, and the waiting ones are examined and interviewed together. When the office
+    actually needs to hire, it opens a
     *round*: the then-eligible candidates are snapshotted as its members, the round may
     fill ``slot_count`` positions, and resolving it touches only that snapshot. Candidates
     the round did not pick stay in the pool for the next one — the client's own practice
     ("tine-take namin for pooling para matawagan sila kapag may nag-open na slot"), and the
     reason one permanent pick must not be allowed to decide people who applied later.
 
-    Opening/pooling/fixed-period COS vacancies are a single batch: they get exactly one
-    round, and the candidates it does not pick are closed as not selected, as before.
+    One-batch COS vacancies get exactly one round, and the candidates it does not pick are
+    closed as not selected, as before. An open pool may also get its round implicitly with
+    the pick (one slot), so the common case stays one click.
     """
 
     class Status(models.TextChoices):

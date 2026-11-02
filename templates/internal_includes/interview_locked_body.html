@@ -16,8 +16,8 @@
         {% if current_interview_session.finalized_at %}
         <div class="rg-scr-elig-bar__meta">
             Finalized
-            {{ current_interview_session.finalized_at|date:"M d, Y" }}
-            at {{ current_interview_session.finalized_at|date:"H:i" }}
+            {{ current_interview_session.finalized_at|date:"M j, Y" }}
+            at {{ current_interview_session.finalized_at|date:"g:i A" }}
             {% if current_interview_session.finalized_by_role %}
                 &mdash;
                 {{ current_interview_session.finalized_by_role|role_label }}
@@ -56,7 +56,7 @@
                 <div class="rg-exam-locked-field__value">
                     {% if current_interview_session.scheduled_for %}
                         {{ current_interview_session.scheduled_for|date:"l, F j, Y" }}
-                        at {{ current_interview_session.scheduled_for|date:"H:i" }}
+                        at {{ current_interview_session.scheduled_for|date:"g:i A" }}
                     {% else %}
                         <span style="color:#9aa4af;font-style:italic;">Not recorded</span>
                     {% endif %}
@@ -197,8 +197,8 @@
             </svg>
             Session finalized
             {% if current_interview_session.finalized_at %}
-                {{ current_interview_session.finalized_at|date:"M d, Y" }}
-                at {{ current_interview_session.finalized_at|date:"H:i" }}
+                {{ current_interview_session.finalized_at|date:"M j, Y" }}
+                at {{ current_interview_session.finalized_at|date:"g:i A" }}
             {% endif %}
             {% if current_interview_session.finalized_by_role %}
                 <span class="rg-imeta__sep"></span>

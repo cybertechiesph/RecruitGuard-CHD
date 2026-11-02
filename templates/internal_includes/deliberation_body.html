@@ -110,7 +110,7 @@ because it's a small read-only card.
             <p class="rg-icard__subtitle">
                 Finalized
                 {% if current_deliberation_record.finalized_at %}
-                    on {{ current_deliberation_record.finalized_at|date:"M d, Y" }}
+                    on {{ current_deliberation_record.finalized_at|date:"M j, Y" }}
                 {% endif %}
                 {% if current_deliberation_record.finalized_by_role %}
                     · {{ current_deliberation_record.finalized_by_role|role_label }}

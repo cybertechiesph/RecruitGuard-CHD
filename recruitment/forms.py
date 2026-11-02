@@ -1538,10 +1538,22 @@ class OfficePolicyForm(BootstrapFormMixin, forms.ModelForm):
             "rescind_cutoff",
             "cos_positions_multi_slot_allowed",
             "require_reason_for_suspend_close",
+            "core_panel_members",
         ]
+        widgets = {"core_panel_members": forms.CheckboxSelectMultiple}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["core_panel_members"].queryset = RecruitmentUser.objects.filter(
+            is_active=True, role=RecruitmentUser.Role.HRMPSB_MEMBER
+        ).order_by("last_name", "first_name", "username")
+        self.fields["core_panel_members"].required = False
+        self.fields["core_panel_members"].label = "Standing HRMPSB panel"
+        self.fields["core_panel_members"].help_text = (
+            "Chair, vice chair and HR: they sit on every vacancy's panel. End-user members "
+            "are added per vacancy on its rating-sheet page. Leave empty to keep every "
+            "HRMPSB member on every panel."
+        )
         labels = {
             "allow_extension_after_exam_scheduled": (
                 "Allow closing-date extension after the exam is scheduled"
@@ -3123,7 +3135,16 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
         # flexible (recording an already-started paper publication is
         # legitimate); a soft JS confirmation covers those.
         self.fields["closing_date"].widget.attrs["min"] = timezone.localdate().isoformat()
-        self.fields["qualification_reference"].label = "Entry Notes / Qualification Reference"
+        self.fields["qualification_reference"].label = "Qualification Standards"
+        self.fields["qualification_reference"].help_text = (
+            "Required for a Plantilla vacancy before it goes Active. One per line: "
+            "Education: … / Training: … / Experience: … / Eligibility: …"
+        )
+        self.fields["qualification_reference"].widget.attrs.setdefault(
+            "placeholder",
+            "Education: Bachelor's degree relevant to the job\nTraining: 4 hours of relevant training\n"
+            "Experience: 1 year of relevant experience\nEligibility: Career Service (Professional)",
+        )
         self.selected_position_reference = self._resolve_selected_position_reference()
         self._apply_bootstrap()
 
@@ -3215,6 +3236,22 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
         if branch == PositionPosting.Branch.PLANTILLA and intake_mode != PositionPosting.IntakeMode.FIXED_PERIOD:
             self.add_error("intake_mode", "Plantilla entries must use the fixed period intake mode.")
 
+        if (
+            branch == PositionPosting.Branch.PLANTILLA
+            and cleaned_data.get("status") == PositionPosting.EntryStatus.ACTIVE
+        ):
+            # F10: screening and 40% of the CAR are judged against these.
+            missing = PositionPosting.missing_qualification_standards_for(
+                position_reference, cleaned_data.get("qualification_reference")
+            )
+            if missing:
+                self.add_error(
+                    "qualification_reference",
+                    "Add the Qualification Standards before this vacancy goes Active "
+                    f"(missing: {', '.join(missing)}). Write each on its own line, for example "
+                    "\"Education: Bachelor's degree\".",
+                )
+
         if branch == PositionPosting.Branch.PLANTILLA and not closing_date:
             # Default to a 14-day publication window when the closing date is left
             # blank. A closing date entered by the user is accepted as-is.
@@ -3228,17 +3265,27 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
         if branch == PositionPosting.Branch.COS and intake_mode == PositionPosting.IntakeMode.FIXED_PERIOD:
             self.add_error(
                 "intake_mode",
-                "COS entries may only use opening-based, continuous, or pooling intake.",
+                "COS entries are either one batch (with a closing date) or an open pool.",
             )
 
         if (
             branch == PositionPosting.Branch.COS
-            and intake_mode in {PositionPosting.IntakeMode.CONTINUOUS, PositionPosting.IntakeMode.POOLING}
+            and intake_mode == PositionPosting.IntakeMode.CONTINUOUS
             and closing_date
         ):
             self.add_error(
                 "closing_date",
-                "Continuous or pooling COS entries must not define a fixed closing date.",
+                "An open pool has no closing date. Close the entry when the office stops hiring from it.",
+            )
+
+        if (
+            branch == PositionPosting.Branch.COS
+            and intake_mode == PositionPosting.IntakeMode.OPENING_BASED
+            and not closing_date
+        ):
+            self.add_error(
+                "closing_date",
+                "A one-batch COS entry needs a closing date, so its batch has a clear end.",
             )
 
         # REV-A: a NEW closing-date value cannot be in the past. On create this

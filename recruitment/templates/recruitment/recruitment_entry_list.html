@@ -137,10 +137,10 @@
                             </td>
                             <td>
                                 <div class="rg-imeta" style="flex-direction:column;gap:0.1rem;align-items:flex-start;">
-                                    <span>{{ entry.opening_date|date:"M d, Y" }}</span>
+                                    <span>{{ entry.opening_date|date:"M j, Y" }}</span>
                                     <span>
                                         {% if entry.closing_date %}
-                                            to {{ entry.closing_date|date:"M d, Y" }}
+                                            to {{ entry.closing_date|date:"M j, Y" }}
                                         {% else %}
                                             No fixed close date
                                         {% endif %}
@@ -169,14 +169,14 @@
                                            target="_blank" rel="noopener">CAR filing copy</a>
                                     {% endif %}
 
-                                    {% if entry.status != "active" and entry.status != "cancelled" %}
+                                    {% if entry.status != "active" and entry.status != "cancelled" and not entry.selection_stands %}
                                         <form method="post" action="{% url 'recruitment-entry-status' entry.pk 'active' %}">
                                             {% csrf_token %}
                                             <button type="submit" class="btn btn-rg-secondary btn-sm">Activate</button>
                                         </form>
                                     {% endif %}
 
-                                    {% if entry.status != "suspended" and entry.status != "closed" and entry.status != "cancelled" %}
+                                    {% if entry.status != "suspended" and entry.status != "closed" and entry.status != "cancelled" and not entry.selection_stands %}
                                         {% if office_policy.require_reason_for_suspend_close %}
                                             <details class="d-inline-block">
                                                 <summary class="btn btn-rg-warn btn-sm">Suspend</summary>
@@ -206,7 +206,7 @@
                                         {% if entry.close_blocked_until %}
                                             {# WF-07: publication period still running — the server blocks the close too. #}
                                             <span class="d-inline-block" tabindex="0"
-                                                  title="This vacancy's publication period runs until {{ entry.close_blocked_until|date:'M d, Y' }}. It can't be closed before then. Use Suspend if applications must stop for an exceptional reason.">
+                                                  title="This vacancy's publication period runs until {{ entry.close_blocked_until|date:'M j, Y' }}. It can't be closed before then. Use Suspend if applications must stop for an exceptional reason.">
                                                 <button type="button" class="btn btn-rg-destructive btn-sm" disabled
                                                         style="pointer-events:none;">
                                                     Close
@@ -243,7 +243,7 @@
                                         {% endif %}
                                     {% endif %}
 
-                                    {% if entry.status != "cancelled" and entry.status != "draft" %}
+                                    {% if entry.status != "cancelled" and entry.status != "draft" and not entry.selection_stands %}
                                         {% comment %}
                                         SL-11: cancelling is not another status toggle — it closes
                                         every live case and emails those applicants — so it asks

@@ -71,7 +71,7 @@
                 <span class="chip">{{ cat.label }}: <strong>{{ cat.count }}</strong></span>
             {% endfor %}
             {% if summary.busiest_day %}
-                <span class="chip">Busiest day: <strong>{{ summary.busiest_day|date:"M d, Y" }}</strong> ({{ summary.busiest_day_count }})</span>
+                <span class="chip">Busiest day: <strong>{{ summary.busiest_day|date:"M j, Y" }}</strong> ({{ summary.busiest_day_count }})</span>
             {% endif %}
         </div>
 

@@ -6,6 +6,8 @@ from django.conf.locale import LANG_INFO
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
+from config.logging import build_logging_config
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
@@ -416,42 +418,16 @@ PERMISSIONS_POLICY = {
     "usb": (),
 }
 
-LOGGING = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "filters": {
-        "redact_sensitive": {
-            "()": "config.logging.SensitiveDataFilter",
-        },
-    },
-    "formatters": {
-        "standard": {
-            "format": "%(levelname)s %(name)s %(message)s",
-        },
-    },
-    "handlers": {
-        "console": {
-            "class": "logging.StreamHandler",
-            "formatter": "standard",
-            "filters": ["redact_sensitive"],
-        },
-    },
-    "loggers": {
-        "django.request": {
-            "handlers": ["console"],
-            "level": "WARNING",
-            "propagate": False,
-        },
-        "recruitment": {
-            "handlers": ["console"],
-            "level": "INFO",
-            "propagate": False,
-        },
-    },
-    "root": {
-        "handlers": ["console"],
-        "level": "WARNING",
-    },
-}
+# F14: set DJANGO_LOG_FILE for a rotating log file and DJANGO_ADMINS ("Name <email>, ...")
+# for an email on every server error. See docs/operations-runbook.md.
+ADMINS = [
+    (part.split("<")[0].strip() or part.strip(), part.split("<")[-1].rstrip(">").strip())
+    for part in env_list("DJANGO_ADMINS", "")
+]
+SERVER_EMAIL = os.getenv("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
+LOGGING = build_logging_config(
+    log_file=os.getenv("DJANGO_LOG_FILE", ""),
+    mail_admins=bool(ADMINS),
+)
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

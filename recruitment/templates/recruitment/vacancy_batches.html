@@ -92,9 +92,15 @@
                                 </div>
                             </td>
                             <td>
-                                <span class="rg-pill rg-pill--info rg-pill--sm">
-                                    {{ vacancy.count }} case{{ vacancy.count|pluralize }}
-                                </span>
+                                {% if vacancy.following %}
+                                    <span class="rg-pill rg-pill--neutral rg-pill--sm" title="Others hold these cases; you can follow them read-only.">
+                                        Following &middot; {{ vacancy.count }} case{{ vacancy.count|pluralize }}
+                                    </span>
+                                {% else %}
+                                    <span class="rg-pill rg-pill--info rg-pill--sm">
+                                        {{ vacancy.count }} case{{ vacancy.count|pluralize }}
+                                    </span>
+                                {% endif %}
                             </td>
                             <td class="col-actions">
                                 <div class="rg-itbl-actions">

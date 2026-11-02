@@ -205,7 +205,7 @@ Bootstrap Icons CSS).
                     {% endcomment %}
                     <div class="alert alert-warning" role="status" style="margin:0.5rem 0;">
                         <strong>
-                            Deadline passed {{ completion_record.deadline|date:"F d, Y" }}
+                            Deadline passed {{ completion_record.deadline|date:"F j, Y" }}
                             &mdash; {{ completion_record.days_overdue }}
                             day{{ completion_record.days_overdue|pluralize }} overdue.
                         </strong>
@@ -228,10 +228,10 @@ Bootstrap Icons CSS).
                         <ul class="list-unstyled mb-0 mt-2" style="font-size:0.8125rem;">
                             {% for change in completion_record.deadline_changes.all %}
                             <li class="py-1" style="border-bottom:1px solid #eef1f4;">
-                                {{ change.previous_deadline|date:"M d, Y"|default:"—" }}
-                                &rarr; <strong>{{ change.new_deadline|date:"M d, Y"|default:"—" }}</strong>
+                                {{ change.previous_deadline|date:"M j, Y"|default:"—" }}
+                                &rarr; <strong>{{ change.new_deadline|date:"M j, Y"|default:"—" }}</strong>
                                 &middot; {{ change.changed_by.get_full_name|default:change.changed_by.username }}
-                                &middot; {{ change.created_at|date:"M d, Y" }}
+                                &middot; {{ change.created_at|date:"M j, Y" }}
                                 <div class="text-muted">{{ change.reason }}</div>
                             </li>
                             {% endfor %}

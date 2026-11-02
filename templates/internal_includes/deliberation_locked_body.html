@@ -22,8 +22,8 @@
         {% if current_deliberation_record.finalized_at %}
         <div class="rg-scr-elig-bar__meta">
             Finalized
-            {{ current_deliberation_record.finalized_at|date:"M d, Y" }}
-            at {{ current_deliberation_record.finalized_at|date:"H:i" }}
+            {{ current_deliberation_record.finalized_at|date:"M j, Y" }}
+            at {{ current_deliberation_record.finalized_at|date:"g:i A" }}
             {% if current_deliberation_record.finalized_by_role %}
                 &mdash;
                 {{ current_deliberation_record.finalized_by_role|role_label }}
@@ -62,7 +62,7 @@
                 <div class="rg-exam-locked-field__value">
                     {% if current_deliberation_record.deliberated_at %}
                         {{ current_deliberation_record.deliberated_at|date:"l, F j, Y" }}
-                        at {{ current_deliberation_record.deliberated_at|date:"H:i" }}
+                        at {{ current_deliberation_record.deliberated_at|date:"g:i A" }}
                     {% else %}
                         <span style="color:#9aa4af;font-style:italic;">Not recorded</span>
                     {% endif %}
@@ -256,8 +256,8 @@
             </svg>
             Deliberation finalized
             {% if current_deliberation_record.finalized_at %}
-                {{ current_deliberation_record.finalized_at|date:"M d, Y" }}
-                at {{ current_deliberation_record.finalized_at|date:"H:i" }}
+                {{ current_deliberation_record.finalized_at|date:"M j, Y" }}
+                at {{ current_deliberation_record.finalized_at|date:"g:i A" }}
             {% endif %}
             {% if current_deliberation_record.finalized_by_role %}
                 <span class="rg-imeta__sep"></span>
@@ -389,8 +389,8 @@
         </svg>
         CAR finalized
         {% if current_comparative_assessment_report.finalized_at %}
-            {{ current_comparative_assessment_report.finalized_at|date:"M d, Y" }}
-            at {{ current_comparative_assessment_report.finalized_at|date:"H:i" }}
+            {{ current_comparative_assessment_report.finalized_at|date:"M j, Y" }}
+            at {{ current_comparative_assessment_report.finalized_at|date:"g:i A" }}
         {% endif %}
         {% if current_comparative_assessment_report.finalized_by_role %}
             <span class="rg-imeta__sep"></span>

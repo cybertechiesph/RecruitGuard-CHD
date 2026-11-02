@@ -338,12 +338,15 @@ class BaseRecruitmentTestCase(TestCase):
             status=PositionPosting.EntryStatus.ACTIVE,
             closing_date=self.level1_closing_date(),
         )
+        # The shared COS vacancy is one batch (it was "pooling", which meant one batch with
+        # no closing date, before the C1 merge); open-pool behaviour has its own fixture.
         self.cos_position = PositionPosting.objects.create(
             position_reference=self.project_assistant_position,
             branch=PositionPosting.Branch.COS,
             level=PositionPosting.Level.LEVEL_1,
-            intake_mode=PositionPosting.IntakeMode.POOLING,
+            intake_mode=PositionPosting.IntakeMode.OPENING_BASED,
             status=PositionPosting.EntryStatus.ACTIVE,
+            closing_date=self.level1_closing_date(),
         )
     @property
     def cos_continuous_position(self):
@@ -2510,7 +2513,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         entry_without_reference = PositionPosting(
             branch=PositionPosting.Branch.COS,
             level=PositionPosting.Level.LEVEL_1,
-            intake_mode=PositionPosting.IntakeMode.POOLING,
+            intake_mode=PositionPosting.IntakeMode.CONTINUOUS,
             status=PositionPosting.EntryStatus.ACTIVE,
         )
         self.assertEqual(entry_without_reference.salary_grade_display, "")
@@ -2590,12 +2593,12 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
 
         self.assertEqual(entry.closing_date, publication_date + timedelta(days=30))
 
-    def test_cos_pooling_entry_cannot_set_closing_date(self):
+    def test_cos_open_pool_entry_cannot_set_closing_date(self):
         entry = PositionPosting(
             position_reference=self.project_assistant_position,
             branch=PositionPosting.Branch.COS,
             level=PositionPosting.Level.LEVEL_1,
-            intake_mode=PositionPosting.IntakeMode.POOLING,
+            intake_mode=PositionPosting.IntakeMode.CONTINUOUS,
             status=PositionPosting.EntryStatus.ACTIVE,
             closing_date=self.level1_closing_date(),
         )
@@ -2819,13 +2822,13 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
                 "publication_date": "",
                 "opening_date": opening_date.isoformat(),
                 "closing_date": "",
-                "qualification_reference": "Fourteen-day Plantilla publication window.",
+                "qualification_reference": "Education: Completion of two years of college\nTraining: None required\nExperience: None required\nFourteen-day Plantilla publication window.",
             },
         )
 
         self.assertEqual(response.status_code, 302)
         created_entry = PositionPosting.objects.get(
-            qualification_reference="Fourteen-day Plantilla publication window."
+            qualification_reference="Education: Completion of two years of college\nTraining: None required\nExperience: None required\nFourteen-day Plantilla publication window."
         )
         self.assertEqual(
             created_entry.closing_date,
@@ -2848,13 +2851,13 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
                 "publication_date": "",
                 "opening_date": opening_date.isoformat(),
                 "closing_date": closing_date.isoformat(),
-                "qualification_reference": "Custom Plantilla publication window.",
+                "qualification_reference": "Education: Completion of two years of college\nTraining: None required\nExperience: None required\nCustom Plantilla publication window.",
             },
         )
 
         self.assertEqual(response.status_code, 302)
         created_entry = PositionPosting.objects.get(
-            qualification_reference="Custom Plantilla publication window."
+            qualification_reference="Education: Completion of two years of college\nTraining: None required\nExperience: None required\nCustom Plantilla publication window."
         )
         self.assertEqual(created_entry.closing_date, closing_date)
 
@@ -3228,11 +3231,11 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
             {
                 "position_reference": self.project_assistant_position.pk,
                 "branch": PositionPosting.Branch.COS,
-                "intake_mode": PositionPosting.IntakeMode.POOLING,
+                "intake_mode": PositionPosting.IntakeMode.OPENING_BASED,
                 "status": PositionPosting.EntryStatus.ACTIVE,
                 "publication_date": "",
                 "opening_date": self.cos_position.opening_date.isoformat(),
-                "closing_date": "",
+                "closing_date": self.cos_position.closing_date.isoformat(),
                 "qualification_reference": "Live entry note update is still allowed.",
             },
         )
@@ -5656,19 +5659,18 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
             )
 
     def test_case_handoff_modal_shows_fixed_destination_for_single_target(self):
+        # C4 + F9: cases move as a whole batch, offered on the vacancy page, not per case.
         application = self.make_application(self.level1_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
 
         client = Client()
         self.force_login_with_mfa(client, self.secretariat)
-        response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
-
-        self.assertEqual(response.status_code, 200)
-        content = response.content.decode()
-        self.assertIn("Send to HRM Chief", content)
-        self.assertIn('type="hidden" name="target_role" value="hrm_chief"', content)
-        self.assertNotIn('<select name="target_role"', content)
+        case_page = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
+        self.assertEqual(case_page.status_code, 200)
+        self.assertNotIn('name="target_role"', case_page.content.decode())
+        batch_page = client.get(reverse("vacancy-batch-detail", args=[self.level1_position.pk]))
+        self.assertContains(batch_page, "Send the batch to the HRM Chief")
 
     def test_handoff_options_match_routes_the_service_accepts(self):
         level1 = self.make_application(self.level1_position)
@@ -5681,11 +5683,8 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         client = Client()
         self.force_login_with_mfa(client, self.secretariat)
         response = client.post(
-            reverse("case-handoff", kwargs={"pk": level1.pk}),
-            {
-                "target_role": RecruitmentUser.Role.HRM_CHIEF,
-                "remarks": "Routine Level 1 office handoff.",
-            },
+            reverse("vacancy-batch-handoff", args=[level1.position.pk]),
+            {"operation": "send", "remarks": "Routine Level 1 office handoff."},
         )
         self.assertEqual(response.status_code, 302)
         level1.refresh_from_db()
@@ -5700,11 +5699,8 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         )
         self.force_login_with_mfa(client, self.hrm_chief)
         response = client.post(
-            reverse("case-handoff", kwargs={"pk": level2.pk}),
-            {
-                "target_role": RecruitmentUser.Role.SECRETARIAT,
-                "remarks": "Authorized Level 2 office handoff.",
-            },
+            reverse("vacancy-batch-handoff", args=[level2.position.pk]),
+            {"operation": "send", "remarks": "Authorized Level 2 office handoff."},
         )
         self.assertEqual(response.status_code, 302)
         level2.refresh_from_db()
@@ -5971,11 +5967,8 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         client = Client()
         self.force_login_with_mfa(client, self.hrm_chief)
         response = client.post(
-            reverse("case-handoff", kwargs={"pk": application.pk}),
-            {
-                "target_role": RecruitmentUser.Role.SECRETARIAT,
-                "remarks": "Controlled screening support.",
-            },
+            reverse("vacancy-batch-handoff", args=[application.position.pk]),
+            {"operation": "send", "remarks": "Controlled screening support."},
         )
         self.assertEqual(response.status_code, 302)
 
@@ -6110,21 +6103,15 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         client = Client()
         self.force_login_with_mfa(client, self.hrm_chief)
         response = client.post(
-            reverse("case-handoff", kwargs={"pk": application.pk}),
-            {
-                "target_role": RecruitmentUser.Role.SECRETARIAT,
-                "remarks": "Controlled screening support.",
-            },
+            reverse("vacancy-batch-handoff", args=[application.position.pk]),
+            {"operation": "send", "remarks": "Controlled screening support."},
         )
         self.assertEqual(response.status_code, 302)
 
         self.force_login_with_mfa(client, self.secretariat)
         response = client.post(
-            reverse("case-handoff", kwargs={"pk": application.pk}),
-            {
-                "target_role": RecruitmentUser.Role.HRM_CHIEF,
-                "remarks": "Returning to HRM Chief.",
-            },
+            reverse("vacancy-batch-handoff", args=[application.position.pk]),
+            {"operation": "send", "remarks": "Returning to HRM Chief."},
         )
         self.assertEqual(response.status_code, 302)
 
@@ -7887,29 +7874,6 @@ class ExamRecordTests(BaseRecruitmentTestCase):
             ExamRecord.AdministeredBy.END_USER.label,
         )
 
-    def test_exam_wizard_reveals_conditional_fields_for_outcome_validation(self):
-        # RD-2: the per-case exam editor lives on un-pooled (pooling /
-        # continuous) COS intake; pooled vacancies score in the batch console.
-        application = self.make_application(self.cos_continuous_position)
-        self.verify_application_for_submission(application)
-        submit_application(application, self.applicant)
-        self.finalize_screening_for_current_stage(application, self.secretariat)
-
-        client = Client()
-        self.force_login_with_mfa(client, self.secretariat)
-        response = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "rg-wizard-validation.js?v=20260624-val2c")
-        self.assertContains(
-            response,
-            'condCompleted.classList.toggle("is-visible", showCompleted);',
-        )
-        self.assertContains(
-            response,
-            'condRemarks.classList.toggle("is-visible", showRemarks);',
-        )
-
     def test_exam_form_rejects_scores_outside_allowed_range(self):
         application = self.make_application(self.level1_position)
         form = ExamRecordForm(
@@ -8260,167 +8224,33 @@ class ExamRecordTests(BaseRecruitmentTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(ExamRecord.objects.filter(application=application).exists())
 
-    def test_exam_view_invalid_scores_show_readable_message_and_do_not_finalize(self):
-        # RD-2: the per-case exam editor lives on un-pooled (pooling /
-        # continuous) COS intake; pooled vacancies score in the batch console.
-        application = self.make_application(self.cos_continuous_position)
-        self.verify_application_for_submission(application)
-        submit_application(application, self.applicant)
-        self.finalize_screening_for_current_stage(application, self.secretariat)
-
-        client = Client()
-        self.force_login_with_mfa(client, self.secretariat)
-        response = client.post(
-            reverse("exam-review", kwargs={"pk": application.pk}),
-            {
-                **self.exam_payload(
-                    technical_score="120",
-                    general_score="-1",
-                ),
-                "operation": "finalize",
-            },
-            follow=True,
-        )
-
-        self.assertEqual(response.status_code, 200)
-        message_text = " ".join(message.message for message in get_messages(response.wsgi_request))
-        self.assertIn("Technical Score", message_text)
-        self.assertIn("General Ability Score", message_text)
-        self.assertIn(ExamRecordForm.SCORE_RANGE_MESSAGE, message_text)
-        self.assertNotIn("{'exam_score'", message_text)
-        self.assertFalse(ExamRecord.objects.filter(application=application).exists())
-
-    def test_exam_autosave_accepts_partial_draft_without_audit_or_evidence(self):
-        # RD-2: the per-case exam editor lives on un-pooled (pooling /
-        # continuous) COS intake; pooled vacancies score in the batch console.
-        application = self.make_application(self.cos_continuous_position)
-        self.verify_application_for_submission(application)
-        submit_application(application, self.applicant)
-        self.finalize_screening_for_current_stage(application, self.secretariat)
-
-        client = Client()
-        self.force_login_with_mfa(client, self.secretariat)
-        response = client.post(
-            reverse("exam-review", kwargs={"pk": application.pk}),
-            {
-                "exam_type": ExamRecord.ExamType.END_USER_ASSESSMENT,
-                "exam_status": ExamRecord.ExamStatus.COMPLETED,
-                "exam_score": "",
-                "exam_result": "",
-                "technical_score": "",
-                "technical_result": "",
-                "general_score": "",
-                "general_result": "",
-                "exam_date": "",
-                "administered_by": ExamRecord.AdministeredBy.END_USER,
-                "valid_from": "",
-                "valid_until": "",
-                "exam_notes": "Autosave captured a partial exam draft.",
-                "operation": "save",
-                "evidence_file": SimpleUploadedFile(
-                    "autosave-exam.pdf",
-                    b"%PDF-1.4\nautosave should not upload",
-                    content_type="application/pdf",
-                ),
-            },
-            HTTP_X_REQUESTED_WITH="RG-Autosave",
-        )
-
-        self.assertEqual(response.status_code, 204)
-        exam_record = ExamRecord.objects.get(application=application)
-        self.assertFalse(exam_record.is_finalized)
-        self.assertEqual(exam_record.exam_status, ExamRecord.ExamStatus.COMPLETED)
-        self.assertIsNone(exam_record.technical_score)
-        self.assertIsNone(exam_record.general_score)
-        self.assertEqual(exam_record.exam_result, ExamRecord.OverallResult.INCOMPLETE)
-        self.assertIsNone(exam_record.evidence_item)
-        self.assertFalse(
-            AuditLog.objects.filter(
-                application=application,
-                action=AuditLog.Action.EXAM_RECORDED,
-            ).exists()
-        )
-        self.assertFalse(
-            EvidenceVaultItem.objects.filter(
-                application=application,
-                artifact_type="exam_supporting_evidence",
-            ).exists()
-        )
-
-    def test_exam_autosave_rejects_invalid_scores_without_creating_record(self):
-        # RD-2: the per-case exam editor lives on un-pooled (pooling /
-        # continuous) COS intake; pooled vacancies score in the batch console.
-        application = self.make_application(self.cos_continuous_position)
-        self.verify_application_for_submission(application)
-        submit_application(application, self.applicant)
-        self.finalize_screening_for_current_stage(application, self.secretariat)
-
-        client = Client()
-        self.force_login_with_mfa(client, self.secretariat)
-        response = client.post(
-            reverse("exam-review", kwargs={"pk": application.pk}),
-            {
-                **self.exam_payload(technical_score="101"),
-                "operation": "save",
-            },
-            HTTP_X_REQUESTED_WITH="RG-Autosave",
-        )
-
-        self.assertEqual(response.status_code, 400)
-        self.assertFalse(ExamRecord.objects.filter(application=application).exists())
-
-    def test_exam_finalize_rerenders_wizard_with_bound_field_errors(self):
-        # RD-2: the per-case exam editor lives on un-pooled (pooling /
-        # continuous) COS intake; pooled vacancies score in the batch console.
-        application = self.make_application(self.cos_continuous_position)
-        self.verify_application_for_submission(application)
-        submit_application(application, self.applicant)
-        self.finalize_screening_for_current_stage(application, self.secretariat)
-
-        client = Client()
-        self.force_login_with_mfa(client, self.secretariat)
-        response = client.post(
-            reverse("exam-review", kwargs={"pk": application.pk}),
-            {
-                **self.exam_payload(
-                    technical_score="",
-                    general_score="",
-                ),
-                "operation": "finalize",
-            },
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Enter this required exam score.")
-        self.assertContains(response, "invalid-feedback")
-        self.assertContains(response, "exam-form")
-        self.assertFalse(ExamRecord.objects.filter(application=application).exists())
-
     def test_waived_exam_clears_hidden_score_and_validity_values(self):
-        # RD-2: the per-case exam editor lives on un-pooled (pooling /
-        # continuous) COS intake; pooled vacancies score in the batch console.
+        # A waived exam carries no score and no validity window, whatever was typed before.
         application = self.make_application(self.cos_continuous_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
         self.finalize_screening_for_current_stage(application, self.secretariat)
         self.schedule_exam_for_current_stage(application, self.secretariat)
-
-        client = Client()
-        self.force_login_with_mfa(client, self.secretariat)
-        response = client.post(
-            reverse("exam-review", kwargs={"pk": application.pk}),
-            {
-                **self.exam_payload(
-                    exam_type=ExamRecord.ExamType.END_USER_ASSESSMENT,
-                    administered_by=ExamRecord.AdministeredBy.END_USER,
-                    exam_status=ExamRecord.ExamStatus.WAIVED,
-                    exam_notes="Waived by authorized office control.",
-                ),
-                "operation": "finalize",
+        application.refresh_from_db()
+        save_exam_record(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data={
+                "exam_type": ExamRecord.ExamType.END_USER_ASSESSMENT,
+                "exam_status": ExamRecord.ExamStatus.WAIVED,
+                "exam_result": "",
+                "technical_score": "80",
+                "technical_result": "",
+                "general_score": "80",
+                "general_result": "",
+                "exam_date": timezone.localdate(),
+                "administered_by": ExamRecord.AdministeredBy.END_USER,
+                "valid_from": timezone.localdate(),
+                "valid_until": timezone.localdate() + timedelta(days=365),
+                "exam_notes": "Waived by authorized office control.",
             },
+            finalize=True,
         )
-
-        self.assertEqual(response.status_code, 302)
         exam_record = ExamRecord.objects.get(application=application)
         self.assertTrue(exam_record.is_finalized)
         self.assertEqual(exam_record.exam_status, ExamRecord.ExamStatus.WAIVED)
@@ -8520,7 +8350,7 @@ class VacancyAssessmentWeightsTests(BaseRecruitmentTestCase):
             position_reference=self.project_assistant_position,
             branch=PositionPosting.Branch.COS,
             level=PositionPosting.Level.LEVEL_1,
-            intake_mode=PositionPosting.IntakeMode.POOLING,
+            intake_mode=PositionPosting.IntakeMode.CONTINUOUS,
             status=PositionPosting.EntryStatus.ACTIVE,
         )
         persist_recruitment_entry(entry, self.secretariat, [])
@@ -9223,36 +9053,16 @@ class BatchExamTests(BaseRecruitmentTestCase):
         # 80*0.60 + 90*0.40 = 84.00
         self.assertEqual(first_exam.exam_score, Decimal("84.00"))
 
-    def test_console_refused_for_continuous_vacancy(self):
-        # RD-5: one door in both directions — a continuous-intake vacancy is
-        # examined/interviewed per case, so its consoles refuse GET and POST.
+    def test_consoles_serve_an_open_pool(self):
+        # C1: an open pool examines and interviews in batches, so its consoles open.
         application = self.make_application(self.cos_continuous_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
         self.finalize_screening_for_current_stage(application, self.secretariat)
-
         client = Client()
         self.force_login_with_mfa(client, self.secretariat)
-        for url_name in ("vacancy-batch-exam", "vacancy-batch-interview"):
-            url = reverse(url_name, args=[self.cos_continuous_position.pk])
-            response = client.get(url)
-            self.assertEqual(response.status_code, 302, url_name)
-            self.assertIn(
-                reverse("vacancy-batch-detail", args=[self.cos_continuous_position.pk]),
-                response.headers["Location"],
-                url_name,
-            )
-        # A forced console POST writes nothing.
-        response = client.post(
-            reverse("vacancy-batch-exam", args=[self.cos_continuous_position.pk]),
-            {
-                "operation": "save_scores",
-                f"general_score_{application.case.id}": "90",
-                f"technical_score_{application.case.id}": "85",
-            },
-        )
-        self.assertEqual(response.status_code, 302)
-        self.assertFalse(application.exam_records.exists())
+        response = client.get(reverse("vacancy-batch-exam", args=[self.cos_continuous_position.pk]))
+        self.assertEqual(response.status_code, 200)
 
     def test_per_case_exam_post_refused_for_pooled_vacancy(self):
         # RD-2 "one door", server-enforced (PT-03 lesson): a pooled vacancy's
@@ -15915,43 +15725,6 @@ class InterviewManagementTests(BaseRecruitmentTestCase):
         )
         self.assertEqual(str(interview_rating.rating_score), "60.00")
 
-    def test_cos_interview_rating_view_posts_a_simple_score(self):
-        # RD-4: the per-case simple-score editor lives on continuous COS intake;
-        # a pooled COS vacancy is scored in the batch interview console.
-        application = self.make_application(self.cos_continuous_position)
-        self.move_application_to_hrm_chief_review(application)
-        self.finalize_screening_for_current_stage(application, self.hrm_chief)
-        self.finalize_exam_for_current_stage(application, self.hrm_chief)
-        save_interview_session(
-            application=application,
-            actor=self.hrm_chief,
-            cleaned_data=self.session_payload(),
-            finalize=False,
-        )
-
-        client = Client()
-        self.force_login_with_mfa(client, self.hrm_chief)
-        # The COS interview section renders the simple score form (not the competency grid).
-        detail = client.get(reverse("application-detail", kwargs={"pk": application.pk}))
-        self.assertEqual(detail.status_code, 200)
-        self.assertContains(detail, "Interview Score (0-100)")
-        self.assertNotContains(detail, "Manage rating sheet")
-
-        response = client.post(
-            reverse("interview-rating", kwargs={"pk": application.pk}),
-            {
-                "rating_score": "82.50",
-                "rating_notes": "Recorded from the case detail page.",
-                "justification": "",
-            },
-        )
-
-        self.assertEqual(response.status_code, 302)
-        interview_rating = application.interview_ratings.first()
-        self.assertIsNotNone(interview_rating)
-        self.assertEqual(str(interview_rating.rating_score), "82.50")
-        self.assertEqual(interview_rating.competency_scores.count(), 0)
-
     def test_pooled_interview_tab_renders_read_only_console_link(self):
         # RD-4: the per-case interview tab for a pooled vacancy is a read-only
         # summary pointing at the batch console — no editable session form, and
@@ -16545,13 +16318,12 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             "deliberation pick first if the engagement is not going ahead."
         )
 
-        # The entry-list cancellation form is intentionally still shown: the existing
-        # Plantilla selection guard is also server-side only, and the POST surfaces the
-        # precise corrective action without duplicating selection state in list context.
+        # Chief review P3: a decided vacancy's row no longer offers Cancel; the server-side
+        # refusal below still stands for a forced POST.
         client = Client()
         self.force_login_with_mfa(client, self.hrm_chief)
-        listing = client.get(reverse("recruitment-entry-list"))
-        self.assertContains(
+        listing = client.get(reverse("recruitment-entry-list") + "?status=all")
+        self.assertNotContains(
             listing,
             reverse("recruitment-entry-cancel", args=[self.cos_position.pk]),
         )
@@ -17009,40 +16781,14 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
 
     # ── SL-04: continuous COS is gated on its own screening ───────────────────
     def test_a_continuous_cos_case_is_not_blocked_by_a_sibling_in_screening(self):
-        # SL-04: the audit's probe — a qualified continuous candidate could not reach the
-        # exam because an unrelated applicant was still screening, and the batch console
-        # refused them too, so there was no valid examination door at all.
+        # SL-04, kept under C1: an open pool's batch is whoever is ready; an applicant still
+        # in screening joins the next batch instead of holding this one.
         ready = self._continuous_candidate_at_exam("ready")
         pending = self._continuous_candidate_awaiting_screening("pending")
-
-        self.assertFalse(
-            vacancy_screening_batch_status(self.cos_continuous_position).is_ready
-        )
+        self.assertTrue(vacancy_screening_batch_status(self.cos_continuous_position).is_ready)
         self.assertEqual(get_current_workflow_section(ready), "exam")
         self.assertTrue(user_can_manage_exam(self.secretariat, ready))
-        # The sibling's own case is genuinely still at screening — only its own.
         self.assertEqual(get_current_workflow_section(pending), "screening")
-
-        record = save_exam_record(
-            application=ready,
-            actor=self.secretariat,
-            cleaned_data={
-                "exam_type": ExamRecord.ExamType.END_USER_ASSESSMENT,
-                "exam_status": ExamRecord.ExamStatus.COMPLETED,
-                "exam_result": "",
-                "technical_score": "84.50",
-                "technical_result": "",
-                "general_score": "89.00",
-                "general_result": "",
-                "exam_date": timezone.localdate().isoformat(),
-                "administered_by": ExamRecord.AdministeredBy.HRMS,
-                "valid_from": timezone.localdate().isoformat(),
-                "valid_until": (timezone.localdate() + timedelta(days=365)).isoformat(),
-                "exam_notes": "Recorded per case for the continuous vacancy.",
-            },
-            finalize=False,
-        )
-        self.assertIsNotNone(record)
 
     def test_a_batch_cos_vacancy_keeps_its_vacancy_wide_screening_gate(self):
         # SL-04 AC#3: opening-based and pooling COS still move as one batch.
@@ -17121,20 +16867,20 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         application.refresh_from_db()
         return application
 
-    def test_continuous_cos_needs_an_open_round_before_a_pick(self):
+    def test_an_open_pool_pick_opens_the_next_round_when_none_is_open(self):
         application = self._continuous_candidate("a")
         self.assertEqual(get_current_workflow_section(application), "deliberation")
-        self.assertEqual(cos_deliberation_pool(self.cos_continuous_position), [])
-        with self.assertRaisesMessage(
-            ValueError, "Open a selection round before recording a pick"
-        ):
+        with self.captureOnCommitCallbacks(execute=True):
             save_cos_vacancy_deliberation(
                 self.cos_continuous_position,
                 self.hrm_chief,
                 application.case.id,
-                "Picking without a round.",
+                "Picked without opening a round first.",
                 finalize=True,
             )
+        rounds = CosSelectionRound.objects.filter(recruitment_entry=self.cos_continuous_position)
+        self.assertEqual(rounds.count(), 1)
+        self.assertEqual(rounds.get().slot_count, 1)
 
     def test_opening_a_round_snapshots_the_candidates_eligible_at_that_moment(self):
         first = self._continuous_candidate("a")
@@ -17276,25 +17022,18 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
     def test_a_round_cannot_exceed_its_slot_count(self):
         first = self._continuous_candidate("a")
         second = self._continuous_candidate("b")
-        open_cos_selection_round(self.cos_continuous_position, self.hrm_chief, slot_count=1)
+        round_one = open_cos_selection_round(self.cos_continuous_position, self.hrm_chief, slot_count=1)
         with self.captureOnCommitCallbacks(execute=True):
             save_cos_vacancy_deliberation(
-                self.cos_continuous_position,
-                self.hrm_chief,
-                first.case.id,
-                "Only hire.",
-                finalize=True,
+                self.cos_continuous_position, self.hrm_chief, first.case.id, "Only hire.", finalize=True
             )
-        with self.assertRaisesMessage(
-            ValueError, "Open a selection round before recording a pick"
-        ):
+        # The second pick can't join the filled round; it opens round 2 instead.
+        with self.captureOnCommitCallbacks(execute=True):
             save_cos_vacancy_deliberation(
-                self.cos_continuous_position,
-                self.hrm_chief,
-                second.case.id,
-                "One too many.",
-                finalize=True,
+                self.cos_continuous_position, self.hrm_chief, second.case.id, "Next slot.", finalize=True
             )
+        self.assertEqual(round_one.picks.filter(is_finalized=True, is_rescinded=False).count(), 1)
+        self.assertEqual(CosSelectionRound.objects.filter(recruitment_entry=self.cos_continuous_position).count(), 2)
 
     def test_single_batch_cos_still_closes_the_unpicked_pool_once(self):
         # SL-02: opening/pooling COS keeps single-batch behaviour — one round, and the
@@ -20585,7 +20324,7 @@ class PositionDocumentRequirementTests(BaseRecruitmentTestCase):
             "publication_date": "",
             "opening_date": self.entry_opening_date().isoformat(),
             "closing_date": "",
-            "qualification_reference": "Per-vacancy document configuration create test.",
+            "qualification_reference": "Education: Completion of two years of college\nTraining: None required\nExperience: None required\nPer-vacancy document configuration create test.",
         }
         for requirement in APPLICANT_DOCUMENT_REQUIREMENTS_BY_BRANCH[PositionPosting.Branch.PLANTILLA]:
             code = requirement.code
@@ -20598,7 +20337,7 @@ class PositionDocumentRequirementTests(BaseRecruitmentTestCase):
         response = client.post(reverse("recruitment-entry-create"), payload)
         self.assertEqual(response.status_code, 302)
         created = PositionPosting.objects.get(
-            qualification_reference="Per-vacancy document configuration create test."
+            qualification_reference="Education: Completion of two years of college\nTraining: None required\nExperience: None required\nPer-vacancy document configuration create test."
         )
         configured_codes = set(
             created.document_requirements.values_list("document_code", flat=True)
@@ -20975,7 +20714,7 @@ class BusinessLogicBypassHardeningTests(BaseRecruitmentTestCase):
         self.force_login_with_mfa(client, self.secretariat)
         response = client.get(reverse("vacancy-batch-detail", args=[self.level1_position.pk]))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Screening batch is on hold")
+        self.assertContains(response, "The exam opens once the other")
         self.assertNotContains(response, "Screening batch is complete")
         self.assertNotContains(response, "Open batch exam")
 
@@ -20994,7 +20733,7 @@ class BusinessLogicBypassHardeningTests(BaseRecruitmentTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Screening batch is complete")
         self.assertContains(response, "Open batch exam")
-        self.assertNotContains(response, "Screening batch is on hold")
+        self.assertNotContains(response, "The exam opens once the other")
 
 
 class SessionStabilityTests(BaseRecruitmentTestCase):
@@ -23040,3 +22779,544 @@ class SecretariatRoundATests(BaseRecruitmentTestCase):
         )
         # The Secretariat, who screened it, still can.
         self.assertEqual(self._staff_client(self.secretariat).get(url).status_code, 200)
+
+
+class RoundBTests(BaseRecruitmentTestCase):
+    """Round B from docs/hrm-chief-review-2026-11.md section 8."""
+
+    _submit = BatchExamTests._submit
+    _extra_submitted_application = BatchExamTests._extra_submitted_application
+    _schedule_payload = BatchExamTests._schedule_payload
+
+    def _staff_client(self, user):
+        client = Client()
+        self.force_login_with_mfa(client, user)
+        return client
+
+    def _open_pool(self):
+        # Medical Officer V is a Level 2 reference, so the pool routes to the HRM Chief.
+        return PositionPosting.objects.create(
+            position_reference=self.medical_officer_position,
+            branch=PositionPosting.Branch.COS,
+            level=PositionPosting.Level.LEVEL_2,
+            intake_mode=PositionPosting.IntakeMode.CONTINUOUS,
+            status=PositionPosting.EntryStatus.ACTIVE,
+        )
+
+    def _cos_l2_to_deliberation(self, posting, applications):
+        """Drive a Level 2 open-pool batch to the HRM Chief's deliberation, the batch way."""
+        for application in applications:
+            self.finalize_screening_for_current_stage(application, self.hrm_chief)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(posting, self.hrm_chief, self._schedule_payload())
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_scores(
+                posting,
+                self.hrm_chief,
+                {a.case.id: {"general_score": "85", "technical_score": "80"} for a in applications},
+                finalize=True,
+            )
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_interview_schedule(
+                posting,
+                self.hrm_chief,
+                {"scheduled_for": timezone.now() + timedelta(days=2), "location": "Chief's office", "session_notes": ""},
+            )
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_cos_interview_ratings(
+                posting,
+                self.hrm_chief,
+                {a.case.id: {"rating_score": "88"} for a in applications},
+                finalize=True,
+            )
+        for application in applications:
+            application.refresh_from_db()
+
+    # C1: "pooling" is gone; COS chooses between an open pool and one batch
+    def test_cos_intake_choices_are_open_pool_and_one_batch(self):
+        values = dict(PositionPosting.IntakeMode.choices)
+        self.assertNotIn("pooling", values)
+        self.assertEqual(values["continuous"], "Open Pool")
+
+    def test_a_one_batch_cos_vacancy_needs_a_closing_date(self):
+        form = RecruitmentEntryForm(
+            data={
+                "position_reference": self.project_assistant_position.pk,
+                "branch": PositionPosting.Branch.COS,
+                "status": PositionPosting.EntryStatus.ACTIVE,
+                "intake_mode": PositionPosting.IntakeMode.OPENING_BASED,
+                "opening_date": timezone.localdate().isoformat(),
+                "closing_date": "",
+            }
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("closing date", str(form.errors).lower())
+
+    def test_open_pool_batch_exam_does_not_wait_for_a_newcomer(self):
+        posting = self._open_pool()
+        first = self._extra_submitted_application(posting, "1")
+        second = self._extra_submitted_application(posting, "2")
+        for application in (first, second):
+            self.finalize_screening_for_current_stage(application, self.hrm_chief)
+        newcomer = self._extra_submitted_application(posting, "3")
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(posting, self.hrm_chief, self._schedule_payload())
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_scores(
+                posting,
+                self.hrm_chief,
+                {a.case.id: {"general_score": "85", "technical_score": "80"} for a in (first, second)},
+                finalize=True,
+            )
+        for application in (first, second):
+            self.assertTrue(ExamRecord.objects.get(application=application).is_finalized)
+        newcomer.refresh_from_db()
+        self.assertEqual(get_current_workflow_section(newcomer), "screening")
+
+    def test_open_pool_keeps_unpicked_candidates_and_picks_a_later_batch_in_round_two(self):
+        posting = self._open_pool()
+        first = self._extra_submitted_application(posting, "1")
+        second = self._extra_submitted_application(posting, "2")
+        self._cos_l2_to_deliberation(posting, [first, second])
+        with self.captureOnCommitCallbacks(execute=True):
+            save_cos_vacancy_deliberation(posting, self.hrm_chief, first.case.id, "Best scores.", finalize=True)
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(first.status, RecruitmentApplication.Status.APPROVED)
+        # The pool stays: the candidate not picked waits for the next slot.
+        self.assertEqual(second.case.case_status, RecruitmentCase.CaseStatus.ACTIVE)
+        later = self._extra_submitted_application(posting, "3")
+        self._cos_l2_to_deliberation(posting, [later])
+        with self.captureOnCommitCallbacks(execute=True):
+            save_cos_vacancy_deliberation(posting, self.hrm_chief, later.case.id, "Second slot.", finalize=True)
+        later.refresh_from_db()
+        self.assertEqual(later.status, RecruitmentApplication.Status.APPROVED)
+        self.assertEqual(CosSelectionRound.objects.filter(recruitment_entry=posting).count(), 2)
+
+    def test_pooling_vacancies_migrate_to_open_pool(self):
+        import importlib
+        from django.apps import apps as global_apps
+
+        migration = importlib.import_module("recruitment.migrations.0092_merge_pooling_into_open_pool")
+        posting = self._open_pool()
+        PositionPosting.objects.filter(pk=posting.pk).update(intake_mode="pooling")
+        migration.merge_pooling_into_continuous(global_apps, None)
+        posting.refresh_from_db()
+        self.assertEqual(posting.intake_mode, PositionPosting.IntakeMode.CONTINUOUS)
+
+    # C2: the HRM Chief owns Level 2 and follows it, read-only, through the CAR and decision
+    def _level_two_at_car(self):
+        application = self.make_application(self.level2_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb)
+        self.finalize_applicant_pool_for_test(self.level2_position)
+        application.refresh_from_db()
+        return application
+
+    def test_chief_follows_a_level_two_case_at_the_car_read_only(self):
+        application = self._level_two_at_car()
+        self.assertEqual(get_current_workflow_section(application), "car")
+        chief = self._staff_client(self.hrm_chief)
+        case_url = reverse("application-detail", args=[application.pk])
+        self.assertEqual(chief.get(case_url).status_code, 200)
+        self.assertEqual(chief.get(reverse("application-export", args=[application.pk])).status_code, 200)
+        self.assertEqual(
+            chief.get(reverse("vacancy-batch-detail", args=[self.level2_position.pk])).status_code, 200
+        )
+        response = chief.post(
+            reverse("comparative-assessment-report", args=[application.pk]),
+            {"operation": "save", "summary_notes": "Chief tries to prepare."},
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_chief_follows_a_level_two_case_at_the_decision_read_only(self):
+        application = self.make_application(self.level2_position)
+        self.move_application_to_appointing_review(application)
+        application.refresh_from_db()
+        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW)
+        chief = self._staff_client(self.hrm_chief)
+        self.assertEqual(chief.get(reverse("application-detail", args=[application.pk])).status_code, 200)
+        response = chief.post(
+            reverse("final-selection-record", args=[application.pk]),
+            {"decision_notes": "Chief tries to decide."},
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_level_two_completion_shows_the_car_summary(self):
+        application = self.make_application(self.level2_position)
+        self.move_application_to_appointing_review(application)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.record_final_decision_for_current_stage(application, self.appointing)
+        application.refresh_from_db()
+        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.COMPLETION)
+        page = self._staff_client(self.hrm_chief).get(reverse("application-detail", args=[application.pk]))
+        self.assertContains(page, "data-car-summary")
+        self.assertContains(page, application.applicant_display_name)
+
+    def test_level_two_interview_finalize_message_names_the_secretariat(self):
+        from recruitment.views import _interview_finalize_next_step
+
+        self.assertIn("Secretariat", _interview_finalize_next_step(self.level2_position, self.hrm_chief))
+        self.assertIn("prepare the Comparative Assessment Report", _interview_finalize_next_step(self.level1_position, self.secretariat))
+
+    # C3: a filled vacancy can't be re-opened for applications by accident
+    def test_a_decided_vacancy_cannot_be_reactivated(self):
+        application = self.make_application(self.level2_position)
+        self.move_application_to_appointing_review(application)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.record_final_decision_for_current_stage(application, self.appointing)
+        self.level2_position.refresh_from_db()
+        PositionPosting.objects.filter(pk=self.level2_position.pk).update(status=PositionPosting.EntryStatus.CLOSED)
+        chief = self._staff_client(self.hrm_chief)
+        response = chief.post(
+            reverse("recruitment-entry-status", args=[self.level2_position.pk, "active"]), follow=True
+        )
+        self.assertContains(response, "selection has already been recorded")
+        self.level2_position.refresh_from_db()
+        self.assertEqual(self.level2_position.status, PositionPosting.EntryStatus.CLOSED)
+        closed_list = chief.get(reverse("recruitment-entry-list") + "?status=closed")
+        self.assertNotContains(
+            closed_list, reverse("recruitment-entry-status", args=[self.level2_position.pk, "active"])
+        )
+
+    def test_a_suspended_open_pool_with_a_pick_can_be_reactivated(self):
+        posting = self._open_pool()
+        first = self._extra_submitted_application(posting, "1")
+        self._cos_l2_to_deliberation(posting, [first])
+        with self.captureOnCommitCallbacks(execute=True):
+            save_cos_vacancy_deliberation(posting, self.hrm_chief, first.case.id, "Filled one slot.", finalize=True)
+        PositionPosting.objects.filter(pk=posting.pk).update(status=PositionPosting.EntryStatus.SUSPENDED)
+        self._staff_client(self.hrm_chief).post(reverse("recruitment-entry-status", args=[posting.pk, "active"]))
+        posting.refresh_from_db()
+        self.assertEqual(posting.status, PositionPosting.EntryStatus.ACTIVE)
+
+    # C4 + F9: the Secretariat and the HRM Chief lend each other whole batches
+    def _two_screened(self, position, reviewer):
+        first = self._extra_submitted_application(position, "h1")
+        second = self._extra_submitted_application(position, "h2")
+        for application in (first, second):
+            self.finalize_screening_for_current_stage(application, reviewer)
+            application.refresh_from_db()
+        return first, second
+
+    def _batch_handoff(self, client, position, operation, remarks="Covering this batch while I'm away."):
+        return client.post(
+            reverse("vacancy-batch-handoff", args=[position.pk]),
+            {"operation": operation, "remarks": remarks},
+            follow=True,
+        )
+
+    def test_secretariat_lends_the_whole_batch_and_keeps_sight_of_it(self):
+        first, second = self._two_screened(self.level1_position, self.secretariat)
+        sec = self._staff_client(self.secretariat)
+        response = self._batch_handoff(sec, self.level1_position, "send")
+        self.assertContains(response, "2 cases")
+        for application in (first, second):
+            application.refresh_from_db()
+            self.assertEqual(application.current_handler_role, RecruitmentUser.Role.HRM_CHIEF)
+        page = sec.get(reverse("application-detail", args=[first.pk]))
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "data-case-on-loan")
+        batch = sec.get(reverse("vacancy-batch-detail", args=[self.level1_position.pk]))
+        self.assertContains(batch, "Recall the batch")
+
+    def test_the_lending_office_can_recall_the_batch(self):
+        first, second = self._two_screened(self.level1_position, self.secretariat)
+        sec = self._staff_client(self.secretariat)
+        self._batch_handoff(sec, self.level1_position, "send")
+        self._batch_handoff(sec, self.level1_position, "recall", remarks="Back from leave.")
+        for application in (first, second):
+            application.refresh_from_db()
+            self.assertEqual(application.current_handler_role, RecruitmentUser.Role.SECRETARIAT)
+
+    def test_a_batch_waiting_on_corrected_documents_is_not_split(self):
+        first, _second = self._two_screened(self.level1_position, self.secretariat)
+        returned = self._extra_submitted_application(self.level1_position, "h3")
+        data = {"operation": "return_to_applicant", "qualification_outcome": "", "screening_notes": "", "completeness_notes": "", "return_remarks": "Fix the PDS."}
+        data.update(self.screening_document_status_payload(returned))
+        code = next(k for k in data if k.startswith("document_status__") and "personal_data_sheet" in k)
+        data[code] = "return_for_resubmission"
+        data[code.replace("document_status__", "document_remarks__")] = "Unsigned PDS."
+        with self.captureOnCommitCallbacks(execute=True):
+            self._staff_client(self.secretariat).post(reverse("screening-review", args=[returned.pk]), data)
+        response = self._batch_handoff(self._staff_client(self.secretariat), self.level1_position, "send")
+        self.assertContains(response, "waiting for corrected documents")
+        first.refresh_from_db()
+        self.assertEqual(first.current_handler_role, RecruitmentUser.Role.SECRETARIAT)
+
+    def test_the_chief_lends_a_level_two_batch_and_recalls_it(self):
+        first, second = self._two_screened(self.level2_position, self.hrm_chief)
+        chief = self._staff_client(self.hrm_chief)
+        self._batch_handoff(chief, self.level2_position, "send")
+        first.refresh_from_db()
+        self.assertEqual(first.current_handler_role, RecruitmentUser.Role.SECRETARIAT)
+        self.assertEqual(chief.get(reverse("application-detail", args=[first.pk])).status_code, 200)
+        self._batch_handoff(chief, self.level2_position, "recall", remarks="Taking it back.")
+        first.refresh_from_db()
+        self.assertEqual(first.current_handler_role, RecruitmentUser.Role.HRM_CHIEF)
+        self.assertIsNone(first.active_secretariat_override)
+
+    def test_single_case_handoff_is_retired(self):
+        first, _second = self._two_screened(self.level1_position, self.secretariat)
+        response = self._staff_client(self.secretariat).post(
+            reverse("case-handoff", args=[first.pk]), {"target_role": "hrm_chief", "remarks": "x"}, follow=True
+        )
+        self.assertContains(response, "whole batch")
+        first.refresh_from_db()
+        self.assertEqual(first.current_handler_role, RecruitmentUser.Role.SECRETARIAT)
+
+    # 4a: the HRMPSB panel is a standing core plus end-user members per vacancy
+    def test_an_unconfigured_panel_is_every_member(self):
+        from recruitment.services import user_is_on_vacancy_panel
+
+        end_user, _outsider = self.extra_plantilla_panel_raters(exclude=self.hrmpsb)
+        self.assertTrue(user_is_on_vacancy_panel(end_user, self.level1_position))
+
+    def test_an_end_user_member_sees_only_the_vacancies_they_sit_on(self):
+        from recruitment.services import (
+            get_interview_schedule_notification_recipients,
+            user_can_manage_interview_rating,
+        )
+
+        end_user, outsider = self.extra_plantilla_panel_raters(exclude=self.hrmpsb)
+        get_office_policy().core_panel_members.set([self.hrmpsb])
+        self.level1_position.panel_end_users.set([end_user])
+        level1_case = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(level1_case)
+        level2_case = self.make_application(self.level2_position)
+        self.move_application_to_hrmpsb_review(level2_case)
+        url = lambda application: reverse("application-detail", args=[application.pk])
+
+        end_user_client = self._staff_client(end_user)
+        self.assertEqual(end_user_client.get(url(level1_case)).status_code, 200)
+        self.assertEqual(end_user_client.get(url(level2_case)).status_code, 404)
+        self.assertEqual(self._staff_client(outsider).get(url(level1_case)).status_code, 404)
+        core_client = self._staff_client(self.hrmpsb)
+        self.assertEqual(core_client.get(url(level1_case)).status_code, 200)
+        self.assertEqual(core_client.get(url(level2_case)).status_code, 200)
+
+        queue = set(get_queue_for_user(end_user).values_list("pk", flat=True))
+        self.assertIn(level1_case.pk, queue)
+        self.assertNotIn(level2_case.pk, queue)
+        self.assertFalse(user_can_manage_interview_rating(outsider, level1_case))
+        self.assertEqual(
+            {user.pk for user in get_interview_schedule_notification_recipients(level1_case)},
+            {self.hrmpsb.pk, end_user.pk},
+        )
+
+    def test_the_rating_sheet_page_sets_the_vacancy_end_users(self):
+        end_user, _outsider = self.extra_plantilla_panel_raters(exclude=self.hrmpsb)
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        response = self._staff_client(self.secretariat).post(
+            reverse("interview-rating-sheet", args=[application.pk]),
+            {"operation": "save_panel", "panel_end_users": [end_user.pk]},
+            follow=True,
+        )
+        self.assertContains(response, "Panel saved")
+        self.assertEqual(list(self.level1_position.panel_end_users.all()), [end_user])
+
+    def test_office_policy_sets_the_core_panel(self):
+        policy = get_office_policy()
+        form = OfficePolicyForm(instance=policy)
+        self.assertIn("core_panel_members", form.fields)
+        data = {name: form.initial.get(name) for name in form.fields if name != "core_panel_members"}
+        data = {key: value for key, value in data.items() if value not in (None, False)}
+        data["core_panel_members"] = [self.hrmpsb.pk]
+        bound = OfficePolicyForm(data=data, instance=policy)
+        self.assertTrue(bound.is_valid(), bound.errors)
+        bound.save()
+        self.assertEqual(list(get_office_policy().core_panel_members.all()), [self.hrmpsb])
+
+    # C5: a case page shows a pick only from a round this case was in
+    def test_a_later_candidate_does_not_see_an_earlier_rounds_pick_as_theirs(self):
+        posting = self._open_pool()
+        first = self._extra_submitted_application(posting, "1")
+        second = self._extra_submitted_application(posting, "2")
+        self._cos_l2_to_deliberation(posting, [first, second])
+        with self.captureOnCommitCallbacks(execute=True):
+            save_cos_vacancy_deliberation(posting, self.hrm_chief, first.case.id, "Best scores.", finalize=True)
+        later = self._extra_submitted_application(posting, "3")
+        self._cos_l2_to_deliberation(posting, [later])
+        chief = self._staff_client(self.hrm_chief)
+        later_page = chief.get(reverse("application-detail", args=[later.pk]))
+        self.assertNotContains(later_page, first.applicant_display_name)
+        member_page = chief.get(reverse("application-detail", args=[second.pk]))
+        self.assertContains(member_page, first.applicant_display_name)
+
+    # F10: a Plantilla vacancy goes Active only with its Qualification Standards on file
+    def _plantilla_entry_data(self, **overrides):
+        data = {
+            "position_reference": self.admin_aide_position.pk,
+            "branch": PositionPosting.Branch.PLANTILLA,
+            "status": PositionPosting.EntryStatus.ACTIVE,
+            "intake_mode": PositionPosting.IntakeMode.FIXED_PERIOD,
+            "item_number": "OSEC-DOH-QS-9-2026",
+            "opening_date": timezone.localdate().isoformat(),
+            "closing_date": (timezone.localdate() + timedelta(days=14)).isoformat(),
+            "qualification_reference": "",
+        }
+        data.update(overrides)
+        return data
+
+    def test_an_active_plantilla_entry_needs_its_qualification_standards(self):
+        form = RecruitmentEntryForm(data=self._plantilla_entry_data())
+        self.assertFalse(form.is_valid())
+        self.assertIn("Education", str(form.errors["qualification_reference"]))
+        complete = RecruitmentEntryForm(
+            data=self._plantilla_entry_data(
+                qualification_reference="Education: Completion of two years of college\nTraining: None required\nExperience: None required"
+            )
+        )
+        self.assertTrue(complete.is_valid(), complete.errors)
+        draft = RecruitmentEntryForm(data=self._plantilla_entry_data(status=PositionPosting.EntryStatus.DRAFT))
+        self.assertNotIn("qualification_reference", draft.errors)
+
+    def test_activating_a_plantilla_entry_without_qualification_standards_is_refused(self):
+        PositionPosting.objects.filter(pk=self.level1_position.pk).update(
+            status=PositionPosting.EntryStatus.DRAFT, qualification_reference=""
+        )
+        response = self._staff_client(self.secretariat).post(
+            reverse("recruitment-entry-status", args=[self.level1_position.pk, "active"]), follow=True
+        )
+        self.assertContains(response, "Qualification Standards")
+        self.level1_position.refresh_from_db()
+        self.assertEqual(self.level1_position.status, PositionPosting.EntryStatus.DRAFT)
+
+    # F7: the panel's interview card shows the earlier stage's results, not "Not recorded"
+    def test_the_interview_card_shows_the_earlier_screening_and_exam(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        page = self._staff_client(self.hrmpsb).get(reverse("application-detail", args=[application.pk]))
+        self.assertContains(page, "rg-int-prev-step")
+        self.assertNotContains(page, "rg-int-prev-step__empty")
+
+    # F8: a refused online rating says what is missing
+    def test_a_rating_that_needs_a_justification_says_so(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        save_interview_session(
+            application=application,
+            actor=self.secretariat,
+            cleaned_data={"scheduled_for": timezone.now() + timedelta(days=1), "location": "Board Room", "session_notes": ""},
+            finalize=False,
+        )
+        payload = self.competency_rating_cleaned_data(application, level=4)
+        data = {"rating_notes": "", "justification": ""}
+        for competency in payload["competency_scores"]:
+            data[f"score_{competency.id}"] = "4"
+        response = self._staff_client(self.hrmpsb).post(
+            reverse("interview-rating", args=[application.pk]), data, follow=True
+        )
+        self.assertContains(response, "justification")
+
+    # F11: after screening one case, the next case that still needs screening is offered
+    def test_after_a_screening_the_next_case_to_screen_is_offered(self):
+        first = self._extra_submitted_application(self.level1_position, "n1")
+        second = self._extra_submitted_application(self.level1_position, "n2")
+        self.finalize_screening_for_current_stage(first, self.secretariat)
+        page = self._staff_client(self.secretariat).get(
+            reverse("application-detail", args=[first.pk]) + "?from=batch"
+        )
+        self.assertContains(page, "Next in this batch")
+        self.assertContains(page, second.case_number_short)
+        self.assertContains(page, "still in screening")
+
+    # F12: the export keeps draft CARs apart from the official one
+    def test_export_files_draft_cars_as_working_copies(self):
+        import io as _io
+        import zipfile as _zipfile
+
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        self.finalize_interview_for_current_stage(application, self.hrmpsb)
+        self.finalize_applicant_pool_for_test(self.level1_position)
+        self.ensure_ete_ratings_for_pool(application)
+        generate_comparative_assessment_report(
+            application=application, actor=self.secretariat, cleaned_data={"summary_notes": "Draft."}, finalize=False
+        )
+        self.finalize_car_for_current_stage(application, self.hrmpsb)
+        response = self._staff_client(self.appointing).get(reverse("application-export", args=[application.pk]))
+        self.assertEqual(response.status_code, 200)
+        names = _zipfile.ZipFile(_io.BytesIO(response.content)).namelist()
+        car_files = [name for name in names if "comparative_assessment_report" in name or "comparative-assessment-report" in name]
+        self.assertTrue(any("working-copies/draft-" in name for name in car_files), car_files)
+        self.assertTrue(any(name.endswith("car-official-version-1.pdf") for name in car_files), car_files)
+
+    # F13: the database itself refuses an impossible score
+    def test_the_database_refuses_scores_outside_0_to_100(self):
+        from django.db import IntegrityError, transaction as db_transaction
+
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        record = ExamRecord.objects.get(application=application)
+        for field in ("general_score", "technical_score", "exam_score"):
+            with self.subTest(field=field), self.assertRaises(IntegrityError), db_transaction.atomic():
+                ExamRecord.objects.filter(pk=record.pk).update(**{field: 101})
+
+    # F14: file logging with rotation and error mail, switched on by environment
+    def test_logging_config_adds_file_and_error_mail_handlers_when_configured(self):
+        from config.logging import build_logging_config
+
+        plain = build_logging_config()
+        self.assertEqual(set(plain["handlers"]), {"console"})
+        full = build_logging_config(log_file="/var/log/recruitment/app.log", mail_admins=True)
+        self.assertEqual(full["handlers"]["file"]["class"], "logging.handlers.RotatingFileHandler")
+        self.assertIn("file", full["loggers"]["django.request"]["handlers"])
+        self.assertIn("mail_admins", full["loggers"]["django.request"]["handlers"])
+        self.assertEqual(full["handlers"]["mail_admins"]["level"], "ERROR")
+
+    # P3: the rating sheet has a vacancy-level address
+    def test_the_rating_sheet_opens_from_the_vacancy(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        response = self._staff_client(self.secretariat).get(
+            reverse("vacancy-rating-sheet", args=[self.level1_position.pk])
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], reverse("interview-rating-sheet", args=[application.pk]))
+        self.assertEqual(
+            self._staff_client(self.hrmpsb)
+            .get(reverse("vacancy-rating-sheet", args=[self.level1_position.pk]))
+            .status_code,
+            404,
+        )
+
+    # C1, through the page: a pick on an open pool with no open round
+    def test_the_deliberation_page_picks_from_an_open_pool_without_an_open_round(self):
+        posting = self._open_pool()
+        first = self._extra_submitted_application(posting, "1")
+        self._cos_l2_to_deliberation(posting, [first])
+        chief = self._staff_client(self.hrm_chief)
+        url = reverse("vacancy-batch-cos-deliberation", args=[posting.pk])
+        page = chief.get(url)
+        self.assertContains(page, 'name="chosen_case"')
+        with self.captureOnCommitCallbacks(execute=True):
+            chief.post(url, {"operation": "finalize", "chosen_case": str(first.case.id), "notes": "Fills the slot."})
+        first.refresh_from_db()
+        self.assertEqual(first.status, RecruitmentApplication.Status.APPROVED)
+
+    _two_qualified = BatchExamTests._two_qualified
+
+    def test_cos_exam_finalize_lands_on_the_batch_page_while_cases_remain(self):
+        # Round B P3: both branches use one landing rule after the exam finalize. A COS
+        # Secretariat who still holds an absent candidate lands on this vacancy's batch page,
+        # not the batches list.
+        first, second = self._two_qualified(self.cos_position)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(self.cos_position, self.secretariat, self._schedule_payload())
+        client = self._staff_client(self.secretariat)
+        response = client.post(
+            reverse("vacancy-batch-exam", args=[self.cos_position.pk]),
+            {
+                "operation": "finalize",
+                f"general_score_{first.case.id}": "80",
+                f"technical_score_{first.case.id}": "90",
+                f"outcome_{second.case.id}": ExamRecord.ExamStatus.ABSENT,
+                f"notes_{second.case.id}": "Did not arrive on the exam day.",
+            },
+        )
+        self.assertRedirects(
+            response, reverse("vacancy-batch-detail", args=[self.cos_position.pk]),
+            fetch_redirect_response=False,
+        )

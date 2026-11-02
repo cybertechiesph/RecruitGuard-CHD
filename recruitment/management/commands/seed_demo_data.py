@@ -415,7 +415,7 @@ class Command(BaseCommand):
             intake_mode=(
                 PositionPosting.IntakeMode.FIXED_PERIOD
                 if is_plantilla
-                else PositionPosting.IntakeMode.POOLING
+                else PositionPosting.IntakeMode.CONTINUOUS
             ),
             status=PositionPosting.EntryStatus.ACTIVE,
             opening_date=opening_date,

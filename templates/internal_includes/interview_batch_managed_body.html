@@ -26,8 +26,8 @@ fallback upload below is additive and cannot conflict with anything.
             <span class="rg-int-readout-grid__label">Date &amp; time</span>
             <strong>
                 {% if current_interview_session and current_interview_session.scheduled_for %}
-                    {{ current_interview_session.scheduled_for|date:"M d, Y" }}
-                    at {{ current_interview_session.scheduled_for|date:"H:i" }}
+                    {{ current_interview_session.scheduled_for|date:"M j, Y" }}
+                    at {{ current_interview_session.scheduled_for|date:"g:i A" }}
                 {% else %}
                     Not yet scheduled
                 {% endif %}

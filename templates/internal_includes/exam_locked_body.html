@@ -45,8 +45,8 @@
         {% if current_exam_record.finalized_at %}
         <div class="rg-scr-elig-bar__meta">
             Finalized
-            {{ current_exam_record.finalized_at|date:"M d, Y" }}
-            at {{ current_exam_record.finalized_at|date:"H:i" }}
+            {{ current_exam_record.finalized_at|date:"M j, Y" }}
+            at {{ current_exam_record.finalized_at|date:"g:i A" }}
             {% if current_exam_record.finalized_by_role %}
                 &mdash;
                 {{ current_exam_record.finalized_by_role|role_label }}
@@ -107,7 +107,7 @@
                 <div class="rg-exam-locked-field__label">Exam date</div>
                 <div class="rg-exam-locked-field__value">
                     {% if current_exam_record.exam_date %}
-                        {{ current_exam_record.exam_date|date:"M d, Y" }}
+                        {{ current_exam_record.exam_date|date:"M j, Y" }}
                     {% else %}
                         <span style="color:#9aa4af;font-style:italic;">Not recorded</span>
                     {% endif %}
@@ -197,13 +197,13 @@
                 <div class="rg-exam-locked-field__label">Validity period</div>
                 <div class="rg-exam-locked-field__value">
                     {% if current_exam_record.valid_from %}
-                        {{ current_exam_record.valid_from|date:"M d, Y" }}
+                        {{ current_exam_record.valid_from|date:"M j, Y" }}
                     {% else %}
                         &mdash;
                     {% endif %}
                     &nbsp;&rarr;&nbsp;
                     {% if current_exam_record.valid_until %}
-                        {{ current_exam_record.valid_until|date:"M d, Y" }}
+                        {{ current_exam_record.valid_until|date:"M j, Y" }}
                     {% else %}
                         &mdash;
                     {% endif %}
@@ -265,8 +265,8 @@
             </svg>
             Finalized
             {% if current_exam_record.finalized_at %}
-                {{ current_exam_record.finalized_at|date:"M d, Y" }}
-                at {{ current_exam_record.finalized_at|date:"H:i" }}
+                {{ current_exam_record.finalized_at|date:"M j, Y" }}
+                at {{ current_exam_record.finalized_at|date:"g:i A" }}
             {% endif %}
             {% if current_exam_record.finalized_by_role %}
                 <span class="rg-imeta__sep"></span>

@@ -164,13 +164,17 @@ def update_office_policy(policy_form, actor):
     policy = policy_form.instance
     changed_fields = list(policy_form.changed_data)
     stored_policy = OfficePolicy.objects.get(pk=policy.pk)
-    previous = {
-        field: getattr(stored_policy, field)
-        for field in changed_fields
-    }
+
+    def _audit_value(holder, field):
+        value = getattr(holder, field)
+        if hasattr(value, "all"):  # a many-to-many list (the core panel): record names
+            return sorted(user.get_full_name() or user.username for user in value.all())
+        return value
+
+    previous = {field: _audit_value(stored_policy, field) for field in changed_fields}
     policy = policy_form.save()
     changes = {
-        field: {"old": previous[field], "new": getattr(policy, field)}
+        field: {"old": previous[field], "new": _audit_value(policy, field)}
         for field in changed_fields
     }
     if changes:
@@ -1406,10 +1410,49 @@ def get_queue_for_user(user):
             )
         )
     queryset = (assigned_queryset | support_queryset).distinct()
+    if user.role == RecruitmentUser.Role.HRMPSB_MEMBER:
+        queryset = queryset.filter(_panel_position_q(user)).distinct()
     # Urgency ordering: oldest stage-entry first, so the most overdue cases (the
     # longest in their current stage) lead the queue instead of being buried in
     # insertion order. pk breaks ties deterministically.
     return queryset.order_by("case__stage_entered_at", "pk")
+
+
+@transaction.atomic
+def set_vacancy_panel_end_users(posting, actor, end_user_ids):
+    """4a: choose the end-user members who join this vacancy's panel. A member who has
+    already rated one of its candidates stays on the panel (their rating counts)."""
+    core = set(get_office_policy().core_panel_members.values_list("pk", flat=True))
+    chosen = set(
+        RecruitmentUser.objects.filter(
+            pk__in=end_user_ids, is_active=True, role=RecruitmentUser.Role.HRMPSB_MEMBER
+        ).exclude(pk__in=core).values_list("pk", flat=True)
+    )
+    raters = set(
+        InterviewRating.objects.filter(interview_session__application__position=posting)
+        .values_list("rated_by_id", flat=True)
+    ) | set(
+        InterviewFallbackRating.objects.filter(interview_session__application__position=posting)
+        .values_list("rated_by_id", flat=True)
+    )
+    current = set(posting.panel_end_users.values_list("pk", flat=True))
+    kept_raters = (current & raters) - chosen
+    if kept_raters:
+        names = ", ".join(
+            user.get_full_name() or user.username
+            for user in RecruitmentUser.objects.filter(pk__in=kept_raters)
+        )
+        raise ValueError(
+            f"{names} already rated this vacancy's candidates, so they stay on its panel."
+        )
+    posting.panel_end_users.set(chosen)
+    record_system_audit_event(
+        actor=actor,
+        action=AuditLog.Action.RECRUITMENT_ENTRY_STATUS_CHANGED,
+        description=f"Set the end-user panel members for '{posting.job_code}'.",
+        metadata={"entry_id": posting.id, "panel_end_user_ids": sorted(chosen)},
+    )
+    return chosen
 
 
 def get_closed_cases_for_user(user):
@@ -1487,12 +1530,301 @@ def get_manageable_recruitment_entries(user, status_filter=None):
     return entries.exclude(status=PositionPosting.EntryStatus.CLOSED)
 
 
+def _workflow_lock_target(args, kwargs, *names):
+    if args:
+        return args[0]
+    for name in names:
+        if kwargs.get(name) is not None:
+            return kwargs[name]
+    return None
+
+
+def locks_workflow_row(scope):
+    """Serialize workflow writes. Two people (or one double click) finalizing the same step
+    used to race: both read "not finalized yet", both wrote, and the loser hit a unique
+    constraint as an error page. The decorated function now locks the row first and
+    re-reads it, so the second request waits, then meets the ordinary "already finalized"
+    checks with a plain message.
+
+    ``scope`` is "case" (lock the application's case), "vacancy" (the first argument is the
+    vacancy) or "vacancy_of_application" (pool-wide steps called with one application).
+    Always sits under @transaction.atomic. On SQLite (tests) the lock is a no-op."""
+
+    def decorate(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            target = _workflow_lock_target(args, kwargs, "application", "posting", "entry")
+            if target is not None and transaction.get_connection().in_atomic_block:
+                if scope == "case":
+                    case_ids = list(
+                        RecruitmentCase.objects.select_for_update()
+                        .filter(application_id=target.pk)
+                        .values_list("pk", flat=True)
+                    )
+                    if case_ids:
+                        target.refresh_from_db()
+                else:
+                    posting = target if scope == "vacancy" else target.position
+                    list(PositionPosting.objects.select_for_update().filter(pk=posting.pk).values_list("pk", flat=True))
+                    if scope == "vacancy_of_application":
+                        target.refresh_from_db()
+            return func(*args, **kwargs)
+
+        wrapper.locks_workflow_row = True
+        return wrapper
+
+    return decorate
+
+
+def level_owner_role(application):
+    """The office that owns a case by the routing rule: Level 1 the Secretariat, Level 2 the
+    HRM Chief."""
+    if application.level == PositionPosting.Level.LEVEL_1:
+        return RecruitmentUser.Role.SECRETARIAT
+    return RecruitmentUser.Role.HRM_CHIEF
+
+
+LOANABLE_CASE_STATUSES = {
+    RecruitmentCase.CaseStatus.ACTIVE,
+    RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION,
+}
+
+
+def case_is_on_loan(application):
+    """C4: the owning office lent this case (with its batch) to the other office, which now
+    holds it at the intake stage."""
+    case = getattr(application, "case", None)
+    if not case or case.is_stage_locked or case.case_status not in LOANABLE_CASE_STATUSES:
+        return False
+    if case.current_stage != _vacancy_screening_stage(application.position):
+        return False
+    return bool(case.current_handler_role) and case.current_handler_role != level_owner_role(application)
+
+
+def get_loaned_out_applications(user):
+    """The cases this office lent to the other office and may recall (C4)."""
+    if user.role == RecruitmentUser.Role.SECRETARIAT:
+        level, stage = PositionPosting.Level.LEVEL_1, RecruitmentCase.Stage.SECRETARIAT_REVIEW
+    elif user.role == RecruitmentUser.Role.HRM_CHIEF:
+        level, stage = PositionPosting.Level.LEVEL_2, RecruitmentCase.Stage.HRM_CHIEF_REVIEW
+    else:
+        return RecruitmentApplication.objects.none()
+    return (
+        RecruitmentApplication.objects.filter(
+            level=level,
+            case__current_stage=stage,
+            case__is_stage_locked=False,
+            case__case_status__in=LOANABLE_CASE_STATUSES,
+        )
+        .exclude(case__current_handler_role__in=[user.role, ""])
+        .select_related("position", "case")
+        .order_by("reference_number")
+    )
+
+
+def _batch_cases_held_by(posting, actor):
+    return [
+        application
+        for application in RecruitmentApplication.objects.filter(
+            position=posting, current_handler_role=actor.role
+        ).select_related("case", "position")
+        if getattr(application, "case", None)
+        and not application.case.is_stage_locked
+        and application.case.case_status in LOANABLE_CASE_STATUSES
+        and application.case.current_stage in SCREENING_STAGES
+    ]
+
+
+def user_can_send_vacancy_batch(user, posting):
+    return user.role in {
+        RecruitmentUser.Role.SECRETARIAT,
+        RecruitmentUser.Role.HRM_CHIEF,
+    } and bool(_batch_cases_held_by(posting, user))
+
+
+@transaction.atomic
+@locks_workflow_row("vacancy")
+def hand_off_vacancy_batch(posting, actor, remarks):
+    """C4 + F9 (office decision 2026-11-02): the Secretariat and the HRM Chief lend each other
+    a vacancy's whole batch, never one case of it, so the batch exam and interview are never
+    split between two offices. Every case the office holds at screening/exam moves together."""
+    remarks = (remarks or "").strip()
+    if not remarks:
+        raise ValueError("Add a short reason before sending the batch.")
+    if actor.role not in {RecruitmentUser.Role.SECRETARIAT, RecruitmentUser.Role.HRM_CHIEF}:
+        raise ValueError("Only the Secretariat and the HRM Chief lend batches to each other.")
+    held = _batch_cases_held_by(posting, actor)
+    if not held:
+        raise ValueError("You hold no cases in this vacancy's batch right now.")
+    waiting = [
+        application.reference_label
+        for application in held
+        if application.case.case_status == RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION
+    ]
+    if waiting:
+        raise ValueError(
+            f"{', '.join(waiting)} {'is' if len(waiting) == 1 else 'are'} waiting for corrected "
+            "documents. Send the batch once they're back, so it stays together."
+        )
+    target = (
+        RecruitmentUser.Role.HRM_CHIEF
+        if actor.role == RecruitmentUser.Role.SECRETARIAT
+        else RecruitmentUser.Role.SECRETARIAT
+    )
+    for application in held:
+        route_case_between_secretariat_and_hrm_chief(application, actor, target, remarks)
+    return held
+
+
+@transaction.atomic
+@locks_workflow_row("vacancy")
+def recall_vacancy_batch(posting, actor, remarks):
+    """C4: the office that lent a batch takes it back, whatever step its cases reached."""
+    remarks = (remarks or "").strip()
+    if not remarks:
+        raise ValueError("Add a short reason before recalling the batch.")
+    loaned = list(get_loaned_out_applications(actor).filter(position=posting))
+    if not loaned:
+        raise ValueError("No cases of this vacancy are on loan from you.")
+    list(
+        RecruitmentCase.objects.select_for_update()
+        .filter(application__in=loaned)
+        .order_by("pk")
+        .values_list("pk", flat=True)
+    )
+    for application in loaned:
+        application.refresh_from_db()
+        case = application.case
+        previous_role = case.current_handler_role
+        if application.level == PositionPosting.Level.LEVEL_2:
+            application.overrides.filter(is_active=True).update(
+                is_active=False, revoked_at=timezone.now()
+            )
+        case.current_handler_role = actor.role
+        case.save(update_fields=["current_handler_role", "updated_at"])
+        application.current_handler_role = actor.role
+        application.save(update_fields=["current_handler_role", "updated_at"])
+        description = f"Batch recalled by the {RecruitmentUser.Role(actor.role).label}."
+        record_audit_event(
+            application=application,
+            actor=actor,
+            action=AuditLog.Action.ROUTED,
+            description=description,
+            metadata={"remarks": remarks, "from_role": previous_role, "to_role": actor.role, "recall": True},
+        )
+        record_routing_history_event(
+            application=application,
+            actor=actor,
+            route_type=RoutingHistory.RouteType.FORWARD,
+            description=description,
+            recruitment_case=case,
+            from_handler_role=previous_role,
+            to_handler_role=actor.role,
+            from_status=application.status,
+            to_status=application.status,
+            from_stage=case.current_stage,
+            to_stage=case.current_stage,
+            notes=remarks,
+            is_override=False,
+        )
+        _emit_case_assignment_notification(
+            application,
+            actor,
+            previous_role,
+            kind=Notification.Kind.CASE_RETURNED,
+            title=f"{application.reference_label} recalled by {_actor_display_name(actor)}",
+            body=remarks,
+        )
+    return loaned
+
+
+LEVEL_TWO_FOLLOW_STAGES = {
+    RecruitmentCase.Stage.HRMPSB_REVIEW,
+    RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW,
+}
+
+
+def user_can_follow_level_two_case(user, application):
+    """Chief review C2: the HRM Chief owns Level 2 by the routing rule, but the Secretariat
+    prepares the CAR (WF-04) and the Appointing Authority decides. The Chief follows those two
+    steps read-only: view, print and export, never an action (every action keeps its own
+    permission check, none of which this grants)."""
+    case = getattr(application, "case", None)
+    return bool(
+        case
+        and user.role == RecruitmentUser.Role.HRM_CHIEF
+        and application.branch == PositionPosting.Branch.PLANTILLA
+        and application.level == PositionPosting.Level.LEVEL_2
+        and case.case_status == RecruitmentCase.CaseStatus.ACTIVE
+        and case.current_stage in LEVEL_TWO_FOLLOW_STAGES
+    )
+
+
+def get_followed_applications(user):
+    """The Level 2 Plantilla cases the HRM Chief follows read-only (C2)."""
+    if user.role != RecruitmentUser.Role.HRM_CHIEF:
+        return RecruitmentApplication.objects.none()
+    return (
+        RecruitmentApplication.objects.filter(
+            branch=PositionPosting.Branch.PLANTILLA,
+            level=PositionPosting.Level.LEVEL_2,
+            case__case_status=RecruitmentCase.CaseStatus.ACTIVE,
+            case__current_stage__in=LEVEL_TWO_FOLLOW_STAGES,
+        )
+        .select_related("position", "case")
+        .order_by("reference_number")
+    )
+
+
+def vacancy_panel_member_ids(posting):
+    """4a: the HRMPSB members on this vacancy's panel: the standing core plus the vacancy's
+    end users. None when neither is set, meaning every active member (as before 4a)."""
+    core = set(
+        get_office_policy()
+        .core_panel_members.filter(is_active=True, role=RecruitmentUser.Role.HRMPSB_MEMBER)
+        .values_list("pk", flat=True)
+    )
+    end_users = set(
+        posting.panel_end_users.filter(is_active=True, role=RecruitmentUser.Role.HRMPSB_MEMBER)
+        .values_list("pk", flat=True)
+    )
+    if not core and not end_users:
+        return None
+    return core | end_users
+
+
+def user_is_on_vacancy_panel(user, posting):
+    """Only restricts HRMPSB members; every other role is unaffected."""
+    if user.role != RecruitmentUser.Role.HRMPSB_MEMBER:
+        return True
+    member_ids = vacancy_panel_member_ids(posting)
+    return member_ids is None or user.pk in member_ids
+
+
+def _panel_position_q(user):
+    """Queryset filter for the vacancies an HRMPSB member sits on (mirrors the rule above)."""
+    core = set(get_office_policy().core_panel_members.values_list("pk", flat=True))
+    if user.pk in core:
+        return Q()
+    if core:
+        return Q(position__panel_end_users=user)
+    return Q(position__panel_end_users=user) | Q(position__panel_end_users__isnull=True)
+
+
 def user_can_view_application(user, application):
     if user.role == RecruitmentUser.Role.APPLICANT:
         return application.applicant_id == user.id
+    if not user_is_on_vacancy_panel(user, application.position):
+        # 4a: an end-user member sees only the vacancies they sit on.
+        return False
     if user_can_support_plantilla_interview(user, application):
         return True
     if user_can_prepare_plantilla_car(user, application):
+        return True
+    if user_can_follow_level_two_case(user, application):
+        return True
+    if user.role == level_owner_role(application) and case_is_on_loan(application):
+        # C4: the office that lent the batch keeps read access to it.
         return True
     if application.current_handler_role == user.role:
         if (
@@ -3509,52 +3841,6 @@ def user_can_reopen_case(user, case):
     )
 
 
-def _workflow_lock_target(args, kwargs, *names):
-    if args:
-        return args[0]
-    for name in names:
-        if kwargs.get(name) is not None:
-            return kwargs[name]
-    return None
-
-
-def locks_workflow_row(scope):
-    """Serialize workflow writes. Two people (or one double click) finalizing the same step
-    used to race: both read "not finalized yet", both wrote, and the loser hit a unique
-    constraint as an error page. The decorated function now locks the row first and
-    re-reads it, so the second request waits, then meets the ordinary "already finalized"
-    checks with a plain message.
-
-    ``scope`` is "case" (lock the application's case), "vacancy" (the first argument is the
-    vacancy) or "vacancy_of_application" (pool-wide steps called with one application).
-    Always sits under @transaction.atomic. On SQLite (tests) the lock is a no-op."""
-
-    def decorate(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            target = _workflow_lock_target(args, kwargs, "application", "posting", "entry")
-            if target is not None and transaction.get_connection().in_atomic_block:
-                if scope == "case":
-                    case_ids = list(
-                        RecruitmentCase.objects.select_for_update()
-                        .filter(application_id=target.pk)
-                        .values_list("pk", flat=True)
-                    )
-                    if case_ids:
-                        target.refresh_from_db()
-                else:
-                    posting = target if scope == "vacancy" else target.position
-                    list(PositionPosting.objects.select_for_update().filter(pk=posting.pk).values_list("pk", flat=True))
-                    if scope == "vacancy_of_application":
-                        target.refresh_from_db()
-            return func(*args, **kwargs)
-
-        wrapper.locks_workflow_row = True
-        return wrapper
-
-    return decorate
-
-
 def get_current_review_stage(application):
     case = getattr(application, "case", None)
     if case:
@@ -3698,7 +3984,9 @@ def vacancy_screening_batch_status(posting):
         terminal=terminal,
         pending=pending,
         pending_references=pending_references,
-        is_ready=(pending == 0),
+        # An open pool never has "everyone screened": people keep applying. Its batch is
+        # whoever is screened and ready; later applicants join the next batch (C1).
+        is_ready=(pending == 0) or vacancy_uses_cos_selection_rounds(posting),
     )
 
 
@@ -3708,9 +3996,8 @@ def vacancy_screening_batch_block_message(posting):
         return ""
     count = status.pending
     return (
-        f"The exam batch is on hold: {count} applicant{'' if count == 1 else 's'} in this "
-        "vacancy still need a screening decision (awaiting resubmission or not yet finalized). "
-        "Finish screening or remove them from the batch first."
+        f"The exam opens once every applicant has a screening decision: {count} "
+        f"{'is' if count == 1 else 'are'} still in screening or waiting for corrected documents."
     )
 
 
@@ -3724,7 +4011,7 @@ def vacancy_batch_pool_is_final(posting):
     the sitting they were entitled to.
 
     Scoped to Plantilla deliberately. The finding is written for the fixed-period Plantilla
-    batch, and pooling/continuous COS vacancies have no closing date at all — applying the
+    batch, and open-pool COS vacancies have no closing date at all — applying the
     same rule to them would lock their consoles permanently rather than temporarily."""
     if posting.branch != PositionPosting.Branch.PLANTILLA:
         return True
@@ -4068,6 +4355,8 @@ def user_can_manage_interview_session(user, application):
 
 
 def user_can_manage_interview_rating(user, application):
+    if not user_is_on_vacancy_panel(user, application.position):
+        return False
     current_stage = get_current_review_stage(application)
     if (
         application.branch == PositionPosting.Branch.PLANTILLA
@@ -4109,10 +4398,14 @@ def interview_fallback_panel_queryset(application):
     panel that could have rated it online. A fallback rating has to name one of them."""
     stage = get_current_review_stage(application)
     roles = INTERVIEW_RATING_ROLES_BY_STAGE.get(stage, set())
-    return RecruitmentUser.objects.filter(
+    queryset = RecruitmentUser.objects.filter(
         is_active=True,
         role__in=roles,
     ).order_by("last_name", "first_name", "username")
+    member_ids = vacancy_panel_member_ids(application.position)
+    if member_ids is not None and RecruitmentUser.Role.HRMPSB_MEMBER in roles:
+        queryset = queryset.filter(pk__in=member_ids)  # 4a: the vacancy's own panel
+    return queryset
 
 
 def get_interview_schedule_notification_recipients(application):
@@ -4351,7 +4644,7 @@ def vacancy_uses_cos_selection_rounds(posting):
     """SL-02: whether this COS vacancy hires in repeated, need-based rounds.
 
     Only continuous intake does. A continuous vacancy accumulates candidates and the office
-    opens a round when it actually needs to hire. Opening-based, pooling and fixed-period
+    opens a round when it actually needs to hire. One-batch and fixed-period
     COS vacancies are a single batch: one implicit round, resolved once."""
     return (
         posting.branch == PositionPosting.Branch.COS
@@ -4388,6 +4681,25 @@ def get_cos_vacancy_deliberation(posting):
         )
         .filter(recruitment_entry=posting)
         .order_by("-created_at", "-id")
+        .first()
+    )
+
+
+def get_cos_round_pick_for_case(case):
+    """C5: the effective pick a case page may show: the one naming this case, else the pick of a
+    round this case was a member of. A candidate who arrived after a round never sees that
+    round's winner as their own decision."""
+    pick = get_cos_pick_for_case(case)
+    if pick is not None or case is None:
+        return pick
+    return (
+        CosVacancyDeliberation.objects.select_related("selection_round", "chosen_case__application")
+        .filter(
+            selection_round__members__recruitment_case=case,
+            is_finalized=True,
+            is_rescinded=False,
+        )
+        .order_by("-id")
         .first()
     )
 
@@ -4490,9 +4802,8 @@ def cos_deliberation_pool(posting):
             if application.case.case_status == RecruitmentCase.CaseStatus.ACTIVE
             and not application.case.is_stage_locked
         ]
-    if vacancy_uses_cos_selection_rounds(posting):
-        # A continuous vacancy hires only through a round the office has opened.
-        return []
+    # An open pool with no open round picks from everyone waiting; the pick opens the round
+    # (C1). A single-batch vacancy's first pick does the same.
     return cos_eligible_pool(posting)
 
 
@@ -4591,13 +4902,16 @@ def save_cos_vacancy_deliberation(posting, actor, chosen_case_id, notes, *, fina
     selection_round = get_open_cos_selection_round(posting)
     if selection_round is None:
         if vacancy_uses_cos_selection_rounds(posting):
-            raise ValueError(
-                "Open a selection round before recording a pick — a continuous vacancy "
-                "hires round by round."
+            # An open pool hires round by round. The Chief may open a multi-slot round
+            # first; otherwise the pick opens the next round for one slot (C1), so a later
+            # batch is never stranded behind a resolved round.
+            selection_round = open_cos_selection_round(
+                posting, actor, slot_count=1, notes="Opened with the pick."
             )
-        # SL-02: a single-batch COS vacancy still gets a round, opened implicitly here, so
-        # its membership is recorded rather than re-derived later against a moved pool.
-        selection_round = _open_implicit_cos_selection_round(posting, actor)
+        else:
+            # SL-02: a single-batch COS vacancy still gets a round, opened implicitly here, so
+            # its membership is recorded rather than re-derived later against a moved pool.
+            selection_round = _open_implicit_cos_selection_round(posting, actor)
 
     pool = cos_deliberation_pool(posting)
     if not pool:
@@ -4941,7 +5255,9 @@ def user_can_manage_cos_deliberation(user, posting):
     selection_round = get_open_cos_selection_round(posting)
     if selection_round is None:
         if vacancy_uses_cos_selection_rounds(posting):
-            return False
+            # C1: the pick opens the next round, so an open pool is pickable whenever
+            # someone is waiting at the deliberation.
+            return bool(cos_eligible_pool(posting))
         if get_latest_cos_selection_round(posting) is not None:
             return False
         return bool(cos_eligible_pool(posting))
@@ -6295,18 +6611,12 @@ def save_exam_record(
 def vacancy_uses_batch_exam(posting):
     """RD-2: does this vacancy's pool sit the exam together?
 
-    A vacancy forms a pool when its applicants are examined as a group: Plantilla
-    (always fixed-period), and COS whose intake is fixed-period, opening-based, or
-    pooling (the very word means a pool of candidates is formed). Those vacancies
-    are scored ONLY in the batch exam console, so the per-case exam screen is a
-    read-only summary and refuses writes — one door, one story.
-
-    Only CONTINUOUS COS intake is genuinely individual — applicants trickle in and
-    are hired as needed — so its per-case editor stays fully functional.
+    Every vacancy does since the open-pool decision (C1, 2026-11-02): Plantilla and one-batch
+    COS as a single batch, and an open pool in successive batches of whoever is screened and
+    ready. The batch consoles are the only door; the per-case exam and interview screens are
+    read-only summaries. Kept as a function so the call sites read as a rule, not a constant.
     """
-    if posting.branch == PositionPosting.Branch.PLANTILLA:
-        return True
-    return posting.intake_mode != PositionPosting.IntakeMode.CONTINUOUS
+    return True
 
 
 def vacancy_exam_pool(posting):
@@ -10797,7 +11107,7 @@ def record_final_selection(application, actor, cleaned_data):
                 target_application,
                 actor,
                 next_role,
-                title=f"{target_application.reference_label} assigned to you for Completion Tracking",
+                title=f"{target_application.reference_label} is now in your queue for completion",
                 body="The applicant was selected and is ready for completion tracking.",
                 tab="completion",
             )
@@ -11459,7 +11769,7 @@ def record_final_decision(application, actor, cleaned_data):
             application,
             actor,
             next_role,
-            title=f"{application.reference_label} assigned to you for Completion Tracking",
+            title=f"{application.reference_label} is now in your queue for completion",
             body="The applicant was selected and is ready for completion tracking.",
             tab="completion",
         )
@@ -12740,10 +13050,17 @@ def _evidence_export_path(evidence, bundle_root):
     document_component = evidence.document_key or _safe_export_path_component(evidence.label, "file")
     fallback_name = f"{document_component}.bin"
     filename = _safe_export_filename(evidence.original_filename, fallback_name)
-    return (
-        f"{bundle_root}evidence/{scope_component}/{stage_component}/{document_component}/"
-        f"{evidence.version_label}_{filename}"
-    )
+    folder = f"{bundle_root}evidence/{scope_component}/{stage_component}/{document_component}/"
+    if evidence.artifact_type == ARTIFACT_TYPE_COMPARATIVE_ASSESSMENT_REPORT:
+        # F12: every "Update draft" stores a PDF for the audit trail, but only a finalized
+        # CAR is the record. Drafts go to a working-copies folder; the official one is named
+        # by its official version, matching what the screens show.
+        report = ComparativeAssessmentReport.objects.filter(evidence_item=evidence).first()
+        if report is not None and not report.is_finalized:
+            return f"{folder}working-copies/draft-{evidence.version_label}_{filename}"
+        if report is not None:
+            return f"{folder}car-official-version-{report.official_version}.pdf"
+    return f"{folder}{evidence.version_label}_{filename}"
 
 
 def _collect_export_evidence(application, bundle_root):
@@ -13789,11 +14106,39 @@ def cancel_recruitment_entry(entry, actor, reason):
     return entry, affected
 
 
+def entry_selection_stands(entry):
+    """Chief review C3: whether this vacancy is filled for good, so re-opening its intake
+    would invite applications for a decided position. An open pool hires again and again,
+    so its standing picks never count here."""
+    if entry.branch == PositionPosting.Branch.COS and entry.intake_mode == PositionPosting.IntakeMode.CONTINUOUS:
+        return False
+    if FinalSelection.objects.filter(recruitment_entry=entry, is_rescinded=False).exists():
+        return True
+    return CosVacancyDeliberation.objects.filter(
+        recruitment_entry=entry, is_finalized=True, is_rescinded=False
+    ).exists()
+
+
 def update_recruitment_entry_status(entry, actor, new_status, reason=""):
     if entry.status == PositionPosting.EntryStatus.CANCELLED:
         raise ValidationError(
             "This vacancy was cancelled and cannot be reactivated, suspended, or "
             "closed. Publish a new vacancy instead."
+        )
+    if new_status == PositionPosting.EntryStatus.ACTIVE and entry_selection_stands(entry):
+        raise ValidationError(
+            "A selection has already been recorded for this vacancy, so it can't take new "
+            "applications. Rescind the selection first if the appointment is not going ahead."
+        )
+    if (
+        new_status == PositionPosting.EntryStatus.ACTIVE
+        and entry.branch == PositionPosting.Branch.PLANTILLA
+        and entry.missing_qualification_standards
+    ):
+        raise ValidationError(
+            "Add the Qualification Standards before this vacancy goes Active (missing: "
+            f"{', '.join(entry.missing_qualification_standards)}). Edit the entry and write "
+            "them as \"Education: …\", \"Training: …\", \"Experience: …\"."
         )
     # WF-07 (HARD): the publication period is a promise to applicants — the vacancy
     # cannot be closed before its closing date. An early close would also auto-finalize

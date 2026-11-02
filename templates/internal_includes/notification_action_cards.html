@@ -25,7 +25,7 @@
                 <p class="rg-imeta" style="margin:0;">
                     Submission deadline:
                     {% if completion_record.deadline %}
-                        <strong>{{ completion_record.deadline|date:"F d, Y" }}</strong>
+                        <strong>{{ completion_record.deadline|date:"F j, Y" }}</strong>
                     {% else %}
                         <strong>not set</strong> &mdash; set it on the tracking form before sending.
                     {% endif %}

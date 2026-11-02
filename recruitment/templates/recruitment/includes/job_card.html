@@ -29,7 +29,7 @@
                     {% if entry.is_closing_soon %}
                         <span class="rg-pub-job-card__urgent">{% translate "Closing soon" %}</span>
                     {% endif %}
-                    {% if entry.intake_closes_today %}{% translate "Closes today, 11:59 PM" %}{% else %}{% blocktranslate with date=entry.closing_date|date:"F d, Y" %}Closes {{ date }}{% endblocktranslate %}{% endif %}
+                    {% if entry.intake_closes_today %}{% translate "Closes today, 11:59 PM" %}{% else %}{% blocktranslate with date=entry.closing_date|date:"F j, Y" %}Closes {{ date }}{% endblocktranslate %}{% endif %}
                     {% if entry.deadline_extended %}
                         <span class="rg-pub-job-card__extended">{% translate "Deadline extended" %}</span>
                     {% endif %}
