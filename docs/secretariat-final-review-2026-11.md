@@ -20,7 +20,8 @@ fixes (`f74ad22`) and the second round (`03a8524`). No code was changed for this
 **Round B (2026-11-03):** F7–F14 and this review's P3 list are done, together with the HRM
 Chief review's Round B; see the status table in `docs/hrm-chief-review-2026-11.md` section 8.
 The rest of F6 is closed too: a panel per vacancy means an HRMPSB member is notified only about
-their own vacancies. Still open: F15 and the office questions.
+their own vacancies. The office questions are all answered. Still open: F15, planned in
+`docs/f15-restructure-plan.md`.
 
 ## 0. How this was tested
 
