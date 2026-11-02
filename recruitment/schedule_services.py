@@ -35,6 +35,7 @@ from .models import (
 )
 from .services import (
     ENTRY_MANAGER_ROLES,
+    local_day,
     get_closed_cases_for_user,
     get_manageable_recruitment_entries,
     get_queue_for_user,
@@ -132,7 +133,7 @@ def get_schedule_events_for_user(user, start, end):
             if group is None:
                 group = groups[key] = ScheduleEvent(
                     kind=kind,
-                    day=local.date(),
+                    day=local_day(local),
                     at=local,
                     vacancy=position,
                     url=reverse("vacancy-batch-detail", args=[position.pk]),
@@ -210,14 +211,14 @@ def get_schedule_events_for_user(user, start, end):
             .order_by("deliberated_at", "pk")
         ):
             local = timezone.localtime(record.deliberated_at)
-            key = (record.application.position_id, local.date())
+            key = (record.application.position_id, local_day(local))
             if key in seen:
                 continue
             seen.add(key)
             events.append(
                 ScheduleEvent(
                     kind=EventKind.DELIBERATION,
-                    day=local.date(),
+                    day=local_day(local),
                     at=local,
                     vacancy=record.application.position,
                     url=reverse("vacancy-batch-detail", args=[record.application.position_id]),

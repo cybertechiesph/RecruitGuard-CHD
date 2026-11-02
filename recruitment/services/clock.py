@@ -1,8 +1,16 @@
-"""When an event counts as held. The only module the suite-wide
-`event_not_held_yet` patch targets.
+"""Time rules: the one place a date-time becomes a calendar date, and when an event counts as
+held. The office runs on Manila time, so a date-time is turned into a date only through
+`local_day`; a bare `.date()` on an aware date-time gives the UTC date, which is the wrong day
+between midnight and 8 a.m. (finding F3). A test fails on any `.date()` call outside this
+module. The suite-wide `event_not_held_yet` patch targets this module.
 """
 
 from django.utils import timezone
+
+
+def local_day(when):
+    """The Manila calendar date of an aware date-time."""
+    return timezone.localtime(when).date()
 
 
 def event_not_held_yet(when):
@@ -13,7 +21,7 @@ def event_not_held_yet(when):
 
 def event_held_by(when, day):
     """True when an event scheduled at `when` had taken place by the date `day`."""
-    return timezone.localtime(when).date() <= day
+    return local_day(when) <= day
 
 
 def not_held_yet_message(event, when):

@@ -36,7 +36,7 @@ from .common import (
     _optional_decimal,
     _quantize_score,
 )
-from .clock import event_not_held_yet, event_held_by, not_held_yet_message
+from .clock import local_day, event_not_held_yet, event_held_by, not_held_yet_message
 from .audit import (
     _copy_metadata,
     record_audit_event,

@@ -286,7 +286,7 @@ user-visible text.
 | 1 — split the module | **Done 2026-11-03.** 18 modules, 421 functions, 503 names; suite green. |
 | 2 — `transition_case` | **Done 2026-11-03** in two commits (R2a behaviour-preserving, R2b routing rows). |
 | 3 — workflow map | **Done 2026-11-03.** One commit; see below. |
-| 4 — clock | not started (`clock.py` exists from round 1 with the three event-time helpers) |
+| 4 — clock | **Done 2026-11-03.** See below. |
 | 5 — tests split | not started |
 | 6 — views split | optional |
 
@@ -371,3 +371,15 @@ user-visible text.
   `docs/workflow-rules.md`. `WorkflowMapTests` checks the paths' shape, that the progress bar,
   section order, owners and statuses read the map, that the derived role tables keep the
   office rules, and that the docs block equals the code.
+
+**Round 4 as built:**
+
+- `clock.local_day(when)` is the one helper that turns an aware date-time into a Manila
+  calendar date; `event_held_by` uses it. The three remaining `.date()` calls (schedule
+  calendar, `schedule_services.py`) were already on Manila-local times and now go through it.
+- The survey found no naive `datetime.now()`, `datetime.today()`, `utcnow()` or `date.today()`
+  anywhere in the app, and 50 uses of `timezone.localdate()`, which is already the correct
+  Manila "today". So no `clock.today()` was added: it would only rename that call.
+  `timezone.localdate(value)` (four uses) is likewise allowed.
+- `test_dates_come_from_manila_time` fails on any `.date()` call outside `clock.py` and on any
+  naive now/today, anywhere in `recruitment/` outside migrations and tests.

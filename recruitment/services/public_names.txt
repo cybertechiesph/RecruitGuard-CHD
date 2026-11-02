@@ -371,6 +371,7 @@ issue_application_otp
 issue_internal_email_change_request
 issue_internal_mfa_challenge
 level_owner_role
+local_day
 lock_competency_rating_template
 lock_vacancy_assessment_weights
 locks_workflow_row

@@ -242,10 +242,12 @@ workflow. Open the file named after the stage to find its rule:
 | `reopen.py`, `completion.py` | reopening and stage-record corrections; completion and closing a case |
 | `audit.py`, `evidence_vault.py`, `case_notices.py`, `identity.py` | audit log, vault and exports, in-app notices, staff sign-in support |
 
-Two rules keep the package workable, and `ServicesPackageArchitectureTests` checks both:
+Three rules keep the package workable, and `ServicesPackageArchitectureTests` checks them:
 modules call each other through the module object (`exam.save_exam_record(...)`, never
 `from .exam import save_exam_record`), and every name in `recruitment/services/public_names.txt`
-stays importable as `from recruitment.services import <name>`. Email delivery and scheduling
+stays importable as `from recruitment.services import <name>`, and a date-time becomes a
+calendar date only through `clock.local_day()` or `timezone.localdate()`, never a bare `.date()`
+(which gives the UTC date, a day early before 8 a.m. Manila). Email delivery and scheduling
 stay in `recruitment/notification_services.py` and `recruitment/schedule_services.py`.
 
 ## Notes for reviewers and first-time users

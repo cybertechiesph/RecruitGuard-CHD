@@ -23430,6 +23430,27 @@ class ServicesPackageArchitectureTests(SimpleTestCase):
                     ):
                         self.fail(f"{relative}:{node.lineno} {function.name} bulk-updates a case field")
 
+    def test_dates_come_from_manila_time(self):
+        """F15 round 4 (keeps F3 fixed): a bare `.date()` on an aware date-time gives the UTC
+        date, a day early before 8 a.m. Manila; a naive now()/today() uses the server clock.
+        Convert with services.clock.local_day, timezone.localdate() or timezone.localtime()."""
+        naive = {("datetime", "now"), ("datetime", "today"), ("datetime", "utcnow"), ("date", "today")}
+        app_dir = self.package_dir.parent
+        clock_path = self.package_dir / "clock.py"
+        for path in sorted(app_dir.rglob("*.py")):
+            relative = path.relative_to(app_dir)
+            if relative.parts[0] == "migrations" or path.name == "tests.py":
+                continue
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+                    continue
+                receiver = ast.unparse(node.func.value).split(".")[-1]
+                with self.subTest(file=str(relative), line=node.lineno):
+                    if node.func.attr == "date" and not node.args and path != clock_path:
+                        self.fail(f"{relative}:{node.lineno} calls .date(); use clock.local_day()")
+                    if (receiver, node.func.attr) in naive:
+                        self.fail(f"{relative}:{node.lineno} uses naive {receiver}.{node.func.attr}()")
+
 
 class RoutingRowForEveryTransitionTests(BaseRecruitmentTestCase):
     """F15 round 2b: every case movement leaves a routing row, including the ones that used
