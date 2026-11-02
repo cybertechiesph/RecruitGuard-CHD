@@ -562,7 +562,7 @@ class SecretariatRoundATests(BatchExamHelpers, BaseRecruitmentTestCase):
         data = {"operation": "finalize", "qualification_outcome": "qualified", "screening_notes": "", "completeness_notes": ""}
         data.update(self.screening_document_status_payload(application))
         with patch(
-            "recruitment.views.save_screening_review",
+            "recruitment.views.screening.save_screening_review",
             side_effect=IntegrityError("duplicate key value violates unique constraint"),
         ):
             response = client.post(

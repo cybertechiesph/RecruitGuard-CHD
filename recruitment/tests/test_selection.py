@@ -1365,7 +1365,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         client = Client()
         self.force_login_with_mfa(client, self.hrm_chief)
         with patch(
-            "recruitment.views.rescind_cos_vacancy_deliberation",
+            "recruitment.views.selection.rescind_cos_vacancy_deliberation",
             side_effect=IntegrityError("one open round"),
         ):
             response = client.post(
@@ -2487,7 +2487,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         client = Client()
         self.force_login_with_mfa(client, self.secretariat)
         with patch(
-            "recruitment.views.get_comparative_assessment_report",
+            "recruitment.views.car.get_comparative_assessment_report",
             return_value=report,
         ):
             print_response = client.get(
@@ -2501,10 +2501,10 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
 
         with (
             patch(
-                "recruitment.views.user_can_generate_entry_car_filing_copy",
+                "recruitment.views.car.user_can_generate_entry_car_filing_copy",
                 return_value=True,
             ),
-            patch("recruitment.views.get_entry_finalized_car", return_value=report),
+            patch("recruitment.views.car.get_entry_finalized_car", return_value=report),
         ):
             filing_response = client.get(
                 reverse(

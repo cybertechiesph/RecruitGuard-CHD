@@ -250,6 +250,13 @@ calendar date only through `clock.local_day()` or `timezone.localdate()`, never 
 (which gives the UTC date, a day early before 8 a.m. Manila). Email delivery and scheduling
 stay in `recruitment/notification_services.py` and `recruitment/schedule_services.py`.
 
+The internal-portal views follow it too, in `recruitment/views/`: `case.py` (the case page
+and case-level actions), `batches.py`, one module per evaluation step (`screening.py`,
+`exam.py`, `interview.py`, `car.py`, `selection.py`, `completion.py`), and `lists.py`,
+`audit.py`, `evidence.py`, `notifications.py`, `policy.py`, `home.py`. They share helpers from
+`views/common.py` only; the applicant portal and identity views stay in `portal_views.py`,
+`identity_views.py` and `entry_views.py`.
+
 The tests follow the same layout in `recruitment/tests/`: `base.py` holds the shared setup
 (`BaseRecruitmentTestCase` and the helper mixins), and each `test_<area>.py` covers one area
 (`test_screening.py`, `test_exam.py`, `test_interview.py`, `test_selection.py`,

@@ -55,10 +55,11 @@ is a hope, not a backup.
 
 ## Finding a rule's history
 
-In November 2026 `recruitment/services.py` was split into the `recruitment/services/` package
-with the code moved unchanged. `git log --follow` does not see across that move; use
-`git blame -C -C recruitment/services/<module>.py` to see who last changed each line before
-the split.
+In November 2026 `recruitment/services.py`, `recruitment/views.py` and `recruitment/tests.py`
+were split into the `recruitment/services/`, `recruitment/views/` and `recruitment/tests/`
+packages with the code moved unchanged. `git log --follow` does not see across that move; use
+`git blame -C -C recruitment/services/<module>.py` (or `views/`, `tests/`) to see who last
+changed each line before the split.
 
 ## Hearing about errors
 

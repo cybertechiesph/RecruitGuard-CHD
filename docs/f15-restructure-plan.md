@@ -288,7 +288,7 @@ user-visible text.
 | 3 — workflow map | **Done 2026-11-03.** One commit; see below. |
 | 4 — clock | **Done 2026-11-03.** See below. |
 | 5 — tests split | **Done 2026-11-03.** See below. |
-| 6 — views split | optional |
+| 6 — views split | **Done 2026-11-03** (the mechanical split only). See below. |
 
 **Round 1 as built, where it differs from section 2:**
 
@@ -404,3 +404,23 @@ user-visible text.
   are historical and were left as they are.
 - The architecture tests now skip the `tests/` folder (they used to skip `tests.py`), and the
   services package path is found from the new location.
+
+**Round 6 as built (the mechanical split; the case-page redesign was not done):**
+
+- `recruitment/views.py` (4,483 lines, 83 names) is now `recruitment/views/`: 15 modules by
+  area (`case`, `batches`, `screening`, `exam`, `interview`, `car`, `selection`,
+  `completion`, `lists`, `audit`, `evidence`, `notifications`, `policy`, `home`, `common`),
+  moved by script, with a re-exporting `__init__.py` so `internal_urls.py` did not change.
+  Largest: `batches.py` and `case.py`, about 1,050 lines each.
+- **Plain imports here, not module objects.** Unlike the services, the views have no
+  cycles: every module depends only on `common`, and `exam`, `selection` and `completion` also
+  use one helper from `case`. So they import those names directly.
+  `ViewsPackageArchitectureTests` keeps it that way (`common` imports no sibling, `case`
+  only `common`, the rest only `common` and `case`) and checks the names snapshot
+  `views/public_names.txt`.
+- The views logger keeps its name, `recruitment.views`. Five test patches now name the module
+  that uses the patched function (`recruitment.views.screening.…`, `…selection.…`,
+  `…car.…`).
+- **Not done, on purpose:** splitting `ApplicationDetailView` (about 640 lines) into one class
+  per tab. That is a redesign of the most-used page, not a move. It should wait until the
+  HRMPSB Member and Appointing Authority walkthroughs show what that page needs.

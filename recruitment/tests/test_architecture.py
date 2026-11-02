@@ -263,3 +263,30 @@ class WorkflowMapTests(SimpleTestCase):
             render_workflow_map().strip(),
             "Run `python manage.py print_workflow_map --write` and commit docs/workflow-rules.md.",
         )
+
+
+class ViewsPackageArchitectureTests(SimpleTestCase):
+    """F15 round 6: recruitment/views/ is split by area. Modules lean only on `common` and the
+    case page in `case`, which keeps the package free of import cycles."""
+
+    package_dir = Path(__file__).resolve().parent.parent / "views"
+    allowed = {"common": set(), "case": {"common"}}
+
+    def test_every_public_name_is_still_importable_from_the_package(self):
+        from recruitment import views
+
+        names = (self.package_dir / "public_names.txt").read_text().split()
+        missing = [name for name in names if not hasattr(views, name)]
+        self.assertEqual(missing, [], "re-export these from recruitment/views/__init__.py")
+
+    def test_modules_import_only_common_and_case(self):
+        for path in sorted(self.package_dir.glob("*.py")):
+            if path.name == "__init__.py":
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            siblings = {
+                node.module for node in ast.walk(tree)
+                if isinstance(node, ast.ImportFrom) and node.level == 1 and node.module
+            }
+            with self.subTest(module=path.stem):
+                self.assertLessEqual(siblings, self.allowed.get(path.stem, {"common", "case"}))
