@@ -30,6 +30,7 @@ from recruitment.services import (
     get_exam_record,
     get_interview_session,
 )
+from recruitment.services import workflow_map
 
 register = template.Library()
 
@@ -465,22 +466,6 @@ QUEUE_TASK_THEMES = {
 }
 
 
-CASE_STEPS_PLANTILLA = [
-    ("screening", "Screening"),
-    ("exam", "Exam"),
-    ("interview", "Interview"),
-    ("car", "Comparative Assessment"),
-    ("decision", "Decision"),
-    ("completion", "Completion"),
-]
-CASE_STEPS_COS = [
-    ("screening", "Screening"),
-    ("exam", "Exam"),
-    ("chief_recheck", "HRM Chief re-check"),
-    ("interview", "Interview"),
-    ("selection", "Selection"),
-    ("completion", "Completion"),
-]
 ENDED_CASE_STATUS_PHRASES = {
     RecruitmentCase.CaseStatus.WITHDRAWN: "Withdrawn at",
     RecruitmentCase.CaseStatus.VACANCY_CANCELLED: "Vacancy cancelled at",
@@ -489,32 +474,16 @@ ENDED_CASE_STATUS_PHRASES = {
 
 
 def _case_step_keys(application):
-    if application.branch != PositionPosting.Branch.COS:
-        return CASE_STEPS_PLANTILLA
-    # Only a Level 1 COS case gets the HRM Chief's second pass; Level 2 starts with the Chief.
-    if application.position.level == PositionPosting.Level.LEVEL_1:
-        return CASE_STEPS_COS
-    return [step for step in CASE_STEPS_COS if step[0] != "chief_recheck"]
+    """The progress steps of this case's branch and level (services/workflow_map.py)."""
+    return [
+        (step.key, step.label)
+        for step in workflow_map.steps(application.branch, application.position.level)
+    ]
 
 
 def _case_step_for_stage(application, stage, section):
-    """Which progress step a (stage, section) pair belongs to, per branch."""
-    Stage = RecruitmentCase.Stage
-    is_cos = application.branch == PositionPosting.Branch.COS
-    if stage in {Stage.COMPLETION, Stage.CLOSED}:
-        return "completion"
-    if stage == Stage.APPOINTING_AUTHORITY_REVIEW:
-        return "decision"
-    if stage == Stage.HRMPSB_REVIEW:
-        return "car" if section == "car" else "interview"
-    if is_cos and stage == Stage.HRM_CHIEF_REVIEW:
-        if section in {"deliberation", "decision"}:
-            return "selection"
-        if section == "interview":
-            return "interview"
-        if application.position.level == PositionPosting.Level.LEVEL_1:
-            return "chief_recheck"
-    return "exam" if section == "exam" else "screening"
+    """Which progress step a (stage, section) pair belongs to, per branch and level."""
+    return workflow_map.step_key(application.branch, application.position.level, stage, section)
 
 
 def _ended_case_step(application, case):

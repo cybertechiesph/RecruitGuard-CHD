@@ -285,7 +285,7 @@ user-visible text.
 |---|---|
 | 1 — split the module | **Done 2026-11-03.** 18 modules, 421 functions, 503 names; suite green. |
 | 2 — `transition_case` | **Done 2026-11-03** in two commits (R2a behaviour-preserving, R2b routing rows). |
-| 3 — workflow map | not started |
+| 3 — workflow map | **Done 2026-11-03.** One commit; see below. |
 | 4 — clock | not started (`clock.py` exists from round 1 with the three event-time helpers) |
 | 5 — tests split | not started |
 | 6 — views split | optional |
@@ -343,3 +343,31 @@ user-visible text.
 - Guard: `test_only_transition_case_moves_a_case` fails on any other assignment to those
   five fields anywhere in `recruitment/` outside migrations and tests. Case birth at
   submission is the one listed exception.
+
+**Round 3 as built:**
+
+- `recruitment/services/workflow_map.py` holds the four paths (Plantilla and COS, Level 1
+  and 2) as `Step(key, label, stage, sections)` tuples, plus the stage owners, the
+  completion owner per level, the stage↔status pairing, where selection is deliberated and
+  the section labels. It imports nothing else from the package, so it joins `common` and
+  `clock` as a module other modules may read at import time.
+- Read from it now: the case page's section order (`_workflow_detail_sequence`), the progress
+  bar's steps and current step (templatetag), `level_owner_role`, `_handler_role_from_stage`,
+  `_completion_handler_role`, both stage↔status lookups, the submission route,
+  `INTERVIEW_RATING_ROLES_BY_STAGE`, `DELIBERATION_STAGES_BY_BRANCH`/`_ROLES_BY_BRANCH`,
+  `LEVEL_TWO_FOLLOW_STAGES` and `WORKFLOW_SECTION_LABELS`. The old names remain as thin
+  wrappers or aliases, so no caller changed.
+- **Left as they were, on purpose:** the "next step" sentences after an interview batch (they
+  are user-visible text, which this restructure does not change) and
+  `user_can_send_vacancy_batch` (an authorization rule about the two intake offices, not a
+  step-order fact).
+- **One commit instead of one per consumer.** In its place: every answer the old lookups gave
+  for every branch × level × stage × section (353 answers) was captured before the switch and
+  compared after it. All differences were inputs that cannot occur: a COS case at the HRMPSB
+  or Appointing Authority stage, or a section that the stage never produces. The progress bar,
+  current section, open tab and queue label of all 39 demo cases were also compared before
+  and after (identical), and two case pages were checked in the browser.
+- `manage.py print_workflow_map` prints the table; `--write` refreshes the generated block in
+  `docs/workflow-rules.md`. `WorkflowMapTests` checks the paths' shape, that the progress bar,
+  section order, owners and statuses read the map, that the derived role tables keep the
+  office rules, and that the docs block equals the code.

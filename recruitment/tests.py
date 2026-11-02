@@ -23364,8 +23364,8 @@ class ServicesPackageArchitectureTests(SimpleTestCase):
                             f"call `{node.module}.<name>(...)`, not `from .{node.module} import`",
                         )
 
-    def test_common_and_clock_import_nothing_above_them(self):
-        allowed = {"common": set(), "clock": {"common"}}
+    def test_leaf_modules_import_nothing_above_them(self):
+        allowed = {"common": set(), "clock": {"common"}, "workflow_map": set()}
         for name, tree in self._modules():
             if name in allowed:
                 with self.subTest(module=name):
@@ -23504,3 +23504,132 @@ class RoutingRowForEveryTransitionTests(BaseRecruitmentTestCase):
         route = self._last_route(application)
         self.assertEqual(route.route_type, RoutingHistory.RouteType.CLOSE)
         self.assertEqual(route.to_status, RecruitmentApplication.Status.VACANCY_CANCELLED)
+
+
+class WorkflowMapTests(SimpleTestCase):
+    """F15 round 3: services/workflow_map.py is the one description of the workflow; the
+    progress bar, the case page's sections, routing owners and the docs all read from it."""
+
+    def _application(self, branch, level, stage=""):
+        return SimpleNamespace(
+            branch=branch,
+            level=level,
+            position=SimpleNamespace(level=level),
+            case=SimpleNamespace(current_stage=stage),
+            status="",
+        )
+
+    def _paths(self):
+        from recruitment.services import workflow_map
+
+        return workflow_map, workflow_map.STEPS.items()
+
+    def test_every_path_starts_with_its_level_owner_and_ends_in_completion(self):
+        workflow_map, paths = self._paths()
+        owners = {
+            PositionPosting.Level.LEVEL_1: RecruitmentUser.Role.SECRETARIAT,
+            PositionPosting.Level.LEVEL_2: RecruitmentUser.Role.HRM_CHIEF,
+        }
+        for (branch, level), steps in paths:
+            with self.subTest(branch=branch, level=level):
+                self.assertEqual(workflow_map.stage_owner(steps[0].stage, level), owners[level])
+                self.assertEqual(steps[-1].stage, RecruitmentCase.Stage.COMPLETION)
+                self.assertEqual(workflow_map.stage_owner(steps[-1].stage, level), owners[level])
+                stages = [step.stage for step in steps]
+                # A case never comes back to a stage it has left.
+                self.assertEqual(stages, sorted(stages, key=stages.index))
+                self.assertEqual(len({step.key for step in steps}), len(steps))
+
+    def test_progress_bar_reads_the_map(self):
+        from recruitment.templatetags.recruitment_ui import _case_step_for_stage, _case_step_keys
+
+        workflow_map, paths = self._paths()
+        for (branch, level), steps in paths:
+            application = self._application(branch, level)
+            with self.subTest(branch=branch, level=level):
+                self.assertEqual(
+                    _case_step_keys(application), [(step.key, step.label) for step in steps]
+                )
+                for step in steps:
+                    for section in step.sections:
+                        self.assertEqual(
+                            _case_step_for_stage(application, step.stage, section), step.key
+                        )
+                self.assertEqual(
+                    _case_step_for_stage(application, RecruitmentCase.Stage.CLOSED, ""),
+                    "completion",
+                )
+
+    def test_case_page_sections_follow_the_map(self):
+        from recruitment.services import routing
+
+        workflow_map, paths = self._paths()
+        for (branch, level), steps in paths:
+            for stage in {step.stage for step in steps}:
+                expected = [s for step in steps if step.stage == stage for s in step.sections]
+                with self.subTest(branch=branch, level=level, stage=stage):
+                    sequence = routing._workflow_detail_sequence(
+                        self._application(branch, level, stage)
+                    )
+                    self.assertEqual([s for s in sequence if s in expected], expected)
+
+    def test_routing_owners_and_statuses_come_from_the_map(self):
+        from recruitment.services import intake, routing
+
+        workflow_map, paths = self._paths()
+        for (branch, level), steps in paths:
+            application = self._application(branch, level)
+            with self.subTest(branch=branch, level=level):
+                intake_stage = steps[0].stage
+                self.assertEqual(
+                    routing.level_owner_role(application),
+                    workflow_map.stage_owner(intake_stage, level),
+                )
+                self.assertEqual(
+                    intake._route_for_submission(application),
+                    (
+                        workflow_map.stage_owner(intake_stage, level),
+                        workflow_map.status_for_stage(intake_stage),
+                    ),
+                )
+                for step in steps:
+                    self.assertEqual(
+                        routing._handler_role_from_stage(step.stage, application=application),
+                        workflow_map.stage_owner(step.stage, level),
+                    )
+                    status = routing._application_status_from_stage(step.stage)
+                    if step.stage != RecruitmentCase.Stage.COMPLETION:
+                        self.assertEqual(routing._review_stage_from_application_status(status), step.stage)
+
+    def test_role_tables_derived_from_the_map_keep_the_office_rules(self):
+        from recruitment.services import access, interview, selection
+
+        Stage, Role = RecruitmentCase.Stage, RecruitmentUser.Role
+        self.assertEqual(
+            interview.INTERVIEW_RATING_ROLES_BY_STAGE,
+            {Stage.HRM_CHIEF_REVIEW: {Role.HRM_CHIEF}, Stage.HRMPSB_REVIEW: {Role.HRMPSB_MEMBER}},
+        )
+        self.assertEqual(
+            selection.DELIBERATION_ROLES_BY_BRANCH,
+            {PositionPosting.Branch.COS: {Role.HRM_CHIEF}, PositionPosting.Branch.PLANTILLA: {Role.HRMPSB_MEMBER}},
+        )
+        self.assertEqual(
+            access.LEVEL_TWO_FOLLOW_STAGES,
+            {Stage.HRMPSB_REVIEW, Stage.APPOINTING_AUTHORITY_REVIEW},
+        )
+
+    def test_docs_table_matches_the_code(self):
+        from recruitment.management.commands.print_workflow_map import (
+            DOC_PATH,
+            END_MARKER,
+            START_MARKER,
+            render_workflow_map,
+        )
+
+        text = DOC_PATH.read_text(encoding="utf-8").replace("\r\n", "\n")
+        block = text.split(START_MARKER, 1)[1].split(END_MARKER, 1)[0]
+        self.assertEqual(
+            block.strip(),
+            render_workflow_map().strip(),
+            "Run `python manage.py print_workflow_map --write` and commit docs/workflow-rules.md.",
+        )

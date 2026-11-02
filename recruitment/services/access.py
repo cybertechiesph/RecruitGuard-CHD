@@ -11,7 +11,7 @@ from ..models import (
     RecruitmentUser,
 )
 from ..permissions import WORKFLOW_PROCESSOR_ROLES
-from . import car, common, entries, interview, routing
+from . import car, common, entries, interview, routing, workflow_map
 
 
 def get_visible_positions_for_user(user):
@@ -135,10 +135,7 @@ def _user_has_closed_application_access(user, application):
     return user.role in common.EXPORT_ROLES
 
 
-LEVEL_TWO_FOLLOW_STAGES = {
-    RecruitmentCase.Stage.HRMPSB_REVIEW,
-    RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW,
-}
+LEVEL_TWO_FOLLOW_STAGES = workflow_map.stages_followed_by_intake_office(PositionPosting.Level.LEVEL_2)
 
 
 def user_can_follow_level_two_case(user, application):

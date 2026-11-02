@@ -232,6 +232,7 @@ workflow. Open the file named after the stage to find its rule:
 | Module | What it holds |
 |---|---|
 | `common.py`, `clock.py` | shared constants and helpers, the workflow row lock, when an event counts as held |
+| `workflow_map.py` | the workflow as one table: each branch and level's steps, their stages and who handles them (printed into `docs/workflow-rules.md` by `manage.py print_workflow_map --write`) |
 | `access.py` | who may see what: queue, visible positions, closed cases, panel membership |
 | `routing.py` | how a case moves: handoffs, batch handoff and recall, auto-advance, workflow sections, the generic action processor |
 | `entries.py` | vacancies, office policy, weights, document requirements, vacancy panel |

@@ -37,16 +37,13 @@ from . import (
     intake,
     interview,
     routing,
+    workflow_map,
 )
 
 
-DELIBERATION_STAGES_BY_BRANCH = {
-    PositionPosting.Branch.COS: RecruitmentCase.Stage.HRM_CHIEF_REVIEW,
-    PositionPosting.Branch.PLANTILLA: RecruitmentCase.Stage.HRMPSB_REVIEW,
-}
+DELIBERATION_STAGES_BY_BRANCH = workflow_map.DELIBERATION_STAGES
 DELIBERATION_ROLES_BY_BRANCH = {
-    PositionPosting.Branch.COS: {RecruitmentUser.Role.HRM_CHIEF},
-    PositionPosting.Branch.PLANTILLA: {RecruitmentUser.Role.HRMPSB_MEMBER},
+    branch: {workflow_map.stage_owner(stage)} for branch, stage in DELIBERATION_STAGES_BY_BRANCH.items()
 }
 FINAL_DECISION_OUTCOME_TO_STATUS = {
     FinalDecision.Outcome.SELECTED: RecruitmentApplication.Status.APPROVED,

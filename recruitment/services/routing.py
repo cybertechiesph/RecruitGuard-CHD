@@ -28,6 +28,7 @@ from . import (
     interview,
     screening,
     selection,
+    workflow_map,
 )
 
 
@@ -39,16 +40,7 @@ COMPLETION_HANDOFF_MESSAGE = (
     "Completion is handled by the case's designated office and cannot be sent between "
     "offices."
 )
-WORKFLOW_SECTION_LABELS = {
-    "overview": "Overview",
-    "screening": "Screening",
-    "exam": "Exam",
-    "interview": "Interview",
-    "deliberation": "Deliberation",
-    "car": "Comparative Assessment",
-    "decision": "Decision",
-    "completion": "Completion",
-}
+WORKFLOW_SECTION_LABELS = workflow_map.SECTION_LABELS
 
 
 def record_routing_history_event(
@@ -89,10 +81,10 @@ def record_routing_history_event(
 
 def level_owner_role(application):
     """The office that owns a case by the routing rule: Level 1 the Secretariat, Level 2 the
-    HRM Chief."""
-    if application.level == PositionPosting.Level.LEVEL_1:
-        return RecruitmentUser.Role.SECRETARIAT
-    return RecruitmentUser.Role.HRM_CHIEF
+    HRM Chief (the owner of the stage the case started in)."""
+    return workflow_map.stage_owner(
+        workflow_map.intake_stage(application.branch, application.level), application.level
+    )
 
 
 LOANABLE_CASE_STATUSES = {
@@ -682,42 +674,19 @@ def repair_auto_advance_workflow_boundaries(actor=None):
 
 
 def _review_stage_from_application_status(application_status):
-    stage_map = {
-        RecruitmentApplication.Status.SECRETARIAT_REVIEW: RecruitmentCase.Stage.SECRETARIAT_REVIEW,
-        RecruitmentApplication.Status.HRM_CHIEF_REVIEW: RecruitmentCase.Stage.HRM_CHIEF_REVIEW,
-        RecruitmentApplication.Status.HRMPSB_REVIEW: RecruitmentCase.Stage.HRMPSB_REVIEW,
-        RecruitmentApplication.Status.APPOINTING_AUTHORITY_REVIEW: RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW,
-    }
-    return stage_map.get(application_status, "")
+    return workflow_map.review_stage_for_status(application_status)
 
 
 def _application_status_from_stage(stage):
-    status_map = {
-        RecruitmentCase.Stage.SECRETARIAT_REVIEW: RecruitmentApplication.Status.SECRETARIAT_REVIEW,
-        RecruitmentCase.Stage.HRM_CHIEF_REVIEW: RecruitmentApplication.Status.HRM_CHIEF_REVIEW,
-        RecruitmentCase.Stage.HRMPSB_REVIEW: RecruitmentApplication.Status.HRMPSB_REVIEW,
-        RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW: RecruitmentApplication.Status.APPOINTING_AUTHORITY_REVIEW,
-        RecruitmentCase.Stage.COMPLETION: RecruitmentApplication.Status.APPROVED,
-    }
-    return status_map.get(stage, "")
+    return workflow_map.status_for_stage(stage)
 
 
 def _completion_handler_role(application):
-    if application.level == PositionPosting.Level.LEVEL_1:
-        return RecruitmentUser.Role.SECRETARIAT
-    return RecruitmentUser.Role.HRM_CHIEF
+    return workflow_map.stage_owner(RecruitmentCase.Stage.COMPLETION, application.level)
 
 
 def _handler_role_from_stage(stage, application=None):
-    role_map = {
-        RecruitmentCase.Stage.SECRETARIAT_REVIEW: RecruitmentUser.Role.SECRETARIAT,
-        RecruitmentCase.Stage.HRM_CHIEF_REVIEW: RecruitmentUser.Role.HRM_CHIEF,
-        RecruitmentCase.Stage.HRMPSB_REVIEW: RecruitmentUser.Role.HRMPSB_MEMBER,
-        RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW: RecruitmentUser.Role.APPOINTING_AUTHORITY,
-    }
-    if stage == RecruitmentCase.Stage.COMPLETION and application is not None:
-        return _completion_handler_role(application)
-    return role_map.get(stage, "")
+    return workflow_map.stage_owner(stage, application.level if application is not None else None)
 
 
 def _case_timeline_metadata(case):
@@ -794,23 +763,9 @@ def get_current_review_stage(application):
 
 
 def _workflow_detail_sequence(application):
-    current_stage = get_current_review_stage(application)
-    if current_stage == RecruitmentCase.Stage.SECRETARIAT_REVIEW:
-        return ["screening", "exam"]
-    if current_stage == RecruitmentCase.Stage.HRM_CHIEF_REVIEW:
-        if application.branch == PositionPosting.Branch.COS:
-            return ["screening", "exam", "interview", "deliberation", "decision"]
-        return ["screening", "exam"]
-    if current_stage == RecruitmentCase.Stage.HRMPSB_REVIEW:
-        return ["interview", "car"]
-    if current_stage == RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW:
-        return ["decision"]
-    if current_stage in {
-        RecruitmentCase.Stage.COMPLETION,
-        RecruitmentCase.Stage.CLOSED,
-    }:
-        return ["completion"]
-    return ["overview"]
+    return workflow_map.section_sequence(
+        application.branch, get_current_review_stage(application)
+    ) or ["overview"]
 
 
 def _workflow_section_is_complete(application, section_key):

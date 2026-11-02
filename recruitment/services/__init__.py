@@ -5,8 +5,8 @@ Every name the old recruitment/services.py defined is re-exported here, so
 package, modules call each other through the module object
 (`exam.save_exam_record(...)`), never `from .exam import name`: the stages call
 each other in both directions and only module-object calls resolve at call time.
-`common` and `clock` import nothing else from the package, so they are the only
-modules whose names may be used at import time (decorators, constants).
+`common`, `clock` and `workflow_map` import nothing else from the package, so they
+are the only modules whose names may be used at import time (decorators, constants).
 public_names.txt (next to this file) freezes this public surface; a test fails
 if a name in it stops being importable from here.
 """

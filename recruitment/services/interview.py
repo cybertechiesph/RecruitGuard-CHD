@@ -41,6 +41,7 @@ from . import (
     exam,
     routing,
     screening,
+    workflow_map,
 )
 
 
@@ -55,8 +56,7 @@ INTERVIEW_SESSION_STAGES = {
     RecruitmentCase.Stage.HRMPSB_REVIEW,
 }
 INTERVIEW_RATING_ROLES_BY_STAGE = {
-    RecruitmentCase.Stage.HRM_CHIEF_REVIEW: {RecruitmentUser.Role.HRM_CHIEF},
-    RecruitmentCase.Stage.HRMPSB_REVIEW: {RecruitmentUser.Role.HRMPSB_MEMBER},
+    stage: {workflow_map.stage_owner(stage)} for stage in workflow_map.stages_with_section("interview")
 }
 # COS interviews are conducted by the HRM Chief alone — one rating locks the session.
 MIN_INTERVIEW_OUTPUTS_TO_FINALIZE = 1

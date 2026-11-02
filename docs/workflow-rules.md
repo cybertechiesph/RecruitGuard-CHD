@@ -15,6 +15,60 @@ and COS responsibilities should be implemented.
 - Finalized outputs may be stage-locked
 - Controlled reopen may be allowed only through authorized action and audit logging
 
+## The workflow table
+
+The steps each branch and level goes through, the stage of each step and who handles it.
+This block is generated from `recruitment/services/workflow_map.py` by
+`python manage.py print_workflow_map --write`; a test fails if it differs from the code, so
+change the workflow there and regenerate.
+
+<!-- workflow-map:start -->
+#### Plantilla, Level 1
+
+| # | Step | Stage | Handled by | Case sections |
+|---|---|---|---|---|
+| 1 | Screening | Secretariat Review | Secretariat | Screening |
+| 2 | Exam | Secretariat Review | Secretariat | Exam |
+| 3 | Interview | HRMPSB Review | HRMPSB Member | Interview |
+| 4 | Comparative Assessment | HRMPSB Review | HRMPSB Member | Comparative Assessment |
+| 5 | Decision | Appointing Authority Review | Appointing Authority | Decision |
+| 6 | Completion | Completion Tracking | Secretariat | Completion |
+
+#### Plantilla, Level 2
+
+| # | Step | Stage | Handled by | Case sections |
+|---|---|---|---|---|
+| 1 | Screening | HRM Chief Review | HRM Chief | Screening |
+| 2 | Exam | HRM Chief Review | HRM Chief | Exam |
+| 3 | Interview | HRMPSB Review | HRMPSB Member | Interview |
+| 4 | Comparative Assessment | HRMPSB Review | HRMPSB Member | Comparative Assessment |
+| 5 | Decision | Appointing Authority Review | Appointing Authority | Decision |
+| 6 | Completion | Completion Tracking | HRM Chief | Completion |
+
+#### COS, Level 1
+
+| # | Step | Stage | Handled by | Case sections |
+|---|---|---|---|---|
+| 1 | Screening | Secretariat Review | Secretariat | Screening |
+| 2 | Exam | Secretariat Review | Secretariat | Exam |
+| 3 | HRM Chief re-check | HRM Chief Review | HRM Chief | Screening, Exam |
+| 4 | Interview | HRM Chief Review | HRM Chief | Interview |
+| 5 | Selection | HRM Chief Review | HRM Chief | Deliberation, Decision |
+| 6 | Completion | Completion Tracking | Secretariat | Completion |
+
+#### COS, Level 2
+
+| # | Step | Stage | Handled by | Case sections |
+|---|---|---|---|---|
+| 1 | Screening | HRM Chief Review | HRM Chief | Screening |
+| 2 | Exam | HRM Chief Review | HRM Chief | Exam |
+| 3 | Interview | HRM Chief Review | HRM Chief | Interview |
+| 4 | Selection | HRM Chief Review | HRM Chief | Deliberation, Decision |
+| 5 | Completion | Completion Tracking | HRM Chief | Completion |
+
+Selection is deliberated at: COS: HRM Chief Review; Plantilla: HRMPSB Review.
+<!-- workflow-map:end -->
+
 ## Plantilla Branch
 - Stricter policy-aware workflow
 - Uses formal vacancy/publication handling with a default 14-calendar-day (editable) publication/intake period

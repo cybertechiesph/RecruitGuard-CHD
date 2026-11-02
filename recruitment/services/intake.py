@@ -59,6 +59,7 @@ from . import (
     routing,
     screening,
     selection,
+    workflow_map,
 )
 
 
@@ -1338,9 +1339,8 @@ def save_applicant_application_answers(application, cleaned_data):
 
 
 def _route_for_submission(application):
-    if application.level == PositionPosting.Level.LEVEL_1:
-        return RecruitmentUser.Role.SECRETARIAT, RecruitmentApplication.Status.SECRETARIAT_REVIEW
-    return RecruitmentUser.Role.HRM_CHIEF, RecruitmentApplication.Status.HRM_CHIEF_REVIEW
+    stage = workflow_map.intake_stage(application.branch, application.level)
+    return workflow_map.stage_owner(stage, application.level), workflow_map.status_for_stage(stage)
 
 
 @transaction.atomic
