@@ -361,12 +361,13 @@ each landing with the suite green.
 first (handoff scope; whether QS is mandatory at publication).
 **Optional:** P3 items; F15 as the restructuring plan above.
 
-**Questions for the office**
-- Should the Secretariat be able to hand a single Level 1 case to the Chief while its batch is
-  in progress, or only the whole batch? (F9)
-- May a Plantilla vacancy be published without its Qualification Standards on file? (F10)
-- Which HRMPSB members sit for a given vacancy — is a panel assignment per vacancy acceptable?
-  (F6, and it would let blinding and quorum follow the real panel.)
+**Questions for the office — answered 2026-11-02**
+- Handoff to the Chief: **the whole batch**, with a reason; a single-case send only for cases
+  that aren't in a batch (continuous-intake COS). (F9)
+- Qualification Standards: **required** before a Plantilla vacancy goes Active; optional for
+  COS. (F10)
+- HRMPSB panel: **the same members for every vacancy**, so no panel-per-vacancy assignment;
+  every active member is the panel. (closes the remaining part of F6)
 
 ## 8. What remains unverified
 
