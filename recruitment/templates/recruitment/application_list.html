@@ -218,7 +218,7 @@
                                 {% endif %}
                                 {% queue_waiting_on_car application as waiting_on_car %}
                                 {% if waiting_on_car %}
-                                    <div class="rg-imeta mt-1">Waiting on CAR preparation</div>
+                                    <div class="rg-imeta mt-1">Waiting for the {{ waiting_on_car }}'s CAR</div>
                                 {% endif %}
                             </td>
                             {% if not is_queue %}

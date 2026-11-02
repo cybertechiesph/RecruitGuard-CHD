@@ -75,7 +75,7 @@
 </p>
 {% else %}
 <p class="rg-queue-count" aria-live="polite">
-    <strong>{{ applications|length }}</strong> case{{ applications|length|pluralize }}
+    <strong>{{ awaiting_count }}</strong> case{{ awaiting_count|pluralize }}
     in this vacancy's batch awaiting your action.
 </p>
 {% endif %}
@@ -155,6 +155,8 @@
                             {% queue_task_label application as task_label %}
                             <span class="rg-pill rg-pill--{{ task_theme }} rg-pill--sm">{{ task_label }}</span>
                             {% include "internal_includes/stage_sla_badge.html" with recruitment_case=application.case variant="sm" %}
+                            {% queue_waiting_on_car application as waiting_on_car %}
+                            {% if waiting_on_car %}<div class="rg-imeta mt-1">Waiting for the {{ waiting_on_car }}'s CAR</div>{% endif %}
                                 {% include "internal_includes/case_flags.html" with application=application %}
                         </td>
                         <td>

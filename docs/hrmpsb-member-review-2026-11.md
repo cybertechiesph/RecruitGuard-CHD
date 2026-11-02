@@ -6,7 +6,11 @@ A review of the portal as an HRMPSB panel member uses it, written 2026-11-03 aga
 repeated. Findings are graded P1 (essential), P2 (important), P3 (polish); section 8 is the
 Round C brief.
 
-## Status: findings open, nothing implemented
+## Status: Round C done (P1-1 to P2-5, P3-1 to P3-3)
+
+Decisions taken: P2-4 option (b), applied to the panel only (office staff always see the name,
+since they prepare the paper sheets ahead); P2-5 the "CAR finalized" notice only, no "vacancy
+decided" notice until the Appointing Authority walkthrough. See section 9.
 
 ## 0. How this was tested
 
@@ -264,3 +268,25 @@ Test-first, one commit per item or small group, suite green, no model changes ex
 7. P3-1, P3-2, P3-3, P3-5 as time allows.
 
 Do not reopen the case-page redesign for this role; the member's page is already small.
+
+## 9. Round C implementation status (2026-11-03)
+
+| Item | Done | Where |
+|---|---|---|
+| P1-1 closed-case timeline and selected appointee blinded | yes | `blinding.actor_for` + `actor_for` filter; `completion_locked_body.html` uses it and `identity_for` for the appointee |
+| P1-2 panel never records a withdrawal | yes | `intake.user_can_record_withdrawal`; at the panel stage the owning office records it whatever the Office Policy switch says (the switch now governs the Appointing Authority's step; `docs/office-policy-guide.md` item 4 updated, the SL-10 switch test moved to that step) |
+| P2-1 no scoring before the interview | yes | `interview.interview_scoring_is_open` guards `save_interview_rating` and `upload_interview_fallback_rating`; the case page shows "Scoring opens at the interview" instead of the form |
+| P2-2 no Finalize for the panel | yes | `vacancy_batch_interview.html` shows the finalize form only with `can_finalize` (the session manager), a one-line note otherwise |
+| P2-3 waiting on the CAR is not the panel's work | yes | `car.panel_waits_on_car`; "Waiting for the Secretariat's CAR" on the queue and batch rows; batch page and batch console counts exclude those cases |
+| P2-4 print names the applicant to the panel only from the interview time | yes (b) | `InterviewRatingSheetPrintView` → `show_applicant_name` |
+| P2-5 panel told when the CAR is finalized | yes | `case_notices.emit_car_finalized_panel_notifications` (new kind `car_finalized`, migration 0095, choices only, no SQL) |
+| P3-1 rating errors said once | yes | `InterviewRatingView` |
+| P3-2 batch finalize names the case | yes | `finalize_vacancy_interview_batch` prefixes the case reference |
+| P3-3 panel calendar shows interviews only | yes | `schedule_services.get_schedule_events_for_user` |
+| P3-4 standing members see all closed cases | not done | harmless after P1-1; consistent with the standing panel sitting on every vacancy |
+| P3-5 demo seed and the standing panel | not done | demo data only; note for the droplet reseed |
+
+Tests: `HrmpsbRoundCTests` and `HrmpsbRoundCTimingTests` in `recruitment/tests/test_reviews.py`
+(13 tests). Live check on the demo database as `walk_psb`: closed case without the name, no
+withdrawal form, "Scoring opens" on the 904 case two days ahead, blind print for the member and
+named print for the HRM Chief, no Finalize form, interviews only on the calendar.

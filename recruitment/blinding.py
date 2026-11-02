@@ -28,6 +28,18 @@ def case_ref_for(application, user):
     return application.reference_label
 
 
+def actor_for(entry, user):
+    """Who did a case-history entry, as this viewer may see it: the person and their role for
+    staff, the role alone for the panel (the actor may be the applicant)."""
+    actor = getattr(entry, "actor", None)
+    role = getattr(entry, "actor_role", "") or ""
+    if is_blind_viewer(user):
+        return role
+    if actor is None:
+        return ""
+    return f"{actor} ({role})" if role else str(actor)
+
+
 def blind_text(text, application):
     """Replace every identifying detail of `application` in free text with its candidate code."""
     if not text or application is None:

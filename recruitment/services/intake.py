@@ -81,10 +81,12 @@ class ApplicationOTPDeliveryError(RuntimeError):
 def user_can_record_withdrawal(user, application):
     """SL-10: who may record that an applicant has stepped out.
 
-    The assigned handler always may; Office Policy may also admit the level's owning office.
-    Not available once the case is terminal, and not the route for a selected appointee
-    changing their mind during completion: that unwinds a recorded selection and belongs to
-    the rescind path (SL-14)."""
+    The assigned handler always may, except the HRMPSB panel: it reviews candidates blind and
+    never deals with applicants, so while a case is with the panel the level's owning office
+    records the withdrawal whatever Office Policy says. At other stages Office Policy may also
+    admit the owning office. Not available once the case is terminal, and not the route for a
+    selected appointee changing their mind during completion: that unwinds a recorded
+    selection and belongs to the rescind path (SL-14)."""
     case = getattr(application, "case", None)
     if case is None:
         return False
@@ -100,12 +102,14 @@ def user_can_record_withdrawal(user, application):
         RecruitmentCase.Stage.CLOSED,
     }:
         return False
+    if user.role == RecruitmentUser.Role.HRMPSB_MEMBER:
+        return False
     if access.user_can_process_application(user, application):
         return True
-    return bool(
-        entries.get_office_policy().withdrawal_recorded_by_owning_office
-        and user.role == routing._completion_handler_role(application)
-    )
+    is_owning_office = user.role == routing._completion_handler_role(application)
+    if case.current_stage == RecruitmentCase.Stage.HRMPSB_REVIEW:
+        return is_owning_office
+    return bool(entries.get_office_policy().withdrawal_recorded_by_owning_office and is_owning_office)
 
 
 @transaction.atomic

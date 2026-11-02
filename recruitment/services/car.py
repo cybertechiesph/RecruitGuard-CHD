@@ -23,6 +23,7 @@ from ..models import (
 )
 from . import (
     audit,
+    case_notices,
     clock,
     common,
     evidence_vault,
@@ -98,6 +99,24 @@ def application_awaiting_car_preparation(user, application):
     if user_can_prepare_plantilla_car(user, application):
         return False
     return get_comparative_assessment_report(application) is None
+
+
+def panel_waits_on_car(user, application):
+    """HRMPSB review P2-3: once the interview batch is finalized an HRMPSB member has nothing
+    left to do in the system for the case: its CAR preparer writes the CAR and the board
+    deliberates off-system. The case stays in the member's queue and readable (the read-only
+    CAR card), but it is not counted as their work. Returns the preparer's label, or ""."""
+    case = getattr(application, "case", None)
+    if (
+        getattr(user, "role", None) != RecruitmentUser.Role.HRMPSB_MEMBER
+        or not case
+        or application.branch != PositionPosting.Branch.PLANTILLA
+        or case.current_stage != CAR_REVIEW_STAGE
+        or case.case_status != RecruitmentCase.CaseStatus.ACTIVE
+        or routing.get_current_workflow_section(application) != "car"
+    ):
+        return ""
+    return plantilla_car_preparer_role_label(application)
 
 
 def car_is_finalized_for_current_stage(application):
@@ -960,6 +979,7 @@ def generate_comparative_assessment_report(application, actor, cleaned_data, fin
     )
     if finalize:
         routing._auto_advance_after_car_finalized(report, actor)
+        case_notices.emit_car_finalized_panel_notifications(report)
     return report
 
 

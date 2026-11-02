@@ -1877,15 +1877,18 @@ class InterviewManagementTests(InterviewSessionHelpers, BaseRecruitmentTestCase)
         self.assertEqual(application.status, RecruitmentApplication.Status.WITHDRAWN)
 
     def test_policy_can_limit_withdrawal_recording_to_the_current_stage_owner(self):
+        # Round C (HRMPSB review P1-2): the switch applies where the stage owner can deal with
+        # the applicant; the blind HRMPSB panel never records one, so this is checked at the
+        # Appointing Authority's stage.
         policy = get_office_policy()
         policy.withdrawal_recorded_by_owning_office = False
         policy.save(update_fields=["withdrawal_recorded_by_owning_office", "updated_at"])
         application = self.make_application(self.level1_position)
-        self.move_application_to_hrmpsb_review(application)
+        self.move_application_to_appointing_review(application)
         application.refresh_from_db()
 
         self.assertFalse(user_can_record_withdrawal(self.secretariat, application))
-        self.assertTrue(user_can_record_withdrawal(self.hrmpsb, application))
+        self.assertTrue(user_can_record_withdrawal(self.appointing, application))
         with self.assertRaisesMessage(ValueError, "not currently assigned to you"):
             record_application_withdrawal(
                 application,

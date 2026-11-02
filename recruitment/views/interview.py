@@ -23,6 +23,7 @@ from ..models import (
     RecruitmentApplication,
     RecruitmentUser,
 )
+from ..blinding import is_blind_viewer
 from ..permissions import WorkflowProcessorRequiredMixin
 from ..services import (
     get_office_policy,
@@ -31,6 +32,7 @@ from ..services import (
     set_vacancy_panel_end_users,
     vacancy_panel_member_ids,
     get_interview_session,
+    interview_scoring_is_open,
     save_interview_rating,
     save_interview_session,
     vacancy_uses_batch_exam,
@@ -229,7 +231,10 @@ class InterviewRatingSheetView(LoginRequiredMixin, WorkflowProcessorRequiredMixi
 class InterviewRatingSheetPrintView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, View):
     """REV-E: print-tailored competency rating sheet for the live interview.
     Shows candidate code AND name — the REV-B face-to-face exception: correct
-    attribution outranks symbolic blinding in the room."""
+    attribution outranks symbolic blinding in the room. For a panel member the name appears
+    only from the interview's scheduled time (HRMPSB review P2-4), so the sheet cannot be
+    used to learn the names ahead of the interview; office staff always see it, since they
+    prepare the paper sheets beforehand."""
 
     def get(self, request, pk):
         application = get_object_or_404(RecruitmentApplication, pk=pk)
@@ -245,6 +250,10 @@ class InterviewRatingSheetPrintView(LoginRequiredMixin, WorkflowProcessorRequire
             if members:
                 grouped.append({"label": group_label, "competencies": members})
         total_weight = sum((c.weight or 0) for c in competencies)
+        interview_session = get_interview_session(application)
+        show_applicant_name = not is_blind_viewer(request.user) or bool(
+            interview_session and interview_scoring_is_open(interview_session)
+        )
         return render(
             request,
             "recruitment/interview_rating_sheet_print.html",
@@ -254,7 +263,8 @@ class InterviewRatingSheetPrintView(LoginRequiredMixin, WorkflowProcessorRequire
                 "rating_template": rating_template,
                 "competency_groups": grouped,
                 "competency_total_weight": total_weight,
-                "interview_session": get_interview_session(application),
+                "interview_session": interview_session,
+                "show_applicant_name": show_applicant_name,
                 "printed_by": request.user,
                 "printed_at": timezone.now(),
             },
@@ -314,8 +324,21 @@ class InterviewRatingView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, Vi
                 messages.success(request, "Interview rating saved.")
         else:
             # F8: name what is missing (often the justification a 75-or-below / above-98
-            # rating needs) instead of one generic line.
-            problems = [error for field_errors in form.errors.values() for error in field_errors]
+            # rating needs) instead of one generic line. HRMPSB review P3-1: gaps or
+            # out-of-range scores on the competencies are said once, not once per competency.
+            problems = [
+                error
+                for name, field_errors in form.errors.items()
+                if not name.startswith("score_")
+                for error in field_errors
+            ]
+            template = getattr(form, "template", None)
+            if template is not None and any(name.startswith("score_") for name in form.errors):
+                problems.insert(
+                    0,
+                    f"Score every competency ({template.competencies.count()}) from 1 to "
+                    f"{template.scale_max}.",
+                )
             messages.error(request, "The rating wasn't saved: " + " ".join(problems))
         return redirect("application-detail", pk=pk)
 

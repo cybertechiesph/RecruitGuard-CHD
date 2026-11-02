@@ -275,3 +275,33 @@ def emit_deadline_approaching_notifications(now=None):
                 )
             )
     return emitted
+
+
+def emit_car_finalized_panel_notifications(report):
+    """HRMPSB review P2-5: tell the vacancy's panel that its CAR is final and the cases are
+    with the Appointing Authority. Candidate codes only; the notice links nowhere, since the
+    cases leave the panel's view at this point."""
+    entry = report.recruitment_entry
+    panel = [
+        member
+        for member in RecruitmentUser.objects.filter(
+            is_active=True, role=RecruitmentUser.Role.HRMPSB_MEMBER
+        ).order_by("pk")
+        if access.user_is_on_vacancy_panel(member, entry)
+    ]
+    if report.recommends_none:
+        recommendation = "The board recommended none of the candidates."
+    elif report.recommended_case_id:
+        recommendation = (
+            f"Recommended: Candidate {report.recommended_case.application.candidate_code_label}."
+        )
+    else:
+        recommendation = ""
+    return create_in_app_notifications(
+        panel,
+        kind=Notification.Kind.CAR_FINALIZED,
+        title=f"The CAR for {entry.title} ({entry.job_code}) is finalized",
+        body=(
+            f"{recommendation} The cases are now with the Appointing Authority for the decision."
+        ).strip(),
+    )

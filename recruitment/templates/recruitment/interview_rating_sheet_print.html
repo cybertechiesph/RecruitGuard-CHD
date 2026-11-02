@@ -72,8 +72,12 @@
         </div>
 
         <div class="doc-meta">
-            {# REV-B face-to-face exception: the live sheet carries code AND name. #}
+            {# REV-B face-to-face exception: the live sheet carries code AND name (for the panel, from the interview time). #}
+            {% if show_applicant_name %}
             <div><span>Name:</span> <strong>{{ application.applicant_display_name }}</strong> ({{ application.candidate_code_label }})</div>
+            {% else %}
+            <div><span>Candidate:</span> <strong>{{ application.candidate_code_label }}</strong> (the name is shown from the interview time)</div>
+            {% endif %}
             <div><span>Position desired:</span> <strong>{{ entry.title }}</strong> ({{ entry.job_code }})</div>
             {% if interview_session %}
             <div><span>Schedule:</span> {{ interview_session.scheduled_for|date:"F d, Y g:i A" }}</div>

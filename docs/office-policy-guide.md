@@ -40,7 +40,11 @@ Open **Office Policy** from the sidebar (visible to the HRM Chief only).
    An applicant's withdrawal letter usually arrives at the HR office even
    while the case sits with the panel or the Director. With this ON, the
    owning office (Secretariat for Level 1, HRM Chief for Level 2) can record
-   it at any stage before completion.
+   it at any stage before completion. The HRMPSB panel never records a
+   withdrawal (it reviews candidates blind), so while a case is with the panel
+   the owning office records it even with this switch OFF; the switch decides
+   only whether the owning office may also do so at the Appointing Authority's
+   step.
 
 5. **When a selection can no longer be rescinded — once a contract or
    appointment reference is recorded.**

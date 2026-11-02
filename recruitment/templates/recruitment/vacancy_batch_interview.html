@@ -156,6 +156,7 @@
             </table>
         </div>
     </div>
+    {% if can_finalize %}
     <form method="post" class="mt-3" id="interviewFinalizeForm">
         {% csrf_token %}
         <div class="row g-3" style="max-width:680px;">
@@ -174,6 +175,9 @@
         </div>
     </form>
     {% include "internal_includes/modal_confirm.html" with modal_id="confirmFinalizeInterview" variant="destructive" title="Finalize this interview batch?" body="This locks every candidate's interview ratings and moves the whole pool to the CAR. Ratings can no longer be changed afterwards." confirm_label="Finalize interview batch" cancel_label="Cancel" form_id="interviewFinalizeForm" confirm_name="operation" confirm_value="finalize" %}
+    {% else %}
+    <p class="rg-imeta mt-3 mb-0">The office finalizes the interview batch once every candidate has the panel's ratings.</p>
+    {% endif %}
 </div>
 {% else %}
 {# ── COS: single end-user score per candidate, inline ─────────── #}

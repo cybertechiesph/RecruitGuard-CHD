@@ -307,6 +307,8 @@ from .interview import (
     _coerce_competency_scores,
     _coerce_simple_interview_score,
     compute_competency_rating_score,
+    interview_scoring_is_open,
+    scoring_opens_message,
     save_interview_rating,
     _vacancy_interview_stage,
     vacancy_interview_pool,
@@ -326,6 +328,7 @@ from .car import (
     user_can_prepare_plantilla_car,
     plantilla_car_preparer_role_label,
     application_awaiting_car_preparation,
+    panel_waits_on_car,
     car_is_finalized_for_current_stage,
     _calculate_preliminary_assessment_score,
     _assessment_weight_display,
@@ -462,6 +465,7 @@ from .completion import (
     close_recruitment_case,
 )
 from .case_notices import (
+    emit_car_finalized_panel_notifications,
     _application_detail_url,
     _notification_tab_for_application,
     _active_users_with_application_access,

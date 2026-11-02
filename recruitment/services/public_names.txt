@@ -266,6 +266,7 @@ create_portal_applicant_identity
 decrypt_evidence_bytes
 deliberation_is_finalized_for_current_stage
 download_audit_archive
+emit_car_finalized_panel_notifications
 emit_deadline_approaching_notifications
 emit_notification_failed_in_app_alert
 encrypt_evidence_bytes
@@ -366,6 +367,7 @@ grant_secretariat_override
 hand_off_vacancy_batch
 interview_fallback_panel_queryset
 interview_is_finalized_for_current_stage
+interview_scoring_is_open
 interview_session_rater_ids
 issue_application_otp
 issue_internal_email_change_request
@@ -383,6 +385,7 @@ normalize_internal_password_reset_email
 not_held_yet_message
 open_cos_selection_round
 open_stage_record_correction
+panel_waits_on_car
 persist_recruitment_entry
 plantilla_car_preparer_role_label
 preview_audit_archive
@@ -433,6 +436,7 @@ save_vacancy_cos_interview_ratings
 save_vacancy_exam_schedule
 save_vacancy_exam_scores
 save_vacancy_interview_schedule
+scoring_opens_message
 screening_is_finalized_for_current_stage
 send_draft_reminder
 send_resubmission_reminder

@@ -145,6 +145,8 @@ from ..services import (
     user_can_export_application,
     user_can_manage_exam,
     user_can_manage_interview_rating,
+    interview_scoring_is_open,
+    scoring_opens_message,
     get_published_competency_rating_template,
     user_can_manage_interview_session,
     user_can_manage_screening,
@@ -521,6 +523,10 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
                 context["interview_rating_requires_session"] = True
             elif interview_session.is_finalized:
                 context["interview_rating_locked"] = True
+            elif not interview_scoring_is_open(interview_session):
+                context["interview_rating_opens_message"] = scoring_opens_message(
+                    interview_session.scheduled_for
+                )
             elif application.branch == PositionPosting.Branch.COS:
                 # COS interviews are scored with a single end-user / HRMS number,
                 # not the competency rating sheet (spec §6.2).

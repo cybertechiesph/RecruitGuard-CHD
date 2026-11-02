@@ -37,6 +37,7 @@ from ..services import (
     user_can_close_cos_selection_round_short,
     vacancy_uses_cos_selection_rounds,
     get_followed_applications,
+    panel_waits_on_car,
     get_loaned_out_applications,
     hand_off_vacancy_batch,
     recall_vacancy_batch,
@@ -95,6 +96,12 @@ class VacancyBatchConsoleView(LoginRequiredMixin, WorkflowProcessorRequiredMixin
         for group in vacancies:
             group["count"] = len(group["applications"])
             group["following"] = False
+            # HRMPSB review P2-3: the panel's cases at the CAR step are the preparer's work.
+            group["awaiting"] = sum(
+                1
+                for application in group["applications"]
+                if not panel_waits_on_car(self.request.user, application)
+            )
         # C2: Level 2 vacancies the HRM Chief follows while others hold the cases.
         followed = {}
         for application in get_followed_applications(self.request.user):
@@ -110,7 +117,7 @@ class VacancyBatchConsoleView(LoginRequiredMixin, WorkflowProcessorRequiredMixin
         context["vacancies"] = vacancies + sorted(
             followed.values(), key=lambda g: (g["entry"].title or "").lower()
         )
-        context["total_applications"] = sum(group["count"] for group in vacancies)
+        context["total_applications"] = sum(group["awaiting"] for group in vacancies)
         # TI-5: the next seven days from the schedule calendar, on the landing page.
         today = timezone.localdate()
         context["coming_up"] = group_events_by_day(
@@ -180,6 +187,9 @@ class VacancyBatchDetailView(LoginRequiredMixin, WorkflowProcessorRequiredMixin,
         entry = applications[0].position
         context["entry"] = entry
         context["applications"] = applications
+        context["awaiting_count"] = sum(
+            1 for application in applications if not panel_waits_on_car(self.request.user, application)
+        )
         context["can_send_batch"] = user_can_send_vacancy_batch(self.request.user, entry)
         context["send_target_label"] = (
             "HRM Chief" if self.request.user.role == RecruitmentUser.Role.SECRETARIAT else "Secretariat"
@@ -629,6 +639,8 @@ class VacancyBatchInterviewView(LoginRequiredMixin, WorkflowProcessorRequiredMix
         return {
             "withdrawal_requests": withdrawal_requests,
             "can_schedule": can_schedule,
+            # Finalizing is the session manager's, like scheduling (HRMPSB review P2-2).
+            "can_finalize": can_schedule,
             "current_interview": current_interview,
             "entry": entry,
             "candidates": candidates,

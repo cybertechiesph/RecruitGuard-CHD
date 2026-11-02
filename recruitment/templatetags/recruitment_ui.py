@@ -5,7 +5,12 @@ from django import template
 from django.conf import settings
 from django.utils.timesince import timesince as django_timesince
 
-from recruitment.blinding import case_ref_for as _case_ref_for, identity_for as _identity_for
+from recruitment.blinding import (
+    actor_for as _actor_for,
+    case_ref_for as _case_ref_for,
+    identity_for as _identity_for,
+    is_blind_viewer,
+)
 from recruitment.models import (
     audit_action_label as resolve_audit_action_label,
     AuditLog,
@@ -26,6 +31,8 @@ from recruitment.notification_services import (
 )
 from recruitment.services import (
     application_awaiting_car_preparation,
+    panel_waits_on_car,
+    plantilla_car_preparer_role_label,
     get_current_workflow_section,
     get_exam_record,
     get_interview_session,
@@ -39,6 +46,13 @@ register = template.Library()
 def identity_for(application, user):
     """Applicant name for staff; "Candidate C-07" for HRMPSB members (blind review)."""
     return _identity_for(application, user)
+
+
+@register.filter
+def actor_for(entry, user):
+    """A case-history entry's actor: name and role for staff, role only for the panel."""
+    actor = _actor_for(entry, user)
+    return role_label(actor) if is_blind_viewer(user) and actor else actor
 
 
 @register.filter
@@ -604,14 +618,16 @@ def queue_task_theme(application):
 
 @register.simple_tag(takes_context=True)
 def queue_waiting_on_car(context, application):
-    """True when this row is a Plantilla HRMPSB case whose CAR is still being prepared by
-    another role and the current viewer can't prepare it — used only to add a soft
-    "Waiting on CAR preparation" hint. The case stays in the queue; access is unchanged."""
+    """Who this viewer is waiting on for the case's CAR ("" when they are not): a Plantilla
+    HRMPSB case whose CAR another role prepares. Used only for a soft "Waiting for the
+    Secretariat's CAR" hint; the case stays in the queue and access is unchanged."""
     request = context.get("request")
     user = getattr(request, "user", None)
     if user is None or not getattr(user, "is_authenticated", False):
-        return False
-    return application_awaiting_car_preparation(user, application)
+        return ""
+    if application_awaiting_car_preparation(user, application):
+        return plantilla_car_preparer_role_label(application)
+    return panel_waits_on_car(user, application)
 
 
 @register.simple_tag

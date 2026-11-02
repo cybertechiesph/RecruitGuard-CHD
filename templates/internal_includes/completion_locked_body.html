@@ -163,7 +163,7 @@
             <div class="rg-pkt-row">
                 <span class="rg-pkt-row__label">Selected appointee</span>
                 <span class="rg-pkt-row__value">
-                    {{ latest_final_selection.selected_application.applicant_display_name }}
+                    {{ latest_final_selection.selected_application|identity_for:request.user }}
                 </span>
             </div>
             <div class="rg-pkt-row">
@@ -460,12 +460,9 @@
                         </div>
                         <div class="rg-cmp-timeline-item__meta">
                             {{ entry.created_at|date:"N j, Y, g:i a" }}
-                            {% if entry.actor %}
-                                &mdash; {{ entry.actor }}
-                                {% if entry.actor_role %}
-                                    ({{ entry.actor_role }})
-                                {% endif %}
-                            {% endif %}
+                            {% with actor=entry|actor_for:request.user %}
+                                {% if actor %}&mdash; {{ actor }}{% endif %}
+                            {% endwith %}
                             {% if entry.workflow_stage %}
                                 &mdash; {{ entry.workflow_stage|title }}
                             {% endif %}

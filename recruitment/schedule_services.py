@@ -252,6 +252,10 @@ def get_schedule_events_for_user(user, start, end):
                 )
             )
 
+    if user.role == RecruitmentUser.Role.HRMPSB_MEMBER:
+        # HRMPSB review P3-3: the panel sits interviews; the exam sittings and the office's
+        # deadlines of its vacancies are not its calendar.
+        events = [event for event in events if event.kind == EventKind.INTERVIEW]
     events.sort(key=lambda e: (e.day, e.at.time() if e.at else time.min, e.kind, e.vacancy.pk))
     return events
 

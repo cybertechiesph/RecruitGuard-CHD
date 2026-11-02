@@ -605,6 +605,21 @@ def compute_competency_rating_score(template, scores_by_competency):
     )
 
 
+def interview_scoring_is_open(interview_session):
+    """Ratings describe an interview that has happened, so scoring opens at its scheduled time
+    (HRMPSB review P2-1). Paper sheets follow the same rule."""
+    return not clock.event_not_held_yet(interview_session.scheduled_for)
+
+
+def scoring_opens_message(when):
+    local = timezone.localtime(when)
+    return (
+        f"The interview is scheduled for {local:%B} {local.day}, {local.year} at "
+        f"{local:%I:%M %p}".replace(" at 0", " at ")
+        + ". Scoring opens once it has taken place."
+    )
+
+
 def save_interview_rating(application, actor, cleaned_data):
     if not hasattr(application, "case"):
         raise ValueError("A case must exist before interview ratings can be recorded.")
@@ -619,6 +634,8 @@ def save_interview_rating(application, actor, cleaned_data):
         )
     if not interview_session:
         raise ValueError("Schedule the interview session before recording interview ratings.")
+    if not interview_scoring_is_open(interview_session):
+        raise ValueError(scoring_opens_message(interview_session.scheduled_for))
 
     if application.branch == PositionPosting.Branch.COS:
         # COS interviews use a simple end-user / HRMS score + notes, not the
@@ -820,16 +837,20 @@ def finalize_vacancy_interview_batch(posting, actor, first_deliberation_note="")
             raise ValueError(
                 f"Schedule {application.reference_label}'s interview before finalizing the batch."
             )
-        save_interview_session(
-            application=application,
-            actor=actor,
-            cleaned_data={
-                "scheduled_for": session.scheduled_for,
-                "location": session.location,
-                "session_notes": session.session_notes,
-            },
-            finalize=True,
-        )
+        try:
+            save_interview_session(
+                application=application,
+                actor=actor,
+                cleaned_data={
+                    "scheduled_for": session.scheduled_for,
+                    "location": session.location,
+                    "session_notes": session.session_notes,
+                },
+                finalize=True,
+            )
+        except ValueError as exc:
+            # HRMPSB review P3-2: say which case stopped the batch.
+            raise ValueError(f"{application.reference_label}: {exc}") from exc
         finalized.append(application)
     if first_deliberation_note:
         for application in finalized:
@@ -1062,6 +1083,8 @@ def upload_interview_fallback_rating(
         )
     if not interview_session:
         raise ValueError("Schedule the interview session before uploading a fallback rating sheet.")
+    if not interview_scoring_is_open(interview_session):
+        raise ValueError(scoring_opens_message(interview_session.scheduled_for))
     if rated_by is None:
         raise ValueError(
             "Name the panel member who signed this rating sheet — a fallback sheet is one "

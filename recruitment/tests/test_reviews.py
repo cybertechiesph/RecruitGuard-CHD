@@ -1,12 +1,14 @@
 """Changes from the November 2026 office reviews (Secretariat walkthrough, Round A,
-Round B)."""
+Round B, and Round C from the HRMPSB Member walkthrough)."""
 
 from decimal import Decimal
 from datetime import datetime, time, timedelta, timezone as dt_timezone
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import Client
+from django.template.loader import render_to_string
+from django.test import Client, RequestFactory
 from django.urls import reverse
 from django.utils import timezone
 
@@ -42,8 +44,12 @@ from ..services import (
     upload_interview_fallback_rating,
     record_application_withdrawal,
     get_interview_session,
+    process_workflow_action,
+    save_interview_rating,
+    user_can_record_withdrawal,
 )
 from ..notification_services import resend_notification
+from ..schedule_services import EventKind, get_schedule_events_for_user
 from .base import BaseRecruitmentTestCase, BatchExamHelpers, InterviewSessionHelpers
 
 
@@ -1230,3 +1236,227 @@ class RoundBTests(BatchExamHelpers, BaseRecruitmentTestCase):
             response, reverse("vacancy-batch-detail", args=[self.cos_position.pk]),
             fetch_redirect_response=False,
         )
+
+
+class HrmpsbRoundCTests(InterviewSessionHelpers, BaseRecruitmentTestCase):
+    """Round C: fixes from docs/hrmpsb-member-review-2026-11.md (the panel member's view)."""
+
+    def _client_for(self, user):
+        client = Client()
+        self.force_login_with_mfa(client, user)
+        return client
+
+    def _named(self):
+        """An application whose applicant has a name no page label contains."""
+        self.applicant.first_name, self.applicant.last_name = "Zenaida", "Quiambao"
+        self.applicant.save(update_fields=["first_name", "last_name"])
+        application = self.make_application(self.level1_position)
+        application.applicant_first_name, application.applicant_last_name = "Zenaida", "Quiambao"
+        application.save(update_fields=["applicant_first_name", "applicant_last_name"])
+        return application
+
+    def _submitted(self):
+        application = self._named()
+        self.verify_application_for_submission(application)
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(application, self.applicant)
+        application.refresh_from_db()
+        return application
+
+    def _at_panel(self):
+        application = self._named()
+        self.move_application_to_hrmpsb_review(application)
+        application.refresh_from_db()
+        return application
+
+    # P1-1: a closed case's timeline must not name the applicant to the panel.
+    def test_closed_case_timeline_does_not_name_the_applicant_to_the_panel(self):
+        application = self._submitted()
+        with self.captureOnCommitCallbacks(execute=True):
+            process_workflow_action(application, self.secretariat, "reject", "Not eligible.")
+        url = reverse("application-detail", args=[application.pk])
+        member_page = self._client_for(self.hrmpsb).get(url)
+        self.assertEqual(member_page.status_code, 200)
+        self.assertNotContains(member_page, application.applicant_last_name)
+        self.assertNotContains(member_page, application.applicant_email)
+        staff_page = self._client_for(self.secretariat).get(url)
+        self.assertContains(staff_page, application.applicant_last_name)
+
+    def test_selected_appointee_is_blinded_in_the_locked_case_summary(self):
+        winner = self._submitted()
+        selection = SimpleNamespace(
+            selected_application=winner,
+            selected_application_id=winner.pk,
+            selected_item=SimpleNamespace(rank_order=1),
+            comparative_assessment_report=SimpleNamespace(official_version=1),
+            decided_by="Appointing Authority",
+            decided_at=None,
+            is_deep_selection=False,
+        )
+        request = RequestFactory().get("/")
+        request.user = self.hrmpsb
+        html = render_to_string(
+            "internal_includes/completion_locked_body.html",
+            {"latest_final_selection": selection, "application": winner},
+            request=request,
+        )
+        self.assertNotIn(winner.applicant_last_name, html)
+        self.assertIn("Candidate", html)
+
+    # P1-2: the panel never records an applicant's withdrawal.
+    def test_panel_member_cannot_record_a_withdrawal(self):
+        application = self._at_panel()
+        self.assertFalse(user_can_record_withdrawal(self.hrmpsb, application))
+        response = self._client_for(self.hrmpsb).post(
+            reverse("application-withdraw", args=[application.pk]),
+            {"reason": "Told the board they are no longer interested."},
+        )
+        application.refresh_from_db()
+        self.assertNotEqual(application.status, RecruitmentApplication.Status.WITHDRAWN)
+        self.assertIn(response.status_code, (302, 403, 404))
+        page = self._client_for(self.hrmpsb).get(reverse("application-detail", args=[application.pk]))
+        self.assertNotContains(page, "Record an applicant withdrawal")
+
+    def test_owning_office_records_a_withdrawal_at_the_panel_stage_whatever_the_policy(self):
+        policy = get_office_policy()
+        policy.withdrawal_recorded_by_owning_office = False
+        policy.save(update_fields=["withdrawal_recorded_by_owning_office", "updated_at"])
+        application = self._at_panel()
+        self.assertTrue(user_can_record_withdrawal(self.secretariat, application))
+
+    # P2-2: the member is not offered a Finalize it cannot use.
+    def test_batch_interview_page_hides_finalize_from_the_panel(self):
+        application = self._plantilla_session_awaiting_ratings()
+        self.finalize_applicant_pool_for_test(application.position)
+        url = reverse("vacancy-batch-interview", args=[application.position.pk])
+        member_page = self._client_for(self.hrmpsb).get(url)
+        self.assertEqual(member_page.status_code, 200)
+        self.assertNotContains(member_page, 'id="interviewFinalizeForm"')
+        staff_page = self._client_for(self.secretariat).get(url)
+        self.assertContains(staff_page, 'id="interviewFinalizeForm"')
+
+    # P2-3: once the interview is finalized the panel waits for the CAR; nothing is theirs.
+    def test_cases_waiting_for_the_car_are_not_the_panels_work(self):
+        application = self._at_panel()
+        self.finalize_interview_for_current_stage(application, self.hrmpsb)
+        application.refresh_from_db()
+        self.assertEqual(get_current_workflow_section(application), "car")
+        member = self._client_for(self.hrmpsb)
+        batch = member.get(reverse("vacancy-batch-detail", args=[application.position.pk]))
+        self.assertEqual(batch.status_code, 200)
+        self.assertContains(batch, "Waiting for the Secretariat")
+        self.assertEqual(batch.context["awaiting_count"], 0)
+        console = member.get(reverse("vacancy-batches"))
+        self.assertEqual(console.context["total_applications"], 0)
+
+    # P2-5: the panel is told when its CAR is finalized.
+    def test_panel_is_notified_when_the_car_is_finalized(self):
+        application = self._named()
+        with self.captureOnCommitCallbacks(execute=True):
+            self.move_application_to_appointing_review(application)
+        application.refresh_from_db()
+        notice = Notification.objects.filter(
+            recipient=self.hrmpsb, kind=Notification.Kind.CAR_FINALIZED
+        ).first()
+        self.assertIsNotNone(notice)
+        self.assertIn(application.position.job_code, notice.title)
+        self.assertIn(application.candidate_code_label, notice.body)
+        self.assertNotIn(application.applicant_last_name, notice.title + notice.body)
+
+    # P3-1: one line for a sheet with gaps, not one per competency.
+    def test_rating_errors_are_said_once(self):
+        application = self._plantilla_session_awaiting_ratings()
+        self.publish_competency_rating_sheet(application.position)
+        response = self._client_for(self.hrmpsb).post(
+            reverse("interview-rating", args=[application.pk]),
+            {"rating_notes": "", "justification": ""},
+            follow=True,
+        )
+        text = " ".join(str(m) for m in response.context["messages"])
+        self.assertIn("Score every competency", text)
+        self.assertNotIn("This field is required.", text)
+
+    # P3-2: the batch finalize names the case that is short of ratings.
+    def test_batch_finalize_names_the_case_short_of_ratings(self):
+        application = self._plantilla_session_awaiting_ratings()
+        self.finalize_applicant_pool_for_test(application.position)
+        with self.assertRaisesMessage(ValueError, application.reference_label):
+            finalize_vacancy_interview_batch(application.position, self.secretariat)
+
+    # P3-3: the panel's calendar holds its interviews only.
+    def test_panel_calendar_shows_interviews_only(self):
+        self._plantilla_session_awaiting_ratings()
+        today = timezone.localdate()
+        events = get_schedule_events_for_user(
+            self.hrmpsb, today - timedelta(days=30), today + timedelta(days=30)
+        )
+        self.assertTrue(events)
+        self.assertEqual({event.kind for event in events}, {EventKind.INTERVIEW})
+
+
+class HrmpsbRoundCTimingTests(InterviewSessionHelpers, BaseRecruitmentTestCase):
+    """Round C, the rules that depend on the interview time (P2-1, P2-4)."""
+
+    enforce_event_held = True
+
+    def _client_for(self, user):
+        client = Client()
+        self.force_login_with_mfa(client, user)
+        return client
+
+    def _awaiting_ratings(self):
+        """A Plantilla case with its interview tomorrow; the earlier steps are recorded with
+        the usual stand-in for "after the sitting"."""
+        with patch("recruitment.services.clock.event_not_held_yet", return_value=False):
+            application = self._plantilla_session_awaiting_ratings()
+        application.applicant_first_name, application.applicant_last_name = "Zenaida", "Quiambao"
+        application.save(update_fields=["applicant_first_name", "applicant_last_name"])
+        return application
+
+    def _hold_interview(self, application):
+        session = get_interview_session(application)
+        session.scheduled_for = timezone.now() - timedelta(hours=1)
+        session.save(update_fields=["scheduled_for", "updated_at"])
+
+    # P2-1: no scoring before the interview.
+    def test_rating_waits_for_the_interview(self):
+        application = self._awaiting_ratings()
+        cleaned = self.competency_rating_cleaned_data(application, level=3)
+        with self.assertRaisesMessage(ValueError, "Scoring opens once it has taken place"):
+            save_interview_rating(application=application, actor=self.hrmpsb, cleaned_data=cleaned)
+        page = self._client_for(self.hrmpsb).get(reverse("application-detail", args=[application.pk]))
+        self.assertContains(page, "Scoring opens")
+        self.assertNotContains(page, "Submit your rating")
+        self._hold_interview(application)
+        save_interview_rating(application=application, actor=self.hrmpsb, cleaned_data=cleaned)
+        self.assertTrue(
+            get_interview_session(application).ratings.filter(rated_by=self.hrmpsb).exists()
+        )
+
+    def test_paper_sheet_waits_for_the_interview(self):
+        application = self._awaiting_ratings()
+        with self.assertRaisesMessage(ValueError, "Scoring opens once it has taken place"):
+            upload_interview_fallback_rating(
+                application=application,
+                actor=self.secretariat,
+                uploaded_file=SimpleUploadedFile(
+                    "sheet.pdf", b"%PDF-1.4 sheet", content_type="application/pdf"
+                ),
+                remarks="",
+                rated_by=self.hrmpsb,
+                rating_score=Decimal("80"),
+            )
+
+    # P2-4: the panel's printout names the applicant only from the interview time.
+    def test_printed_sheet_names_the_applicant_to_the_panel_only_once_the_interview_starts(self):
+        application = self._awaiting_ratings()
+        url = reverse("interview-rating-sheet-print", args=[application.pk])
+        before = self._client_for(self.hrmpsb).get(url)
+        self.assertEqual(before.status_code, 200)
+        self.assertNotContains(before, application.applicant_last_name)
+        self.assertContains(before, application.candidate_code_label)
+        office = self._client_for(self.secretariat).get(url)
+        self.assertContains(office, application.applicant_last_name)
+        self._hold_interview(application)
+        after = self._client_for(self.hrmpsb).get(url)
+        self.assertContains(after, application.applicant_last_name)
