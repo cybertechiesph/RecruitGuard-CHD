@@ -366,8 +366,13 @@ first (handoff scope; whether QS is mandatory at publication).
   that aren't in a batch (continuous-intake COS). (F9)
 - Qualification Standards: **required** before a Plantilla vacancy goes Active; optional for
   COS. (F10)
-- HRMPSB panel: **the same members for every vacancy**, so no panel-per-vacancy assignment;
-  every active member is the panel. (closes the remaining part of F6)
+- HRMPSB panel: **revised the same day** after re-reading the interviews. The board is three
+  standing members (chair, vice chair, HR) plus end-user members who change with the position,
+  and Dr. Victorina asked that an end-user member "see only what's for them". So: **a panel per
+  vacancy** (the standing members always; the Secretariat adds the end-user members when the
+  rating sheet is prepared), and visibility, notices and quorum follow that list. Every member
+  has a named account; no shared "end user" login. (reopens the remaining part of F6; see the
+  Chief review §8, item 4a)
 
 ## 8. What remains unverified
 

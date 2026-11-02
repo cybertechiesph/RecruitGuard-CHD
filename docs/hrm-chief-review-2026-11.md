@@ -219,11 +219,14 @@ F13, F14.
 **Separate round:** F15, the restructuring.
 
 **Office questions — answered 2026-11-02**
-- C1: **close intake with the pick.** When the pick of a single-round COS vacancy
-  (opening-based, pooling, fixed-period) is finalized, the vacancy closes and the portal stops
-  taking applications. No round 2 on pooling vacancies. The two stuck cases on
-  VAC-COS-2026-901 are resolved by the fix's data step (close them as not selected with a
-  notice, since the position was filled before they were deliberated).
+- C1: **revised the same day** after re-reading the interviews. The office's "pooling" is a
+  standing pool of COS applicants called whenever a slot opens (Kristine: "tine-take namin for
+  pooling para matawagan sila kapag may nag-open na slot"), which is what the system calls
+  *continuous*. Decision: **merge "pooling" into "continuous" and call it "Open pool"**:
+  applications any time, a selection round per slot (or several slots at once), the pool stays
+  open until the office closes the vacancy. The existing pooling vacancies migrate to it, and
+  the two stuck cases on VAC-COS-2026-901 become round 2's pool. COS keeps two choices: Open
+  pool (no end date) and Fixed period (closing date, one batch).
 - C2/C6: **the Secretariat prints the Level 2 CAR filing copy.** So C2's fix is read-only sight
   for the Chief (cases, batch, CAR summary at completion) and the corrected message; the
   filing-copy owner doesn't change.
@@ -232,9 +235,11 @@ F13, F14.
 
 Implement in this order, test-first, against `147c4b8` or later. Don't touch F15.
 
-1. **C1** — close intake when a single-round COS pick is finalized; refuse submissions after;
-   stop the "record the chosen applicant" banner on a resolved batch; data step for the two
-   stuck cases above.
+1. **C1** — merge the `pooling` intake mode into `continuous`, label it "Open pool: hire from
+   it as slots open" (and "Fixed period: one batch, one selection" for the other COS choice);
+   migrate existing pooling vacancies; the stuck second batch on VAC-COS-2026-901 then opens as
+   round 2. For a fixed-period COS vacancy, closing is already implied by its closing date.
+   The batch page must not ask for a pick on a resolved round.
 2. **C2** — read-only access for the HRM Chief to Level 2 cases, batch and CAR after the
    interview (view/export only, no actions); CAR summary on the Level 2 completion page; the
    interview-finalize message by level.
@@ -242,6 +247,12 @@ Implement in this order, test-first, against `147c4b8` or later. Don't touch F15
 4. **C4 + F9** — whole-batch handoff between Secretariat and HRM Chief with a reason; the
    delegating office keeps read access and can recall; single-case handoff only for cases
    outside a batch; the case header shows the loan.
+4a. **Panel per vacancy (F6, decided 2026-11-02 per Dr. Victorina)** — a standing core panel
+   (chair, vice chair, HR; an Office Policy setting) plus end-user members the Secretariat (or
+   the Chief for Level 2) adds per vacancy on the rating-sheet page. An HRMPSB member sees,
+   is notified about, and counts toward the quorum of only the vacancies they are assigned
+   to; the core members are on every panel. Paper sheets can still be encoded for an assigned
+   member. Every member has a named account; no shared login.
 5. **C5** — the pick card shows a pick only for cases in the resolved round.
 6. **F10** — QS (education, training, experience) required before a Plantilla entry goes
    Active; shown on the entry form.
