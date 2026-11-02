@@ -16,7 +16,7 @@ staging environment with dummy or synthetic data.
 
 | Tool | Scope | Command or Activity | Result Summary | Critical/High Findings | Remediation Status |
 | --- | --- | --- | --- | --- | --- |
-| Bandit | Python code | `python -m bandit -r config recruitment -x recruitment/migrations,recruitment/tests.py` |  |  |  |
+| Bandit | Python code | `python -m bandit -r config recruitment -x recruitment/migrations,recruitment/tests` |  |  |  |
 | pip-audit | Python dependencies | `python -m pip_audit` |  |  |  |
 | OWASP ZAP | Deployed web app | Baseline/authenticated scan on staging |  |  |  |
 | Burp Suite Community | Manual access-control checks | Request/response inspection |  |  |  |

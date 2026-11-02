@@ -121,7 +121,7 @@ Development security checks are installed through `requirements-dev.txt`.
 
 ```powershell
 python manage.py check --deploy
-python -m bandit -r config recruitment -x recruitment/migrations,recruitment/tests.py
+python -m bandit -r config recruitment -x recruitment/migrations,recruitment/tests
 python -m pip_audit
 ```
 
@@ -249,6 +249,17 @@ stays importable as `from recruitment.services import <name>`, and a date-time b
 calendar date only through `clock.local_day()` or `timezone.localdate()`, never a bare `.date()`
 (which gives the UTC date, a day early before 8 a.m. Manila). Email delivery and scheduling
 stay in `recruitment/notification_services.py` and `recruitment/schedule_services.py`.
+
+The tests follow the same layout in `recruitment/tests/`: `base.py` holds the shared setup
+(`BaseRecruitmentTestCase` and the helper mixins), and each `test_<area>.py` covers one area
+(`test_screening.py`, `test_exam.py`, `test_interview.py`, `test_selection.py`,
+`test_architecture.py` for the structure rules, and so on). Run one file or one class by its
+label:
+
+```powershell
+python manage.py test recruitment.tests.test_exam
+python manage.py test recruitment.tests.test_exam.BatchExamTests
+```
 
 ## Notes for reviewers and first-time users
 

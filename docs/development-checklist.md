@@ -176,6 +176,10 @@ modules call each other through the module object. The original suggested groupi
 ## 6. Testing Checkpoints
 
 ### After Each Module
+Tests live in `recruitment/tests/`, one `test_<area>.py` per area, sharing `base.py`. Add a new
+test to the file for its area; a class that needs another class's helpers gets them from a
+mixin in `base.py`, never by importing the other test class (Django would run that class's
+tests twice). Labels look like `recruitment.tests.test_exam.BatchExamTests`.
 - [ ] Model tests
 - [ ] Access control tests
 - [ ] Form validation tests

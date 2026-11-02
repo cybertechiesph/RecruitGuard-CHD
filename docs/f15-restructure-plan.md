@@ -287,7 +287,7 @@ user-visible text.
 | 2 — `transition_case` | **Done 2026-11-03** in two commits (R2a behaviour-preserving, R2b routing rows). |
 | 3 — workflow map | **Done 2026-11-03.** One commit; see below. |
 | 4 — clock | **Done 2026-11-03.** See below. |
-| 5 — tests split | not started |
+| 5 — tests split | **Done 2026-11-03.** See below. |
 | 6 — views split | optional |
 
 **Round 1 as built, where it differs from section 2:**
@@ -383,3 +383,24 @@ user-visible text.
   `timezone.localdate(value)` (four uses) is likewise allowed.
 - `test_dates_come_from_manila_time` fails on any `.date()` call outside `clock.py` and on any
   naive now/today, anywhere in `recruitment/` outside migrations and tests.
+
+**Round 5 as built:**
+
+- `recruitment/tests.py` (23,656 lines, 56 classes) is now `recruitment/tests/`: `base.py`
+  (`BaseRecruitmentTestCase`, `User` and three helper mixins) and 18 `test_<area>.py` files,
+  moved by script with each file's imports pruned to what it uses. Largest file:
+  `test_selection.py` (deliberation, CAR and final decision) at about 4,000 lines.
+- **Borrowed helpers became mixins.** The review classes used to copy methods from other
+  test classes (`RoundBTests._submit = BatchExamTests._submit`); importing those classes into
+  another file would make Django run their tests twice. The helpers now live in
+  `BatchExamHelpers`, `BatchScreeningHelpers` and `InterviewSessionHelpers` in `base.py`, and
+  both the original class and the borrowers inherit them. The two `_submit` /
+  `_extra_submitted_application` pairs stayed separate because their test data differ.
+- **Same tests:** before and after, the suite has the same 817 tests with identical class and
+  method names and no duplicates.
+- Labels changed: `recruitment.tests.<Class>` is now
+  `recruitment.tests.test_<area>.<Class>`. The README, the development checklist and the
+  Bandit exclusion (`recruitment/tests`) were updated. Older docs that cite `tests.py:<line>`
+  are historical and were left as they are.
+- The architecture tests now skip the `tests/` folder (they used to skip `tests.py`), and the
+  services package path is found from the new location.
