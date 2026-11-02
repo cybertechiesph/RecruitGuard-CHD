@@ -1236,6 +1236,9 @@ def rescind_final_selection(selection, actor, reason, *, reference=""):
             actor,
             to_status=RecruitmentApplication.Status.APPOINTING_AUTHORITY_REVIEW,
             to_role=RecruitmentUser.Role.APPOINTING_AUTHORITY,
+            route_type=RoutingHistory.RouteType.REOPEN,
+            description="Returned to the Appointing Authority after the selection was rescinded.",
+            notes=reason,
         )
         audit.record_audit_event(
             application=application,
@@ -1385,8 +1388,14 @@ def record_final_decision(application, actor, cleaned_data):
         actor,
         to_status=next_status,
         to_role=next_role,
-        route_type=RoutingHistory.RouteType.FORWARD if next_role else None,
-        description=f"Application routed to {next_role} for completion handling.",
+        route_type=(
+            RoutingHistory.RouteType.FORWARD if next_role else RoutingHistory.RouteType.CLOSE
+        ),
+        description=(
+            f"Application routed to {next_role} for completion handling."
+            if next_role
+            else "Closed as not selected by the final decision."
+        ),
         notes=decision.decision_notes,
     )
 

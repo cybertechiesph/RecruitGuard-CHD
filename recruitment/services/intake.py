@@ -1571,6 +1571,8 @@ def submit_document_resubmission(application, actor, uploaded_files, *, email_ve
         to_status=routing._application_status_from_stage(review_stage),
         to_role=reviewing_role,
         restart_stage_clock=True,
+        route_type=RoutingHistory.RouteType.REOPEN,
+        description="Applicant resubmitted flagged documents; back with the reviewer for re-review.",
     )
     case.reopened_at = timezone.now()
     case.save(update_fields=["reopened_at", "updated_at"])

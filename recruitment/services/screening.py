@@ -13,6 +13,7 @@ from ..models import (
     PositionPosting,
     RecruitmentApplication,
     RecruitmentCase,
+    RoutingHistory,
     ScreeningDocumentReview,
     ScreeningRecord,
 )
@@ -645,6 +646,9 @@ def request_document_resubmission(application, actor, remarks):
         actor,
         to_status=RecruitmentApplication.Status.RETURNED_TO_APPLICANT,
         to_role=reviewing_role,
+        route_type=RoutingHistory.RouteType.FORWARD,
+        description="Waiting for the applicant to resubmit flagged documents; the reviewer keeps the case.",
+        notes=remarks,
     )
     # Invalidate any leftover OTP (e.g. from the original submission) so the applicant must
     # verify a fresh code before resubmitting.

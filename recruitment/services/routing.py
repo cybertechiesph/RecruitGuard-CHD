@@ -877,8 +877,8 @@ def transition_case(
     *,
     to_status,
     to_role,
-    route_type=None,
-    description="",
+    route_type,
+    description,
     notes="",
     is_override=False,
     restart_stage_clock=False,
@@ -887,7 +887,8 @@ def transition_case(
 
     Locks the case row, derives the case's stage and status from the application status
     it is moving to, writes the case and the application's status, handler and closed time,
-    and, when ``route_type`` is given, records the RoutingHistory row. The caller records
+    and records one RoutingHistory row (``route_type`` and ``description`` are required, so
+    every movement shows in the case's routing history and the export). The caller records
     its own audit event (the action and metadata differ by step) from the returned
     before-state. ``restart_stage_clock`` restarts the stage's SLA clock when the stage
     itself does not change (an applicant's resubmission).
@@ -980,22 +981,21 @@ def transition_case(
     )
     application.save(update_fields=["current_handler_role", "status", "closed_at", "updated_at"])
 
-    if route_type:
-        record_routing_history_event(
-            application=application,
-            actor=actor,
-            route_type=route_type,
-            description=description,
-            recruitment_case=case,
-            from_handler_role=previous_role,
-            to_handler_role=application.current_handler_role,
-            from_status=previous_status,
-            to_status=to_status,
-            from_stage=previous_stage,
-            to_stage=case.current_stage,
-            notes=notes,
-            is_override=is_override,
-        )
+    record_routing_history_event(
+        application=application,
+        actor=actor,
+        route_type=route_type,
+        description=description,
+        recruitment_case=case,
+        from_handler_role=previous_role,
+        to_handler_role=application.current_handler_role,
+        from_status=previous_status,
+        to_status=to_status,
+        from_stage=previous_stage,
+        to_stage=case.current_stage,
+        notes=notes,
+        is_override=is_override,
+    )
     return {
         "previous_stage": previous_stage,
         "previous_case_status": previous_case_status,
@@ -1080,6 +1080,9 @@ def remove_applicant_from_batch(application, actor, reason):
         actor,
         to_status=RecruitmentApplication.Status.REJECTED,
         to_role="",
+        route_type=RoutingHistory.RouteType.CLOSE,
+        description="Removed the applicant from the batch (disqualified).",
+        notes=reason,
     )
     audit.record_audit_event(
         application=application,
@@ -1153,6 +1156,13 @@ def process_workflow_action(application, actor, action, remarks):
         actor,
         to_status=next_status,
         to_role=next_role,
+        route_type=(
+            RoutingHistory.RouteType.CLOSE
+            if next_status == RecruitmentApplication.Status.REJECTED
+            else RoutingHistory.RouteType.FORWARD
+        ),
+        description=description,
+        notes=remarks,
     )
 
     audit.record_audit_event(

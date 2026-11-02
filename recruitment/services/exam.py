@@ -18,6 +18,7 @@ from ..models import (
     PositionPosting,
     RecruitmentApplication,
     RecruitmentCase,
+    RoutingHistory,
 )
 from ..notification_services import (
     queue_exam_invitation_notification,
@@ -89,6 +90,9 @@ def _close_absent_or_waived_exam_application(application, actor, exam_record):
         actor,
         to_status=RecruitmentApplication.Status.REJECTED,
         to_role="",
+        route_type=RoutingHistory.RouteType.CLOSE,
+        description=reason,
+        notes=reason,
     )
     audit.record_audit_event(
         application=application,
@@ -310,6 +314,9 @@ def _close_after_attendance_absence(exception, actor):
         actor,
         to_status=RecruitmentApplication.Status.REJECTED,
         to_role="",
+        route_type=RoutingHistory.RouteType.CLOSE,
+        description=f"Did not proceed after a recorded {stage_label} absence.",
+        notes=exception.decision_reason,
     )
     audit.record_audit_event(
         application=application,

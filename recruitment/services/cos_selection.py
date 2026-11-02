@@ -785,6 +785,12 @@ def rescind_cos_vacancy_deliberation(pick, actor, reason, *, reference=""):
             actor,
             to_status=RecruitmentApplication.Status.HRM_CHIEF_REVIEW,
             to_role=RecruitmentUser.Role.HRM_CHIEF,
+            route_type=RoutingHistory.RouteType.REOPEN,
+            description=(
+                "Returned to the HRM Chief's deliberation step after the COS pick was "
+                "rescinded."
+            ),
+            notes=reason,
         )
         audit.record_audit_event(
             application=application,

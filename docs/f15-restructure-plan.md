@@ -284,7 +284,7 @@ user-visible text.
 | Round | Status |
 |---|---|
 | 1 — split the module | **Done 2026-11-03.** 18 modules, 421 functions, 503 names; suite green. |
-| 2 — `transition_case` | not started |
+| 2 — `transition_case` | **Done 2026-11-03** in two commits (R2a behaviour-preserving, R2b routing rows). |
 | 3 — workflow map | not started |
 | 4 — clock | not started (`clock.py` exists from round 1 with the three event-time helpers) |
 | 5 — tests split | not started |
@@ -314,3 +314,32 @@ user-visible text.
   `assertLogs("recruitment.services")` and log filters still match.
 - `forms.py` now imports `TOP_FIVE_SELECTION_LIMIT` from `models` (it came through services
   before, but services never defined it).
+
+**Round 2 as built:**
+
+- `routing.transition_case(application, actor, *, to_status, to_role, route_type,
+  description, notes="", is_override=False, restart_stage_clock=False)` is the only writer of
+  a case's stage, case status, handler and lock fields. It also writes the application's
+  status, handler and closed time and records one RoutingHistory row. `route_type` and
+  `description` have no default, so a new caller cannot forget the routing row.
+- All 20 movements go through it: the 14 callers of the old hub plus the six that wrote case
+  fields themselves (close, reopen, batch recall, the Secretariat↔Chief handoff, the
+  resubmission request and the resubmission).
+- Two targets the old hub could not express were added: `RETURNED_TO_APPLICANT` keeps the
+  stage and marks the case awaiting resubmission, and `restart_stage_clock=True` restarts
+  the SLA clock when the stage does not change (the resubmission).
+- **Audit stays with the callers**, not in the hub. Each step records a different audit
+  action with step-specific metadata (CAR version, deliberation id, absence record…), so the
+  hub returns the before-state (`previous_stage`, `previous_case_status`, `previous_role`,
+  `previous_status`) for the caller's audit entry. The single audit writer is unchanged.
+- **The hub locks the case row itself** with `locks_workflow_row("case", refresh=False)`. The
+  re-read the entry-point decorators do would drop the caller's cached `application.case`
+  mid-step, so the hub only takes the lock.
+- **R2b, new routing rows** (previously audit-only): rejection at screening, the
+  resubmission request (FORWARD) and resubmission (REOPEN), removal from the batch, vacancy
+  cancellation, the two absence closures, the rescission of a Plantilla selection and of a
+  COS pick (REOPEN), and the not-selected final decision (CLOSE). No existing test count
+  moved; `RoutingRowForEveryTransitionTests` covers the new rows.
+- Guard: `test_only_transition_case_moves_a_case` fails on any other assignment to those
+  five fields anywhere in `recruitment/` outside migrations and tests. Case birth at
+  submission is the one listed exception.

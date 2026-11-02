@@ -1,6 +1,7 @@
 import ast
 import hashlib
 import importlib
+import inspect
 import io
 import json
 import re
@@ -23428,3 +23429,78 @@ class ServicesPackageArchitectureTests(SimpleTestCase):
                         and guarded & {keyword.arg for keyword in node.keywords}
                     ):
                         self.fail(f"{relative}:{node.lineno} {function.name} bulk-updates a case field")
+
+
+class RoutingRowForEveryTransitionTests(BaseRecruitmentTestCase):
+    """F15 round 2b: every case movement leaves a routing row, including the ones that used
+    to leave only an audit entry (rejection, resubmission, removal, cancellation)."""
+
+    _submit = BatchScreeningGateTests._submit
+    _make_awaiting_case = BatchScreeningGateTests._make_awaiting_case
+
+    def _last_route(self, application):
+        return application.routing_history.order_by("-id").first()
+
+    def test_transition_case_requires_a_route_type_and_description(self):
+        from recruitment.services import routing
+
+        signature = inspect.signature(routing.transition_case)
+        for name in ("route_type", "description"):
+            with self.subTest(parameter=name):
+                self.assertIs(signature.parameters[name].default, inspect.Parameter.empty)
+
+    def test_rejection_records_a_close_route(self):
+        application = self._submit(self.make_application(self.level1_position), self.applicant)
+        with self.captureOnCommitCallbacks(execute=True):
+            process_workflow_action(application, self.secretariat, "reject", "Not eligible.")
+        route = self._last_route(application)
+        self.assertEqual(route.route_type, RoutingHistory.RouteType.CLOSE)
+        self.assertEqual(route.from_status, RecruitmentApplication.Status.SECRETARIAT_REVIEW)
+        self.assertEqual(route.to_status, RecruitmentApplication.Status.REJECTED)
+        self.assertEqual(route.to_stage, RecruitmentCase.Stage.CLOSED)
+        self.assertEqual(route.notes, "Not eligible.")
+
+    def test_resubmission_request_and_resubmission_each_record_a_route(self):
+        application = self._submit(self.make_application(self.level1_position), self.applicant)
+        self._make_awaiting_case(application)
+        request = self._last_route(application)
+        self.assertEqual(request.to_status, RecruitmentApplication.Status.RETURNED_TO_APPLICANT)
+        self.assertEqual(request.from_handler_role, RecruitmentUser.Role.SECRETARIAT)
+        self.assertEqual(request.to_handler_role, RecruitmentUser.Role.SECRETARIAT)
+        self.assertEqual(request.to_stage, RecruitmentCase.Stage.SECRETARIAT_REVIEW)
+
+        first_requirement = get_applicant_document_requirements(application.branch)[0]
+        otp_code = issue_application_otp(application, actor=self.applicant)
+        verify_application_otp(application, otp_code, actor=self.applicant)
+        application.refresh_from_db()
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_document_resubmission(
+                application,
+                self.applicant,
+                {
+                    first_requirement.code: self.build_valid_applicant_document_upload(
+                        first_requirement.code, content_prefix="route-row-resubmission"
+                    )
+                },
+            )
+        returned = self._last_route(application)
+        self.assertEqual(returned.route_type, RoutingHistory.RouteType.REOPEN)
+        self.assertEqual(returned.from_status, RecruitmentApplication.Status.RETURNED_TO_APPLICANT)
+        self.assertEqual(returned.to_status, RecruitmentApplication.Status.SECRETARIAT_REVIEW)
+
+    def test_removal_from_batch_records_a_close_route(self):
+        application = self._submit(self.make_application(self.level1_position), self.applicant)
+        self._make_awaiting_case(application)
+        remove_applicant_from_batch(application, self.secretariat, "Missed the deadline.")
+        route = self._last_route(application)
+        self.assertEqual(route.route_type, RoutingHistory.RouteType.CLOSE)
+        self.assertEqual(route.to_status, RecruitmentApplication.Status.REJECTED)
+        self.assertEqual(route.notes, "Missed the deadline.")
+
+    def test_vacancy_cancellation_records_a_close_route(self):
+        application = self._submit(self.make_application(self.level1_position), self.applicant)
+        with self.captureOnCommitCallbacks(execute=True):
+            cancel_recruitment_entry(self.level1_position, self.secretariat, "Publication disapproved.")
+        route = self._last_route(application)
+        self.assertEqual(route.route_type, RoutingHistory.RouteType.CLOSE)
+        self.assertEqual(route.to_status, RecruitmentApplication.Status.VACANCY_CANCELLED)

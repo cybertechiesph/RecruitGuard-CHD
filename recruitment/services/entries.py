@@ -19,6 +19,7 @@ from ..models import (
     RecruitmentApplication,
     RecruitmentCase,
     RecruitmentUser,
+    RoutingHistory,
     VacancyAssessmentWeights,
 )
 from ..notification_services import queue_vacancy_cancellation_notification
@@ -538,6 +539,9 @@ def cancel_recruitment_entry(entry, actor, reason):
             actor,
             to_status=RecruitmentApplication.Status.VACANCY_CANCELLED,
             to_role="",
+            route_type=RoutingHistory.RouteType.CLOSE,
+            description="Closed because the vacancy was cancelled.",
+            notes=reason,
         )
         audit.record_audit_event(
             application=application,
