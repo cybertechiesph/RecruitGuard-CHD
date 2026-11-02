@@ -53,6 +53,13 @@ is a hope, not a backup.
 - A "Workflow conflict on …" warning means two people saved the same step at the same moment;
   the second was told to reload. Frequent ones are worth a look, single ones are normal.
 
+## Finding a rule's history
+
+In November 2026 `recruitment/services.py` was split into the `recruitment/services/` package
+with the code moved unchanged. `git log --follow` does not see across that move; use
+`git blame -C -C recruitment/services/<module>.py` to see who last changed each line before
+the split.
+
 ## Hearing about errors
 
 Set `DJANGO_ADMINS="Name <email>, Other Name <email>"` in `.env`. Every server error (HTTP 500)

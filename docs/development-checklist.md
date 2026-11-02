@@ -51,7 +51,10 @@ Before implementing any module, confirm these are frozen and reflected in the re
 ---
 
 ## 4. Recommended App Structure
-Suggested Django app grouping:
+As built, everything lives in the `recruitment` app; its business rules are split by stage in
+`recruitment/services/` (see "Where the workflow rules live" in the README and
+`docs/f15-restructure-plan.md`). New rules go in the module named after their stage, and
+modules call each other through the module object. The original suggested grouping was:
 - accounts
 - recruitment
 - intake

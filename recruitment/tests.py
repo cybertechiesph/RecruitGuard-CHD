@@ -1,13 +1,16 @@
+import ast
 import hashlib
 import importlib
 import io
 import json
 import re
 import smtplib
+import symtable
 import urllib.parse
 import uuid
 import zipfile
 from decimal import ROUND_HALF_UP, Decimal
+from pathlib import Path
 from datetime import date, datetime, time, timedelta, timezone as dt_timezone
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -264,8 +267,8 @@ class BaseRecruitmentTestCase(TestCase):
     def setUp(self):
         if not self.enforce_event_held:
             for target, value in (
-                ("recruitment.services.event_not_held_yet", False),
-                ("recruitment.services.event_held_by", True),
+                ("recruitment.services.clock.event_not_held_yet", False),
+                ("recruitment.services.clock.event_held_by", True),
             ):
                 held = patch(target, return_value=value)
                 held.start()
@@ -1237,7 +1240,7 @@ class FoundationSmokeTests(TestCase):
         # failure must not roll back the challenge or block staff login; it should
         # degrade to text-only delivery (the code lives in the plain-text body).
         with patch(
-            "recruitment.services.render_to_string",
+            "recruitment.services.identity.render_to_string",
             side_effect=RuntimeError("template render boom"),
         ), self.assertLogs("recruitment.services", level="ERROR") as logs:
             response = self.client.post(
@@ -4240,7 +4243,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
 
         with self.assertLogs("recruitment.services", level="ERROR"):
             with patch(
-                "recruitment.services.EmailMultiAlternatives.send",
+                "recruitment.services.intake.EmailMultiAlternatives.send",
                 side_effect=PermissionError("denied"),
             ):
                 response = self.start_portal_draft(
@@ -5497,7 +5500,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         # verification code, so delivery must degrade to text-only rather than
         # blocking the applicant's submission verification.
         with patch(
-            "recruitment.services.render_to_string",
+            "recruitment.services.intake.render_to_string",
             side_effect=RuntimeError("template render boom"),
         ), self.assertLogs("recruitment.services", level="ERROR") as logs:
             with self.captureOnCommitCallbacks(execute=True):
@@ -5583,7 +5586,7 @@ class CandidateCodeAllocationTests(BaseRecruitmentTestCase):
             return selected_code
 
         with patch(
-            "recruitment.services.secrets.choice",
+            "recruitment.services.intake.secrets.choice",
             side_effect=collide_on_first_choice,
         ):
             assigned_code = assign_candidate_code(target)
@@ -22128,7 +22131,7 @@ class SecretariatEssentialsTests(BaseRecruitmentTestCase):
 
     def _not_yet(self):
         # Setup steps that record results "afterwards" use the suite-wide stand-in.
-        return patch("recruitment.services.event_not_held_yet", return_value=False)
+        return patch("recruitment.services.clock.event_not_held_yet", return_value=False)
 
     def _plantilla_at_interview(self):
         first, second = self._two_qualified(self.level1_position)
@@ -23320,3 +23323,65 @@ class RoundBTests(BaseRecruitmentTestCase):
             response, reverse("vacancy-batch-detail", args=[self.cos_position.pk]),
             fetch_redirect_response=False,
         )
+
+
+class ServicesPackageArchitectureTests(SimpleTestCase):
+    """F15: rules that keep recruitment/services/ split by stage and importable."""
+
+    package_dir = Path(__file__).resolve().parent / "services"
+
+    def _modules(self):
+        for path in sorted(self.package_dir.glob("*.py")):
+            if path.name != "__init__.py":
+                yield path.stem, ast.parse(path.read_text(encoding="utf-8"))
+
+    def _siblings_imported(self, tree):
+        return {
+            alias.asname or alias.name
+            for node in tree.body
+            if isinstance(node, ast.ImportFrom) and node.level == 1 and node.module is None
+            for alias in node.names
+        }
+
+    def test_every_public_name_is_still_importable_from_the_package(self):
+        from recruitment import services
+
+        names = (self.package_dir / "public_names.txt").read_text().split()
+        self.assertGreaterEqual(len(names), 503)
+        missing = [name for name in names if not hasattr(services, name)]
+        self.assertEqual(missing, [], "re-export these from recruitment/services/__init__.py")
+
+    def test_modules_call_siblings_through_the_module_object(self):
+        for name, tree in self._modules():
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom) and node.level == 1:
+                    with self.subTest(module=name, line=node.lineno):
+                        self.assertIsNone(
+                            node.module,
+                            f"services/{name}.py: use `from . import {node.module}` and "
+                            f"call `{node.module}.<name>(...)`, not `from .{node.module} import`",
+                        )
+
+    def test_common_and_clock_import_nothing_above_them(self):
+        allowed = {"common": set(), "clock": {"common"}}
+        for name, tree in self._modules():
+            if name in allowed:
+                with self.subTest(module=name):
+                    self.assertLessEqual(self._siblings_imported(tree), allowed[name])
+
+    def test_no_local_variable_hides_a_sibling_module(self):
+        for name, tree in self._modules():
+            siblings = self._siblings_imported(tree)
+            source = (self.package_dir / f"{name}.py").read_text(encoding="utf-8")
+            pending = list(symtable.symtable(source, f"{name}.py", "exec").get_children())
+            while pending:
+                table = pending.pop()
+                pending.extend(table.get_children())
+                hidden = {
+                    symbol.get_name()
+                    for symbol in table.get_symbols()
+                    if (symbol.is_local() or symbol.is_parameter())
+                    and symbol.get_name() in siblings
+                }
+                with self.subTest(module=name, scope=table.get_name()):
+                    self.assertEqual(hidden, set(), "rename the local; it hides a sibling module")

@@ -224,6 +224,29 @@ Internal roles used by the system:
 - Audit log: `/internal/audit/`
 - Django admin: `/admin/`
 
+## Where the workflow rules live
+
+The business rules are in `recruitment/services/`, one module per stage of the recruitment
+workflow. Open the file named after the stage to find its rule:
+
+| Module | What it holds |
+|---|---|
+| `common.py`, `clock.py` | shared constants and helpers, the workflow row lock, when an event counts as held |
+| `access.py` | who may see what: queue, visible positions, closed cases, panel membership |
+| `routing.py` | how a case moves: handoffs, batch handoff and recall, auto-advance, workflow sections, the generic action processor |
+| `entries.py` | vacancies, office policy, weights, document requirements, vacancy panel |
+| `intake.py` | applicant portal identity, drafts, OTP, submission, resubmission upload, withdrawal |
+| `screening.py`, `exam.py`, `interview.py`, `car.py` | one module per evaluation step |
+| `selection.py`, `cos_selection.py` | Plantilla deliberation and decisions; COS selection rounds and picks |
+| `reopen.py`, `completion.py` | reopening and stage-record corrections; completion and closing a case |
+| `audit.py`, `evidence_vault.py`, `case_notices.py`, `identity.py` | audit log, vault and exports, in-app notices, staff sign-in support |
+
+Two rules keep the package workable, and `ServicesPackageArchitectureTests` checks both:
+modules call each other through the module object (`exam.save_exam_record(...)`, never
+`from .exam import save_exam_record`), and every name in `recruitment/services/public_names.txt`
+stays importable as `from recruitment.services import <name>`. Email delivery and scheduling
+stay in `recruitment/notification_services.py` and `recruitment/schedule_services.py`.
+
 ## Notes for reviewers and first-time users
 
 - If SMTP credentials are missing or invalid, the server will still start, but applicant OTP sending and email notifications will fail when triggered.

@@ -52,6 +52,7 @@ from .models import (
     RecruitmentUser,
     ScreeningDocumentReview,
     ScreeningRecord,
+    TOP_FIVE_SELECTION_LIMIT,
     VacancyAssessmentWeights,
 )
 from .requirements import (
@@ -64,7 +65,6 @@ from .services import (
     FINAL_SELECTION_OUT_OF_CONTENTION_STATUSES,
     PENDING_RESUBMISSION_SCREENING_FINALIZE_MESSAGE,
     REAPPLICATION_ELIGIBLE_TERMINAL_STATUSES,
-    TOP_FIVE_SELECTION_LIMIT,
     compute_competency_rating_score,
     get_available_actions,
     get_case_handoff_options,

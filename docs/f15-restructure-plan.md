@@ -278,3 +278,39 @@ lint test; round 5 last. Live-smoke rounds 2 and 3 on the demo database with the
 harness. Update `docs/development-checklist.md`, `README.md` (test labels) and
 `docs/operations-runbook.md` (blame note). Do not change models, templates, URLs or any
 user-visible text.
+
+## 7. Implementation status
+
+| Round | Status |
+|---|---|
+| 1 — split the module | **Done 2026-11-03.** 18 modules, 421 functions, 503 names; suite green. |
+| 2 — `transition_case` | not started |
+| 3 — workflow map | not started |
+| 4 — clock | not started (`clock.py` exists from round 1 with the three event-time helpers) |
+| 5 — tests split | not started |
+| 6 — views split | optional |
+
+**Round 1 as built, where it differs from section 2:**
+
+- **Three more modules.** `selection` came out at 2,700 lines, so COS selection rounds, picks
+  and COS rescission went to `cos_selection.py`, and reopening plus stage-record corrections
+  went to `reopen.py`. Largest file now: `evidence_vault.py` at 1,994 lines.
+- **`evidence.py` is `evidence_vault.py`.** Six functions keep an EvidenceVaultItem in a local
+  named `evidence`, which would hide a module of that name.
+- **`locks_workflow_row` is in `common.py`, not `routing.py`.** A decorator runs at import
+  time, and only `common` and `clock` are safe to use then (they import no siblings).
+- **Constants** were placed by the script: used by one module, they stay there; otherwise
+  `common.py`.
+- **The names snapshot** is `recruitment/services/public_names.txt` (next to the package, not
+  in a tests folder). `ServicesPackageArchitectureTests` (in `recruitment/tests.py` until
+  round 5) checks the snapshot, the module-object rule, that `common`/`clock` import nothing
+  above them, and that no local variable shares a sibling module's name (one local was
+  renamed, `entries` → `postings` in `access.get_visible_positions_for_user`).
+- **Patch targets** in tests now name the module: `recruitment.services.clock.event_not_held_yet`
+  (one patch covers every caller, since callers use `clock.event_not_held_yet`),
+  `…identity.render_to_string`, `…intake.render_to_string`, `…intake.secrets.choice`,
+  `…intake.EmailMultiAlternatives.send`.
+- **Logger name kept**: every module logs to `recruitment.services`, as before, so
+  `assertLogs("recruitment.services")` and log filters still match.
+- `forms.py` now imports `TOP_FIVE_SELECTION_LIMIT` from `models` (it came through services
+  before, but services never defined it).
