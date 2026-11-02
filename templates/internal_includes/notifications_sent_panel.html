@@ -50,7 +50,8 @@
                                 </td>
                                 <td>
                                     <form method="post"
-                                          action="{% url 'notification-resend' application.pk log.pk %}">
+                                          action="{% url 'notification-resend' application.pk log.pk %}"
+                                          data-resend-form>
                                         {% csrf_token %}
                                         <button type="submit"
                                                 class="btn btn-sm {% if log.delivery_status == 'failed' %}btn-rg-primary{% else %}btn-outline-secondary{% endif %}">
@@ -66,3 +67,15 @@
         </div>
     </div>
 {% endif %}
+<script>
+(function () {
+    "use strict";
+    // One click sends one copy (the server also refuses a repeat within a minute).
+    document.querySelectorAll("form[data-resend-form]").forEach(function (form) {
+        form.addEventListener("submit", function () {
+            var button = form.querySelector("button[type='submit']");
+            if (button) { button.disabled = true; button.textContent = "Sending…"; }
+        });
+    });
+})();
+</script>

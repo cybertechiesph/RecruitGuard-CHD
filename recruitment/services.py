@@ -11,6 +11,7 @@ import textwrap
 import uuid
 import zipfile
 from collections import namedtuple
+from functools import wraps
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from io import BytesIO, StringIO
@@ -2287,6 +2288,13 @@ def _close_after_attendance_absence(exception, actor):
 
 
 ARTIFACT_TYPE_WITHDRAWAL_REQUEST = "withdrawal_request"
+# Files that can carry the applicant's name, which the blind-reviewing panel never opens.
+HRMPSB_RESTRICTED_ARTIFACT_TYPES = {
+    ARTIFACT_TYPE_APPLICANT_DOCUMENT,
+    ARTIFACT_TYPE_EXAM_EVIDENCE,
+    ARTIFACT_TYPE_LETTER_OF_INTENT,
+    ARTIFACT_TYPE_WITHDRAWAL_REQUEST,
+}
 
 
 def user_can_record_withdrawal(user, application):
@@ -3499,6 +3507,52 @@ def user_can_reopen_case(user, case):
         and case.is_stage_locked
         and case.locked_stage
     )
+
+
+def _workflow_lock_target(args, kwargs, *names):
+    if args:
+        return args[0]
+    for name in names:
+        if kwargs.get(name) is not None:
+            return kwargs[name]
+    return None
+
+
+def locks_workflow_row(scope):
+    """Serialize workflow writes. Two people (or one double click) finalizing the same step
+    used to race: both read "not finalized yet", both wrote, and the loser hit a unique
+    constraint as an error page. The decorated function now locks the row first and
+    re-reads it, so the second request waits, then meets the ordinary "already finalized"
+    checks with a plain message.
+
+    ``scope`` is "case" (lock the application's case), "vacancy" (the first argument is the
+    vacancy) or "vacancy_of_application" (pool-wide steps called with one application).
+    Always sits under @transaction.atomic. On SQLite (tests) the lock is a no-op."""
+
+    def decorate(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            target = _workflow_lock_target(args, kwargs, "application", "posting", "entry")
+            if target is not None and transaction.get_connection().in_atomic_block:
+                if scope == "case":
+                    case_ids = list(
+                        RecruitmentCase.objects.select_for_update()
+                        .filter(application_id=target.pk)
+                        .values_list("pk", flat=True)
+                    )
+                    if case_ids:
+                        target.refresh_from_db()
+                else:
+                    posting = target if scope == "vacancy" else target.position
+                    list(PositionPosting.objects.select_for_update().filter(pk=posting.pk).values_list("pk", flat=True))
+                    if scope == "vacancy_of_application":
+                        target.refresh_from_db()
+            return func(*args, **kwargs)
+
+        wrapper.locks_workflow_row = True
+        return wrapper
+
+    return decorate
 
 
 def get_current_review_stage(application):
@@ -5785,6 +5839,7 @@ def _document_review_status_counts(document_reviews):
 
 
 @transaction.atomic
+@locks_workflow_row("case")
 def save_screening_review(
     application, actor, cleaned_data, finalize=False, allow_partial=False, record_audit=True
 ):
@@ -5924,6 +5979,7 @@ def save_screening_review(
 
 
 @transaction.atomic
+@locks_workflow_row("case")
 def return_screening_documents_to_applicant(application, actor, cleaned_data, remarks=""):
     """RD-1: the reviewer's "Return to applicant" decision — one atomic action.
 
@@ -6053,6 +6109,7 @@ def save_exam_schedule(application, actor, cleaned_data, record_audit=True):
 
 
 @transaction.atomic
+@locks_workflow_row("case")
 def save_exam_record(
     application,
     actor,
@@ -6279,6 +6336,7 @@ def vacancy_exam_pool(posting):
 
 
 @transaction.atomic
+@locks_workflow_row("vacancy")
 def save_vacancy_exam_schedule(posting, actor, cleaned_data):
     """Apply ONE exam schedule (date/venue/instructions) to every candidate in the vacancy's
     exam pool and notify each — the batch sits the exam together. Loops the per-case
@@ -6297,6 +6355,7 @@ def save_vacancy_exam_schedule(posting, actor, cleaned_data):
 
 
 @transaction.atomic
+@locks_workflow_row("vacancy")
 def save_vacancy_exam_scores(
     posting,
     actor,
@@ -6331,6 +6390,25 @@ def save_vacancy_exam_scores(
     administered_by = (
         ExamRecord.AdministeredBy.HRMS if is_plantilla else ExamRecord.AdministeredBy.END_USER
     )
+
+    # Check every typed score before anything is saved, drafts included: a draft skips the
+    # record's full validation, so without this a 101 was stored and "abc" crashed the page.
+    for application in pool:
+        row = scores_by_case_id.get(application.case.id) or {}
+        for key, label in (("general_score", "General Ability"), ("technical_score", "Technical")):
+            raw = row.get(key)
+            if raw in (None, ""):
+                continue
+            try:
+                value = Decimal(str(raw).strip())
+            except ArithmeticError:
+                raise ValueError(
+                    f"{application.reference_label}: the {label} score must be a number from 0 to 100."
+                )
+            if not value.is_finite() or value < 0 or value > 100:
+                raise ValueError(
+                    f"{application.reference_label}: the {label} score must be between 0 and 100."
+                )
 
     saved = []
     for application in pool:
@@ -6404,8 +6482,10 @@ def save_vacancy_exam_scores(
             continue  # nothing to record for this candidate yet (draft)
 
         schedule = get_exam_schedule(application)
+        # The Manila calendar day of the sitting; .date() on the stored UTC time dated
+        # every sitting before 08:00 as the day before.
         exam_date = (
-            schedule.scheduled_for.date()
+            timezone.localdate(schedule.scheduled_for)
             if schedule and schedule.scheduled_for
             else timezone.localdate()
         )
@@ -6450,6 +6530,7 @@ def save_vacancy_exam_scores(
 
 
 @transaction.atomic
+@locks_workflow_row("case")
 def save_interview_session(
     application, actor, cleaned_data, finalize=False, notify_applicant=False, notify_panel=False
 ):
@@ -6907,6 +6988,7 @@ def vacancy_interview_pool(posting, *, include_recorded_absences=False):
 
 
 @transaction.atomic
+@locks_workflow_row("vacancy")
 def save_vacancy_interview_schedule(posting, actor, cleaned_data):
     """Apply ONE interview schedule to every candidate in the vacancy's interview pool and
     notify each — the batch sits the interview together. Loops the per-case
@@ -6953,6 +7035,7 @@ def save_vacancy_interview_schedule(posting, actor, cleaned_data):
 
 
 @transaction.atomic
+@locks_workflow_row("vacancy")
 def finalize_vacancy_interview_batch(posting, actor, first_deliberation_note=""):
     """Finalize the interview session for every candidate in the vacancy's interview pool
     together. Each must already carry the required number of distinct attributable raters —
@@ -7812,6 +7895,8 @@ def _resolve_car_recommendation(raw_case_id, candidate_rows, recommendation_note
     return case_id, False
 
 
+@transaction.atomic
+@locks_workflow_row("vacancy_of_application")
 def generate_comparative_assessment_report(application, actor, cleaned_data, finalize=False):
     if not hasattr(application, "case"):
         raise ValueError("A case must exist before a Comparative Assessment Report can be generated.")
@@ -8044,6 +8129,7 @@ def generate_comparative_assessment_report(application, actor, cleaned_data, fin
 
 
 @transaction.atomic
+@locks_workflow_row("case")
 def save_completion_tracking(application, actor, cleaned_data, requirement_formset):
     if not hasattr(application, "case"):
         raise ValueError("A case must exist before completion details can be recorded.")
@@ -9237,6 +9323,20 @@ def decrypt_evidence_bytes(evidence, actor, *, application=None):
     if context_application is None:
         record_evidence_access_denied(evidence, actor, application=application, reason="unauthorized")
         raise ValueError("You cannot access this evidence item.")
+    if (
+        actor.role == RecruitmentUser.Role.HRMPSB_MEMBER
+        and evidence.artifact_type in HRMPSB_RESTRICTED_ARTIFACT_TYPES
+    ):
+        # Blind review: the panel's pages show candidate codes only, but these files
+        # are the applicant's own papers (or exam sheets) and carry the name. No panel
+        # page links them; this closes the guessed-URL route as well.
+        record_evidence_access_denied(
+            evidence,
+            actor,
+            application=application,
+            reason="applicant_file_restricted_for_hrmpsb",
+        )
+        raise ValueError("HRMPSB members review candidates blind and cannot open this file.")
     plaintext = _decrypt_evidence_bytes(evidence)
     record_audit_event(
         application=context_application,
@@ -10446,6 +10546,7 @@ def _close_car_item_as_non_selected(
 
 
 @transaction.atomic
+@locks_workflow_row("vacancy_of_application")
 def record_no_appointment(application, actor, reason):
     reason = (reason or "").strip()
     if not reason:
@@ -10495,6 +10596,7 @@ def record_no_appointment(application, actor, reason):
 
 
 @transaction.atomic
+@locks_workflow_row("vacancy_of_application")
 def record_final_selection(application, actor, cleaned_data):
     if application.branch != PositionPosting.Branch.PLANTILLA:
         raise ValueError("CAR-based final selection is only available for Plantilla vacancies.")
@@ -11368,6 +11470,7 @@ def record_final_decision(application, actor, cleaned_data):
 
 
 @transaction.atomic
+@locks_workflow_row("case")
 def close_recruitment_case(application, actor, closure_notes):
     if not hasattr(application, "case"):
         raise ValueError("A case must exist before it can be closed.")

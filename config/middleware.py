@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import time
 
 from django.conf import settings
@@ -9,6 +10,8 @@ from django.middleware.locale import LocaleMiddleware
 from django.utils import translation
 
 from config.client_ip import get_client_ip
+
+logger = logging.getLogger(__name__)
 
 PASSIVE_SESSION_REQUEST_ATTR = "_rg_passive_session_request"
 
@@ -183,3 +186,43 @@ class RateLimitMiddleware:
         raw_key = f"{rule_name}:{client_ip}:{browser_id}:{window}"
         digest = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
         return f"recruitguard:rate-limit:{digest}"
+
+
+class WorkflowConflictMiddleware:
+    """A database conflict on an internal form post (two people saving the same step at
+    the same moment) becomes a plain message and a fresh page instead of an error page.
+    The transaction has already rolled back, so nothing half-saved remains."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        return self.get_response(request)
+
+    def process_exception(self, request, exception):
+        from django.contrib import messages
+        from django.db import IntegrityError
+        from django.http import HttpResponseRedirect
+        from django.utils.http import url_has_allowed_host_and_scheme
+        from urllib.parse import urlsplit
+
+        if not isinstance(exception, IntegrityError):
+            return None
+        if request.method != "POST" or not request.path.startswith("/internal/"):
+            return None
+        logger.warning("Workflow conflict on %s: %s", request.path, exception)
+        messages.warning(
+            request,
+            "Someone else saved this step at the same moment, so your change was not "
+            "applied. The page now shows the latest version.",
+        )
+        referer = request.META.get("HTTP_REFERER", "")
+        if referer and url_has_allowed_host_and_scheme(
+            referer, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+        ):
+            parts = urlsplit(referer)
+            target = parts.path + (f"?{parts.query}" if parts.query else "")
+        else:
+            target = "/internal/"
+        return HttpResponseRedirect(target)
+

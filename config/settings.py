@@ -74,6 +74,7 @@ MIDDLEWARE = [
     "recruitment.request_context.AuditRequestContextMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "config.middleware.WorkflowConflictMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"

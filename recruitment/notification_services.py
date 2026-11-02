@@ -503,9 +503,8 @@ def _build_interview_session_scheduled_notification(application, interview_sessi
         f"Dear {recipient_name},",
         "",
         "An interview session has been scheduled and is ready for panel rating.",
-        f"Candidate: {application.candidate_code_label} — {application.applicant_display_name}",
+        f"Candidate: {_panel_candidate_line(application, recipient)}",
         f"Position: {application.position.title}",
-        f"Case Reference: {application.reference_number}",
         f"Schedule: {_format_schedule(interview_session.scheduled_for)}",
         f"Location / medium: {interview_session.location}",
     ]
@@ -843,6 +842,10 @@ def queue_notification(
     return notification
 
 
+RESEND_REPEAT_WINDOW = timedelta(minutes=1)
+
+
+@transaction.atomic
 def resend_notification(notification_log, actor):
     """RD-9: re-deliver a previously queued applicant email, verbatim.
 
@@ -869,6 +872,17 @@ def resend_notification(notification_log, actor):
                 "This schedule has already passed, so its notice can't be sent again. "
                 "Schedule a new date if the applicant still needs to attend."
             )
+    # A double click used to queue two copies. Lock the email being resent so a second,
+    # simultaneous click waits, then sees the copy the first one queued.
+    NotificationLog.objects.select_for_update().filter(pk=notification_log.pk).exists()
+    if NotificationLog.objects.filter(
+        metadata__resent_from=notification_log.pk,
+        created_at__gte=timezone.now() - RESEND_REPEAT_WINDOW,
+    ).exists():
+        raise ValueError(
+            f"{notification_log.get_notification_type_display()} was just sent again. "
+            "Check its status in the list before sending another copy."
+        )
     application = notification_log.application
     recipient_email = (
         (_recipient_email(application) or "").strip().lower()
@@ -1153,6 +1167,17 @@ def queue_vacancy_cancellation_notification(application, actor=None, reason=""):
     )
 
 
+def _panel_candidate_line(application, recipient):
+    """How a candidate is named in an email to this recipient. The HRMPSB panel reviews
+    blind (REV-B): its pages show only the candidate code, and so must its email."""
+    if is_blind_viewer(recipient):
+        return application.candidate_code_label
+    return (
+        f"{application.candidate_code_label} — {application.applicant_display_name}"
+        f" ({application.reference_number})"
+    )
+
+
 def _build_interview_batch_panel_digest(posting, applications, interview_session, recipient):
     """WF-14: one digest per panel member per batch scheduling action — the whole pool
     shares the date/venue, so one email lists every candidate instead of N copies."""
@@ -1172,10 +1197,7 @@ def _build_interview_batch_panel_digest(posting, applications, interview_session
         "Candidates:",
     ]
     for application in applications:
-        lines.append(
-            f"- {application.candidate_code_label} — {application.applicant_display_name}"
-            f" ({application.reference_number})"
-        )
+        lines.append(f"- {_panel_candidate_line(application, recipient)}")
     if interview_session.session_notes:
         lines.extend(["", "Session notes:", interview_session.session_notes.strip()])
     lines.extend(
@@ -1223,6 +1245,17 @@ def queue_interview_batch_panel_digest_notifications(
                     "candidate_references": [
                         application.reference_number for application in applications
                     ],
+                    "candidate_labels": [
+                        _panel_candidate_line(application, recipient)
+                        for application in applications
+                    ],
+                    "position_title": posting.title,
+                    "scheduled_for": interview_session.scheduled_for.isoformat(),
+                    "schedule_display": _format_schedule(interview_session.scheduled_for),
+                    "location": interview_session.location,
+                    "session_notes": (interview_session.session_notes or "").strip(),
+                    "recipient_user_id": recipient.id,
+                    "recipient_role": recipient.role,
                 },
             )
         )
@@ -1260,7 +1293,7 @@ def queue_interview_session_scheduled_notifications(
                     "schedule_display": _format_schedule(interview_session.scheduled_for),
                     "location": interview_session.location,
                     "session_notes": (interview_session.session_notes or "").strip(),
-                    "applicant_name": application.applicant_display_name,
+                    "candidate_labels": [_panel_candidate_line(application, recipient)],
                     "position_title": application.position.title,
                     "recipient_user_id": recipient.id,
                     "recipient_role": recipient.role,

@@ -8,7 +8,7 @@ import urllib.parse
 import uuid
 import zipfile
 from decimal import ROUND_HALF_UP, Decimal
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta, timezone as dt_timezone
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -9912,8 +9912,10 @@ class VacancyBatchInterviewTests(BaseRecruitmentTestCase):
         )
         for log in panel_logs:
             self.assertIn("2 candidates", log.subject)
-            self.assertIn(first.applicant_display_name, log.body)
-            self.assertIn(second.applicant_display_name, log.body)
+            # Blind review (REV-B): the panel's email lists candidate codes, never names.
+            self.assertIn(first.candidate_code_label, log.body)
+            self.assertIn(second.candidate_code_label, log.body)
+            self.assertNotIn(first.applicant_display_name, log.body)
 
         applicant_notices = NotificationLog.objects.filter(
             notification_type=NotificationLog.NotificationType.APPLICANT_INTERVIEW_NOTICE,
@@ -22822,3 +22824,219 @@ class SecretariatImprovementsTests(BaseRecruitmentTestCase):
         )
         self.assertFalse(form.is_valid())
         self.assertEqual(len(form.errors["intake_mode"]), 1)
+
+
+class SecretariatRoundATests(BaseRecruitmentTestCase):
+    """Round A from docs/secretariat-final-review-2026-11.md (F1-F6)."""
+
+    _submit = BatchExamTests._submit
+    _extra_submitted_application = BatchExamTests._extra_submitted_application
+    _two_qualified = BatchExamTests._two_qualified
+    _schedule_payload = BatchExamTests._schedule_payload
+
+    def _staff_client(self, user):
+        client = Client()
+        self.force_login_with_mfa(client, user)
+        return client
+
+    def _batch_exam_scores(self, applications, general, technical, operation="save_scores"):
+        data = {"operation": operation}
+        for application in applications:
+            data[f"general_score_{application.case.id}"] = general
+            data[f"technical_score_{application.case.id}"] = technical
+        return data
+
+    # F2: a draft score is held to the same 0-100 rule as a final one
+    def test_batch_exam_draft_scores_outside_0_to_100_are_refused(self):
+        first, second = self._two_qualified(self.level1_position)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(self.level1_position, self.secretariat, self._schedule_payload())
+        client = self._staff_client(self.secretariat)
+        url = reverse("vacancy-batch-exam", args=[self.level1_position.pk])
+        for bad in ("101", "-1"):
+            response = client.post(url, self._batch_exam_scores([first, second], bad, "80"), follow=True)
+            self.assertContains(response, "General Ability score must be between 0 and 100", msg_prefix=bad)
+        self.assertFalse(ExamRecord.objects.filter(application__in=[first, second]).exists())
+
+    def test_batch_exam_non_numeric_score_is_a_message_not_a_crash(self):
+        first, second = self._two_qualified(self.level1_position)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(self.level1_position, self.secretariat, self._schedule_payload())
+        client = self._staff_client(self.secretariat)
+        url = reverse("vacancy-batch-exam", args=[self.level1_position.pk])
+        response = client.post(url, self._batch_exam_scores([first, second], "abc", "80"), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "General Ability score must be a number from 0 to 100")
+        self.assertFalse(ExamRecord.objects.filter(application__in=[first, second]).exists())
+
+    # F3: the exam date is the Manila calendar day of the sitting
+    def test_batch_exam_date_is_the_local_day_of_an_early_sitting(self):
+        first, second = self._two_qualified(self.level1_position)
+        tomorrow = timezone.localdate() + timedelta(days=1)
+        # 07:00 in Manila is 23:00 the previous day in UTC.
+        early = timezone.make_aware(datetime.combine(tomorrow, time(7, 0)))
+        self.assertNotEqual(early.astimezone(dt_timezone.utc).date(), tomorrow)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(
+                self.level1_position,
+                self.secretariat,
+                dict(self._schedule_payload(), scheduled_for=early),
+            )
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_scores(
+                self.level1_position,
+                self.secretariat,
+                {
+                    first.case.id: {"general_score": "90", "technical_score": "80"},
+                    second.case.id: {"general_score": "85", "technical_score": "75"},
+                },
+                finalize=True,
+            )
+        for application in (first, second):
+            record = ExamRecord.objects.get(application=application)
+            self.assertEqual(record.exam_date, tomorrow)
+
+    # F4: a simultaneous second save is a plain message, not an error page
+    def test_a_conflicting_save_is_reported_not_crashed(self):
+        from django.db import IntegrityError
+
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        client = self._staff_client(self.secretariat)
+        case_url = reverse("application-detail", args=[application.pk])
+        data = {"operation": "finalize", "qualification_outcome": "qualified", "screening_notes": "", "completeness_notes": ""}
+        data.update(self.screening_document_status_payload(application))
+        with patch(
+            "recruitment.views.save_screening_review",
+            side_effect=IntegrityError("duplicate key value violates unique constraint"),
+        ):
+            response = client.post(
+                reverse("screening-review", args=[application.pk]),
+                data,
+                HTTP_REFERER=f"http://testserver{case_url}",
+            )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], case_url)
+        page = client.get(case_url)
+        self.assertContains(page, "Someone else saved this step at the same moment")
+
+    def test_workflow_transitions_lock_their_rows_first(self):
+        from recruitment import services
+
+        for name in (
+            "save_screening_review",
+            "return_screening_documents_to_applicant",
+            "save_exam_record",
+            "save_vacancy_exam_schedule",
+            "save_vacancy_exam_scores",
+            "save_interview_session",
+            "save_vacancy_interview_schedule",
+            "finalize_vacancy_interview_batch",
+            "generate_comparative_assessment_report",
+            "record_final_selection",
+            "record_no_appointment",
+            "save_completion_tracking",
+            "close_recruitment_case",
+        ):
+            with self.subTest(name=name):
+                self.assertTrue(
+                    getattr(getattr(services, name), "locks_workflow_row", False),
+                    f"{name} must take its row lock before reading state",
+                )
+
+    # F5: a double click on "Send again" sends one email
+    def test_send_again_twice_in_a_row_queues_one_email(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(application, self.applicant)
+        original = NotificationLog.objects.filter(
+            application=application,
+            notification_type=NotificationLog.NotificationType.SUBMISSION_ACKNOWLEDGMENT,
+        ).first()
+        client = self._staff_client(self.secretariat)
+        url = reverse("notification-resend", args=[application.pk, original.pk])
+        with self.captureOnCommitCallbacks(execute=True):
+            client.post(url)
+        with self.captureOnCommitCallbacks(execute=True):
+            second = client.post(url, follow=True)
+        resent = NotificationLog.objects.filter(
+            application=application, metadata__resent_from=original.pk
+        )
+        self.assertEqual(resent.count(), 1)
+        self.assertContains(second, "was just sent again")
+
+    # F6: the panel's interview email is blind like its pages
+    def test_panel_interview_email_shows_candidate_codes_not_names(self):
+        from recruitment.notification_services import _render_notification_html
+
+        first, second = self._two_qualified(self.level1_position)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(self.level1_position, self.secretariat, self._schedule_payload())
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_scores(
+                self.level1_position,
+                self.secretariat,
+                {
+                    first.case.id: {"general_score": "90", "technical_score": "80"},
+                    second.case.id: {"general_score": "85", "technical_score": "75"},
+                },
+                finalize=True,
+            )
+        first.refresh_from_db()
+        second.refresh_from_db()
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_interview_schedule(
+                self.level1_position,
+                self.secretariat,
+                {
+                    "scheduled_for": timezone.now() + timedelta(days=2),
+                    "location": "HRMPSB Board Room",
+                    "session_notes": "",
+                },
+            )
+        panel_logs = NotificationLog.objects.filter(
+            notification_type=NotificationLog.NotificationType.INTERVIEW_SESSION_SCHEDULED,
+            application__position=self.level1_position,
+        )
+        self.assertTrue(panel_logs.exists())
+        for log in panel_logs:
+            html = _render_notification_html(log)
+            for text in (log.subject, log.body, html):
+                for application in (first, second):
+                    self.assertNotIn(application.applicant_display_name, text)
+                    self.assertNotIn(application.applicant_first_name, text)
+                    self.assertNotIn(application.reference_number, text)
+            for application in (first, second):
+                self.assertIn(application.candidate_code_label, log.body)
+                self.assertIn(application.candidate_code_label, html)
+            self.assertIn("HRMPSB Board Room", html)
+
+    # F1: the panel reviews blind, so no file that carries the applicant's name
+    def test_hrmpsb_member_cannot_download_applicant_documents(self):
+        application = self.make_application(self.level1_position)
+        self.move_application_to_hrmpsb_review(application)
+        document = application.evidence_items.filter(
+            artifact_type="applicant_document", is_current_version=True
+        ).first()
+        url = reverse("evidence-download", args=[application.pk, document.pk])
+
+        response = self._staff_client(self.hrmpsb).get(url)
+
+        self.assertEqual(response.status_code, 403)
+        denial = AuditLog.objects.get(
+            actor=self.hrmpsb,
+            action=AuditLog.Action.EVIDENCE_ACCESS_DENIED,
+            metadata__evidence_id=document.id,
+        )
+        self.assertEqual(denial.metadata["reason"], "applicant_file_restricted_for_hrmpsb")
+        self.assertFalse(
+            AuditLog.objects.filter(
+                actor=self.hrmpsb,
+                action=AuditLog.Action.EVIDENCE_DOWNLOADED,
+                metadata__evidence_id=document.id,
+            ).exists()
+        )
+        # The Secretariat, who screened it, still can.
+        self.assertEqual(self._staff_client(self.secretariat).get(url).status_code, 200)
