@@ -11,12 +11,6 @@ from django.views import View
 from django.views.generic import DetailView
 
 from ..forms import (
-    CaseClosureForm,
-    CompletionRequirementFormSet,
-    CompletionTrackingForm,
-    EvidenceUploadForm,
-    FinalSelectionForm,
-    NoAppointmentForm,
     ApplicationWithdrawalForm,
     ApplicantContactUpdateForm,
     ResubmissionDeadlineExtensionForm,
@@ -24,39 +18,36 @@ from ..forms import (
     WorkflowOverrideForm,
     WorkflowReopenForm,
 )
-from ..models import (
-    CompletionRecord,
-    RecruitmentApplication,
-    RecruitmentCase,
-)
+from ..models import RecruitmentApplication, RecruitmentCase
 from ..permissions import (
     InternalUserRequiredMixin,
     WorkflowProcessorRequiredMixin,
 )
 from ..services import (
     COMPLETION_HANDOFF_MESSAGE,
-    FINAL_SELECTION_OUT_OF_CONTENTION_STATUSES,
     record_application_withdrawal,
     extend_document_resubmission_deadline,
     update_applicant_contact,
     user_can_extend_resubmission_deadline,
     user_can_record_withdrawal,
     user_can_update_applicant_contact,
-    final_selection_recommended_case_ids,
     get_screening_record,
     grant_secretariat_override,
     process_workflow_action,
     record_protected_record_access,
     reopen_recruitment_case,
-    user_can_close_case,
-    user_can_manage_completion,
     user_can_process_application,
-    user_can_record_final_selection,
-    user_can_record_no_appointment,
-    user_can_upload_evidence,
     user_can_view_application,
 )
-from . import case_car, case_exam, case_interview, case_screening, case_shared
+from . import (
+    case_car,
+    case_completion,
+    case_decision,
+    case_exam,
+    case_interview,
+    case_screening,
+    case_shared,
+)
 from .common import _format_form_errors
 
 
@@ -68,6 +59,8 @@ SECTION_BUILDERS = {
     "interview": case_interview.build,
     "deliberation": case_car.build,
     "car": case_car.build,
+    "decision": case_decision.build,
+    "completion": case_completion.build,
 }
 
 
@@ -103,49 +96,6 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
         builder = SECTION_BUILDERS.get(context["current_detail_tab"]["key"])
         if builder:
             context.update(builder(context, self.request, application))
-        # Round H2: decision and completion are still built here for every step; round H3
-        # moves them into their own builders.
-        if user_can_upload_evidence(user, application):
-            context["evidence_form"] = EvidenceUploadForm()
-        if user_can_record_final_selection(user, application):
-            report = context["current_comparative_assessment_report"]
-            selection_items = list(context["current_comparative_assessment_report_items"])
-            recommended_case_ids = final_selection_recommended_case_ids(report)
-            for item in selection_items:
-                item.is_out_of_contention = (
-                    item.application.status
-                    in FINAL_SELECTION_OUT_OF_CONTENTION_STATUSES
-                )
-                item.is_selection_recommended = (
-                    not report.recommends_none
-                    and (
-                        not recommended_case_ids
-                        or item.recruitment_case_id in recommended_case_ids
-                    )
-                )
-            context["final_selection_report"] = report
-            context["final_selection_items"] = selection_items
-            context["final_selection_form"] = FinalSelectionForm(report=report)
-            if user_can_record_no_appointment(user, application):
-                context["no_appointment_form"] = NoAppointmentForm()
-        if user_can_manage_completion(user, application):
-            completion_record = context["completion_record"]
-            requirement_instance = completion_record or CompletionRecord(
-                application=application,
-                recruitment_case=application.case,
-                tracked_by=user,
-            )
-            context["completion_form"] = CompletionTrackingForm(
-                instance=completion_record,
-                application=application,
-                actor=user,
-            )
-            context["completion_requirement_formset"] = CompletionRequirementFormSet(
-                instance=requirement_instance,
-                prefix="completion_requirements",
-            )
-        if user_can_close_case(user, application):
-            context["closure_form"] = CaseClosureForm()
         record_protected_record_access(
             application=application,
             actor=user,

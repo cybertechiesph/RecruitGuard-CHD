@@ -5,7 +5,7 @@ The last piece of the F15 restructure: `ApplicationDetailView.get_context_data` 
 on every visit, whichever step the page is on. This round splits it into a shared part and one
 builder per step. **Nothing changes for the office**: the page renders exactly the same HTML.
 
-## Status: H1 done (shared + screening + exam), H2 done (interview + CAR/deliberation); H3–H4 to do
+## Status: H1 done (shared + screening + exam), H2 done (interview + CAR/deliberation), H3 done (decision + completion; inline remainder gone); H4 to do
 
 ## 1. What the page does today
 

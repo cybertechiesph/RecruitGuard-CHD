@@ -259,9 +259,6 @@ def build(application, user):
     context["car_filing_copy_available"] = user_can_generate_entry_car_filing_copy(
         user, application.position
     )
-    context["evidence_items"] = []
-    context["can_archive_evidence"] = False
-    context["evidence_vault_url"] = ""
     context["submission_packet"] = (
         build_submission_packet(application) if context["recruitment_case"] else {}
     )
