@@ -267,10 +267,33 @@ class WorkflowMapTests(SimpleTestCase):
 
 class ViewsPackageArchitectureTests(SimpleTestCase):
     """F15 round 6: recruitment/views/ is split by area. Modules lean only on `common` and the
-    case page in `case`, which keeps the package free of import cycles."""
+    case page in `case`, which keeps the package free of import cycles. Round H: the case page
+    is built from `case_shared` and one `case_<step>` module per step, which lean only on
+    `common`."""
 
     package_dir = Path(__file__).resolve().parent.parent / "views"
-    allowed = {"common": set(), "case": {"common"}}
+    case_parts = {"case_shared", "case_screening", "case_exam"}
+    allowed = {"common": set(), "case": {"common"} | case_parts}
+
+    def _allowed_for(self, module):
+        if module in self.case_parts:
+            return {"common"}
+        return self.allowed.get(module, {"common", "case"})
+
+    def _sibling_imports(self, tree):
+        siblings = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.level == 1:
+                if node.module:
+                    siblings.add(node.module)
+                else:
+                    # `from . import case_shared` names the sibling in the alias.
+                    siblings.update(alias.name for alias in node.names)
+        return siblings
+
+    def test_every_case_module_is_listed(self):
+        on_disk = {path.stem for path in self.package_dir.glob("case_*.py")}
+        self.assertEqual(on_disk, self.case_parts)
 
     def test_every_public_name_is_still_importable_from_the_package(self):
         from recruitment import views
@@ -283,10 +306,6 @@ class ViewsPackageArchitectureTests(SimpleTestCase):
         for path in sorted(self.package_dir.glob("*.py")):
             if path.name == "__init__.py":
                 continue
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-            siblings = {
-                node.module for node in ast.walk(tree)
-                if isinstance(node, ast.ImportFrom) and node.level == 1 and node.module
-            }
+            siblings = self._sibling_imports(ast.parse(path.read_text(encoding="utf-8")))
             with self.subTest(module=path.stem):
-                self.assertLessEqual(siblings, self.allowed.get(path.stem, {"common", "case"}))
+                self.assertLessEqual(siblings, self._allowed_for(path.stem))

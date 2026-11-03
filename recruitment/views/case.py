@@ -10,7 +10,6 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
-from django.utils import timezone
 from django.views import View
 from django.views.generic import DetailView
 
@@ -20,24 +19,15 @@ from ..forms import (
     CompletionRequirementFormSet,
     CompletionTrackingForm,
     DeliberationRecordForm,
-    ExamRecordForm,
-    ExamScheduleForm,
     EvidenceUploadForm,
     FinalSelectionForm,
     NoAppointmentForm,
     InterviewFallbackUploadForm,
     InterviewRatingForm,
     InterviewSessionForm,
-    ReminderNotificationForm,
     SimpleInterviewRatingForm,
-    RequirementChecklistNotificationForm,
-    ScreeningReviewForm,
     ApplicationWithdrawalForm,
     ApplicantContactUpdateForm,
-    CosVacancyDeliberationRescindForm,
-    FinalSelectionRescindForm,
-    AttendanceAbsenceDecisionForm,
-    AttendanceLetterOfIntentForm,
     InterviewAbsenceForm,
     ResubmissionDeadlineExtensionForm,
     WorkflowActionForm,
@@ -46,92 +36,37 @@ from ..forms import (
 )
 from ..models import (
     CompletionRecord,
-    CompletionRequirement,
     PositionPosting,
     RecruitmentApplication,
     RecruitmentCase,
     RecruitmentUser,
-    ScreeningDocumentReview,
-    ScreeningRecord,
-    StageRecordVersion,
-)
-from ..notification_services import (
-    INTERNAL_AUDIENCE_NOTIFICATION_TYPES,
-    NOTIFICATION_MANAGER_ROLES,
-    user_can_send_reminder_notification,
-    user_can_send_requirement_checklist_notification,
 )
 from ..permissions import (
     InternalUserRequiredMixin,
     WorkflowProcessorRequiredMixin,
-    WORKFLOW_PROCESSOR_ROLES,
 )
 from ..services import (
     COMPLETION_HANDOFF_MESSAGE,
-    COS_EARLIER_ROUND_RESCIND_MESSAGE,
     FINAL_SELECTION_OUT_OF_CONTENTION_STATUSES,
     application_awaiting_car_preparation,
     application_has_finalized_applicant_pool,
     application_requires_finalized_applicant_pool,
     plantilla_car_preparer_role_label,
-    build_submission_packet,
-    cos_pick_is_from_latest_selection_round,
-    get_application_detail_tab,
-    get_applicant_document_review_items,
-    get_comparative_assessment_report,
-    get_comparative_assessment_report_items_for_report,
     get_comparative_assessment_readiness,
     get_current_workflow_section,
-    get_completion_record,
-    get_completion_requirements,
-    ETE_COMPONENT_WEIGHTS_BY_BRANCH,
-    user_can_generate_entry_car_filing_copy,
-    get_attendance_exceptions,
     get_car_candidate_fact_rows,
-    get_cos_pick_for_case,
-    get_rescinded_cos_picks_for_case,
-    get_interview_fallback_ratings,
-    get_stage_record_correction,
-    get_stage_record_versions,
-    get_pending_attendance_exception,
     interview_fallback_panel_queryset,
     record_application_withdrawal,
     extend_document_resubmission_deadline,
-    rescind_cutoff_block_message,
     update_applicant_contact,
     user_can_extend_resubmission_deadline,
-    user_can_manage_attendance_exception,
     user_can_record_withdrawal,
     user_can_update_applicant_contact,
-    user_can_rescind_cos_vacancy_deliberation,
-    user_can_rescind_final_selection,
-    get_final_selection_history,
     final_selection_recommended_case_ids,
     user_can_follow_level_two_case,
     get_cos_round_pick_for_case,
-    case_is_on_loan,
-    get_deliberation_record,
-    get_deliberation_records,
-    get_exam_record,
-    get_exam_schedule,
-    get_notified_exam_sitting,
-    get_exam_records,
-    get_final_decision_history,
-    get_final_selection_for_application,
     get_applicant_pool_finalization_block_message,
-    get_interview_fallback_evidence,
-    get_interview_rating_for_user,
-    get_interview_ratings,
-    get_interview_session,
-    get_interview_sessions,
-    get_latest_final_decision,
-    _completion_handler_role,
-    get_latest_finalized_comparative_assessment_report,
-    get_available_actions,
-    get_case_timeline,
     get_screening_record,
-    get_screening_records,
-    get_queue_for_user,
     grant_secretariat_override,
     process_workflow_action,
     record_protected_record_access,
@@ -141,25 +76,29 @@ from ..services import (
     user_can_manage_comparative_assessment_report,
     user_can_manage_deliberation,
     user_can_manage_completion,
-    user_can_export_application,
-    user_can_manage_exam,
     user_can_manage_interview_rating,
     interview_scoring_is_open,
     scoring_opens_message,
     get_published_competency_rating_template,
     user_can_manage_interview_session,
-    user_can_manage_screening,
     user_can_process_application,
-    vacancy_screening_batch_block_message,
     user_can_record_final_selection,
     user_can_record_no_appointment,
-    user_can_reopen_case,
     user_can_upload_interview_fallback,
     user_can_upload_evidence,
     user_can_view_application,
     user_is_interview_rating_support_encoder,
 )
+from . import case_exam, case_screening, case_shared
 from .common import _format_form_errors
+
+
+# The case page shows one workflow step at a time; each step's forms and flags come from
+# its own module.
+SECTION_BUILDERS = {
+    "screening": case_screening.build,
+    "exam": case_exam.build,
+}
 
 
 def _render_application_detail_with_overrides(request, application, **overrides):
@@ -188,191 +127,22 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
         context = super().get_context_data(**kwargs)
         application = context["application"]
         user = self.request.user
-        context["audit_log_url"] = ""
-        context["recruitment_case"] = getattr(application, "case", None)
-        context["current_detail_tab"] = get_application_detail_tab(application)
-        context["case_timeline"] = get_case_timeline(application) if context["recruitment_case"] else []
-        context["routing_history"] = application.routing_history.select_related("actor", "recruitment_case")
-        context["notification_history"] = application.notifications.select_related(
-            "triggered_by",
-            "recruitment_case",
-        )
-        context["completion_record"] = get_completion_record(application)
-        context["completion_requirements"] = get_completion_requirements(application)
-        context["screening_records"] = get_screening_records(application)
-        context["current_screening_record"] = get_screening_record(application)
-        _screening_record = context["current_screening_record"]
-        if _screening_record is not None:
-            _reviews = list(_screening_record.document_reviews.all())
-            context["screening_flagged_count"] = sum(
-                1 for r in _reviews
-                if r.status == ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
-            )
-            context["screening_not_submitted_count"] = sum(
-                1 for r in _reviews
-                if r.status == ScreeningDocumentReview.ReviewStatus.NOT_SUBMITTED
-            )
-        context["applicant_document_review_items"] = get_applicant_document_review_items(application)
-        context["exam_records"] = get_exam_records(application)
-        context["current_exam_record"] = get_exam_record(application)
-        # F7: at the interview the current stage has no screening/exam of its own; the card
-        # shows the latest finalized ones from the earlier stage.
-        context["earlier_screening_record"] = (
-            application.screening_records.filter(is_finalized=True).order_by("-finalized_at", "-id").first()
-        )
-        context["earlier_exam_record"] = (
-            application.exam_records.filter(is_finalized=True).order_by("-finalized_at", "-id").first()
-        )
-        context["interview_sessions"] = get_interview_sessions(application)
-        context["current_interview_session"] = get_interview_session(application)
-        context["current_interview_ratings"] = get_interview_ratings(application)
-        context["current_interview_fallback_evidence"] = get_interview_fallback_evidence(application)
-        # SL-03: the encoded paper ratings — the rows that actually count toward the quorum
-        # and the interview average. The evidence list above is the retained scans.
-        context["current_interview_fallback_ratings"] = (
-            get_interview_fallback_ratings(context["current_interview_session"])
-            if context["current_interview_session"]
-            else []
-        )
-        # SL-12: when a reopen unlocked a finalized record for correction, say so on the
-        # section being corrected. Editing a decision that is already on file without any
-        # sign that it is a correction is how a second answer quietly becomes the first.
-        context["screening_correction"] = get_stage_record_correction(
-            context["current_screening_record"], StageRecordVersion.RecordType.SCREENING
-        )
-        context["exam_correction"] = get_stage_record_correction(
-            context["current_exam_record"], StageRecordVersion.RecordType.EXAM
-        )
-        context["interview_correction"] = get_stage_record_correction(
-            context["current_interview_session"], StageRecordVersion.RecordType.INTERVIEW
-        )
-        context["stage_record_versions"] = list(get_stage_record_versions(application))
-        # SL-06: a recorded absence waiting on the office's reschedule-or-terminal decision.
-        pending_absence = get_pending_attendance_exception(application)
-        context["attendance_exceptions"] = get_attendance_exceptions(application)
-        context["pending_attendance_exception"] = pending_absence
-        if pending_absence and user_can_manage_attendance_exception(user, pending_absence):
-            context["attendance_letter_form"] = AttendanceLetterOfIntentForm()
-            context["attendance_decision_form"] = AttendanceAbsenceDecisionForm()
-        if user_can_extend_resubmission_deadline(user, application):
-            screening_record = context["current_screening_record"]
-            context["resubmission_deadline_extension_form"] = (
-                ResubmissionDeadlineExtensionForm(
-                    current_deadline=screening_record.resubmission_deadline
-                )
-            )
-        # SL-10: a neutral exit from an active competition, available at every pre-selection
-        # stage to whoever the case is assigned to.
-        if user_can_record_withdrawal(user, application):
-            initial = {}
-            if application.withdrawal_requested_at:
-                requested_on = timezone.localtime(application.withdrawal_requested_at)
-                initial["reason"] = (
-                    f"The applicant asked to withdraw through the applicant portal on "
-                    f"{requested_on:%B %d, %Y %I:%M %p}."
-                    + (f" Reason given: {application.withdrawal_request_reason}" if application.withdrawal_request_reason else "")
-                )
-            context["withdrawal_form"] = ApplicationWithdrawalForm(initial=initial)
-        if user_can_update_applicant_contact(user, application):
-            context["applicant_contact_form"] = ApplicantContactUpdateForm(
-                application=application
-            )
-        # SL-14: a recorded selection is strongly controlled but no longer a one-way door.
-        if application.branch == PositionPosting.Branch.PLANTILLA:
-            context["final_selection_history"] = get_final_selection_history(
-                application.position
-            )
-            final_selection = get_final_selection_for_application(application)
-            if user_can_rescind_final_selection(user, final_selection):
-                context["final_selection_rescind_form"] = FinalSelectionRescindForm()
-            elif (
-                final_selection is not None
-                and user.role == RecruitmentUser.Role.APPOINTING_AUTHORITY
-                and rescind_cutoff_block_message(final_selection.selected_application)
-            ):
-                context["final_selection_rescind_unavailable_message"] = (
-                    rescind_cutoff_block_message(final_selection.selected_application)
-                )
-        else:
-            # SL-14 (COS): the same correction, on the record that carries the COS decision
-            # — SL-01 made the finalized deliberation pick the selection itself.
-            cos_pick = get_cos_pick_for_case(getattr(application, "case", None))
-            context["cos_rescinded_picks"] = get_rescinded_cos_picks_for_case(
-                getattr(application, "case", None)
-            )
-            if user_can_rescind_cos_vacancy_deliberation(
-                user, cos_pick
-            ):
-                context["cos_pick_rescind_form"] = CosVacancyDeliberationRescindForm()
-            elif (
-                cos_pick is not None
-                and user.role == RecruitmentUser.Role.HRM_CHIEF
-                and rescind_cutoff_block_message(cos_pick.chosen_case.application)
-            ):
-                context["cos_pick_rescind_unavailable_message"] = (
-                    rescind_cutoff_block_message(cos_pick.chosen_case.application)
-                )
-            elif (
-                cos_pick is not None
-                and user.role == RecruitmentUser.Role.HRM_CHIEF
-                and not cos_pick_is_from_latest_selection_round(cos_pick)
-            ):
-                context["cos_pick_rescind_unavailable_message"] = (
-                    COS_EARLIER_ROUND_RESCIND_MESSAGE
-                )
-        context["current_user_interview_rating"] = get_interview_rating_for_user(application, user)
+        context.update(case_shared.build(application, user))
+        # Round H: the step on screen adds its own keys; the other steps' keys are never
+        # computed (the page shows one step at a time).
+        builder = SECTION_BUILDERS.get(context["current_detail_tab"]["key"])
+        if builder:
+            context.update(builder(context, self.request, application))
+        # Round H1: interview, CAR/deliberation, decision and completion are still built here
+        # for every step; rounds H2 and H3 move them into their own builders.
         context["interview_rating_is_support_encoding"] = user_is_interview_rating_support_encoder(
             user,
             application,
         )
-        context["deliberation_records"] = get_deliberation_records(application)
-        context["current_deliberation_record"] = get_deliberation_record(application)
-        context["current_comparative_assessment_report"] = get_comparative_assessment_report(application)
-        if not context["current_comparative_assessment_report"]:
-            context["current_comparative_assessment_report"] = (
-                get_latest_finalized_comparative_assessment_report(application)
-            )
-        comparative_assessment_items = list(
-            get_comparative_assessment_report_items_for_report(
-                context["current_comparative_assessment_report"]
-            )
-        )
-        for item in comparative_assessment_items:
-            # REV-B: CAR surfaces are blinded — rows are identified by the
-            # per-vacancy candidate code, never by name or case number.
-            item.candidate_label = item.application.candidate_code_label
-        context["current_comparative_assessment_report_items"] = comparative_assessment_items
-        # WF-11: with ETE blank the sort fallback produces an alphabetical pseudo-ranking —
-        # suppress ordinals on the draft until every row carries a real assessment score.
-        context["car_all_rows_scored"] = bool(comparative_assessment_items) and all(
-            item.assessment_score is not None for item in comparative_assessment_items
-        )
-        # SL-00: the CAR split is per-vacancy, so every CAR surface states the split its
-        # scores were actually computed against instead of implying the office default.
-        current_car = context["current_comparative_assessment_report"]
-        context["car_weights"] = (
-            current_car.assessment_weights_for_display
-            if current_car
-            else application.position.assessment_weights_or_default
-        )
-        ete_weights = ETE_COMPONENT_WEIGHTS_BY_BRANCH.get(
-            application.branch,
-            ETE_COMPONENT_WEIGHTS_BY_BRANCH[PositionPosting.Branch.PLANTILLA],
-        )
-        context["ete_component_weight_display"] = {
-            "education": int(ete_weights[0] * 100),
-            "training": int(ete_weights[1] * 100),
-            "experience": int(ete_weights[2] * 100),
-        }
-        # N1: the named filing copy, offered wherever the preparer can still reach the case
-        # — in practice at Completion, where the appointment paperwork is assembled.
-        context["car_filing_copy_available"] = user_can_generate_entry_car_filing_copy(
-            user, application.position
-        )
         context["car_readiness"] = get_comparative_assessment_readiness(application)
         # The ETE grid lists the draft's rows; before the first draft it lists the pool,
         # so the scores can be typed first and one "Prepare draft CAR" saves and ranks.
-        car_ete_rows = comparative_assessment_items or [
+        car_ete_rows = context["current_comparative_assessment_report_items"] or [
             SimpleNamespace(
                 recruitment_case_id=pool_case.id,
                 application=pool_case.application,
@@ -394,103 +164,8 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
             "prepare_block_message",
             "",
         )
-        context["evidence_items"] = []
-        context["can_archive_evidence"] = False
-        context["evidence_vault_url"] = ""
-        context["submission_packet"] = (
-            build_submission_packet(application) if context["recruitment_case"] else {}
-        )
-        context["final_decision_history"] = get_final_decision_history(application)
-        context["latest_final_decision"] = get_latest_final_decision(application)
-        context["latest_final_selection"] = get_final_selection_for_application(application)
-        context["decision_locked_record"] = (
-            context["latest_final_decision"] or context["latest_final_selection"]
-        )
-        if application.branch == PositionPosting.Branch.COS:
-            context["decision_record_label"] = "COS Selection"
-            context["decision_actor_label"] = "HRM Chief"
-            context["decision_completion_label"] = "contract"
-        else:
-            context["decision_record_label"] = "Final Selection"
-            context["decision_actor_label"] = "Appointing Authority"
-            context["decision_completion_label"] = "appointment"
-        # AA review P2-1: who tracks completion, for the viewers who do not.
-        context["completion_handler_label"] = RecruitmentUser.Role(
-            _completion_handler_role(application)
-        ).label
         if user_can_upload_evidence(user, application):
             context["evidence_form"] = EvidenceUploadForm()
-        if user_can_manage_screening(user, application):
-            screening_record = context["current_screening_record"]
-            if screening_record and screening_record.is_finalized:
-                context["screening_locked"] = True
-            else:
-                context["screening_form"] = ScreeningReviewForm(
-                    instance=screening_record,
-                    application=application,
-                )
-        # RD-1: completeness is computed for the banner (never asked), and the
-        # flag count drives which decision the reviewer is offered.
-        if context.get("screening_form") is not None:
-            review_items = context["screening_form"].document_review_fields
-            required_items = [i for i in review_items if i["is_required_for_completeness"]]
-            flagged = [
-                i
-                for i in review_items
-                if i["field"].value()
-                == ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
-            ]
-            pending = [
-                i
-                for i in required_items
-                if i["field"].value()
-                in ScreeningRecord.COMPLETENESS_BLOCKING_DOCUMENT_STATUSES
-                or not i["field"].value()
-            ]
-            context["screening_required_count"] = len(required_items)
-            context["screening_flagged_now_count"] = len(flagged)
-            context["screening_pending_count"] = len(pending)
-            context["screening_documents_complete"] = not pending
-            # The QS the verdict is judged against, so step 2 reads as a
-            # comparison rather than a floating question.
-            context["screening_qualification_reference"] = (
-                application.position.qualification_reference or ""
-            )
-            context["screening_position_reference"] = application.position.position_reference
-        if user_can_manage_exam(user, application):
-            exam_record = context["current_exam_record"]
-            # The sitting the applicant was told about, even when it was scheduled at an
-            # earlier review stage (the HRM Chief re-checking the Secretariat's exam).
-            exam_schedule = get_notified_exam_sitting(application) or get_exam_schedule(application)
-            context["current_exam_schedule"] = exam_schedule
-            if exam_record and exam_record.is_finalized:
-                context["exam_locked"] = True
-            elif vacancy_uses_batch_exam(application.position):
-                # RD-2: one door. This vacancy's pool is scheduled, scored, and
-                # finalized together in the batch console, so the per-case screen
-                # is a read-only summary — no exam_form, no schedule form.
-                context["exam_batch_managed"] = True
-                context["exam_batch_url"] = reverse(
-                    "vacancy-batch-exam", kwargs={"pk": application.position.pk}
-                )
-            else:
-                context["exam_form"] = ExamRecordForm(
-                    instance=exam_record,
-                    application=application,
-                )
-                context["exam_schedule_form"] = ExamScheduleForm(instance=exam_schedule)
-        elif (
-            context.get("current_detail_tab", {}).get("key") == "exam"
-            and user.role in {RecruitmentUser.Role.SECRETARIAT, RecruitmentUser.Role.HRM_CHIEF}
-            # SL-04: only a batch vacancy can be waiting on its batch. A continuous COS case
-            # is never on hold for a sibling, so it must not be told that it is.
-            and vacancy_uses_batch_exam(application.position)
-        ):
-            # The case's own screening is done (section is exam) but the vacancy's exam batch is
-            # on hold because a sibling still needs a screening decision (§4.3).
-            batch_block = vacancy_screening_batch_block_message(application.position)
-            if batch_block:
-                context["exam_batch_block_message"] = batch_block
         interview_is_batch_managed = vacancy_uses_batch_exam(application.position)
         if interview_is_batch_managed:
             context["interview_batch_url"] = reverse(
@@ -649,67 +324,6 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
                 "The Comparative Assessment Report for this vacancy is being prepared by the "
                 f"{label}. You will be able to record the deliberation once the CAR is finalized."
             )
-        # UX-03 — surface the earlier review stage's finalized screening + exam results so the
-        # HRM Chief / HRMPSB re-validate against the work being checked instead of re-keying blind.
-        current_review_stage = getattr(context["recruitment_case"], "current_stage", None)
-        if (
-            current_review_stage
-            in {RecruitmentCase.Stage.HRM_CHIEF_REVIEW, RecruitmentCase.Stage.HRMPSB_REVIEW}
-            and user.role in {RecruitmentUser.Role.HRM_CHIEF, RecruitmentUser.Role.HRMPSB_MEMBER}
-        ):
-            context["prior_screening_record"] = next(
-                (
-                    record
-                    for record in reversed(list(context["screening_records"]))
-                    if record.is_finalized and record.review_stage != current_review_stage
-                ),
-                None,
-            )
-            context["prior_exam_record"] = next(
-                (
-                    record
-                    for record in reversed(list(context["exam_records"]))
-                    if record.is_finalized and record.review_stage != current_review_stage
-                ),
-                None,
-            )
-        # UX-07 — batch-aware navigation: the user's next scoped case in the same vacancy and a
-        # link back to that vacancy's batch. Stays entirely inside get_queue_for_user scoping.
-        if user.role in WORKFLOW_PROCESSOR_ROLES and getattr(application, "position_id", None):
-            scoped_batch = [
-                candidate
-                for candidate in get_queue_for_user(user)
-                if candidate.position_id == application.position_id
-            ]
-            if scoped_batch:
-                context["batch_url"] = reverse(
-                    "vacancy-batch-detail", kwargs={"pk": application.position_id}
-                )
-                others = [c for c in scoped_batch if c.pk != application.pk]
-                if not user_can_process_application(user, application):
-                    context["next_batch_case"] = others[0] if others else None
-                elif get_current_workflow_section(application) != "screening":
-                    # F11: this case's own (per-case) work is done and the rest happens as a
-                    # batch, so point at the next case that still needs screening.
-                    context["next_batch_case"] = next(
-                        (c for c in others if get_current_workflow_section(c) == "screening"),
-                        None,
-                    )
-                    context["next_batch_case_in_screening"] = context["next_batch_case"] is not None
-        if application.branch == PositionPosting.Branch.COS:
-            # SL-01: the COS selection is made once, on the deliberation console. The case's
-            # Decision surface shows that authoritative pick — it never offers a second,
-            # independent choice.
-            # SL-02: show the pick from the round THIS case was actually considered in —
-            # a candidate the pool is still holding has not been decided by anyone's round.
-            pick = get_cos_round_pick_for_case(application.case)
-            # SL-14 (COS): is_effective, not is_finalized — a rescinded pick keeps its
-            # finalization (that history is the point), so testing is_finalized here would
-            # present a voided pick as "the authoritative selection" during the exact
-            # window when the vacancy is undecided and awaiting its replacement.
-            if pick and pick.is_effective:
-                context["cos_authoritative_pick"] = pick
-                context["cos_pick_is_this_case"] = pick.chosen_case_id == application.case.id
         if user_can_record_final_selection(user, application):
             report = context["current_comparative_assessment_report"]
             selection_items = list(context["current_comparative_assessment_report_items"])
@@ -749,56 +363,6 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
             )
         if user_can_close_case(user, application):
             context["closure_form"] = CaseClosureForm()
-        if user_can_process_application(user, application):
-            available_actions = get_available_actions(application, user)
-            if available_actions:
-                context["action_form"] = WorkflowActionForm(application=application, user=user)
-                screening_record = context.get("current_screening_record")
-                if screening_record is not None:
-                    context["resubmission_document_reviews"] = list(
-                        screening_record.document_reviews.filter(
-                            status=ScreeningDocumentReview.ReviewStatus.RETURN_FOR_RESUBMISSION
-                        ).order_by("display_order", "created_at")
-                    )
-        # C4: cases are lent as a whole batch from the vacancy page; the header only says so.
-        context["case_on_loan"] = case_is_on_loan(application)
-        if context["recruitment_case"] and user_can_reopen_case(user, context["recruitment_case"]):
-            context["reopen_form"] = WorkflowReopenForm()
-        if user_can_send_requirement_checklist_notification(user, application):
-            context["checklist_notification_form"] = RequirementChecklistNotificationForm()
-            # RD-8: the dialog previews what will actually be emailed — the
-            # record's pending rows and the record's deadline (one source).
-            completion_record = context.get("completion_record")
-            context["checklist_preview_requirements"] = (
-                list(
-                    completion_record.requirements.filter(
-                        status=CompletionRequirement.RequirementStatus.PENDING
-                    ).order_by("display_order", "created_at")
-                )
-                if completion_record
-                else []
-            )
-        if user_can_send_reminder_notification(user, application):
-            reminder_initial = {}
-            completion_record = context.get("completion_record")
-            if completion_record and completion_record.deadline:
-                # RD-8: reminders default to the deadline the office tracks.
-                reminder_initial["deadline"] = completion_record.deadline
-            context["reminder_notification_form"] = ReminderNotificationForm(
-                initial=reminder_initial
-            )
-        if user.role in NOTIFICATION_MANAGER_ROLES:
-            # RD-9: delivery state visible where work happens. NOT shown to
-            # HRMPSB — the log's subjects carry applicant names (blinding).
-            # Only the emails that went to the applicant: staff notices (e.g. the panel's
-            # interview notice) belong to the case history, not to a box that offers to
-            # "Send again" to the applicant.
-            context["notification_log_entries"] = list(
-                application.notifications.select_related("triggered_by")
-                .exclude(notification_type__in=INTERNAL_AUDIENCE_NOTIFICATION_TYPES)
-                .order_by("-created_at")[:25]
-            )
-        context["can_export"] = user_can_export_application(user, application)
         record_protected_record_access(
             application=application,
             actor=user,
