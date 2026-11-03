@@ -621,8 +621,7 @@ def _assert_car_rows_are_complete(rows):
             )
     if problems:
         raise ValueError(
-            "Every candidate needs a complete score before the CAR can be finalized — "
-            "the office's own CAR sheet would show #DIV/0! here. "
+            "Every candidate needs a complete score before the CAR can be finalized. "
             + "; ".join(problems)
             + "."
         )

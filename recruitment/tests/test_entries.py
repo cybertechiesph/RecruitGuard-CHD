@@ -1190,7 +1190,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         self.assertContains(
             response,
             "The examination for this vacancy has already been scheduled. Extending the "
-            "publication would create a second cohort; cancel and re-publish instead.",
+            "publication would create a second batch; cancel and re-publish instead.",
         )
         self.level1_position.refresh_from_db()
         self.assertEqual(self.level1_position.closing_date, previous_closing_date)

@@ -7,7 +7,7 @@ This one asks a single question of every heading, button, notice, error, email a
 system: does a first-time reader understand it without a manual? Review only; nothing in the
 code was changed.
 
-## Status: review written; I1–I4 done, I5–I6 to do
+## Status: review written; I1–I5 done, I6 to do
 
 ## 0. How this was tested
 
@@ -405,7 +405,7 @@ kind from the console backend.
 | I2 — one name per thing | **Done** with the defaults. See the note below. |
 | I3 — applicant side and emails | **Done.** See the note below. |
 | I4 — Filipino consistency | **Done.** See the note below. |
-| I5 — staff jargon and locked panels | not started |
+| I5 — staff jargon and locked panels | **Done.** See the note below. |
 | I6 — hard words | not started |
 
 **I1 as built, where it differs from the brief:**
@@ -500,3 +500,28 @@ kind from the console backend.
   stored in Filipino on the staff side. They are official document names anyway.
 - 896 of 896 strings translated; every applicant page re-rendered in Filipino with no
   untranslated line.
+
+**I5 as built:**
+
+- **L-06** The exam outcome copy says what happens: "The system records the scores and the
+  overall. It does not decide pass or fail; the office does that at evaluation."
+- **L-07** Every automatic case-history line is one plain sentence ("Exam finalized. Sent to
+  the HRMPSB.", "Comparative Assessment Report finalized. Sent to the Appointing
+  Authority."). **A display bug fixed on the way:** three completion lines printed the raw
+  role code ("Application routed to secretariat for completion handling"); they now print the
+  office's name.
+- **L-08** The six locked panels use sentence case, matching the live step bodies; "Packet
+  Snapshot" / "CAR Snapshot" / "Noted Gaps" read "Records at the time of the decision" /
+  "Ranked list at the time" / "Missing at the time".
+- **L-09** "in this round", "second batch", "List view", "the Secretariat" (for "the session
+  manager"), "the board and the office", the "#DIV/0!" clause dropped, "Authorized", "Quick
+  actions", and one noun per form label ("Exam notes", "Deliberation minutes", "Ranking notes",
+  "Decision notes", "Where the interview happens", "Reason"). "Complied" was left for the
+  office to confirm.
+- **L-10** The sign-in pages say "Staff sign-in", "Use your staff username and password",
+  "Change the password you use to sign in", "Enter the email address on your staff account".
+- **L-11** The Notifications sent panel names each email plainly ("Interview notice", "Exam
+  invitation", "Documents returned", "Corrected documents received"…). Migration 0100,
+  labels only (no SQL).
+- Checked with the touched test files (294 tests), the translation check, and a re-render of
+  all 118 case pages (no status change). The full suite runs once after I6.

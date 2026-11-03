@@ -1510,7 +1510,7 @@ class AppointingAuthorityRoundDTests(BaseRecruitmentTestCase):
         page = self._client_for(self.appointing).get(
             reverse("application-detail", args=[application.pk])
         )
-        self.assertContains(page, "CAR Final Selection Record")
+        self.assertContains(page, "Final selection record")
         self.assertContains(page, "Completion tracking is with the Secretariat")
         self.assertNotContains(page, "This step will open after a final decision is recorded")
 

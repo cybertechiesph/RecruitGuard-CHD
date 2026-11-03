@@ -19,7 +19,7 @@
 
 <div class="rg-dec-locked-frame">
     <div class="rg-dec-locked-frame__header">
-        <span class="rg-dec-locked-frame__header-title">Final Decision Record</span>
+        <span class="rg-dec-locked-frame__header-title">Final decision record</span>
     </div>
     <div class="rg-dec-locked-frame__body">
 
@@ -78,7 +78,7 @@
                 <div class="text-muted mb-1"
                      style="font-size:0.72rem;font-weight:600;text-transform:uppercase;
                             letter-spacing:0.04em;">
-                    Decision Notes
+                    Decision notes
                 </div>
                 <div style="font-size:0.8125rem;color:#374151;line-height:1.65;
                             white-space:pre-line;">{{ dec.decision_notes }}</div>
@@ -94,9 +94,9 @@
     <div class="rg-icard" style="margin-top:0;">
         <div class="rg-icard__header">
             <div>
-                <h3 class="rg-icard__title">Packet Snapshot</h3>
+                <h3 class="rg-icard__title">Records at the time of the decision</h3>
                 <p class="rg-icard__subtitle">
-                    Submission packet as captured at the time this decision was recorded.
+                    What was on file when the decision was recorded.
                 </p>
             </div>
         </div>
@@ -181,7 +181,7 @@
                     </div>
                 {% endif %}
                 <div class="rg-pkt-row">
-                    <span class="rg-pkt-row__label">Evidence items</span>
+                    <span class="rg-pkt-row__label">Files</span>
                     <span class="rg-pkt-row__value">
                         {{ ssum.evidence_reference_count|default:"0" }}
                     </span>
@@ -189,7 +189,7 @@
                 {% if ssum.missing_components %}
                     <div class="rg-pkt-row" style="align-items:flex-start;">
                         <span class="rg-pkt-row__label" style="padding-top:0.1rem;">
-                            Noted Gaps
+                            Missing at the time
                         </span>
                         <span class="rg-pkt-row__value" style="color:#854d0e;">
                             {% for item in ssum.missing_components %}

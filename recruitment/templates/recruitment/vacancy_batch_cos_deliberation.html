@@ -52,7 +52,7 @@ is being considered right now and how many positions it fills.
     {% if selection_round %}
         <div class="alert alert-info" role="status">
             <strong>Round {{ selection_round.round_number }} is open</strong> &mdash;
-            {{ candidate_count }} candidate{{ candidate_count|pluralize }} snapshotted,
+            {{ candidate_count }} candidate{{ candidate_count|pluralize }} in this round,
             {{ round_picks|length }} of {{ selection_round.slot_count }}
             slot{{ selection_round.slot_count|pluralize }} filled.
             {% if selection_round.notes %}<div class="mt-1">{{ selection_round.notes }}</div>{% endif %}

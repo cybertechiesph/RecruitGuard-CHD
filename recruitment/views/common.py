@@ -14,14 +14,14 @@ logger = logging.getLogger("recruitment.views")
 EXAM_FIELD_LABELS = {
     "exam_type": "Exam Type",
     "exam_status": "Exam Status",
-    "exam_score": "Overall / Single Exam Score",
+    "exam_score": "Overall exam score",
     "technical_score": "Technical Score",
     "general_score": "General Ability Score",
     "exam_date": "Exam Date",
     "administered_by": "Administered By",
     "valid_from": "Validity Start",
     "valid_until": "Validity End",
-    "exam_notes": "Exam Notes / Remarks",
+    "exam_notes": "Exam notes",
 }
 
 

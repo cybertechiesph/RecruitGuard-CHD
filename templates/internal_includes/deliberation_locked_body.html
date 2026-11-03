@@ -11,12 +11,12 @@
         </svg>
     </div>
     <div class="flex-1">
-        <div class="rg-scr-elig-bar__label">Deliberation Step &mdash; Finalized</div>
+        <div class="rg-scr-elig-bar__label">Deliberation &mdash; finalized</div>
         <div class="rg-scr-elig-bar__verdict">
             {% if current_comparative_assessment_report and current_comparative_assessment_report.is_finalized %}
-                Deliberation &amp; CAR Locked
+                Deliberation and CAR locked
             {% else %}
-                Deliberation Locked
+                Deliberation locked
             {% endif %}
         </div>
         {% if current_deliberation_record.finalized_at %}
@@ -54,7 +54,7 @@
         <div style="margin-bottom:1.25rem;">
             <div style="font-size:0.72rem;font-weight:700;color:#5f6c78;
                         text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem;">
-                Deliberation Record
+                Deliberation record
             </div>
 
             <div class="rg-exam-locked-field">
@@ -148,13 +148,13 @@
         <div style="margin-bottom:1.25rem;">
             <div style="font-size:0.72rem;font-weight:700;color:#5f6c78;
                         text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem;">
-                Step Summary at Finalization
+                Summary when finalized
             </div>
             <div style="display:flex;flex-wrap:wrap;gap:0.5rem 1.5rem;font-size:0.79rem;">
                 {% if snap.latest_qualification_outcome %}
                 <div>
                     <span style="color:#9aa4af;font-weight:600;text-transform:uppercase;
-                                 font-size:0.68rem;letter-spacing:0.04em;">Document Review</span>
+                                 font-size:0.68rem;letter-spacing:0.04em;">Document review</span>
                     <span style="margin-left:0.35rem;font-weight:600;color:#374151;">
                         {{ snap.latest_qualification_outcome }}
                         {% if snap.latest_document_review_score %}
@@ -166,7 +166,7 @@
                 {% if snap.latest_exam_score %}
                 <div>
                     <span style="color:#9aa4af;font-weight:600;text-transform:uppercase;
-                                 font-size:0.68rem;letter-spacing:0.04em;">Exam Score</span>
+                                 font-size:0.68rem;letter-spacing:0.04em;">Exam score</span>
                     <span style="margin-left:0.35rem;font-weight:600;color:#374151;">
                         {{ snap.latest_exam_score }}
                     </span>
@@ -183,7 +183,7 @@
                 {% if snap.latest_interview_average %}
                 <div>
                     <span style="color:#9aa4af;font-weight:600;text-transform:uppercase;
-                                 font-size:0.68rem;letter-spacing:0.04em;">Interview Avg</span>
+                                 font-size:0.68rem;letter-spacing:0.04em;">Interview avg</span>
                     <span style="margin-left:0.35rem;font-weight:600;color:#374151;">
                         {{ snap.latest_interview_average }} / 100
                     </span>
@@ -192,7 +192,7 @@
                 {% if snap.preliminary_assessment_score %}
                 <div>
                     <span style="color:#9aa4af;font-weight:600;text-transform:uppercase;
-                                 font-size:0.68rem;letter-spacing:0.04em;">Preliminary Score</span>
+                                 font-size:0.68rem;letter-spacing:0.04em;">Preliminary score</span>
                     <span style="margin-left:0.35rem;font-weight:600;color:#374151;">
                         {{ snap.preliminary_assessment_score }} / 100
                     </span>
@@ -208,7 +208,7 @@
         <div style="margin-bottom:1.25rem;">
             <div style="font-size:0.72rem;font-weight:700;color:#5f6c78;
                         text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem;">
-                Panel Interview Ratings
+                Panel interview ratings
             </div>
             <div class="rg-del-rating-list">
                 {% for rating in current_interview_ratings %}
@@ -287,7 +287,7 @@
                 <path d="M4 6V4.5a2 2 0 0 1 4 0V6"
                       stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
-            CAR Locked
+            CAR locked
         </span>
     </div>
 
@@ -303,7 +303,7 @@
                 <div class="rg-del-car-item__scores">
                     {% if item.qualification_outcome %}
                     <div class="rg-del-car-item__score-cell">
-                        <span class="rg-del-car-item__score-label">Document Review</span>
+                        <span class="rg-del-car-item__score-label">Document review</span>
                         <span class="rg-del-car-item__score-val">
                             <span class="rg-pill rg-pill--{{ item.qualification_outcome|status_theme }} rg-pill--sm">
                                 {{ item.qualification_outcome }}
@@ -316,7 +316,7 @@
                     {% endif %}
                     {% if item.exam_score %}
                     <div class="rg-del-car-item__score-cell">
-                        <span class="rg-del-car-item__score-label">Exam Score</span>
+                        <span class="rg-del-car-item__score-label">Exam score</span>
                         <span class="rg-del-car-item__score-val">{{ item.exam_score }}</span>
                     </div>
                     {% elif item.exam_status %}
@@ -331,19 +331,19 @@
                     {% endif %}
                     {% if item.interview_average_score %}
                     <div class="rg-del-car-item__score-cell">
-                        <span class="rg-del-car-item__score-label">Interview Avg</span>
+                        <span class="rg-del-car-item__score-label">Interview avg</span>
                         <span class="rg-del-car-item__score-val">{{ item.interview_average_score }}</span>
                     </div>
                     {% endif %}
                     {% if item.assessment_score %}
                     <div class="rg-del-car-item__score-cell">
-                        <span class="rg-del-car-item__score-label">Preliminary Score</span>
+                        <span class="rg-del-car-item__score-label">Preliminary score</span>
                         <span class="rg-del-car-item__score-val">{{ item.assessment_score }}</span>
                     </div>
                     {% endif %}
                     {% if item.preliminary_rank_order %}
                     <div class="rg-del-car-item__score-cell">
-                        <span class="rg-del-car-item__score-label">System Rank</span>
+                        <span class="rg-del-car-item__score-label">System rank</span>
                         <span class="rg-del-car-item__score-val">#{{ item.preliminary_rank_order }}</span>
                     </div>
                     {% endif %}
@@ -374,7 +374,7 @@
                 border-radius:0.4rem;font-size:0.8125rem;color:#374151;margin-bottom:0.75rem;">
         <div style="font-size:0.68rem;font-weight:700;color:#9aa4af;text-transform:uppercase;
                     letter-spacing:0.05em;margin-bottom:0.25rem;">
-            CAR Summary Notes
+            CAR summary notes
         </div>
         {{ current_comparative_assessment_report.summary_notes }}
     </div>

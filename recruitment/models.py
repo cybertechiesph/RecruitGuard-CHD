@@ -4432,45 +4432,45 @@ class FinalDecision(TimestampedModel):
 
 class NotificationLog(TimestampedModel):
     class NotificationType(models.TextChoices):
-        SUBMISSION_ACKNOWLEDGMENT = "submission_acknowledgment", "Submission Acknowledgment"
-        SELECTED_APPLICANT = "selected_applicant", "Selected Applicant Notification"
-        NON_SELECTED_APPLICANT = "non_selected_applicant", "Non-selected Applicant Notification"
+        SUBMISSION_ACKNOWLEDGMENT = "submission_acknowledgment", "Application received"
+        SELECTED_APPLICANT = "selected_applicant", "Selection result"
+        NON_SELECTED_APPLICANT = "non_selected_applicant", "Not-selected result"
         # SL-10: a withdrawal is the applicant's own act. Confirming it with the
         # non-selected template would tell them they were turned down.
         WITHDRAWAL_ACKNOWLEDGEMENT = (
             "withdrawal_acknowledgement",
-            "Withdrawal Acknowledgement",
+            "Withdrawal confirmed",
         )
         # SL-11: the vacancy was cancelled — a neutral notice, not a rejection.
-        VACANCY_CANCELLED = "vacancy_cancelled", "Vacancy Cancellation Notice"
+        VACANCY_CANCELLED = "vacancy_cancelled", "Vacancy cancelled"
         SELECTION_UNDER_REVIEW = (
             "selection_under_review",
-            "Selection Under Review Notice",
+            "Selection under review",
         )
         APPLICANT_CONTACT_UPDATED = (
             "applicant_contact_updated",
-            "Applicant Contact Updated Notice",
+            "Contact details corrected",
         )
         DOCUMENT_RESUBMISSION_REQUEST = (
             "document_resubmission_request",
-            "Document Resubmission Request",
+            "Documents returned",
         )
         # Round E: the applicant's proof in the inbox that corrected documents arrived.
         DOCUMENT_RESUBMISSION_RECEIVED = (
             "document_resubmission_received",
-            "Document Resubmission Received",
+            "Corrected documents received",
         )
         INTERVIEW_SESSION_SCHEDULED = (
             "interview_session_scheduled",
-            "Interview Session Scheduled Notification",
+            "Interview notice to the panel",
         )
-        EXAM_INVITATION = "exam_invitation", "Exam Invitation Notification"
+        EXAM_INVITATION = "exam_invitation", "Exam invitation"
         APPLICANT_INTERVIEW_NOTICE = (
             "applicant_interview_notice",
-            "Applicant Interview Notice Notification",
+            "Interview notice",
         )
-        REQUIREMENT_CHECKLIST = "requirement_checklist", "Requirement Checklist Notification"
-        REMINDER = "reminder", "Reminder Notification"
+        REQUIREMENT_CHECKLIST = "requirement_checklist", "Requirement checklist"
+        REMINDER = "reminder", "Reminder"
 
     class DeliveryChannel(models.TextChoices):
         EMAIL = "email", "Email"

@@ -383,7 +383,7 @@ def route_case_between_secretariat_and_hrm_chief(application, actor, target_role
             application=application,
             actor=actor,
             action=AuditLog.Action.OVERRIDE_GRANTED,
-            description="HRM Chief handed off a Level 2 case to Secretariat.",
+            description="The HRM Chief sent this Level 2 case to the Secretariat.",
             metadata={
                 "override_id": override.id,
                 "reason": remarks,
@@ -397,7 +397,7 @@ def route_case_between_secretariat_and_hrm_chief(application, actor, target_role
             application=application,
             actor=actor,
             action=AuditLog.Action.OVERRIDE_USED,
-            description="Level 2 case returned from Secretariat to HRM Chief.",
+            description="The Secretariat sent this Level 2 case back to the HRM Chief.",
             metadata={"override_id": active_override.id},
         )
 
@@ -502,7 +502,7 @@ def _auto_route_application(application, actor, *, next_role, next_status, descr
         _consume_active_secretariat_handoff(
             application,
             actor,
-            "Level 2 Secretariat authorization ended after automatic case advancement.",
+            "Special authorization ended when the case moved on.",
         )
     return True
 
@@ -518,14 +518,14 @@ def _auto_advance_after_exam_finalized(application, actor, review_stage):
                 actor,
                 next_role=RecruitmentUser.Role.HRM_CHIEF,
                 next_status=RecruitmentApplication.Status.HRM_CHIEF_REVIEW,
-                description="Automatically returned to HRM Chief after Plantilla examination was finalized by Secretariat.",
-                remarks="Plantilla examination finalized by Secretariat; next assigned office is HRM Chief.",
+                description="Exam finalized by the Secretariat. Sent back to the HRM Chief.",
+                remarks="Exam finalized by the Secretariat. The HRM Chief has the case next.",
             )
             if not returned_to_hrm_chief:
                 return False
             onward_description = (
-                "Automatically routed to HRMPSB after Plantilla examination was finalized "
-                "by Secretariat under HRM Chief authorization."
+                "Exam finalized by the Secretariat under the HRM Chief's special "
+                "authorization. Sent to the HRMPSB."
             )
             return _auto_route_application(
                 application,
@@ -540,8 +540,8 @@ def _auto_advance_after_exam_finalized(application, actor, review_stage):
             actor,
             next_role=RecruitmentUser.Role.HRMPSB_MEMBER,
             next_status=RecruitmentApplication.Status.HRMPSB_REVIEW,
-            description="Automatically routed to HRMPSB after examination finalization.",
-            remarks="Examination finalized; next designated handler is HRMPSB.",
+            description="Exam finalized. Sent to the HRMPSB.",
+            remarks="Exam finalized. The HRMPSB has the case next.",
         )
     if application.branch == PositionPosting.Branch.COS:
         if review_stage == RecruitmentCase.Stage.SECRETARIAT_REVIEW:
@@ -550,8 +550,8 @@ def _auto_advance_after_exam_finalized(application, actor, review_stage):
                 actor,
                 next_role=RecruitmentUser.Role.HRM_CHIEF,
                 next_status=RecruitmentApplication.Status.HRM_CHIEF_REVIEW,
-                description="Automatically routed to HRM Chief after COS examination finalization.",
-                remarks="COS examination finalized; next designated handler is HRM Chief.",
+                description="Exam finalized. Sent to the HRM Chief.",
+                remarks="Exam finalized. The HRM Chief has the case next.",
             )
         if (
             review_stage == RecruitmentCase.Stage.HRM_CHIEF_REVIEW
@@ -562,8 +562,8 @@ def _auto_advance_after_exam_finalized(application, actor, review_stage):
                 actor,
                 next_role=RecruitmentUser.Role.HRM_CHIEF,
                 next_status=RecruitmentApplication.Status.HRM_CHIEF_REVIEW,
-                description="Automatically returned to HRM Chief after COS examination was finalized by Secretariat.",
-                remarks="COS examination finalized by Secretariat; next assigned office is HRM Chief.",
+                description="Exam finalized by the Secretariat. Sent back to the HRM Chief.",
+                remarks="Exam finalized by the Secretariat. The HRM Chief has the case next.",
             )
     return False
 
@@ -590,8 +590,8 @@ def _auto_advance_after_car_finalized(report, actor):
             actor,
             next_role=RecruitmentUser.Role.APPOINTING_AUTHORITY,
             next_status=RecruitmentApplication.Status.APPOINTING_AUTHORITY_REVIEW,
-            description="Automatically routed to Appointing Authority after CAR finalization.",
-            remarks=f"{common.CAR_LABEL} finalized; next designated handler is Appointing Authority.",
+            description="Comparative Assessment Report finalized. Sent to the Appointing Authority.",
+            remarks=f"{common.CAR_LABEL} finalized. The Appointing Authority has the case next.",
         )
         if routed:
             routed_applications.append(application)
@@ -1152,7 +1152,7 @@ def process_workflow_action(application, actor, action, remarks):
         _consume_active_secretariat_handoff(
             application,
             actor,
-            "Secretariat special authorization ended after Level 2 processing.",
+            "Special authorization ended when the Secretariat finished its part.",
         )
     if next_status == RecruitmentApplication.Status.REJECTED:
         queue_non_selected_applicant_notification(

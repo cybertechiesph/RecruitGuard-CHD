@@ -1966,7 +1966,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
 
         readiness = get_comparative_assessment_readiness(application)
         self.assertFalse(readiness["can_finalize"])
-        self.assertIn("#DIV/0!", readiness["finalize_block_message"])
+        self.assertIn("Every candidate needs a complete score", readiness["finalize_block_message"])
         self.assertIn(application.reference_label, readiness["finalize_block_message"])
 
         with self.assertRaisesMessage(

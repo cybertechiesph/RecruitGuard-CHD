@@ -479,7 +479,7 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         self.assertEqual(override_audits.count(), 1)
         self.assertEqual(
             override_audits.get().description,
-            "Level 2 Secretariat authorization ended after automatic case advancement.",
+            "Special authorization ended when the case moved on.",
         )
         automatic_routes = list(
             AuditLog.objects.filter(
@@ -493,8 +493,8 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
         self.assertEqual(
             automatic_routes,
             [
-                "Automatically returned to HRM Chief after Plantilla examination was finalized by Secretariat.",
-                "Automatically routed to HRMPSB after Plantilla examination was finalized by Secretariat under HRM Chief authorization.",
+                "Exam finalized by the Secretariat. Sent back to the HRM Chief.",
+                "Exam finalized by the Secretariat under the HRM Chief's special authorization. Sent to the HRMPSB.",
             ],
         )
 

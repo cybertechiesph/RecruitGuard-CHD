@@ -1253,7 +1253,7 @@ class WorkflowActionForm(BootstrapFormMixin, forms.Form):
 class CaseHandoffForm(BootstrapFormMixin, forms.Form):
     target_role = forms.ChoiceField(label="Send To")
     remarks = forms.CharField(
-        label="Reason or Remarks",
+        label="Reason",
         widget=forms.Textarea(attrs={"rows": 3}),
     )
 
@@ -2169,7 +2169,7 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
         self.fields["administered_by"].label = "Administered By"
         self.fields["valid_from"].label = "Validity Start"
         self.fields["valid_until"].label = "Validity End"
-        self.fields["exam_notes"].label = "Exam Notes / Remarks"
+        self.fields["exam_notes"].label = "Exam notes"
         self.fields["exam_notes"].required = False
         self.fields["exam_result"].required = False
         self.fields["technical_score"].required = False
@@ -2382,7 +2382,7 @@ class InterviewSessionForm(DeferredModelValidationMixin, BootstrapFormMixin, for
         self.fields["scheduled_for"].widget.attrs["min"] = timezone.localtime().strftime(
             "%Y-%m-%dT00:00"
         )
-        self.fields["location"].label = "Interview Location / Medium"
+        self.fields["location"].label = "Where the interview happens"
         self.fields["session_notes"].label = "Session Notes"
         self.fields["session_notes"].required = False
         self._apply_bootstrap()
@@ -2926,13 +2926,13 @@ class DeliberationRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, f
         draft = kwargs.pop("draft", False)
         super().__init__(*args, **kwargs)
         self.fields["deliberated_at"].label = "Deliberation Date and Time"
-        self.fields["deliberation_minutes"].label = "Deliberation Minutes / Record"
+        self.fields["deliberation_minutes"].label = "Deliberation minutes"
         self.fields["recommendation"].label = "HRMPSB Recommendation"
         self.fields["decision_support_summary"].label = "Decision-Support Summary"
         self.fields["quorum_status"].label = "Quorum Status"
         self.fields["attendance_notes"].label = "Attendance Notes"
         self.fields["ranking_position"].label = "Ranking Position"
-        self.fields["ranking_notes"].label = "Ranking Notes / Justification"
+        self.fields["ranking_notes"].label = "Ranking notes"
         self.fields["ranking_position"].required = False
         self.fields["ranking_notes"].required = False
         self.fields["quorum_status"].required = False
@@ -2983,7 +2983,7 @@ class ComparativeAssessmentReportForm(DeferredModelValidationMixin, BootstrapFor
         self.fields["members_present"].required = False
         self.fields["deliberated_on"].label = "Date of deliberation"
         self.fields["deliberated_on"].required = False
-        self.fields["recommendation_notes"].label = "Recommendation Notes / Remarks"
+        self.fields["recommendation_notes"].label = "Recommendation notes"
         self.fields["recommendation_notes"].required = False
         self._apply_bootstrap()
 
@@ -3019,7 +3019,7 @@ class FinalSelectionForm(BootstrapFormMixin, forms.Form):
         self.fields["selected_item"].label = "Selected Appointee"
         self.fields["is_deep_selection"].label = "Deep selection"
         self.fields["deep_selection_justification"].label = "Deep-selection Justification"
-        self.fields["decision_notes"].label = "Decision Notes / Remarks"
+        self.fields["decision_notes"].label = "Decision notes"
         self.fields["is_deep_selection"].help_text = (
             "Required when selecting an applicant ranked outside the top five."
         )
@@ -3500,7 +3500,7 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
                     self.add_error(
                         "closing_date",
                         "The examination for this vacancy has already been scheduled. "
-                        "Extending the publication would create a second cohort; cancel "
+                        "Extending the publication would create a second batch; cancel "
                         "and re-publish instead.",
                     )
             # RD-7: a manual Close is a deliberate stop — extending the deadline

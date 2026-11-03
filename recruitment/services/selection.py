@@ -811,7 +811,7 @@ def return_car_for_reassessment(application, actor, remarks):
             to_status=RecruitmentApplication.Status.HRMPSB_REVIEW,
             to_role=RecruitmentUser.Role.HRMPSB_MEMBER,
             route_type=RoutingHistory.RouteType.REOPEN,
-            description="Returned from Appointing Authority to HRMPSB for ETE and recommendation correction.",
+            description="Sent back by the Appointing Authority to correct the ETE ratings and the recommendation.",
             notes=remarks,
         )
 
@@ -1089,8 +1089,8 @@ def record_final_selection(application, actor, cleaned_data):
             to_role=next_role,
             route_type=RoutingHistory.RouteType.FORWARD,
             description=(
-                f"Selected from CAR and routed to {RecruitmentUser.Role(next_role).label} "
-                "for completion handling."
+                f"Selected from the CAR. Sent to the {RecruitmentUser.Role(next_role).label} "
+                "for completion."
             ),
             notes=selection.decision_notes,
         )
@@ -1138,7 +1138,7 @@ def record_final_selection(application, actor, cleaned_data):
                 application=target_application,
                 actor=actor,
                 action=AuditLog.Action.ROUTED,
-                description=f"Application routed to {next_role} for completion handling.",
+                description=f"Sent to the {RecruitmentUser.Role(next_role).label} for completion.",
                 metadata={
                     "status": next_status,
                     "current_handler_role": next_role,
@@ -1393,7 +1393,7 @@ def record_final_decision(application, actor, cleaned_data):
             RoutingHistory.RouteType.FORWARD if next_role else RoutingHistory.RouteType.CLOSE
         ),
         description=(
-            f"Application routed to {next_role} for completion handling."
+            f"Sent to the {RecruitmentUser.Role(next_role).label} for completion."
             if next_role
             else "Closed as not selected by the final decision."
         ),
@@ -1438,7 +1438,7 @@ def record_final_decision(application, actor, cleaned_data):
             application=application,
             actor=actor,
             action=AuditLog.Action.ROUTED,
-            description=f"Application routed to {next_role} for completion handling.",
+            description=f"Sent to the {RecruitmentUser.Role(next_role).label} for completion.",
             metadata={
                 "status": next_status,
                 "current_handler_role": next_role,

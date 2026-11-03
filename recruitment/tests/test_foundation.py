@@ -37,7 +37,7 @@ class FoundationSmokeTests(TestCase):
     def test_login_page_loads(self):
         response = self.client.get(reverse("login"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Internal Access")
+        self.assertContains(response, "Staff sign-in")
         # The portal presents as the office's system, not the study title.
         self.assertContains(response, "DOH–CHD CALABARZON")
         self.assertTrue(reverse("login").startswith("/internal/"))
@@ -86,7 +86,7 @@ class FoundationSmokeTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.request["PATH_INFO"], reverse("internal-mfa-verify"))
-        self.assertContains(response, "Check Your Email")
+        self.assertContains(response, "Check your email")
         self.assertFalse(
             AuditLog.objects.filter(action=AuditLog.Action.INTERNAL_LOGIN).exists()
         )
