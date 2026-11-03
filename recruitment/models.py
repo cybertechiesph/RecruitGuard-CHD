@@ -4547,6 +4547,8 @@ class Notification(TimestampedModel):
         EXAM_FINALIZED = "exam_finalized", "Exam finalized"
         # HRMPSB review P2-5: the panel's cases leave its queue when the CAR is finalized.
         CAR_FINALIZED = "car_finalized", "CAR finalized"
+        # AA review P2-4: the board is told the outcome of the vacancy it ranked.
+        VACANCY_DECIDED = "vacancy_decided", "Vacancy decided"
         DEADLINE_APPROACHING = "deadline_approaching", "Deadline approaching"
         # RD-9: an applicant email failed to send — the handler must know, or the
         # office believes the applicant was told when they never were.

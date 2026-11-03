@@ -277,18 +277,22 @@ def emit_deadline_approaching_notifications(now=None):
     return emitted
 
 
-def emit_car_finalized_panel_notifications(report):
-    """HRMPSB review P2-5: tell the vacancy's panel that its CAR is final and the cases are
-    with the Appointing Authority. Candidate codes only; the notice links nowhere, since the
-    cases leave the panel's view at this point."""
-    entry = report.recruitment_entry
-    panel = [
+def _vacancy_panel(entry):
+    return [
         member
         for member in RecruitmentUser.objects.filter(
             is_active=True, role=RecruitmentUser.Role.HRMPSB_MEMBER
         ).order_by("pk")
         if access.user_is_on_vacancy_panel(member, entry)
     ]
+
+
+def emit_car_finalized_panel_notifications(report):
+    """HRMPSB review P2-5: tell the vacancy's panel that its CAR is final and the cases are
+    with the Appointing Authority. Candidate codes only; the notice links nowhere, since the
+    cases leave the panel's view at this point."""
+    entry = report.recruitment_entry
+    panel = _vacancy_panel(entry)
     if report.recommends_none:
         recommendation = "The board recommended none of the candidates."
     elif report.recommended_case_id:
@@ -304,4 +308,19 @@ def emit_car_finalized_panel_notifications(report):
         body=(
             f"{recommendation} The cases are now with the Appointing Authority for the decision."
         ).strip(),
+    )
+
+
+def emit_vacancy_decided_panel_notifications(entry, *, selected_application=None):
+    """AA review P2-4: tell the vacancy's panel how the vacancy it ranked was decided: the
+    selected candidate's code, or that no appointment was made. Candidate codes only."""
+    if selected_application is not None:
+        outcome = f"Candidate {selected_application.candidate_code_label} was selected."
+    else:
+        outcome = "No appointment was made from the CAR."
+    return create_in_app_notifications(
+        _vacancy_panel(entry),
+        kind=Notification.Kind.VACANCY_DECIDED,
+        title=f"{entry.title} ({entry.job_code}) has been decided",
+        body=outcome,
     )

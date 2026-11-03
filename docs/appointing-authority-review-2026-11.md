@@ -5,7 +5,11 @@ A review of the portal as the Appointing Authority uses it, written 2026-11-03 a
 pages those settled are referenced, not repeated. Findings are graded P1 (essential), P2
 (important), P3 (polish); section 8 is the Round D brief.
 
-## Status: findings open, nothing implemented
+## Status: Round D done (P2-1 to P2-4, P3-1, P3-3)
+
+Decisions taken: P2-3 option (b), the Director's page does not record withdrawals; P2-4 yes,
+the panel is told the outcome (candidate code only). P3-2 (the Director's calendar) left for the
+office. See section 9.
 
 ## 0. How this was tested
 
@@ -210,3 +214,26 @@ Test-first, one commit per item or small group, suite green, no model changes ex
 4. **P2-4** if wanted: a panel notice on selection and on no appointment (candidate code only),
    next to Round C's `emit_car_finalized_panel_notifications`.
 5. **P3-1**, **P3-3** as time allows; **P3-2** only if the office says so.
+
+## 9. Round D implementation status (2026-11-03)
+
+| Item | Done | Where |
+|---|---|---|
+| P2-1 the appointee's case shows the decision after selecting | yes | `application_detail.html` completion section: before completion tracking starts it shows the final-selection (or COS decision) record and "Completion tracking is with the Secretariat / HRM Chief" (`completion_handler_label`) |
+| P2-2 rescission is confirmed | yes | `final_selection_rescind_card.html`: confirmation dialog saying what the rescission unwinds |
+| P2-3 the Director does not record withdrawals | yes (b) | `intake.user_can_record_withdrawal`: never for the HRMPSB panel or the Appointing Authority; at those two steps the owning office records it. The Office Policy switch keeps one job, the lent batch (guide item 4 and the form label updated; `WithdrawalOwningOfficeSwitchTests`) |
+| P2-4 the panel is told the vacancy was decided | yes | `case_notices.emit_vacancy_decided_panel_notifications` on selection and on no appointment (new kind `vacancy_decided`, migration 0096, choices only) |
+| P3-1 the CAR return says what happened | yes | `WorkflowActionView` |
+| P3-2 the Director's calendar | not done | office decision |
+| P3-3 a replacement selection names what it replaced | yes | `final_selection_locked_body.html` |
+| P3-4 | n/a | not a gap |
+
+Tests: `AppointingAuthorityRoundDTests` (7) and `WithdrawalOwningOfficeSwitchTests` (2) in
+`recruitment/tests/test_reviews.py`; the SL-10 switch test in `test_interview.py` became
+`test_the_owning_office_records_withdrawals_at_the_panel_and_decision_steps`. Five withdrawn-candidate tests
+in `test_selection.py` recorded their setup withdrawal as the Appointing Authority; they now
+record it as the Secretariat (the owning office), which is what the rule says. Live check on the
+demo database (rolled back): selecting on 905 shows the record, "Completion tracking is with the
+Secretariat", "Replaces the selection rescinded on November 3, 2026", the confirmation dialog,
+and the panel receives "Administrative Aide VI (VAC-PLT-2026-905) has been decided: Candidate
+C-06 was selected."; the Director's page no longer offers to record a withdrawal.

@@ -126,6 +126,7 @@ from ..services import (
     get_interview_session,
     get_interview_sessions,
     get_latest_final_decision,
+    _completion_handler_role,
     get_latest_finalized_comparative_assessment_report,
     get_available_actions,
     get_case_timeline,
@@ -415,6 +416,10 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
             context["decision_record_label"] = "Final Selection"
             context["decision_actor_label"] = "Appointing Authority"
             context["decision_completion_label"] = "appointment"
+        # AA review P2-1: who tracks completion, for the viewers who do not.
+        context["completion_handler_label"] = RecruitmentUser.Role(
+            _completion_handler_role(application)
+        ).label
         if user.role == RecruitmentUser.Role.SYSTEM_ADMIN:
             context["audit_log_url"] = reverse("application-audit-log", kwargs={"pk": application.pk})
             context["evidence_items"] = list(
@@ -858,7 +863,15 @@ class WorkflowActionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, Vie
                     )
                 messages.error(request, str(exc))
             else:
-                messages.success(request, "Next step saved.")
+                if form.cleaned_data["action"] == "return_car_for_reassessment":
+                    # AA review P3-1: say what the return did.
+                    messages.success(
+                        request,
+                        "CAR returned to the HRMPSB for correction. The candidates' cases are "
+                        "back at the HRMPSB step.",
+                    )
+                else:
+                    messages.success(request, "Next step saved.")
         else:
             message = _format_form_errors(form, "Choose an allowed next step.")
             if self._should_rerender_bound_action_form(form, request):

@@ -3176,10 +3176,11 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         original_ranks = {
             item.recruitment_case_id: item.rank_order for item in report.items.all()
         }
+        # The owning office records a withdrawal at the decision step (AA review P2-3).
         with self.captureOnCommitCallbacks(execute=True):
             record_application_withdrawal(
                 withdrawn,
-                self.appointing,
+                self.secretariat,
                 "Applicant withdrew after the CAR reached the Appointing Authority.",
             )
         withdrawn.refresh_from_db()
@@ -3267,7 +3268,7 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         with self.captureOnCommitCallbacks(execute=True):
             record_application_withdrawal(
                 withdrawn,
-                self.appointing,
+                self.secretariat,
                 "Applicant withdrew before the final selection.",
             )
 
@@ -3311,7 +3312,7 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         with self.captureOnCommitCallbacks(execute=True):
             record_application_withdrawal(
                 withdrawn,
-                self.appointing,
+                self.secretariat,
                 "Applicant withdrew before CAR reassessment.",
             )
             returned = return_car_for_reassessment(
@@ -3338,7 +3339,7 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         with self.captureOnCommitCallbacks(execute=True):
             record_application_withdrawal(
                 recommended,
-                self.appointing,
+                self.secretariat,
                 "The board's recommended candidate withdrew.",
             )
 
@@ -3374,7 +3375,7 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
             with self.captureOnCommitCallbacks(execute=True):
                 record_application_withdrawal(
                     application,
-                    self.appointing,
+                    self.secretariat,
                     f"Applicant {index} withdrew before selection.",
                 )
 

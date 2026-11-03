@@ -1563,7 +1563,7 @@ class OfficePolicyForm(BootstrapFormMixin, forms.ModelForm):
             ),
             "interview_absence_decided_by": "Interview absences are decided by",
             "withdrawal_recorded_by_owning_office": (
-                "Owning office may record withdrawals"
+                "Owning office may record withdrawals while the other office holds the batch"
             ),
             "rescind_cutoff": "When rescission is no longer allowed",
             "cos_positions_multi_slot_allowed": (

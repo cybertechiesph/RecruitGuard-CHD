@@ -466,6 +466,7 @@ from .completion import (
 )
 from .case_notices import (
     emit_car_finalized_panel_notifications,
+    emit_vacancy_decided_panel_notifications,
     _application_detail_url,
     _notification_tab_for_application,
     _active_users_with_application_access,

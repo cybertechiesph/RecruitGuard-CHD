@@ -23,7 +23,7 @@ Inputs:
         and marked rescinded; the candidates it closed come back to this step so the vacancy
         can be decided again.
     </p>
-    <form method="post"
+    <form method="post" id="finalSelectionRescindForm"
           action="{% url 'final-selection-rescind' application.pk %}" novalidate>
         {% csrf_token %}
         <div class="rg-field">
@@ -41,11 +41,15 @@ Inputs:
             {{ final_selection_rescind_form.reference }}
             <div class="form-text">{{ final_selection_rescind_form.reference.help_text }}</div>
         </div>
-        <button type="submit" class="btn btn-outline-danger btn-sm">
+        <button type="button" class="btn btn-outline-danger btn-sm"
+                data-bs-toggle="modal" data-bs-target="#confirmRescindSelection">
             Rescind the selection
         </button>
     </form>
 </details>
+{% comment %} AA review P2-2: a rescission unwinds the decision, so it is confirmed like
+       the selection itself. {% endcomment %}
+{% include "internal_includes/modal_confirm.html" with modal_id="confirmRescindSelection" variant="destructive" title="Rescind this selection?" body="The selected applicant and every candidate this selection closed return to the Appointing Authority step, and each applicant is told the selection is under review. The original record is kept, marked rescinded, with your reason." confirm_label="Yes, rescind it" cancel_label="Keep the selection" form_id="finalSelectionRescindForm" %}
 {% elif final_selection_rescind_unavailable_message %}
 <div class="rg-icard mb-3" id="final-selection-rescind">
     <h3 class="rg-icard__title">Rescind this selection</h3>

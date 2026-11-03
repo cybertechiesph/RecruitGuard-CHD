@@ -4,6 +4,13 @@
 <div class="rg-dec-status-bar rg-dec-status-bar--selected">
     Final Selection Recorded &mdash; <strong>{{ selection.selected_application.applicant_display_name }}</strong>
 </div>
+{% if selection.supersedes %}
+    {# AA review P3-3: a replacement decision says which one it replaced. #}
+    <p class="rg-note mt-2 mb-2">
+        Replaces the selection rescinded on {{ selection.supersedes.rescinded_at|date:"F j, Y" }}
+        ({{ selection.supersedes.selected_application.applicant_display_name }}).
+    </p>
+{% endif %}
 
 <div class="rg-dec-locked-frame">
     <div class="rg-dec-locked-frame__header">

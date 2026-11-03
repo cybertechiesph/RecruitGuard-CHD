@@ -36,15 +36,15 @@ Open **Office Policy** from the sidebar (visible to the HRM Chief only).
    or not-proceed. *Switch to "stage owner / panel" if the board itself should
    decide.*
 
-4. **The owning office may record withdrawals — ON.**
-   An applicant's withdrawal letter usually arrives at the HR office even
-   while the case sits with the panel or the Director. With this ON, the
-   owning office (Secretariat for Level 1, HRM Chief for Level 2) can record
-   it at any stage before completion. The HRMPSB panel never records a
-   withdrawal (it reviews candidates blind), so while a case is with the panel
-   the owning office records it even with this switch OFF; the switch decides
-   only whether the owning office may also do so at the Appointing Authority's
-   step.
+4. **The owning office may record withdrawals while the other office holds the batch — ON.**
+   An applicant's withdrawal letter usually arrives at the HR office. The
+   owning office (Secretariat for Level 1, HRM Chief for Level 2) always
+   records it while the case is with the HRMPSB panel or the Director: the
+   panel reviews candidates blind and the Director's page holds the decision
+   only, so neither records withdrawals. This switch covers the one remaining
+   case: when the owning office has lent its batch to the other office, ON
+   lets the owning office still record a withdrawal; OFF leaves it to the
+   office holding the batch.
 
 5. **When a selection can no longer be rescinded — once a contract or
    appointment reference is recorded.**

@@ -1,5 +1,6 @@
 """Changes from the November 2026 office reviews (Secretariat walkthrough, Round A,
-Round B, and Round C from the HRMPSB Member walkthrough)."""
+Round B, Round C from the HRMPSB Member walkthrough and Round D from the Appointing
+Authority walkthrough)."""
 
 from decimal import Decimal
 from datetime import datetime, time, timedelta, timezone as dt_timezone
@@ -19,6 +20,7 @@ from ..models import (
     CosSelectionRound,
     ExamRecord,
     ExamSchedule,
+    FinalSelection,
     CompetencyRatingTemplate,
     Notification,
     NotificationLog,
@@ -44,7 +46,10 @@ from ..services import (
     upload_interview_fallback_rating,
     record_application_withdrawal,
     get_interview_session,
+    hand_off_vacancy_batch,
     process_workflow_action,
+    record_no_appointment,
+    rescind_final_selection,
     save_interview_rating,
     user_can_record_withdrawal,
 )
@@ -1460,3 +1465,141 @@ class HrmpsbRoundCTimingTests(InterviewSessionHelpers, BaseRecruitmentTestCase):
         self._hold_interview(application)
         after = self._client_for(self.hrmpsb).get(url)
         self.assertContains(after, application.applicant_last_name)
+
+
+class AppointingAuthorityRoundDTests(BaseRecruitmentTestCase):
+    """Round D: fixes from docs/appointing-authority-review-2026-11.md."""
+
+    def _client_for(self, user):
+        client = Client()
+        self.force_login_with_mfa(client, user)
+        return client
+
+    def _named(self):
+        self.applicant.first_name, self.applicant.last_name = "Zenaida", "Quiambao"
+        self.applicant.save(update_fields=["first_name", "last_name"])
+        application = self.make_application(self.level1_position)
+        application.applicant_first_name, application.applicant_last_name = "Zenaida", "Quiambao"
+        application.save(update_fields=["applicant_first_name", "applicant_last_name"])
+        return application
+
+    def _at_decision(self):
+        application = self._named()
+        with self.captureOnCommitCallbacks(execute=True):
+            self.move_application_to_appointing_review(application)
+        application.refresh_from_db()
+        return application
+
+    def _selected(self):
+        application = self._at_decision()
+        with self.captureOnCommitCallbacks(execute=True):
+            self.record_final_decision_for_current_stage(application, self.appointing)
+        application.refresh_from_db()
+        return application
+
+    # P2-1: after selecting, the appointee's page shows the decision.
+    def test_appointee_page_shows_the_decision_after_selecting(self):
+        application = self._selected()
+        page = self._client_for(self.appointing).get(
+            reverse("application-detail", args=[application.pk])
+        )
+        self.assertContains(page, "CAR Final Selection Record")
+        self.assertContains(page, "Completion tracking is with the Secretariat")
+        self.assertNotContains(page, "This step will open after a final decision is recorded")
+
+    # P2-2: rescinding asks for confirmation first.
+    def test_rescission_asks_for_confirmation(self):
+        application = self._selected()
+        page = self._client_for(self.appointing).get(
+            reverse("application-detail", args=[application.pk])
+        )
+        self.assertContains(page, 'id="finalSelectionRescindForm"')
+        self.assertContains(page, 'data-bs-target="#confirmRescindSelection"')
+        self.assertContains(page, 'id="confirmRescindSelection"')
+
+    # P2-3: the Director never records a withdrawal; the owning office does.
+    def test_appointing_authority_cannot_record_a_withdrawal(self):
+        policy = get_office_policy()
+        policy.withdrawal_recorded_by_owning_office = False
+        policy.save(update_fields=["withdrawal_recorded_by_owning_office", "updated_at"])
+        application = self._at_decision()
+        self.assertFalse(user_can_record_withdrawal(self.appointing, application))
+        self.assertTrue(user_can_record_withdrawal(self.secretariat, application))
+        page = self._client_for(self.appointing).get(
+            reverse("application-detail", args=[application.pk])
+        )
+        self.assertNotContains(page, "Record an applicant withdrawal")
+
+    # P2-4: the panel is told when its vacancy is decided.
+    def test_panel_is_told_the_vacancy_was_decided(self):
+        application = self._selected()
+        notice = Notification.objects.filter(
+            recipient=self.hrmpsb, kind=Notification.Kind.VACANCY_DECIDED
+        ).first()
+        self.assertIsNotNone(notice)
+        self.assertIn(application.position.job_code, notice.title)
+        self.assertIn(application.candidate_code_label, notice.body)
+        self.assertNotIn("Quiambao", notice.title + notice.body)
+
+    def test_panel_is_told_when_no_appointment_is_made(self):
+        application = self._at_decision()
+        with self.captureOnCommitCallbacks(execute=True):
+            record_no_appointment(application, self.appointing, "No candidate meets the need.")
+        notice = Notification.objects.filter(
+            recipient=self.hrmpsb, kind=Notification.Kind.VACANCY_DECIDED
+        ).first()
+        self.assertIsNotNone(notice)
+        self.assertIn("No appointment", notice.body)
+
+    # P3-1: the CAR return says what happened.
+    def test_car_return_says_what_happened(self):
+        application = self._at_decision()
+        response = self._client_for(self.appointing).post(
+            reverse("workflow-action", args=[application.pk]),
+            {"action": "return_car_for_reassessment", "remarks": "ETE needs correction."},
+            follow=True,
+        )
+        text = " ".join(str(m) for m in response.context["messages"])
+        self.assertIn("CAR returned to the HRMPSB", text)
+
+    # P3-3: a replacement selection says what it replaced.
+    def test_replacement_selection_names_the_one_it_replaced(self):
+        application = self._selected()
+        selection = FinalSelection.objects.get(selected_application=application)
+        with self.captureOnCommitCallbacks(execute=True):
+            rescind_final_selection(selection, self.appointing, "Recorded in error.")
+        application.refresh_from_db()
+        with self.captureOnCommitCallbacks(execute=True):
+            self.record_final_decision_for_current_stage(application, self.appointing)
+        page = self._client_for(self.appointing).get(
+            reverse("application-detail", args=[application.pk])
+        )
+        self.assertContains(page, "Replaces the selection rescinded on")
+
+
+class WithdrawalOwningOfficeSwitchTests(BaseRecruitmentTestCase):
+    """Rounds C and D leave the Office Policy switch one job: whether the owning office may
+    record a withdrawal while the other office holds the case on loan."""
+
+    def _lent(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(application, self.applicant)
+        with self.captureOnCommitCallbacks(execute=True):
+            hand_off_vacancy_batch(self.level1_position, self.secretariat, "Lending the batch.")
+        application.refresh_from_db()
+        return application
+
+    def test_switch_on_lets_the_owning_office_record_while_the_case_is_lent(self):
+        application = self._lent()
+        self.assertTrue(user_can_record_withdrawal(self.secretariat, application))
+        self.assertTrue(user_can_record_withdrawal(self.hrm_chief, application))
+
+    def test_switch_off_leaves_it_to_the_office_holding_the_case(self):
+        policy = get_office_policy()
+        policy.withdrawal_recorded_by_owning_office = False
+        policy.save(update_fields=["withdrawal_recorded_by_owning_office", "updated_at"])
+        application = self._lent()
+        self.assertFalse(user_can_record_withdrawal(self.secretariat, application))
+        self.assertTrue(user_can_record_withdrawal(self.hrm_chief, application))

@@ -351,6 +351,17 @@
                     {% include "internal_includes/completion_locked_body.html" %}
                     {% include "internal_includes/notification_action_cards.html" %}
 
+                {% elif latest_final_selection or latest_final_decision.decision_outcome == "selected" %}
+                    {% comment %} AA review P2-1: the decision was just recorded and completion
+                       tracking has not started; show the decision to everyone who can open the
+                       case, and say who tracks completion. {% endcomment %}
+                    {% if latest_final_selection %}
+                        {% include "internal_includes/final_selection_locked_body.html" %}
+                    {% else %}
+                        {% include "internal_includes/decision_locked_body.html" %}
+                    {% endif %}
+                    {% include "internal_includes/state_empty.html" with title="Completion tracking is with the "|add:completion_handler_label copy="The selected applicant's completion requirements are tracked from here once that office starts." %}
+
                 {% else %}
                     
                     {% include "internal_includes/state_empty.html" with title="Completion not yet available" copy="This step will open after a final decision is recorded." %}

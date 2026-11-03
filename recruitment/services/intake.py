@@ -81,10 +81,12 @@ class ApplicationOTPDeliveryError(RuntimeError):
 def user_can_record_withdrawal(user, application):
     """SL-10: who may record that an applicant has stepped out.
 
-    The assigned handler always may, except the HRMPSB panel: it reviews candidates blind and
-    never deals with applicants, so while a case is with the panel the level's owning office
-    records the withdrawal whatever Office Policy says. At other stages Office Policy may also
-    admit the owning office. Not available once the case is terminal, and not the route for a
+    The assigned handler always may, except the HRMPSB panel (it reviews candidates blind) and
+    the Appointing Authority (whose page holds the decision only): neither deals with
+    applicants, so while a case is with either, the level's owning office records the
+    withdrawal whatever Office Policy says (HRMPSB review P1-2, AA review P2-3). Office Policy
+    decides whether the owning office may also record it while the other office holds the
+    case on loan. Not available once the case is terminal, and not the route for a
     selected appointee changing their mind during completion: that unwinds a recorded
     selection and belongs to the rescind path (SL-14)."""
     case = getattr(application, "case", None)
@@ -102,12 +104,18 @@ def user_can_record_withdrawal(user, application):
         RecruitmentCase.Stage.CLOSED,
     }:
         return False
-    if user.role == RecruitmentUser.Role.HRMPSB_MEMBER:
+    if user.role in {
+        RecruitmentUser.Role.HRMPSB_MEMBER,
+        RecruitmentUser.Role.APPOINTING_AUTHORITY,
+    }:
         return False
     if access.user_can_process_application(user, application):
         return True
     is_owning_office = user.role == routing._completion_handler_role(application)
-    if case.current_stage == RecruitmentCase.Stage.HRMPSB_REVIEW:
+    if case.current_stage in {
+        RecruitmentCase.Stage.HRMPSB_REVIEW,
+        RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW,
+    }:
         return is_owning_office
     return bool(entries.get_office_policy().withdrawal_recorded_by_owning_office and is_owning_office)
 

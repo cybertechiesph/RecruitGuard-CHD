@@ -961,6 +961,7 @@ def record_no_appointment(application, actor, reason):
             "item_ids": item_ids,
         },
     )
+    case_notices.emit_vacancy_decided_panel_notifications(report.recruitment_entry)
     return report
 
 
@@ -1153,6 +1154,9 @@ def record_final_selection(application, actor, cleaned_data):
                 tab="completion",
             )
             queue_selected_applicant_notification(target_application, actor=actor)
+    case_notices.emit_vacancy_decided_panel_notifications(
+        report.recruitment_entry, selected_application=selection.selected_application
+    )
     return selection
 
 

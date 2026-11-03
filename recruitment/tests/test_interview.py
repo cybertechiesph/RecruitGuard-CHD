@@ -1876,10 +1876,10 @@ class InterviewManagementTests(InterviewSessionHelpers, BaseRecruitmentTestCase)
         application.refresh_from_db()
         self.assertEqual(application.status, RecruitmentApplication.Status.WITHDRAWN)
 
-    def test_policy_can_limit_withdrawal_recording_to_the_current_stage_owner(self):
-        # Round C (HRMPSB review P1-2): the switch applies where the stage owner can deal with
-        # the applicant; the blind HRMPSB panel never records one, so this is checked at the
-        # Appointing Authority's stage.
+    def test_the_owning_office_records_withdrawals_at_the_panel_and_decision_steps(self):
+        # Rounds C and D: neither the blind HRMPSB panel nor the Appointing Authority records a
+        # withdrawal, so the owning office does at those steps whatever the switch says. The
+        # switch's remaining job (a lent batch) is in WithdrawalOwningOfficeSwitchTests.
         policy = get_office_policy()
         policy.withdrawal_recorded_by_owning_office = False
         policy.save(update_fields=["withdrawal_recorded_by_owning_office", "updated_at"])
@@ -1887,14 +1887,8 @@ class InterviewManagementTests(InterviewSessionHelpers, BaseRecruitmentTestCase)
         self.move_application_to_appointing_review(application)
         application.refresh_from_db()
 
-        self.assertFalse(user_can_record_withdrawal(self.secretariat, application))
-        self.assertTrue(user_can_record_withdrawal(self.appointing, application))
-        with self.assertRaisesMessage(ValueError, "not currently assigned to you"):
-            record_application_withdrawal(
-                application,
-                self.secretariat,
-                "The applicant wrote to the owning office.",
-            )
+        self.assertTrue(user_can_record_withdrawal(self.secretariat, application))
+        self.assertFalse(user_can_record_withdrawal(self.appointing, application))
 
     def test_support_role_can_encode_a_paper_rating_sheet(self):
         # SL-07: the rendered fallback form belongs to the Secretariat, but the generic
