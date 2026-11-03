@@ -672,7 +672,7 @@ def save_deliberation_record(
     # permission change away from reintroducing exactly that. Existing records stay readable.
     raise ValueError(
         "Per-case deliberation records are no longer recorded. Plantilla's board "
-        "recommendation is encoded on the Comparative Assessment Report, and COS uses the "
+        "recommendation is recorded on the Comparative Assessment Report, and COS uses the "
         "per-vacancy deliberation pick."
     )
 
@@ -729,7 +729,7 @@ def _final_selection_items_are_ready(report):
         if item.application.status not in FINAL_SELECTION_OUT_OF_CONTENTION_STATUSES
     ]
     if not contenders:
-        raise ValueError("The finalized CAR has no ranked applicants in contention.")
+        raise ValueError("The finalized CAR has no ranked applicants still in the running.")
     for item in contenders:
         application = item.application
         case = getattr(application, "case", None)
@@ -1005,7 +1005,7 @@ def record_final_selection(application, actor, cleaned_data):
         cleaned_data.get("deep_selection_justification") or ""
     ).strip():
         raise ValueError(
-            "Record the deep-selection justification before finalizing this selection."
+            "Record the reason for the deep selection before finalizing this selection."
         )
     # WF-03: deviating from the board's recommendation (rank #1 fallback when none was
     # recorded) requires a written justification — HARD rule, mirrored in FinalSelection.clean.
@@ -1024,8 +1024,8 @@ def record_final_selection(application, actor, cleaned_data):
         and not (cleaned_data.get("deep_selection_justification") or "").strip()
     ):
         raise ValueError(
-            "This selection differs from the board's recorded recommendation. "
-            "Record the justification for the official record."
+            "This selection differs from the board's recorded recommendation. Record the "
+            "reason for the official record."
         )
 
     car_snapshot = build_car_selection_packet(report)
@@ -1186,14 +1186,14 @@ def rescind_final_selection(selection, actor, reason, *, reference=""):
     selected are reopened there too, because they are once again in contention."""
     reason = (reason or "").strip()
     if not reason:
-        raise ValueError("Record why this selection is being rescinded.")
+        raise ValueError("Record why this selection is being taken back.")
     if selection.is_rescinded:
-        raise ValueError("This selection has already been rescinded.")
+        raise ValueError("This selection has already been taken back.")
     if rescind_cutoff_block_message(selection.selected_application):
         raise ValueError(common.RESCIND_CUTOFF_MESSAGE)
     if not user_can_rescind_final_selection(actor, selection):
         raise ValueError(
-            "Only the Appointing Authority may rescind a recorded final selection."
+            "Only the Appointing Authority may take back a recorded final selection."
         )
 
     entry = selection.recruitment_entry
@@ -1238,7 +1238,7 @@ def rescind_final_selection(selection, actor, reason, *, reference=""):
             to_status=RecruitmentApplication.Status.APPOINTING_AUTHORITY_REVIEW,
             to_role=RecruitmentUser.Role.APPOINTING_AUTHORITY,
             route_type=RoutingHistory.RouteType.REOPEN,
-            description="Returned to the Appointing Authority after the selection was rescinded.",
+            description="Returned to the Appointing Authority after the selection was taken back.",
             notes=reason,
         )
         audit.record_audit_event(
@@ -1246,7 +1246,7 @@ def rescind_final_selection(selection, actor, reason, *, reference=""):
             actor=actor,
             action=AuditLog.Action.FINAL_SELECTION_RESCINDED,
             description=(
-                "Returned to the Appointing Authority after the selection was rescinded."
+                "Returned to the Appointing Authority after the selection was taken back."
             ),
             metadata={
                 "final_selection_id": selection.id,
@@ -1268,7 +1268,7 @@ def rescind_final_selection(selection, actor, reason, *, reference=""):
         actor=actor,
         action=AuditLog.Action.FINAL_SELECTION_RESCINDED,
         description=(
-            f"Rescinded the final selection for {entry.job_code} "
+            f"Took back the final selection for {entry.job_code} "
             f"({winner.reference_label})."
         ),
         metadata={
@@ -1293,7 +1293,7 @@ def rescind_final_selection(selection, actor, reason, *, reference=""):
         RecruitmentUser.Role.APPOINTING_AUTHORITY,
         kind=Notification.Kind.CASE_RETURNED,
         title=(
-            f"{winner.reference_label} selection rescinded — vacancy back for decision"
+            f"{winner.reference_label} selection taken back — vacancy back for decision"
         ),
         body=reason,
         exclude_user_ids={actor.id},

@@ -194,7 +194,7 @@
 
             {% if current_exam_record.valid_from or current_exam_record.valid_until %}
             <div class="rg-exam-locked-field">
-                <div class="rg-exam-locked-field__label">Validity period</div>
+                <div class="rg-exam-locked-field__label">Valid from &ndash; until</div>
                 <div class="rg-exam-locked-field__value">
                     {% if current_exam_record.valid_from %}
                         {{ current_exam_record.valid_from|date:"M j, Y" }}

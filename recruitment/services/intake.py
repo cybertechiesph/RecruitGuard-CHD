@@ -148,8 +148,7 @@ def record_application_withdrawal(
     }:
         raise ValueError(
             "This case has already passed selection. A selected appointee who withdraws "
-            "needs the selection rescinded, not a withdrawal recorded against the "
-            "competition."
+            "needs the selection taken back, not a withdrawal recorded."
         )
     if not user_can_record_withdrawal(actor, application):
         raise ValueError("This case is not currently assigned to you.")

@@ -247,7 +247,7 @@
             <div class="form-text" id="scr-outcome-blocked-hint" hidden>
                 Qualified is unavailable while a required document is unreviewed or flagged &mdash;
                 an applicant is never passed on evidence that has not been verified. Return the
-                flagged documents, or record Not qualified with the basis if they cannot qualify
+                flagged documents, or record Not qualified with the reason if they cannot qualify
                 regardless.
             </div>
             <div class="visually-hidden">
@@ -264,7 +264,7 @@
                 <span class="text-danger ms-1" data-qo-required aria-hidden="true" hidden>*</span>
             </label>
             {{ screening_form.screening_notes }}
-            <div class="form-text">Required if you choose Not qualified &mdash; state the basis against the QS.</div>
+            <div class="form-text">Required if you choose Not qualified &mdash; say why, measured against the QS.</div>
             {% for error in screening_form.screening_notes.errors %}
                 <div class="invalid-feedback d-block">{{ error }}</div>
             {% endfor %}

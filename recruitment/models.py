@@ -419,7 +419,8 @@ class PositionPosting(TimestampedModel):
         ),
         "intake_mode": (
             "intake_mode",
-            "Intake mode cannot be changed once the vacancy has received applications.",
+            "How the vacancy takes applications cannot be changed once it has received "
+            "applications.",
         ),
         "publication_date": (
             "publication_date",
@@ -1855,8 +1856,7 @@ class OfficePolicy(TimestampedModel):
     allow_resubmission_deadline_extension = models.BooleanField(
         default=True,
         help_text=(
-            "Allow the reviewing office to give an applicant more time for a pending "
-            "document resubmission."
+            "Allow the reviewing office to give an applicant more time to send corrected documents."
         ),
     )
     interview_absence_decided_by = models.CharField(
@@ -1880,8 +1880,7 @@ class OfficePolicy(TimestampedModel):
         choices=RescindCutoff.choices,
         default=RescindCutoff.CONTRACT_RECORDED,
         help_text=(
-            "Choose when an appointment or contract decision becomes too late to rescind "
-            "inside recruitment."
+            "Choose when an appointment or contract decision becomes too late to take back here."
         ),
     )
     cos_positions_multi_slot_allowed = models.BooleanField(
@@ -2075,7 +2074,7 @@ class ExamRecord(TimestampedModel):
         }:
             errors["recorded_by"] = "Only Secretariat or HRM Chief may record examination details."
         if self.valid_from and self.valid_until and self.valid_until < self.valid_from:
-            errors["valid_until"] = "Validity end date cannot be earlier than the validity start date."
+            errors["valid_until"] = "The \"valid until\" date cannot be earlier than the \"valid from\" date."
         if self.evidence_item_id:
             evidence_matches_context = (
                 (
@@ -2124,9 +2123,9 @@ class ExamRecord(TimestampedModel):
             for field_name in scored_fields:
                 errors[field_name] = "Waived or absent exams must not store numeric scores."
             if self.valid_from or self.valid_until:
-                errors["valid_from"] = "Only completed exams may record a validity period."
+                errors["valid_from"] = "Only a completed exam can have valid-from and valid-until dates."
             if not self.exam_notes:
-                errors["exam_notes"] = "Provide remarks explaining the waiver or absence."
+                errors["exam_notes"] = "Explain why the exam was waived or missed."
         if self.is_finalized and not self.finalized_by_id:
             errors["finalized_by"] = "Finalized examination records must record the finalizing user."
         if not self.is_finalized and (self.finalized_by_id or self.finalized_at):
@@ -2644,7 +2643,7 @@ class InterviewRating(TimestampedModel):
             and not self.justification
         ):
             errors["justification"] = (
-                "Provide a justification when the interview rating is below 75 or above 98."
+                "Give a reason when the interview rating is below 75 or above 98."
             )
         if errors:
             raise ValidationError(errors)
@@ -2890,7 +2889,7 @@ class InterviewFallbackRating(TimestampedModel):
             and not self.justification
         ):
             errors["justification"] = (
-                "Provide a justification when the interview rating is below 75 or above 98."
+                "Give a reason when the interview rating is below 75 or above 98."
             )
         if errors:
             raise ValidationError(errors)
@@ -3614,15 +3613,15 @@ class CosVacancyDeliberation(TimestampedModel):
         if self.is_rescinded:
             if not self.is_finalized:
                 errors["is_rescinded"] = (
-                    "Only a finalized COS deliberation pick can be rescinded."
+                    "Only a finalized COS deliberation pick can be taken back."
                 )
             if not self.rescinded_by_id:
-                errors["rescinded_by"] = "Record who rescinded this COS deliberation pick."
+                errors["rescinded_by"] = "Record who took back this COS deliberation pick."
             if not (self.rescind_reason or "").strip():
-                errors["rescind_reason"] = "Record why this COS deliberation pick was rescinded."
+                errors["rescind_reason"] = "Record why this COS deliberation pick was taken back."
         elif self.rescinded_by_id or self.rescinded_at or self.rescind_reason:
             errors["is_rescinded"] = (
-                "Rescission details belong only on a rescinded COS deliberation pick."
+                "Take-back details belong only on a COS deliberation pick that was taken back."
             )
         if errors:
             raise ValidationError(errors)
@@ -4233,7 +4232,7 @@ class FinalSelection(TimestampedModel):
                 )
         if self.is_deep_selection and not (self.deep_selection_justification or "").strip():
             errors["deep_selection_justification"] = (
-                "Record the deep-selection justification before finalizing this selection."
+                "Record the reason for the deep selection before finalizing this selection."
             )
         # WF-03: selecting against the board's recommendation (falling back to rank #1 when
         # no recommendation was recorded) requires a written justification for the record.
@@ -4276,7 +4275,7 @@ class FinalSelection(TimestampedModel):
             ):
                 errors["deep_selection_justification"] = (
                     "This selection differs from the board's recorded recommendation. "
-                    "Record the justification for the official record."
+                    "Record the reason for the official record."
                 )
         if self.decided_by_id and self.decided_by.role != RecruitmentUser.Role.APPOINTING_AUTHORITY:
             errors["decided_by"] = "Only the Appointing Authority may record the final CAR selection."
@@ -4288,12 +4287,12 @@ class FinalSelection(TimestampedModel):
         # stated reason would be the same one-way door in the opposite direction.
         if self.is_rescinded:
             if not self.rescinded_by_id:
-                errors["rescinded_by"] = "A rescinded selection must record who rescinded it."
+                errors["rescinded_by"] = "A selection that was taken back must record who took it back."
             if not (self.rescind_reason or "").strip():
-                errors["rescind_reason"] = "Record why this selection is being rescinded."
+                errors["rescind_reason"] = "Record why this selection is being taken back."
         elif self.rescinded_by_id or self.rescinded_at or self.rescind_reason:
             errors["is_rescinded"] = (
-                "Rescission details require the selection to be marked rescinded."
+                "Take-back details require the selection to be marked as taken back."
             )
         if errors:
             raise ValidationError(errors)
@@ -4725,8 +4724,8 @@ class CompletionRecord(TimestampedModel):
         blockers = []
         if self.is_voided:
             return [
-                "This completion record was voided by rescission. Record fresh completion "
-                "tracking after a new selection."
+                "This completion record no longer applies because the selection was taken"
+                " back. Record fresh completion tracking after a new selection."
             ]
         completion_label = self.completion_label.lower()
         if not self.requirements.exists():
@@ -5249,7 +5248,7 @@ class AuditLog(TimestampedModel):
         APPLICATION_WITHDRAWN = "application_withdrawn", "Application Withdrawn"
         RECRUITMENT_ENTRY_CANCELLED = "recruitment_entry_cancelled", "Vacancy Cancelled"
         COMPLETION_DEADLINE_CHANGED = "completion_deadline_changed", "Completion Deadline Changed"
-        FINAL_SELECTION_RESCINDED = "final_selection_rescinded", "Final Selection Rescinded"
+        FINAL_SELECTION_RESCINDED = "final_selection_rescinded", "Selection Taken Back"
         COMPLETION_RECORDED = "completion_recorded", "Completion Recorded"
         CASE_CLOSED = "case_closed", "Case Closed"
         NOTIFICATION_SENT = "notification_sent", "Notification Sent"

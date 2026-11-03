@@ -325,7 +325,7 @@ class WorkflowOverrideView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
             else:
                 messages.success(request, "Special authorization recorded.")
         else:
-            messages.error(request, "Add a reason for this authorization.")
+            messages.error(request, "Add a reason for this special authorization.")
         if user_can_view_application(request.user, application):
             return redirect("application-detail", pk=pk)
         return redirect("workflow-queue")

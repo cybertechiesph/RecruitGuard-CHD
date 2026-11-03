@@ -1,7 +1,7 @@
 {% load recruitment_ui %}
 {% if completion_record.is_voided %}
 <div class="alert alert-warning" role="status">
-    <strong>Voided by rescission.</strong>
+    <strong>No longer applies: the selection was taken back.</strong>
     This completion record no longer supports case closure.
     {% if completion_record.void_reason %}{{ completion_record.void_reason }}{% endif %}
 </div>
@@ -30,7 +30,7 @@
                         {% endif %}
                     </p>
                     <span class="rg-cmp-closed-banner__audit-note">
-                                                Fully archived &amp; audit-logged
+                                                Archived and recorded
                     </span>
                 </div>
             </div>
@@ -47,7 +47,7 @@
                         The Appointing Authority selected another applicant from the finalized CAR.
                     </p>
                     <span class="rg-cmp-closed-banner__audit-note">
-                                                Fully archived &amp; audit-logged
+                                                Archived and recorded
                     </span>
                 </div>
             </div>
@@ -72,7 +72,7 @@
                         {% endif %}
                     </p>
                     <span class="rg-cmp-closed-banner__audit-note">
-                                                Fully archived &amp; audit-logged
+                                                Archived and recorded
                     </span>
                 </div>
             </div>
@@ -95,7 +95,7 @@
                         {% endif %}
                     </p>
                     <span class="rg-cmp-closed-banner__audit-note">
-                                                Fully archived &amp; audit-logged
+                                                Archived and recorded
                     </span>
                 </div>
             </div>
@@ -113,7 +113,7 @@
                     All records are preserved as final archives.
                 </p>
                 <span class="rg-cmp-closed-banner__audit-note">
-                                        Fully archived &amp; audit-logged
+                                        Archived and recorded
                 </span>
             </div>
         </div>
@@ -324,7 +324,7 @@
             {% if completion_record.remarks %}
                 <div class="rg-pkt-row" style="align-items:flex-start;">
                     <span class="rg-pkt-row__label" style="padding-top:0.1rem;">
-                        Remarks
+                        Notes
                     </span>
                     <span class="rg-pkt-row__value"
                           style="white-space:pre-line;color:#374151;">
@@ -479,7 +479,7 @@
     <div class="rg-dec-handoff">
         <div>
             <strong>Audit Log.</strong>
-            The complete audit trail for this case is preserved and accessible.
+            Everything done on this case is kept and can be looked up.
             <a href="{{ audit_log_url }}" class="ms-1">
                 View full audit log            </a>
         </div>
@@ -505,7 +505,7 @@
                 (<strong>{{ recruitment_case.locked_stage|title }}</strong>)
             {% endif %}
             for review and reprocessing.
-            This action is <strong>permanently audit-logged</strong> and should only be
+            This action is <strong>recorded permanently</strong> and should only be
             used when a documented administrative need or legal obligation requires it.
         </div>
         <button type="button"
@@ -540,9 +540,9 @@
                              style="background:#fef2f2;border:1px solid #fca5a5;
                                     border-radius:0.35rem;padding:0.65rem 0.75rem;
                                     font-size:0.8rem;color:#991b1b;">
-                                            <strong>This is a controlled, audit-logged action.</strong>
+                                            <strong>This action is recorded.</strong>
                             The reopen event will be permanently recorded against this case.
-                            Only proceed if you have a documented administrative or legal basis.
+                            Only continue if you have a documented administrative or legal reason.
                         </div>
                         <div class="mb-3">
                             <label for="{{ reopen_form.reason.id_for_label }}"
@@ -556,7 +556,7 @@
                                 id="{{ reopen_form.reason.id_for_label }}"
                                 class="form-control{% if reopen_form.reason.errors %} is-invalid{% endif %}"
                                 rows="4"
-                                placeholder="Document the specific administrative or legal basis for reopening this closed recruitment case."
+                                placeholder="Write the administrative or legal reason for reopening this closed case."
                                 style="font-size:0.8125rem;"
                             ></textarea>
                             {% if reopen_form.reason.errors %}
@@ -592,8 +592,8 @@
         <div class="rg-dec-handoff">
             <div>
                 <strong>Read-only archive.</strong>
-                All records for this case are preserved and immutable.
-                The complete audit trail is available through the
+                Every record of this case is kept unchanged.
+                Everything done on this case is in the
                 <a href="{{ audit_log_url }}">full audit log</a>.
             </div>
         </div>

@@ -108,7 +108,7 @@
                                     {% if rating.encoded_by_id and rating.encoded_by_id != rating.rated_by_id %}
                                         <br>
                                         <span style="font-size:0.72rem;color:#64748b;">
-                                            Encoded by {{ rating.encoded_by.get_full_name|default:rating.encoded_by.username }}
+                                            Typed in by {{ rating.encoded_by.get_full_name|default:rating.encoded_by.username }}
                                         </span>
                                     {% endif %}
                                 </div>
@@ -134,7 +134,7 @@
             what — a bare sheet count told the reader nothing about the score.
             {% endcomment %}
             <div class="rg-exam-locked-field">
-                <div class="rg-exam-locked-field__label">Encoded paper ratings</div>
+                <div class="rg-exam-locked-field__label">Paper ratings typed in</div>
                 <div class="rg-exam-locked-field__value">
                     <ul class="list-unstyled mb-0">
                         {% for fallback in current_interview_fallback_ratings %}
@@ -174,7 +174,7 @@
                     {% endif %}
                     {% if current_user_interview_rating.justification %}
                     <div style="font-size:0.79rem;color:#374151;margin-top:0.35rem;">
-                        <strong>Justification:</strong>
+                        <strong>Reason:</strong>
                         {{ current_user_interview_rating.justification }}
                     </div>
                     {% endif %}

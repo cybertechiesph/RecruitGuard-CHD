@@ -1959,7 +1959,7 @@ class PositionDocumentRequirementTests(BaseRecruitmentTestCase):
             "Resubmission deadline may be extended",
             "Interview absences are decided by",
             "Owning office may record withdrawals",
-            "When rescission is no longer allowed",
+            "When a selection can no longer be taken back",
             "COS vacancies may fill more than one position",
             "Suspend and Close require a reason",
         ):

@@ -125,7 +125,7 @@ reviewer can see the disposition at a glance without scrolling to step 2.
                 <h2 class="rg-scr-panel__title">Step 2 &mdash; Outcome and scores</h2>
                 <p class="rg-scr-panel__subtitle">
                     Record what happened with the exam. Score fields appear only when the applicant
-                    completed it; a remarks field appears for waived or absent.
+                    completed it; a notes field appears for waived (the office excused the exam) or absent.
                 </p>
             </div>
         </div>
@@ -264,7 +264,7 @@ reviewer can see the disposition at a glance without scrolling to step 2.
         {# Conditional: remarks (shown when waived or absent). #}
         <div class="rg-exam-cond-group" id="exam-cond-remarks" hidden>
             <div class="rg-exam-cond-group__head">
-                Reason or remarks <span class="text-danger" aria-hidden="true">*</span>
+                Reason <span class="text-danger" aria-hidden="true">*</span>
             </div>
             <div class="rg-field">
                 <label class="form-label" for="{{ exam_form.exam_notes.id_for_label }}">
@@ -619,7 +619,7 @@ reviewer can see the disposition at a glance without scrolling to step 2.
             });
         } else if (v === "waived" || v === "absent") {
             if (notesEl && !(notesEl.value || "").trim()) {
-                p.push({ field: notesEl, msg: "Add a reason or remarks for a waived / absent outcome." });
+                p.push({ field: notesEl, msg: "Add a reason for a waived or absent outcome." });
             }
         }
         return p;

@@ -137,7 +137,7 @@ def archive_audit_logs(actor, cutoff_date):
     to the audit log AFTER the delete, so it survives its own cleanup."""
     if cutoff_date > audit_archive_latest_allowed_cutoff():
         raise ValueError(
-            "Only entries older than six months can be archived. Choose a cutoff "
+            "Only entries older than six months can be archived. Choose a date "
             f"on or before {audit_archive_latest_allowed_cutoff():%b %d, %Y}."
         )
 
@@ -159,7 +159,7 @@ def archive_audit_logs(actor, cutoff_date):
         )
     )
     if not rows:
-        raise ValueError("There are no audit entries older than that cutoff to archive.")
+        raise ValueError("There are no audit entries older than that date to archive.")
 
     buffer = StringIO()
     writer = csv.writer(buffer)

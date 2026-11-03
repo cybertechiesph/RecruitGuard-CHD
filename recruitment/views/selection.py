@@ -44,7 +44,7 @@ class FinalSelectionRescindView(LoginRequiredMixin, WorkflowProcessorRequiredMix
             raise PermissionDenied
         form = FinalSelectionRescindForm(request.POST)
         if not form.is_valid():
-            messages.error(request, "Record why this selection is being rescinded.")
+            messages.error(request, "Record why this selection is being taken back.")
             return redirect("application-detail", pk=pk)
         try:
             _selection, restored = rescind_final_selection(
@@ -58,7 +58,7 @@ class FinalSelectionRescindView(LoginRequiredMixin, WorkflowProcessorRequiredMix
         else:
             messages.success(
                 request,
-                f"Selection rescinded. The original record is preserved, and "
+                f"Selection taken back. The original decision stays on file, and "
                 f"{len(restored)} case(s) are back at the Appointing Authority step so a "
                 "replacement decision can be recorded.",
             )
@@ -77,7 +77,7 @@ class CosVacancyDeliberationRescindView(
             raise PermissionDenied
         form = CosVacancyDeliberationRescindForm(request.POST)
         if not form.is_valid():
-            messages.error(request, "Record why this COS deliberation pick is being rescinded.")
+            messages.error(request, "Record why this COS deliberation pick is being taken back.")
             return redirect("application-detail", pk=pk)
         try:
             _pick, restored = rescind_cos_vacancy_deliberation(
@@ -90,17 +90,16 @@ class CosVacancyDeliberationRescindView(
             messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
         except IntegrityError:
             logger.exception(
-                "COS pick rescission conflicted with another open selection round."
+                "The COS pick could not be taken back because another selection round is open."
             )
             messages.error(
                 request,
-                "This pick cannot be rescinded right now because another selection round "
-                "is open.",
+                "This pick cannot be taken back right now because another selection round is open.",
             )
         else:
             messages.success(
                 request,
-                f"COS deliberation pick rescinded. The original pick is preserved, and "
+                f"COS deliberation pick taken back. The original pick stays on file, and "
                 f"{len(restored)} case(s) are back at the HRM Chief's deliberation step so "
                 "a replacement pick can be recorded.",
             )
@@ -157,7 +156,7 @@ class FinalSelectionView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, Vie
                 form,
                 _format_form_errors(
                     form,
-                    "Choose the selected appointee and provide decision remarks.",
+                    "Choose the appointee and write the decision notes.",
                 ),
             )
 

@@ -339,7 +339,7 @@ class AuditLogArchiveView(LoginRequiredMixin, SystemAdministratorRequiredMixin, 
         try:
             cutoff = date.fromisoformat(cutoff_raw)
         except ValueError:
-            messages.error(request, "Choose a valid cutoff date for the archive.")
+            messages.error(request, "Choose a valid date for the archive.")
             return redirect(reverse("maintenance") + "#archives")
         try:
             archive = archive_audit_logs(request.user, cutoff)

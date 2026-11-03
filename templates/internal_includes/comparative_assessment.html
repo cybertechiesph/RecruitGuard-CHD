@@ -171,7 +171,7 @@ HRM Chief on COS). Two states:
         <div class="rg-field">
             <label class="form-label">ETE ratings (Education, Training, Experience)</label>
             <div class="form-text">
-                Score each component 0&ndash;100 and record a one-line basis for each
+                Score each component 0&ndash;100 and write a one-line reason for each
                 (e.g. <em>"Master's degree; only Bachelor's required"</em>). The composition
                 inside the CAR's {{ car_weights.ete_weight|floatformat:"-1" }}% is
                 education {{ ete_component_weight_display.education }}%,
@@ -240,8 +240,8 @@ HRM Chief on COS). Two states:
                             <input type="text" class="form-control form-control-sm mt-1"
                                    name="ete_education_basis_{{ item.recruitment_case_id }}"
                                    value="{{ ete.education_basis|default:'' }}"
-                                   placeholder="Basis — required"
-                                   aria-label="Education basis for {{ item.candidate_label }}">
+                                   placeholder="Reason — required"
+                                   aria-label="Reason for the education score of {{ item.candidate_label }}">
                         </div>
                         <div class="col-md-4">
                             <label class="form-label" style="font-size:0.72rem;" for="ete-training-{{ item.recruitment_case_id }}">Training ({{ ete_component_weight_display.training }}%)</label>
@@ -254,8 +254,8 @@ HRM Chief on COS). Two states:
                             <input type="text" class="form-control form-control-sm mt-1"
                                    name="ete_training_basis_{{ item.recruitment_case_id }}"
                                    value="{{ ete.training_basis|default:'' }}"
-                                   placeholder="Basis — required"
-                                   aria-label="Training basis for {{ item.candidate_label }}">
+                                   placeholder="Reason — required"
+                                   aria-label="Reason for the training score of {{ item.candidate_label }}">
                         </div>
                         <div class="col-md-4">
                             <label class="form-label" style="font-size:0.72rem;" for="ete-experience-{{ item.recruitment_case_id }}">Experience ({{ ete_component_weight_display.experience }}%)</label>
@@ -268,8 +268,8 @@ HRM Chief on COS). Two states:
                             <input type="text" class="form-control form-control-sm mt-1"
                                    name="ete_experience_basis_{{ item.recruitment_case_id }}"
                                    value="{{ ete.experience_basis|default:'' }}"
-                                   placeholder="Basis — required"
-                                   aria-label="Experience basis for {{ item.candidate_label }}">
+                                   placeholder="Reason — required"
+                                   aria-label="Reason for the experience score of {{ item.candidate_label }}">
                         </div>
                     </div>
                 </div>
@@ -365,7 +365,7 @@ HRM Chief on COS). Two states:
                             </option>
                         {% endfor %}
                     </select>
-                    <label class="form-label mt-2" for="car-recommendation-notes">Recommendation notes / remarks</label>
+                    <label class="form-label mt-2" for="car-recommendation-notes">Recommendation notes</label>
                     <textarea id="car-recommendation-notes" name="recommendation_notes" form="car-form"
                               class="form-control form-control-sm" rows="3">{{ car_form.recommendation_notes.value|default_if_none:'' }}</textarea>
                     <div class="form-text">The board deliberates off-system. Notes are required when it recommends no candidate.</div>

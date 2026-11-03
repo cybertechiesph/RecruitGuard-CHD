@@ -467,7 +467,7 @@ class VacancyBatchExamView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
                 valid_from = date.fromisoformat(valid_from_raw) if valid_from_raw else None
                 valid_until = date.fromisoformat(valid_until_raw) if valid_until_raw else None
             except ValueError:
-                messages.error(request, "Enter valid dates for the exam validity window.")
+                messages.error(request, "Enter valid dates for when the exam stays valid.")
                 return redirect("vacancy-batch-exam", pk=entry.pk)
             clear_validity_window = bool(
                 request.POST.get("clear_validity_window")

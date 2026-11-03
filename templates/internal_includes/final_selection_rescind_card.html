@@ -15,12 +15,12 @@ Inputs:
 {% if final_selection_rescind_form %}
 <details class="rg-icard mb-3" id="final-selection-rescind">
     <summary class="rg-icard__title" style="cursor:pointer; padding:0.25rem 0;">
-        Rescind this selection
+        Take back this selection
     </summary>
     <p class="rg-icard__subtitle">
         Use this to correct a selection that was recorded in error, or when the selected
-        person withdraws before appointment. The original record is <strong>kept intact</strong>
-        and marked rescinded; the candidates it closed come back to this step so the vacancy
+        person withdraws before appointment. The original decision <strong>stays on file</strong>,
+        marked as taken back; the candidates it closed come back to this step so the vacancy
         can be decided again.
     </p>
     <form method="post" id="finalSelectionRescindForm"
@@ -43,16 +43,16 @@ Inputs:
         </div>
         <button type="button" class="btn btn-outline-danger btn-sm"
                 data-bs-toggle="modal" data-bs-target="#confirmRescindSelection">
-            Rescind the selection
+            Take back the selection
         </button>
     </form>
 </details>
 {% comment %} AA review P2-2: a rescission unwinds the decision, so it is confirmed like
        the selection itself. {% endcomment %}
-{% include "internal_includes/modal_confirm.html" with modal_id="confirmRescindSelection" variant="destructive" title="Rescind this selection?" body="The selected applicant and every candidate this selection closed return to the Appointing Authority step, and each applicant is told the selection is under review. The original record is kept, marked rescinded, with your reason." confirm_label="Yes, rescind it" cancel_label="Keep the selection" form_id="finalSelectionRescindForm" %}
+{% include "internal_includes/modal_confirm.html" with modal_id="confirmRescindSelection" variant="destructive" title="Take back this selection?" body="The selected applicant and every candidate this selection closed return to the Appointing Authority step, and each applicant is told the selection is under review. The original decision stays on file, marked as taken back, with your reason." confirm_label="Yes, take it back" cancel_label="Keep the selection" form_id="finalSelectionRescindForm" %}
 {% elif final_selection_rescind_unavailable_message %}
 <div class="rg-icard mb-3" id="final-selection-rescind">
-    <h3 class="rg-icard__title">Rescind this selection</h3>
+    <h3 class="rg-icard__title">Take back this selection</h3>
     <p class="rg-note mb-0">{{ final_selection_rescind_unavailable_message }}</p>
 </div>
 {% endif %}
@@ -63,18 +63,18 @@ Inputs:
 <div class="rg-icard mb-3">
     <div class="rg-icard__header">
         <div>
-            <h3 class="rg-icard__title">Rescinded selection</h3>
+            <h3 class="rg-icard__title">Selection taken back</h3>
             <p class="rg-icard__subtitle">
                 {{ record.selected_application.applicant_display_name }} was selected on
                 {{ record.decided_at|date:"N j, Y" }} by
                 {{ record.decided_by.get_full_name|default:record.decided_by.username }},
-                and that selection was rescinded on
+                and that selection was taken back on
                 {{ record.rescinded_at|date:"N j, Y" }} by
                 {{ record.rescinded_by.get_full_name|default:record.rescinded_by.username }}.
-                The original record is preserved exactly as it was recorded.
+                The original decision stays on file exactly as it was recorded.
             </p>
         </div>
-        <span class="rg-pill rg-pill--neutral rg-pill--sm">Rescinded</span>
+        <span class="rg-pill rg-pill--neutral rg-pill--sm">Taken back</span>
     </div>
     <p class="rg-note mb-0">
         {{ record.rescind_reason }}

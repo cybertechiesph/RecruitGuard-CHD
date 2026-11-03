@@ -15,12 +15,12 @@ Inputs:
 {% if cos_pick_rescind_form %}
 <details class="rg-icard mb-3" id="cos-pick-rescind">
     <summary class="rg-icard__title" style="cursor:pointer; padding:0.25rem 0;">
-        Rescind this deliberation pick
+        Take back this deliberation pick
     </summary>
     <p class="rg-icard__subtitle">
         Use this to correct a pick that was recorded in error, or when the chosen applicant
-        withdraws before the contract is issued. The original pick is <strong>kept intact</strong>
-        and marked rescinded; its round reopens and the candidates it resolved come back to
+        withdraws before the contract is issued. The original pick <strong>stays on file</strong>,
+        marked as taken back; its round reopens and the candidates it resolved come back to
         the deliberation step so this vacancy can be decided again.
     </p>
     <form method="post"
@@ -42,13 +42,13 @@ Inputs:
             <div class="form-text">{{ cos_pick_rescind_form.reference.help_text }}</div>
         </div>
         <button type="submit" class="btn btn-outline-danger btn-sm">
-            Rescind the pick
+            Take back the pick
         </button>
     </form>
 </details>
 {% elif cos_pick_rescind_unavailable_message %}
 <div class="rg-icard mb-3" id="cos-pick-rescind">
-    <h3 class="rg-icard__title">Rescind this deliberation pick</h3>
+    <h3 class="rg-icard__title">Take back this deliberation pick</h3>
     <p class="rg-note mb-0">{{ cos_pick_rescind_unavailable_message }}</p>
 </div>
 {% endif %}
@@ -58,22 +58,22 @@ Inputs:
 <div class="rg-icard mb-3">
     <div class="rg-icard__header">
         <div>
-            <h3 class="rg-icard__title">Rescinded deliberation pick</h3>
+            <h3 class="rg-icard__title">Deliberation pick taken back</h3>
             <p class="rg-icard__subtitle">
                 {{ record.chosen_case.application.applicant_display_name }} was picked on
                 {{ record.finalized_at|date:"N j, Y" }}
                 {% if record.finalized_by %}
                     by {{ record.finalized_by.get_full_name|default:record.finalized_by.username }},
                 {% endif %}
-                and that pick was rescinded on
+                and that pick was taken back on
                 {{ record.rescinded_at|date:"N j, Y" }}
                 {% if record.rescinded_by %}
                     by {{ record.rescinded_by.get_full_name|default:record.rescinded_by.username }}.
                 {% endif %}
-                The original pick is preserved exactly as it was recorded.
+                The original pick stays on file exactly as it was recorded.
             </p>
         </div>
-        <span class="rg-pill rg-pill--neutral rg-pill--sm">Rescinded</span>
+        <span class="rg-pill rg-pill--neutral rg-pill--sm">Taken back</span>
     </div>
     <p class="rg-note mb-0">
         {{ record.rescind_reason }}

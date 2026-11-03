@@ -32,8 +32,8 @@ from . import (
 
 
 PENDING_RESUBMISSION_SCREENING_FINALIZE_MESSAGE = (
-    "The applicant's resubmission is still pending. Wait for the new documents (or remove "
-    "the applicant from the batch) before finalizing this screening as Qualified."
+    "The applicant has not sent the corrected documents yet. Wait for them (or remove the"
+    " applicant from the batch) before finalizing this screening as Qualified."
 )
 # Default window the applicant has to re-upload flagged documents before the secretariat
 # may remove them from the batch (the "Incomplete shall not be entertained" final outcome).
@@ -362,7 +362,7 @@ def _validate_screening_review_consistency(
         blocking_labels = "; ".join(row["requirement_title"] for row in blocking_reviews)
         raise ValueError(
             "Every required document must be marked Complied before this applicant can be "
-            f"marked Qualified. Still pending: {blocking_labels}."
+            f"marked Qualified. Still waiting: {blocking_labels}."
         )
     for row in document_reviews:
         if (
@@ -712,7 +712,7 @@ def extend_document_resubmission_deadline(application, actor, new_deadline, reas
         raise ValueError("Office Policy does not allow resubmission deadline extensions.")
     if not user_can_extend_resubmission_deadline(actor, application):
         raise ValueError(
-            "This pending resubmission is not currently assigned to you for review."
+            "This resubmission is not currently assigned to you."
         )
     reason = (reason or "").strip()
     if not reason:
@@ -738,7 +738,7 @@ def extend_document_resubmission_deadline(application, actor, new_deadline, reas
         application=application,
         actor=actor,
         action=AuditLog.Action.DECISION_RECORDED,
-        description="Extended the pending document resubmission deadline.",
+        description="Extended the deadline for the corrected documents.",
         metadata={
             "old_resubmission_deadline": old_deadline.isoformat(),
             "new_resubmission_deadline": new_deadline.isoformat(),

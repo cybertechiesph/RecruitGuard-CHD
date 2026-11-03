@@ -1226,7 +1226,7 @@ def _build_comparative_assessment_report_pdf(
         f"Prepared By: {actor}",
         f"Prepared At: {timezone.now():%Y-%m-%d %H:%M}",
         f"Generation Version: {generation_number}",
-        f"Preliminary Ranking Basis: {car._assessment_weight_display(application.position, assessment_weights) or 'Not available'}",
+        f"Preliminary ranking based on: {car._assessment_weight_display(application.position, assessment_weights) or 'Not available'}",
         "",
         "Ranked Candidates",
     ]

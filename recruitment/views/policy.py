@@ -64,8 +64,7 @@ class VacancyAssessmentWeightsView(LoginRequiredMixin, EntryManagerRequiredMixin
             else:
                 messages.success(
                     request,
-                    "Assessment weights unlocked for correction. The reason is recorded in "
-                    "the audit trail.",
+                    "Assessment weights unlocked for correction. The reason is recorded.",
                 )
                 return redirect("vacancy-assessment-weights", pk=entry.pk)
         else:
@@ -86,7 +85,7 @@ class VacancyAssessmentWeightsView(LoginRequiredMixin, EntryManagerRequiredMixin
             messages.error(
                 request,
                 "Assessment weights are locked because scoring has started for this vacancy. "
-                "Unlock them for correction if the split was encoded wrongly.",
+                "Unlock them for correction if the split was entered wrongly.",
             )
             return redirect("vacancy-assessment-weights", pk=entry.pk)
         form = VacancyAssessmentWeightsForm(request.POST, instance=weights)

@@ -527,7 +527,7 @@ class VacancyBatchInterviewTests(BaseRecruitmentTestCase):
                 follow=True,
             )
         self.assertEqual(recorded.status_code, 200)
-        self.assertContains(recorded, "Absent &mdash; letter of intent pending", html=True)
+        self.assertContains(recorded, "Absent &mdash; letter of intent waiting", html=True)
         self.assertContains(recorded, 'value="mark_absent"', count=2)
 
         absence = get_pending_attendance_exception(
@@ -1322,7 +1322,7 @@ class InterviewManagementTests(InterviewSessionHelpers, BaseRecruitmentTestCase)
         application = self.make_selected_application(self.level1_position)
         application.refresh_from_db()
         self.assertFalse(user_can_record_withdrawal(self.secretariat, application))
-        with self.assertRaisesMessage(ValueError, "needs the selection rescinded"):
+        with self.assertRaisesMessage(ValueError, "needs the selection taken back"):
             record_application_withdrawal(
                 application, self.secretariat, "Changed their mind."
             )
@@ -2252,7 +2252,7 @@ class InterviewManagementTests(InterviewSessionHelpers, BaseRecruitmentTestCase)
                 cleaned_data=self.rating_payload(application, level=4, justification=""),
             )
         self.assertIn(
-            "Provide a justification when the interview rating is below 75 or above 98.",
+            "Give a reason when the interview rating is below 75 or above 98.",
             str(exc.exception),
         )
 

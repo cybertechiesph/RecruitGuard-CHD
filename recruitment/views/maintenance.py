@@ -33,7 +33,7 @@ class MaintenanceView(LoginRequiredMixin, SystemAdministratorRequiredMixin, Temp
                 context["archive_preview_cutoff"] = cutoff
             elif cutoff:
                 context["archive_preview_error"] = (
-                    "Only entries older than six months can be archived. Choose a cutoff "
+                    "Only entries older than six months can be archived. Choose a date "
                     f"on or before {latest_cutoff:%b %d, %Y}."
                 )
             else:

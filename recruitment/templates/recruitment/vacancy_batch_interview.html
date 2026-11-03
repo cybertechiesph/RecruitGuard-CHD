@@ -91,7 +91,7 @@
     <h2 class="h6 mb-1">2 — Score &amp; finalize</h2>
     <p class="rg-note mb-3">
         Each candidate is scored on the competency rating sheet from their case page
-        (HRMPSB rates online or the secretariat encodes). Finalize the whole pool once every
+        (the HRMPSB rates online, or the Secretariat types in paper sheets). Finalize the whole pool once every
         attending candidate has the required panel ratings. A recorded absence waits here
         for the office's letter-of-intent decision and does not block the rest of the pool.
     </p>
@@ -124,7 +124,7 @@
                                 {% if candidate.session.attendance_outcome == "absent" %}
                                     <span class="rg-pill rg-pill--withdrawn rg-pill--sm">
                                         Absent &mdash; letter of intent
-                                        {% if candidate.absence_exception.is_pending %}pending{% else %}decided{% endif %}
+                                        {% if candidate.absence_exception.is_pending %}waiting{% else %}decided{% endif %}
                                     </span>
                                 {% elif candidate.rating_count %}
                                     <span class="rg-pill rg-pill--success rg-pill--sm">{{ candidate.rating_count }} on record</span>
@@ -184,7 +184,7 @@
 <div class="card p-4 mb-3">
     <h2 class="h6 mb-1">2 — Record interview scores</h2>
     <p class="rg-note mb-3">
-        Enter each candidate's interview score from the end user (0–100). Add a justification when a
+        Enter each candidate's interview score from the end user (0–100). Add a reason when a
         score lands below 75 or above 98.
     </p>
     <form method="post" id="cosInterviewForm">
@@ -197,7 +197,7 @@
                             <th>Candidate</th>
                             <th>Score</th>
                             <th>Notes</th>
-                            <th>Justification</th>
+                            <th>Reason</th>
                             <th>Current</th>
                         </tr>
                     </thead>

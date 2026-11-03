@@ -7,7 +7,7 @@ This one asks a single question of every heading, button, notice, error, email a
 system: does a first-time reader understand it without a manual? Review only; nothing in the
 code was changed.
 
-## Status: review written; I1–I5 done, I6 to do
+## Status: done (I1–I6, November 2026)
 
 ## 0. How this was tested
 
@@ -406,7 +406,7 @@ kind from the console backend.
 | I3 — applicant side and emails | **Done.** See the note below. |
 | I4 — Filipino consistency | **Done.** See the note below. |
 | I5 — staff jargon and locked panels | **Done.** See the note below. |
-| I6 — hard words | not started |
+| I6 — hard words | **Done.** See the note below. |
 
 **I1 as built, where it differs from the brief:**
 
@@ -525,3 +525,29 @@ kind from the console backend.
   labels only (no SQL).
 - Checked with the touched test files (294 tests), the translation check, and a re-render of
   all 118 case pages (no status change). The full suite runs once after I6.
+
+**I6 as built:**
+
+- **"Rescind" is "take back"** everywhere a user reads it: the Director's and the HRM Chief's
+  cards ("Take back this selection", "Selection taken back", "Taken back"), the confirm
+  dialog, the Office Policy switch ("When a selection can no longer be taken back"), every
+  message, the case-history lines and the audit label ("Selection Taken Back"). "Voided by
+  rescission" is "No longer applies: the selection was taken back".
+- **"Encode" is "type in"** on the paper-rating card, the rater's dialog and the panels
+  ("Typed in by", "Paper ratings typed in"); "entered wrongly" for the weights.
+- **"Justification" and "basis" are "reason"**; **"remarks" is "notes"** (one label each, so
+  "Reason or remarks" is "Reason"); **"pending" is "waiting"**; **"validity" is "valid from /
+  valid until"**; **"intake" is "applications"** ("Stop applications"); **"cutoff" is
+  "date"**; "in contention" is "still in the running"; "disposition", "supersedes", "kept
+  intact", "immutable" are gone.
+- **"Audit-logged" / "recorded in the audit trail" is "recorded"** on the case pages and
+  prints; the System Administrator's own pages keep "audit trail", since that is their tool.
+- **Kept on purpose:** the feature names "Special authorization" and "Authorized reopen";
+  "Remarks" on the CAR filing copy (the office's paper form); integrity messages a user never
+  reaches; stored history rows.
+- **H-01 glosses:** "Waived" now says what it means on the exam form ("the office excused the
+  exam"); the other office words (quorum, letter of intent, deep selection, finalize) were
+  already explained where they first appear.
+- Migration 0101: labels and help text only (no SQL). 896 of 896 Filipino strings still
+  translated (I6 touched staff wording only).
+- **One full suite after I6**, at the user's request, covering I5 and I6.

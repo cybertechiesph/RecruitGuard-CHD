@@ -57,7 +57,7 @@
     <h2 class="rg-adm-section-title" id="archives">Audit archives</h2>
     <section class="rg-adm-panel" data-archives>
         <p class="rg-adm-muted small">
-            Move entries older than a cutoff into an encrypted archive file, then remove them from the live log.
+            Move entries older than a chosen date into an encrypted archive file, then remove them from the live log.
             Only entries older than six months (before {{ archive_latest_cutoff|date:"M j, Y" }}) can be archived.
             Nothing is removed until the archive file is saved and checked.
         </p>
@@ -87,7 +87,7 @@
                     </form>
                 </div>
             {% else %}
-                <div class="alert alert-secondary mt-3 mb-0">No entries are older than that cutoff.</div>
+                <div class="alert alert-secondary mt-3 mb-0">No entries are older than that date.</div>
             {% endif %}
         {% endif %}
 

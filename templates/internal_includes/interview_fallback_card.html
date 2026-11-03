@@ -46,8 +46,8 @@ Inputs:
         <div>
             <h3 class="rg-icard__title">Paper rating sheet</h3>
             <p class="rg-icard__subtitle">
-                When a panel member rated on paper, encode their sheet here: name the member,
-                record their score, and attach the scan. Each encoded sheet counts as one
+                When a panel member rated on paper, type in their sheet here: name the member,
+                record their score, and attach the scan. Each typed-in sheet counts as one
                 rater toward the 3&ndash;5 HRMPSB quorum &mdash; the scan on its own does not.
             </p>
         </div>
@@ -61,7 +61,7 @@ Inputs:
             <span>
                 <strong>{{ fallback.rated_by.get_full_name|default:fallback.rated_by.username }}</strong>
                 <span class="text-muted">
-                    &mdash; encoded by {{ fallback.encoded_by.get_full_name|default:fallback.encoded_by.username }}
+                    &mdash; typed in by {{ fallback.encoded_by.get_full_name|default:fallback.encoded_by.username }}
                 </span>
             </span>
             <span><strong>{{ fallback.rating_score }}</strong></span>
@@ -139,7 +139,7 @@ Inputs:
         </div>
         <div class="rg-int-fallback-actions">
             <button type="submit" class="btn btn-sm btn-outline-secondary">
-                Encode this rating sheet
+                Type in this rating sheet
             </button>
         </div>
     </form>

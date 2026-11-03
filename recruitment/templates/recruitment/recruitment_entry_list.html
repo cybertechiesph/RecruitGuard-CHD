@@ -223,7 +223,7 @@
                                                         class="btn {% if entry.intake_deadline_passed %}btn-rg-primary{% else %}btn-rg-destructive{% endif %} btn-sm"
                                                         data-bs-toggle="modal"
                                                         data-bs-target="#closeModal{{ entry.pk }}">
-                                                    {% if entry.intake_deadline_passed %}Close intake{% else %}Close{% endif %}
+                                                    {% if entry.intake_deadline_passed %}Stop applications{% else %}Close{% endif %}
                                                 </button>
                                                 {% include "internal_includes/modal_confirm.html" with modal_id=entry.pk|dom_id:"closeModal" variant="destructive" title="Close this vacancy?" body="No new applications will be accepted. For a Plantilla vacancy, the applicant pool is then final, so the Comparative Assessment can be prepared. Cases already in progress continue as normal." confirm_label="Close Entry" form_id=entry.pk|dom_id:"closeForm" reason_label="Reason for closing" reason_id=entry.pk|dom_id:"close-reason-" reason_name="reason" %}
                                             {% else %}
@@ -236,7 +236,7 @@
                                                         class="btn {% if entry.intake_deadline_passed %}btn-rg-primary{% else %}btn-rg-destructive{% endif %} btn-sm"
                                                         data-bs-toggle="modal"
                                                         data-bs-target="#closeModal{{ entry.pk }}">
-                                                    {% if entry.intake_deadline_passed %}Close intake{% else %}Close{% endif %}
+                                                    {% if entry.intake_deadline_passed %}Stop applications{% else %}Close{% endif %}
                                                 </button>
                                                 {% include "internal_includes/modal_confirm.html" with modal_id=entry.pk|dom_id:"closeModal" variant="destructive" title="Close this vacancy?" body="No new applications will be accepted. For a Plantilla vacancy, the applicant pool is then final, so the Comparative Assessment can be prepared. Cases already in progress continue as normal." confirm_label="Close Entry" form_id=entry.pk|dom_id:"closeForm" %}
                                             {% endif %}

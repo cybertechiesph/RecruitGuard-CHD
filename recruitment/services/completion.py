@@ -73,8 +73,8 @@ def save_completion_tracking(application, actor, cleaned_data, requirement_forms
     created = completion_record is None
     if completion_record is not None and completion_record.is_voided:
         raise ValueError(
-            "This completion record was voided by rescission. Record a new selection "
-            "before starting completion tracking again."
+            "This completion record no longer applies because the selection was taken "
+            "back. Record a new selection before starting completion tracking again."
         )
     if completion_record is None:
         completion_record = CompletionRecord(
@@ -223,8 +223,8 @@ def close_recruitment_case(application, actor, closure_notes):
         raise ValueError("Record completion tracking before closing the recruitment case.")
     if completion_record.is_voided:
         raise ValueError(
-            "This completion record was voided by rescission. Record fresh completion "
-            "tracking after a new selection."
+            "This completion record no longer applies because the selection was taken "
+            "back. Record fresh completion tracking after a new selection."
         )
     if not completion_record.requirements.exists():
         raise ValueError("Add at least one completion requirement item before closing the case.")

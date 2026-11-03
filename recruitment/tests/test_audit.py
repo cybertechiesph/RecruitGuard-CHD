@@ -619,7 +619,7 @@ class AdminAreaRoundF3Tests(BaseRecruitmentTestCase):
         self.assertContains(response, "Only entries older than six months can be archived.")
         old_enough = (timezone.localdate() - timedelta(days=400)).isoformat()
         response = self.admin.get(reverse("maintenance"), {"archive_cutoff": old_enough})
-        self.assertContains(response, "No entries are older than that cutoff.")
+        self.assertContains(response, "No entries are older than that date.")
 
     def test_archive_action_returns_to_maintenance(self):
         response = self.admin.post(reverse("audit-log-archive"), {"archive_cutoff": "not-a-date"})

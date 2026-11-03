@@ -388,10 +388,10 @@ def apply_car_ete_ratings(application, actor, posted):
         missing_bases = [label for label in ETE_COMPONENT_LABELS if not bases[label]]
         if missing_bases:
             raise ValueError(
-                f"Add the one-line basis for {candidate_name}'s "
+                f"Add the one-line reason for {candidate_name}'s "
                 f"{', '.join(missing_bases)} rating"
                 f"{'s' if len(missing_bases) != 1 else ''} — each ETE component needs "
-                "its basis on record."
+                "its reason on record."
             )
         rating = (
             scores["education"] * weights[0]
@@ -537,7 +537,7 @@ def _car_draft_candidate_rows(recruitment_entry, review_stage, assessment_weight
         pending_references = "; ".join(incomplete_references)
         raise ValueError(
             "Finalize screening, exam, and interview outputs for all active applicants before preparing the CAR draft. "
-            f"Pending: {pending_references}."
+            f"Still waiting: {pending_references}."
         )
 
     scored_rows = sorted(

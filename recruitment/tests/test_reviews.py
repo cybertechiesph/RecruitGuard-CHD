@@ -473,7 +473,7 @@ class SecretariatImprovementsTests(InterviewSessionHelpers, BatchExamHelpers, Ba
         client = self._staff_client(self.secretariat)
         open_list = client.get(reverse("recruitment-entry-list"))
         self.assertContains(open_list, "data-intake-deadline-passed")
-        self.assertContains(open_list, "Close intake")
+        self.assertContains(open_list, "Stop applications")
         self.assertNotContains(open_list, self.cos_position.job_code)
         closed_list = client.get(reverse("recruitment-entry-list") + "?status=closed")
         self.assertContains(closed_list, self.cos_position.job_code)
@@ -1133,7 +1133,7 @@ class RoundBTests(BatchExamHelpers, BaseRecruitmentTestCase):
         response = self._staff_client(self.hrmpsb).post(
             reverse("interview-rating", args=[application.pk]), data, follow=True
         )
-        self.assertContains(response, "justification")
+        self.assertContains(response, "Give a reason")
 
     # F11: after screening one case, the next case that still needs screening is offered
     def test_after_a_screening_the_next_case_to_screen_is_offered(self):
@@ -1581,7 +1581,7 @@ class AppointingAuthorityRoundDTests(BaseRecruitmentTestCase):
         page = self._client_for(self.appointing).get(
             reverse("application-detail", args=[application.pk])
         )
-        self.assertContains(page, "Replaces the selection rescinded on")
+        self.assertContains(page, "Replaces the selection taken back on")
 
 
 class WithdrawalOwningOfficeSwitchTests(BaseRecruitmentTestCase):

@@ -617,7 +617,7 @@ def user_can_open_cos_selection_round(user, posting):
 
 
 COS_EARLIER_ROUND_RESCIND_MESSAGE = (
-    "Only the most recent selection round's pick can be rescinded. Earlier rounds are "
+    "Only the most recent selection round's pick can be taken back. Earlier rounds are "
     "history; run a new round instead."
 )
 
@@ -667,18 +667,18 @@ def rescind_cos_vacancy_deliberation(pick, actor, reason, *, reference=""):
     deliberation step — where the replacement pick is actually made."""
     reason = (reason or "").strip()
     if not reason:
-        raise ValueError("Record why this COS deliberation pick is being rescinded.")
+        raise ValueError("Record why this COS deliberation pick is being taken back.")
     if pick.is_rescinded:
-        raise ValueError("This COS deliberation pick has already been rescinded.")
+        raise ValueError("This COS deliberation pick has already been taken back.")
     if not pick.is_finalized:
-        raise ValueError("Only a finalized COS deliberation pick can be rescinded.")
+        raise ValueError("Only a finalized COS deliberation pick can be taken back.")
     if not cos_pick_is_from_latest_selection_round(pick):
         raise ValueError(COS_EARLIER_ROUND_RESCIND_MESSAGE)
     if selection.rescind_cutoff_block_message(pick.chosen_case.application):
         raise ValueError(common.RESCIND_CUTOFF_MESSAGE)
     if not user_can_rescind_cos_vacancy_deliberation(actor, pick):
         raise ValueError(
-            "Only the HRM Chief may rescind a recorded COS deliberation pick."
+            "Only the HRM Chief may take back a recorded COS deliberation pick."
         )
 
     entry = pick.recruitment_entry
@@ -760,7 +760,7 @@ def rescind_cos_vacancy_deliberation(pick, actor, reason, *, reference=""):
             action=AuditLog.Action.COS_SELECTION_ROUND_OPENED,
             description=(
                 f"Reopened COS selection round {selection_round.round_number} for "
-                f"{entry.job_code} after its pick was rescinded."
+                f"{entry.job_code} after its pick was taken back."
             ),
             metadata={
                 "entry_id": entry.id,
@@ -787,8 +787,7 @@ def rescind_cos_vacancy_deliberation(pick, actor, reason, *, reference=""):
             to_role=RecruitmentUser.Role.HRM_CHIEF,
             route_type=RoutingHistory.RouteType.REOPEN,
             description=(
-                "Returned to the HRM Chief's deliberation step after the COS pick was "
-                "rescinded."
+                "Returned to the HRM Chief's deliberation step after the COS pick was taken back."
             ),
             notes=reason,
         )
@@ -797,8 +796,7 @@ def rescind_cos_vacancy_deliberation(pick, actor, reason, *, reference=""):
             actor=actor,
             action=AuditLog.Action.FINAL_SELECTION_RESCINDED,
             description=(
-                "Returned to the HRM Chief's deliberation step after the COS pick was "
-                "rescinded."
+                "Returned to the HRM Chief's deliberation step after the COS pick was taken back."
             ),
             metadata={
                 "cos_deliberation_pick_id": pick.id,
@@ -822,7 +820,7 @@ def rescind_cos_vacancy_deliberation(pick, actor, reason, *, reference=""):
         actor=actor,
         action=AuditLog.Action.FINAL_SELECTION_RESCINDED,
         description=(
-            f"Rescinded the COS deliberation pick for {entry.job_code} "
+            f"Took back the COS deliberation pick for {entry.job_code} "
             f"({winner.reference_label})."
         ),
         metadata={
@@ -850,7 +848,7 @@ def rescind_cos_vacancy_deliberation(pick, actor, reason, *, reference=""):
         actor,
         RecruitmentUser.Role.HRM_CHIEF,
         kind=Notification.Kind.CASE_RETURNED,
-        title=f"{winner.reference_label} COS pick rescinded — round reopened",
+        title=f"{winner.reference_label} COS pick taken back — round reopened",
         body=reason,
         exclude_user_ids={actor.id},
     )

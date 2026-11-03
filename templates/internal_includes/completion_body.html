@@ -1,7 +1,7 @@
 {% load recruitment_ui %}
 {% if completion_record.is_voided %}
 <div class="alert alert-warning" role="status">
-    <strong>Voided by rescission.</strong>
+    <strong>No longer applies: the selection was taken back.</strong>
     This completion record no longer supports case closure.
     {% if completion_record.void_reason %}{{ completion_record.void_reason }}{% endif %}
 </div>
@@ -210,7 +210,7 @@ Bootstrap Icons CSS).
                             day{{ completion_record.days_overdue|pluralize }} overdue.
                         </strong>
                         {{ completion_record.pending_requirement_count|default:"Some" }} requirement{{ completion_record.pending_requirement_count|pluralize }}
-                        still pending from the applicant. A late-but-valid item can be marked
+                        still waiting from the applicant. A late-but-valid item can be marked
                         complete without moving this date &mdash; the original deadline stays
                         on the record, and the completion date shows that it was late.
                     </div>
@@ -462,7 +462,7 @@ Bootstrap Icons CSS).
                     </svg>
                     <span>
                         <strong>This is permanent and can't be undone.</strong>
-                        The case will be marked closed and every record preserved as a final archive. The closure is audit-logged.
+                        The case will be marked closed and every record preserved as a final archive. The closure is recorded.
                     </span>
                 </div>
             </div>

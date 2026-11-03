@@ -116,7 +116,7 @@ HRM Chief on a COS case; each carries its own footer.
                     <span class="text-danger" aria-hidden="true">*</span>
                 </label>
                 {{ deliberation_form.attendance_notes }}
-                <div class="form-text">Member attendance or quorum basis.</div>
+                <div class="form-text">Who attended, and how quorum was met.</div>
                 {% for error in deliberation_form.attendance_notes.errors %}
                     <div class="invalid-feedback d-block">{{ error }}</div>
                 {% endfor %}
@@ -252,7 +252,7 @@ HRM Chief on a COS case; each carries its own footer.
                 p.push({ field: form.elements["quorum_status"], msg: "Choose the quorum status." });
             }
             if (!valOf("attendance_notes")) {
-                p.push({ field: form.elements["attendance_notes"], msg: "Record member attendance or the quorum basis." });
+                p.push({ field: form.elements["attendance_notes"], msg: "Record who attended and how quorum was met." });
             }
         }
         return p;

@@ -62,7 +62,7 @@ Standards applied:
             <div>
                 <h3 class="rg-icard__title">Ranked candidates</h3>
                 <p class="rg-icard__subtitle">
-                    Pick the appointee. Top-five candidates are preferred — picking outside the top five needs a deep-selection justification.
+                    Pick the appointee. Top-five candidates are preferred — picking outside the top five needs a written reason (deep selection).
                 </p>
             </div>
         </div>
@@ -192,7 +192,7 @@ Standards applied:
         <div class="rg-field rg-fs-deep-justification" id="fs-justification-group">
             <div class="rg-fs-deep-lock" id="fs-deviation-note" role="status" hidden>
                 You are selecting someone other than the board's recommended candidate.
-                Record the justification for the official record.
+                Record the reason for the official record.
             </div>
             <label class="form-label" for="{{ final_selection_form.deep_selection_justification.id_for_label }}">
                 {{ final_selection_form.deep_selection_justification.label }}
@@ -391,7 +391,7 @@ Standards applied:
                     A return reopens the ETE ratings and the recommendation. Finalized exam and interview scores are not re-opened.
                 </p>
                 <p class="mb-0" style="font-size:0.78rem; color:#5f6c78;">
-                    Your <strong>remarks</strong> above are saved to the case history and visible to HRMPSB.
+                    Your <strong>notes</strong> above are saved to the case history and visible to HRMPSB.
                 </p>
             </div>
             <div class="modal-footer" style="border-top:1px solid #e5e7eb; padding:0.75rem 1.25rem; display:flex; justify-content:flex-end; gap:0.5rem;">
@@ -559,12 +559,12 @@ Standards applied:
         }
         if (deepCheckbox && deepCheckbox.checked) {
             if (!justField || !(justField.value || "").trim()) {
-                p.push({ field: justField, msg: "Deep selection needs a written justification before recording." });
+                p.push({ field: justField, msg: "Deep selection needs a written reason before recording." });
             }
         } else if (selectionDeviates()) {
             // WF-03: deviation from the board's recommendation needs the justification too.
             if (!justField || !(justField.value || "").trim()) {
-                p.push({ field: justField, msg: "You are selecting someone other than the board's recommended candidate. Record the justification for the official record." });
+                p.push({ field: justField, msg: "You are selecting someone other than the board's recommended candidate. Record the reason for the official record." });
             }
         }
         if (!notesField || !(notesField.value || "").trim()) {
@@ -621,7 +621,7 @@ Standards applied:
         if (returnBtn) {
             returnBtn.addEventListener("click", function () {
                 if (!returnRemarks || !(returnRemarks.value || "").trim()) {
-                    returnShowError("Add remarks for HRMPSB before sending the CAR back.", returnRemarks);
+                    returnShowError("Add notes for the HRMPSB before sending the CAR back.", returnRemarks);
                     return;
                 }
                 if (returnModalEl && window.bootstrap) bootstrap.Modal.getOrCreateInstance(returnModalEl).show();

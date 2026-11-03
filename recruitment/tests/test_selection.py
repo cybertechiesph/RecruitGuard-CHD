@@ -278,8 +278,8 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             status=CompletionRequirement.RequirementStatus.COMPLETED,
         )
         refusal = (
-            "The appointment has been issued. A revocation at this point is handled as a "
-            "separation, not a rescission."
+            "The appointment has been issued. Undoing it now is handled as a separation, not by "
+            "taking back the selection."
         )
 
         self.assertFalse(user_can_rescind_cos_vacancy_deliberation(self.hrm_chief, pick))
@@ -301,7 +301,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         self.assertIsNotNone(completion.voided_at)
         self.assertEqual(completion.void_reason, "The engagement will not proceed.")
         self.assertFalse(completion.ready_for_closure)
-        self.assertIn("Voided by rescission", render_to_string(
+        self.assertIn("No longer applies: the selection was taken back", render_to_string(
             "internal_includes/completion_locked_body.html",
             {"completion_record": completion},
         ))
@@ -323,7 +323,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
     def test_a_live_cos_pick_must_be_rescinded_before_the_vacancy_is_cancelled(self):
         pick, winner, sibling = self._cos_pick_with_a_closed_sibling()
         refusal = (
-            "A COS selection has already been recorded for this vacancy. Rescind the "
+            "A COS selection has already been recorded for this vacancy. Take back the "
             "deliberation pick first if the hire is not going ahead."
         )
 
@@ -486,7 +486,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         self.assertEqual(returned_bell.recipient, hrm_chief_peer)
         self.assertEqual(
             returned_bell.title,
-            f"{winner.reference_label} COS pick rescinded — round reopened",
+            f"{winner.reference_label} COS pick taken back — round reopened",
         )
         self.assertEqual(
             returned_bell.body,
@@ -694,18 +694,18 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             user_can_rescind_cos_vacancy_deliberation(self.secretariat, pick)
         )
         with self.assertRaisesMessage(
-            ValueError, "Only the HRM Chief may rescind a recorded COS deliberation pick."
+            ValueError, "Only the HRM Chief may take back a recorded COS deliberation pick."
         ):
             rescind_cos_vacancy_deliberation(pick, self.secretariat, "No authority.")
         with self.assertRaisesMessage(
-            ValueError, "Record why this COS deliberation pick is being rescinded."
+            ValueError, "Record why this COS deliberation pick is being taken back."
         ):
             rescind_cos_vacancy_deliberation(pick, self.hrm_chief, "   ")
         # And it cannot be rescinded twice.
         with self.captureOnCommitCallbacks(execute=True):
             rescind_cos_vacancy_deliberation(pick, self.hrm_chief, "Correcting an error.")
         with self.assertRaisesMessage(
-            ValueError, "This COS deliberation pick has already been rescinded."
+            ValueError, "This COS deliberation pick has already been taken back."
         ):
             rescind_cos_vacancy_deliberation(pick, self.hrm_chief, "Again.")
 
@@ -726,7 +726,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
                 follow=True,
             )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "COS deliberation pick rescinded")
+        self.assertContains(response, "COS deliberation pick taken back")
         pick.refresh_from_db()
         self.assertTrue(pick.is_rescinded)
 
@@ -1303,7 +1303,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             user_can_rescind_cos_vacancy_deliberation(self.hrm_chief, old_pick)
         )
         refusal = (
-            "Only the most recent selection round's pick can be rescinded. Earlier rounds "
+            "Only the most recent selection round's pick can be taken back. Earlier rounds "
             "are history; run a new round instead."
         )
         with self.assertRaisesMessage(ValueError, refusal):
@@ -1376,7 +1376,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(
             response,
-            "This pick cannot be rescinded right now because another selection round is open.",
+            "This pick cannot be taken back right now because another selection round is open.",
         )
         pick.refresh_from_db()
         self.assertFalse(pick.is_rescinded)
@@ -1855,7 +1855,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
             follow=True,
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "each ETE component needs its basis on record")
+        self.assertContains(response, "each ETE component needs its reason on record")
         self.assertFalse(ApplicationETERating.objects.filter(application=application).exists())
 
         payload[f"ete_experience_basis_{case_id}"] = "Three years of directly relevant experience"
@@ -3381,7 +3381,7 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
 
         with self.assertRaisesMessage(
             ValueError,
-            "The finalized CAR has no ranked applicants in contention.",
+            "The finalized CAR has no ranked applicants still in the running.",
         ):
             _final_selection_items_are_ready(report)
         form = FinalSelectionForm(report=report)
@@ -3673,8 +3673,8 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
             status=CompletionRequirement.RequirementStatus.COMPLETED,
         )
         refusal = (
-            "The appointment has been issued. A revocation at this point is handled as a "
-            "separation, not a rescission."
+            "The appointment has been issued. Undoing it now is handled as a separation, not by "
+            "taking back the selection."
         )
 
         self.assertFalse(user_can_rescind_final_selection(self.appointing, selection))
@@ -3702,7 +3702,7 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         completion.refresh_from_db()
         self.assertTrue(completion.is_voided)
         self.assertFalse(completion.ready_for_closure)
-        self.assertIn("voided by rescission", completion.closure_blockers[0].lower())
+        self.assertIn("the selection was taken back", completion.closure_blockers[0].lower())
 
         with self.captureOnCommitCallbacks(execute=True):
             replacement = record_final_selection(
@@ -3808,7 +3808,7 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         self.assertEqual(returned_bell.recipient, appointing_peer)
         self.assertEqual(
             returned_bell.title,
-            f"{winner.reference_label} selection rescinded — vacancy back for decision",
+            f"{winner.reference_label} selection taken back — vacancy back for decision",
         )
         self.assertEqual(
             returned_bell.body,
@@ -3893,11 +3893,11 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         self.assertTrue(user_can_rescind_final_selection(self.appointing, selection))
 
         with self.assertRaisesMessage(
-            ValueError, "Only the Appointing Authority may rescind"
+            ValueError, "Only the Appointing Authority may take back"
         ):
             rescind_final_selection(selection, self.hrm_chief, "Not my call to make.")
         with self.assertRaisesMessage(
-            ValueError, "Record why this selection is being rescinded."
+            ValueError, "Record why this selection is being taken back."
         ):
             rescind_final_selection(selection, self.appointing, "   ")
 
@@ -3924,7 +3924,7 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         self.force_login_with_mfa(client, self.appointing)
         detail = client.get(reverse("application-detail", kwargs={"pk": winner.pk}))
         self.assertEqual(detail.status_code, 200)
-        self.assertContains(detail, "Rescind this selection")
+        self.assertContains(detail, "Take back this selection")
         self.assertNotContains(detail, "{#")
 
         other_client = Client()
@@ -3947,10 +3947,10 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
 
         self.assertIsNone(get_final_selection_for_entry(self.level1_position))
         after = client.get(reverse("application-detail", kwargs={"pk": winner.pk}))
-        self.assertContains(after, "Rescinded selection")
+        self.assertContains(after, "Selection taken back")
         self.assertContains(after, "The appointment is not going ahead.")
         self.assertContains(after, "Memo 2026-07-22")
-        self.assertNotContains(after, "Rescind this selection")
+        self.assertNotContains(after, "Take back this selection")
 
     def test_a_rescinded_selection_no_longer_blocks_cancelling_the_vacancy(self):
         # SL-14 + SL-11: cancellation tells the canceller to rescind first, so a rescinded

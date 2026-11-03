@@ -118,7 +118,7 @@
                     <p><strong>Notes:</strong> {{ current_user_interview_rating.rating_notes }}</p>
                 {% endif %}
                 {% if current_user_interview_rating.justification %}
-                    <p><strong>Justification:</strong> {{ current_user_interview_rating.justification }}</p>
+                    <p><strong>Reason:</strong> {{ current_user_interview_rating.justification }}</p>
                 {% endif %}
                 <p class="rg-int-submitted__notice">
                     Ratings can no longer be changed. Use an authorized reopen if a correction is required.
@@ -140,7 +140,7 @@
                 <path d="M2 13l2-5 5-5 3 3-5 5-5 2z"/><path d="M9 3l3 3"/>
             </svg>
             <span>
-                <strong>Encoding mode.</strong>
+                <strong>Typing in a paper rating.</strong>
                 You are recording a paper rating on behalf of an HRMPSB member.
                 Pick the rater below.
             </span>
@@ -151,7 +151,7 @@
         <div>
             <h3 class="rg-icard__title">
                 {% if interview_rating_is_support_encoding %}
-                    Encode a panel rating
+                    Type in a panel rating
                 {% elif current_user_interview_rating %}
                     Your submitted rating
                 {% else %}
@@ -160,12 +160,12 @@
             </h3>
             <p class="rg-icard__subtitle">
                 {% if interview_rating_is_support_encoding %}
-                    The HRMPSB member you select stays the rater of record; you are saved as the encoder.
+                    The HRMPSB member you select stays the rater of record; you are saved as the person who typed it in.
                 {% elif current_user_interview_rating %}
                     Your rating is on record. You can revise it until the session is finalized.
                 {% else %}
                     Score each competency on the panel sheet. The overall rating is computed
-                    automatically. Add a justification when it lands below 75 or above 98.
+                    automatically. Add a reason when it lands below 75 or above 98.
                 {% endif %}
             </p>
         </div>
@@ -184,7 +184,7 @@
                     <p><strong>Notes:</strong> {{ current_user_interview_rating.rating_notes }}</p>
                 {% endif %}
                 {% if current_user_interview_rating.justification %}
-                    <p><strong>Justification:</strong> {{ current_user_interview_rating.justification }}</p>
+                    <p><strong>Reason:</strong> {{ current_user_interview_rating.justification }}</p>
                 {% endif %}
                 <button type="button" class="btn btn-sm btn-outline-secondary" id="int-revise-toggle">
                     Revise rating
@@ -261,7 +261,7 @@
                 <path d="M8 6.5v3" stroke-linecap="round"/>
                 <circle cx="8" cy="11" r="0.6" fill="currentColor"/>
             </svg>
-            A score below 75 or above 98 needs a written justification.
+            A score below 75 or above 98 needs a written reason.
         </div>
 
         <div class="rg-field">
@@ -303,7 +303,7 @@
             {% if current_user_interview_rating %}
                 Revise &amp; resubmit
             {% elif interview_rating_is_support_encoding %}
-                Encode rating
+                Type in rating
             {% else %}
                 Submit rating
             {% endif %}
@@ -321,7 +321,7 @@
             <div class="modal-header" style="background:var(--rg-primary);border-bottom:none;padding:1rem 1.25rem;">
                 <h5 class="modal-title" id="modal-int-submit-rating-label" style="font-size:0.95rem;font-weight:700;color:#fff;margin:0;">
                     {% if interview_rating_is_support_encoding %}
-                        Encode this rating?
+                        Type in this rating?
                     {% elif current_user_interview_rating %}
                         Replace your rating with this one?
                     {% else %}
@@ -333,7 +333,7 @@
             <div class="modal-body" style="padding:1.25rem;font-size:0.83rem;color:#374151;line-height:1.6;">
                 <p class="mb-2">
                     {% if interview_rating_is_support_encoding %}
-                        Recording a paper rating on behalf of an HRMPSB member. The selected member is the rater of record; you are saved as the encoder.
+                        Recording a paper rating on behalf of an HRMPSB member. The selected member is the rater of record; you are saved as the person who typed it in.
                     {% elif current_user_interview_rating %}
                         Your previously submitted score will be replaced. You can keep revising until the session is finalized.
                     {% else %}
@@ -363,7 +363,7 @@
                 </button>
                 <button type="button" class="btn-rg-finalize" id="modal-int-rating-confirm">
                     {% if interview_rating_is_support_encoding %}
-                        Confirm encoding
+                        Confirm
                     {% elif current_user_interview_rating %}
                         Confirm revision
                     {% else %}
@@ -495,7 +495,7 @@
             if (needsJustification(n)) {
                 var j = justInput && (justInput.value || "").trim();
                 if (!j) {
-                    p.push({ field: justInput, msg: "Add a justification — required when the computed rating is below 75 or above 98." });
+                    p.push({ field: justInput, msg: "Add a reason — required when the computed rating is below 75 or above 98." });
                 }
             }
         }

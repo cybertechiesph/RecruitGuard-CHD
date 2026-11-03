@@ -19,8 +19,8 @@ EXAM_FIELD_LABELS = {
     "general_score": "General Ability Score",
     "exam_date": "Exam Date",
     "administered_by": "Administered By",
-    "valid_from": "Validity Start",
-    "valid_until": "Validity End",
+    "valid_from": "Valid from",
+    "valid_until": "Valid until",
     "exam_notes": "Exam notes",
 }
 

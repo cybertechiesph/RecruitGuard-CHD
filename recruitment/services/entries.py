@@ -499,8 +499,8 @@ def cancel_recruitment_entry(entry, actor, reason):
     # canceller to rescind first, so a rescinded row must not keep refusing them.
     if FinalSelection.objects.filter(recruitment_entry=entry, is_rescinded=False).exists():
         raise ValidationError(
-            "A selection has already been recorded for this vacancy. Rescind the selection "
-            "first if the appointment is not going ahead."
+            "A selection has already been recorded for this vacancy. Take back the "
+            "selection first if the appointment is not going ahead."
         )
     if CosVacancyDeliberation.objects.filter(
         recruitment_entry=entry,
@@ -508,7 +508,7 @@ def cancel_recruitment_entry(entry, actor, reason):
         is_rescinded=False,
     ).exists():
         raise ValidationError(
-            "A COS selection has already been recorded for this vacancy. Rescind the "
+            "A COS selection has already been recorded for this vacancy. Take back the "
             "deliberation pick first if the hire is not going ahead."
         )
 
@@ -600,7 +600,7 @@ def update_recruitment_entry_status(entry, actor, new_status, reason=""):
     if new_status == PositionPosting.EntryStatus.ACTIVE and entry_selection_stands(entry):
         raise ValidationError(
             "A selection has already been recorded for this vacancy, so it can't take new "
-            "applications. Rescind the selection first if the appointment is not going ahead."
+            "applications. Take back the selection first if the appointment is not going ahead."
         )
     if (
         new_status == PositionPosting.EntryStatus.ACTIVE

@@ -305,8 +305,8 @@ class RecruitmentEntryCancelView(LoginRequiredMixin, EntryManagerRequiredMixin, 
         messages.success(
             request,
             f"{entry.job_code} cancelled. {len(affected)} in-flight "
-            f"application{'' if len(affected) == 1 else 's'} closed with a "
-            "vacancy-cancelled disposition and notified — none were recorded as rejected.",
+            f"application{'' if len(affected) == 1 else 's'} closed as "
+            "\"vacancy cancelled\" and notified — none were recorded as rejected.",
         )
         return redirect("recruitment-entry-list")
 

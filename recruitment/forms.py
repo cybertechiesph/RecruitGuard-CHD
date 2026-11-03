@@ -1661,8 +1661,8 @@ class VacancyAssessmentWeightsUnlockForm(BootstrapFormMixin, forms.Form):
         widget=forms.Textarea(attrs={"rows": 3}),
         max_length=1000,
         help_text=(
-            "Explain the correction being made — this is recorded in the audit trail "
-            "alongside the split that finalized scores were computed against."
+            "Explain the correction. It is recorded together with the split the finalized"
+            " scores were computed against."
         ),
     )
 
@@ -1733,7 +1733,7 @@ class OfficePolicyForm(BootstrapFormMixin, forms.ModelForm):
             "withdrawal_recorded_by_owning_office": (
                 "Owning office may record withdrawals while the other office holds the batch"
             ),
-            "rescind_cutoff": "When rescission is no longer allowed",
+            "rescind_cutoff": "When a selection can no longer be taken back",
             "cos_positions_multi_slot_allowed": (
                 "COS vacancies may fill more than one position"
             ),
@@ -1951,7 +1951,7 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
                     if existing_review is not None and not is_resubmitted
                     else ""
                 ),
-                label=f"Remarks for {requirement.title}",
+                label=f"Note for {requirement.title}",
                 widget=forms.Textarea(
                     attrs={
                         "rows": 2,
@@ -2081,8 +2081,8 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
             self.add_error(
                 "qualification_outcome",
                 "Every required document must be marked Complied before this applicant "
-                f"can be marked Qualified. Still pending: {blocking_labels}. Return the "
-                "flagged documents to the applicant, or record Not Qualified with the basis.",
+                f"can be marked Qualified. Still waiting: {blocking_labels}. Return the "
+                "flagged documents to the applicant, or record Not Qualified with the reason.",
             )
         if (
             qualification_outcome == ScreeningRecord.QualificationOutcome.NOT_QUALIFIED
@@ -2090,7 +2090,7 @@ class ScreeningReviewForm(DeferredModelValidationMixin, BootstrapFormMixin, form
         ):
             self.add_error(
                 "screening_notes",
-                "Record the qualification basis before marking this applicant Not Qualified.",
+                "Write why the applicant does not qualify before marking them Not Qualified.",
             )
         return cleaned_data
 
@@ -2167,8 +2167,8 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
         self.fields["general_result"].label = "General Ability Result"
         self.fields["exam_date"].label = "Exam Date"
         self.fields["administered_by"].label = "Administered By"
-        self.fields["valid_from"].label = "Validity Start"
-        self.fields["valid_until"].label = "Validity End"
+        self.fields["valid_from"].label = "Valid from"
+        self.fields["valid_until"].label = "Valid until"
         self.fields["exam_notes"].label = "Exam notes"
         self.fields["exam_notes"].required = False
         self.fields["exam_result"].required = False
@@ -2273,7 +2273,7 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
         valid_from = cleaned_data.get("valid_from")
         valid_until = cleaned_data.get("valid_until")
         if valid_from and valid_until and valid_until < valid_from:
-            self.add_error("valid_until", "Validity end date cannot be earlier than the validity start date.")
+            self.add_error("valid_until", "The \"valid until\" date cannot be earlier than the \"valid from\" date.")
 
         exam_status = cleaned_data.get("exam_status")
         score_values = {
@@ -2295,7 +2295,7 @@ class ExamRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, forms.Mod
             cleaned_data["valid_from"] = None
             cleaned_data["valid_until"] = None
             if not self.draft and not cleaned_data.get("exam_notes"):
-                self.add_error("exam_notes", "Provide remarks explaining the waiver or absence.")
+                self.add_error("exam_notes", "Explain why the exam was waived or missed.")
         return cleaned_data
 
     def clean_evidence_file(self):
@@ -2547,7 +2547,7 @@ class InterviewRatingForm(DeferredModelValidationMixin, BootstrapFormMixin, form
             ) and not justification:
                 self.add_error(
                     "justification",
-                    "Provide a justification when the computed rating is below 75 or above 98.",
+                    "Give a reason when the computed rating is below 75 or above 98.",
                 )
         return cleaned
 
@@ -2591,7 +2591,7 @@ class SimpleInterviewRatingForm(BootstrapFormMixin, forms.Form):
         ):
             self.add_error(
                 "justification",
-                "Provide a justification when the interview score is below 75 or above 98.",
+                "Give a reason when the interview score is below 75 or above 98.",
             )
         return cleaned
 
@@ -2623,10 +2623,10 @@ class CosVacancyDeliberationRescindForm(BootstrapFormMixin, forms.Form):
     only supplies the reason and any authority reference recorded against it."""
 
     reason = forms.CharField(
-        label="Reason for rescinding this pick",
+        label="Reason for taking back this pick",
         widget=forms.Textarea(attrs={"rows": 3}),
         help_text=(
-            "Recorded permanently against the original pick, which is kept intact."
+            "Recorded permanently against the original pick, which stays on file unchanged."
         ),
     )
     reference = forms.CharField(
@@ -2648,10 +2648,10 @@ class FinalSelectionRescindForm(BootstrapFormMixin, forms.Form):
     authority reference that go on the rescission."""
 
     reason = forms.CharField(
-        label="Reason for rescinding this selection",
+        label="Reason for taking back this selection",
         widget=forms.Textarea(attrs={"rows": 3}),
         help_text=(
-            "Recorded permanently against the original selection, which is kept intact."
+            "Recorded permanently against the original selection, which stays on file unchanged."
         ),
     )
     reference = forms.CharField(
@@ -2668,7 +2668,7 @@ class FinalSelectionRescindForm(BootstrapFormMixin, forms.Form):
     def clean_reason(self):
         reason = (self.cleaned_data.get("reason") or "").strip()
         if not reason:
-            raise forms.ValidationError("Record why this selection is being rescinded.")
+            raise forms.ValidationError("Record why this selection is being taken back.")
         return reason
 
 
@@ -2860,7 +2860,7 @@ class InterviewFallbackUploadForm(BootstrapFormMixin, forms.Form):
     replace_existing = forms.BooleanField(
         label="Replace this member's earlier sheet",
         required=False,
-        help_text="Only if this member already has a sheet on record and this one supersedes it.",
+        help_text="Only if this member already has a sheet on record and this one replaces it.",
     )
 
     def __init__(self, *args, panel_members=None, **kwargs):
@@ -2889,7 +2889,7 @@ class InterviewFallbackUploadForm(BootstrapFormMixin, forms.Form):
         ):
             self.add_error(
                 "justification",
-                "Provide a justification when the interview rating is below 75 or above 98.",
+                "Give a reason when the interview rating is below 75 or above 98.",
             )
         return cleaned
 
@@ -2938,7 +2938,8 @@ class DeliberationRecordForm(DeferredModelValidationMixin, BootstrapFormMixin, f
         self.fields["quorum_status"].required = False
         self.fields["attendance_notes"].required = False
         self.fields["ranking_notes"].help_text = (
-            "Record concerns or justification when the HRMPSB rank differs from the system's preliminary score order."
+            "Record concerns, or the reason, when the HRMPSB rank differs from the "
+            "system's preliminary order."
         )
         if draft:
             for field in self.fields.values():
@@ -3018,13 +3019,13 @@ class FinalSelectionForm(BootstrapFormMixin, forms.Form):
             ).order_by("rank_order", "created_at")
         self.fields["selected_item"].label = "Selected Appointee"
         self.fields["is_deep_selection"].label = "Deep selection"
-        self.fields["deep_selection_justification"].label = "Deep-selection Justification"
+        self.fields["deep_selection_justification"].label = "Reason for deep selection"
         self.fields["decision_notes"].label = "Decision notes"
         self.fields["is_deep_selection"].help_text = (
             "Required when selecting an applicant ranked outside the top five."
         )
         self.fields["deep_selection_justification"].help_text = (
-            "Explain the superior qualifications and selection basis."
+            "Explain why this candidate was chosen over those ranked higher."
         )
         self._apply_bootstrap()
 
@@ -3062,7 +3063,7 @@ class FinalSelectionForm(BootstrapFormMixin, forms.Form):
         if is_deep_selection and not justification:
             self.add_error(
                 "deep_selection_justification",
-                "Record the deep-selection justification before finalizing this selection.",
+                "Record the reason for the deep selection before finalizing this selection.",
             )
         # WF-03: a pick that deviates from the board's recommendation needs a justification.
         recommended_case_ids = self._recommended_case_ids()
@@ -3079,8 +3080,8 @@ class FinalSelectionForm(BootstrapFormMixin, forms.Form):
         ):
             self.add_error(
                 "deep_selection_justification",
-                "This selection differs from the board's recorded recommendation. "
-                "Record the justification for the official record.",
+                "This selection differs from the board's recorded recommendation. Record "
+                "the reason for the official record.",
             )
         return cleaned_data
 

@@ -374,7 +374,7 @@ def save_interview_session(
                     "This interview needs ratings from at least "
                     f"{MIN_INTERVIEW_RATINGS_PLANTILLA} HRMPSB members before it can be "
                     f"finalized (currently {distinct_rater_count}). A paper sheet counts "
-                    "once it is encoded with the member who signed it and their score."
+                    "once it is typed in with the member who signed it and their score."
                 )
             if distinct_rater_count > MAX_INTERVIEW_RATINGS_PLANTILLA:
                 raise ValueError(

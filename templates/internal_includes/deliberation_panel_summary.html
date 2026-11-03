@@ -39,7 +39,7 @@ generator.
                     {{ rating.rated_by_role|role_label }}
                     {% if rating.encoded_by_id and rating.encoded_by_id != rating.rated_by_id %}
                         <span class="rg-del-rating-row__encoded">
-                            · Encoded by {{ rating.encoded_by.get_full_name|default:rating.encoded_by.username }}
+                            · Typed in by {{ rating.encoded_by.get_full_name|default:rating.encoded_by.username }}
                         </span>
                     {% endif %}
                 </div>
@@ -48,7 +48,7 @@ generator.
                 {% endif %}
                 {% if rating.justification %}
                     <p class="rg-del-rating-row__justification">
-                        <strong>Justification:</strong> {{ rating.justification }}
+                        <strong>Reason:</strong> {{ rating.justification }}
                     </p>
                 {% endif %}
             </div>

@@ -25,8 +25,8 @@ logger = logging.getLogger("recruitment.services")
 
 
 RESCIND_CUTOFF_MESSAGE = (
-    "The appointment has been issued. A revocation at this point is handled as a "
-    "separation, not a rescission."
+    "The appointment has been issued. Undoing it now is handled as a separation, not by "
+    "taking back the selection."
 )
 
 

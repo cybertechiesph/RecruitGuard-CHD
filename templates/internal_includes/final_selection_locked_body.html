@@ -7,7 +7,7 @@
 {% if selection.supersedes %}
     {# AA review P3-3: a replacement decision says which one it replaced. #}
     <p class="rg-note mt-2 mb-2">
-        Replaces the selection rescinded on {{ selection.supersedes.rescinded_at|date:"F j, Y" }}
+        Replaces the selection taken back on {{ selection.supersedes.rescinded_at|date:"F j, Y" }}
         ({{ selection.supersedes.selected_application.applicant_display_name }}).
     </p>
 {% endif %}
@@ -41,7 +41,7 @@
                 <span class="rg-pkt-row__value">v{{ selection.comparative_assessment_report.official_version }}</span>
             </div>
             <div class="rg-pkt-row">
-                <span class="rg-pkt-row__label">Selection basis</span>
+                <span class="rg-pkt-row__label">How selected</span>
                 <span class="rg-pkt-row__value">
                     {% if selection.is_deep_selection %}
                         Deep selection
@@ -83,7 +83,7 @@
             <div class="mt-3 pt-3" style="border-top:1px solid #e5e7eb;">
                 <div class="text-muted mb-1"
                      style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">
-                    Deep-selection Justification
+                    Reason for deep selection
                 </div>
                 <div style="font-size:0.8125rem;color:#374151;line-height:1.65;white-space:pre-line;">
                     {{ selection.deep_selection_justification }}

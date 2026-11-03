@@ -157,7 +157,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
         audit = AuditLog.objects.get(
             application=application,
             action=AuditLog.Action.DECISION_RECORDED,
-            description="Extended the pending document resubmission deadline.",
+            description="Extended the deadline for the corrected documents.",
         )
         self.assertEqual(audit.metadata["old_resubmission_deadline"], old_deadline.isoformat())
         self.assertEqual(audit.metadata["new_resubmission_deadline"], new_deadline.isoformat())
@@ -198,7 +198,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
     def test_pending_resubmission_blocks_qualified_finalize_in_service_and_form(self):
         application = self._awaiting_resubmission_application()
         refusal = (
-            "The applicant's resubmission is still pending. Wait for the new documents "
+            "The applicant has not sent the corrected documents yet. Wait for them "
             "(or remove the applicant from the batch) before finalizing this screening "
             "as Qualified."
         )

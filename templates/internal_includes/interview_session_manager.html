@@ -147,7 +147,7 @@
             <h3 class="rg-icard__title">Interview rating</h3>
             <p class="rg-icard__subtitle">
                 Record the end user&rsquo;s interview score (0&ndash;100) for this COS applicant.
-                Add a justification when it lands below 75 or above 98.
+                Add a reason when it lands below 75 or above 98.
             </p>
         </div>
         {% if current_user_interview_rating %}
@@ -236,7 +236,7 @@
                     <div class="rg-int-monitor-item__role">
                         {{ rating.rated_by_role|role_label }}
                         {% if rating.encoded_by_id and rating.encoded_by_id != rating.rated_by_id %}
-                            · Encoded by {{ rating.encoded_by.get_full_name|default:rating.encoded_by.username }}
+                            · Typed in by {{ rating.encoded_by.get_full_name|default:rating.encoded_by.username }}
                         {% endif %}
                     </div>
                 </div>
@@ -277,7 +277,7 @@
         <path d="M4 6V4.5a2 2 0 0 1 4 0V6" stroke="#9aa4af" stroke-width="1.5" stroke-linecap="round"/>
     </svg>
     <div>
-        Paper-sheet encoding is closed because the session is finalized.
+        Paper sheets can no longer be typed in: the session is finalized.
         {% if current_interview_fallback_ratings %}
             {{ current_interview_fallback_ratings|length }}
             sheet{{ current_interview_fallback_ratings|length|pluralize }} on record.
@@ -344,7 +344,7 @@
                         <span class="rg-scr-modal-summary__value">
                             {{ current_interview_ratings|length }}
                             {% if current_interview_fallback_ratings %}
-                                + {{ current_interview_fallback_ratings|length }} encoded paper
+                                + {{ current_interview_fallback_ratings|length }} typed-in paper
                             {% endif %}
                             {% if application.branch == "plantilla" %}(3&ndash;5 required){% endif %}
                         </span>
