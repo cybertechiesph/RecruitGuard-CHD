@@ -162,7 +162,7 @@
                 <label class="form-check-label" for="{{ form.submission_confirmation.id_for_label }}">{{ form.submission_confirmation.label }}</label>
                 {% for error in form.submission_confirmation.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
             </div>
-            <p class="rg-apply-submit-note">{% translate "After you submit, you can no longer change your application. You&rsquo;ll get a receipt and a tracking code right away." %}</p>
+            <p class="rg-apply-submit-note">{% translate "After you submit, you can no longer change your application. You&rsquo;ll get a receipt and a Tracking Code right away." %}</p>
             <div class="rg-apply-actions">
                 <button type="submit" name="action" value="save" class="btn btn-outline-secondary">{% translate "Save and finish later" %}</button>
                 <button type="submit" name="action" value="submit" class="btn btn-rg-primary btn-lg" data-submit-application>{% translate "Submit my application" %}</button>

@@ -9,9 +9,9 @@
     </p>
     <p style="margin:8px 0 0; color:#374151; font-size:14px; line-height:1.65;">
         {% if meta.cut_at_screening %}
-            {% blocktranslate trimmed with title=application.position.title branch=application.position.get_branch_display %}After the initial screening of qualifications for {{ title }} under {{ branch }} recruitment, your application did not meet the Qualification Standards (QS) for this position and will not proceed to the examination.{% endblocktranslate %}
+            {% blocktranslate trimmed with title=application.position.title branch=application.position.get_branch_display %}After the initial screening of qualifications for {{ title }} ({{ branch }}), your application did not meet the Qualification Standards for this position and will not proceed to the examination.{% endblocktranslate %}
         {% else %}
-            {% blocktranslate trimmed with title=application.position.title branch=application.position.get_branch_display %}Your application for {{ title }} under {{ branch }} recruitment was not selected.{% endblocktranslate %}
+            {% blocktranslate trimmed with title=application.position.title branch=application.position.get_branch_display %}Your application for {{ title }} ({{ branch }}) was not selected.{% endblocktranslate %}
         {% endif %}
     </p>
 
@@ -28,7 +28,7 @@
                     <td align="right" style="padding:8px 0; border-bottom:1px solid #e5e9ed; color:#374151; font-size:13px; line-height:1.5; font-weight:600;">{{ application.position.title }}</td>
                 </tr>
                 <tr>
-                    <td style="padding:8px 0; color:#6b7280; font-size:13px; line-height:1.5;">{% blocktranslate trimmed %}Recruitment type{% endblocktranslate %}</td>
+                    <td style="padding:8px 0; color:#6b7280; font-size:13px; line-height:1.5;">{% blocktranslate trimmed %}Position type{% endblocktranslate %}</td>
                     <td align="right" style="padding:8px 0; color:#374151; font-size:13px; line-height:1.5; font-weight:600;">{{ application.position.get_branch_display }}</td>
                 </tr>
             </table>

@@ -74,13 +74,13 @@
                 <div id="faq-a2" class="accordion-collapse collapse" aria-labelledby="faq-a2-hd">
                     <div class="accordion-body rg-faq__body">
                         <p>{% blocktranslate trimmed %}The required documents are listed on each position&rsquo;s detail page before you start applying.
-                        Requirements differ between Plantilla and COS entries, but common documents include:{% endblocktranslate %}</p>
+                        Requirements differ between the two position types, but common documents include:{% endblocktranslate %}</p>
                         <ul>
                             <li>{% blocktranslate trimmed %}Signed application or cover letter for the selected position{% endblocktranslate %}</li>
                             <li>{% blocktranslate trimmed %}Personal Data Sheet (CS Form No. 212, Revised 2026) with Work Experience Sheet{% endblocktranslate %}</li>
-                            <li>{% blocktranslate trimmed %}Eligibility, rating, or license documents where required by the posting{% endblocktranslate %}</li>
+                            <li>{% blocktranslate trimmed %}Eligibility, rating, or license documents, when the position requires them{% endblocktranslate %}</li>
                             <li>{% blocktranslate trimmed %}Diploma and transcript of records{% endblocktranslate %}</li>
-                            <li>{% blocktranslate trimmed %}Employment and training certificates where applicable to the selected branch{% endblocktranslate %}</li>
+                            <li>{% blocktranslate trimmed %}Employment and training certificates, when the position type needs them{% endblocktranslate %}</li>
                         </ul>
                         <p>{% blocktranslate trimmed %}Documents should be saved as <strong>PDF, JPG, or PNG</strong> files, with a maximum size of 5 MB per file.{% endblocktranslate %}</p>
                     </div>
@@ -336,7 +336,7 @@
                         <p>{% url 'applicant-my-applications' as link3 %}{% url 'applicant-status-lookup' as link3b %}{% blocktranslate trimmed %}Open
                         <a href="{{ link3 }}">My Applications</a> and enter your email. We send you a 6-digit code, then you
                         see every application you made with that email and its status, in plain language. Prefer your
-                        tracking code? Use the <a href="{{ link3b }}">tracking code page</a> instead.{% endblocktranslate %}</p>
+                        Tracking Code? Use the <a href="{{ link3b }}">Tracking Code page</a> instead.{% endblocktranslate %}</p>
                         <p>{% blocktranslate trimmed %}Easier: every status update email we send includes a direct link straight to your
                         status page &mdash; just click that.{% endblocktranslate %}</p>
                     </div>
@@ -373,7 +373,7 @@
                     <div class="accordion-body rg-faq__body">
                         <p>{% url 'applicant-status-lookup' as link4 %}{% blocktranslate trimmed %}Yes &mdash; but only someone you trust. A family member with your Tracking Code and the
                         email address you used can check your status on the
-                        <a href="{{ link4 }}">tracking code page</a>. This is useful if
+                        <a href="{{ link4 }}">Tracking Code page</a>. This is useful if
                         you&rsquo;re overseas (OFW) or working in an area without good internet. Share the code only
                         with someone checking on your behalf.{% endblocktranslate %}</p>
                         <p>{% blocktranslate trimmed %}The status page does not show personal information beyond your name and the position. We

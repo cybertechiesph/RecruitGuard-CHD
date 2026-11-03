@@ -2831,7 +2831,7 @@ class MyApplicationsAndLanguageEmailTests(BaseRecruitmentTestCase):
         self.assertContains(home, reverse("applicant-my-applications"))
         self.assertNotContains(home, ">\n                Track Application\n")
         hub = Client().get(reverse("applicant-my-applications"))
-        self.assertContains(hub, "Have a tracking code instead?")
+        self.assertContains(hub, "Have a Tracking Code instead?")
         self.assertContains(hub, reverse("applicant-status-lookup"))
         lookup = Client().get(reverse("applicant-status-lookup"))
         self.assertContains(lookup, "See all your applications with just your email")

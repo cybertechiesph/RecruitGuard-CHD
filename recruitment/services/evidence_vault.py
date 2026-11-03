@@ -1007,8 +1007,8 @@ def _render_application_receipt_pdf(application, *, generated_at=None):
     rows = [
         (gettext("Applicant"), application.applicant_display_name or "—"),
         (gettext("Position"), application.position.title),
-        (gettext("Reference / Job Code"), application.position.job_code),
-        (gettext("Engagement"), engagement),
+        (gettext("Vacancy code"), application.position.job_code),
+        (gettext("Position type"), engagement),
         (
             gettext("Date Submitted"),
             _receipt_datetime(submitted_at) if submitted_at else "—",

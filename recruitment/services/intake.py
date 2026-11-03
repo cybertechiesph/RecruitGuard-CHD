@@ -359,7 +359,7 @@ def request_application_withdrawal(application, reason=""):
         raise ValueError(gettext("You already asked to withdraw this application. The office will confirm by email."))
     if not applicant_can_request_withdrawal(application):
         raise ValueError(
-            gettext("This application can no longer be withdrawn online. Please contact the recruitment office.")
+            gettext("This application can no longer be withdrawn online. Please contact the recruitment team.")
         )
     application.withdrawal_requested_at = timezone.now()
     application.withdrawal_request_reason = (reason or "").strip()[:1000]
@@ -1248,7 +1248,7 @@ def start_public_application_draft(entry, cleaned_data):
     types someone else's e-mail must not be able to rewrite that person's draft. The owner
     can correct their details on the application page once verified."""
     if not entry.is_open_for_intake:
-        raise ValueError(gettext("The selected recruitment entry is not currently open for intake."))
+        raise ValueError(gettext("This position is no longer accepting applications."))
     applicant_email = normalize_applicant_email(cleaned_data["email"])
     if RecruitmentApplication.objects.filter(
         position=entry,
@@ -1301,7 +1301,7 @@ def start_public_application_draft(entry, cleaned_data):
         if "unique_active_application_per_applicant_position" not in str(exc):
             raise
         raise ValueError(
-            gettext("An application for this recruitment entry already exists for this applicant.")
+            gettext("You already have an application for this position.")
         ) from exc
     audit.record_audit_event(
         application=application,

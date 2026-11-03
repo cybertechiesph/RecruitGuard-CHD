@@ -80,7 +80,7 @@ class ScreeningRecordTests(BaseRecruitmentTestCase):
             notification_type=NotificationLog.NotificationType.NON_SELECTED_APPLICANT,
         )
         self.assertIn(
-            "The review also noted deficiencies in 1 submitted document(s).",
+            "The review also found problems in 1 of the documents you sent.",
             notification.body,
         )
         self.assertNotIn("Pages are incomplete", notification.body)

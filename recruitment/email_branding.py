@@ -48,8 +48,8 @@ DO_NOT_REPLY_INTERNAL = (
 
 # Reporting instructions shown only on the applicant exam-invitation and interview-notice.
 REPORTING_INSTRUCTIONS = (
-    gettext_lazy("Bring at least one (1) valid government-issued identification card."),
-    gettext_lazy("Report at least fifteen (15) minutes before your scheduled time."),
+    gettext_lazy("Bring one valid government ID."),
+    gettext_lazy("Arrive at least 15 minutes before your scheduled time."),
     gettext_lazy(
         "If you are unable to attend on the scheduled date, submit a written letter of intent "
         "to reschedule to the Human Resource Management Unit (details below) before your "

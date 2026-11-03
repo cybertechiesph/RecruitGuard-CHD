@@ -87,27 +87,21 @@
 
     {% if entry.position_reference %}
     <div class="rg-pub-section">
-        <h2 class="rg-pub-section__title">{% translate "Official Position Reference" %}</h2>
+        <h2 class="rg-pub-section__title">{% translate "Salary and level" %}</h2>
         <div class="row g-3">
             <div class="col-md-4">
                 <p class="rg-pub-section__copy mb-1"><strong>{% translate "Salary Grade" %}</strong></p>
                 <p class="rg-pub-section__copy mb-0">{% if entry.position_reference.salary_grade %}SG {{ entry.position_reference.salary_grade }}{% else %}{% translate "Not recorded" %}{% endif %}</p>
                 <p class="rg-pub-jargon">{% translate "The government pay level for this job. A higher number means a higher salary." %}</p>
             </div>
-        </div>
-        <details class="rg-pub-reference-details" style="margin-top:0.85rem;">
-            <summary style="cursor:pointer; font-size:0.9375rem;">{% translate "Official reference details" %}</summary>
-            <div class="row g-3" style="margin-top:0.35rem;">
-                <div class="col-md-6">
-                    <p class="rg-pub-section__copy mb-1"><strong>{% translate "Level Classification" %}</strong></p>
-                    <p class="rg-pub-section__copy mb-0">{% if entry.position_reference.get_level_classification_display %}{{ entry.position_reference.get_level_classification_display }}{% else %}{% translate "Not recorded" %}{% endif %}</p>
-                </div>
-                <div class="col-md-6">
-                    <p class="rg-pub-section__copy mb-1"><strong>{% translate "Class ID" %}</strong></p>
-                    <p class="rg-pub-section__copy mb-0">{% if entry.position_reference.class_id %}{{ entry.position_reference.class_id }}{% else %}{% translate "Not recorded" %}{% endif %}</p>
-                </div>
+            {% if entry.position_reference.level_classification %}
+            <div class="col-md-8">
+                <p class="rg-pub-section__copy mb-1"><strong>{% translate "Level" %}</strong></p>
+                <p class="rg-pub-section__copy mb-0">{% if entry.position_reference.level_classification == "SECOND_LEVEL" %}{% translate "Second Level" %}{% else %}{% translate "First Level" %}{% endif %}</p>
+                <p class="rg-pub-jargon">{% translate "First Level is for clerical and support jobs; Second Level is for professional and technical jobs up to Division Chief." %}</p>
             </div>
-        </details>
+            {% endif %}
+        </div>
     </div>
     {% endif %}
 
@@ -174,7 +168,7 @@
             <li>{% translate "Click <strong>&ldquo;Apply for This Position&rdquo;</strong> below and enter your name, email and mobile number." %}</li>
             <li>{% translate "Enter the 6-digit code we email you." %}</li>
             <li>{% translate "Add your documents &mdash; a phone photo is fine, and a document with several pages can be added page by page." %}</li>
-            <li>{% translate "Submit. You&rsquo;ll get a receipt and a tracking code right away." %}</li>
+            <li>{% translate "Submit. You&rsquo;ll get a receipt and a Tracking Code right away." %}</li>
         </ol>
         <p class="rg-pub-section__copy">
             {% blocktranslate trimmed %}

@@ -25,7 +25,7 @@
             {% endblocktranslate %}
         </p>
         <p class="rg-ta-intro__copy rg-hub-alt">
-            {% translate "Lost your tracking code?" %}
+            {% translate "Lost your Tracking Code?" %}
             <a href="{% url 'applicant-my-applications' %}">{% translate "See all your applications with just your email" %}</a>
         </p>
     </div>
@@ -323,7 +323,7 @@
         <p class="rg-ta-action-card__copy">
             {% blocktranslate trimmed with date=application.withdrawal_requested_at|date:"F j, Y" email=application.applicant_email %}
             You asked to withdraw on {{ date }}. The recruitment
-            office will record it and email you at <strong>{{ email }}</strong>.
+            team will record it and email you at <strong>{{ email }}</strong>.
             {% endblocktranslate %}
         </p>
     </div>

@@ -1301,7 +1301,7 @@ class ApplicantStatusLookupView(FormView):
         if not application:
             form.add_error(
                 None,
-                _("We could not find an application with that tracking code and email combination. "
+                _("We could not find an application with that Tracking Code and email. "
                 "Please check your Tracking Code and email address and try again."),
             )
             return self.form_invalid(form)
@@ -1422,7 +1422,7 @@ class ApplicantWithdrawalRequestView(View):
         else:
             messages.success(
                 request,
-                _("Your request to withdraw was sent to the recruitment office. "
+                _("Your request to withdraw was sent to the recruitment team. "
                 "You will get an email once it is recorded."),
             )
         return redirect(status_url)

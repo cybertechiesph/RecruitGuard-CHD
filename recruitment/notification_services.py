@@ -363,9 +363,9 @@ def _build_selected_notification(application):
     lines = [
         gettext("Dear %(name)s,") % {"name": application.applicant_display_name},
         "",
-        gettext("You have been selected for %(title)s under %(branch)s recruitment.")
+        gettext("You have been selected for %(title)s (%(branch)s).")
         % {"title": application.position.title, "branch": application.position.get_branch_display()},
-        gettext("The next step is %(step)s within the scope of this recruitment process.")
+        gettext("The next step is %(step)s.")
         % {"step": _completion_label(application).lower()},
         gettext("Case No. %(ref)s") % {"ref": application.case_number_short or application.reference_label},
         "",
@@ -390,26 +390,26 @@ def _build_non_selected_notification(application, cut_at_screening=False, exam_s
     )
     if exam_status == "absent":
         result_line = gettext(
-            "Your application for %(title)s under %(branch)s recruitment did not proceed "
+            "Your application for %(title)s (%(branch)s) did not proceed "
             "because you did not take the scheduled examination."
         ) % names
         closing = other_positions
     elif exam_status == "waived":
         result_line = gettext(
-            "For your application for %(title)s under %(branch)s recruitment, "
+            "For your application for %(title)s (%(branch)s), "
             "your examination was waived and the application did not proceed."
         ) % names
         closing = other_positions
     elif cut_at_screening:
         result_line = gettext(
-            "After the initial screening of qualifications for %(title)s under %(branch)s "
-            "recruitment, your application did not meet the Qualification Standards (QS) for "
+            "After the initial screening of qualifications for %(title)s (%(branch)s), "
+            "your application did not meet the Qualification Standards for "
             "this position and will not proceed to the examination."
         ) % names
         closing = other_positions
     else:
         result_line = gettext(
-            "Your application for %(title)s under %(branch)s recruitment was not selected."
+            "Your application for %(title)s (%(branch)s) was not selected."
         ) % names
         closing = gettext("Thank you for your interest in this recruitment opportunity.")
     lines = [
@@ -441,7 +441,7 @@ def _build_non_selected_notification(application, cut_at_screening=False, exam_s
             lines.extend(
                 [
                     "",
-                    gettext("The review also noted deficiencies in %(count)s submitted document(s).")
+                    gettext("The review also found problems in %(count)s of the documents you sent.")
                     % {"count": deficient_count},
                 ]
             )
@@ -491,7 +491,7 @@ def _build_applicant_contact_updated_notification(application, *, is_new_address
         lines.append(gettext("Future recruitment notices will no longer be sent to this email address."))
     lines.extend(
         [
-            gettext("If you did not request or expect this correction, contact the HRM Unit promptly."),
+            gettext("If you did not request or expect this correction, contact the Human Resource Management Unit promptly."),
             gettext("Case No. %(ref)s") % {"ref": application.case_number_short or application.reference_label},
         ]
     )
@@ -1171,7 +1171,7 @@ def _build_vacancy_cancellation_notice(application, reason=""):
         gettext("Dear %(name)s,") % {"name": application.applicant_display_name},
         "",
         gettext(
-            "The recruitment for %(title)s under %(branch)s recruitment has been cancelled "
+            "The recruitment for %(title)s (%(branch)s) has been cancelled "
             "by the office, so your application will not proceed."
         )
         % {"title": application.position.title, "branch": application.position.get_branch_display()},

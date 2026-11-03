@@ -1,10 +1,10 @@
-{% load static %}
+{% load static i18n %}{% get_current_language as LANGUAGE_CODE %}
 <!doctype html>
-<html lang="en">
+<html lang="{{ LANGUAGE_CODE }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Page Not Found | DOH&ndash;CHD CALABARZON</title>
+    <title>{% translate "Page Not Found" %} | DOH&ndash;CHD CALABARZON</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -18,13 +18,13 @@
 <body>
 <div class="rg-standalone-403">
     <div class="rg-standalone-403__card">
-        <h1 class="rg-forbidden-title">Page Not Found</h1>
+        <h1 class="rg-forbidden-title">{% translate "Page Not Found" %}</h1>
         <p class="rg-forbidden-copy">
-            We couldn&rsquo;t find that page. The link may be old or mistyped.
+            {% translate "We couldn&rsquo;t find that page. The link may be old or mistyped." %}
         </p>
         <div style="margin-top:1.25rem; display:flex; flex-direction:column; align-items:center; gap:0.6rem;">
-            <a href="/apply/" class="btn btn-rg-primary">Job Openings</a>
-            <a href="/internal/" style="font-size:0.8125rem; color:#9aa4af; text-decoration:underline;">Staff Sign-in</a>
+            <a href="/apply/" class="btn btn-rg-primary">{% translate "Job Openings" %}</a>
+            <a href="/internal/" style="font-size:0.8125rem; color:#9aa4af; text-decoration:underline;">{% translate "Staff Sign-in" %}</a>
         </div>
     </div>
 </div>

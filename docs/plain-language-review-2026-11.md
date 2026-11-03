@@ -7,7 +7,7 @@ This one asks a single question of every heading, button, notice, error, email a
 system: does a first-time reader understand it without a manual? Review only; nothing in the
 code was changed.
 
-## Status: review written; I1 and I2 done, I3–I6 to do
+## Status: review written; I1–I3 done, I4–I6 to do
 
 ## 0. How this was tested
 
@@ -403,7 +403,7 @@ kind from the console backend.
 |---|---|
 | I1 — wrong and stale | **Done.** See the note below. |
 | I2 — one name per thing | **Done** with the defaults. See the note below. |
-| I3 — applicant side and emails | not started |
+| I3 — applicant side and emails | **Done.** See the note below. |
 | I4 — Filipino consistency | not started |
 | I5 — staff jargon and locked panels | not started |
 | I6 — hard words | not started |
@@ -454,3 +454,31 @@ kind from the console backend.
   in the contact email (E-01) are I3, since they need Filipino; "intake" wording (e.g. "Close
   intake") is I6; the routing-history sentences are I5. Old audit and case-history rows keep
   the wording they were written with.
+
+**I3 as built:**
+
+- **A-01** Help says "the two position types" / "when the position requires them" instead of
+  entries, posting and branch.
+- **A-02** The vacancy page's "Official Position Reference" block is now "Salary and level":
+  the salary grade (as before) and the level with a one-line meaning ("First Level is for
+  clerical and support jobs; Second Level is for professional and technical jobs up to
+  Division Chief"). Class ID is gone. The level label is translated in the template, because
+  the model choice label is not.
+- **A-03** The two start-form errors now read "This position is no longer accepting
+  applications." and "You already have an application for this position."
+- **A-04** "recruitment team" on the status page and in the withdrawal messages.
+- **A-05** "Tracking Code" capitalized everywhere an applicant reads it (both languages).
+- **A-06** The privacy band names "the recruitment team (HRMPSB Secretariat) or the Data
+  Protection Officer".
+- **A-07** The 404 page follows the portal language (Filipino under /apply/, English for staff
+  pages). **The 500 page stays English on purpose**: it carries a note that it must stay free
+  of template tags so it can always render.
+- **E-01 … E-04** The contact-updated email names the Human Resource Management Unit; the
+  screening email says "found problems in N of the documents you sent"; "under Plantilla
+  recruitment" is now "(Plantilla)", "within the scope of this recruitment process" and
+  "(QS)" are gone; the reporting instructions say "Bring one valid government ID." / "Arrive
+  at least 15 minutes before your scheduled time."; the emails' "Recruitment type" label and
+  the receipt PDF's "Engagement" / "Reference / Job Code" read "Position type" / "Vacancy code".
+- **Filipino**: 38 new or changed strings translated in the existing Taglish voice; 892 of 892
+  translated, `update_translations --check` green. Every applicant page re-rendered in
+  Filipino: no untranslated line.
