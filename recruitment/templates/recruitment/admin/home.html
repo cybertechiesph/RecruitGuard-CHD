@@ -1,0 +1,88 @@
+{% extends "internal_base.html" %}
+{% load recruitment_ui %}
+
+{% block internal_title %}Home{% endblock %}
+
+{% block content %}
+<div class="rg-adm">
+    <header class="rg-adm-head">
+        <div>
+            <h1 class="rg-adm-head__title">Home</h1>
+            <p class="rg-adm-head__lead">Staff accounts and security for the internal portal.</p>
+        </div>
+        <div class="rg-adm-head__actions">
+            <a href="{% url 'internal-user-create' %}" class="btn btn-rg-primary">Create account</a>
+        </div>
+    </header>
+
+    {# ── Needs attention ─────────────────────────────────────────── #}
+    <h2 class="rg-adm-section-title">Needs attention</h2>
+    {% if not locked_count and not failed_today and not archive_overdue %}
+        <p class="rg-adm-allclear mb-3" data-all-clear>
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+            Nothing needs attention.
+        </p>
+    {% endif %}
+    <div class="rg-adm-tiles" data-attention>
+        <a class="rg-adm-tile{% if locked_count %} rg-adm-tile--danger{% else %} rg-adm-tile--quiet{% endif %}"
+           href="{% url 'internal-user-list' %}?status=locked" data-tile="locked">
+            <span class="rg-adm-tile__label">Locked accounts</span>
+            <span class="rg-adm-tile__value">{{ locked_count }}</span>
+            <span class="rg-adm-tile__verb">{% if locked_count %}Unlock{% else %}View accounts{% endif %} &rarr;</span>
+        </a>
+        <a class="rg-adm-tile{% if not inactive_count %} rg-adm-tile--quiet{% endif %}"
+           href="{% url 'internal-user-list' %}?status=inactive" data-tile="inactive">
+            <span class="rg-adm-tile__label">Inactive accounts</span>
+            <span class="rg-adm-tile__value">{{ inactive_count }} <small>of {{ account_count }}</small></span>
+            <span class="rg-adm-tile__verb">Review &rarr;</span>
+        </a>
+        <a class="rg-adm-tile{% if failed_today %} rg-adm-tile--warn{% else %} rg-adm-tile--quiet{% endif %}"
+           href="{% url 'audit-log-list' %}?category=security&amp;date_from={{ today|date:'Y-m-d' }}" data-tile="failed">
+            <span class="rg-adm-tile__label">Failed sign-ins today</span>
+            <span class="rg-adm-tile__value">{{ failed_today }}</span>
+            <span class="rg-adm-tile__verb">Review &rarr;</span>
+        </a>
+        <a class="rg-adm-tile{% if archive_overdue %} rg-adm-tile--warn{% else %} rg-adm-tile--quiet{% endif %}"
+           href="{% url 'audit-log-list' %}#archives" data-tile="archive">
+            <span class="rg-adm-tile__label">Last audit archive</span>
+            {% if latest_archive %}
+                <span class="rg-adm-tile__value">{{ archive_age_days }} <small>day{{ archive_age_days|pluralize }} ago</small></span>
+            {% else %}
+                <span class="rg-adm-tile__value">Never</span>
+            {% endif %}
+            <span class="rg-adm-tile__verb">{% if archive_overdue %}Archive the trail{% else %}Archives{% endif %} &rarr;</span>
+        </a>
+    </div>
+
+    {# ── Do ──────────────────────────────────────────────────────── #}
+    <h2 class="rg-adm-section-title">Do</h2>
+    <div class="rg-adm-do">
+        <a href="{% url 'internal-user-create' %}" class="btn btn-outline-secondary">Create account</a>
+        <form class="rg-adm-do__search" method="get" action="{% url 'internal-user-list' %}" role="search">
+            <label class="visually-hidden" for="home-find-user">Find a user</label>
+            <input id="home-find-user" class="form-control" type="search" name="q"
+                   placeholder="Find a user by name, username or email" autocomplete="off">
+            <button type="submit" class="btn btn-outline-secondary">Find</button>
+        </form>
+        <a href="{% url 'audit-log-list' %}?date_from={{ today|date:'Y-m-d' }}" class="btn btn-outline-secondary">Today&rsquo;s activity</a>
+    </div>
+
+    {# ── Recent ──────────────────────────────────────────────────── #}
+    <h2 class="rg-adm-section-title">Recent account and security events</h2>
+    <ul class="rg-adm-feed" data-recent>
+        {% for entry in recent_events %}
+            <li class="rg-adm-feed__item">
+                <span class="rg-adm-feed__time">{{ entry.created_at|date:"M j, g:i A" }}</span>
+                <span class="rg-adm-feed__what">
+                    <strong>{{ entry.action|audit_action_label }}</strong> &middot;
+                    {{ entry.description }}
+                    {% if entry.actor %}<span class="rg-adm-muted">&mdash; {{ entry.actor.get_full_name|default:entry.actor.username }}</span>{% endif %}
+                </span>
+            </li>
+        {% empty %}
+            <li class="rg-adm-feed__empty">No account or security events yet.</li>
+        {% endfor %}
+    </ul>
+    <a class="rg-adm-feed__more" href="{% url 'audit-log-list' %}?category=accounts">All account activity &rarr;</a>
+</div>
+{% endblock %}

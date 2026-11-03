@@ -5183,6 +5183,9 @@ class AuditLog(TimestampedModel):
         INTERNAL_ACCOUNT_ACTIVATED = "internal_account_activated", "Internal Account Activated"
         INTERNAL_ACCOUNT_DEACTIVATED = "internal_account_deactivated", "Internal Account Deactivated"
         INTERNAL_ROLE_CHANGED = "internal_role_changed", "Internal Role Changed"
+        # Round F1: help an internal user sign in, from the account page.
+        PASSWORD_RESET_SENT_BY_ADMIN = "password_reset_sent_by_admin", "Password Reset Sent by Admin"
+        INTERNAL_ACCOUNT_UNLOCKED = "internal_account_unlocked", "Internal Account Unlocked"
         ASSESSMENT_WEIGHTS_UPDATED = "assessment_weights_updated", "Assessment Weights Updated"
         ASSESSMENT_WEIGHTS_UNLOCKED = "assessment_weights_unlocked", "Assessment Weights Unlocked"
         OFFICE_POLICY_UPDATED = "office_policy_updated", "Office Policy Updated"
@@ -5397,6 +5400,8 @@ AUDIT_ACTION_DISPLAY_LABELS = {
     AuditLog.Action.INTERNAL_ACCOUNT_ACTIVATED: "Internal Account Activated",
     AuditLog.Action.INTERNAL_ACCOUNT_DEACTIVATED: "Internal Account Deactivated",
     AuditLog.Action.INTERNAL_ROLE_CHANGED: "Internal Role Changed",
+    AuditLog.Action.PASSWORD_RESET_SENT_BY_ADMIN: "Password Reset Email Sent",
+    AuditLog.Action.INTERNAL_ACCOUNT_UNLOCKED: "Account Unlocked",
     AuditLog.Action.OFFICE_POLICY_UPDATED: "Office Policy Updated",
     AuditLog.Action.POSITION_CREATED: "Position Created",
     AuditLog.Action.POSITION_UPDATED: "Position Updated",
@@ -5567,6 +5572,8 @@ AUDIT_ACTION_CATEGORIES = {
             AuditLog.Action.INTERNAL_ACCOUNT_ACTIVATED,
             AuditLog.Action.INTERNAL_ACCOUNT_DEACTIVATED,
             AuditLog.Action.INTERNAL_ROLE_CHANGED,
+            AuditLog.Action.PASSWORD_RESET_SENT_BY_ADMIN,
+            AuditLog.Action.INTERNAL_ACCOUNT_UNLOCKED,
             AuditLog.Action.ASSESSMENT_WEIGHTS_UPDATED,
             AuditLog.Action.ASSESSMENT_WEIGHTS_UNLOCKED,
             AuditLog.Action.OFFICE_POLICY_UPDATED,

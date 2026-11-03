@@ -1,0 +1,109 @@
+{% extends "internal_base.html" %}
+{% load recruitment_ui %}
+
+{% block internal_title %}Accounts{% endblock %}
+
+{% block breadcrumb %}
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<span class="rg-breadcrumb-current">Accounts</span>
+{% endblock %}
+
+{% block content %}
+<div class="rg-adm">
+    <header class="rg-adm-head">
+        <div>
+            <h1 class="rg-adm-head__title">Accounts</h1>
+            <p class="rg-adm-head__lead">Staff accounts for the internal portal.</p>
+        </div>
+        <div class="rg-adm-head__actions">
+            <a href="{% url 'internal-user-create' %}" class="btn btn-rg-primary">Create account</a>
+        </div>
+    </header>
+
+    <div class="rg-adm-toolbar" data-accounts-toolbar>
+        <form class="rg-adm-toolbar__search" method="get" role="search">
+            {% if role %}<input type="hidden" name="role" value="{{ role }}">{% endif %}
+            {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+            {% if sort != "name" %}<input type="hidden" name="sort" value="{{ sort }}">{% endif %}
+            <label class="visually-hidden" for="accounts-q">Search accounts</label>
+            <input id="accounts-q" class="form-control" type="search" name="q" value="{{ q }}"
+                   placeholder="Name, username or email" autocomplete="off">
+            <button type="submit" class="btn btn-outline-secondary">Search</button>
+        </form>
+        <span class="rg-adm-toolbar__count" data-count-line>
+            {% if is_filtered %}
+                Showing {{ page_obj.paginator.count }} of {{ total_count }} account{{ total_count|pluralize }}
+                &middot; <a href="{% url 'internal-user-list' %}">Clear</a>
+            {% else %}
+                {{ total_count }} account{{ total_count|pluralize }} &middot; {{ active_count }} active &middot; {{ locked_count }} locked
+            {% endif %}
+        </span>
+    </div>
+
+    <div class="rg-adm-toolbar">
+        <nav class="rg-adm-chips" aria-label="Filter by role">
+            <a class="rg-adm-chip{% if not role %} is-active{% endif %}" href="{% query_with role='' %}">All roles</a>
+            {% for chip in role_chips %}
+                <a class="rg-adm-chip{% if role == chip.value %} is-active{% endif %}" href="{% query_with role=chip.value %}">
+                    {{ chip.label }} <span class="rg-adm-chip__n">{{ chip.count }}</span>
+                </a>
+            {% endfor %}
+        </nav>
+        <span class="rg-adm-chip-sep" aria-hidden="true"></span>
+        <nav class="rg-adm-chips" aria-label="Filter by status">
+            <a class="rg-adm-chip{% if not status %} is-active{% endif %}" href="{% query_with status='' %}">Any status</a>
+            <a class="rg-adm-chip{% if status == 'active' %} is-active{% endif %}" href="{% query_with status='active' %}">Active <span class="rg-adm-chip__n">{{ active_count }}</span></a>
+            <a class="rg-adm-chip{% if status == 'inactive' %} is-active{% endif %}" href="{% query_with status='inactive' %}">Inactive <span class="rg-adm-chip__n">{{ inactive_count }}</span></a>
+            <a class="rg-adm-chip{% if status == 'locked' %} is-active{% endif %}" href="{% query_with status='locked' %}">Locked <span class="rg-adm-chip__n">{{ locked_count }}</span></a>
+        </nav>
+    </div>
+
+    <div class="rg-table-shell rg-itbl rg-adm-table">
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th scope="col">{% if sort == "name" %}Name{% else %}<a href="{% query_with sort='' %}">Name</a>{% endif %}</th>
+                        <th scope="col">Role</th>
+                        <th scope="col">Office</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">{% if sort == "last_sign_in" %}Last sign-in &darr;{% else %}<a href="{% query_with sort='last_sign_in' %}">Last sign-in</a>{% endif %}</th>
+                        <th scope="col" class="col-actions"><span class="visually-hidden">Open</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for account in accounts %}
+                        <tr data-account-row="{{ account.username }}">
+                            <td>
+                                <a class="rg-adm-name" href="{% url 'internal-user-detail' account.pk %}">{{ account.get_full_name|default:account.username }}</a>
+                                <span class="rg-adm-sub">{{ account.username }}{% if account == user %} &middot; you{% endif %}</span>
+                            </td>
+                            <td>{{ account.get_role_display }}</td>
+                            <td>{{ account.office_name|default:"—" }}</td>
+                            <td>
+                                {% if account.locked_until %}
+                                    <span class="rg-adm-status rg-adm-status--locked">Locked until {{ account.locked_until|date:"g:i A" }}</span>
+                                {% elif account.is_active %}
+                                    <span class="rg-adm-status rg-adm-status--active">Active</span>
+                                {% else %}
+                                    <span class="rg-adm-status rg-adm-status--inactive">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td class="rg-adm-num">{% if account.last_login %}{{ account.last_login|date:"M j, Y" }}{% else %}<span class="rg-adm-muted">Never</span>{% endif %}</td>
+                            <td class="col-actions"><a class="btn btn-outline-secondary btn-sm" href="{% url 'internal-user-detail' account.pk %}">Open</a></td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="6" class="rg-adm-muted">
+                                {% if is_filtered %}No accounts match. <a href="{% url 'internal-user-list' %}">Show all accounts</a>{% else %}No staff accounts yet.{% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% query_without_page as querystring %}
+    {% include "internal_includes/pagination.html" with page_obj=page_obj querystring=querystring %}
+</div>
+{% endblock %}

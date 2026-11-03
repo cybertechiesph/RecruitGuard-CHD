@@ -12,6 +12,7 @@ from django.utils import timezone
 from ..models import (
     AuditLog,
     InternalEmailChangeRequest,
+    InternalLoginAttempt,
     InternalPasswordHistory,
     RecruitmentUser,
 )
@@ -67,7 +68,10 @@ class IdentityAdministrationTests(BaseRecruitmentTestCase):
             follow=True,
         )
 
-        self.assertEqual(response.request["PATH_INFO"], reverse("internal-user-list"))
+        self.assertEqual(
+            response.request["PATH_INFO"],
+            reverse("internal-user-detail", kwargs={"pk": self.secretariat.pk}),
+        )
         self.secretariat.refresh_from_db()
         self.assertEqual(self.secretariat.email, "secretariat@example.com")
         change_request = InternalEmailChangeRequest.objects.get(user=self.secretariat)
@@ -368,3 +372,205 @@ class SessionStabilityTests(BaseRecruitmentTestCase):
         self.assertContains(response, "data-inactivity-signout")
         self.assertContains(response, "minutes of inactivity")
         self.assertNotContains(Client().get(reverse("login")), "data-inactivity-signout")
+
+
+class AdminAreaRoundF1Tests(BaseRecruitmentTestCase):
+    """Round F1 (docs/admin-area-rebuild-plan.md): Home, Accounts, the account page, invitations,
+    password reset and unlock."""
+
+    def _admin(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.sysadmin)
+        return client
+
+    def _lock(self, user, minutes=10):
+        return InternalLoginAttempt.objects.create(
+            username=user.username,
+            username_normalized=user.username.lower(),
+            ip_address="203.0.113.5",
+            failure_count=5,
+            locked_until=timezone.now() + timedelta(minutes=minutes),
+        )
+
+    # ---- Home -------------------------------------------------------------
+    def test_home_shows_the_attention_counts_and_no_recruitment_numbers(self):
+        self._lock(self.secretariat)
+        self.hrmpsb.is_active = False
+        self.hrmpsb.save(update_fields=["is_active"])
+        AuditLog.objects.create(
+            actor=self.secretariat,
+            action=AuditLog.Action.INTERNAL_LOGIN_FAILED,
+            description="Internal user login failed.",
+        )
+        response = self._admin().get(reverse("dashboard"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["locked_count"], 1)
+        self.assertEqual(response.context["inactive_count"], 1)
+        self.assertEqual(response.context["failed_today"], 1)
+        self.assertContains(response, 'data-tile="locked"')
+        self.assertNotContains(response, reverse("recruitment-entry-list"))
+        self.assertNotContains(response, "Recruitment at a glance")
+
+    def test_home_asks_for_an_archive_when_none_was_ever_made(self):
+        # A fresh system has no archive yet, so the "last archive" tile asks for one.
+        response = self._admin().get(reverse("dashboard"))
+        self.assertTrue(response.context["archive_overdue"])
+        self.assertNotContains(response, "data-all-clear")
+        self.assertContains(response, "Never")
+
+    def test_workflow_roles_still_land_on_their_batches(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        self.assertRedirects(client.get(reverse("dashboard")), reverse("vacancy-batches"), fetch_redirect_response=False)
+
+    # ---- Accounts list ----------------------------------------------------
+    def test_accounts_search_and_status_chips(self):
+        self._lock(self.hrm_chief)
+        client = self._admin()
+        names = lambda r: [a.username for a in r.context["accounts"]]
+        self.assertEqual(names(client.get(reverse("internal-user-list"), {"q": self.secretariat.email})), [self.secretariat.username])
+        self.assertEqual(names(client.get(reverse("internal-user-list"), {"status": "locked"})), [self.hrm_chief.username])
+        by_role = client.get(reverse("internal-user-list"), {"role": RecruitmentUser.Role.SYSTEM_ADMIN})
+        self.assertEqual(names(by_role), [self.sysadmin.username])
+        page = client.get(reverse("internal-user-list"), {"status": "locked"})
+        self.assertContains(page, "Locked until")
+        self.assertNotContains(page, "rg-kpi")
+
+    def test_accounts_page_is_admin_only(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        for name, kwargs in (
+            ("internal-user-list", {}),
+            ("internal-user-detail", {"pk": self.hrm_chief.pk}),
+        ):
+            with self.subTest(name=name):
+                self.assertEqual(client.get(reverse(name, kwargs=kwargs)).status_code, 403)
+        for name in ("internal-user-send-reset", "internal-user-unlock"):
+            with self.subTest(name=name):
+                self.assertEqual(client.post(reverse(name, kwargs={"pk": self.hrm_chief.pk})).status_code, 403)
+
+    # ---- Account page -----------------------------------------------------
+    def test_account_page_shows_details_access_and_recent_activity(self):
+        AuditLog.objects.create(
+            actor=self.secretariat,
+            action=AuditLog.Action.INTERNAL_LOGIN,
+            description="Internal user logged in.",
+        )
+        response = self._admin().get(reverse("internal-user-detail", kwargs={"pk": self.secretariat.pk}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.secretariat.email)
+        self.assertContains(response, "data-send-reset")
+        self.assertContains(response, "data-toggle-active")
+        self.assertContains(response, "Internal user logged in.")
+        self.assertNotContains(response, "data-unlock")
+
+    def test_unlock_lifts_the_lock_and_is_audited(self):
+        attempt = self._lock(self.secretariat)
+        client = self._admin()
+        page = client.get(reverse("internal-user-detail", kwargs={"pk": self.secretariat.pk}))
+        self.assertContains(page, "data-unlock")
+        response = client.post(reverse("internal-user-unlock", kwargs={"pk": self.secretariat.pk}))
+        self.assertRedirects(response, reverse("internal-user-detail", kwargs={"pk": self.secretariat.pk}), fetch_redirect_response=False)
+        attempt.refresh_from_db()
+        self.assertIsNone(attempt.locked_until)
+        self.assertEqual(attempt.failure_count, 0)
+        self.assertTrue(
+            AuditLog.objects.filter(
+                action=AuditLog.Action.INTERNAL_ACCOUNT_UNLOCKED,
+                actor=self.sysadmin,
+                metadata__target_username=self.secretariat.username,
+            ).exists()
+        )
+
+    def test_unlock_when_nothing_is_locked_changes_nothing(self):
+        self._admin().post(reverse("internal-user-unlock", kwargs={"pk": self.secretariat.pk}))
+        self.assertFalse(AuditLog.objects.filter(action=AuditLog.Action.INTERNAL_ACCOUNT_UNLOCKED).exists())
+
+    def test_send_password_reset_emails_a_link_and_is_audited(self):
+        mail.outbox.clear()
+        response = self._admin().post(reverse("internal-user-send-reset", kwargs={"pk": self.secretariat.pk}))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [self.secretariat.email])
+        self.assertIn("/internal/password/reset/", mail.outbox[0].body)
+        self.assertTrue(
+            AuditLog.objects.filter(
+                action=AuditLog.Action.PASSWORD_RESET_SENT_BY_ADMIN,
+                metadata__target_username=self.secretariat.username,
+            ).exists()
+        )
+
+    def test_send_password_reset_is_refused_for_an_inactive_account_and_for_yourself(self):
+        self.secretariat.is_active = False
+        self.secretariat.save(update_fields=["is_active"])
+        mail.outbox.clear()
+        client = self._admin()
+        client.post(reverse("internal-user-send-reset", kwargs={"pk": self.secretariat.pk}))
+        client.post(reverse("internal-user-send-reset", kwargs={"pk": self.sysadmin.pk}))
+        self.assertEqual(mail.outbox, [])
+        self.assertFalse(AuditLog.objects.filter(action=AuditLog.Action.PASSWORD_RESET_SENT_BY_ADMIN).exists())
+
+    def test_deactivate_from_the_account_page_returns_there(self):
+        response = self._admin().post(
+            reverse("internal-user-toggle-active", kwargs={"pk": self.hrmpsb.pk}), {"next": "detail"}
+        )
+        self.assertRedirects(response, reverse("internal-user-detail", kwargs={"pk": self.hrmpsb.pk}), fetch_redirect_response=False)
+        self.hrmpsb.refresh_from_db()
+        self.assertFalse(self.hrmpsb.is_active)
+
+    # ---- Create: invitation by default (D1) -------------------------------
+    def _new_account(self, **extra):
+        data = {
+            "first_name": "Nina",
+            "last_name": "Navarro",
+            "email": "nina.navarro@example.com",
+            "username": "nina.navarro",
+            "role": RecruitmentUser.Role.SECRETARIAT,
+            "office_name": "HR Unit",
+            "employee_id": "EMP-777",
+        }
+        data.update(extra)
+        return data
+
+    def test_create_by_invitation_sets_no_password_and_emails_a_link(self):
+        mail.outbox.clear()
+        response = self._admin().post(reverse("internal-user-create"), self._new_account(password_mode="invite"))
+        created = User.objects.get(username="nina.navarro")
+        self.assertRedirects(response, reverse("internal-user-detail", kwargs={"pk": created.pk}), fetch_redirect_response=False)
+        self.assertFalse(created.has_usable_password())
+        self.assertTrue(created.is_active)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["nina.navarro@example.com"])
+        self.assertIn("set your password", mail.outbox[0].body)
+        self.assertIn("/internal/password/reset/", mail.outbox[0].body)
+        log = AuditLog.objects.get(action=AuditLog.Action.INTERNAL_ACCOUNT_CREATED, metadata__target_username="nina.navarro")
+        self.assertTrue(log.metadata["invited"])
+
+    def test_create_with_a_temporary_password_still_works(self):
+        mail.outbox.clear()
+        self._admin().post(
+            reverse("internal-user-create"),
+            self._new_account(password_mode="temporary", password1="Tamarind-Harbor-2026", password2="Tamarind-Harbor-2026"),
+        )
+        created = User.objects.get(username="nina.navarro")
+        self.assertTrue(created.check_password("Tamarind-Harbor-2026"))
+        self.assertEqual(mail.outbox, [])
+
+    def test_temporary_password_is_checked(self):
+        client = self._admin()
+        weak = client.post(reverse("internal-user-create"), self._new_account(password_mode="temporary", password1="password", password2="password"))
+        self.assertContains(weak, "This password is too common.")
+        missing = client.post(reverse("internal-user-create"), self._new_account(password_mode="temporary"))
+        self.assertContains(missing, "Enter a temporary password")
+        self.assertFalse(User.objects.filter(username="nina.navarro").exists())
+
+    def test_create_form_offers_role_cards_and_no_applicant_role(self):
+        page = self._admin().get(reverse("internal-user-create"))
+        self.assertContains(page, "rg-adm-role")
+        self.assertContains(page, "No access to cases.")
+        self.assertNotContains(page, 'value="applicant"')
+        self.assertNotContains(page, "Designates whether this user should be treated as active")
+
+    def test_usernames_are_unique_regardless_of_case(self):
+        page = self._admin().post(reverse("internal-user-create"), self._new_account(username=self.secretariat.username.upper()))
+        self.assertContains(page, "A user with that username already exists.")

@@ -253,6 +253,89 @@ def clear_internal_login_failures(username, request=None):
     return deleted_count
 
 
+def get_internal_account_locks(users=None):
+    """Round F1: the sign-in locks standing right now, as {normalized username: locked_until}.
+    A lock is recorded per username and address, so one person can have several; the latest
+    end time is the one that matters to them."""
+    now = timezone.now()
+    attempts = InternalLoginAttempt.objects.filter(locked_until__gt=now)
+    if users is not None:
+        attempts = attempts.filter(
+            username_normalized__in=[normalize_internal_login_username(u.username) for u in users]
+        )
+    locks = {}
+    for username_normalized, locked_until in attempts.values_list("username_normalized", "locked_until"):
+        if locked_until > locks.get(username_normalized, now):
+            locks[username_normalized] = locked_until
+    return locks
+
+
+def internal_account_locked_until(user):
+    return get_internal_account_locks([user]).get(normalize_internal_login_username(user.username))
+
+
+@transaction.atomic
+def unlock_internal_account(user, actor):
+    """Round F1: lift every standing sign-in lock on ``user`` (from any address) so they can
+    try again at once. Audited; returns how many locks were lifted (0 when none stood)."""
+    now = timezone.now()
+    lifted = InternalLoginAttempt.objects.filter(
+        username_normalized=normalize_internal_login_username(user.username),
+        locked_until__gt=now,
+    ).update(locked_until=None, failure_count=0, first_failed_at=now)
+    if lifted:
+        audit.record_system_audit_event(
+            actor=actor,
+            action=AuditLog.Action.INTERNAL_ACCOUNT_UNLOCKED,
+            description=f"Unlocked internal account '{user.username}'.",
+            metadata={"target_user_id": user.id, "target_username": user.username},
+        )
+    return lifted
+
+
+def send_admin_password_email(user, actor, request, *, invitation=False):
+    """Round F1: email ``user`` a one-time link to set their password, on an administrator's
+    request. ``invitation`` is the welcome version sent when the account is created without a
+    password (D1); otherwise it is a reset. Uses Django's reset token, so the link works once
+    and expires after PASSWORD_RESET_TIMEOUT. Raises ValueError when the account cannot be
+    helped this way."""
+    from django.contrib.auth.forms import PasswordResetForm
+
+    if user.role not in RecruitmentUser.internal_roles():
+        raise ValueError("Only internal staff accounts can be sent a password link.")
+    if not user.is_active:
+        raise ValueError("Reactivate the account first.")
+    if not (user.email or "").strip():
+        raise ValueError("Add an email address to the account first.")
+
+    class _OneAccountResetForm(PasswordResetForm):
+        def get_users(self, email):
+            return [user]
+
+    form = _OneAccountResetForm({"email": user.email})
+    form.is_valid()
+    if invitation:
+        subject_template = "registration/account_invitation_subject.txt"
+        email_template = "registration/account_invitation_email.txt"
+    else:
+        subject_template = "registration/password_reset_subject.txt"
+        email_template = "registration/password_reset_email.txt"
+    form.save(
+        request=request,
+        use_https=request.is_secure(),
+        subject_template_name=subject_template,
+        email_template_name=email_template,
+        extra_email_context={"recipient": user, "sent_by_admin": True},
+    )
+    if not invitation:
+        audit.record_system_audit_event(
+            actor=actor,
+            action=AuditLog.Action.PASSWORD_RESET_SENT_BY_ADMIN,
+            description=f"Sent a password reset email to '{user.username}'.",
+            metadata={"target_user_id": user.id, "target_username": user.username},
+        )
+
+
 def remember_internal_password_hash(user, password_hash=None):
     password_hash = password_hash or user.password
     if not getattr(user, "is_internal_user", False) or not password_hash:

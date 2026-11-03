@@ -39,7 +39,7 @@ background:
                 </svg>
             </button>
             <nav class="rg-context-bar__breadcrumb" aria-label="Breadcrumb">
-                <a href="{% url 'dashboard' %}" class="rg-breadcrumb-home">{% if user.role == "system_admin" %}Dashboard{% else %}Batches{% endif %}</a>
+                <a href="{% url 'dashboard' %}" class="rg-breadcrumb-home">{% if user.role == "system_admin" %}Home{% else %}Batches{% endif %}</a>
                 {% block breadcrumb %}{% endblock %}
             </nav>
             <div class="rg-context-bar__right">

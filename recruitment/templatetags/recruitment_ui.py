@@ -3,6 +3,7 @@ import re
 
 from django import template
 from django.conf import settings
+from django.http import QueryDict
 from django.utils.timesince import timesince as django_timesince
 
 from recruitment.blinding import (
@@ -711,3 +712,30 @@ def notifications_bell(context):
 def session_inactivity_timeout_seconds():
     """TI-1: the server-side inactivity timeout, so the idle-warning script mirrors it exactly."""
     return int(getattr(settings, "SESSION_INACTIVITY_TIMEOUT_SECONDS", 30 * 60))
+
+
+@register.simple_tag(takes_context=True)
+def query_with(context, **changes):
+    """Round F: a toolbar link that changes one filter and keeps the others. Empty values drop
+    the parameter; the page number always resets. Returns "?…" (or "?" when nothing is left)."""
+    request = context.get("request")
+    params = request.GET.copy() if request is not None else QueryDict(mutable=True)
+    params.pop("page", None)
+    for key, value in changes.items():
+        if value in ("", None):
+            params.pop(key, None)
+        else:
+            params[key] = value
+    encoded = params.urlencode()
+    return f"?{encoded}" if encoded else "?"
+
+
+@register.simple_tag(takes_context=True)
+def query_without_page(context):
+    """The current filters, urlencoded without "page", for the shared pagination include."""
+    request = context.get("request")
+    if request is None:
+        return ""
+    params = request.GET.copy()
+    params.pop("page", None)
+    return params.urlencode()

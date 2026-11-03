@@ -1,0 +1,14 @@
+{% autoescape off %}Hello{% if recipient.first_name %} {{ recipient.first_name }}{% endif %},
+
+A staff account was created for you on the DOH–CHD CALABARZON Recruitment Portal.
+
+Username: {{ user.get_username }}
+Role: {{ user.get_role_display }}
+
+Use the link below to set your password and sign in:
+{{ protocol }}://{{ domain }}{% url 'password-reset-confirm' uidb64=uid token=token %}
+
+This link works once and is time-limited. If it has expired, ask the System Administrator to send a new one.
+
+If you were not expecting this email, contact the System Administrator.
+{% endautoescape %}

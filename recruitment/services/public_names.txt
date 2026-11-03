@@ -328,6 +328,7 @@ get_final_selection_for_application
 get_final_selection_for_entry
 get_final_selection_history
 get_followed_applications
+get_internal_account_locks
 get_internal_login_lock
 get_interview_fallback_evidence
 get_interview_fallback_ratings
@@ -365,6 +366,7 @@ get_system_audit_logs
 get_visible_positions_for_user
 grant_secretariat_override
 hand_off_vacancy_batch
+internal_account_locked_until
 interview_fallback_panel_queryset
 interview_is_finalized_for_current_stage
 interview_scoring_is_open
@@ -438,6 +440,7 @@ save_vacancy_exam_scores
 save_vacancy_interview_schedule
 scoring_opens_message
 screening_is_finalized_for_current_stage
+send_admin_password_email
 send_draft_reminder
 send_resubmission_reminder
 set_application_ete_rating
@@ -450,6 +453,7 @@ submit_application
 submit_document_resubmission
 summarize_audit_logs
 transition_case
+unlock_internal_account
 unlock_vacancy_assessment_weights
 update_applicant_contact
 update_evidence_archive_status

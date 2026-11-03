@@ -1,0 +1,136 @@
+{% extends "internal_base.html" %}
+{% load recruitment_ui %}
+
+{% block internal_title %}{{ account.get_full_name|default:account.username }}{% endblock %}
+
+{% block breadcrumb %}
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<a href="{% url 'internal-user-list' %}" class="rg-breadcrumb-home">Accounts</a>
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<span class="rg-breadcrumb-current">{{ account.get_full_name|default:account.username }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="rg-adm">
+    <header class="rg-adm-head">
+        <div>
+            <h1 class="rg-adm-head__title">{{ account.get_full_name|default:account.username }}</h1>
+            <p class="rg-adm-head__lead">
+                {{ account.get_role_display }}
+                &middot;
+                {% if locked_until %}
+                    <span class="rg-adm-status rg-adm-status--locked" data-account-status>Locked until {{ locked_until|date:"g:i A" }}</span>
+                {% elif account.is_active %}
+                    <span class="rg-adm-status rg-adm-status--active" data-account-status>Active</span>
+                {% else %}
+                    <span class="rg-adm-status rg-adm-status--inactive" data-account-status>Inactive</span>
+                {% endif %}
+                {% if is_self %}&middot; <span class="rg-adm-muted">This is your account</span>{% endif %}
+            </p>
+        </div>
+        <div class="rg-adm-head__actions">
+            <a href="{% url 'internal-user-update' account.pk %}" class="btn btn-outline-secondary">Edit details</a>
+        </div>
+    </header>
+
+    <div class="row g-3">
+        <div class="col-lg-6">
+            <section class="rg-adm-panel" aria-labelledby="details-title">
+                <h2 class="rg-adm-panel__title" id="details-title">Details</h2>
+                <dl class="rg-adm-dl">
+                    <dt>Username</dt><dd>{{ account.username }}</dd>
+                    <dt>Email</dt><dd>{{ account.email|default:"—" }}</dd>
+                    <dt>Role</dt><dd>{{ account.get_role_display }}</dd>
+                    <dt>Office</dt><dd>{{ account.office_name|default:"—" }}</dd>
+                    <dt>Employee ID</dt><dd>{{ account.employee_id|default:"—" }}</dd>
+                    <dt>Created</dt><dd>{{ account.date_joined|date:"M j, Y" }}</dd>
+                    <dt>Last sign-in</dt><dd>{% if account.last_login %}{{ account.last_login|date:"M j, Y, g:i A" }}{% else %}Never{% endif %}</dd>
+                    <dt>Password</dt><dd>{% if has_password %}Set{% else %}Not set yet &mdash; waiting for them to use their invitation link{% endif %}</dd>
+                </dl>
+            </section>
+        </div>
+
+        <div class="col-lg-6">
+            <section class="rg-adm-panel" aria-labelledby="access-title">
+                <h2 class="rg-adm-panel__title" id="access-title">Access</h2>
+                <ul class="rg-adm-access">
+                    {% if locked_until %}
+                        <li class="rg-adm-access__row" data-unlock>
+                            <div class="rg-adm-access__text">
+                                <strong>Unlock now</strong>
+                                <span>Too many wrong passwords locked this account until {{ locked_until|date:"g:i A" }}. Unlocking lets them try again at once.</span>
+                            </div>
+                            <form method="post" action="{% url 'internal-user-unlock' account.pk %}">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-rg-primary btn-sm">Unlock now</button>
+                            </form>
+                        </li>
+                    {% endif %}
+
+                    <li class="rg-adm-access__row" data-send-reset>
+                        <div class="rg-adm-access__text">
+                            <strong>{% if has_password %}Send password reset email{% else %}Send the invitation again{% endif %}</strong>
+                            <span>Emails {{ account.email }} a one-time link to set {% if has_password %}a new{% else %}their{% endif %} password. You never see or handle the password.</span>
+                        </div>
+                        {% if is_self %}
+                            <a class="btn btn-outline-secondary btn-sm" href="{% url 'password-change' %}">Change password</a>
+                        {% elif account.is_active %}
+                            <form method="post" action="{% url 'internal-user-send-reset' account.pk %}">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-outline-secondary btn-sm">Send email</button>
+                            </form>
+                        {% else %}
+                            <span class="rg-adm-muted small">Reactivate first</span>
+                        {% endif %}
+                    </li>
+
+                    <li class="rg-adm-access__row" data-toggle-active>
+                        <div class="rg-adm-access__text">
+                            {% if account.is_active %}
+                                <strong>Deactivate</strong>
+                                <span>Signs them out at once and blocks sign-in until the account is reactivated. Their records stay.</span>
+                            {% else %}
+                                <strong>Reactivate</strong>
+                                <span>Lets them sign in again with their existing password.</span>
+                            {% endif %}
+                        </div>
+                        <form id="toggleActive" method="post" action="{% url 'internal-user-toggle-active' account.pk %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="detail">
+                        </form>
+                        {% if is_self %}
+                            <span class="rg-adm-muted small">Another administrator must do this</span>
+                        {% elif account.is_active %}
+                            <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#confirmDeactivate">Deactivate</button>
+                        {% else %}
+                            <button type="submit" form="toggleActive" class="btn btn-outline-secondary btn-sm">Reactivate</button>
+                        {% endif %}
+                    </li>
+                </ul>
+            </section>
+        </div>
+    </div>
+
+    <h2 class="rg-adm-section-title">Recent activity</h2>
+    <ul class="rg-adm-feed" data-account-activity>
+        {% for entry in recent_activity %}
+            <li class="rg-adm-feed__item">
+                <span class="rg-adm-feed__time">{{ entry.created_at|date:"M j, g:i A" }}</span>
+                <span class="rg-adm-feed__what">
+                    <strong>{{ entry.action|audit_action_label }}</strong> &middot; {{ entry.description }}
+                    {% if entry.application %}<span class="rg-adm-muted">&mdash; {{ entry.application.reference_number }}</span>{% endif %}
+                </span>
+            </li>
+        {% empty %}
+            <li class="rg-adm-feed__empty">No activity recorded for this account yet.</li>
+        {% endfor %}
+    </ul>
+    <a class="rg-adm-feed__more" href="{% url 'audit-log-list' %}?actor={{ account.pk }}">See all activity &rarr;</a>
+</div>
+
+{% if account.is_active and not is_self %}
+    {% with title="Deactivate "|add:account.username|add:"?" %}
+        {% include "internal_includes/modal_confirm.html" with modal_id="confirmDeactivate" variant="destructive" title=title body="They are signed out at once and cannot sign in until the account is reactivated. Their records and history stay." confirm_label="Deactivate account" cancel_label="Cancel" form_id="toggleActive" %}
+    {% endwith %}
+{% endif %}
+{% endblock %}

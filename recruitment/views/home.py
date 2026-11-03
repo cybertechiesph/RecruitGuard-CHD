@@ -1,12 +1,11 @@
 """The dashboard, the forbidden page, the session keep-alive and the positions list.
 """
 
-from datetime import timedelta
+from datetime import datetime, time
 
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
-from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.utils import timezone
@@ -14,118 +13,95 @@ from django.views import View
 from django.views.generic import ListView, TemplateView
 
 from ..models import (
-    COMPLETION_SLA_OVERDUE_THRESHOLD,
-    STAGE_SLA_OVERDUE_THRESHOLD,
     AuditLog,
     AuditLogArchive,
-    PositionPosting,
-    RecruitmentCase,
     RecruitmentUser,
 )
 from ..permissions import InternalUserRequiredMixin
 from ..services import (
-    summarize_audit_logs,
-    get_all_audit_logs,
-    get_queue_for_user,
+    get_internal_account_locks,
     get_visible_positions_for_user,
 )
 
 
 class DashboardView(LoginRequiredMixin, InternalUserRequiredMixin, TemplateView):
-    template_name = "recruitment/dashboard.html"
+    """Round F1: the System Administrator's Home — what needs attention, the common tasks,
+    and recent account and security events (docs/admin-area-rebuild-plan.md §4.1). Workflow
+    roles land on the vacancy batch console instead; that is their home."""
 
-    def get(self, request, *args, **kwargs):
-        # Workflow roles land on the vacancy batch console — that is their home; the flat
-        # My Queue is a secondary view. Only System Admin sees the dashboard overview.
-        if request.user.role != RecruitmentUser.Role.SYSTEM_ADMIN:
-            return redirect("vacancy-batches")
-        return super().get(request, *args, **kwargs)
+    template_name = "recruitment/admin/home.html"
 
-    # Failed/locked authentication events surfaced on the security card.
-    SECURITY_WATCH_ACTIONS = [
+    # Account changes and sign-in trouble; routine sign-ins and page views are left out.
+    RECENT_ACTIONS = [
+        AuditLog.Action.INTERNAL_ACCOUNT_CREATED,
+        AuditLog.Action.INTERNAL_ACCOUNT_UPDATED,
+        AuditLog.Action.INTERNAL_ACCOUNT_ACTIVATED,
+        AuditLog.Action.INTERNAL_ACCOUNT_DEACTIVATED,
+        AuditLog.Action.INTERNAL_ROLE_CHANGED,
+        AuditLog.Action.INTERNAL_EMAIL_CHANGE_REQUESTED,
+        AuditLog.Action.INTERNAL_EMAIL_CHANGE_VERIFIED,
+        AuditLog.Action.PASSWORD_RESET_SENT_BY_ADMIN,
+        AuditLog.Action.INTERNAL_ACCOUNT_UNLOCKED,
+        AuditLog.Action.PASSWORD_RESET_REQUESTED,
+        AuditLog.Action.PASSWORD_RESET_COMPLETED,
+        AuditLog.Action.PASSWORD_CHANGED,
         AuditLog.Action.INTERNAL_LOGIN_FAILED,
         AuditLog.Action.INTERNAL_LOGIN_LOCKED,
         AuditLog.Action.INTERNAL_MFA_FAILED,
         AuditLog.Action.INTERNAL_MFA_LOCKED,
-        AuditLog.Action.APPLICATION_OTP_FAILED,
-        AuditLog.Action.APPLICATION_OTP_LOCKED,
         AuditLog.Action.EVIDENCE_ACCESS_DENIED,
     ]
+    FAILED_SIGN_IN_ACTIONS = [
+        AuditLog.Action.INTERNAL_LOGIN_FAILED,
+        AuditLog.Action.INTERNAL_LOGIN_LOCKED,
+    ]
+    # An archive older than this is flagged (entries become archivable after six months).
+    ARCHIVE_WARN_AFTER_DAYS = 180
+
+    def get(self, request, *args, **kwargs):
+        if request.user.role != RecruitmentUser.Role.SYSTEM_ADMIN:
+            return redirect("vacancy-batches")
+        return super().get(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        user = self.request.user
-        context["open_entry_count"] = get_visible_positions_for_user(user).count()
-        if user.role == RecruitmentUser.Role.SYSTEM_ADMIN:
-            internal_users = RecruitmentUser.objects.filter(role__in=RecruitmentUser.internal_roles())
-            context["internal_user_count"] = internal_users.count()
-            context["active_internal_user_count"] = internal_users.filter(is_active=True).count()
-            context["recent_identity_logs"] = AuditLog.objects.filter(
-                action__in=[
-                    AuditLog.Action.INTERNAL_ACCOUNT_CREATED,
-                    AuditLog.Action.INTERNAL_ACCOUNT_UPDATED,
-                    AuditLog.Action.INTERNAL_ACCOUNT_ACTIVATED,
-                    AuditLog.Action.INTERNAL_ACCOUNT_DEACTIVATED,
-                    AuditLog.Action.INTERNAL_ROLE_CHANGED,
-                ]
-            )[:5]
+        internal_users = list(
+            RecruitmentUser.objects.filter(role__in=RecruitmentUser.internal_roles())
+        )
+        locks = get_internal_account_locks(internal_users)
+        locked_count = sum(
+            1 for user in internal_users if user.username.strip().lower() in locks
+        )
+        inactive_count = sum(1 for user in internal_users if not user.is_active)
 
-            # Panel revision (Chavez, "improve dashboard"): the admin home is an
-            # oversight console, assembled from data the system already tracks.
-            today = timezone.localdate()
-            week_ago = today - timedelta(days=6)
+        today = timezone.localdate()
+        midnight = timezone.make_aware(datetime.combine(today, time.min))
+        failed_today = AuditLog.objects.filter(
+            action__in=self.FAILED_SIGN_IN_ACTIONS, created_at__gte=midnight
+        ).count()
 
-            active_postings = PositionPosting.objects.filter(
-                status=PositionPosting.EntryStatus.ACTIVE
-            )
-            context["active_vacancy_count"] = active_postings.count()
-            context["closing_soon_count"] = active_postings.filter(
-                closing_date__gte=today, closing_date__lte=today + timedelta(days=7)
-            ).count()
+        latest_archive = AuditLogArchive.objects.order_by("-created_at").first()
+        archive_age_days = (
+            (timezone.now() - latest_archive.created_at).days if latest_archive else None
+        )
 
-            open_cases = RecruitmentCase.objects.exclude(
-                current_stage=RecruitmentCase.Stage.CLOSED
-            )
-            context["open_case_count"] = open_cases.count()
-            stage_counts = {
-                row["current_stage"]: row["n"]
-                for row in open_cases.values("current_stage").annotate(n=Count("id"))
+        context.update(
+            {
+                "account_count": len(internal_users),
+                "locked_count": locked_count,
+                "inactive_count": inactive_count,
+                "failed_today": failed_today,
+                "today": today,
+                "latest_archive": latest_archive,
+                "archive_age_days": archive_age_days,
+                "archive_overdue": archive_age_days is None
+                or archive_age_days > self.ARCHIVE_WARN_AFTER_DAYS,
+                "needs_attention": bool(locked_count or failed_today),
+                "recent_events": AuditLog.objects.filter(action__in=self.RECENT_ACTIONS)
+                .select_related("actor")
+                .order_by("-created_at")[:10],
             }
-            context["case_stage_counts"] = [
-                {"label": label, "count": stage_counts.get(value, 0)}
-                for value, label in RecruitmentCase.Stage.choices
-                if value != RecruitmentCase.Stage.CLOSED
-            ]
-            # Same per-stage targets as the case badge (Completion has two weeks).
-            now = timezone.now()
-            context["overdue_case_count"] = open_cases.filter(
-                (
-                    ~Q(current_stage=RecruitmentCase.Stage.COMPLETION)
-                    & Q(stage_entered_at__lt=now - STAGE_SLA_OVERDUE_THRESHOLD)
-                )
-                | Q(
-                    current_stage=RecruitmentCase.Stage.COMPLETION,
-                    stage_entered_at__lt=now - COMPLETION_SLA_OVERDUE_THRESHOLD,
-                )
-            ).exclude(
-                case_status=RecruitmentCase.CaseStatus.AWAITING_RESUBMISSION
-            ).count()
-
-            context["audit_week_summary"] = summarize_audit_logs(
-                get_all_audit_logs(date_from=week_ago)
-            )
-            context["audit_week_start"] = week_ago
-            week_events = AuditLog.objects.filter(created_at__date__gte=week_ago)
-            context["security_event_count"] = week_events.filter(
-                action__in=self.SECURITY_WATCH_ACTIONS
-            ).count()
-            context["sensitive_event_count"] = week_events.filter(
-                is_sensitive_access=True
-            ).count()
-            context["audit_archive_count"] = AuditLogArchive.objects.count()
-            context["latest_audit_archive"] = AuditLogArchive.objects.first()
-        else:
-            context["queue"] = get_queue_for_user(user)
+        )
         return context
 
 

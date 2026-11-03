@@ -670,7 +670,7 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         response = client.get(reverse("dashboard"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "No identity events yet")
+        self.assertContains(response, "No account or security events yet.")
         self.assertNotContains(
             response,
             '{% include "internal_includes/state_empty.html" with title="No identity events yet" copy="Account creation, role changes, and activation events will appear here." %}',
@@ -777,7 +777,8 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         self.assertContains(response, "rg-pill--system-admin")
         self.assertContains(response, f'href="{reverse("evidence-vault-list")}"')
         self.assertContains(response, f'href="{reverse("audit-log-list")}"')
-        self.assertContains(response, "User Management")
+        self.assertContains(response, f'href="{reverse("internal-user-list")}"')
+        self.assertContains(response, "Accounts")
 
     def test_non_admin_dashboard_redirects_to_vacancy_console(self):
         roles = {

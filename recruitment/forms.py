@@ -10,8 +10,8 @@ from django.contrib.auth.forms import (
     PasswordChangeForm,
     PasswordResetForm,
     SetPasswordForm,
-    UserCreationForm,
 )
+from django.contrib.auth import password_validation
 from django.contrib.auth.hashers import check_password
 from django.forms import BaseInlineFormSet, inlineformset_factory
 from django.forms.models import ModelChoiceIteratorValue, construct_instance
@@ -435,58 +435,47 @@ class InternalMFAOTPForm(BootstrapFormMixin, forms.Form):
         return otp
 
 
-class InternalUserCreateForm(BootstrapFormMixin, UserCreationForm):
-    class Meta(UserCreationForm.Meta):
-        model = RecruitmentUser
-        fields = (
-            "username",
-            "first_name",
-            "last_name",
-            "email",
-            "employee_id",
-            "office_name",
-            "role",
-            "is_active",
-        )
+# Round F1: what each role can do, shown on the account form's role cards.
+INTERNAL_ROLE_DESCRIPTIONS = {
+    RecruitmentUser.Role.SECRETARIAT: "Runs Level 1 recruitment: screening, exams, interviews and completion.",
+    RecruitmentUser.Role.HRM_CHIEF: "Runs Level 2 recruitment and COS selection; sets the Office Policy.",
+    RecruitmentUser.Role.HRMPSB_MEMBER: "Rates candidates on the selection board panel.",
+    RecruitmentUser.Role.APPOINTING_AUTHORITY: "Records the final selection from the board's report.",
+    RecruitmentUser.Role.SYSTEM_ADMIN: "Manages staff accounts and reviews the audit log. No access to cases.",
+}
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+INTERNAL_USERNAME_HELP = "Letters, numbers and @ . + - _ only. Used to sign in."
+INTERNAL_ACTIVE_HELP = "Inactive accounts cannot sign in. Deactivate instead of deleting."
+TEMPORARY_PASSWORD_HELP = "At least 8 characters, not a common word, not only numbers."
+
+
+class _InternalAccountFieldsMixin:
+    """Shared by the create and edit forms: role cards, portal-voice help, one email per
+    internal account, usernames unique regardless of case."""
+
+    def _setup_account_fields(self):
         self.fields["role"].choices = internal_role_choices()
+        self.fields["role"].widget = forms.RadioSelect(choices=internal_role_choices())
         self.fields["email"].required = True
-        self.fields["is_active"].initial = True
-        self._apply_bootstrap()
-        _apply_password_strength_widget(self.fields["password1"])
-        _apply_password_strength_widget(self.fields["password2"])
+        self.fields["email"].label = "Email"
+        self.fields["username"].help_text = INTERNAL_USERNAME_HELP
+        self.fields["employee_id"].label = "Employee ID"
+        self.fields["office_name"].label = "Office"
+        if "is_active" in self.fields:
+            self.fields["is_active"].help_text = INTERNAL_ACTIVE_HELP
 
-    def clean_email(self):
-        email = self.cleaned_data["email"].strip().lower()
-        if RecruitmentUser.objects.filter(
-            email__iexact=email,
-            role__in=RecruitmentUser.internal_roles(),
-        ).exists():
-            raise forms.ValidationError("This email address is already assigned to an internal account.")
-        return email
-
-
-class InternalUserUpdateForm(BootstrapFormMixin, forms.ModelForm):
-    class Meta:
-        model = RecruitmentUser
-        fields = (
-            "username",
-            "first_name",
-            "last_name",
-            "email",
-            "employee_id",
-            "office_name",
-            "role",
-            "is_active",
-        )
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["role"].choices = internal_role_choices()
-        self.fields["email"].required = True
-        self._apply_bootstrap()
+    def role_cards(self):
+        current = str(self["role"].value() or "")
+        return [
+            {
+                "value": value,
+                "label": label,
+                "description": INTERNAL_ROLE_DESCRIPTIONS.get(value, ""),
+                "checked": value == current,
+                "id": f"id_role_{index}",
+            }
+            for index, (value, label) in enumerate(internal_role_choices())
+        ]
 
     def clean_email(self):
         email = self.cleaned_data["email"].strip().lower()
@@ -499,6 +488,134 @@ class InternalUserUpdateForm(BootstrapFormMixin, forms.ModelForm):
         if queryset.exists():
             raise forms.ValidationError("This email address is already assigned to an internal account.")
         return email
+
+    def clean_username(self):
+        username = (self.cleaned_data.get("username") or "").strip()
+        queryset = RecruitmentUser.objects.filter(username__iexact=username)
+        if self.instance and self.instance.pk:
+            queryset = queryset.exclude(pk=self.instance.pk)
+        if queryset.exists():
+            raise forms.ValidationError("A user with that username already exists.")
+        return username
+
+
+class InternalUserCreateForm(_InternalAccountFieldsMixin, BootstrapFormMixin, forms.ModelForm):
+    """Round F1 (D1): the account is created without a password and the person is emailed a
+    link to set their own. A temporary password is the fallback for staff whose email is not
+    working yet."""
+
+    PASSWORD_MODE_INVITE = "invite"
+    PASSWORD_MODE_TEMPORARY = "temporary"
+
+    password_mode = forms.ChoiceField(
+        required=False,
+        choices=[
+            (PASSWORD_MODE_INVITE, "Email them a link to set their own password"),
+            (PASSWORD_MODE_TEMPORARY, "Set a temporary password now"),
+        ],
+        widget=forms.RadioSelect,
+        initial=PASSWORD_MODE_INVITE,
+        label="Password",
+    )
+    password1 = forms.CharField(
+        required=False,
+        label="Temporary password",
+        strip=False,
+        widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}),
+        help_text=TEMPORARY_PASSWORD_HELP,
+    )
+    password2 = forms.CharField(
+        required=False,
+        label="Repeat the temporary password",
+        strip=False,
+        widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}),
+    )
+
+    class Meta:
+        model = RecruitmentUser
+        fields = (
+            "first_name",
+            "last_name",
+            "email",
+            "username",
+            "role",
+            "office_name",
+            "employee_id",
+        )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._setup_account_fields()
+        # A new account needs a name for its invitation and the audit trail.
+        self.fields["first_name"].required = True
+        self.fields["last_name"].required = True
+        self._apply_bootstrap()
+        _apply_password_strength_widget(self.fields["password1"])
+        _apply_password_strength_widget(self.fields["password2"])
+
+    @property
+    def chosen_password_mode(self):
+        data = getattr(self, "cleaned_data", {})
+        mode = data.get("password_mode")
+        if mode in {self.PASSWORD_MODE_INVITE, self.PASSWORD_MODE_TEMPORARY}:
+            return mode
+        # A form posted without the choice but with a password is the temporary path.
+        return self.PASSWORD_MODE_TEMPORARY if data.get("password1") else self.PASSWORD_MODE_INVITE
+
+    def clean(self):
+        cleaned = super().clean()
+        if self.chosen_password_mode != self.PASSWORD_MODE_TEMPORARY:
+            return cleaned
+        password1 = cleaned.get("password1") or ""
+        password2 = cleaned.get("password2") or ""
+        if not password1:
+            self.add_error("password1", "Enter a temporary password, or choose to email a link instead.")
+            return cleaned
+        if password1 != password2:
+            self.add_error("password2", "The two passwords do not match.")
+            return cleaned
+        probe = RecruitmentUser(
+            username=cleaned.get("username") or "",
+            email=cleaned.get("email") or "",
+            first_name=cleaned.get("first_name") or "",
+            last_name=cleaned.get("last_name") or "",
+        )
+        try:
+            password_validation.validate_password(password1, user=probe)
+        except forms.ValidationError as exc:
+            self.add_error("password1", exc)
+        return cleaned
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.is_active = True
+        if self.chosen_password_mode == self.PASSWORD_MODE_TEMPORARY:
+            user.set_password(self.cleaned_data["password1"])
+        else:
+            user.set_unusable_password()
+        if commit:
+            user.save()
+        return user
+
+
+class InternalUserUpdateForm(_InternalAccountFieldsMixin, BootstrapFormMixin, forms.ModelForm):
+    class Meta:
+        model = RecruitmentUser
+        fields = (
+            "first_name",
+            "last_name",
+            "email",
+            "username",
+            "role",
+            "office_name",
+            "employee_id",
+            "is_active",
+        )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._setup_account_fields()
+        self._apply_bootstrap()
 
 
 class ApplicantIdentityCleaningMixin:

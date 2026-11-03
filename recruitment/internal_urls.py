@@ -19,7 +19,10 @@ from .identity_views import (
     InternalPasswordResetDoneView,
     InternalPasswordResetView,
     InternalUserCreateView,
+    InternalUserDetailView,
     InternalUserListView,
+    InternalUserSendResetView,
+    InternalUserUnlockView,
     InternalUserToggleActiveView,
     InternalUserUpdateView,
 )
@@ -129,7 +132,10 @@ urlpatterns = [
     ),
     path("users/", InternalUserListView.as_view(), name="internal-user-list"),
     path("users/new/", InternalUserCreateView.as_view(), name="internal-user-create"),
+    path("users/<int:pk>/", InternalUserDetailView.as_view(), name="internal-user-detail"),
     path("users/<int:pk>/edit/", InternalUserUpdateView.as_view(), name="internal-user-update"),
+    path("users/<int:pk>/send-reset/", InternalUserSendResetView.as_view(), name="internal-user-send-reset"),
+    path("users/<int:pk>/unlock/", InternalUserUnlockView.as_view(), name="internal-user-unlock"),
     path(
         "users/email-change/<uuid:token>/verify/",
         InternalEmailChangeVerifyView.as_view(),

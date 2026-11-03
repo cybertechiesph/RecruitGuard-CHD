@@ -5,7 +5,7 @@ docs/sysadmin-review-2026-11.md (the walkthrough) and the office's own verdict t
 current pages look clunky. The security boundaries stay exactly as they are; what changes is
 what the administrator sees and how the daily jobs are laid out.
 
-## Status: plan written, not implemented
+## Status: Round F1 done (Home, Accounts, account page, invitations, reset, unlock); F2–F4 not started
 
 ## 1. Decisions (locked)
 
@@ -231,3 +231,12 @@ notification emails to administrators (the Home tiles cover it); Django admin.
 All four rounds committed; suite green; the six jobs in section 2 each done end to end in the
 browser as `walk_admin`; the walkthrough's P2-1, P2-2, P2-3 and P3-1 to P3-5 closed in
 docs/sysadmin-review-2026-11.md section 9.
+
+## 9. Implementation status
+
+| Round | State | Notes |
+|---|---|---|
+| F1 | Done (2026-11-03) | Home (`admin/home.html`), Accounts with search/role/status chips and sort (`admin/accounts.html`), account page with Unlock now, Send password reset email / Send the invitation again, Deactivate/Reactivate (`admin/account_detail.html`), create and edit form with role cards and invitation by default (`admin/account_form.html`), sidebar order and "Change password". Services `get_internal_account_locks`, `internal_account_locked_until`, `unlock_internal_account`, `send_admin_password_email`; audit actions `PASSWORD_RESET_SENT_BY_ADMIN`, `INTERNAL_ACCOUNT_UNLOCKED` (migration 0098, choices only). New stylesheet `static/css/recruitguard-admin.css` (theme tokens only). Old `dashboard.html`, `internal_user_list.html`, `internal_user_form.html` deleted. The Home archive tile links to the Audit Log's archive block until Maintenance exists (F3). The invitation email does not point to "Forgot your password?" because that page skips accounts without a password; the administrator resends instead. Tests: `AdminAreaRoundF1Tests` (16). |
+| F2 | Not started | |
+| F3 | Not started | |
+| F4 | Not started | |

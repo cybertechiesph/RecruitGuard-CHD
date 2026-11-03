@@ -1,0 +1,134 @@
+{% extends "internal_base.html" %}
+{% load recruitment_ui %}
+
+{% block internal_title %}{% if object %}Edit {{ object.username }}{% else %}Create account{% endif %}{% endblock %}
+
+{% block breadcrumb %}
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<a href="{% url 'internal-user-list' %}" class="rg-breadcrumb-home">Accounts</a>
+{% if object %}
+    <span class="rg-breadcrumb-sep">&rsaquo;</span>
+    <a href="{% url 'internal-user-detail' object.pk %}" class="rg-breadcrumb-home">{{ object.get_full_name|default:object.username }}</a>
+    <span class="rg-breadcrumb-sep">&rsaquo;</span>
+    <span class="rg-breadcrumb-current">Edit</span>
+{% else %}
+    <span class="rg-breadcrumb-sep">&rsaquo;</span>
+    <span class="rg-breadcrumb-current">Create account</span>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="rg-adm">
+    <header class="rg-adm-head">
+        <div>
+            <h1 class="rg-adm-head__title">{% if object %}Edit account{% else %}Create account{% endif %}</h1>
+            <p class="rg-adm-head__lead">{% if object %}Changes are recorded in the audit log.{% else %}They will get an email to set their own password.{% endif %}</p>
+        </div>
+    </header>
+
+    <form method="post" class="rg-adm-form" novalidate data-account-form>
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <section class="rg-adm-panel">
+            <h2 class="rg-adm-panel__title">Person</h2>
+            <div class="row g-3">
+                <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.first_name %}</div>
+                <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.last_name %}</div>
+                <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.email %}</div>
+                <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.username %}</div>
+                <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.office_name %}</div>
+                <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.employee_id %}</div>
+            </div>
+        </section>
+
+        <section class="rg-adm-panel">
+            <h2 class="rg-adm-panel__title" id="role-title">Role</h2>
+            <fieldset aria-labelledby="role-title">
+                <div class="rg-adm-roles">
+                    {% for card in form.role_cards %}
+                        <label class="rg-adm-role" for="{{ card.id }}">
+                            <input type="radio" class="form-check-input" name="{{ form.role.html_name }}" id="{{ card.id }}"
+                                   value="{{ card.value }}"{% if card.checked %} checked{% endif %}>
+                            <span>
+                                <strong>{{ card.label }}</strong>
+                                <span>{{ card.description }}</span>
+                            </span>
+                        </label>
+                    {% endfor %}
+                </div>
+                {% for error in form.role.errors %}
+                    <div class="invalid-feedback d-block">{{ error }}</div>
+                {% endfor %}
+            </fieldset>
+        </section>
+
+        {% if form.password_mode %}
+            <section class="rg-adm-panel" data-password-section>
+                <h2 class="rg-adm-panel__title" id="password-title">Password</h2>
+                <fieldset class="rg-adm-choice" aria-labelledby="password-title">
+                    <label for="id_password_mode_invite">
+                        <input type="radio" class="form-check-input" name="password_mode" id="id_password_mode_invite" value="invite"
+                               {% if form.password_mode.value != "temporary" %}checked{% endif %} data-password-mode>
+                        <span>
+                            <strong>Email them a link to set their own password</strong>
+                            <span>Recommended. The link works once and expires; you never see the password.</span>
+                        </span>
+                    </label>
+                    <label for="id_password_mode_temporary">
+                        <input type="radio" class="form-check-input" name="password_mode" id="id_password_mode_temporary" value="temporary"
+                               {% if form.password_mode.value == "temporary" %}checked{% endif %} data-password-mode>
+                        <span>
+                            <strong>Set a temporary password now</strong>
+                            <span>Only when their email is not working yet. Give it to them in person.</span>
+                        </span>
+                    </label>
+                </fieldset>
+                <div class="row g-3 mt-1" data-temporary-fields {% if form.password_mode.value != "temporary" %}hidden{% endif %}>
+                    <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.password1 %}</div>
+                    <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.password2 %}</div>
+                </div>
+            </section>
+        {% endif %}
+
+        {% if form.is_active %}
+            <section class="rg-adm-panel">
+                <h2 class="rg-adm-panel__title">Status</h2>
+                {% include "recruitment/includes/form_field.html" with field=form.is_active %}
+            </section>
+        {% endif %}
+
+        <div class="rg-adm-form-actions">
+            <button type="submit" class="btn btn-rg-primary">{% if object %}Save changes{% else %}Create account{% endif %}</button>
+            <a href="{% if object %}{% url 'internal-user-detail' object.pk %}{% else %}{% url 'internal-user-list' %}{% endif %}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<script>
+(function () {
+    var form = document.querySelector("[data-account-form]");
+    if (!form) { return; }
+    var temporary = form.querySelector("[data-temporary-fields]");
+    form.querySelectorAll("[data-password-mode]").forEach(function (radio) {
+        radio.addEventListener("change", function () {
+            if (temporary) { temporary.hidden = !(radio.checked && radio.value === "temporary"); }
+        });
+    });
+    // A new account's username starts as the part of the email before the "@".
+    var email = form.querySelector("[name=email]");
+    var username = form.querySelector("[name=username]");
+    if (email && username && !username.value && form.querySelector("[data-password-section]")) {
+        var touched = false;
+        username.addEventListener("input", function () { touched = true; });
+        email.addEventListener("input", function () {
+            if (touched) { return; }
+            var local = (email.value.split("@")[0] || "").toLowerCase().replace(/[^a-z0-9@.+_-]/g, "");
+            username.value = local;
+        });
+    }
+})();
+</script>
+{% endblock %}
