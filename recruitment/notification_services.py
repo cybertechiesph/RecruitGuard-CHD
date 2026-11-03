@@ -83,6 +83,7 @@ NOTIFICATION_EMAIL_TEMPLATES = {
     NotificationLog.NotificationType.SELECTION_UNDER_REVIEW: "email/selection_under_review.html",
     NotificationLog.NotificationType.APPLICANT_CONTACT_UPDATED: "email/applicant_contact_updated.html",
     NotificationLog.NotificationType.DOCUMENT_RESUBMISSION_REQUEST: "email/document_resubmission_request.html",
+    NotificationLog.NotificationType.DOCUMENT_RESUBMISSION_RECEIVED: "email/document_resubmission_received.html",
     NotificationLog.NotificationType.INTERVIEW_SESSION_SCHEDULED: "email/interview_scheduled_internal.html",
     NotificationLog.NotificationType.EXAM_INVITATION: "email/exam_invitation.html",
     NotificationLog.NotificationType.APPLICANT_INTERVIEW_NOTICE: "email/applicant_interview_notice.html",
@@ -348,8 +349,12 @@ def _build_submission_acknowledgment(application):
     ]
     _append_status_link(lines, application)
     return (
+        # Round E, P3-2: the applicant-facing case number, as in the body and on the receipt.
         gettext("DOH–CHD CALABARZON Recruitment Portal application received: %(ref)s")
-        % {"ref": application.reference_number},
+        % {
+            "ref": gettext("Case No. %(ref)s")
+            % {"ref": application.case_number_short or application.reference_label}
+        },
         "\n".join(lines),
     )
 
@@ -1106,6 +1111,54 @@ def queue_withdrawal_acknowledgement_notification(application, actor=None, reaso
             "status": application.status,
             "branch": application.branch,
             "reason": reason,
+            "status_link": build_applicant_status_url(application),
+        },
+    )
+
+
+def _build_document_resubmission_received(application, document_titles):
+    """Round E, P2-3: the applicant resubmitted corrected documents. Proof in the inbox, so
+    the on-screen message is not the only record they have."""
+    lines = [
+        gettext("Dear %(name)s,") % {"name": application.applicant_display_name},
+        "",
+        gettext("We received your corrected documents for %(title)s.")
+        % {"title": application.position.title},
+        gettext("Case No. %(ref)s") % {"ref": application.case_number_short or application.reference_label},
+        "",
+    ]
+    if document_titles:
+        lines.append(gettext("Documents received:"))
+        lines.extend(f"- {title}" for title in document_titles)
+        lines.append("")
+    lines.append(
+        gettext(
+            "The recruitment team will continue reviewing your application. We will email you "
+            "when there is news."
+        )
+    )
+    _append_status_link(lines, application)
+    return (
+        gettext("DOH–CHD CALABARZON Recruitment Portal: corrected documents received for %(title)s")
+        % {"title": application.position.title},
+        "\n".join(lines),
+    )
+
+
+@_in_applicant_language
+def queue_document_resubmission_received_notification(application, actor=None, document_titles=()):
+    document_titles = [str(title) for title in document_titles]
+    subject, body = _build_document_resubmission_received(application, document_titles)
+    return queue_notification(
+        application,
+        notification_type=NotificationLog.NotificationType.DOCUMENT_RESUBMISSION_RECEIVED,
+        actor=actor,
+        subject=subject,
+        body=body,
+        metadata={
+            "reference_number": application.reference_number,
+            "status": application.status,
+            "document_titles": document_titles,
             "status_link": build_applicant_status_url(application),
         },
     )

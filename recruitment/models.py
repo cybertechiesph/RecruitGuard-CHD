@@ -4455,6 +4455,11 @@ class NotificationLog(TimestampedModel):
             "document_resubmission_request",
             "Document Resubmission Request",
         )
+        # Round E: the applicant's proof in the inbox that corrected documents arrived.
+        DOCUMENT_RESUBMISSION_RECEIVED = (
+            "document_resubmission_received",
+            "Document Resubmission Received",
+        )
         INTERVIEW_SESSION_SCHEDULED = (
             "interview_session_scheduled",
             "Interview Session Scheduled Notification",

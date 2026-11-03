@@ -81,7 +81,7 @@ msgstr "Ipapadala na ang mga susunod na recruitment notice sa bagong contact det
 msgid "If you did not request or expect this correction, contact the Human Resource Management Unit promptly."
 msgstr "Kung hindi mo ito ni-request o hindi mo ito inaasahan, i-contact agad ang Human Resource Management Unit."
 
-#: templates/email/applicant_contact_updated.html templates/email/applicant_interview_notice.html templates/email/application_received.html templates/email/exam_invitation.html templates/email/non_selected_applicant.html templates/email/reminder.html templates/email/requirement_checklist.html templates/email/selected_applicant.html templates/email/selection_under_review.html
+#: templates/email/applicant_contact_updated.html templates/email/applicant_interview_notice.html templates/email/application_received.html templates/email/document_resubmission_received.html templates/email/exam_invitation.html templates/email/non_selected_applicant.html templates/email/reminder.html templates/email/requirement_checklist.html templates/email/selected_applicant.html templates/email/selection_under_review.html
 msgid "Check application status"
 msgstr "I-check ang status ng application"
 
@@ -241,7 +241,7 @@ msgstr "Details ng application"
 msgid "Tracking Code (keep private)"
 msgstr "Tracking Code (huwag ibigay sa iba)"
 
-#: templates/email/application_received.html templates/email/non_selected_applicant.html templates/email/selected_applicant.html recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_status_lookup.html recruitment/services.py
+#: templates/email/application_received.html templates/email/non_selected_applicant.html templates/email/selected_applicant.html recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_status_lookup.html recruitment/services/evidence_vault.py
 msgid "Position"
 msgstr "Position"
 
@@ -276,6 +276,34 @@ msgstr "<strong>%(contact_unit)s</strong><br> Tel: %(phone)s &nbsp;&middot;&nbsp
 #: templates/email/base.html
 msgid "<br>Portal:"
 msgstr "<br>Portal:"
+
+#: templates/email/document_resubmission_received.html
+msgid "Corrected Documents Received"
+msgstr "Natanggap ang Itinamang Documents"
+
+#: templates/email/document_resubmission_received.html recruitment/notification_services.py
+msgid "We received your corrected documents for %(title)s."
+msgstr "Natanggap namin ang itinamang documents mo para sa %(title)s."
+
+#: templates/email/document_resubmission_received.html
+msgid "Corrected documents received"
+msgstr "Natanggap ang itinamang documents"
+
+#: templates/email/document_resubmission_received.html
+msgid "Dear %(name)s, we received your corrected documents for %(title)s."
+msgstr "Dear %(name)s, natanggap namin ang itinamang documents mo para sa %(title)s."
+
+#: templates/email/document_resubmission_received.html recruitment/notification_services.py
+msgid "Case No. %(ref)s"
+msgstr "Case No. %(ref)s"
+
+#: templates/email/document_resubmission_received.html
+msgid "Documents received"
+msgstr "Mga natanggap na documents"
+
+#: templates/email/document_resubmission_received.html recruitment/notification_services.py
+msgid "The recruitment team will continue reviewing your application. We will email you when there is news."
+msgstr "Itutuloy ng recruitment team ang pag-review sa application mo. Mag-e-email kami kapag may balita."
 
 #: templates/email/document_resubmission_request.html
 msgid "DOH–CHD CALABARZON Recruitment Portal Document Resubmission"
@@ -1503,11 +1531,11 @@ msgstr "Piliin ang klase ng position"
 msgid "All Position Types"
 msgstr "Lahat ng klase ng position"
 
-#: recruitment/templates/recruitment/applicant_portal.html recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_status_lookup.html recruitment/templates/recruitment/applicant_vacancy_detail.html recruitment/services.py
+#: recruitment/templates/recruitment/applicant_portal.html recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_status_lookup.html recruitment/templates/recruitment/applicant_vacancy_detail.html recruitment/services/evidence_vault.py
 msgid "Permanent (Plantilla)"
 msgstr "Permanent (Plantilla)"
 
-#: recruitment/templates/recruitment/applicant_portal.html recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_status_lookup.html recruitment/templates/recruitment/applicant_vacancy_detail.html recruitment/templates/recruitment/includes/branch_explainer.html recruitment/templates/recruitment/includes/job_card.html recruitment/services.py
+#: recruitment/templates/recruitment/applicant_portal.html recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_status_lookup.html recruitment/templates/recruitment/applicant_vacancy_detail.html recruitment/templates/recruitment/includes/branch_explainer.html recruitment/templates/recruitment/includes/job_card.html recruitment/services/evidence_vault.py
 msgid "Contract of Service"
 msgstr "Contract of Service"
 
@@ -1591,7 +1619,7 @@ msgstr "Na-submit na ang Application"
 msgid "Department of Health &mdash; Center for Health Development CALABARZON"
 msgstr "Department of Health &mdash; Center for Health Development CALABARZON"
 
-#: recruitment/templates/recruitment/applicant_receipt.html recruitment/services.py
+#: recruitment/templates/recruitment/applicant_receipt.html recruitment/services/evidence_vault.py
 msgid "Application Submission Receipt"
 msgstr "Resibo ng Application"
 
@@ -1653,7 +1681,7 @@ msgid_plural "%(counter)s files submitted"
 msgstr[0] "%(counter)s file ang na-submit"
 msgstr[1] "%(counter)s files ang na-submit"
 
-#: recruitment/templates/recruitment/applicant_receipt.html recruitment/services.py
+#: recruitment/templates/recruitment/applicant_receipt.html recruitment/services/evidence_vault.py
 msgid "What Happens Next"
 msgstr "Ano ang Susunod"
 
@@ -1732,8 +1760,8 @@ msgid "Send verification code"
 msgstr "Ipadala ang verification code"
 
 #: recruitment/templates/recruitment/applicant_resubmission.html
-msgid "Step 2 — Re-upload the requested documents"
-msgstr "Step 2 — I-upload ulit ang hinihinging documents"
+msgid "Re-upload the requested documents"
+msgstr "I-upload ulit ang mga hinihinging documents"
 
 #: recruitment/templates/recruitment/applicant_resubmission.html
 msgid "Only the documents the recruitment team flagged are shown below. Your already-accepted documents do not need to be uploaded again."
@@ -2413,7 +2441,7 @@ msgstr "Hanggang {max} files lang ang puwede sa isang document. Pagsamahin ang i
 msgid "This document is not part of this application."
 msgstr "Hindi kasama ang document na ito sa application na ito."
 
-#: recruitment/applicant_documents.py recruitment/services.py
+#: recruitment/applicant_documents.py recruitment/services/intake.py
 msgid "This application has already been submitted and can no longer be changed."
 msgstr "Na-submit na ang application na ito at hindi na mapapalitan."
 
@@ -2447,15 +2475,15 @@ msgstr ""
 "\n"
 "Huwag ibigay ang code na ito. Hindi ito hihingin ng staff ng DOH–CHD CALABARZON."
 
-#: recruitment/applicant_hub.py recruitment/services.py
+#: recruitment/applicant_hub.py recruitment/services/intake.py
 msgid "Request a verification code first."
 msgstr "Humingi muna ng verification code."
 
-#: recruitment/applicant_hub.py recruitment/services.py
+#: recruitment/applicant_hub.py recruitment/services/intake.py
 msgid "The verification code has expired. Request a new code."
 msgstr "Nag-expire na ang verification code. Humingi ng bagong code."
 
-#: recruitment/applicant_hub.py recruitment/services.py
+#: recruitment/applicant_hub.py recruitment/services/intake.py
 msgid "Too many invalid verification attempts. Request a new code."
 msgstr "Masyadong maraming maling code. Humingi ng bagong code."
 
@@ -2463,7 +2491,7 @@ msgstr "Masyadong maraming maling code. Humingi ng bagong code."
 msgid "That code doesn't match. Check the latest email from us and try again."
 msgstr "Hindi tugma ang code. I-check ang pinakabagong email namin at subukan ulit."
 
-#: recruitment/applicant_hub.py recruitment/services.py
+#: recruitment/applicant_hub.py recruitment/services/intake.py
 msgid "Please wait %(seconds)s seconds before requesting another code."
 msgstr "Maghintay ng %(seconds)s segundo bago humingi ulit ng code."
 
@@ -2683,7 +2711,7 @@ msgstr "Maglagay ng tamang email, gaya ng juan@example.com."
 msgid "Give your consent to continue."
 msgstr "Pumayag muna para makapagpatuloy."
 
-#: recruitment/forms.py recruitment/portal_views.py recruitment/services.py
+#: recruitment/forms.py recruitment/portal_views.py recruitment/services/intake.py
 msgid "This position is no longer accepting applications."
 msgstr "Hindi na tumatanggap ng applicants ang position na ito."
 
@@ -2707,7 +2735,7 @@ msgstr "Pinoprotektahan ng Google reCAPTCHA ang form na ito laban sa spam at bot
 msgid "Cloudflare Turnstile protects this form from automated abuse."
 msgstr "Pinoprotektahan ng Cloudflare Turnstile ang form na ito laban sa spam at bots."
 
-#: recruitment/forms.py recruitment/services.py
+#: recruitment/forms.py recruitment/services/intake.py
 msgid "You have already submitted an application for this position using this email address."
 msgstr "Nakapag-submit ka na ng application para sa position na ito gamit ang email na ito."
 
@@ -2788,10 +2816,6 @@ msgid "DOH–CHD CALABARZON Recruitment Portal exam invitation: %(title)s"
 msgstr "DOH–CHD CALABARZON Recruitment Portal: imbitasyon sa exam para sa %(title)s"
 
 #: recruitment/notification_services.py
-msgid "Case No. %(ref)s"
-msgstr "Case No. %(ref)s"
-
-#: recruitment/notification_services.py
 msgid "Position: %(title)s"
 msgstr "Position: %(title)s"
 
@@ -2862,6 +2886,14 @@ msgstr "Na-record na namin ang pag-withdraw mo sa recruitment para sa %(title)s 
 #: recruitment/notification_services.py
 msgid "DOH–CHD CALABARZON Recruitment Portal: withdrawal recorded for %(title)s"
 msgstr "DOH–CHD CALABARZON Recruitment Portal: na-record ang withdrawal para sa %(title)s"
+
+#: recruitment/notification_services.py
+msgid "Documents received:"
+msgstr "Mga natanggap na documents:"
+
+#: recruitment/notification_services.py
+msgid "DOH–CHD CALABARZON Recruitment Portal: corrected documents received for %(title)s"
+msgstr "DOH–CHD CALABARZON Recruitment Portal: natanggap ang itinamang documents para sa %(title)s"
 
 #: recruitment/notification_services.py
 msgid "The recruitment for %(title)s under %(branch)s recruitment has been cancelled by the office, so your application will not proceed."
@@ -3052,6 +3084,10 @@ msgid "This looks like the old PDS (Revised 2017). The office needs the Revised 
 msgstr "Mukhang lumang PDS ito (Revised 2017). Ang kailangan ng office ay ang Revised 2026 form, kaya baka ibalik ito sa iyo. I-download ang 2026 form sa card na ito, sagutan, at i-upload ito."
 
 #: recruitment/portal_views.py
+msgid "Verify your email to see your receipt."
+msgstr "I-verify ang email mo para makita ang resibo mo."
+
+#: recruitment/portal_views.py
 msgid "Application submitted"
 msgstr "Na-submit ang application"
 
@@ -3078,6 +3114,22 @@ msgstr "appointment"
 #: recruitment/portal_views.py
 msgid "Contract"
 msgstr "contract"
+
+#: recruitment/portal_views.py
+msgid "Exam scheduled"
+msgstr "May schedule na ang exam"
+
+#: recruitment/portal_views.py
+msgid "You are invited to take the examination. The date, time and place are below and in the email we sent you."
+msgstr "Imbitado ka sa examination. Nasa baba at nasa email na pinadala namin ang petsa, oras at lugar."
+
+#: recruitment/portal_views.py
+msgid "Interview scheduled"
+msgstr "May schedule na ang interview"
+
+#: recruitment/portal_views.py
+msgid "You are invited to an interview. The date, time and place are below and in the email we sent you."
+msgstr "Imbitado ka sa interview. Nasa baba at nasa email na pinadala namin ang petsa, oras at lugar."
 
 #: recruitment/portal_views.py
 msgid "This verification link is no longer available. Please start again from the job openings page."
@@ -3199,7 +3251,7 @@ msgstr "Pumili ng file na ia-upload."
 msgid "Your session ended. Reload the page and verify your email to continue."
 msgstr "Na-end na ang session mo. I-reload ang page at i-verify ang email mo para ituloy."
 
-#: recruitment/portal_views.py
+#: recruitment/portal_views.py recruitment/services/intake.py
 msgid "We could not send a verification code right now. Please try again in a few moments."
 msgstr "Hindi kami makapagpadala ng verification code ngayon. Subukan ulit maya-maya."
 
@@ -3315,11 +3367,117 @@ msgstr "Mag-upload ng kopya ng Transcript of Records mo."
 msgid "Upload your training certificates when they apply to this COS application."
 msgstr "I-upload ang training certificates mo kung kailangan para sa COS application na ito."
 
-#: recruitment/services.py
+#: recruitment/services/evidence_vault.py
+msgid "REPUBLIC OF THE PHILIPPINES"
+msgstr "REPUBLIKA NG PILIPINAS"
+
+#: recruitment/services/evidence_vault.py
+msgid "Requirements Submitted (continued)"
+msgstr "Mga Requirement na Ipinasa (karugtong)"
+
+#: recruitment/services/evidence_vault.py
+msgid "Requirements Submitted"
+msgstr "Mga Requirement na Ipinasa"
+
+#: recruitment/services/evidence_vault.py
+msgid "Keep your Tracking Code private — treat it like a password."
+msgstr "Huwag ipakita sa iba ang Tracking Code mo — parang password ito."
+
+#: recruitment/services/evidence_vault.py
+msgid "Official proof of a received application. Please keep this copy."
+msgstr "Opisyal na patunay na natanggap ang application. Itago ang kopyang ito."
+
+#: recruitment/services/evidence_vault.py
+msgid "TRACKING CODE  (keep private)"
+msgstr "TRACKING CODE  (huwag ipakita sa iba)"
+
+#: recruitment/services/evidence_vault.py
+msgid "CASE REFERENCE"
+msgstr "CASE REFERENCE"
+
+#: recruitment/services/evidence_vault.py
+msgid "Never share it. Staff will never ask for it."
+msgstr "Huwag ibigay sa iba. Hindi ito hihingin ng staff."
+
+#: recruitment/services/evidence_vault.py
+msgid "Quote this when you contact the office."
+msgstr "Sabihin ito kapag nag-contact ka sa office."
+
+#: recruitment/services/evidence_vault.py
+msgid "Application Details"
+msgstr "Details ng Application"
+
+#: recruitment/services/evidence_vault.py
+msgid "Your application will be reviewed by the recruitment team."
+msgstr "Ire-review ng recruitment team ang application mo."
+
+#: recruitment/services/evidence_vault.py
+msgid "You may be contacted by email or phone for updates or additional requirements."
+msgstr "Puwede ka naming i-contact sa email o phone para sa updates o dagdag na requirements."
+
+#: recruitment/services/evidence_vault.py
+msgid "Check your status anytime on My Applications with just your email."
+msgstr "I-check ang status mo anytime sa My Applications gamit lang ang email mo."
+
+#: recruitment/services/evidence_vault.py
+msgid "Keep this receipt and your Tracking Code safe."
+msgstr "Itago ang resibong ito at ang Tracking Code mo."
+
+#: recruitment/services/evidence_vault.py
+msgid "Staff will never ask for your Tracking Code; give your case number instead. A confirmation was also sent to %(email)s."
+msgstr "Hindi hihingin ng staff ang Tracking Code mo; case number ang ibigay mo. Nagpadala rin kami ng confirmation sa %(email)s."
+
+#: recruitment/services/evidence_vault.py
+msgid "Generated %(when)s. This is a system-generated receipt and needs no signature."
+msgstr "Ginawa noong %(when)s. Automatic na resibo ito at hindi kailangan ng pirma."
+
+#: recruitment/services/evidence_vault.py
+msgid "Applicant"
+msgstr "Applicant"
+
+#: recruitment/services/evidence_vault.py
+msgid "Reference / Job Code"
+msgstr "Reference / Job Code"
+
+#: recruitment/services/evidence_vault.py
+msgid "Engagement"
+msgstr "Klase ng trabaho"
+
+#: recruitment/services/evidence_vault.py
+msgid "Date Submitted"
+msgstr "Petsa ng pag-submit"
+
+#: recruitment/services/evidence_vault.py
+msgid "Registered Email"
+msgstr "Email na ginamit"
+
+#: recruitment/services/evidence_vault.py
+msgid "Documents Submitted"
+msgstr "Documents na ipinasa"
+
+#: recruitment/services/evidence_vault.py
+msgid "%(count)s file"
+msgid_plural "%(count)s files"
+msgstr[0] "%(count)s file"
+msgstr[1] "%(count)s files"
+
+#: recruitment/services/evidence_vault.py
+msgid "your registered email"
+msgstr "email mo"
+
+#: recruitment/services/evidence_vault.py
+msgid "Submitted requirement"
+msgstr "Requirement na ipinasa"
+
+#: recruitment/services/evidence_vault.py
+msgid "File"
+msgstr "File"
+
+#: recruitment/services/intake.py
 msgid "DOH–CHD CALABARZON Recruitment Portal applicant verification code"
 msgstr "DOH–CHD CALABARZON Recruitment Portal verification code"
 
-#: recruitment/services.py
+#: recruitment/services/intake.py
 msgid ""
 "DOH–CHD CALABARZON Recruitment Portal applicant verification code\n"
 "\n"
@@ -3335,11 +3493,11 @@ msgstr ""
 "\n"
 "Huwag ibigay ang code na ito. Hindi ito hihingin ng staff ng DOH–CHD CALABARZON."
 
-#: recruitment/services.py
+#: recruitment/services/intake.py
 msgid "Your application for %(title)s is not submitted yet"
 msgstr "Hindi pa na-submit ang application mo para sa %(title)s"
 
-#: recruitment/services.py
+#: recruitment/services/intake.py
 msgid ""
 "Hello %(name)s,\n"
 "\n"
@@ -3363,11 +3521,11 @@ msgstr ""
 "\n"
 "DOH–CHD CALABARZON Recruitment Portal"
 
-#: recruitment/services.py
+#: recruitment/services/intake.py
 msgid "Reminder: send your corrected documents for %(title)s by %(date)s"
 msgstr "Paalala: i-submit ang corrected documents mo para sa %(title)s hanggang %(date)s"
 
-#: recruitment/services.py
+#: recruitment/services/intake.py
 msgid ""
 "Hello %(name)s,\n"
 "\n"
@@ -3387,147 +3545,59 @@ msgstr ""
 "\n"
 "DOH–CHD CALABARZON Recruitment Portal"
 
-#: recruitment/services.py
-msgid "REPUBLIC OF THE PHILIPPINES"
-msgstr "REPUBLIKA NG PILIPINAS"
-
-#: recruitment/services.py
-msgid "Requirements Submitted (continued)"
-msgstr "Mga Requirement na Ipinasa (karugtong)"
-
-#: recruitment/services.py
-msgid "Requirements Submitted"
-msgstr "Mga Requirement na Ipinasa"
-
-#: recruitment/services.py
-msgid "Keep your Tracking Code private — treat it like a password."
-msgstr "Huwag ipakita sa iba ang Tracking Code mo — parang password ito."
-
-#: recruitment/services.py
-msgid "Official proof of a received application. Please keep this copy."
-msgstr "Opisyal na patunay na natanggap ang application. Itago ang kopyang ito."
-
-#: recruitment/services.py
-msgid "TRACKING CODE  (keep private)"
-msgstr "TRACKING CODE  (huwag ipakita sa iba)"
-
-#: recruitment/services.py
-msgid "CASE REFERENCE"
-msgstr "CASE REFERENCE"
-
-#: recruitment/services.py
-msgid "Never share it. Staff will never ask for it."
-msgstr "Huwag ibigay sa iba. Hindi ito hihingin ng staff."
-
-#: recruitment/services.py
-msgid "Quote this when you contact the office."
-msgstr "Sabihin ito kapag nag-contact ka sa office."
-
-#: recruitment/services.py
-msgid "Application Details"
-msgstr "Details ng Application"
-
-#: recruitment/services.py
-msgid "Your application will be reviewed by the recruitment team."
-msgstr "Ire-review ng recruitment team ang application mo."
-
-#: recruitment/services.py
-msgid "You may be contacted by email or phone for updates or additional requirements."
-msgstr "Puwede ka naming i-contact sa email o phone para sa updates o dagdag na requirements."
-
-#: recruitment/services.py
-msgid "Check your status anytime on My Applications with just your email."
-msgstr "I-check ang status mo anytime sa My Applications gamit lang ang email mo."
-
-#: recruitment/services.py
-msgid "Keep this receipt and your Tracking Code safe."
-msgstr "Itago ang resibong ito at ang Tracking Code mo."
-
-#: recruitment/services.py
-msgid "Staff will never ask for your Tracking Code; give your case number instead. A confirmation was also sent to %(email)s."
-msgstr "Hindi hihingin ng staff ang Tracking Code mo; case number ang ibigay mo. Nagpadala rin kami ng confirmation sa %(email)s."
-
-#: recruitment/services.py
+#: recruitment/services/intake.py
 msgid "You already asked to withdraw this application. The office will confirm by email."
 msgstr "Nakapag-request ka na ng withdrawal para sa application na ito. Ico-confirm ito ng office sa email."
 
-#: recruitment/services.py
+#: recruitment/services/intake.py
 msgid "This application can no longer be withdrawn online. Please contact the recruitment office."
 msgstr "Hindi na puwedeng i-withdraw online ang application na ito. Paki-contact ang recruitment office."
 
-#: recruitment/services.py
+#: recruitment/services/intake.py
 msgid "This application was already submitted, so it can no longer be verified."
 msgstr "Na-submit na ang application na ito, kaya hindi na ito kailangang i-verify."
 
-#: recruitment/services.py
+#: recruitment/services/intake.py
 msgid "The selected recruitment entry is not currently open for intake."
 msgstr "Hindi na tumatanggap ng applicants ang position na ito."
 
-#: recruitment/services.py
+#: recruitment/services/intake.py
 msgid "This application can no longer be submitted."
 msgstr "Hindi na puwedeng i-submit ang application na ito."
 
-#: recruitment/services.py
+#: recruitment/services/intake.py
 msgid "Tick the confirmation box before you submit."
 msgstr "I-check muna ang confirmation box bago mag-submit."
 
-#: recruitment/services.py
+#: recruitment/services/intake.py
 msgid "Some documents use the same file. Use a different file for each document, then submit."
 msgstr "May documents na pareho ang file. Gumamit ng ibang file sa bawat document, tapos i-submit."
 
-#: recruitment/services.py
+#: recruitment/services/intake.py
 msgid "Only the applicant may resubmit documents for this application."
 msgstr "Ang applicant lang ang puwedeng mag-resubmit ng documents para sa application na ito."
 
-#: recruitment/services.py
+#: recruitment/services/intake.py
 msgid "This application is not awaiting a document resubmission."
 msgstr "Walang hinihintay na documents para sa application na ito."
 
-#: recruitment/services.py
+#: recruitment/services/intake.py
 msgid "There are no documents awaiting resubmission."
 msgstr "Walang documents na kailangang i-resubmit."
 
-#: recruitment/services.py
+#: recruitment/services/intake.py
 msgid "The resubmission deadline has passed; please contact the recruitment team."
 msgstr "Lumampas na ang deadline ng resubmission; paki-contact ang recruitment team."
 
-#: recruitment/services.py
+#: recruitment/services/intake.py
 msgid "Verify your email with a fresh code before resubmitting your documents."
 msgstr "I-verify muna ang email mo gamit ang bagong code bago i-resubmit ang documents mo."
 
-#: recruitment/services.py
+#: recruitment/services/intake.py
 msgid "Upload a file for each flagged document before resubmitting."
 msgstr "Mag-upload ng file sa bawat document na ibinalik bago mag-resubmit."
 
-#: recruitment/services.py
-msgid "Generated %(when)s. This is a system-generated receipt and needs no signature."
-msgstr "Ginawa noong %(when)s. Automatic na resibo ito at hindi kailangan ng pirma."
-
-#: recruitment/services.py
-msgid "Applicant"
-msgstr "Applicant"
-
-#: recruitment/services.py
-msgid "Reference / Job Code"
-msgstr "Reference / Job Code"
-
-#: recruitment/services.py
-msgid "Engagement"
-msgstr "Klase ng trabaho"
-
-#: recruitment/services.py
-msgid "Date Submitted"
-msgstr "Petsa ng pag-submit"
-
-#: recruitment/services.py
-msgid "Registered Email"
-msgstr "Email na ginamit"
-
-#: recruitment/services.py
-msgid "Documents Submitted"
-msgstr "Documents na ipinasa"
-
-#: recruitment/services.py
+#: recruitment/services/intake.py
 msgid ""
 "Keep this email. Your progress is saved, and this link brings you back to your application for %(title)s anytime:\n"
 "%(link)s"
@@ -3535,63 +3605,45 @@ msgstr ""
 "Itago ang email na ito. Naka-save ang progress mo, at ibabalik ka ng link na ito sa application mo para sa %(title)s anytime:\n"
 "%(link)s"
 
-#: recruitment/services.py
+#: recruitment/services/intake.py
 msgid "Your application draft and uploaded files were saved, but we could not send the verification code right now. Please try again in a few moments."
 msgstr "Na-save ang draft at files mo, pero hindi namin maipadala ang verification code ngayon. Subukan ulit maya-maya."
 
-#: recruitment/services.py
+#: recruitment/services/intake.py
 msgid "applicant"
 msgstr "applicant"
 
-#: recruitment/services.py
+#: recruitment/services/intake.py
 msgid "A verification code can only be issued while the application is in draft or awaiting the applicant's resubmission."
 msgstr "Puwede lang magpadala ng verification code habang draft pa ang application o habang hinihintay ang resubmission ng applicant."
 
-#: recruitment/services.py
+#: recruitment/services/intake.py
 msgid "This application has not been submitted yet."
 msgstr "Hindi pa na-submit ang application na ito."
 
-#: recruitment/services.py
+#: recruitment/services/intake.py
 msgid "That code doesn't match. Check the latest email from us and try again. You have %(count)s try left."
 msgid_plural "That code doesn't match. Check the latest email from us and try again. You have %(count)s tries left."
 msgstr[0] "Hindi tugma ang code. I-check ang pinakabagong email namin at subukan ulit. May %(count)s subok ka pa."
 msgstr[1] "Hindi tugma ang code. I-check ang pinakabagong email namin at subukan ulit. May %(count)s subok ka pa."
 
-#: recruitment/services.py
+#: recruitment/services/intake.py
 msgid "An application for this recruitment entry already exists for this applicant."
 msgstr "May application na ang applicant na ito para sa recruitment na ito."
 
-#: recruitment/services.py
+#: recruitment/services/intake.py
 msgid "Add all required documents before you submit. %(count)s required document is still missing."
 msgid_plural "Add all required documents before you submit. %(count)s required documents are still missing."
 msgstr[0] "I-upload muna lahat ng required documents bago mag-submit. %(count)s required document pa ang kulang."
 msgstr[1] "I-upload muna lahat ng required documents bago mag-submit. %(count)s required documents pa ang kulang."
 
-#: recruitment/services.py
+#: recruitment/services/intake.py
 msgid "Verify your email before you submit."
 msgstr "I-verify muna ang email mo bago mag-submit."
 
-#: recruitment/services.py
-msgid "%(count)s file"
-msgid_plural "%(count)s files"
-msgstr[0] "%(count)s file"
-msgstr[1] "%(count)s files"
-
-#: recruitment/services.py
-msgid "your registered email"
-msgstr "email mo"
-
-#: recruitment/services.py
+#: recruitment/services/intake.py
 msgid "Your email verification has expired. Request a new code, then submit."
 msgstr "Nag-expire na ang verification ng email mo. Humingi ng bagong code, tapos i-submit."
-
-#: recruitment/services.py
-msgid "Submitted requirement"
-msgstr "Requirement na ipinasa"
-
-#: recruitment/services.py
-msgid "File"
-msgstr "File"
 
 #: recruitment/upload_validation.py
 msgid "This file is too large. Choose a file that is 5 MB or smaller."

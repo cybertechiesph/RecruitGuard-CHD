@@ -317,7 +317,7 @@
 
 
     {# ── Withdraw (a request to the office, which records it) ── #}
-    {% if application.withdrawal_requested_at %}
+    {% if withdrawal_request_pending %}
     <div class="rg-ta-action-card rg-ta-action-card--rest" id="withdraw" data-withdrawal-requested>
         <p class="rg-ta-action-card__title">{% translate "Withdrawal requested" %}</p>
         <p class="rg-ta-action-card__copy">

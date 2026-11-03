@@ -39,6 +39,7 @@ from ..models import (
 from ..notification_services import (
     build_applicant_otp_url,
     queue_applicant_contact_updated_notifications,
+    queue_document_resubmission_received_notification,
     queue_submission_acknowledgment_notification,
     queue_withdrawal_acknowledgement_notification,
 )
@@ -840,12 +841,15 @@ def _deliver_application_otp(application, otp_code, *, actor=None, otp_expires_a
             "Applicant OTP email delivery failed for application %s.",
             application.pk,
         )
-        raise ApplicationOTPDeliveryError(
-            gettext(
+        # Round E, P3-3: "your draft was saved" only makes sense for a draft.
+        if application.submitted_at:
+            message = gettext("We could not send a verification code right now. Please try again in a few moments.")
+        else:
+            message = gettext(
                 "Your application draft and uploaded files were saved, but we could not send "
                 "the verification code right now. Please try again in a few moments."
             )
-        ) from exc
+        raise ApplicationOTPDeliveryError(message) from exc
     audit.record_audit_event(
         application=application,
         actor=actor or application.applicant,
@@ -1601,5 +1605,12 @@ def submit_document_resubmission(application, actor, uploaded_files, *, email_ve
     )
     case_notices._emit_resubmission_received_notification(
         application, actor, reviewing_role, document_count=len(flagged_codes)
+    )
+    queue_document_resubmission_received_notification(
+        application,
+        actor=actor,
+        document_titles=[
+            requirements[code].title if code in requirements else code for code in flagged_codes
+        ],
     )
     return application

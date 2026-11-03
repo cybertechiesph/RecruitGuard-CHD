@@ -540,6 +540,20 @@ class RateLimitMiddlewareTests(TestCase):
         self.assertEqual(statuses, [200, 200, 429])
 
 
+    @override_settings(
+        RATE_LIMIT_RULES={"default": {"limit": 50, "window": 60}, "otp": {"limit": 2, "window": 60}}
+    )
+    def test_track_application_lookups_use_the_code_budget(self):
+        """Round E, P3-6: the Track Application form checks emailed codes, so it shares
+        the tight "otp" budget rather than the default one."""
+        browser = Client()
+        browser.session.save()  # one browser throughout: its session cookie exists from the start
+        statuses = [
+            browser.post(reverse("applicant-status-lookup"), {"tracking_code": "TRK-AAAA-BBBB", "email": "x@example.com"}).status_code
+            for _ in range(3)
+        ]
+        self.assertEqual(statuses, [200, 200, 429])
+
 class ClientIpTests(SimpleTestCase):
     def request(self, forwarded="", remote="127.0.0.1"):
         return SimpleNamespace(META={"HTTP_X_FORWARDED_FOR": forwarded, "REMOTE_ADDR": remote})

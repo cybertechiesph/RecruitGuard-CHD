@@ -49,9 +49,10 @@ from ..services import (
     issue_application_otp,
     submit_application,
     record_application_withdrawal,
+    save_vacancy_exam_schedule,
     upload_evidence_item,
 )
-from .base import User, BaseRecruitmentTestCase
+from .base import User, BaseRecruitmentTestCase, BatchExamHelpers
 
 
 class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
@@ -1091,7 +1092,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         documents = list(get_current_applicant_document_items(application))
         self.assertGreaterEqual(len(documents), 2)
 
-        response = self.client.get(
+        response = self.applicant_status_verified_client(application).get(
             reverse("applicant-receipt", kwargs={"token": application.public_token})
         )
 
@@ -1167,7 +1168,7 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         submit_application(application, self.applicant)
         application.refresh_from_db()
 
-        response = self.client.get(
+        response = self.applicant_status_verified_client(application).get(
             reverse("applicant-receipt-pdf", kwargs={"token": application.public_token})
         )
         pdf_bytes = response.getvalue()
@@ -1192,12 +1193,12 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
 
     def test_submitted_application_receipt_downloads_as_pdf(self):
         # Panel revision: the application receipt must download as a real PDF
-        # file (not only browser-print). Same token gate as the receipt page.
-        client = Client()
+        # file (not only browser-print). Same gate as the receipt page.
         application = self.make_application(self.level1_position)
         self.verify_application_for_submission(application)
         submit_application(application, self.applicant)
         application.refresh_from_db()
+        client = self.applicant_status_verified_client(application)
 
         response = client.get(
             reverse("applicant-receipt-pdf", kwargs={"token": application.public_token})
@@ -2852,3 +2853,109 @@ class MyApplicationsAndLanguageEmailTests(BaseRecruitmentTestCase):
         self.assertContains(hub, reverse("applicant-status-lookup"))
         lookup = Client().get(reverse("applicant-status-lookup"))
         self.assertContains(lookup, "See all your applications with just your email")
+
+
+class ApplicantRoundETests(BatchExamHelpers, BaseRecruitmentTestCase):
+    """Round E: fixes from docs/applicant-review-2026-11.md."""
+
+    def _submitted(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(application, self.applicant)
+        application.refresh_from_db()
+        # The submission's own code is past its resend cooldown, as on any later visit.
+        application.otp_requested_at = None
+        application.save(update_fields=["otp_requested_at", "updated_at"])
+        return application
+
+    def _status_page(self, application):
+        return self.applicant_status_verified_client(application).get(
+            reverse("applicant-status-link", kwargs={"token": application.public_token})
+        )
+
+    # P2-1: the receipt needs a browser that proved the inbox.
+    def test_a_stranger_with_the_receipt_link_gets_the_code_step(self):
+        application = self._submitted()
+        status_url = reverse("applicant-status-link", kwargs={"token": application.public_token})
+        for name in ("applicant-receipt", "applicant-receipt-pdf"):
+            with self.subTest(url=name):
+                response = Client().get(reverse(name, kwargs={"token": application.public_token}))
+                self.assertRedirects(response, status_url, fetch_redirect_response=False)
+                self.assertNotIn(application.tracking_code.encode(), response.content)
+
+    def test_after_the_code_the_stranger_lands_on_the_receipt(self):
+        application = self._submitted()
+        client = Client()
+        receipt_url = reverse("applicant-receipt", kwargs={"token": application.public_token})
+        client.get(receipt_url)
+        mail.outbox.clear()
+        page = client.get(reverse("applicant-status-link", kwargs={"token": application.public_token}))
+        self.assertContains(page, 'name="otp"')
+        code = re.search(r"\b(\d{6})\b", mail.outbox[-1].body).group(1)
+        response = client.post(reverse("applicant-status-lookup"), {"action": "verify", "otp": code})
+        self.assertRedirects(response, receipt_url, fetch_redirect_response=False)
+        self.assertContains(client.get(receipt_url), application.tracking_code)
+
+    def test_a_my_applications_browser_gets_the_receipt_pdf(self):
+        from ..portal_views import APPLICANT_HUB_SESSION_KEY
+
+        application = self._submitted()
+        client = Client()
+        session = client.session
+        session[APPLICANT_HUB_SESSION_KEY] = {
+            "email": application.applicant_email,
+            "verified_at": timezone.now().isoformat(),
+        }
+        session.save()
+        response = client.get(reverse("applicant-receipt-pdf", kwargs={"token": application.public_token}))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+
+    def test_the_submitting_browser_sees_the_receipt_at_once(self):
+        _client, application, receipt = self.apply_through_portal(
+            "round.e.submitter@example.com", self.level1_position
+        )
+        self.assertEqual(receipt.status_code, 200)
+        self.assertContains(receipt, application.tracking_code)
+
+    # P2-2: a scheduled exam ahead is the current step, never "done".
+    def test_a_scheduled_exam_ahead_is_the_current_step(self):
+        first, _second = self._two_qualified(self.level1_position)
+        with self.captureOnCommitCallbacks(execute=True):
+            save_vacancy_exam_schedule(self.level1_position, self.secretariat, self._schedule_payload())
+        first.refresh_from_db()
+        self.assertIn(first.status, {RecruitmentApplication.Status.SECRETARIAT_REVIEW, RecruitmentApplication.Status.HRM_CHIEF_REVIEW})
+        html = self._status_page(first).content.decode()
+        self.assertIn("Exam scheduled", html)
+        self.assertRegex(html, r'Document check\s*<span class="visually-hidden">\(done\)')
+        self.assertRegex(html, r'Examination\s*<span class="visually-hidden">\(in progress\)')
+        self.assertNotRegex(html, r'Examination\s*<span class="visually-hidden">\(done\)')
+
+    # P3-1: the request card goes once the office records the withdrawal.
+    def test_withdrawal_request_card_goes_once_recorded(self):
+        application = self._submitted()
+        client = self.applicant_status_verified_client(application)
+        withdraw_url = reverse("applicant-withdrawal-request", kwargs={"token": application.public_token})
+        client.post(withdraw_url, {"confirm": "on", "reason": "Another job."})
+        status_url = reverse("applicant-status-link", kwargs={"token": application.public_token})
+        self.assertContains(client.get(status_url), "data-withdrawal-requested")
+        application.refresh_from_db()
+        with self.captureOnCommitCallbacks(execute=True):
+            record_application_withdrawal(application, self.secretariat, "Another job.")
+        page = client.get(status_url)
+        self.assertContains(page, "Withdrawn")
+        self.assertNotContains(page, "data-withdrawal-requested")
+
+    # P3-3: no "your draft was saved" for a submitted application.
+    def test_status_code_delivery_failure_is_worded_for_a_submitted_application(self):
+        import smtplib
+
+        application = self._submitted()
+        with patch(
+            "recruitment.services.intake.EmailMultiAlternatives.send",
+            side_effect=smtplib.SMTPException("down"),
+        ):
+            page = Client().get(reverse("applicant-status-link", kwargs={"token": application.public_token}))
+        self.assertContains(page, "We could not send a verification code right now.")
+        self.assertNotContains(page, "draft and uploaded files were saved")

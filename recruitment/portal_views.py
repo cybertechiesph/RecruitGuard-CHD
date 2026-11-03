@@ -102,6 +102,7 @@ def _build_applicant_upcoming_schedules(application):
         schedules.append(
             {
                 "kind": _("Examination"),
+                "is_exam": True,
                 "scheduled_for": exam_schedule.scheduled_for,
                 "location": exam_schedule.venue,
                 "instructions": exam_schedule.instructions,
@@ -122,6 +123,7 @@ def _build_applicant_upcoming_schedules(application):
         schedules.append(
             {
                 "kind": _("Interview"),
+                "is_exam": False,
                 "scheduled_for": interview_session.scheduled_for,
                 "location": interview_session.location,
                 "instructions": "",
@@ -140,6 +142,12 @@ _ENDED_STATUSES = {
     RecruitmentApplication.Status.REJECTED,
     RecruitmentApplication.Status.WITHDRAWN,
     RecruitmentApplication.Status.VACANCY_CANCELLED,
+}
+# Statuses where an announced exam or interview ahead replaces the status chip.
+_SCHEDULE_CHIP_STATUSES = {
+    RecruitmentApplication.Status.SECRETARIAT_REVIEW,
+    RecruitmentApplication.Status.HRM_CHIEF_REVIEW,
+    RecruitmentApplication.Status.HRMPSB_REVIEW,
 }
 
 
@@ -168,7 +176,10 @@ def _build_applicant_timeline(application, status_label):
             "date_only": True,
         }
     ]
-    if phase == 1:
+    # An exam invitation is only sent to applicants who passed the document check, even
+    # though the case keeps its screening status until the scores are in (Round E, P2-2).
+    invited_to_exam = application.exam_schedules.filter(applicant_notified_at__isnull=False).exists()
+    if phase == 1 and not invited_to_exam:
         note = (
             _("Some documents were returned to you to fix.")
             if status == RecruitmentApplication.Status.RETURNED_TO_APPLICANT
@@ -188,13 +199,15 @@ def _build_applicant_timeline(application, status_label):
         )
         if schedule is None:
             continue
+        # A schedule still ahead is the applicant's current step at any status; it is never
+        # ticked as done before it happens.
         is_past = schedule.scheduled_for <= now
         if is_past:
             state = "done"
-        elif phase == 2:
-            state = "current"
+        elif ended:
+            state = "ended"
         else:
-            state = "ended" if ended else "done"
+            state = "current"
         location = getattr(schedule, location_field, "") or ""
         steps.append(
             {
@@ -289,6 +302,24 @@ def _build_applicant_status_context(application):
         )
         if screening_record:
             resubmission_deadline = screening_record.resubmission_deadline
+    upcoming_schedules = _build_applicant_upcoming_schedules(application)
+    if upcoming_schedules and application.status in _SCHEDULE_CHIP_STATUSES and not awaiting_resubmission:
+        # Round E, P2-2: an announced exam or interview ahead is what the applicant needs to
+        # know, whatever the case's internal status says.
+        next_event = upcoming_schedules[0]
+        if next_event["is_exam"]:
+            status_label = _("Exam scheduled")
+            status_description = _(
+                "You are invited to take the examination. The date, time and place are below "
+                "and in the email we sent you."
+            )
+        else:
+            status_label = _("Interview scheduled")
+            status_description = _(
+                "You are invited to an interview. The date, time and place are below and in "
+                "the email we sent you."
+            )
+        status_variant = "evaluation"
     return {
         "application": application,
         "status_label": status_label,
@@ -296,9 +327,15 @@ def _build_applicant_status_context(application):
         "status_description": status_description,
         "awaiting_resubmission": awaiting_resubmission,
         "resubmission_deadline": resubmission_deadline,
-        "upcoming_schedules": _build_applicant_upcoming_schedules(application),
+        "upcoming_schedules": upcoming_schedules,
         "timeline": _build_applicant_timeline(application, status_label),
         "can_request_withdrawal": applicant_can_request_withdrawal(application),
+        # Round E, P3-1: the "Withdrawal requested" card only while the office has not acted.
+        "withdrawal_request_pending": bool(
+            application.withdrawal_requested_at
+            and application.status not in _ENDED_STATUSES
+            and application.status != RecruitmentApplication.Status.APPROVED
+        ),
         "completion_checklist": _build_applicant_completion_checklist(application),
     }
 
@@ -1012,6 +1049,8 @@ class ApplicantReceiptView(TemplateView):
                 _("This receipt link is no longer available. If you already submitted, open My Applications and enter your email."),
             )
             return redirect("applicant-portal")
+        if not _can_view_receipt(request, self.application):
+            return _verify_before_receipt(request, self.application, "applicant-receipt")
         return super().get(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
@@ -1029,7 +1068,8 @@ class ApplicantReceiptView(TemplateView):
 class ApplicantReceiptPdfView(View):
     """Downloadable PDF of the submission receipt (panel revision: the
     application ID must be a real file, not only browser-print). Same gate as
-    the receipt page — possessing the public token proves access; no login."""
+    the receipt page: the token names the application, but only a browser that
+    recently proved the applicant's inbox may read it."""
 
     def get(self, request, *args, **kwargs):
         application = (
@@ -1043,6 +1083,8 @@ class ApplicantReceiptPdfView(View):
                 _("This receipt link is no longer available. If you already submitted, open My Applications and enter your email."),
             )
             return redirect("applicant-portal")
+        if not _can_view_receipt(request, application):
+            return _verify_before_receipt(request, application, "applicant-receipt-pdf")
 
         pdf_bytes = _build_application_receipt_pdf(application)
         reference = application.case_number_short or application.reference_number or "application"
@@ -1054,6 +1096,36 @@ class ApplicantReceiptPdfView(View):
 
 STATUS_OTP_PENDING_SESSION_KEY = "status_lookup_pending_application"
 STATUS_OTP_VERIFIED_SESSION_KEY = "status_lookup_verified"
+# Where to send the browser once the status code is verified (the receipt it asked for).
+STATUS_OTP_NEXT_SESSION_KEY = "status_lookup_next"
+RECEIPT_URL_NAMES = {"applicant-receipt", "applicant-receipt-pdf"}
+
+
+def _can_view_receipt(request, application):
+    """The receipt carries the private tracking code, so the token in the link is not enough
+    (Round E, P2-1). This browser must have proved the applicant's inbox recently: a status
+    code for this application, or a My Applications sign-in for the same email. The browser
+    that submitted already has both."""
+    if _status_otp_verified_recently(request, application):
+        return True
+    hub_email = _hub_email(request)
+    return bool(hub_email) and hub_email.lower() == (application.applicant_email or "").lower()
+
+
+def _verify_before_receipt(request, application, url_name):
+    """Send a browser that has not proved the inbox to the status code step; after the code it
+    comes back to the receipt it asked for."""
+    request.session[STATUS_OTP_NEXT_SESSION_KEY] = {"pk": application.pk, "url_name": url_name}
+    messages.info(request, _("Verify your email to see your receipt."))
+    return redirect("applicant-status-link", token=application.public_token)
+
+
+def _redirect_after_status_verify(request, application):
+    """The receipt the browser was sent here from, if any (else None: show the status)."""
+    target = request.session.pop(STATUS_OTP_NEXT_SESSION_KEY, None) or {}
+    if target.get("pk") == application.pk and target.get("url_name") in RECEIPT_URL_NAMES:
+        return redirect(target["url_name"], token=application.public_token)
+    return None
 
 
 def _masked_email(email):
@@ -1182,7 +1254,9 @@ class ApplicantStatusLookupView(FormView):
                 otp_form.add_error("otp", str(exc))
             else:
                 _mark_status_otp_verified(self.request, application)
-                return self._render_status(application)
+                return _redirect_after_status_verify(self.request, application) or self._render_status(
+                    application
+                )
         return self._render_otp_step(application, otp_form=otp_form)
 
     def _handle_resend(self):

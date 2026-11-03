@@ -5,7 +5,7 @@ Authority walkthroughs. The public portal (`/apply/`) was walked as a first-time
 local server against the demo database, then the office side was driven so the applicant's view
 of every later step could be read. Review only; nothing in the code was changed.
 
-## Status: review written (Round E brief in section 8, not implemented)
+## Status: Round E done (P2-1, P2-2, P2-3 option (a), P3-1, P3-2, P3-3, P3-5, P3-6; P3-4 withdrawn)
 
 ## 0. How this was tested
 
@@ -42,8 +42,8 @@ What this walk adds:
 - **One decision for the office.** A resubmission gets a green message on screen and nothing in
   the inbox. (P2-3)
 - Small things: a stale "Withdrawal requested" card after the withdrawal is recorded, a subject
-  line that says CASE-2026-0050 while the body says Case No. 2026-0050, an intake-worded error on
-  the status page, and the page language tag that stays English in Filipino.
+  line that says CASE-2026-0050 while the body says Case No. 2026-0050, and an intake-worded
+  error on the status page.
 
 No P1.
 
@@ -147,11 +147,10 @@ message is the intake delivery error reused by every code flow. *Fix:* a neutral
 message ("We could not send the code right now. Please try again in a few moments.") for the
 status, hub and resubmit flows.
 
-**P3-4. The page language tag stays English in Filipino.** `base.html` writes
-`lang="{{ CURRENT_LANGUAGE|default:'en' }}"` but nothing sets that variable, so every Filipino
-page is `<html lang="en">`: screen readers voice Filipino text with English rules, and
-translation tools misread the page. *Fix:* use `{% get_current_language %}` from the i18n tag
-library (or set the variable from the locale middleware).
+**P3-4. Withdrawn (false finding).** This said the page language tag stays English in
+Filipino. It does not: `base.html` sets it with `get_current_language`, and a Filipino page is
+`<html lang="fil">`. The check that reported "en" had sent no language cookie. Corrected during
+Round E.
 
 **P3-5. Two copy slips.** "Under Evaluation — You may be contacted for an examination or
 interview schedule" shows after the exam is done and the interview is booked (fold into P2-2).
@@ -187,8 +186,8 @@ states purpose, recipients and rights; the panel sees codes, not names; emails c
 number, not the tracking code, for office contact. The receipt is the exception (P2-1).
 
 **Accessibility.** Labels, ARIA landmarks, a text-size control, visible focus, dates spelled
-out with "(Philippine time)". The language tag (P3-4) is the gap; a screen-reader pass is still
-owed (section 7).
+out with "(Philippine time)", and the page language follows the chosen language. A
+screen-reader pass is still owed (section 7).
 
 **Plain language and Filipino.** Short sentences, no workflow jargon ("Document check", "What
 you need to do"); the Filipino is the agreed Taglish. One intake-worded error (P3-3).
@@ -228,7 +227,7 @@ recruitment team will continue the review."
 ## 6. Essential vs optional
 
 **Essential (Round E, first):** P2-1, P2-2.
-**Important (Round E):** P2-3 once decided, P3-1, P3-2, P3-3, P3-4.
+**Important (Round E):** P2-3 once decided, P3-1, P3-2, P3-3.
 **Optional:** P3-5, P3-6.
 
 ## 7. What remains unverified
@@ -276,10 +275,27 @@ Test-first, one commit, no model changes expected.
 5. **Subject (P3-2).** Use "Case No. 2026-0050" in the confirmation subject. Test: subject text.
 6. **Delivery error wording (P3-3).** A neutral message for the status, hub and resubmit code
    flows. Test: the status link with a failing backend shows the neutral text.
-7. **Language tag (P3-4).** `{% get_current_language as CURRENT_LANGUAGE %}` in `base.html` (or
-   the locale middleware sets it). Test: a Filipino page has `<html lang="fil">`.
+7. **Language tag (P3-4).** Withdrawn: already correct (see P3-4).
 8. **Rate-limit rule (P3-6, optional).** Classify `/apply/status/` and `/apply/my/` POSTs under
    "otp". Test: the eleventh lookup in a minute is refused.
 
 Then: run `update_translations --check`, the applicant tests and the full suite; walk P2-1 and
 P2-2 in the browser on the local demo database.
+
+## 9. Round E implementation status (2026-11-03)
+
+| Item | What shipped |
+|---|---|
+| P2-1 | The receipt page and PDF need a browser that proved the inbox: a status code for this application, or a My Applications sign-in for the same email. The submitting browser already has it. Any other browser is sent to the status code step with "Verify your email to see your receipt" and, after the code, lands back on the receipt it asked for. |
+| P2-2 | An announced exam or interview still ahead is the current step at any status and is never ticked as done; "Document check" is done once the exam invitation is sent. The chip reads "Exam scheduled" or "Interview scheduled" with a sentence pointing to the details, at the screening and HRMPSB statuses. |
+| P2-3 (a) | After a resubmission the applicant gets "corrected documents received for <position>" in their language, with the documents, the case number and the status link. New notification type, migration 0097 (choices only). |
+| P3-1 | The "Withdrawal requested" card shows only while the office has not acted. |
+| P3-2 | The confirmation subject reads "Case No. 2026-0050". |
+| P3-3 | A code that cannot be sent for a submitted application says "We could not send a verification code right now"; the draft wording stays for drafts. |
+| P3-4 | Withdrawn (false finding). |
+| P3-5 | The resubmit page's upload heading drops "Step 2". The HRMPSB-status sentence after an interview is booked is covered by the P2-2 chip. |
+| P3-6 | POSTs to Track Application and My Applications use the "otp" rate rule (10 a minute per browser). |
+
+Tests: `ApplicantRoundETests` (7) in `test_portal.py`, a resubmission-email test in
+`test_notices.py`, a rate-rule test in `test_security.py`; three receipt tests and the
+confirmation-subject test updated for the gate and the new subject. 14 new Filipino strings.

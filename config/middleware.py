@@ -14,6 +14,8 @@ from config.client_ip import get_client_ip
 logger = logging.getLogger(__name__)
 
 PASSIVE_SESSION_REQUEST_ATTR = "_rg_passive_session_request"
+# Applicant forms that ask for and check emailed codes (Track Application, My Applications).
+APPLICANT_CODE_FORM_PATHS = {"/apply/status/", "/apply/my/"}
 
 
 def mark_passive_session_request(request):
@@ -158,6 +160,10 @@ class RateLimitMiddleware:
             if path.startswith("/internal/login") or "password" in path:
                 return "auth"
             if "otp" in path or "mfa" in path:
+                return "otp"
+            # Round E, P3-6: the Track Application and My Applications forms ask for and
+            # check emailed codes too, so they get the same tight budget.
+            if path in APPLICANT_CODE_FORM_PATHS:
                 return "otp"
             if "upload" in path or "evidence" in path:
                 return "upload"

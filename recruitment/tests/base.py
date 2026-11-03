@@ -176,6 +176,17 @@ class BaseRecruitmentTestCase(TestCase):
             )
         return self._cos_continuous_position
 
+    def applicant_status_verified_client(self, application, client=None):
+        """A browser that just entered the emailed status code for ``application`` (Round E:
+        the receipt, like the status page, needs a recently verified browser)."""
+        from ..portal_views import STATUS_OTP_VERIFIED_SESSION_KEY
+
+        client = client or Client()
+        session = client.session
+        session[STATUS_OTP_VERIFIED_SESSION_KEY] = {str(application.pk): timezone.now().isoformat()}
+        session.save()
+        return client
+
     def force_login_with_mfa(self, client, user):
         client.force_login(user)
         if getattr(user, "is_internal_user", False):

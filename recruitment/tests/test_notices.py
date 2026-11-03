@@ -346,7 +346,7 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         self.assertIsNotNone(notification.sent_at)
         self.assertEqual(notification.recipient_email, "applicant@example.com")
         self.assertEqual(len(mail.outbox), 1)
-        self.assertIn(application.reference_number, mail.outbox[0].subject)
+        self.assertIn(f"Case No. {application.case_number_short}", mail.outbox[0].subject)
         status_link = reverse("applicant-status-link", kwargs={"token": application.public_token})
         self.assertIn(status_link, mail.outbox[0].body)
         self.assertEqual(len(mail.outbox[0].alternatives), 1)
@@ -758,6 +758,40 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         verify_application_otp(application, otp_code, actor=application.applicant)
         application.refresh_from_db()
         self.assertTrue(application.otp_is_currently_valid)
+
+    def test_resubmission_emails_the_applicant_a_receipt(self):
+        """Round E, P2-3: corrected documents get a confirmation in the inbox."""
+        application = self.make_submitted_application()
+        first_requirement = get_applicant_document_requirements(application.branch)[0]
+        self._finalize_screening_with_flagged_document(application, first_requirement)
+        with self.captureOnCommitCallbacks(execute=True):
+            process_workflow_action(
+                application, self.secretariat, "return_to_applicant", "Please resubmit."
+            )
+        application.refresh_from_db()
+        otp_code = issue_application_otp(application, actor=application.applicant)
+        verify_application_otp(application, otp_code, actor=application.applicant)
+        application.refresh_from_db()
+        mail.outbox.clear()
+        uploaded_files = {
+            first_requirement.code: self.build_valid_applicant_document_upload(
+                first_requirement.code, content_prefix="resubmitted-receipt"
+            )
+        }
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_document_resubmission(application, self.applicant, uploaded_files)
+
+        notice = NotificationLog.objects.get(
+            application=application,
+            notification_type=NotificationLog.NotificationType.DOCUMENT_RESUBMISSION_RECEIVED,
+        )
+        self.assertEqual(notice.recipient_email, application.applicant_email)
+        sent = [m for m in mail.outbox if "corrected documents received" in m.subject]
+        self.assertEqual(len(sent), 1)
+        self.assertIn(first_requirement.title, sent[0].body)
+        self.assertIn(f"Case No. {application.case_number_short}", sent[0].body)
+        html_body, _mime = sent[0].alternatives[0]
+        self.assertIn("Corrected documents received", html_body)
 
     def test_submit_document_resubmission_returns_case_to_reviewer(self):
         application = self.make_submitted_application()
