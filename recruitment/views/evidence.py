@@ -10,7 +10,7 @@ from django.urls import reverse
 from django.views import View
 from django.views.generic import ListView
 
-from ..forms import EvidenceArchiveForm, EvidenceVaultSearchForm, EvidenceUploadForm
+from ..forms import EvidenceArchiveForm, EvidenceUploadForm
 from ..models import EvidenceVaultItem, RecruitmentApplication
 from ..permissions import InternalUserRequiredMixin, SystemAdministratorRequiredMixin
 from ..services import (
@@ -155,30 +155,39 @@ class EvidenceArchiveToggleView(LoginRequiredMixin, SystemAdministratorRequiredM
 
 
 class EvidenceVaultListView(LoginRequiredMixin, SystemAdministratorRequiredMixin, ListView):
-    template_name = "recruitment/evidence_vault_list.html"
+    """Round F3: Secured Files — one toolbar and one row per file. Metadata only: the owning
+    case is shown for labelling, the file content is never offered
+    (docs/admin-area-rebuild-plan.md section 4.6)."""
+
+    template_name = "recruitment/admin/secured_files.html"
     context_object_name = "evidence_items"
     paginate_by = 50
+    ARCHIVAL_CHOICES = ("active", "archived", "all")
+
+    def _filters(self):
+        get = self.request.GET
+        stage = get.get("stage") or ""
+        scope = get.get("artifact_scope") or ""
+        archival = get.get("archival_status") or "active"
+        return {
+            "q": (get.get("q") or "").strip(),
+            "stage": stage if stage in EvidenceVaultItem.Stage.values else "",
+            "artifact_scope": scope if scope in EvidenceVaultItem.OwnerScope.values else "",
+            "archival_status": archival if archival in self.ARCHIVAL_CHOICES else "active",
+            # A toggle, not a checkbox: an unticked box in a GET form looks like a first visit.
+            "current_version_only": get.get("versions") != "all",
+        }
 
     def get_queryset(self):
-        self.search_form = EvidenceVaultSearchForm(self.request.GET or None)
-        if self.search_form.is_valid():
-            cleaned_data = self.search_form.cleaned_data
-        else:
-            cleaned_data = {
-                "q": "",
-                "stage": "",
-                "artifact_scope": "",
-                "archival_status": "active",
-                "current_version_only": True,
-            }
-        self.search_filters = cleaned_data
+        self.search_filters = self._filters()
+        filters = self.search_filters
         return get_evidence_queryset_for_user(
             self.request.user,
-            search_query=cleaned_data["q"],
-            stage=cleaned_data["stage"],
-            artifact_scope=cleaned_data["artifact_scope"],
-            archival_status=cleaned_data["archival_status"],
-            current_version_only=cleaned_data["current_version_only"],
+            search_query=filters["q"],
+            stage=filters["stage"],
+            artifact_scope=filters["artifact_scope"],
+            archival_status=filters["archival_status"],
+            current_version_only=filters["current_version_only"],
         )
 
     def get_context_data(self, **kwargs):
@@ -188,19 +197,30 @@ class EvidenceVaultListView(LoginRequiredMixin, SystemAdministratorRequiredMixin
             # Oversight is metadata-only: resolve the owning case for labelling,
             # but never authorize the admin to download the file content.
             evidence.owner_application = get_evidence_owner_application(evidence)
-        context["evidence_items"] = evidence_items
-        context["search_form"] = self.search_form
-        context["result_count"] = context["paginator"].count if context.get("paginator") else len(evidence_items)
-        params = self.request.GET.copy()
-        params.pop("page", None)
-        context["querystring"] = params.urlencode()
+        filters = self.search_filters
+        context.update(
+            {
+                "evidence_items": evidence_items,
+                "filters": filters,
+                "result_count": context["paginator"].count if context.get("paginator") else len(evidence_items),
+                "stage_chips": EvidenceVaultItem.Stage.choices,
+                "scope_chips": EvidenceVaultItem.OwnerScope.choices,
+                "is_filtered": bool(
+                    filters["q"]
+                    or filters["stage"]
+                    or filters["artifact_scope"]
+                    or filters["archival_status"] != "active"
+                    or not filters["current_version_only"]
+                ),
+            }
+        )
         record_evidence_vault_access(
             self.request.user,
-            search_query=self.search_filters["q"],
-            stage=self.search_filters["stage"],
-            artifact_scope=self.search_filters["artifact_scope"],
-            archival_status=self.search_filters["archival_status"],
-            current_version_only=self.search_filters["current_version_only"],
+            search_query=filters["q"],
+            stage=filters["stage"],
+            artifact_scope=filters["artifact_scope"],
+            archival_status=filters["archival_status"],
+            current_version_only=filters["current_version_only"],
         )
         return context
 

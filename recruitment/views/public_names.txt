@@ -37,6 +37,7 @@ InterviewRatingSheetPrintView
 InterviewRatingSheetView
 InterviewRatingView
 InterviewSessionView
+MaintenanceView
 NoAppointmentView
 NotificationListView
 NotificationReadAllView
@@ -45,6 +46,9 @@ NotificationResendView
 NotificationUnreadCountView
 OfficePolicyView
 PositionListView
+PositionReferenceCreateView
+PositionReferenceListView
+PositionReferenceUpdateView
 ReminderNotificationView
 RequirementChecklistNotificationView
 ResubmissionDeadlineExtensionView

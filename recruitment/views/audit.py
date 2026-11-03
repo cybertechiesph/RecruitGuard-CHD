@@ -10,6 +10,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views import View
 from django.views.generic import DetailView, TemplateView
@@ -28,9 +29,7 @@ from ..services import (
     record_system_audit_event,
     summarize_audit_logs,
     archive_audit_logs,
-    audit_archive_latest_allowed_cutoff,
     download_audit_archive,
-    preview_audit_archive,
     get_application_audit_logs,
     get_all_audit_logs,
     record_audit_log_review,
@@ -87,31 +86,13 @@ class ApplicationAuditLogView(
 
 class AuditLogListView(LoginRequiredMixin, SystemAdministratorRequiredMixin, TemplateView):
     """Round F2: the log first, as a table grouped by day, under one toolbar; routine sign-ins
-    hidden by default; the archive in a Maintenance block at the bottom
+    hidden by default; archives live on the Maintenance page (Round F3)
     (docs/admin-area-rebuild-plan.md section 4.5)."""
 
     template_name = "recruitment/admin/audit_log.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # REV-D archival panel: existing archives, the age guard, and — when a
-        # cutoff was chosen — the confirmation preview (count + date range).
-        context["audit_archives"] = AuditLogArchive.objects.select_related("created_by")[:20]
-        context["archive_latest_cutoff"] = audit_archive_latest_allowed_cutoff()
-        cutoff_raw = (self.request.GET.get("archive_cutoff") or "").strip()
-        if cutoff_raw:
-            try:
-                cutoff = date.fromisoformat(cutoff_raw)
-            except ValueError:
-                cutoff = None
-            if cutoff and cutoff <= audit_archive_latest_allowed_cutoff():
-                context["archive_preview"] = preview_audit_archive(cutoff)
-                context["archive_preview_cutoff"] = cutoff
-            elif cutoff:
-                context["archive_preview_error"] = (
-                    "Only entries older than six months can be archived. Choose a cutoff "
-                    f"on or before {audit_archive_latest_allowed_cutoff():%b %d, %Y}."
-                )
         audit_logs, cleaned_data, session_tag, signins_hidden = _filtered_audit_logs_from_request(
             self.request
         )
@@ -349,8 +330,8 @@ class AuditLogReportView(LoginRequiredMixin, SystemAdministratorRequiredMixin, V
 
 class AuditLogArchiveView(LoginRequiredMixin, SystemAdministratorRequiredMixin, View):
     """REV-D: execute an archive run (export, verify, delete). The GET-side
-    preview/confirmation lives on AuditLogListView; this POST only fires from
-    the confirmation form."""
+    preview/confirmation lives on the Maintenance page (Round F3); this POST only
+    fires from the confirmation form."""
 
     def post(self, request):
         cutoff_raw = (request.POST.get("archive_cutoff") or "").strip()
@@ -358,19 +339,19 @@ class AuditLogArchiveView(LoginRequiredMixin, SystemAdministratorRequiredMixin, 
             cutoff = date.fromisoformat(cutoff_raw)
         except ValueError:
             messages.error(request, "Choose a valid cutoff date for the archive.")
-            return redirect("audit-log-list")
+            return redirect(reverse("maintenance") + "#archives")
         try:
             archive = archive_audit_logs(request.user, cutoff)
         except ValueError as exc:
             messages.error(request, str(exc))
-            return redirect("audit-log-list")
+            return redirect(reverse("maintenance") + "#archives")
         messages.success(
             request,
             f"Archived {archive.entry_count} audit entries to {archive.file_name}. "
             "The live log now starts after the archived range; the archival "
             "action itself is on the record.",
         )
-        return redirect("audit-log-list")
+        return redirect(reverse("maintenance") + "#archives")
 
 
 class AuditArchiveDownloadView(LoginRequiredMixin, SystemAdministratorRequiredMixin, View):

@@ -11,6 +11,9 @@ from django.utils import timezone
 from ..models import (
     AUDIT_ACTION_CATEGORIES,
     AuditLog,
+    EvidenceVaultItem,
+    NotificationLog,
+    PositionReference,
     RecruitmentCase,
     RecruitmentUser,
     ScreeningRecord,
@@ -528,14 +531,16 @@ class AuditLogRoundF2Tests(BaseRecruitmentTestCase):
         self.assertNotIn(AuditLog.Action.AUDIT_LOG_VIEWED, actions)
         self.assertIn(AuditLog.Action.INTERNAL_LOGIN_FAILED, actions)
 
-    def test_log_is_a_table_grouped_by_day_with_the_archive_after_it(self):
+    def test_log_is_a_table_grouped_by_day_and_archives_live_on_maintenance(self):
         response = self.client.get(reverse("audit-log-list"))
         html = response.content.decode()
         self.assertIn("data-audit-table", html)
         self.assertIn('class="rg-adm-log__day"', html)
         self.assertIn(">Today<", html)
-        self.assertLess(html.index("data-audit-table"), html.index("data-archives"))
         self.assertNotIn("rg-record", html)
+        # Round F3: the archive block moved to Maintenance; the log only links there.
+        self.assertIn("data-archives-link", html)
+        self.assertNotIn('name="archive_cutoff"', html)
 
     def test_quick_range_and_category_chips_keep_each_other(self):
         today = timezone.localdate().isoformat()
@@ -556,3 +561,145 @@ class AuditLogRoundF2Tests(BaseRecruitmentTestCase):
         self.assertContains(response, "Case trail")
         self.assertNotContains(response, "data-archives")
         self.assertNotContains(response, "data-export-csv")
+
+
+class AdminAreaRoundF3Tests(BaseRecruitmentTestCase):
+    """Round F3 (docs/admin-area-rebuild-plan.md 4.6-4.8): Secured Files toolbar, Maintenance,
+    Position References."""
+
+    def setUp(self):
+        super().setUp()
+        self.admin = Client()
+        self.force_login_with_mfa(self.admin, self.sysadmin)
+
+    # ---- Secured Files --------------------------------------------------
+    def test_secured_files_is_one_toolbar_and_one_table_without_downloads(self):
+        application = self.make_application(self.level1_position)
+        response = self.admin.get(reverse("evidence-vault-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "data-files-table")
+        self.assertContains(response, "Older versions too")
+        self.assertNotContains(response, "/evidence/download")
+        self.assertTrue(response.context["filters"]["current_version_only"])
+        older = self.admin.get(reverse("evidence-vault-list"), {"versions": "all", "stage": ""})
+        self.assertFalse(older.context["filters"]["current_version_only"])
+        self.assertTrue(application.evidence_items.exists())
+
+    def test_a_step_chip_keeps_latest_versions_only(self):
+        response = self.admin.get(reverse("evidence-vault-list"), {"stage": EvidenceVaultItem.Stage.APPLICANT_INTAKE})
+        self.assertTrue(response.context["filters"]["current_version_only"])
+        self.assertEqual(response.context["filters"]["stage"], EvidenceVaultItem.Stage.APPLICANT_INTAKE)
+
+    # ---- Maintenance ----------------------------------------------------
+    def test_maintenance_holds_archives_exports_and_email_delivery(self):
+        response = self.admin.get(reverse("maintenance"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "data-archives")
+        self.assertContains(response, "data-exports")
+        self.assertContains(response, "All emails in the last 7 days were delivered.")
+        self.assertContains(response, 'name="signins" value="show"')
+
+    def test_maintenance_counts_failed_emails(self):
+        application = self.make_application(self.level1_position)
+        NotificationLog.objects.create(
+            application=application,
+            notification_type=NotificationLog.NotificationType.SUBMISSION_ACKNOWLEDGMENT,
+            delivery_status=NotificationLog.DeliveryStatus.FAILED,
+            recipient_email="applicant@example.com",
+            subject="x",
+            body="x",
+        )
+        response = self.admin.get(reverse("maintenance"))
+        self.assertEqual(response.context["failed_email_count"], 1)
+        self.assertContains(response, "category=emails")
+
+    def test_archive_preview_runs_on_maintenance_and_refuses_recent_cutoffs(self):
+        too_recent = timezone.localdate().isoformat()
+        response = self.admin.get(reverse("maintenance"), {"archive_cutoff": too_recent})
+        self.assertContains(response, "Only entries older than six months can be archived.")
+        old_enough = (timezone.localdate() - timedelta(days=400)).isoformat()
+        response = self.admin.get(reverse("maintenance"), {"archive_cutoff": old_enough})
+        self.assertContains(response, "No entries are older than that cutoff.")
+
+    def test_archive_action_returns_to_maintenance(self):
+        response = self.admin.post(reverse("audit-log-archive"), {"archive_cutoff": "not-a-date"})
+        self.assertRedirects(response, reverse("maintenance") + "#archives", fetch_redirect_response=False)
+
+    def test_maintenance_and_references_are_admin_only(self):
+        client = Client()
+        self.force_login_with_mfa(client, self.secretariat)
+        for name, kwargs in (
+            ("maintenance", {}),
+            ("position-reference-list", {}),
+            ("position-reference-create", {}),
+            ("position-reference-update", {"pk": self.admin_aide_position.pk}),
+        ):
+            with self.subTest(name=name):
+                self.assertEqual(client.get(reverse(name, kwargs=kwargs)).status_code, 403)
+
+    # ---- Position References -------------------------------------------
+    def _reference_data(self, **extra):
+        data = {
+            "position_title": "Records Officer II",
+            "salary_grade": "13",
+            "level_classification": PositionReference.LevelClassification.SECOND_LEVEL,
+            "occupational_service": "General Administrative Service",
+            "occupational_group": "Records Management",
+            "class_id": "RECO2",
+            "os_code": "GAS-RM",
+            "office_division_default": "Records Unit",
+            "qs_education": "Bachelor's degree",
+            "qs_training": "4 hours of relevant training",
+            "qs_experience": "1 year of relevant experience",
+            "qs_eligibility": "Career Service (Professional)",
+            "notes": "",
+            "is_active": "on",
+        }
+        data.update(extra)
+        return data
+
+    def test_list_shows_references_with_vacancy_counts(self):
+        response = self.admin.get(reverse("position-reference-list"))
+        self.assertEqual(response.status_code, 200)
+        row = next(r for r in response.context["references"] if r.pk == self.admin_aide_position.pk)
+        self.assertGreaterEqual(row.vacancy_count, 1)
+        self.assertContains(response, "Add position reference")
+
+    def test_admin_adds_a_reference_and_it_is_audited_and_offered_for_vacancies(self):
+        response = self.admin.post(reverse("position-reference-create"), self._reference_data())
+        self.assertRedirects(response, reverse("position-reference-list"), fetch_redirect_response=False)
+        reference = PositionReference.objects.get(position_title="Records Officer II")
+        self.assertEqual(reference.reference_status, PositionReference.ReferenceStatus.VERIFIED_REFERENCE)
+        self.assertTrue(
+            AuditLog.objects.filter(
+                action=AuditLog.Action.POSITION_CREATED,
+                metadata__position_reference_id=reference.pk,
+            ).exists()
+        )
+        from recruitment.forms import RecruitmentEntryForm
+
+        offered = RecruitmentEntryForm().fields["position_reference"].queryset
+        self.assertIn(reference, offered)
+
+    def test_retiring_keeps_the_reference_off_new_vacancies(self):
+        self.admin.post(reverse("position-reference-create"), self._reference_data())
+        reference = PositionReference.objects.get(position_title="Records Officer II")
+        data = self._reference_data()
+        data.pop("is_active")
+        self.admin.post(reverse("position-reference-update", kwargs={"pk": reference.pk}), data)
+        reference.refresh_from_db()
+        self.assertFalse(reference.is_active)
+        log = AuditLog.objects.filter(action=AuditLog.Action.POSITION_UPDATED).latest("created_at")
+        self.assertIn("Retired", log.description)
+        from recruitment.forms import RecruitmentEntryForm
+
+        offered = RecruitmentEntryForm().fields["position_reference"].queryset
+        self.assertNotIn(reference, offered)
+
+    def test_reference_form_checks_grade_and_duplicates(self):
+        bad = self.admin.post(reverse("position-reference-create"), self._reference_data(salary_grade="40"))
+        self.assertContains(bad, "Salary grades run from 1 to 33.")
+        self.admin.post(reverse("position-reference-create"), self._reference_data())
+        duplicate = self.admin.post(reverse("position-reference-create"), self._reference_data(position_title="records  officer ii"))
+        self.assertContains(duplicate, "An active reference with this title and salary grade already exists.")
+        self.assertEqual(PositionReference.objects.filter(position_title__iexact="Records Officer II").count(), 1)

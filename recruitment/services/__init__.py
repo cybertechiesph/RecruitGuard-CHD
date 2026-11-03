@@ -554,3 +554,7 @@ from .evidence_vault import (
     record_export_denied,
     build_export_bundle,
 )
+from .references import (
+    save_position_reference,
+    position_references_with_usage,
+)

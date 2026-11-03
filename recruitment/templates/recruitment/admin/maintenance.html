@@ -1,0 +1,118 @@
+{% extends "internal_base.html" %}
+{% load recruitment_ui %}
+
+{% block internal_title %}Maintenance{% endblock %}
+
+{% block breadcrumb %}
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<span class="rg-breadcrumb-current">Maintenance</span>
+{% endblock %}
+
+{% block content %}
+<div class="rg-adm">
+    <header class="rg-adm-head">
+        <div>
+            <h1 class="rg-adm-head__title">Maintenance</h1>
+            <p class="rg-adm-head__lead">Archive the audit trail, export it for an auditor, and check that emails are going out.</p>
+        </div>
+    </header>
+
+    {# ── Email delivery ─────────────────────────────────────────── #}
+    <h2 class="rg-adm-section-title">Email delivery</h2>
+    {% if failed_email_count %}
+        <a class="rg-adm-tile rg-adm-tile--warn mb-2" style="max-width:420px"
+           href="{% url 'audit-log-list' %}?category=emails&amp;date_from={{ failed_email_from|date:'Y-m-d' }}&amp;date_to={{ today|date:'Y-m-d' }}" data-failed-emails>
+            <span class="rg-adm-tile__label">Failed in the last {{ failed_email_window_days }} days</span>
+            <span class="rg-adm-tile__value">{{ failed_email_count }}</span>
+            <span class="rg-adm-tile__verb">See the email entries &rarr;</span>
+        </a>
+        <p class="rg-adm-muted small">Applicants only hear from the office by email. Check the mail settings if this keeps rising.</p>
+    {% else %}
+        <p class="rg-adm-allclear" data-failed-emails>
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+            All emails in the last {{ failed_email_window_days }} days were delivered.
+        </p>
+    {% endif %}
+
+    {# ── Exports ────────────────────────────────────────────────── #}
+    <h2 class="rg-adm-section-title">Export the audit trail</h2>
+    <section class="rg-adm-panel" data-exports>
+        <p class="rg-adm-muted small mb-3">Every entry in the range, sign-ins included. Each export is itself recorded in the audit log.</p>
+        <form method="get" action="{% url 'audit-log-export-csv' %}" class="d-flex flex-wrap align-items-end gap-2">
+            <input type="hidden" name="signins" value="show">
+            <div>
+                <label for="export-from" class="form-label small fw-semibold">From</label>
+                <input type="date" id="export-from" name="date_from" class="form-control form-control-sm" value="{{ export_default_from|date:'Y-m-d' }}">
+            </div>
+            <div>
+                <label for="export-to" class="form-label small fw-semibold">To</label>
+                <input type="date" id="export-to" name="date_to" class="form-control form-control-sm" value="{{ today|date:'Y-m-d' }}">
+            </div>
+            <button type="submit" class="btn btn-outline-secondary btn-sm">Download CSV</button>
+            <button type="submit" class="btn btn-outline-secondary btn-sm" formaction="{% url 'audit-log-report' %}" formtarget="_blank">Printable report</button>
+        </form>
+    </section>
+
+    {# ── Audit archives ─────────────────────────────────────────── #}
+    <h2 class="rg-adm-section-title" id="archives">Audit archives</h2>
+    <section class="rg-adm-panel" data-archives>
+        <p class="rg-adm-muted small">
+            Move entries older than a cutoff into an encrypted archive file, then remove them from the live log.
+            Only entries older than six months (before {{ archive_latest_cutoff|date:"M j, Y" }}) can be archived.
+            Nothing is removed until the archive file is saved and checked.
+        </p>
+        <form method="get" action="{% url 'maintenance' %}#archives" class="d-flex flex-wrap align-items-end gap-2">
+            <div>
+                <label for="archive-cutoff" class="form-label small fw-semibold">Archive entries older than</label>
+                <input type="date" id="archive-cutoff" name="archive_cutoff" class="form-control form-control-sm"
+                       max="{{ archive_latest_cutoff|date:'Y-m-d' }}" value="{{ archive_preview_cutoff|date:'Y-m-d' }}">
+            </div>
+            <button type="submit" class="btn btn-outline-secondary btn-sm">Preview</button>
+        </form>
+
+        {% if archive_preview_error %}
+            <div class="alert alert-warning mt-3 mb-0">{{ archive_preview_error }}</div>
+        {% elif archive_preview %}
+            {% if archive_preview.count %}
+                <div class="rg-adm-callout mt-3 flex-wrap justify-content-between" data-archive-preview>
+                    <div>
+                        This will archive <strong>{{ archive_preview.count }}</strong> entr{{ archive_preview.count|pluralize:"y,ies" }}
+                        from <strong>{{ archive_preview.range_start|date:"M j, Y" }}</strong> to
+                        <strong>{{ archive_preview.range_end|date:"M j, Y" }}</strong>, then remove them from the live log.
+                    </div>
+                    <form method="post" action="{% url 'audit-log-archive' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="archive_cutoff" value="{{ archive_preview_cutoff|date:'Y-m-d' }}">
+                        <button type="submit" class="btn btn-danger btn-sm">Archive {{ archive_preview.count }} entr{{ archive_preview.count|pluralize:"y,ies" }}</button>
+                    </form>
+                </div>
+            {% else %}
+                <div class="alert alert-secondary mt-3 mb-0">No entries are older than that cutoff.</div>
+            {% endif %}
+        {% endif %}
+
+        {% if audit_archives %}
+            <div class="rg-table-shell rg-itbl rg-adm-table mt-3">
+                <div class="table-responsive">
+                    <table class="table align-middle">
+                        <thead><tr><th scope="col">Archive file</th><th scope="col">Entries</th><th scope="col">Covers</th><th scope="col">Created</th><th scope="col" class="col-actions"><span class="visually-hidden">Download</span></th></tr></thead>
+                        <tbody>
+                            {% for archive in audit_archives %}
+                                <tr>
+                                    <td class="col-ref">{{ archive.file_name }}</td>
+                                    <td class="rg-adm-num">{{ archive.entry_count }}</td>
+                                    <td class="rg-adm-num">{{ archive.range_start|date:"M j, Y" }} &ndash; {{ archive.range_end|date:"M j, Y" }}</td>
+                                    <td>{{ archive.created_at|date:"M j, Y" }} &middot; {{ archive.created_by.get_full_name|default:archive.created_by.username }}</td>
+                                    <td class="col-actions"><a href="{% url 'audit-archive-download' archive.pk %}" class="btn btn-outline-secondary btn-sm">Download</a></td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        {% else %}
+            <p class="rg-adm-muted small mt-3 mb-0">No archives yet.</p>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

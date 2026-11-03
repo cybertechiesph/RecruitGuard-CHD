@@ -1,0 +1,86 @@
+{% extends "internal_base.html" %}
+{% load recruitment_ui %}
+
+{% block internal_title %}Position References{% endblock %}
+
+{% block breadcrumb %}
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<span class="rg-breadcrumb-current">Position References</span>
+{% endblock %}
+
+{% block content %}
+<div class="rg-adm">
+    <header class="rg-adm-head">
+        <div>
+            <h1 class="rg-adm-head__title">Position References</h1>
+            <p class="rg-adm-head__lead">The official positions vacancies are created from: title, salary grade, level and qualifications.</p>
+        </div>
+        <div class="rg-adm-head__actions">
+            <a href="{% url 'position-reference-create' %}" class="btn btn-rg-primary">Add position reference</a>
+        </div>
+    </header>
+
+    <form method="get" class="rg-adm-toolbar" role="search">
+        {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+        <div class="rg-adm-toolbar__search">
+            <label class="visually-hidden" for="ref-q">Search position references</label>
+            <input id="ref-q" class="form-control" type="search" name="q" value="{{ q }}" placeholder="Title, class ID or service" autocomplete="off">
+            <button type="submit" class="btn btn-outline-secondary">Search</button>
+        </div>
+        <span class="rg-adm-toolbar__count" data-count-line>
+            {% if is_filtered %}Showing {{ page_obj.paginator.count }} of {{ total_count }} &middot; <a href="{% url 'position-reference-list' %}">Clear</a>{% else %}{{ total_count }} reference{{ total_count|pluralize }} &middot; {{ active_count }} active &middot; {{ retired_count }} retired{% endif %}
+        </span>
+    </form>
+    <div class="rg-adm-toolbar">
+        <nav class="rg-adm-chips" aria-label="Filter by status">
+            <a class="rg-adm-chip{% if not status %} is-active{% endif %}" href="{% query_with status='' %}">All</a>
+            <a class="rg-adm-chip{% if status == 'active' %} is-active{% endif %}" href="{% query_with status='active' %}">Active <span class="rg-adm-chip__n">{{ active_count }}</span></a>
+            <a class="rg-adm-chip{% if status == 'retired' %} is-active{% endif %}" href="{% query_with status='retired' %}">Retired <span class="rg-adm-chip__n">{{ retired_count }}</span></a>
+        </nav>
+    </div>
+
+    <div class="rg-table-shell rg-itbl rg-adm-table" data-references-table>
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th scope="col">Position</th>
+                        <th scope="col">Salary grade</th>
+                        <th scope="col">Level</th>
+                        <th scope="col">Occupational service</th>
+                        <th scope="col">Used by</th>
+                        <th scope="col">Status</th>
+                        <th scope="col" class="col-actions"><span class="visually-hidden">Edit</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for reference in references %}
+                        <tr data-reference-row="{{ reference.pk }}">
+                            <td>
+                                <a class="rg-adm-name" href="{% url 'position-reference-update' reference.pk %}">{{ reference.position_title }}</a>
+                                <span class="rg-adm-sub">{% if reference.class_id %}Class ID {{ reference.class_id }}{% else %}No class ID{% endif %}{% if reference.missing_core_fields %} &middot; details incomplete{% endif %}</span>
+                            </td>
+                            <td class="rg-adm-num">{% if reference.salary_grade %}SG {{ reference.salary_grade }}{% else %}<span class="rg-adm-muted">&mdash;</span>{% endif %}</td>
+                            <td>{{ reference.get_level_classification_display|default:"—" }}</td>
+                            <td>{{ reference.occupational_service|default:"—" }}</td>
+                            <td class="rg-adm-num">{{ reference.vacancy_count }} vacanc{{ reference.vacancy_count|pluralize:"y,ies" }}</td>
+                            <td>
+                                {% if reference.is_active %}
+                                    <span class="rg-adm-status rg-adm-status--active">Active</span>
+                                {% else %}
+                                    <span class="rg-adm-status rg-adm-status--inactive">Retired</span>
+                                {% endif %}
+                            </td>
+                            <td class="col-actions"><a class="btn btn-outline-secondary btn-sm" href="{% url 'position-reference-update' reference.pk %}">Edit</a></td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="7" class="rg-adm-muted">{% if is_filtered %}No references match. <a href="{% url 'position-reference-list' %}">Show all</a>{% else %}No position references yet.{% endif %}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% query_without_page as querystring %}
+    {% include "internal_includes/pagination.html" with page_obj=page_obj querystring=querystring %}
+</div>
+{% endblock %}

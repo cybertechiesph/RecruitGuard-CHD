@@ -1,0 +1,116 @@
+{% extends "internal_base.html" %}
+{% load recruitment_ui %}
+
+{% block internal_title %}Secured Files{% endblock %}
+
+{% block breadcrumb %}
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<span class="rg-breadcrumb-current">Secured Files</span>
+{% endblock %}
+
+{% block content %}
+<div class="rg-adm">
+    <header class="rg-adm-head">
+        <div>
+            <h1 class="rg-adm-head__title">Secured Files</h1>
+            <p class="rg-adm-head__lead">Every file saved to a case, with its fingerprint (SHA-256). Contents stay with the workflow team.</p>
+        </div>
+    </header>
+
+    <form method="get" class="rg-adm-toolbar" role="search" data-files-toolbar>
+        {% if filters.stage %}<input type="hidden" name="stage" value="{{ filters.stage }}">{% endif %}
+        {% if filters.artifact_scope %}<input type="hidden" name="artifact_scope" value="{{ filters.artifact_scope }}">{% endif %}
+        {% if filters.archival_status != "active" %}<input type="hidden" name="archival_status" value="{{ filters.archival_status }}">{% endif %}
+        {% if not filters.current_version_only %}<input type="hidden" name="versions" value="all">{% endif %}
+        <div class="rg-adm-toolbar__search">
+            <label class="visually-hidden" for="files-q">Search files</label>
+            <input id="files-q" class="form-control" type="search" name="q" value="{{ filters.q }}"
+                   placeholder="Case number, file name, label, hash or uploader" autocomplete="off">
+            <button type="submit" class="btn btn-outline-secondary">Search</button>
+        </div>
+        <span class="rg-adm-toolbar__count" data-count-line>
+            {{ result_count }} file{{ result_count|pluralize }}{% if is_filtered %} &middot; <a href="{% url 'evidence-vault-list' %}">Clear</a>{% endif %}
+        </span>
+    </form>
+
+    <div class="rg-adm-toolbar">
+        <nav class="rg-adm-chips" aria-label="Filter by step">
+            <a class="rg-adm-chip{% if not filters.stage %} is-active{% endif %}" href="{% query_with stage='' %}">All steps</a>
+            {% for value, label in stage_chips %}
+                <a class="rg-adm-chip{% if filters.stage == value %} is-active{% endif %}" href="{% query_with stage=value %}">{{ label }}</a>
+            {% endfor %}
+        </nav>
+    </div>
+    <div class="rg-adm-toolbar">
+        <nav class="rg-adm-chips" aria-label="Filter by scope">
+            <a class="rg-adm-chip{% if not filters.artifact_scope %} is-active{% endif %}" href="{% query_with artifact_scope='' %}">Any scope</a>
+            {% for value, label in scope_chips %}
+                <a class="rg-adm-chip{% if filters.artifact_scope == value %} is-active{% endif %}" href="{% query_with artifact_scope=value %}">{{ label }}</a>
+            {% endfor %}
+        </nav>
+        <span class="rg-adm-chip-sep" aria-hidden="true"></span>
+        <nav class="rg-adm-chips" aria-label="Show">
+            <a class="rg-adm-chip{% if not filters.current_version_only %} is-active{% endif %}"
+               href="{% if filters.current_version_only %}{% query_with versions='all' %}{% else %}{% query_with versions='' %}{% endif %}"
+               aria-pressed="{% if filters.current_version_only %}false{% else %}true{% endif %}">Older versions too</a>
+            <a class="rg-adm-chip{% if filters.archival_status == 'all' %} is-active{% endif %}"
+               href="{% if filters.archival_status == 'all' %}{% query_with archival_status='' %}{% else %}{% query_with archival_status='all' %}{% endif %}"
+               aria-pressed="{% if filters.archival_status == 'all' %}true{% else %}false{% endif %}">Include archived</a>
+        </nav>
+    </div>
+
+    <div class="rg-table-shell rg-itbl rg-adm-table" data-files-table>
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th scope="col">Document</th>
+                        <th scope="col">Case</th>
+                        <th scope="col">Step</th>
+                        <th scope="col">Uploaded by</th>
+                        <th scope="col">Date</th>
+                        <th scope="col">Version</th>
+                        <th scope="col">Fingerprint</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in evidence_items %}
+                        <tr>
+                            <td>
+                                <span class="rg-adm-what">{{ item.label }}</span>
+                                <span class="rg-adm-sub">{{ item.original_filename }}{% if item.is_archived %} &middot; archived{% if item.archive_tag %}: {{ item.archive_tag }}{% endif %}{% endif %}</span>
+                            </td>
+                            <td class="rg-adm-num">{% if item.owner_application %}{{ item.owner_application.reference_label }}{% else %}<span class="rg-adm-muted">&mdash;</span>{% endif %}</td>
+                            <td>{% if item.stage %}{{ item.stage|stage_label }}{% else %}<span class="rg-adm-muted">&mdash;</span>{% endif %}</td>
+                            <td>{% if item.uploaded_by %}{{ item.uploaded_by.get_full_name|default:item.uploaded_by.username }}{% else %}System{% endif %}</td>
+                            <td class="rg-adm-num">{{ item.created_at|date:"M j, Y" }}<span class="rg-adm-sub">{{ item.created_at|date:"g:i A" }}</span></td>
+                            <td class="rg-adm-num">{{ item.version_label }}</td>
+                            <td class="rg-adm-num">
+                                <code class="rg-adm-hash" title="{{ item.sha256_digest }}">{{ item.sha256_digest|truncatechars:14 }}</code>
+                                <button type="button" class="btn btn-link btn-sm p-0 ms-1 rg-copy-hash"
+                                        data-hash="{{ item.sha256_digest }}"
+                                        aria-label="Copy the full SHA-256 for {{ item.original_filename }}">Copy</button>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="7" class="rg-adm-muted">No files match.{% if is_filtered %} <a href="{% url 'evidence-vault-list' %}">Show all files</a>{% endif %}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% query_without_page as querystring %}
+    {% include "internal_includes/pagination.html" with page_obj=page_obj querystring=querystring %}
+</div>
+
+<script>
+document.addEventListener("click", function (e) {
+    var btn = e.target.closest(".rg-copy-hash");
+    if (!btn || !navigator.clipboard) return;
+    navigator.clipboard.writeText(btn.dataset.hash).then(function () {
+        btn.textContent = "Copied";
+        setTimeout(function () { btn.textContent = "Copy"; }, 1500);
+    });
+});
+</script>
+{% endblock %}

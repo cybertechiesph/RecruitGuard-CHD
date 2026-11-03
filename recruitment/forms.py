@@ -618,6 +618,95 @@ class InternalUserUpdateForm(_InternalAccountFieldsMixin, BootstrapFormMixin, fo
         self._apply_bootstrap()
 
 
+class PositionReferenceForm(BootstrapFormMixin, forms.ModelForm):
+    """Round F3: add or edit a position reference (docs/admin-area-rebuild-plan.md 4.7).
+    The completeness status is derived on save, not chosen here."""
+
+    class Meta:
+        model = PositionReference
+        fields = (
+            "position_title",
+            "salary_grade",
+            "level_classification",
+            "occupational_service",
+            "occupational_group",
+            "class_id",
+            "os_code",
+            "office_division_default",
+            "qs_education",
+            "qs_training",
+            "qs_experience",
+            "qs_eligibility",
+            "notes",
+            "is_active",
+        )
+        labels = {
+            "position_title": "Position title",
+            "salary_grade": "Salary grade",
+            "level_classification": "Level",
+            "occupational_service": "Occupational service",
+            "occupational_group": "Occupational group",
+            "class_id": "Class ID",
+            "os_code": "OS code",
+            "office_division_default": "Default office or division",
+            "qs_education": "Education",
+            "qs_training": "Training",
+            "qs_experience": "Experience",
+            "qs_eligibility": "Eligibility",
+            "notes": "Notes",
+            "is_active": "Active",
+        }
+        help_texts = {
+            "salary_grade": "1 to 33.",
+            "level_classification": "First Level positions route to the Secretariat, Second Level to the HRM Chief.",
+            "qs_education": "As written in the Qualification Standards.",
+            "is_active": "Retired references stay on the vacancies that use them but are no longer offered for new ones.",
+        }
+        widgets = {
+            "qs_education": forms.Textarea(attrs={"rows": 2}),
+            "qs_training": forms.Textarea(attrs={"rows": 2}),
+            "qs_experience": forms.Textarea(attrs={"rows": 2}),
+            "qs_eligibility": forms.Textarea(attrs={"rows": 2}),
+            "notes": forms.Textarea(attrs={"rows": 2}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["position_title"].required = True
+        self.fields["salary_grade"].required = True
+        self.fields["level_classification"].required = True
+        self.fields["level_classification"].choices = [("", "Choose a level"), *PositionReference.LevelClassification.choices]
+        if not self.instance.pk:
+            self.fields["is_active"].initial = True
+        self._apply_bootstrap()
+
+    def clean_salary_grade(self):
+        grade = self.cleaned_data.get("salary_grade")
+        if grade is not None and not 1 <= grade <= 33:
+            raise forms.ValidationError("Salary grades run from 1 to 33.")
+        return grade
+
+    def clean_position_title(self):
+        return " ".join((self.cleaned_data.get("position_title") or "").split())
+
+    def clean(self):
+        cleaned = super().clean()
+        title = cleaned.get("position_title")
+        grade = cleaned.get("salary_grade")
+        if title and grade:
+            duplicates = PositionReference.objects.filter(
+                position_title__iexact=title, salary_grade=grade, is_active=True
+            )
+            if self.instance.pk:
+                duplicates = duplicates.exclude(pk=self.instance.pk)
+            if duplicates.exists() and cleaned.get("is_active", True):
+                self.add_error(
+                    "position_title",
+                    "An active reference with this title and salary grade already exists.",
+                )
+        return cleaned
+
+
 class ApplicantIdentityCleaningMixin:
     """Name / e-mail / mobile / qualification-summary cleaning shared by every applicant
     form, so the start form and the application page accept and normalise exactly the same
@@ -987,44 +1076,6 @@ class EvidenceUploadForm(BootstrapFormMixin, forms.Form):
                 "The uploaded file is larger than the allowed file size."
             )
         return uploaded_file
-
-
-class EvidenceVaultSearchForm(BootstrapFormMixin, forms.Form):
-    ARCHIVAL_STATUS_CHOICES = (
-        ("active", "Active only"),
-        ("archived", "Archived only"),
-        ("all", "All files"),
-    )
-
-    q = forms.CharField(required=False, label="Search")
-    stage = forms.ChoiceField(
-        required=False,
-        choices=[("", "All steps"), *EvidenceVaultItem.Stage.choices],
-        label="Step",
-    )
-    artifact_scope = forms.ChoiceField(
-        required=False,
-            choices=[("", "All file scopes"), *EvidenceVaultItem.OwnerScope.choices],
-            label="File Scope",
-    )
-    archival_status = forms.ChoiceField(
-        required=False,
-        choices=ARCHIVAL_STATUS_CHOICES,
-        initial="active",
-        label="Archive Status",
-    )
-    current_version_only = forms.BooleanField(
-        required=False,
-        initial=True,
-        label="Show latest versions only",
-    )
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["q"].help_text = (
-            "Search by Application ID, recruitment entry, file label, filename, SHA-256 hash, archive label, or uploader."
-        )
-        self._apply_bootstrap()
 
 
 class AuditLogSearchForm(BootstrapFormMixin, forms.Form):

@@ -180,65 +180,7 @@
     {% if page_obj %}{% include "internal_includes/pagination.html" %}{% endif %}
 
     {% if review_scope != "application" %}
-        {# ── Maintenance: audit archives (moves to its own page in Round F3) ── #}
-        <section class="rg-adm-panel mt-4" id="archives" data-archives>
-            <h2 class="rg-adm-panel__title">Maintenance &middot; audit archives</h2>
-            <p class="rg-adm-muted small">
-                Move entries older than a cutoff into an encrypted archive file, then remove them from the live
-                log. Only entries older than six months (before {{ archive_latest_cutoff|date:"M j, Y" }}) can be archived.
-            </p>
-            <form method="get" action="{% url 'audit-log-list' %}#archives" class="d-flex flex-wrap align-items-end gap-2">
-                <div>
-                    <label for="archive-cutoff" class="form-label small fw-semibold">Archive entries older than</label>
-                    <input type="date" id="archive-cutoff" name="archive_cutoff" class="form-control form-control-sm"
-                           max="{{ archive_latest_cutoff|date:'Y-m-d' }}" value="{{ archive_preview_cutoff|date:'Y-m-d' }}">
-                </div>
-                <button type="submit" class="btn btn-outline-secondary btn-sm">Preview</button>
-            </form>
-
-            {% if archive_preview_error %}
-                <div class="alert alert-warning mt-3 mb-0">{{ archive_preview_error }}</div>
-            {% elif archive_preview %}
-                {% if archive_preview.count %}
-                    <div class="rg-adm-callout mt-3 flex-wrap justify-content-between">
-                        <div>
-                            This will archive <strong>{{ archive_preview.count }}</strong> entr{{ archive_preview.count|pluralize:"y,ies" }}
-                            from <strong>{{ archive_preview.range_start|date:"M j, Y" }}</strong> to
-                            <strong>{{ archive_preview.range_end|date:"M j, Y" }}</strong>, then remove them from the live log.
-                            They are deleted only after the archive file is saved and verified.
-                        </div>
-                        <form method="post" action="{% url 'audit-log-archive' %}">
-                            {% csrf_token %}
-                            <input type="hidden" name="archive_cutoff" value="{{ archive_preview_cutoff|date:'Y-m-d' }}">
-                            <button type="submit" class="btn btn-danger btn-sm">Archive {{ archive_preview.count }} entr{{ archive_preview.count|pluralize:"y,ies" }}</button>
-                        </form>
-                    </div>
-                {% else %}
-                    <div class="alert alert-secondary mt-3 mb-0">No entries are older than that cutoff.</div>
-                {% endif %}
-            {% endif %}
-
-            {% if audit_archives %}
-                <div class="rg-table-shell rg-itbl rg-adm-table mt-3">
-                    <div class="table-responsive">
-                        <table class="table align-middle">
-                            <thead><tr><th scope="col">Archive file</th><th scope="col">Entries</th><th scope="col">Covers</th><th scope="col">Created</th><th scope="col" class="col-actions"><span class="visually-hidden">Download</span></th></tr></thead>
-                            <tbody>
-                                {% for archive in audit_archives %}
-                                    <tr>
-                                        <td class="col-ref">{{ archive.file_name }}</td>
-                                        <td class="rg-adm-num">{{ archive.entry_count }}</td>
-                                        <td class="rg-adm-num">{{ archive.range_start|date:"M j, Y" }} &ndash; {{ archive.range_end|date:"M j, Y" }}</td>
-                                        <td>{{ archive.created_at|date:"M j, Y" }} &middot; {{ archive.created_by.get_full_name|default:archive.created_by.username }}</td>
-                                        <td class="col-actions"><a href="{% url 'audit-archive-download' archive.pk %}" class="btn btn-outline-secondary btn-sm">Download</a></td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            {% endif %}
-        </section>
+        <p class="rg-adm-muted small mt-3" data-archives-link>Older entries are archived from <a href="{% url 'maintenance' %}#archives">Maintenance</a>.</p>
     {% endif %}
 </div>
 {% endblock %}

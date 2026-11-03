@@ -1,0 +1,68 @@
+{% extends "internal_base.html" %}
+{% load recruitment_ui %}
+
+{% block internal_title %}{% if object %}Edit {{ object.position_title }}{% else %}Add position reference{% endif %}{% endblock %}
+
+{% block breadcrumb %}
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<a href="{% url 'position-reference-list' %}" class="rg-breadcrumb-home">Position References</a>
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<span class="rg-breadcrumb-current">{% if object %}{{ object.position_title }}{% else %}Add{% endif %}</span>
+{% endblock %}
+
+{% block content %}
+<div class="rg-adm">
+    <header class="rg-adm-head">
+        <div>
+            <h1 class="rg-adm-head__title">{% if object %}{{ object.position_title }}{% else %}Add position reference{% endif %}</h1>
+            <p class="rg-adm-head__lead">
+                {% if object %}
+                    Used by {{ vacancy_count }} vacanc{{ vacancy_count|pluralize:"y,ies" }}. Changes apply to new vacancies; existing ones keep what they were published with.
+                {% else %}
+                    Copy the details from the official position record. Changes are recorded in the audit log.
+                {% endif %}
+            </p>
+        </div>
+    </header>
+
+    <form method="post" class="rg-adm-form" novalidate data-reference-form>
+        {% csrf_token %}
+        {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+
+        <section class="rg-adm-panel">
+            <h2 class="rg-adm-panel__title">Position</h2>
+            <div class="row g-3">
+                <div class="col-12">{% include "recruitment/includes/form_field.html" with field=form.position_title %}</div>
+                <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.salary_grade %}</div>
+                <div class="col-md-8">{% include "recruitment/includes/form_field.html" with field=form.level_classification %}</div>
+                <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.occupational_service %}</div>
+                <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.occupational_group %}</div>
+                <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.class_id %}</div>
+                <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.os_code %}</div>
+                <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.office_division_default %}</div>
+            </div>
+        </section>
+
+        <section class="rg-adm-panel">
+            <h2 class="rg-adm-panel__title">Qualification Standards</h2>
+            <div class="row g-3">
+                <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.qs_education %}</div>
+                <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.qs_training %}</div>
+                <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.qs_experience %}</div>
+                <div class="col-md-6">{% include "recruitment/includes/form_field.html" with field=form.qs_eligibility %}</div>
+            </div>
+        </section>
+
+        <section class="rg-adm-panel">
+            <h2 class="rg-adm-panel__title">Notes and status</h2>
+            {% include "recruitment/includes/form_field.html" with field=form.notes %}
+            <div class="mt-3">{% include "recruitment/includes/form_field.html" with field=form.is_active %}</div>
+        </section>
+
+        <div class="rg-adm-form-actions">
+            <button type="submit" class="btn btn-rg-primary">{% if object %}Save changes{% else %}Add position reference{% endif %}</button>
+            <a href="{% url 'position-reference-list' %}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

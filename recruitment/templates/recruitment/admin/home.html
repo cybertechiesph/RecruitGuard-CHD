@@ -43,7 +43,7 @@
             <span class="rg-adm-tile__verb">Review &rarr;</span>
         </a>
         <a class="rg-adm-tile{% if archive_overdue %} rg-adm-tile--warn{% else %} rg-adm-tile--quiet{% endif %}"
-           href="{% url 'audit-log-list' %}#archives" data-tile="archive">
+           href="{% url 'maintenance' %}#archives" data-tile="archive">
             <span class="rg-adm-tile__label">Last audit archive</span>
             {% if latest_archive %}
                 <span class="rg-adm-tile__value">{{ archive_age_days }} <small>day{{ archive_age_days|pluralize }} ago</small></span>
@@ -65,6 +65,7 @@
             <button type="submit" class="btn btn-outline-secondary">Find</button>
         </form>
         <a href="{% url 'audit-log-list' %}?date_from={{ today|date:'Y-m-d' }}" class="btn btn-outline-secondary">Today&rsquo;s activity</a>
+        <a href="{% url 'position-reference-list' %}" class="btn btn-outline-secondary">Position references</a>
     </div>
 
     {# ── Recent ──────────────────────────────────────────────────── #}

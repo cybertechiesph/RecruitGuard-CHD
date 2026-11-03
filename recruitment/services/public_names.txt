@@ -390,6 +390,7 @@ open_stage_record_correction
 panel_waits_on_car
 persist_recruitment_entry
 plantilla_car_preparer_role_label
+position_references_with_usage
 preview_audit_archive
 process_workflow_action
 purge_abandoned_draft_files
@@ -433,6 +434,7 @@ save_exam_record
 save_exam_schedule
 save_interview_rating
 save_interview_session
+save_position_reference
 save_screening_review
 save_vacancy_cos_interview_ratings
 save_vacancy_exam_schedule
