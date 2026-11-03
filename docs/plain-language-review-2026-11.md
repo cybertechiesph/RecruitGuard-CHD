@@ -38,6 +38,12 @@ notices still point at screens that no longer exist, the older "locked" panels k
 formal Title Case voice, and the case history prints routing lines that read like a log file.
 None of it stops anyone working; all of it costs a new reader time.
 
+**And the staff side uses words no ordinary Filipino reader knows** (section 3.5): the
+applicant side has none, but the Director's and Chief's screens say "rescind", the interview
+screens say "encode", and forms ask for a "justification" or a "basis" where "reason" would
+do. The office's own vocabulary (deliberation, quorum, CAR) stays and gets a gloss; the
+lawyer's and programmer's words get replaced.
+
 Two things need an answer from the office before the fix round (section 4): the official name
 of the HR office as applicants should see it, and whether the vacancy should be called
 "Vacancy" everywhere inside the portal.
@@ -267,6 +273,63 @@ recruitment"; the Filipino puts the type in brackets, which reads better: "for N
 government-issued identification card.", "Report at least fifteen (15) minutes before…". Fix:
 "Bring one valid government ID.", "Arrive 15 minutes early."
 
+### 3.5 Hard words (H)
+
+A different problem from 3.1: words that are correct, used consistently, and still unknown to
+an ordinary Filipino reader. The applicant side has none of them (checked word by word; the
+only "hard" applicant words are *eligibility*, *plantilla* and *resubmit*, each explained where
+it appears). The staff side is full of them. Two kinds, treated differently.
+
+**H-01 (P2) The office's own words: keep, gloss once.** The HRMPSB and the CSC say these, so a
+staff member knows them even when a new hire does not: *deliberation, quorum, plantilla,
+eligibility, Qualification Standards, Comparative Assessment Report (CAR), finalize, endorse,
+letter of intent, deep selection, failure of search, waived*. Keep them. Each gets a one-line
+plain gloss the first time it appears on a screen, the way "No appointment (failure of
+search)" and the deep-selection note already do. Candidates for a gloss: the Deliberation
+titlebar ("the board's meeting on the ranked candidates"), "Quorum" ("3 to 5 members
+present"), "Letter of intent" ("the applicant's written request to be rescheduled"),
+"Waived" ("the office excused the exam"), "Finalize" ("lock; needs an authorized reopen to
+change").
+
+**H-02 (P2) Lawyer and programmer words: replace.** No office in the Philippines says these;
+a developer or a legal template did. Where they appear and what to say instead:
+
+| Today | Where (user-facing) | Say instead |
+|---|---|---|
+| rescind, rescission, rescinded | the Director's and HRM Chief's cards and dialogs (`final_selection_rescind_card.html`, `cos_pick_rescind_card.html`), the selection messages, the audit label "Final Selection Rescinded", Office Policy "When rescission is no longer allowed" | **take back the selection**; "the selection was taken back"; audit label "Selection Taken Back" |
+| void, voided ("Voided by rescission") | `completion_body.html`, completion and selection messages | **cancelled** ("No longer applies: the selection was taken back") |
+| disposition ("vacancy-cancelled disposition") | entry cancellation message | **outcome** |
+| superseded, supersedes | paper-sheet replace option, rescission copy | **replaced by** |
+| in contention, out of contention | final selection list and messages | **still in the running** / **no longer in the running** |
+| terminal (outcome) | absence decision copy | **final** |
+| encode, encoder, encoding mode | the paper rating sheet card, `interview_rater.html`, the ratings list ("Encoded by …") | **type in**; "typed in by …"; "Typing in a paper rating" |
+| immutable, "preserved intact", "preserved exactly as it was recorded" | locked panels, rescind cards | **kept unchanged** |
+| cutoff | Maintenance archive form, rescind-policy copy | **deadline** / "older than this date" |
+| snapshot ("Packet Snapshot", "CAR Snapshot", "snapshotted") | `decision_locked_body.html`, `final_selection_locked_body.html`, COS console | **copy at the time** ("The ranked list as it was when the selection was made") |
+| justification | rating forms, deep selection, CAR return | **reason** |
+| basis ("Basis — required", "one-line basis") | ETE grid, screening decision | **reason** / "why" |
+| remarks | forms and panels | **notes** |
+| validity period, validity window | exam forms | **valid until** / "valid from … to …" |
+| intake, "open for intake" | entry form and messages | **applications** ("while applications are open") |
+| pending ("3 pending", "pending decided") | counts and chips | **waiting** |
+| authorization, authorized ("Add a reason for this authorization", "reopened with authorization") | override and reopen copy | **permission** / "allowed"; keep the feature name "Special authorization" and "Authorized reopen" as names only |
+| attributable, "distinct attributable raters" | interview finalize messages | "ratings from 3 to 5 different members" |
+| audit-logged, "recorded in the audit trail" | many confirmations | **recorded** ("This is recorded.") — one phrase everywhere |
+
+Worked example, the Director's card today: *"Rescind this selection — Use this to correct a
+selection that was recorded in error, or when the selected person withdraws before
+appointment. The original record is kept intact and marked rescinded; the candidates it closed
+come back to this step so the vacancy can be decided again."* After: *"Take back this selection
+— Use this when the selection was recorded by mistake, or the selected person withdraws before
+appointment. The original decision stays on file, marked as taken back. The other candidates
+return to this step so the vacancy can be decided again."* Same meaning, no dictionary.
+
+The counts behind this: in the user-facing strings "rescind" and its forms appear about 80
+times, "encode" about 40, "justification" about 25, "basis" about 20, "remarks" about 20,
+"terminal" about 18, "void" about 17, "cutoff" and "snapshot" about 10 each, "disposition",
+"supersede" and "in contention" a handful. "Finalize" (about 300) and "deliberation" (about
+200) are the office's own words and stay.
+
 ## 4. One name per thing
 
 The glossary the fix round should enforce. The office decides the two marked ⚠.
@@ -311,6 +374,13 @@ for the new and changed strings and their Filipino. Two hours.
 routing-history sentences, sentence case on the six locked panels, the jargon table, the
 sign-in pages, the notification labels. Two to three hours.
 
+**I6 — hard words (H-01, H-02).** The replacement table in 3.5, applied everywhere a user can
+see the word (templates, messages, form labels, choice labels, audit labels, the Office Policy
+page), and a one-line gloss for each office word in H-01 where it heads a screen. Keep the
+feature names "Special authorization" and "Authorized reopen". The audit labels change wording
+only (no data change). Half a day. The office's own words (H-01) are not replaced; if the
+office later wants any of them glossed differently, it is one string each.
+
 Check once at the end in the browser: one case per step as the Secretariat and the HRMPSB
 member (as in Round H), the applicant start-to-receipt flow in Filipino, and one email of each
 kind from the console backend.
@@ -336,3 +406,4 @@ kind from the console backend.
 | I3 — applicant side and emails | not started |
 | I4 — Filipino consistency | not started |
 | I5 — staff jargon and locked panels | not started |
+| I6 — hard words | not started |
