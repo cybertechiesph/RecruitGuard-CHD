@@ -285,7 +285,7 @@ HRM Chief on COS). Two states:
                 <span class="rg-int-optional">Optional</span>
             </label>
             {{ car_form.summary_notes }}
-            <div class="form-text">Notes from the HRMU that go with the CAR draft and the final report.</div>
+            <div class="form-text">Notes from the Secretariat that go with the CAR draft and the final report.</div>
             {% for error in car_form.summary_notes.errors %}
                 <div class="invalid-feedback d-block">{{ error }}</div>
             {% endfor %}
@@ -334,7 +334,7 @@ HRM Chief on COS). Two states:
             </div>
             <div class="modal-body" style="padding:1.25rem; font-size:0.83rem; color:#374151; line-height:1.6;">
                 <p class="mb-2">
-                    Once finalized, this CAR locks in. It can't be changed without an authorized reopen, and the case moves to Final Selection / Decision.
+                    Once finalized, this CAR locks in. It can't be changed without an authorized reopen, and the case moves to the Decision step.
                 </p>
                 <p class="mb-2">
                     Make sure the candidate rankings are correct before continuing.
@@ -492,7 +492,7 @@ HRM Chief on COS). Two states:
                 {% if current_comparative_assessment_report.finalized_at %}
                     on {{ current_comparative_assessment_report.finalized_at|date:"M j, Y" }}
                 {% endif %}.
-                The case proceeds to Final Selection / Decision.
+                The case moves to the Decision step.
             </p>
             {% with snapshot_split=current_comparative_assessment_report.consolidated_snapshot.assessment_weight_display %}
             {% if snapshot_split %}

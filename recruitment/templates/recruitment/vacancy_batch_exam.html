@@ -133,7 +133,7 @@
     <p class="rg-note mb-3">
         Enter each candidate's General Ability and Technical scores (0–100). The overall is
         computed from the weights above.
-        {% if not is_plantilla %}COS scores are entered by the HRMU.{% endif %}
+        {% if not is_plantilla %}For COS, enter the scores from the end user's exam.{% endif %}
     </p>
     <form method="post" id="examScoreForm" novalidate>
         {% csrf_token %}

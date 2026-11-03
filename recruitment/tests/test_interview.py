@@ -2492,7 +2492,7 @@ class InterviewManagementTests(InterviewSessionHelpers, BaseRecruitmentTestCase)
             )
         with self.assertRaisesMessage(
             ValueError,
-            "Finalized interview records cannot accept fallback rating uploads.",
+            "Finalized interview records cannot accept paper rating sheets.",
         ):
             upload_interview_fallback_rating(
                 application=application,

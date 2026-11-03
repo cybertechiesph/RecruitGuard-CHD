@@ -248,7 +248,7 @@ class ComparativeAssessmentReportView(LoginRequiredMixin, WorkflowProcessorRequi
                         request,
                         "Comparative Assessment Report finalized. The candidates' cases are now "
                         "with the Appointing Authority for the decision. The CAR filing copy "
-                        "is on Recruitment Entries.",
+                        "is on the Vacancies page.",
                     )
                 else:
                     messages.success(

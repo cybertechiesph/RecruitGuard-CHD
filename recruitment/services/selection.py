@@ -1331,7 +1331,7 @@ def record_final_decision(application, actor, cleaned_data):
             "Finalize the COS vacancy deliberation pick before recording the selection."
         )
     if application.case.is_stage_locked:
-        raise ValueError("This case is final and cannot be edited unless it is reopened with authorization.")
+        raise ValueError("This case is final and cannot be edited unless the HRM Chief reopens it.")
     expected_stage, expected_role = _final_decision_stage_and_role(application)
     cleaned_data = {
         **cleaned_data,

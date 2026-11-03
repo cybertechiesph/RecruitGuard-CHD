@@ -676,7 +676,7 @@ class WorkflowRoutingTests(BaseRecruitmentTestCase):
 
         with self.assertRaisesMessage(
             ValueError,
-            "Level 2 Secretariat authorization is only available while the case is assigned to HRM Chief review.",
+            "Special authorization is only available while the case is assigned to HRM Chief review.",
         ):
             grant_secretariat_override(
                 application=application,

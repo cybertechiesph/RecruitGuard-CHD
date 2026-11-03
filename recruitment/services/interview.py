@@ -68,7 +68,7 @@ MIN_INTERVIEW_OUTPUTS_TO_FINALIZE = 1
 # sheet never do — three versions of one document are not three panel members.
 MIN_INTERVIEW_RATINGS_PLANTILLA = 3
 MAX_INTERVIEW_RATINGS_PLANTILLA = 5
-INTERVIEW_FALLBACK_LABEL = "Interview Rating Sheet (Fallback)"
+INTERVIEW_FALLBACK_LABEL = "Paper Interview Rating Sheet"
 ARTIFACT_TYPE_INTERVIEW_FALLBACK = "interview_fallback_rating_sheet"
 
 
@@ -384,7 +384,7 @@ def save_interview_session(
                 )
         elif distinct_rater_count < MIN_INTERVIEW_OUTPUTS_TO_FINALIZE:
             raise ValueError(
-                "Record at least one interview rating or encode a fallback rating sheet before finalizing the interview session."
+                "Record at least one interview rating or add a paper rating sheet before finalizing the interview session."
             )
     schedule_notification_recipients = (
         get_interview_schedule_notification_recipients(application)
@@ -1071,23 +1071,23 @@ def upload_interview_fallback_rating(
     "are you the assigned handler" and refused the support office outright, so the action
     was visible but unusable — a paper-rated session could not be finalized legitimately."""
     if not hasattr(application, "case"):
-        raise ValueError("A case must exist before fallback interview ratings can be uploaded.")
+        raise ValueError("A case must exist before paper rating sheets can be added.")
 
     review_stage = application.case.current_stage
     interview_session = get_interview_session(application, stage=review_stage)
     if interview_session and interview_session.is_finalized:
-        raise ValueError("Finalized interview records cannot accept fallback rating uploads.")
+        raise ValueError("Finalized interview records cannot accept paper rating sheets.")
     if not user_can_upload_interview_fallback(actor, application):
         raise ValueError(
-            "This case is not currently assigned to you for fallback rating upload."
+            "This case is not currently assigned to you for paper rating sheets."
         )
     if not interview_session:
-        raise ValueError("Schedule the interview session before uploading a fallback rating sheet.")
+        raise ValueError("Schedule the interview session before adding a paper rating sheet.")
     if not interview_scoring_is_open(interview_session):
         raise ValueError(scoring_opens_message(interview_session.scheduled_for))
     if rated_by is None:
         raise ValueError(
-            "Name the panel member who signed this rating sheet — a fallback sheet is one "
+            "Name the panel member who signed this rating sheet — a paper sheet is one "
             "member's rating, not an anonymous document."
         )
     if rating_score in (None, ""):

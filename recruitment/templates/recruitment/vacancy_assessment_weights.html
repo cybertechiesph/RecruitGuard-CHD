@@ -6,7 +6,7 @@
 {% block content %}
 <div class="rg-page-header">
     <div>
-        <p class="rg-eyebrow">Recruitment Entry</p>
+        <p class="rg-eyebrow">Vacancy</p>
         <h1 class="rg-page-title">Assessment Weights</h1>
         <p class="rg-page-copy">
             The percentages this vacancy uses when the system computes the exam overall and
@@ -107,7 +107,7 @@
         {% if not is_locked %}
         <button type="submit" class="btn btn-rg-primary">Save weights</button>
         {% endif %}
-        <a href="{% url 'recruitment-entry-list' %}" class="btn btn-outline-secondary">Back to entries</a>
+        <a href="{% url 'recruitment-entry-list' %}" class="btn btn-outline-secondary">Back to vacancies</a>
     </div>
 </form>
 

@@ -17,7 +17,7 @@
                 Finished cases &mdash; selected, not selected, withdrawn or cancelled. Open a case to see its
                 documents and history, or to export it.
                 {% if user.role == "secretariat" or user.role == "hrm_chief" %}
-                    For past vacancies, see <a href="{% url 'recruitment-entry-list' %}?status=closed">closed recruitment entries</a>.
+                    For past vacancies, see <a href="{% url 'recruitment-entry-list' %}?status=closed">closed vacancies</a>.
                 {% endif %}
             </p>
         {% endif %}
@@ -123,7 +123,7 @@
                         <th>Case</th>
                         <th>Position</th>
                         {% if not is_queue %}
-                            <th>Branch / Level</th>
+                            <th>Type / Level</th>
                         {% endif %}
                         {% if is_closed_list %}
                             <th>Outcome</th>

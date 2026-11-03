@@ -411,23 +411,23 @@ class PositionPosting(TimestampedModel):
     LIVE_METADATA_LOCKED_FIELDS = {
         "position_reference": (
             "position_reference_id",
-            "Position reference cannot be changed once the recruitment entry has submitted applications or linked recruitment cases.",
+            "Position reference cannot be changed once the vacancy has received applications.",
         ),
         "branch": (
             "branch",
-            "Engagement type cannot be changed once the recruitment entry has submitted applications or linked recruitment cases.",
+            "Position type cannot be changed once the vacancy has received applications.",
         ),
         "intake_mode": (
             "intake_mode",
-            "Intake mode cannot be changed once the recruitment entry has submitted applications or linked recruitment cases.",
+            "Intake mode cannot be changed once the vacancy has received applications.",
         ),
         "publication_date": (
             "publication_date",
-            "Publication date cannot be changed once the recruitment entry has submitted applications or linked recruitment cases.",
+            "Publication date cannot be changed once the vacancy has received applications.",
         ),
         "opening_date": (
             "opening_date",
-            "Opening date cannot be changed once the recruitment entry has submitted applications or linked recruitment cases.",
+            "Opening date cannot be changed once the vacancy has received applications.",
         ),
     }
 
@@ -454,7 +454,7 @@ class PositionPosting(TimestampedModel):
     )
     positions_to_fill = models.PositiveSmallIntegerField(
         default=1,
-        help_text="Number of people this COS posting is intended to engage.",
+        help_text="Number of people this COS vacancy is meant to hire.",
     )
     # 4a: the end-user members who join the standing core panel for this vacancy only.
     panel_end_users = models.ManyToManyField(
@@ -630,7 +630,7 @@ class PositionPosting(TimestampedModel):
     def build_next_entry_code(self):
         prefix = self.expected_entry_code_prefix
         if not prefix:
-            raise ValidationError({"branch": "Engagement type is required before Entry Code can be generated."})
+            raise ValidationError({"branch": "Choose the position type before the vacancy code can be generated."})
 
         queryset = type(self).objects.select_for_update().filter(job_code__startswith=prefix)
         if self.pk:
@@ -656,7 +656,7 @@ class PositionPosting(TimestampedModel):
             errors["position_reference"] = "Position reference is required."
         else:
             if not self.position_reference.is_active:
-                errors["position_reference"] = "Inactive position references cannot be used for recruitment entries."
+                errors["position_reference"] = "Inactive position references cannot be used for vacancies."
             elif self.position_reference.routing_level is None:
                 errors["position_reference"] = (
                     "The selected position reference is missing the level classification needed for assignment."
@@ -672,20 +672,20 @@ class PositionPosting(TimestampedModel):
             # required at the model level so programmatic postings (e.g. demo seeding)
             # can be created without fabricating an official-looking number.
             if self.intake_mode != self.IntakeMode.FIXED_PERIOD:
-                errors["intake_mode"] = "Plantilla entries must use a fixed validity period."
+                errors["intake_mode"] = "Plantilla vacancies must use a fixed application period."
             if not self.closing_date:
-                errors["closing_date"] = "Plantilla entries require a closing date."
+                errors["closing_date"] = "Plantilla vacancies need a closing date."
             # The 14-day window is a suggested default (auto-filled on the form when
             # the closing date is left blank), not a hard cap. Any closing date on or
             # after the opening date is accepted.
         elif self.branch == self.Branch.COS:
             self.item_number = ""
             if self.intake_mode == self.IntakeMode.FIXED_PERIOD:
-                errors["intake_mode"] = "COS entries are either one batch or an open pool."
+                errors["intake_mode"] = "COS vacancies are either one batch or an open pool."
             if self.intake_mode == self.IntakeMode.CONTINUOUS and self.closing_date:
-                errors["closing_date"] = "An open pool has no closing date; close the entry when the office stops hiring from it."
+                errors["closing_date"] = "An open pool has no closing date; close the vacancy when the office stops hiring from it."
             if self.intake_mode == self.IntakeMode.OPENING_BASED and not self.closing_date:
-                errors["closing_date"] = "A one-batch COS entry needs a closing date, so its batch has a clear end."
+                errors["closing_date"] = "A one-batch COS vacancy needs a closing date, so its batch has a clear end."
 
         if self.branch != self.Branch.COS:
             self.positions_to_fill = 1
@@ -698,19 +698,19 @@ class PositionPosting(TimestampedModel):
             code_match = ENTRY_CODE_PATTERN.fullmatch(self.job_code)
             if not code_match:
                 errors["job_code"] = (
-                    f"Entry Code must match the format {self.ENTRY_CODE_FORMAT_LABEL}."
+                    f"The vacancy code must match the format {self.ENTRY_CODE_FORMAT_LABEL}."
                 )
             else:
                 expected_branch_segment = self.entry_code_branch_segment
                 expected_year_segment = f"{self.entry_code_year:04d}"
                 if expected_branch_segment and code_match.group("branch") != expected_branch_segment:
-                    errors["job_code"] = "Entry Code branch segment must match the selected engagement type."
+                    errors["job_code"] = "The type part of the vacancy code must match the selected position type."
                 elif code_match.group("year") != expected_year_segment:
                     errors["job_code"] = (
-                        "Entry Code year segment must match the publication date, opening date, or current year fallback."
+                        "The year in the vacancy code must match the publication date, the opening date, or this year."
                     )
         elif self.pk:
-            errors["job_code"] = "Entry Code is required after the recruitment entry is first saved."
+            errors["job_code"] = "A vacancy code is required once the vacancy is saved."
 
         if errors:
             raise ValidationError(errors)
@@ -1834,8 +1834,8 @@ class OfficePolicy(TimestampedModel):
     SINGLETON_PK = 1
 
     class InterviewAbsenceDecisionOwner(models.TextChoices):
-        SUPPORT_OFFICE = "support_office", "HR support office"
-        PANEL = "panel", "Stage owner / panel"
+        SUPPORT_OFFICE = "support_office", "The office that owns the level (Secretariat or HRM Chief)"
+        PANEL = "panel", "The HRMPSB panel"
 
     class RescindCutoff(models.TextChoices):
         CASE_CLOSED = "case_closed", "Blocked once the case is closed"
@@ -1864,7 +1864,7 @@ class OfficePolicy(TimestampedModel):
         choices=InterviewAbsenceDecisionOwner.choices,
         default=InterviewAbsenceDecisionOwner.SUPPORT_OFFICE,
         help_text=(
-            "Choose whether the HR support office or the stage owner records the letter "
+            "Choose whether the office that owns the level or the HRMPSB panel records the letter "
             "and decides a Plantilla interview absence."
         ),
     )
@@ -1887,7 +1887,7 @@ class OfficePolicy(TimestampedModel):
     cos_positions_multi_slot_allowed = models.BooleanField(
         default=False,
         help_text=(
-            "Allow a single-batch COS posting to fill more than one position in its one "
+            "Allow a single-batch COS vacancy to fill more than one position in its one "
             "selection round."
         ),
     )
@@ -1938,7 +1938,7 @@ class ExamRecord(TimestampedModel):
         ABSENT = "absent", "Absent"
 
     class AdministeredBy(models.TextChoices):
-        HRMS = "hrms", "Human Resource Management Section"
+        HRMS = "hrms", "Human Resource Management Unit"
         END_USER = "end_user", "End-user"
 
     class ComponentResult(models.TextChoices):
@@ -2093,7 +2093,7 @@ class ExamRecord(TimestampedModel):
             )
             if not evidence_matches_context:
                 errors["evidence_item"] = (
-                    "Exam evidence must belong to the same application, case, or recruitment entry context."
+                    "Exam evidence must belong to the same application, case, or vacancy context."
                 )
             if self.evidence_item.stage != self.review_stage:
                 errors["evidence_item"] = "Exam evidence must match the examination review stage."
@@ -2347,10 +2347,10 @@ class ExamSchedule(TimestampedModel):
                 "Exam schedules must stay linked to the recruitment case of the same application."
             )
         if not self.recruitment_entry_id:
-            errors["recruitment_entry"] = "Exam schedules must reference the recruitment entry of the application."
+            errors["recruitment_entry"] = "Exam schedules must reference the vacancy of the application."
         elif self.application_id and self.recruitment_entry_id != self.application.position_id:
             errors["recruitment_entry"] = (
-                "Exam schedules must stay linked to the recruitment entry of the same application."
+                "Exam schedules must stay linked to the vacancy of the same application."
             )
         if self.review_stage not in {
             RecruitmentCase.Stage.SECRETARIAT_REVIEW,
@@ -2477,10 +2477,10 @@ class InterviewSession(TimestampedModel):
                 "Interview sessions must stay linked to the recruitment case of the same application."
             )
         if not self.recruitment_entry_id:
-            errors["recruitment_entry"] = "Interview sessions must reference the recruitment entry of the application."
+            errors["recruitment_entry"] = "Interview sessions must reference the vacancy of the application."
         elif self.application_id and self.recruitment_entry_id != self.application.position_id:
             errors["recruitment_entry"] = (
-                "Interview sessions must stay linked to the recruitment entry of the same application."
+                "Interview sessions must stay linked to the vacancy of the same application."
             )
         if self.review_stage not in expected_roles:
             if self.review_stage != RecruitmentCase.Stage.HRMPSB_REVIEW:
@@ -2497,11 +2497,11 @@ class InterviewSession(TimestampedModel):
             allowed_roles = plantilla_hrmpsb_session_roles.get(self.level, set())
             if self.scheduled_by.role not in allowed_roles:
                 errors["scheduled_by"] = (
-                    "Plantilla HRMPSB interview sessions must be scheduled by the assigned HRMS support role."
+                    "Plantilla HRMPSB interviews are scheduled by the office that owns the level (the Secretariat for Level 1, the HRM Chief for Level 2)."
                 )
             if self.finalized_by_id and self.finalized_by.role not in allowed_roles:
                 errors["finalized_by"] = (
-                    "Plantilla HRMPSB interview sessions must be finalized by the assigned HRMS support role."
+                    "Plantilla HRMPSB interviews are finalized by the office that owns the level (the Secretariat for Level 1, the HRM Chief for Level 2)."
                 )
         if self.is_finalized and not self.finalized_by_id:
             errors["finalized_by"] = "Finalized interview sessions must record the finalizing user."
@@ -2626,7 +2626,7 @@ class InterviewRating(TimestampedModel):
                 }
                 if self.encoded_by.role not in allowed_encoder_roles:
                     errors["encoded_by"] = (
-                        "Only the HRMPSB rater or the assigned HRMS support role may encode this Plantilla rating."
+                        "Only the HRMPSB member who rated, or the office that owns the level, may type in this Plantilla rating."
                     )
             elif self.encoded_by.role != self.rated_by.role:
                 errors["encoded_by"] = "The encoder must match the authorized evaluator for this review stage."
@@ -2858,12 +2858,12 @@ class InterviewFallbackRating(TimestampedModel):
             )
         if self.review_stage not in allowed_roles:
             errors["review_stage"] = (
-                "Fallback interview ratings are only supported during HRM Chief or HRMPSB "
+                "Paper rating sheets are only supported during HRM Chief or HRMPSB "
                 "review stages."
             )
         elif self.rated_by.role != allowed_roles[self.review_stage]:
             errors["rated_by"] = (
-                "A fallback rating must name the actual panel member who signed the sheet."
+                "A paper rating sheet must name the panel member who signed it."
             )
         # The same member cannot rate twice through two doors: one digital rating and one
         # paper sheet would count as two raters toward the quorum.
@@ -3333,10 +3333,10 @@ class DeliberationRecord(TimestampedModel):
                 "Deliberation records must stay linked to the recruitment case of the same application."
             )
         if not self.recruitment_entry_id:
-            errors["recruitment_entry"] = "Deliberation records must reference the recruitment entry of the application."
+            errors["recruitment_entry"] = "Deliberation records must reference the vacancy of the application."
         elif self.application_id and self.recruitment_entry_id != self.application.position_id:
             errors["recruitment_entry"] = (
-                "Deliberation records must stay linked to the recruitment entry of the same application."
+                "Deliberation records must stay linked to the vacancy of the same application."
             )
         if expected_stage and self.review_stage != expected_stage:
             errors["review_stage"] = (
@@ -3827,7 +3827,7 @@ class ComparativeAssessmentReport(TimestampedModel):
         )
         if self.recruitment_entry.branch != PositionPosting.Branch.PLANTILLA:
             errors["recruitment_entry"] = (
-                "Comparative Assessment Reports are only supported for Plantilla recruitment entries."
+                "Comparative Assessment Reports are only supported for Plantilla vacancies."
             )
         if self.review_stage != RecruitmentCase.Stage.HRMPSB_REVIEW:
             errors["review_stage"] = (
@@ -3835,7 +3835,7 @@ class ComparativeAssessmentReport(TimestampedModel):
             )
         if self.generated_by.role not in allowed_preparation_roles:
             errors["generated_by"] = (
-                "Only the assigned HRMS support role may prepare or update a Comparative Assessment Report."
+                "Only the Secretariat may prepare or update a Comparative Assessment Report."
             )
         if self.version_number < 1:
             errors["version_number"] = "CAR version number must be a positive whole number."
@@ -3861,7 +3861,7 @@ class ComparativeAssessmentReport(TimestampedModel):
                 )
             elif self.evidence_item.recruitment_entry_id != self.recruitment_entry_id:
                 errors["evidence_item"] = (
-                    "The generated CAR file must stay linked to the same recruitment entry as the report."
+                    "The generated CAR file must stay linked to the same vacancy as the report."
                 )
         # WF-02: 3–5 members present is the quorum fact. The historical quorum_met field
         # remains for old CAR rows, but new reports derive quorum from this count.
@@ -3914,7 +3914,7 @@ class ComparativeAssessmentReport(TimestampedModel):
             )
         elif self.is_finalized and self.finalized_by.role not in allowed_preparation_roles:
             errors["finalized_by"] = (
-                "Only the assigned HRMS support role may finalize a Comparative Assessment Report."
+                "Only the Secretariat may finalize a Comparative Assessment Report."
             )
         if not self.is_finalized and (self.finalized_by_id or self.finalized_at):
             errors["finalized_at"] = (
@@ -4039,7 +4039,7 @@ class ComparativeAssessmentReportItem(TimestampedModel):
             and self.recruitment_case.application.position_id != self.report.recruitment_entry_id
         ):
             errors["recruitment_case"] = (
-                "CAR items must stay linked to a recruitment case from the same recruitment entry as the report."
+                "CAR items must stay linked to a recruitment case from the same vacancy as the report."
             )
         if (
             self.deliberation_record_id
@@ -4397,11 +4397,11 @@ class FinalDecision(TimestampedModel):
             )
         if not self.recruitment_entry_id:
             errors["recruitment_entry"] = (
-                "Final decisions must reference the recruitment entry of the same application."
+                "Final decisions must reference the vacancy of the same application."
             )
         elif self.application_id and self.recruitment_entry_id != self.application.position_id:
             errors["recruitment_entry"] = (
-                "Final decisions must stay linked to the recruitment entry of the same application."
+                "Final decisions must stay linked to the vacancy of the same application."
             )
         if self.decided_by.role != expected_role:
             expected_role_label = RecruitmentUser.Role(expected_role).label
@@ -4886,7 +4886,7 @@ class EvidenceVaultItem(TimestampedModel):
     class OwnerScope(models.TextChoices):
         APPLICATION = "application", "Application"
         CASE = "case", "Recruitment Case"
-        ENTRY = "entry", "Recruitment Entry"
+        ENTRY = "entry", "Vacancy"
 
     class Stage(models.TextChoices):
         APPLICANT_INTAKE = "applicant_intake", "Applicant Intake"
@@ -5027,14 +5027,14 @@ class EvidenceVaultItem(TimestampedModel):
         )
         if owner_count != 1:
             errors["artifact_scope"] = (
-                "Saved files must belong to exactly one owner: application, recruitment case, or recruitment entry."
+                "Saved files must belong to exactly one owner: application, recruitment case, or vacancy."
             )
         if self.artifact_scope == self.OwnerScope.APPLICATION and not self.application_id:
             errors["application"] = "Application files must point to an application."
         if self.artifact_scope == self.OwnerScope.CASE and not self.recruitment_case_id:
             errors["recruitment_case"] = "Case files must point to a recruitment case."
         if self.artifact_scope == self.OwnerScope.ENTRY and not self.recruitment_entry_id:
-            errors["recruitment_entry"] = "Entry files must point to a recruitment entry."
+            errors["recruitment_entry"] = "Vacancy files must point to a vacancy."
         if self.is_archived and not self.archive_tag.strip():
             errors["archive_tag"] = "Provide an archive label when marking a file as archived."
         if self.previous_version_id:
@@ -5191,10 +5191,10 @@ class AuditLog(TimestampedModel):
         OFFICE_POLICY_UPDATED = "office_policy_updated", "Office Policy Updated"
         POSITION_CREATED = "position_created", "Position Created"
         POSITION_UPDATED = "position_updated", "Position Updated"
-        RECRUITMENT_ENTRY_CREATED = "recruitment_entry_created", "Recruitment Entry Created"
-        RECRUITMENT_ENTRY_UPDATED = "recruitment_entry_updated", "Recruitment Entry Updated"
-        RECRUITMENT_ENTRY_STATUS_CHANGED = "recruitment_entry_status_changed", "Recruitment Entry Status Changed"
-        RECRUITMENT_ENTRY_DEADLINE_CHANGED = "recruitment_entry_deadline_changed", "Recruitment Entry Deadline Changed"
+        RECRUITMENT_ENTRY_CREATED = "recruitment_entry_created", "Vacancy Created"
+        RECRUITMENT_ENTRY_UPDATED = "recruitment_entry_updated", "Vacancy Updated"
+        RECRUITMENT_ENTRY_STATUS_CHANGED = "recruitment_entry_status_changed", "Vacancy Status Changed"
+        RECRUITMENT_ENTRY_DEADLINE_CHANGED = "recruitment_entry_deadline_changed", "Vacancy Deadline Changed"
         APPLICATION_CREATED = "application_created", "Application Created"
         APPLICATION_UPDATED = "application_updated", "Application Updated"
         APPLICANT_CONTACT_UPDATED = (
@@ -5228,7 +5228,7 @@ class AuditLog(TimestampedModel):
         INTERVIEW_SCHEDULED = "interview_scheduled", "Interview Scheduled"
         INTERVIEW_FINALIZED = "interview_finalized", "Interview Finalized"
         INTERVIEW_RATING_RECORDED = "interview_rating_recorded", "Interview Rating Recorded"
-        INTERVIEW_FALLBACK_UPLOADED = "interview_fallback_uploaded", "Interview Fallback Uploaded"
+        INTERVIEW_FALLBACK_UPLOADED = "interview_fallback_uploaded", "Paper Rating Sheet Added"
         DELIBERATION_RECORDED = "deliberation_recorded", "Deliberation Recorded"
         DELIBERATION_FINALIZED = "deliberation_finalized", "Deliberation Finalized"
         COS_SELECTION_ROUND_OPENED = "cos_selection_round_opened", "COS Selection Round Opened"
@@ -5247,7 +5247,7 @@ class AuditLog(TimestampedModel):
         NO_APPOINTMENT_RECORDED = "no_appointment_recorded", "No Appointment Recorded"
         APPLICANT_DISQUALIFIED = "applicant_disqualified", "Applicant Disqualified"
         APPLICATION_WITHDRAWN = "application_withdrawn", "Application Withdrawn"
-        RECRUITMENT_ENTRY_CANCELLED = "recruitment_entry_cancelled", "Recruitment Entry Cancelled"
+        RECRUITMENT_ENTRY_CANCELLED = "recruitment_entry_cancelled", "Vacancy Cancelled"
         COMPLETION_DEADLINE_CHANGED = "completion_deadline_changed", "Completion Deadline Changed"
         FINAL_SELECTION_RESCINDED = "final_selection_rescinded", "Final Selection Rescinded"
         COMPLETION_RECORDED = "completion_recorded", "Completion Recorded"
@@ -5405,9 +5405,9 @@ AUDIT_ACTION_DISPLAY_LABELS = {
     AuditLog.Action.OFFICE_POLICY_UPDATED: "Office Policy Updated",
     AuditLog.Action.POSITION_CREATED: "Position Reference Added",
     AuditLog.Action.POSITION_UPDATED: "Position Reference Updated",
-    AuditLog.Action.RECRUITMENT_ENTRY_CREATED: "Recruitment Entry Created",
-    AuditLog.Action.RECRUITMENT_ENTRY_UPDATED: "Recruitment Entry Updated",
-    AuditLog.Action.RECRUITMENT_ENTRY_STATUS_CHANGED: "Recruitment Entry Status Changed",
+    AuditLog.Action.RECRUITMENT_ENTRY_CREATED: "Vacancy Created",
+    AuditLog.Action.RECRUITMENT_ENTRY_UPDATED: "Vacancy Updated",
+    AuditLog.Action.RECRUITMENT_ENTRY_STATUS_CHANGED: "Vacancy Status Changed",
     AuditLog.Action.APPLICATION_CREATED: "Application Created",
     AuditLog.Action.APPLICATION_UPDATED: "Application Updated",
     AuditLog.Action.APPLICANT_CONTACT_UPDATED: "Applicant Contact Updated",

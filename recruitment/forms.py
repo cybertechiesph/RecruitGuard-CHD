@@ -1286,7 +1286,7 @@ class CaseHandoffForm(BootstrapFormMixin, forms.Form):
 
 class WorkflowOverrideForm(BootstrapFormMixin, forms.Form):
     reason = forms.CharField(
-        label="Reason for Special Authorization",
+        label="Reason for special authorization",
         widget=forms.Textarea(attrs={"rows": 3}),
     )
 
@@ -1718,7 +1718,7 @@ class OfficePolicyForm(BootstrapFormMixin, forms.ModelForm):
         self.fields["core_panel_members"].required = False
         self.fields["core_panel_members"].label = "Standing HRMPSB panel"
         self.fields["core_panel_members"].help_text = (
-            "Chair, vice chair and HR: they sit on every vacancy's panel. End-user members "
+            "The chair, vice chair and HR member: they sit on every vacancy's panel. End-user members "
             "are added per vacancy on its rating-sheet page. Leave empty to keep every "
             "HRMPSB member on every panel."
         )
@@ -1735,7 +1735,7 @@ class OfficePolicyForm(BootstrapFormMixin, forms.ModelForm):
             ),
             "rescind_cutoff": "When rescission is no longer allowed",
             "cos_positions_multi_slot_allowed": (
-                "COS postings may fill multiple positions"
+                "COS vacancies may fill more than one position"
             ),
             "require_reason_for_suspend_close": (
                 "Suspend and Close require a reason"
@@ -2845,7 +2845,7 @@ class InterviewFallbackUploadForm(BootstrapFormMixin, forms.Form):
         min_value=Decimal("0"),
         max_value=Decimal("100"),
     )
-    file = forms.FileField(label="Scanned Fallback Rating Sheet")
+    file = forms.FileField(label="Scanned paper rating sheet")
     justification = forms.CharField(
         label="Justification",
         required=False,
@@ -3238,7 +3238,7 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
         self.fields["position_reference"].help_text = (
             "Choose from the official Position Reference list. Official positions are not typed in manually here."
         )
-        self.fields["job_code"].label = "Entry Code"
+        self.fields["job_code"].label = "Vacancy code"
         self.fields["job_code"].required = False
         self.fields["job_code"].disabled = True
         self.fields["job_code"].help_text = (
@@ -3256,7 +3256,7 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
             "Required for Plantilla — the official plantilla item number for this vacancy. "
             "Leave blank for COS (item numbers apply to Plantilla items only)."
         )
-        self.fields["branch"].label = "Engagement Type"
+        self.fields["branch"].label = "Position type"
         office_policy = get_office_policy()
         self.cos_positions_multi_slot_allowed = (
             office_policy.cos_positions_multi_slot_allowed
@@ -3353,7 +3353,7 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
         if submitted_job_code and submitted_job_code != existing_job_code:
             self.add_error(
                 "job_code",
-                "Entry Code is generated automatically for tracking and cannot be edited.",
+                "The vacancy code is generated automatically and cannot be edited.",
             )
 
         item_number = (cleaned_data.get("item_number") or "").strip()
@@ -3373,7 +3373,7 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
                 self.add_error(
                     "item_number",
                     f"Item {item_number} is already being filled by {clash.job_code} "
-                    f"({clash.title}). Close or cancel that posting first, or check the item number.",
+                    f"({clash.title}). Close or cancel that vacancy first, or check the item number.",
                 )
         elif branch == PositionPosting.Branch.COS:
             cleaned_data["item_number"] = ""
@@ -3385,12 +3385,12 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
             self.instance.positions_to_fill = 1
 
         if position_reference is None:
-            self.add_error("position_reference", "Select a position reference before creating the recruitment entry.")
+            self.add_error("position_reference", "Select a position reference before creating the vacancy.")
         else:
             if not position_reference.is_active:
                 self.add_error(
                     "position_reference",
-                    "Inactive position references cannot be used for recruitment entries.",
+                    "Inactive position references cannot be used for vacancies.",
                 )
             elif position_reference.routing_level is None:
                 self.add_error(
@@ -3402,7 +3402,7 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
                 self.instance.title = position_reference.position_title
 
         if branch == PositionPosting.Branch.PLANTILLA and intake_mode != PositionPosting.IntakeMode.FIXED_PERIOD:
-            self.add_error("intake_mode", "Plantilla entries must use the fixed period intake mode.")
+            self.add_error("intake_mode", "Plantilla vacancies must use a fixed application period.")
 
         if (
             branch == PositionPosting.Branch.PLANTILLA
@@ -3433,7 +3433,7 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
         if branch == PositionPosting.Branch.COS and intake_mode == PositionPosting.IntakeMode.FIXED_PERIOD:
             self.add_error(
                 "intake_mode",
-                "COS entries are either one batch (with a closing date) or an open pool.",
+                "COS vacancies are either one batch (with a closing date) or an open pool.",
             )
 
         if (
@@ -3443,7 +3443,7 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
         ):
             self.add_error(
                 "closing_date",
-                "An open pool has no closing date. Close the entry when the office stops hiring from it.",
+                "An open pool has no closing date. Close the vacancy when the office stops hiring from it.",
             )
 
         if (
@@ -3453,7 +3453,7 @@ class RecruitmentEntryForm(BootstrapFormMixin, forms.ModelForm):
         ):
             self.add_error(
                 "closing_date",
-                "A one-batch COS entry needs a closing date, so its batch has a clear end.",
+                "A one-batch COS vacancy needs a closing date, so its batch has a clear end.",
             )
 
         # REV-A: a NEW closing-date value cannot be in the past. On create this

@@ -81,7 +81,7 @@
             {% if entry.position_reference.salary_grade %}<div><span>Salary Grade:</span> {{ entry.position_reference.salary_grade }}</div>{% endif %}
             <div><span>Level:</span> {{ entry.get_level_display }}</div>
             {% if entry.item_number %}<div><span>Plantilla Item Number:</span> {{ entry.item_number }}</div>{% endif %}
-            <div><span>Engagement:</span> {{ entry.get_branch_display }}</div>
+            <div><span>Position type:</span> {{ entry.get_branch_display }}</div>
             <div><span>Candidates assessed:</span> {{ items|length }}</div>
             {% if report.members_present %}<div><span>HRMPSB members present:</span> {{ report.members_present }}</div>{% endif %}
             {% if report.deliberated_on %}<div><span>Date of deliberation:</span> {{ report.deliberated_on|date:"F j, Y" }}</div>{% endif %}

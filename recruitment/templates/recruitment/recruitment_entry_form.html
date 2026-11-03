@@ -1,16 +1,16 @@
 {% extends "internal_base.html" %}
 
-{% block internal_title %}{% if object %}Update Recruitment Entry{% else %}Create Recruitment Entry{% endif %}{% endblock %}
+{% block internal_title %}{% if object %}Edit vacancy{% else %}New vacancy{% endif %}{% endblock %}
 
 {% block content %}
 <div class="rg-page-header">
     <div>
-        <p class="rg-eyebrow">Recruitment Entry Management</p>
-        <h1 class="rg-page-title">{% if object %}Update Recruitment Entry{% else %}Create Recruitment Entry{% endif %}</h1>
-        <p class="rg-page-copy">Create the recruitment entry by choosing an official position, reviewing its details, and setting the intake schedule.</p>
+        <p class="rg-eyebrow">Vacancies</p>
+        <h1 class="rg-page-title">{% if object %}Edit vacancy{% else %}New vacancy{% endif %}</h1>
+        <p class="rg-page-copy">Create the vacancy by choosing an official position, reviewing its details, and setting the intake schedule.</p>
     </div>
     <div class="rg-page-actions">
-        <a href="{% url 'recruitment-entry-list' %}" class="btn btn-outline-secondary">Back to Entries</a>
+        <a href="{% url 'recruitment-entry-list' %}" class="btn btn-outline-secondary">Back to vacancies</a>
     </div>
 </div>
 
@@ -62,11 +62,11 @@
                 </div>
 
                 <div class="rg-form-section mb-4">
-                    <h2 class="rg-form-section__title">3. Set Recruitment Entry Details</h2>
+                    <h2 class="rg-form-section__title">3. Set vacancy details</h2>
                     {% if form.status %}
-                        <p class="rg-form-section__copy">Review the generated entry code, then set the recruitment type, entry status, intake dates, and notes for screening.</p>
+                        <p class="rg-form-section__copy">Review the generated vacancy code, then set the position type, status, application dates, and notes for screening.</p>
                     {% else %}
-                        <p class="rg-form-section__copy">Review the generated entry code, recruitment type, intake dates, and notes for screening.</p>
+                        <p class="rg-form-section__copy">Review the generated vacancy code, position type, application dates, and notes for screening.</p>
                     {% endif %}
                     <div class="row g-3">
                         <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.job_code %}</div>
@@ -78,7 +78,7 @@
                             <div class="col-md-4">
                                 <div class="form-label">Current Status</div>
                                 <div class="form-control-plaintext fw-semibold">{{ object.get_status_display }}</div>
-                                <p class="rg-form-section__copy mb-0">Change status from the Recruitment Entries list.</p>
+                                <p class="rg-form-section__copy mb-0">Change status from the Vacancies list.</p>
                             </div>
                         {% endif %}
                         <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.intake_mode %}</div>
@@ -95,8 +95,8 @@
                 </div>
 
                 <div class="rg-form-section">
-                    <h2 class="rg-form-section__title">4. Entry Notes</h2>
-                    <p class="rg-form-section__copy">Use this area only for notes specific to this recruitment entry. Official position details remain linked to the selected position.</p>
+                    <h2 class="rg-form-section__title">4. Notes</h2>
+                    <p class="rg-form-section__copy">Use this area only for notes specific to this vacancy. Official position details remain linked to the selected position.</p>
                     {% include "recruitment/includes/form_field.html" with field=form.qualification_reference %}
                 </div>
 
@@ -130,7 +130,7 @@
                 </div>
 
                 <div class="rg-form-actions">
-                    <button type="submit" class="btn btn-rg-primary">Save Entry</button>
+                    <button type="submit" class="btn btn-rg-primary">Save vacancy</button>
                     <a href="{% url 'recruitment-entry-list' %}" class="btn btn-outline-secondary">Cancel</a>
                 </div>
             </form>

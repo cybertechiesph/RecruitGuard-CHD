@@ -7,7 +7,7 @@ This one asks a single question of every heading, button, notice, error, email a
 system: does a first-time reader understand it without a manual? Review only; nothing in the
 code was changed.
 
-## Status: review written; I1 done, I2–I6 to do
+## Status: review written; I1 and I2 done, I3–I6 to do
 
 ## 0. How this was tested
 
@@ -402,7 +402,7 @@ kind from the console backend.
 | Batch | Status |
 |---|---|
 | I1 — wrong and stale | **Done.** See the note below. |
-| I2 — one name per thing | not started (needs the two office answers, or the defaults) |
+| I2 — one name per thing | **Done** with the defaults. See the note below. |
 | I3 — applicant side and emails | not started |
 | I4 — Filipino consistency | not started |
 | I5 — staff jargon and locked panels | not started |
@@ -426,3 +426,31 @@ kind from the console backend.
   template text and form attributes, and every non-docstring Python string, for
   "RecruitGuard" or "RG". Scripts, styles, comments and `rg-` classes are ignored; one machine
   value (the `RG-Autosave` request header) is allow-listed.
+
+**I2 as built:**
+
+- **Defaults taken** (the office can still overrule them; each is one string): inside the
+  portal the HR office is **the Secretariat** wherever a sentence names who does something,
+  and the vacancy is **Vacancy** (sidebar "Vacancies", "New vacancy", "Vacancy created.",
+  "Vacancy code", audit labels "Vacancy Created/Updated/Status Changed/Deadline
+  Changed/Cancelled"). The URL names (`recruitment-entry-…`) and code identifiers are
+  unchanged.
+- **"Unit", not "Section".** `email_branding.py` records "Human Resource Management Unit" as
+  the office-confirmed name, so the exam "administered by" choice and the export PDF header
+  (which said "Recruitment, Selection and Placement Office") now use it.
+- **Who actually does it, not just a tidier word.** The "HRMS support role" and "HR support
+  office" messages meant *the office that owns the level* (Secretariat for Level 1, HRM Chief
+  for Level 2), so they now say that; the CAR messages say "the Secretariat", because the
+  Secretariat prepares the CAR at both levels (WF-04). The appointment/contract notice on a
+  recorded decision names the completion office from the case
+  (`completion_handler_label`) instead of "HR".
+- **Rest of the glossary:** "paper rating sheet" for "fallback" (labels, messages, the
+  evidence label, the audit label "Paper Rating Sheet Added"); "Special authorization"
+  everywhere; "System Administrator"; "Authorized reopen"; the step names ("Decision", "the
+  next step" where Plantilla and COS differ); "Read-only"; "Type" for Plantilla/COS columns
+  and "Position type" for the form field.
+- **Migration 0099** changes choice labels and help text only (no SQL; `sqlmigrate` is empty).
+- **Left for later batches:** the two applicant-facing entry messages (A-03) and "HRM Unit"
+  in the contact email (E-01) are I3, since they need Filipino; "intake" wording (e.g. "Close
+  intake") is I6; the routing-history sentences are I5. Old audit and case-history rows keep
+  the wording they were written with.

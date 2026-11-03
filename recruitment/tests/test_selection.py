@@ -324,7 +324,7 @@ class DeliberationDecisionSupportTests(BaseRecruitmentTestCase):
         pick, winner, sibling = self._cos_pick_with_a_closed_sibling()
         refusal = (
             "A COS selection has already been recorded for this vacancy. Rescind the "
-            "deliberation pick first if the engagement is not going ahead."
+            "deliberation pick first if the hire is not going ahead."
         )
 
         # Chief review P3: a decided vacancy's row no longer offers Cancel; the server-side
@@ -2864,7 +2864,7 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
         self.assertContains(
             detail,
             "Every remaining candidate is told they were not selected. "
-            "The vacancy can then be re-published as a new posting.",
+            "The vacancy can then be published again as a new vacancy.",
         )
         self.assertContains(
             detail,

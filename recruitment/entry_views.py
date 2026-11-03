@@ -184,7 +184,7 @@ class RecruitmentEntryCreateView(
     template_name = "recruitment/recruitment_entry_form.html"
     model = PositionPosting
     form_class = RecruitmentEntryForm
-    success_message = "Recruitment entry created."
+    success_message = "Vacancy created."
     DUPLICATE_WINDOW_SECONDS = 120
 
     def form_valid(self, form):
@@ -216,7 +216,7 @@ class RecruitmentEntryUpdateView(
     template_name = "recruitment/recruitment_entry_form.html"
     model = PositionPosting
     form_class = RecruitmentEntryForm
-    success_message = "Recruitment entry updated."
+    success_message = "Vacancy updated."
 
     def form_valid(self, form):
         # REV-A: deadline extensions are transparent, never silent. Capture the
@@ -269,13 +269,13 @@ class RecruitmentEntryUpdateView(
             if posting.status == PositionPosting.EntryStatus.ACTIVE:
                 messages.info(
                     self.request,
-                    "Deadline extended — the posting is open to applicants again and "
+                    "Deadline extended — the vacancy is open to applicants again and "
                     "publicly labeled as extended. The change is recorded in the audit log.",
                 )
             else:
                 messages.warning(
                     self.request,
-                    "The closing date was extended, but this entry's status is "
+                    "The closing date was extended, but this vacancy's status is "
                     f"\"{posting.get_status_display()}\" — it will not reopen to applicants "
                     "until the status is set back to Active.",
                 )
@@ -315,7 +315,7 @@ class RecruitmentEntryStatusUpdateView(LoginRequiredMixin, EntryManagerRequiredM
     def post(self, request, pk, status):
         entry = get_object_or_404(PositionPosting, pk=pk)
         if status not in PositionPosting.EntryStatus.values:
-            messages.error(request, "Invalid entry status.")
+            messages.error(request, "Invalid vacancy status.")
             return redirect("recruitment-entry-list")
         if status == PositionPosting.EntryStatus.CANCELLED:
             # SL-11: cancellation resolves live cases and notifies their applicants, so it

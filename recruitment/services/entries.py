@@ -167,9 +167,9 @@ def persist_recruitment_entry(entry, actor, changed_fields):
         else AuditLog.Action.RECRUITMENT_ENTRY_UPDATED
     )
     description = (
-        f"Created recruitment entry '{entry.job_code}'."
+        f"Created vacancy '{entry.job_code}'."
         if is_create
-        else f"Updated recruitment entry '{entry.job_code}'."
+        else f"Updated vacancy '{entry.job_code}'."
     )
     audit.record_system_audit_event(
         actor=actor,
@@ -509,7 +509,7 @@ def cancel_recruitment_entry(entry, actor, reason):
     ).exists():
         raise ValidationError(
             "A COS selection has already been recorded for this vacancy. Rescind the "
-            "deliberation pick first if the engagement is not going ahead."
+            "deliberation pick first if the hire is not going ahead."
         )
 
     previous_status = entry.status
@@ -565,7 +565,7 @@ def cancel_recruitment_entry(entry, actor, reason):
     audit.record_system_audit_event(
         actor=actor,
         action=AuditLog.Action.RECRUITMENT_ENTRY_CANCELLED,
-        description=f"Cancelled recruitment entry '{entry.job_code}'.",
+        description=f"Cancelled vacancy '{entry.job_code}'.",
         metadata={
             "entry_id": entry.id,
             "entry_code": entry.job_code,
@@ -652,7 +652,7 @@ def update_recruitment_entry_status(entry, actor, new_status, reason=""):
     audit.record_system_audit_event(
         actor=actor,
         action=AuditLog.Action.RECRUITMENT_ENTRY_STATUS_CHANGED,
-        description=f"Changed recruitment entry '{entry.job_code}' status from {previous_status} to {new_status}.",
+        description=f"Changed vacancy '{entry.job_code}' status from {previous_status} to {new_status}.",
         metadata={
             "entry_id": entry.id,
             "entry_code": entry.job_code,

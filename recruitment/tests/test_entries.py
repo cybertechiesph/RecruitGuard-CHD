@@ -233,7 +233,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         with self.assertRaises(ValidationError) as invalid_pattern_error:
             entry.full_clean()
         self.assertIn(
-            "Entry Code must match the format",
+            "The vacancy code must match the format",
             invalid_pattern_error.exception.message_dict["job_code"][0],
         )
 
@@ -241,7 +241,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         with self.assertRaises(ValidationError) as missing_code_error:
             entry.full_clean()
         self.assertIn(
-            "Entry Code is required after the recruitment entry is first saved.",
+            "A vacancy code is required once the vacancy is saved.",
             missing_code_error.exception.message_dict["job_code"],
         )
 
@@ -258,7 +258,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         with self.assertRaises(ValidationError) as branch_error:
             branch_mismatch_entry.full_clean()
         self.assertIn(
-            "Entry Code branch segment must match the selected engagement type.",
+            "The type part of the vacancy code must match the selected position type.",
             branch_error.exception.message_dict["job_code"],
         )
 
@@ -273,7 +273,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         with self.assertRaises(ValidationError) as year_error:
             year_mismatch_entry.full_clean()
         self.assertIn(
-            "Entry Code year segment must match the publication date, opening date, or current year fallback.",
+            "The year in the vacancy code must match the publication date, the opening date, or this year.",
             year_error.exception.message_dict["job_code"],
         )
 
@@ -305,7 +305,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         self.assertNotContains(update_response, 'id="id_status"')
         self.assertContains(update_response, "Current Status")
         self.assertContains(update_response, entry.get_status_display())
-        self.assertContains(update_response, "Change status from the Recruitment Entries list.")
+        self.assertContains(update_response, "Change status from the Vacancies list.")
 
     def test_entry_create_status_choices_allow_only_draft_and_active(self):
         client = Client()
@@ -731,7 +731,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(
             response,
-            "Entry Code year segment must match the publication date, opening date, or current year fallback.",
+            "The year in the vacancy code must match the publication date, the opening date, or this year.",
         )
 
     def test_live_entry_update_blocks_position_reference_change_after_first_submitted_application(self):
@@ -759,7 +759,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(
             response,
-            "Position reference cannot be changed once the recruitment entry has submitted applications or linked recruitment cases.",
+            "Position reference cannot be changed once the vacancy has received applications.",
         )
         self.level1_position.refresh_from_db()
         self.assertEqual(self.level1_position.position_reference, self.admin_aide_position)
@@ -783,7 +783,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
             self.cos_position.save()
 
         self.assertIn(
-            "Opening date cannot be changed once the recruitment entry has submitted applications or linked recruitment cases.",
+            "Opening date cannot be changed once the vacancy has received applications.",
             exc.exception.message_dict["opening_date"],
         )
         self.cos_position.refresh_from_db()
@@ -844,7 +844,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Select a position reference before creating the recruitment entry.")
+        self.assertContains(response, "Select a position reference before creating the vacancy.")
         self.assertEqual(PositionPosting.objects.count(), initial_count)
 
     def test_recruitment_entry_create_rejects_manual_entry_code_tampering(self):
@@ -867,7 +867,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Entry Code is generated automatically for tracking and cannot be edited.")
+        self.assertContains(response, "The vacancy code is generated automatically and cannot be edited.")
         self.assertEqual(PositionPosting.objects.count(), initial_count)
 
     def test_inactive_position_reference_cannot_be_used_for_entry_creation(self):
@@ -1144,7 +1144,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(
             response,
-            "Inactive position references cannot be used for recruitment entries.",
+            "Inactive position references cannot be used for vacancies.",
         )
         self.level1_position.refresh_from_db()
         self.assertEqual(self.level1_position.status, PositionPosting.EntryStatus.ACTIVE)
@@ -1960,7 +1960,7 @@ class PositionDocumentRequirementTests(BaseRecruitmentTestCase):
             "Interview absences are decided by",
             "Owning office may record withdrawals",
             "When rescission is no longer allowed",
-            "COS postings may fill multiple positions",
+            "COS vacancies may fill more than one position",
             "Suspend and Close require a reason",
         ):
             self.assertContains(response, label)

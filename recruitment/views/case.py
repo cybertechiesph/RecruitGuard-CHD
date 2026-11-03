@@ -323,7 +323,7 @@ class WorkflowOverrideView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, V
             except ValueError as exc:
                 messages.error(request, str(exc))
             else:
-                messages.success(request, "Level 2 authorization recorded.")
+                messages.success(request, "Special authorization recorded.")
         else:
             messages.error(request, "Add a reason for this authorization.")
         if user_can_view_application(request.user, application):
@@ -347,7 +347,7 @@ class WorkflowReopenView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, Vie
             except ValueError as exc:
                 messages.error(request, str(exc))
             else:
-                messages.success(request, "Case reopened with authorization.")
+                messages.success(request, "Case reopened.")
         else:
             messages.error(request, "Add a reason before reopening this case.")
         if user_can_view_application(request.user, application):

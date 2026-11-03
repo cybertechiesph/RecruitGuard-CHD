@@ -1069,7 +1069,7 @@ def process_workflow_action(application, actor, action, remarks):
     if not hasattr(application, "case"):
         raise ValueError("A case must exist before saving the next step.")
     if application.case.is_stage_locked:
-        raise ValueError("This case is final and cannot be edited unless it is reopened with authorization.")
+        raise ValueError("This case is final and cannot be edited unless the HRM Chief reopens it.")
     if not access.user_can_process_application(actor, application):
         if (
             effective_role == RecruitmentUser.Role.SECRETARIAT
@@ -1170,7 +1170,7 @@ def grant_secretariat_override(application, actor, reason):
     if application.level != PositionPosting.Level.LEVEL_2:
         raise ValueError("Special authorization is only required for Level 2 applications.")
     if not hasattr(application, "case"):
-        raise ValueError("A recruitment case must exist before Level 2 special authorization can be recorded.")
+        raise ValueError("A recruitment case must exist before special authorization can be recorded.")
     case = application.case
     if (
         application.status != RecruitmentApplication.Status.HRM_CHIEF_REVIEW
@@ -1179,7 +1179,7 @@ def grant_secretariat_override(application, actor, reason):
         or case.current_handler_role != RecruitmentUser.Role.HRM_CHIEF
     ):
         raise ValueError(
-            "Level 2 Secretariat authorization is only available while the case is assigned to HRM Chief review."
+            "Special authorization is only available while the case is assigned to HRM Chief review."
         )
     route_case_between_secretariat_and_hrm_chief(
         application=application,

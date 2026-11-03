@@ -146,7 +146,7 @@
         <div>
             <h3 class="rg-icard__title">Interview rating</h3>
             <p class="rg-icard__subtitle">
-                Record the end-user / HRMU interview score (0&ndash;100) for this COS applicant.
+                Record the end user&rsquo;s interview score (0&ndash;100) for this COS applicant.
                 Add a justification when it lands below 75 or above 98.
             </p>
         </div>
@@ -267,7 +267,7 @@
     </svg>
     <div>
         <div class="rg-int-banner__title">Save the session first</div>
-        <p>You can upload a fallback rating sheet once the session is saved.</p>
+        <p>You can add a paper rating sheet once the session is saved.</p>
     </div>
 </div>
 {% elif interview_fallback_locked %}
@@ -326,7 +326,7 @@
             </div>
             <div class="modal-body" style="padding:1.25rem;font-size:0.83rem;color:#374151;line-height:1.6;">
                 <p class="mb-2">
-                    Once finalized, no new ratings or fallback uploads can be recorded for this
+                    Once finalized, no new ratings or paper rating sheets can be recorded for this
                     session, and panel members can no longer revise their scores. This can only be
                     undone with an authorized reopen.
                 </p>
@@ -459,7 +459,7 @@
                 var msg = minRequiredOutputs > 1
                     ? ("This interview needs ratings from at least " + minRequiredOutputs +
                        " HRMPSB members before it can be finalized (currently " + totalOutputs + ").")
-                    : "Record at least one panel rating or encode a fallback sheet before finalizing.";
+                    : "Record at least one panel rating or add a paper rating sheet before finalizing.";
                 probs.push({ field: null, summaryOnly: true, msg: msg });
             }
             if (probs.length) { revealProblems(probs); return false; }

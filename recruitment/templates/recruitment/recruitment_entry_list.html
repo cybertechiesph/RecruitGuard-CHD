@@ -1,25 +1,25 @@
 {% extends "internal_base.html" %}
 {% load recruitment_ui %}
 
-{% block internal_title %}Recruitment Entries{% endblock %}
+{% block internal_title %}Vacancies{% endblock %}
 
 {% block breadcrumb %}
 <span class="rg-breadcrumb-sep">&rsaquo;</span>
-<span class="rg-breadcrumb-current">Entries &amp; Positions</span>
+<span class="rg-breadcrumb-current">Vacancies</span>
 {% endblock %}
 
 {% block content %}
 <div class="rg-page-header">
     <div>
-        <p class="rg-eyebrow">Entries &amp; Positions</p>
-        <h1 class="rg-page-title">Recruitment Entries</h1>
+        <p class="rg-eyebrow">Recruitment</p>
+        <h1 class="rg-page-title">Vacancies</h1>
     </div>
     <div class="rg-page-actions">
-        <a href="{% url 'recruitment-entry-create' %}" class="btn btn-rg-primary btn-sm">New Entry</a>
+        <a href="{% url 'recruitment-entry-create' %}" class="btn btn-rg-primary btn-sm">New vacancy</a>
     </div>
 </div>
 
-<nav class="rg-seg mb-3" aria-label="Show entries">
+<nav class="rg-seg mb-3" aria-label="Show vacancies">
     {% with counts=entry_filter_counts %}
     <a href="?status=open" class="btn btn-sm {% if status_filter == 'open' %}btn-rg-primary{% else %}btn-outline-secondary{% endif %}"
        {% if status_filter == 'open' %}aria-current="page"{% endif %}>Open ({{ counts.open }})</a>
@@ -33,7 +33,7 @@
 <div class="rg-istat-row">
     <div class="rg-istat">
         <span class="rg-istat__value">{{ entries|length }}</span>
-        <span class="rg-istat__label">{% if status_filter == "closed" %}Closed or cancelled{% elif status_filter == "all" %}All entries{% else %}Open entries{% endif %}</span>
+        <span class="rg-istat__label">{% if status_filter == "closed" %}Closed or cancelled{% elif status_filter == "all" %}All vacancies{% else %}Open vacancies{% endif %}</span>
     </div>
     <div class="rg-istat-row__divider"></div>
     <div class="rg-istat">
@@ -53,9 +53,9 @@
         {% if status_filter == "closed" %}
             {% include "internal_includes/state_empty.html" with title="No closed vacancies yet" copy="Vacancies you close or cancel will be listed here." %}
         {% elif entry_filter_counts.all %}
-            {% include "internal_includes/state_empty.html" with title="No open vacancies" copy="Every vacancy is closed or cancelled. Create a new entry to start another recruitment." action_url=create_entry_url action_label="New Entry" %}
+            {% include "internal_includes/state_empty.html" with title="No open vacancies" copy="Every vacancy is closed or cancelled. Create a new vacancy to start another recruitment." action_url=create_entry_url action_label="New vacancy" %}
         {% else %}
-            {% include "internal_includes/state_empty.html" with title="No recruitment entries recorded yet" copy="Create a Plantilla or COS entry to begin managing applications for a position." action_url=create_entry_url action_label="Create First Entry" %}
+            {% include "internal_includes/state_empty.html" with title="No vacancies yet" copy="Create a Plantilla or COS vacancy to start taking applications for a position." action_url=create_entry_url action_label="Create the first vacancy" %}
         {% endif %}
     </div>
 {% else %}
@@ -64,9 +64,9 @@
             <table class="table align-middle">
                 <thead>
                     <tr>
-                        <th>Entry</th>
+                        <th>Vacancy</th>
                         <th>Position</th>
-                        <th>Branch / Intake</th>
+                        <th>Type</th>
                         <th>Level</th>
                         <th>Status</th>
                         <th>Schedule</th>
@@ -225,7 +225,7 @@
                                                         data-bs-target="#closeModal{{ entry.pk }}">
                                                     {% if entry.intake_deadline_passed %}Close intake{% else %}Close{% endif %}
                                                 </button>
-                                                {% include "internal_includes/modal_confirm.html" with modal_id=entry.pk|dom_id:"closeModal" variant="destructive" title="Close this recruitment entry?" body="No new applications will be accepted. For a Plantilla vacancy, the applicant pool is then final, so the Comparative Assessment can be prepared. Cases already in progress continue as normal." confirm_label="Close Entry" form_id=entry.pk|dom_id:"closeForm" reason_label="Reason for closing" reason_id=entry.pk|dom_id:"close-reason-" reason_name="reason" %}
+                                                {% include "internal_includes/modal_confirm.html" with modal_id=entry.pk|dom_id:"closeModal" variant="destructive" title="Close this vacancy?" body="No new applications will be accepted. For a Plantilla vacancy, the applicant pool is then final, so the Comparative Assessment can be prepared. Cases already in progress continue as normal." confirm_label="Close Entry" form_id=entry.pk|dom_id:"closeForm" reason_label="Reason for closing" reason_id=entry.pk|dom_id:"close-reason-" reason_name="reason" %}
                                             {% else %}
                                                 <form method="post"
                                                       action="{% url 'recruitment-entry-status' entry.pk 'closed' %}"
@@ -238,7 +238,7 @@
                                                         data-bs-target="#closeModal{{ entry.pk }}">
                                                     {% if entry.intake_deadline_passed %}Close intake{% else %}Close{% endif %}
                                                 </button>
-                                                {% include "internal_includes/modal_confirm.html" with modal_id=entry.pk|dom_id:"closeModal" variant="destructive" title="Close this recruitment entry?" body="No new applications will be accepted. For a Plantilla vacancy, the applicant pool is then final, so the Comparative Assessment can be prepared. Cases already in progress continue as normal." confirm_label="Close Entry" form_id=entry.pk|dom_id:"closeForm" %}
+                                                {% include "internal_includes/modal_confirm.html" with modal_id=entry.pk|dom_id:"closeModal" variant="destructive" title="Close this vacancy?" body="No new applications will be accepted. For a Plantilla vacancy, the applicant pool is then final, so the Comparative Assessment can be prepared. Cases already in progress continue as normal." confirm_label="Close Entry" form_id=entry.pk|dom_id:"closeForm" %}
                                             {% endif %}
                                         {% endif %}
                                     {% endif %}

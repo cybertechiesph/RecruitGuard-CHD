@@ -125,7 +125,7 @@
                     <span class="rg-pkt-row__value">{{ sctx.recruitment_entry_code }}</span>
                 </div>
                 <div class="rg-pkt-row">
-                    <span class="rg-pkt-row__label">Branch / type</span>
+                    <span class="rg-pkt-row__label">Type</span>
                     <span class="rg-pkt-row__value">{{ sctx.branch_label }}</span>
                 </div>
                 <div class="rg-pkt-row">
@@ -214,7 +214,7 @@
                 <strong>Decision recorded.</strong>
                 This application has been marked <em>Selected</em>.
                 The recruitment case will proceed to appointment processing.
-                Coordinate with HR for the preparation and issuance of the appointment document
+                The {{ completion_handler_label }} prepares and issues the appointment document
                 in accordance with CSC rules.
             {% else %}
                 <strong>Decision recorded.</strong>
@@ -228,7 +228,7 @@
                 <strong>Decision recorded.</strong>
                 This application has been marked <em>Selected</em>.
                 The recruitment case will proceed to contract preparation.
-                Coordinate with HR for the preparation and issuance of the contract of service.
+                The {{ completion_handler_label }} prepares and issues the contract of service.
             {% else %}
                 <strong>Decision recorded.</strong>
                 This application has been marked <em>Not Selected</em>.

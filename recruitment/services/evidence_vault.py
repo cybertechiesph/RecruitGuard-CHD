@@ -284,7 +284,7 @@ def _evidence_owner_filters(*, application=None, recruitment_case=None, recruitm
     owner_count = sum(bool(owner is not None) for owner in [application, recruitment_case, recruitment_entry])
     if owner_count != 1:
         raise ValueError(
-            "Evidence ownership must target exactly one scope: application, recruitment case, or recruitment entry."
+            "Evidence ownership must target exactly one scope: application, recruitment case, or vacancy."
         )
     if application is not None:
         return {
@@ -417,7 +417,7 @@ def store_generated_evidence_item(
     if artifact_scope == EvidenceVaultItem.OwnerScope.CASE and recruitment_case is None:
         raise ValueError("Case-owned generated evidence must point to a recruitment case.")
     if artifact_scope == EvidenceVaultItem.OwnerScope.ENTRY and recruitment_entry is None:
-        raise ValueError("Entry-owned generated evidence must point to a recruitment entry.")
+        raise ValueError("Vacancy-owned generated evidence must point to a vacancy.")
     owner_kwargs = _evidence_owner_filters(
         application=application if artifact_scope == EvidenceVaultItem.OwnerScope.APPLICATION else None,
         recruitment_case=(
@@ -436,7 +436,7 @@ def store_generated_evidence_item(
         owner_kwargs["artifact_scope"] == EvidenceVaultItem.OwnerScope.ENTRY
         and owner_kwargs["recruitment_entry"].id != application.position_id
     ):
-        raise ValueError("Entry-owned evidence must stay linked to the same recruitment entry as the application.")
+        raise ValueError("Vacancy-owned evidence must stay linked to the same vacancy as the application.")
     if not stage:
         stage = _evidence_stage_for_application(application)
     sha256_digest = hashlib.sha256(raw_bytes).hexdigest()
@@ -822,7 +822,7 @@ def _draw_application_receipt_header(pdf, *, left, right, page_height):
     pdf.drawString(text_x, top - 36, "Center for Health Development — CALABARZON")
     pdf.setFont("Helvetica", 8.5)
     pdf.setFillColor(_RECEIPT_MUTE)
-    pdf.drawString(text_x, top - 49, "Recruitment, Selection and Placement Office")
+    pdf.drawString(text_x, top - 49, "Human Resource Management Unit")
 
     rule_y = top - 62
     pdf.setStrokeColor(_RECEIPT_GOLD)
@@ -1220,7 +1220,7 @@ def _build_comparative_assessment_report_pdf(
 ):
     lines = [
         "DOH-CHD CALABARZON Comparative Assessment Report",
-        f"Recruitment Entry: {application.position.title} [{application.position.job_code}]",
+        f"Vacancy: {application.position.title} [{application.position.job_code}]",
         f"Branch: {application.position.get_branch_display()}",
         f"Workflow Stage: {application.case.get_current_stage_display()}",
         f"Prepared By: {actor}",

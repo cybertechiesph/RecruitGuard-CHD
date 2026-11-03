@@ -227,7 +227,7 @@ def vacancy_batch_pool_block_message(posting):
         )
     return (
         "Batch examination and interview unlock when the applicant pool is final. Close "
-        "the recruitment entry once the intake period is over. Screening each applicant "
+        "the vacancy once its application period is over. Screening each applicant "
         "can continue in the meantime."
     )
 
@@ -255,7 +255,7 @@ def get_applicant_pool_finalization_block_message(application):
     closing_date = getattr(application.position, "closing_date", None)
     if closing_date:
         return f"{PLANTILLA_POOL_NOT_FINAL_MESSAGE} Current closing date: {closing_date:%Y-%m-%d}."
-    return f"{PLANTILLA_POOL_NOT_FINAL_MESSAGE} Close the recruitment entry before starting HRMPSB deliberation."
+    return f"{PLANTILLA_POOL_NOT_FINAL_MESSAGE} Close the vacancy before starting HRMPSB deliberation."
 
 
 SCREENING_COMPLETENESS_BLOCKING_DOCUMENT_STATUSES = {

@@ -726,11 +726,11 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         response = client.get(reverse("recruitment-entry-list"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "No recruitment entries recorded yet")
+        self.assertContains(response, "No vacancies yet")
         self.assertContains(response, reverse("recruitment-entry-create"))
         self.assertNotContains(
             response,
-            '{% include "internal_includes/state_empty.html" with title="No recruitment entries recorded yet" copy="Create a Plantilla or COS entry to begin managing applications for a position." action_url=create_entry_url action_label="Create First Entry" %}',
+            '{% include "internal_includes/state_empty.html" with title="No vacancies yet" copy="Create a Plantilla or COS vacancy to start taking applications for a position." action_url=create_entry_url action_label="Create First Entry" %}',
         )
         self.assertNotContains(response, "{# Empty state partial.")
 
@@ -747,7 +747,7 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         response = client.get(reverse("recruitment-entry-list"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Close this recruitment entry?")
+        self.assertContains(response, "Close this vacancy?")
         self.assertContains(response, f'data-bs-target="#closeModal{self.level1_position.pk}"')
         self.assertContains(response, f'id="closeModal{self.level1_position.pk}"')
         self.assertContains(response, f'id="closeForm{self.level1_position.pk}"')
@@ -762,7 +762,7 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         self.assertContains(response, 'class="mb-0 rg-modal-confirm__body-copy"')
         self.assertNotContains(
             response,
-            '{% include "internal_includes/modal_confirm.html" with modal_id="closeModal"|add:entry.pk|stringformat:"s" variant="destructive" title="Close this recruitment entry?" body="Closing will stop accepting new applications for this entry. Existing cases in the workflow will not be affected." confirm_label="Close Entry" form_id="closeForm"|add:entry.pk|stringformat:"s" %}',
+            '{% include "internal_includes/modal_confirm.html" with modal_id="closeModal"|add:entry.pk|stringformat:"s" variant="destructive" title="Close this vacancy?" body="Closing will stop accepting new applications for this entry. Existing cases in the workflow will not be affected." confirm_label="Close Entry" form_id="closeForm"|add:entry.pk|stringformat:"s" %}',
         )
         self.assertNotContains(response, "{# Confirmation modal partial.")
 
