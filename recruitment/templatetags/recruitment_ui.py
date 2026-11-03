@@ -739,3 +739,23 @@ def query_without_page(context):
     params = request.GET.copy()
     params.pop("page", None)
     return params.urlencode()
+
+
+@register.filter
+def day_heading(value):
+    """Round F2: the day group heading in the audit log — "Today", "Yesterday", or the date."""
+    if not value:
+        return ""
+    from django.utils import timezone as dj_timezone
+
+    from ..services.clock import local_day
+
+    day = local_day(value) if hasattr(value, "hour") else value
+    today = dj_timezone.localdate()
+    if day == today:
+        return "Today"
+    if (today - day).days == 1:
+        return "Yesterday"
+    if day.year == today.year:
+        return f"{day:%A}, {day:%B} {day.day}"
+    return f"{day:%A}, {day:%B} {day.day}, {day.year}"

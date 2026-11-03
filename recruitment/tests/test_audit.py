@@ -181,7 +181,9 @@ class AuditLoggingTraceabilityTests(BaseRecruitmentTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, '<select name="action"')
-        self.assertContains(response, '<select name="category"')
+        # Round F2: categories are chips in the toolbar.
+        self.assertContains(response, 'data-category-chip="case"')
+        self.assertContains(response, 'data-category-chip="security"')
 
     def test_audit_exports_are_logged_and_filtered(self):
         self.make_submitted_application()
@@ -288,7 +290,7 @@ class AuditLoggingTraceabilityTests(BaseRecruitmentTestCase):
         response = client.get(reverse("application-audit-log", kwargs={"pk": application.pk}))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Case Audit Log")
+        self.assertContains(response, "Case trail")
         log = AuditLog.objects.filter(
             application=application,
             actor=self.sysadmin,
@@ -469,3 +471,88 @@ class AuditLoggingTraceabilityTests(BaseRecruitmentTestCase):
         self.assertEqual(log.case_reference, "")
         self.assertEqual(log.workflow_stage, RecruitmentCase.Stage.SECRETARIAT_REVIEW)
         self.assertFalse(log.is_sensitive_access)
+
+
+class AuditLogRoundF2Tests(BaseRecruitmentTestCase):
+    """Round F2 (docs/admin-area-rebuild-plan.md section 4.5): the log first, as a day-grouped
+    table under one toolbar; routine sign-ins hidden by default; the archive at the bottom."""
+
+    def setUp(self):
+        super().setUp()
+        self.client = Client()
+        self.force_login_with_mfa(self.client, self.sysadmin)
+        AuditLog.objects.create(
+            actor=self.secretariat,
+            actor_role=self.secretariat.role,
+            action=AuditLog.Action.INTERNAL_LOGIN,
+            description="Internal user logged in.",
+        )
+        AuditLog.objects.create(
+            actor=self.secretariat,
+            actor_role=self.secretariat.role,
+            action=AuditLog.Action.INTERNAL_LOGIN_FAILED,
+            description="Internal user login failed.",
+        )
+
+    def _actions(self, response):
+        return {log.action for log in response.context["audit_logs"]}
+
+    def test_routine_sign_ins_are_hidden_by_default_but_failures_stay(self):
+        response = self.client.get(reverse("audit-log-list"))
+        actions = self._actions(response)
+        self.assertNotIn(AuditLog.Action.INTERNAL_LOGIN, actions)
+        self.assertIn(AuditLog.Action.INTERNAL_LOGIN_FAILED, actions)
+        self.assertContains(response, "routine sign-ins hidden")
+
+    def test_routine_sign_ins_show_on_request_and_in_the_sign_ins_category(self):
+        shown = self.client.get(reverse("audit-log-list"), {"signins": "show"})
+        self.assertIn(AuditLog.Action.INTERNAL_LOGIN, self._actions(shown))
+        security = self.client.get(reverse("audit-log-list"), {"category": "security"})
+        self.assertIn(AuditLog.Action.INTERNAL_LOGIN, self._actions(security))
+        self.assertNotContains(security, "data-signins-toggle")
+
+    def test_exports_follow_the_same_filter_as_the_screen(self):
+        body = self.client.get(reverse("audit-log-export-csv")).content.decode("utf-8")
+        self.assertIn("internal_login_failed", body)
+        self.assertNotIn(",internal_login,", body)
+        shown = self.client.get(reverse("audit-log-export-csv"), {"signins": "show"}).content.decode("utf-8")
+        self.assertIn(",internal_login,", shown)
+        report = self.client.get(reverse("audit-log-report"))
+        self.assertContains(report, "routine sign-ins hidden")
+
+    def test_first_page_is_not_cut_short_by_the_viewing_entry(self):
+        # The "audit log viewed" entry is written during the request; it must not push a
+        # real entry off the page that was counted before it existed.
+        response = self.client.get(reverse("audit-log-list"))
+        actions = self._actions(response)
+        self.assertNotIn(AuditLog.Action.AUDIT_LOG_VIEWED, actions)
+        self.assertIn(AuditLog.Action.INTERNAL_LOGIN_FAILED, actions)
+
+    def test_log_is_a_table_grouped_by_day_with_the_archive_after_it(self):
+        response = self.client.get(reverse("audit-log-list"))
+        html = response.content.decode()
+        self.assertIn("data-audit-table", html)
+        self.assertIn('class="rg-adm-log__day"', html)
+        self.assertIn(">Today<", html)
+        self.assertLess(html.index("data-audit-table"), html.index("data-archives"))
+        self.assertNotIn("rg-record", html)
+
+    def test_quick_range_and_category_chips_keep_each_other(self):
+        today = timezone.localdate().isoformat()
+        response = self.client.get(
+            reverse("audit-log-list"), {"category": "security", "date_from": today, "date_to": today}
+        )
+        html = response.content.decode()
+        self.assertIn('class="rg-adm-chip is-active" href="?category=security&amp;date_from=', html)
+        self.assertIn(f"date_from={today}", html)
+        self.assertIn('data-category-chip="case"', html)
+
+    def test_case_trail_uses_the_new_page_without_exports_or_archives(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        response = self.client.get(reverse("application-audit-log", kwargs={"pk": application.pk}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Case trail")
+        self.assertNotContains(response, "data-archives")
+        self.assertNotContains(response, "data-export-csv")

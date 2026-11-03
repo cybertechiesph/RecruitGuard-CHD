@@ -5,7 +5,7 @@ docs/sysadmin-review-2026-11.md (the walkthrough) and the office's own verdict t
 current pages look clunky. The security boundaries stay exactly as they are; what changes is
 what the administrator sees and how the daily jobs are laid out.
 
-## Status: Round F1 done (Home, Accounts, account page, invitations, reset, unlock); F2–F4 not started
+## Status: Rounds F1 and F2 done; F3 and F4 not started
 
 ## 1. Decisions (locked)
 
@@ -237,6 +237,6 @@ docs/sysadmin-review-2026-11.md section 9.
 | Round | State | Notes |
 |---|---|---|
 | F1 | Done (2026-11-03) | Home (`admin/home.html`), Accounts with search/role/status chips and sort (`admin/accounts.html`), account page with Unlock now, Send password reset email / Send the invitation again, Deactivate/Reactivate (`admin/account_detail.html`), create and edit form with role cards and invitation by default (`admin/account_form.html`), sidebar order and "Change password". Services `get_internal_account_locks`, `internal_account_locked_until`, `unlock_internal_account`, `send_admin_password_email`; audit actions `PASSWORD_RESET_SENT_BY_ADMIN`, `INTERNAL_ACCOUNT_UNLOCKED` (migration 0098, choices only). New stylesheet `static/css/recruitguard-admin.css` (theme tokens only). Old `dashboard.html`, `internal_user_list.html`, `internal_user_form.html` deleted. The Home archive tile links to the Audit Log's archive block until Maintenance exists (F3). The invitation email does not point to "Forgot your password?" because that page skips accounts without a password; the administrator resends instead. Tests: `AdminAreaRoundF1Tests` (16). |
-| F2 | Not started | |
+| F2 | Done (2026-11-03) | Audit Log rebuilt as `admin/audit_log.html`: header with Export CSV and Printable report; toolbar with search, category chips, quick ranges (Today, 7 days, 30 days), "Show routine sign-ins" and "Sensitive only" toggles, and More filters (role, user, from, to); a table grouped by day (Time, Who, What happened with a Details disclosure, Case). Routine sign-ins (sign-in, sign-out, sign-in codes sent/verified) are hidden by default and shown on request, in the sign-ins category, or in a session view; failures stay visible. The screen, CSV and report share one filter path, and the report names "routine sign-ins hidden". The archive moved to a Maintenance block at the bottom (its own page in F3). The case trail uses the same page. Fixed in passing: the first page could lose one real entry to the administrator's own "audit log viewed" entry (the page slice was read after that entry was written). Old `audit_log_list.html` deleted. Tests: `AuditLogRoundF2Tests` (7); two existing tests updated. |
 | F3 | Not started | |
 | F4 | Not started | |

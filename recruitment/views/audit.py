@@ -44,7 +44,7 @@ class ApplicationAuditLogView(
     DetailView,
 ):
     model = RecruitmentApplication
-    template_name = "recruitment/audit_log_list.html"
+    template_name = "recruitment/admin/audit_log.html"
     context_object_name = "application"
 
     def get_object(self, queryset=None):
@@ -72,6 +72,7 @@ class ApplicationAuditLogView(
         context["result_count"] = len(audit_logs)
         context["review_scope"] = "application"
         context["recruitment_case"] = getattr(application, "case", None)
+        context.update(_toolbar_context(self.request, cleaned_data, signins_hidden=False))
         if _should_record_audit_review(self.request, f"application:{application.pk}"):
             record_audit_log_review(
                 actor=self.request.user,
@@ -85,7 +86,11 @@ class ApplicationAuditLogView(
 
 
 class AuditLogListView(LoginRequiredMixin, SystemAdministratorRequiredMixin, TemplateView):
-    template_name = "recruitment/audit_log_list.html"
+    """Round F2: the log first, as a table grouped by day, under one toolbar; routine sign-ins
+    hidden by default; the archive in a Maintenance block at the bottom
+    (docs/admin-area-rebuild-plan.md section 4.5)."""
+
+    template_name = "recruitment/admin/audit_log.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -107,43 +112,27 @@ class AuditLogListView(LoginRequiredMixin, SystemAdministratorRequiredMixin, Tem
                     "Only entries older than six months can be archived. Choose a cutoff "
                     f"on or before {audit_archive_latest_allowed_cutoff():%b %d, %Y}."
                 )
-        self.search_form = AuditLogSearchForm(self.request.GET or None)
-        cleaned_data = _audit_search_cleaned_data(self.search_form)
-        session_tag = (self.request.GET.get("session") or "").strip()
-        audit_logs = get_all_audit_logs(
-            search_query=cleaned_data["q"],
-            actor_role=cleaned_data["actor_role"],
-            sensitive_only=cleaned_data["sensitive_only"],
-            category=cleaned_data["category"],
-            actor=cleaned_data["actor"],
-            date_from=cleaned_data["date_from"],
-            date_to=cleaned_data["date_to"],
-            session_tag=session_tag,
+        audit_logs, cleaned_data, session_tag, signins_hidden = _filtered_audit_logs_from_request(
+            self.request
         )
-        # REV-F: the session view reads chronologically — a visit replayed
-        # top to bottom.
+        self.search_form = AuditLogSearchForm(self.request.GET or None)
         if session_tag:
-            audit_logs = audit_logs.order_by("created_at")
             context["session_summary"] = build_audit_session_summary(session_tag)
             context["session_tag"] = session_tag
-        context["audit_summary"] = summarize_audit_logs(audit_logs)
-        today = timezone.localdate()
-        context["date_presets"] = [
-            {"label": "Today", "date_from": today, "date_to": today},
-            {"label": "Last 7 days", "date_from": today - timedelta(days=6), "date_to": today},
-            {"label": "This month", "date_from": today.replace(day=1), "date_to": today},
-        ]
         paginator = Paginator(audit_logs, 50)
         page_number = self.request.GET.get("page")
         page_obj = paginator.get_page(page_number)
         params = self.request.GET.copy()
         params.pop("page", None)
         context["search_form"] = self.search_form
-        context["audit_logs"] = page_obj.object_list
+        # Read the page now: the "audit log viewed" entry written below would otherwise
+        # slip into the lazily evaluated slice and push a real entry off the first page.
+        context["audit_logs"] = list(page_obj.object_list)
         context["page_obj"] = page_obj
         context["result_count"] = paginator.count
         context["querystring"] = params.urlencode()
         context["review_scope"] = "system"
+        context.update(_toolbar_context(self.request, cleaned_data, signins_hidden=signins_hidden))
         # One review entry per visit: the first-page guard stops paging spam,
         # and the session window (REV-D) stops filter-change spam.
         if page_number in (None, "", "1") and _should_record_audit_review(
@@ -157,6 +146,63 @@ class AuditLogListView(LoginRequiredMixin, SystemAdministratorRequiredMixin, Tem
                 result_count=paginator.count,
             )
         return context
+
+
+# Round F2: the routine half of signing in. Hidden by default because they fill the log; the
+# failures, lockouts and password changes stay visible.
+ROUTINE_SIGN_IN_ACTIONS = [
+    AuditLog.Action.INTERNAL_LOGIN,
+    AuditLog.Action.INTERNAL_LOGOUT,
+    AuditLog.Action.INTERNAL_MFA_SENT,
+    AuditLog.Action.INTERNAL_MFA_RESENT,
+    AuditLog.Action.INTERNAL_MFA_VERIFIED,
+]
+
+
+def _routine_sign_ins_hidden(request, cleaned, session_tag):
+    """Hidden unless asked for, or unless the view is about sign-ins: the sign-ins category,
+    or one sign-in session replayed."""
+    if request.GET.get("signins") == "show":
+        return False
+    if cleaned.get("category") == "security" or session_tag:
+        return False
+    return True
+
+
+def _toolbar_context(request, cleaned, *, signins_hidden):
+    """The chips, quick ranges and "more filters" state the toolbar draws."""
+    today = timezone.localdate()
+    ranges = [
+        ("Today", today, today),
+        ("7 days", today - timedelta(days=6), today),
+        ("30 days", today - timedelta(days=29), today),
+    ]
+    date_from = cleaned.get("date_from")
+    date_to = cleaned.get("date_to")
+    quick_ranges = [
+        {
+            "label": label,
+            "date_from": start.isoformat(),
+            "date_to": end.isoformat(),
+            "active": date_from == start and date_to == end,
+        }
+        for label, start, end in ranges
+    ]
+    custom_range = bool(date_from or date_to) and not any(r["active"] for r in quick_ranges)
+    return {
+        "category": cleaned.get("category") or "",
+        "category_chips": [(key, group["label"]) for key, group in AUDIT_ACTION_CATEGORIES.items()],
+        "quick_ranges": quick_ranges,
+        "any_range": bool(date_from or date_to),
+        "custom_range": custom_range,
+        "sensitive_only": bool(cleaned.get("sensitive_only")),
+        "signins_hidden": signins_hidden,
+        "signins_toggleable": cleaned.get("category") != "security",
+        "more_filters_count": sum(
+            1 for value in (cleaned.get("actor_role"), cleaned.get("actor"), custom_range) if value
+        ),
+        "search_query": cleaned.get("q") or "",
+    }
 
 
 def _audit_search_cleaned_data(search_form):
@@ -189,12 +235,16 @@ def _filtered_audit_logs_from_request(request):
         date_to=cleaned["date_to"],
         session_tag=session_tag,
     )
+    signins_hidden = _routine_sign_ins_hidden(request, cleaned, session_tag)
+    if signins_hidden:
+        queryset = queryset.exclude(action__in=ROUTINE_SIGN_IN_ACTIONS)
+    # REV-F: the session view reads chronologically — a visit replayed top to bottom.
     if session_tag:
         queryset = queryset.order_by("created_at")
-    return queryset, cleaned, session_tag
+    return queryset, cleaned, session_tag, signins_hidden
 
 
-def _describe_audit_filters(cleaned, session_tag):
+def _describe_audit_filters(cleaned, session_tag, signins_hidden=False):
     parts = []
     if cleaned["q"]:
         parts.append(f'search "{cleaned["q"]}"')
@@ -212,6 +262,8 @@ def _describe_audit_filters(cleaned, session_tag):
         parts.append("sensitive only")
     if session_tag:
         parts.append("single session")
+    if signins_hidden:
+        parts.append("routine sign-ins hidden")
     return "; ".join(parts) if parts else "no filters (full trail)"
 
 
@@ -220,8 +272,8 @@ class AuditLogExportCsvView(LoginRequiredMixin, SystemAdministratorRequiredMixin
     audit-logged."""
 
     def get(self, request):
-        queryset, cleaned, session_tag = _filtered_audit_logs_from_request(request)
-        filters_label = _describe_audit_filters(cleaned, session_tag)
+        queryset, cleaned, session_tag, signins_hidden = _filtered_audit_logs_from_request(request)
+        filters_label = _describe_audit_filters(cleaned, session_tag, signins_hidden)
         buffer = StringIO()
         writer = csv.writer(buffer)
         writer.writerow(
@@ -263,7 +315,8 @@ class AuditLogReportView(LoginRequiredMixin, SystemAdministratorRequiredMixin, V
     then the entries."""
 
     def get(self, request):
-        queryset, cleaned, session_tag = _filtered_audit_logs_from_request(request)
+        queryset, cleaned, session_tag, signins_hidden = _filtered_audit_logs_from_request(request)
+        filters_label = _describe_audit_filters(cleaned, session_tag, signins_hidden)
         summary = summarize_audit_logs(queryset)
         entries = list(queryset[:1000])
         record_system_audit_event(
@@ -271,12 +324,12 @@ class AuditLogReportView(LoginRequiredMixin, SystemAdministratorRequiredMixin, V
             action=AuditLog.Action.EXPORT_GENERATED,
             description=(
                 f"Generated printable audit report ({summary['total']} entries; "
-                f"{_describe_audit_filters(cleaned, session_tag)})."
+                f"{filters_label})."
             ),
             metadata={
                 "export": "audit_report",
                 "entry_count": summary["total"],
-                "filters": _describe_audit_filters(cleaned, session_tag),
+                "filters": filters_label,
             },
         )
         return render(
@@ -286,7 +339,7 @@ class AuditLogReportView(LoginRequiredMixin, SystemAdministratorRequiredMixin, V
                 "entries": entries,
                 "entry_cap": 1000,
                 "summary": summary,
-                "filters_label": _describe_audit_filters(cleaned, session_tag),
+                "filters_label": filters_label,
                 "session_summary": build_audit_session_summary(session_tag) if session_tag else None,
                 "printed_by": request.user,
                 "printed_at": timezone.now(),

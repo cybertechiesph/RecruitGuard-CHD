@@ -1,0 +1,244 @@
+{% extends "internal_base.html" %}
+{% load recruitment_ui %}
+
+{% block internal_title %}{% if review_scope == "application" %}Case trail {{ application.reference_label }}{% else %}Audit Log{% endif %}{% endblock %}
+
+{% block breadcrumb %}
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+{% if review_scope == "application" %}
+    <a href="{% url 'audit-log-list' %}" class="rg-breadcrumb-home">Audit Log</a>
+    <span class="rg-breadcrumb-sep">&rsaquo;</span>
+    <span class="rg-breadcrumb-current">{{ application.reference_label }}</span>
+{% else %}
+    <span class="rg-breadcrumb-current">Audit Log</span>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="rg-adm">
+    <header class="rg-adm-head">
+        <div>
+            {% if review_scope == "application" %}
+                <h1 class="rg-adm-head__title">Case trail &middot; {{ application.reference_label }}</h1>
+                <p class="rg-adm-head__lead">Everything recorded for this case: who acted, and when. {{ application.get_branch_display }} &middot; {{ application.get_level_display }} &middot; {{ application.get_status_display }}.</p>
+            {% else %}
+                <h1 class="rg-adm-head__title">Audit Log</h1>
+                <p class="rg-adm-head__lead">Everything the system recorded: who did what, and when.</p>
+            {% endif %}
+        </div>
+        {% if review_scope != "application" %}
+            <div class="rg-adm-head__actions">
+                <a href="{% url 'audit-log-export-csv' %}?{{ querystring }}" class="btn btn-outline-secondary btn-sm" data-export-csv>Export CSV</a>
+                <a href="{% url 'audit-log-report' %}?{{ querystring }}" class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener">Printable report</a>
+            </div>
+        {% endif %}
+    </header>
+
+    {% if session_summary %}
+        {# REV-F session view: one sign-in, replayed start to finish #}
+        <section class="rg-adm-panel mb-3" data-session-view>
+            <h2 class="rg-adm-panel__title">Session view</h2>
+            <p class="mb-1">
+                <strong>{{ session_summary.actor.get_full_name|default:session_summary.actor.username }}</strong>
+                {% if session_summary.actor_role %}({{ session_summary.actor_role|role_label }}){% endif %}
+                &mdash; {{ session_summary.entry_count }} recorded action{{ session_summary.entry_count|pluralize }}
+            </p>
+            <p class="rg-adm-muted small mb-1">
+                {% if session_summary.signed_in_at %}Signed in {{ session_summary.signed_in_at|date:"M j, Y g:i A" }}{% else %}First activity {{ session_summary.first_activity|date:"M j, Y g:i A" }}{% endif %}
+                {% if session_summary.ip_address %} &middot; from {{ session_summary.ip_address }}{% endif %}
+                {% if session_summary.user_agent %} &middot; {{ session_summary.user_agent|truncatechars:80 }}{% endif %}
+            </p>
+            <p class="rg-adm-muted small mb-2">
+                Last activity {{ session_summary.last_activity|date:"M j, Y g:i A" }}
+                {% if session_summary.logout_at %}&middot; signed out {{ session_summary.logout_at|date:"g:i A" }}{% else %}&middot; no sign-out recorded &mdash; session expired{% endif %}
+            </p>
+            <a href="{% url 'audit-log-list' %}" class="btn btn-outline-secondary btn-sm">Leave session view</a>
+        </section>
+    {% endif %}
+
+    {# ── Toolbar ─────────────────────────────────────────────────── #}
+    <form method="get" class="rg-adm-audit-form" data-audit-toolbar>
+        {% if category %}<input type="hidden" name="category" value="{{ category }}">{% endif %}
+        {% if sensitive_only %}<input type="hidden" name="sensitive_only" value="on">{% endif %}
+        {% if not signins_hidden and signins_toggleable %}<input type="hidden" name="signins" value="show">{% endif %}
+        {% if session_tag %}<input type="hidden" name="session" value="{{ session_tag }}">{% endif %}
+
+        <div class="rg-adm-toolbar">
+            <div class="rg-adm-toolbar__search" role="search">
+                <label class="visually-hidden" for="audit-q">Search the log</label>
+                <input id="audit-q" class="form-control" type="search" name="q" value="{{ search_query }}"
+                       placeholder="Case number, name, username or words" autocomplete="off">
+                <button type="submit" class="btn btn-outline-secondary">Search</button>
+            </div>
+            <span class="rg-adm-toolbar__count" data-count-line>
+                {{ result_count }} entr{{ result_count|pluralize:"y,ies" }}{% if signins_hidden %} &middot; routine sign-ins hidden{% endif %}
+            </span>
+        </div>
+
+        <div class="rg-adm-toolbar">
+            <nav class="rg-adm-chips" aria-label="Filter by category">
+                <a class="rg-adm-chip{% if not category %} is-active{% endif %}" href="{% query_with category='' %}">All</a>
+                {% for key, label in category_chips %}
+                    <a class="rg-adm-chip{% if category == key %} is-active{% endif %}" href="{% query_with category=key %}" data-category-chip="{{ key }}">{{ label }}</a>
+                {% endfor %}
+            </nav>
+        </div>
+
+        <div class="rg-adm-toolbar">
+            <nav class="rg-adm-chips" aria-label="Date range">
+                <a class="rg-adm-chip{% if not any_range %} is-active{% endif %}" href="{% query_with date_from='' date_to='' %}">Any time</a>
+                {% for range in quick_ranges %}
+                    <a class="rg-adm-chip{% if range.active %} is-active{% endif %}" href="{% query_with date_from=range.date_from date_to=range.date_to %}">{{ range.label }}</a>
+                {% endfor %}
+            </nav>
+            <span class="rg-adm-chip-sep" aria-hidden="true"></span>
+            <nav class="rg-adm-chips" aria-label="Show">
+                {% if signins_toggleable %}
+                    <a class="rg-adm-chip{% if not signins_hidden %} is-active{% endif %}"
+                       href="{% if signins_hidden %}{% query_with signins='show' %}{% else %}{% query_with signins='' %}{% endif %}"
+                       aria-pressed="{% if signins_hidden %}false{% else %}true{% endif %}" data-signins-toggle>Show routine sign-ins</a>
+                {% endif %}
+                <a class="rg-adm-chip{% if sensitive_only %} is-active{% endif %}"
+                   href="{% if sensitive_only %}{% query_with sensitive_only='' %}{% else %}{% query_with sensitive_only='on' %}{% endif %}"
+                   aria-pressed="{% if sensitive_only %}true{% else %}false{% endif %}">Sensitive only</a>
+            </nav>
+        </div>
+
+        <details class="rg-adm-more"{% if more_filters_count %} open{% endif %}>
+            <summary>More filters{% if more_filters_count %} <span class="rg-adm-chip__n">({{ more_filters_count }})</span>{% endif %}</summary>
+            <div class="rg-adm-more__body">
+                <div class="row g-3">
+                    <div class="col-sm-6 col-lg-3">{% include "recruitment/includes/form_field.html" with field=search_form.actor_role %}</div>
+                    <div class="col-sm-6 col-lg-3">{% include "recruitment/includes/form_field.html" with field=search_form.actor %}</div>
+                    <div class="col-sm-6 col-lg-3">{% include "recruitment/includes/form_field.html" with field=search_form.date_from %}</div>
+                    <div class="col-sm-6 col-lg-3">{% include "recruitment/includes/form_field.html" with field=search_form.date_to %}</div>
+                </div>
+                <div class="rg-adm-form-actions mt-3">
+                    <button type="submit" class="btn btn-rg-primary btn-sm">Apply</button>
+                    <a href="{% if review_scope == 'application' %}{% url 'application-audit-log' application.pk %}{% else %}{% url 'audit-log-list' %}{% endif %}" class="btn btn-outline-secondary btn-sm">Clear all filters</a>
+                </div>
+            </div>
+        </details>
+    </form>
+
+    {# ── The log ─────────────────────────────────────────────────── #}
+    <div class="rg-table-shell rg-itbl rg-adm-table rg-adm-log" data-audit-table>
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th scope="col" class="rg-adm-log__time">Time</th>
+                        <th scope="col" class="rg-adm-log__who">Who</th>
+                        <th scope="col">What happened</th>
+                        <th scope="col" class="rg-adm-log__case">Case</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in audit_logs %}
+                        {% ifchanged log.created_at|date:"Y-m-d" %}
+                            <tr class="rg-adm-log__day"><th colspan="4" scope="rowgroup">{{ log.created_at|day_heading }}</th></tr>
+                        {% endifchanged %}
+                        <tr data-audit-row="{{ log.action }}">
+                            <td class="rg-adm-num rg-adm-muted">{{ log.created_at|date:"g:i A" }}</td>
+                            <td>
+                                {% if log.actor %}
+                                    <span class="rg-adm-who">{{ log.actor.get_full_name|default:log.actor.username }}</span>
+                                    <span class="rg-adm-sub">{% if log.actor_role %}{{ log.actor_role|role_label }}{% else %}{{ log.actor.username }}{% endif %}</span>
+                                {% else %}
+                                    <span class="rg-adm-who">System</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <strong class="rg-adm-what">{{ log.action|audit_action_label }}</strong>
+                                {% if log.is_sensitive_access %}<span class="rg-pill rg-pill--warning rg-pill--sm ms-1">Sensitive</span>{% endif %}
+                                <span class="rg-adm-sub">{{ log.description }}</span>
+                                {% with detail_lines=log|audit_detail_summary %}
+                                    {% if detail_lines or log.workflow_stage or log.application or log.session_tag and log.action == "internal_login" %}
+                                        <details class="rg-adm-details">
+                                            <summary>Details</summary>
+                                            <ul>
+                                                {% if log.workflow_stage %}<li>Step: {{ log.workflow_stage|stage_label }}</li>{% endif %}
+                                                {% if log.application %}<li>Vacancy: {{ log.application.position.title }} &middot; {{ log.application.get_branch_display }} &middot; {{ log.application.get_level_display }}</li>{% endif %}
+                                                {% for line in detail_lines %}<li>{{ line }}</li>{% endfor %}
+                                                {% if review_scope != "application" and log.session_tag and log.action == "internal_login" and not session_tag %}
+                                                    <li><a href="{% url 'audit-log-list' %}?session={{ log.session_tag }}">View this sign-in session</a></li>
+                                                {% endif %}
+                                            </ul>
+                                        </details>
+                                    {% endif %}
+                                {% endwith %}
+                            </td>
+                            <td class="rg-adm-num">{% if log.case_reference %}{{ log.case_reference }}{% else %}<span class="rg-adm-muted">&mdash;</span>{% endif %}</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="4" class="rg-adm-muted">No entries match. {% if review_scope != "application" %}<a href="{% url 'audit-log-list' %}">Show everything</a>{% endif %}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% if page_obj %}{% include "internal_includes/pagination.html" %}{% endif %}
+
+    {% if review_scope != "application" %}
+        {# ── Maintenance: audit archives (moves to its own page in Round F3) ── #}
+        <section class="rg-adm-panel mt-4" id="archives" data-archives>
+            <h2 class="rg-adm-panel__title">Maintenance &middot; audit archives</h2>
+            <p class="rg-adm-muted small">
+                Move entries older than a cutoff into an encrypted archive file, then remove them from the live
+                log. Only entries older than six months (before {{ archive_latest_cutoff|date:"M j, Y" }}) can be archived.
+            </p>
+            <form method="get" action="{% url 'audit-log-list' %}#archives" class="d-flex flex-wrap align-items-end gap-2">
+                <div>
+                    <label for="archive-cutoff" class="form-label small fw-semibold">Archive entries older than</label>
+                    <input type="date" id="archive-cutoff" name="archive_cutoff" class="form-control form-control-sm"
+                           max="{{ archive_latest_cutoff|date:'Y-m-d' }}" value="{{ archive_preview_cutoff|date:'Y-m-d' }}">
+                </div>
+                <button type="submit" class="btn btn-outline-secondary btn-sm">Preview</button>
+            </form>
+
+            {% if archive_preview_error %}
+                <div class="alert alert-warning mt-3 mb-0">{{ archive_preview_error }}</div>
+            {% elif archive_preview %}
+                {% if archive_preview.count %}
+                    <div class="rg-adm-callout mt-3 flex-wrap justify-content-between">
+                        <div>
+                            This will archive <strong>{{ archive_preview.count }}</strong> entr{{ archive_preview.count|pluralize:"y,ies" }}
+                            from <strong>{{ archive_preview.range_start|date:"M j, Y" }}</strong> to
+                            <strong>{{ archive_preview.range_end|date:"M j, Y" }}</strong>, then remove them from the live log.
+                            They are deleted only after the archive file is saved and verified.
+                        </div>
+                        <form method="post" action="{% url 'audit-log-archive' %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="archive_cutoff" value="{{ archive_preview_cutoff|date:'Y-m-d' }}">
+                            <button type="submit" class="btn btn-danger btn-sm">Archive {{ archive_preview.count }} entr{{ archive_preview.count|pluralize:"y,ies" }}</button>
+                        </form>
+                    </div>
+                {% else %}
+                    <div class="alert alert-secondary mt-3 mb-0">No entries are older than that cutoff.</div>
+                {% endif %}
+            {% endif %}
+
+            {% if audit_archives %}
+                <div class="rg-table-shell rg-itbl rg-adm-table mt-3">
+                    <div class="table-responsive">
+                        <table class="table align-middle">
+                            <thead><tr><th scope="col">Archive file</th><th scope="col">Entries</th><th scope="col">Covers</th><th scope="col">Created</th><th scope="col" class="col-actions"><span class="visually-hidden">Download</span></th></tr></thead>
+                            <tbody>
+                                {% for archive in audit_archives %}
+                                    <tr>
+                                        <td class="col-ref">{{ archive.file_name }}</td>
+                                        <td class="rg-adm-num">{{ archive.entry_count }}</td>
+                                        <td class="rg-adm-num">{{ archive.range_start|date:"M j, Y" }} &ndash; {{ archive.range_end|date:"M j, Y" }}</td>
+                                        <td>{{ archive.created_at|date:"M j, Y" }} &middot; {{ archive.created_by.get_full_name|default:archive.created_by.username }}</td>
+                                        <td class="col-actions"><a href="{% url 'audit-archive-download' archive.pk %}" class="btn btn-outline-secondary btn-sm">Download</a></td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            {% endif %}
+        </section>
+    {% endif %}
+</div>
+{% endblock %}

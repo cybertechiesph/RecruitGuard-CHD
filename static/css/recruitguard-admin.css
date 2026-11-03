@@ -386,3 +386,56 @@ a.rg-adm-tile:focus-visible {
     .rg-adm-head__title { font-size: 1.35rem; }
     .rg-adm-toolbar__count { margin-left: 0; width: 100%; }
 }
+
+/* ---- Audit Log (Round F2) ---------------------------------------------- */
+.rg-adm-audit-form { margin-bottom: 0.25rem; }
+.rg-adm-more {
+    margin-bottom: 0.9rem;
+    border: 1px solid var(--rgi-border);
+    border-radius: var(--rgi-radius);
+    background: var(--rgi-card);
+}
+.rg-adm-more > summary {
+    padding: 0.55rem 0.9rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--rgi-ink);
+    cursor: pointer;
+    list-style-position: inside;
+}
+.rg-adm-more[open] > summary { border-bottom: 1px solid var(--rgi-border); }
+.rg-adm-more__body { padding: 0.9rem; }
+
+.rg-adm-log .table td { vertical-align: top; }
+.rg-adm-log__time { width: 6.5rem; }
+.rg-adm-log__who { width: 13rem; }
+.rg-adm-log__case { width: 10rem; }
+.rg-adm-log__day th {
+    padding-top: 0.9rem !important;
+    padding-bottom: 0.45rem !important;
+    background: var(--adm-soft) !important;
+    color: var(--rgi-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+.rg-adm-who { font-weight: 600; }
+.rg-adm-what { font-weight: 600; }
+.rg-adm-details { margin-top: 0.3rem; }
+.rg-adm-details > summary {
+    display: inline-block;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--rgi-primary);
+    cursor: pointer;
+}
+.rg-adm-details ul {
+    margin: 0.35rem 0 0;
+    padding-left: 1.1rem;
+    font-size: 0.8rem;
+    color: var(--rgi-muted);
+}
+@media (max-width: 767.98px) {
+    .rg-adm-log__who, .rg-adm-log__case { width: auto; }
+}
