@@ -266,13 +266,14 @@ class IdentityAdministrationTests(BaseRecruitmentTestCase):
         self.sysadmin.refresh_from_db()
         self.assertEqual(self.sysadmin.role, RecruitmentUser.Role.SYSTEM_ADMIN)
 
-    def test_system_admin_cannot_open_position_list(self):
+    def test_the_old_positions_address_lands_on_the_home_page(self):
+        # Round I1: the orphan open-positions page is gone; an old bookmark still lands.
         client = Client()
-        self.force_login_with_mfa(client, self.sysadmin)
+        self.force_login_with_mfa(client, self.secretariat)
 
-        response = client.get(reverse("position-list"))
+        response = client.get("/internal/positions/")
 
-        self.assertEqual(response.status_code, 403)
+        self.assertRedirects(response, reverse("dashboard"), fetch_redirect_response=False)
 
 
 class SessionStabilityTests(BaseRecruitmentTestCase):

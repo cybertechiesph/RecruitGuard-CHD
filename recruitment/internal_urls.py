@@ -1,5 +1,6 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path
+from django.views.generic import RedirectView
 
 from .entry_views import (
     RecruitmentEntryCancelView,
@@ -76,7 +77,6 @@ from .views import (
     SessionKeepAliveView,
     ScheduleCalendarView,
     OfficePolicyView,
-    PositionListView,
     NotificationResendView,
     ReminderNotificationView,
     RequirementChecklistNotificationView,
@@ -159,7 +159,9 @@ urlpatterns = [
         name="notification-unread-count",
     ),
     path("session/keep-alive/", SessionKeepAliveView.as_view(), name="session-keep-alive"),
-    path("positions/", PositionListView.as_view(), name="position-list"),
+    # Round I1: the old open-positions page was linked from nowhere; the address now
+    # lands on the role's own home page.
+    path("positions/", RedirectView.as_view(pattern_name="dashboard", permanent=False)),
     path("entries/", RecruitmentEntryListView.as_view(), name="recruitment-entry-list"),
     path("entries/new/", RecruitmentEntryCreateView.as_view(), name="recruitment-entry-create"),
     path(

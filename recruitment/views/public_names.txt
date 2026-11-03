@@ -45,7 +45,6 @@ NotificationReadView
 NotificationResendView
 NotificationUnreadCountView
 OfficePolicyView
-PositionListView
 PositionReferenceCreateView
 PositionReferenceListView
 PositionReferenceUpdateView

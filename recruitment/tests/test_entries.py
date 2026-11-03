@@ -305,7 +305,7 @@ class RecruitmentEntryManagementTests(BaseRecruitmentTestCase):
         self.assertNotContains(update_response, 'id="id_status"')
         self.assertContains(update_response, "Current Status")
         self.assertContains(update_response, entry.get_status_display())
-        self.assertContains(update_response, "Change status from the Vacancies list.")
+        self.assertContains(update_response, "Change status from the Recruitment Entries list.")
 
     def test_entry_create_status_choices_allow_only_draft_and_active(self):
         client = Client()

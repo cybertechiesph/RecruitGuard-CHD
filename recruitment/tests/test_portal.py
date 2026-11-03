@@ -394,24 +394,6 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         self.assertNotContains(response, "Legacy description should stay hidden.")
         self.assertNotContains(response, "Legacy requirements should stay hidden.")
 
-    def test_internal_position_list_uses_reference_metadata_over_legacy_entry_text(self):
-        self.level1_position.description = "Legacy internal description should stay hidden."
-        self.level1_position.requirements = "Legacy internal requirements should stay hidden."
-        self.level1_position.qualification_reference = "Internal entry note."
-        self.level1_position.save(update_fields=["description", "requirements", "qualification_reference", "updated_at"])
-        self.admin_aide_position.qs_training = "Eight hours of records management training"
-        self.admin_aide_position.save(update_fields=["qs_training", "updated_at"])
-
-        client = Client()
-        self.force_login_with_mfa(client, self.secretariat)
-        response = client.get(reverse("position-list"))
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Internal entry note.")
-        self.assertContains(response, "Training: Eight hours of records management training")
-        self.assertNotContains(response, "Legacy internal description should stay hidden.")
-        self.assertNotContains(response, "Legacy internal requirements should stay hidden.")
-
     def test_plantilla_public_submission_requires_valid_otp_before_finalization(self):
         client = Client()
         self.start_portal_draft(client, self.level1_position, "plantilla.portal@example.com")

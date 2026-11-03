@@ -7,7 +7,7 @@ This one asks a single question of every heading, button, notice, error, email a
 system: does a first-time reader understand it without a manual? Review only; nothing in the
 code was changed.
 
-## Status: review written, Round I not started
+## Status: review written; I1 done, I2–I6 to do
 
 ## 0. How this was tested
 
@@ -401,9 +401,28 @@ kind from the console backend.
 
 | Batch | Status |
 |---|---|
-| I1 — wrong and stale | not started |
+| I1 — wrong and stale | **Done.** See the note below. |
 | I2 — one name per thing | not started (needs the two office answers, or the defaults) |
 | I3 — applicant side and emails | not started |
 | I4 — Filipino consistency | not started |
 | I5 — staff jargon and locked panels | not started |
 | I6 — hard words | not started |
+
+**I1 as built, where it differs from the brief:**
+
+- **The reopen sentence (L-02) is narrower than suggested.** A reopen only works on a *closed*
+  case (`user_can_reopen_case` needs `is_stage_locked`), and a finalized exam, interview or
+  deliberation panel is shown while the case is still active. So the panels now say
+  "Finalized records can't be edited. Only the HRM Chief can reopen a closed case to correct
+  one." rather than pointing at a reopen the reader cannot use yet.
+- **L-03 points at today's name.** The form now says "Change status from the Recruitment
+  Entries list."; it changes again with the rest of the vacancy rename in I2.
+- **`/internal/positions/` redirects** to the role's home page instead of returning 404, so an
+  old bookmark still lands. The view, template, export name and its two tests are gone;
+  `get_visible_positions_for_user` (services) is now unused by any view and was left in place.
+- **The queue search label** said "reference" too; it now reads "Search applicant, case number,
+  or position" to match the placeholder (the search does match the case number).
+- **The branding guard** (`BrandingGuardTests` in `tests/test_architecture.py`) checks readable
+  template text and form attributes, and every non-docstring Python string, for
+  "RecruitGuard" or "RG". Scripts, styles, comments and `rg-` classes are ignored; one machine
+  value (the `RG-Autosave` request header) is allow-listed.

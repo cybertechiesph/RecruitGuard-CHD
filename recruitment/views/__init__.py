@@ -20,7 +20,7 @@ from .common import (
     _add_validation_errors_to_form,
     _safe_internal_redirect,
 )
-from .home import DashboardView, ForbiddenView, SessionKeepAliveView, PositionListView
+from .home import DashboardView, ForbiddenView, SessionKeepAliveView
 from .maintenance import MaintenanceView
 from .references import (
     PositionReferenceListView,

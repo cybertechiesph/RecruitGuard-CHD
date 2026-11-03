@@ -2,6 +2,7 @@
 one door for case movements, Manila dates and the workflow map."""
 
 import ast
+import re
 import symtable
 from pathlib import Path
 from types import SimpleNamespace
@@ -317,3 +318,60 @@ class ViewsPackageArchitectureTests(SimpleTestCase):
             siblings = self._sibling_imports(ast.parse(path.read_text(encoding="utf-8")))
             with self.subTest(module=path.stem):
                 self.assertLessEqual(siblings, self._allowed_for(path.stem))
+
+
+class BrandingGuardTests(SimpleTestCase):
+    """Round I1: "RecruitGuard" is the study's title only. Every user-facing surface says
+    "DOH–CHD CALABARZON Recruitment Portal", so no readable template text, form attribute or
+    non-docstring Python string may carry the study name or its "RG" short form. Script and
+    style blocks, template comments and CSS class names (``rg-…``) are code, not text."""
+
+    root = Path(__file__).resolve().parent.parent.parent
+    pattern = re.compile(r"RecruitGuard|\bRG\b")
+    # Machine values nobody reads: the X-Requested-With header recruitguard-autosave.js sends.
+    technical_values = {"RG-Autosave"}
+
+    def _template_text(self, source):
+        source = re.sub(r"<(script|style)\b.*?</\1>", " ", source, flags=re.S | re.I)
+        source = re.sub(r"{%\s*comment\s*%}.*?{%\s*endcomment\s*%}", " ", source, flags=re.S)
+        source = re.sub(r"{#.*?#}|<!--.*?-->", " ", source, flags=re.S)
+        attributes = re.findall(r'\b(?:placeholder|title|aria-label|alt|value)="([^"]*)"', source)
+        text = re.sub(r"{%.*?%}|{{.*?}}", " ", source, flags=re.S)
+        text = re.sub(r"<[^>]+>", " ", text)
+        return [text, *attributes]
+
+    def test_templates_do_not_show_the_study_name(self):
+        offenders = []
+        for folder in ("templates", "recruitment/templates"):
+            for path in sorted((self.root / folder).rglob("*")):
+                if path.suffix not in {".html", ".txt"}:
+                    continue
+                for chunk in self._template_text(path.read_text(encoding="utf-8")):
+                    for match in self.pattern.finditer(chunk):
+                        offenders.append(f"{path.relative_to(self.root)}: …{chunk[max(0, match.start() - 30):match.end() + 30].strip()}…")
+        self.assertEqual(offenders, [])
+
+    def test_python_strings_do_not_show_the_study_name(self):
+        offenders = []
+        for path in sorted((self.root / "recruitment").rglob("*.py")):
+            if "tests" in path.parts or "migrations" in path.parts:
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            docstrings = {
+                id(node.body[0].value)
+                for node in ast.walk(tree)
+                if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+                and node.body
+                and isinstance(node.body[0], ast.Expr)
+                and isinstance(node.body[0].value, ast.Constant)
+            }
+            for node in ast.walk(tree):
+                if (
+                    isinstance(node, ast.Constant)
+                    and isinstance(node.value, str)
+                    and id(node) not in docstrings
+                    and node.value not in self.technical_values
+                    and self.pattern.search(node.value)
+                ):
+                    offenders.append(f"{path.relative_to(self.root)}:{node.lineno}: {node.value[:80]}")
+        self.assertEqual(offenders, [])

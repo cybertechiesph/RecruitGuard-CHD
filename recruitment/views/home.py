@@ -1,16 +1,15 @@
-"""The dashboard, the forbidden page, the session keep-alive and the positions list.
+"""The dashboard, the forbidden page and the session keep-alive.
 """
 
 from datetime import datetime, time
 
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.core.exceptions import PermissionDenied
 from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.utils import timezone
 from django.views import View
-from django.views.generic import ListView, TemplateView
+from django.views.generic import TemplateView
 
 from ..models import (
     AuditLog,
@@ -18,10 +17,7 @@ from ..models import (
     RecruitmentUser,
 )
 from ..permissions import InternalUserRequiredMixin
-from ..services import (
-    get_internal_account_locks,
-    get_visible_positions_for_user,
-)
+from ..services import get_internal_account_locks
 
 
 class DashboardView(LoginRequiredMixin, InternalUserRequiredMixin, TemplateView):
@@ -121,15 +117,3 @@ class SessionKeepAliveView(LoginRequiredMixin, InternalUserRequiredMixin, View):
             {"ok": True, "timeout_seconds": settings.SESSION_INACTIVITY_TIMEOUT_SECONDS}
         )
 
-
-class PositionListView(LoginRequiredMixin, InternalUserRequiredMixin, ListView):
-    template_name = "recruitment/position_list.html"
-    context_object_name = "positions"
-
-    def get(self, request, *args, **kwargs):
-        if request.user.role == RecruitmentUser.Role.SYSTEM_ADMIN:
-            raise PermissionDenied
-        return super().get(request, *args, **kwargs)
-
-    def get_queryset(self):
-        return get_visible_positions_for_user(self.request.user)
