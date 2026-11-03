@@ -5,6 +5,7 @@ following, vacancy panel membership and the generic view/process checks.
 from django.db.models import Q
 
 from ..models import (
+    InterviewRating,
     PositionPosting,
     RecruitmentApplication,
     RecruitmentCase,
@@ -112,6 +113,9 @@ def get_closed_cases_for_user(user):
     # Secretariat never sees Level 2 closed cases (helper's first guard).
     if user.role == RecruitmentUser.Role.SECRETARIAT:
         queryset = queryset.exclude(level=PositionPosting.Level.LEVEL_2)
+    # Round G (G3): a panel member's past records are their own vacancies.
+    if user.role == RecruitmentUser.Role.HRMPSB_MEMBER:
+        queryset = queryset.filter(_panel_member_record_q(user))
     # Helper split: closed-stage cases need a processor role; approved/rejected
     # cases not yet at the closed stage need an export role.
     if is_processor and is_exporter:
@@ -123,11 +127,32 @@ def get_closed_cases_for_user(user):
     return queryset.order_by("-closed_at", "-updated_at", "pk").distinct()
 
 
+def _panel_member_record_position_ids(user):
+    """Round G (G3): the vacancies an HRMPSB member has a record on: those they rated a
+    candidate in, and those they are named on as an end-user member. A standing member sits
+    on every panel, so sitting alone does not make every closed vacancy theirs."""
+    rated = set(
+        InterviewRating.objects.filter(rated_by=user).values_list("application__position_id", flat=True)
+    )
+    named = set(user.panel_vacancies.values_list("pk", flat=True))
+    return rated | named
+
+
+def _panel_member_record_q(user):
+    return Q(position_id__in=_panel_member_record_position_ids(user))
+
+
 def _user_has_closed_application_access(user, application):
     case = getattr(application, "case", None)
     if (
         user.role == RecruitmentUser.Role.SECRETARIAT
         and application.level == PositionPosting.Level.LEVEL_2
+    ):
+        return False
+    # Round G (G3): mirrors get_closed_cases_for_user for panel members.
+    if (
+        user.role == RecruitmentUser.Role.HRMPSB_MEMBER
+        and application.position_id not in _panel_member_record_position_ids(user)
     ):
         return False
     if case and case.current_stage == RecruitmentCase.Stage.CLOSED:

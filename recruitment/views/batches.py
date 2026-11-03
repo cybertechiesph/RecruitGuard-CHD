@@ -119,10 +119,13 @@ class VacancyBatchConsoleView(LoginRequiredMixin, WorkflowProcessorRequiredMixin
         )
         context["total_applications"] = sum(group["awaiting"] for group in vacancies)
         # TI-5: the next seven days from the schedule calendar, on the landing page.
-        today = timezone.localdate()
-        context["coming_up"] = group_events_by_day(
-            get_schedule_events_for_user(self.request.user, today, today + timedelta(days=6))
-        )
+        # Round G (G2): not for the Appointing Authority, whose calendar is not theirs.
+        context["show_coming_up"] = self.request.user.role != RecruitmentUser.Role.APPOINTING_AUTHORITY
+        if context["show_coming_up"]:
+            today = timezone.localdate()
+            context["coming_up"] = group_events_by_day(
+                get_schedule_events_for_user(self.request.user, today, today + timedelta(days=6))
+            )
         return context
 
 

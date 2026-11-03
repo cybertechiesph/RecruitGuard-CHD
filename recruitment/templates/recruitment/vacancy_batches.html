@@ -26,6 +26,7 @@
   TI-5: the next seven days from the Schedule page, so nobody has to open each case to find
   out what is happening this week.
 {% endcomment %}
+{% if show_coming_up %}
 <section class="rg-icard rg-sched-comingup mb-3" aria-labelledby="coming-up-title" data-coming-up>
     <div class="rg-sched-comingup__head">
         <h2 class="rg-sched-comingup__title" id="coming-up-title">Coming up &middot; next 7 days</h2>
@@ -44,6 +45,7 @@
         <p class="rg-imeta mb-0">No exams, interviews or deadlines in the next 7 days.</p>
     {% endif %}
 </section>
+{% endif %}
 
 {% if not vacancies %}
     <div class="rg-icard">

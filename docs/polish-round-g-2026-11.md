@@ -3,7 +3,7 @@
 Four small items left over from the role walkthroughs, bundled into one short round after the
 admin area rebuild (Round F). Each is a few lines of code plus a test; none changes a rule.
 
-## Status: brief written, not implemented
+## Status: done (2026-11-03)
 
 ## G1. "Open Pool" wording on the COS deliberation page
 
@@ -76,3 +76,22 @@ walkthroughs is among the standing members.
 G1, G4, G2, G3 — about an hour. One commit, suite green, the Chief's deliberation page, the
 Director's sidebar and a panel member's Past Records checked in the browser on the local demo
 database (reseed first for G4).
+
+## Implementation notes
+
+- **G1** as written.
+- **G2** as written: the Schedule link is hidden, the calendar returns 403 and the landing page
+  skips "Coming up" for the Appointing Authority. The Secretariat and HRM Chief are unchanged.
+- **G3** narrowed one step further than the brief's "Change" line. "Rated on, or sits on the
+  vacancy's panel" would give a standing member every closed vacancy again (a standing member
+  sits on every panel), which is the problem the finding raised. So the rule is: vacancies the
+  member rated a candidate in, plus vacancies they are named on as an end-user member. The list
+  and the per-case guard use the same helper. On the local demo database the panel account's
+  Past Records went from 25 to 7 cases.
+- **G4** as written: the seed resolves four members, puts the three raters on the standing panel
+  before any rating, and names the fourth as the end user on each seeded Plantilla vacancy; a
+  second run leaves the same shape. The local demo database was not reseeded for the browser
+  check (it would remove the walkthrough cases); the seed test covers the change.
+- Tests: `RoundGTests` (6) in `test_reviews.py`, `SeedDemoPanelTests` (1) in `test_commands.py`,
+  the open-pool deliberation test extended; two older tests now name the panel member on the
+  vacancy before checking closed-case access.

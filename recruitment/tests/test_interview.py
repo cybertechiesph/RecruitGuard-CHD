@@ -1440,6 +1440,9 @@ class InterviewManagementTests(InterviewSessionHelpers, BaseRecruitmentTestCase)
 
         level1_application = self.make_application(self.level1_position)
         level2_application = self.make_application(self.level2_position)
+        # Round G (G3): the panel member keeps sight of the vacancies they sit on.
+        self.level1_position.panel_end_users.add(self.hrmpsb)
+        self.level2_position.panel_end_users.add(self.hrmpsb)
         for application in (level1_application, level2_application):
             self.verify_application_for_submission(application)
             with self.captureOnCommitCallbacks(execute=True):

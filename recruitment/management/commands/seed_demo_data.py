@@ -66,6 +66,7 @@ from recruitment.services import (
     generate_comparative_assessment_report,
     get_competency_rating_template,
     get_current_workflow_section,
+    get_office_policy,
     get_published_competency_rating_template,
     save_exam_record,
     save_exam_schedule,
@@ -228,7 +229,13 @@ class Command(BaseCommand):
         }
         # Workflow governance requires a quorum of HRMPSB members to finalize a
         # Plantilla interview, so the panel needs that many distinct raters.
-        hrmpsb_panel = self._resolve_hrmpsb_panel(MIN_INTERVIEW_RATINGS_PLANTILLA)
+        # Round G (G4): the demo models the office's panel rule — the raters are the
+        # standing panel (chair, vice chair, HR) and each Plantilla vacancy adds one end
+        # user — so setting a panel in Office Policy never empties a demo member's queue.
+        hrmpsb_members = self._resolve_hrmpsb_panel(MIN_INTERVIEW_RATINGS_PLANTILLA + 1)
+        hrmpsb_panel = hrmpsb_members[:MIN_INTERVIEW_RATINGS_PLANTILLA]
+        end_user_member = hrmpsb_members[MIN_INTERVIEW_RATINGS_PLANTILLA]
+        get_office_policy().core_panel_members.set(hrmpsb_panel)
         actors["hrmpsb_panel"] = hrmpsb_panel
         actors["hrmpsb"] = hrmpsb_panel[0]
 
@@ -259,6 +266,9 @@ class Command(BaseCommand):
         # The CAR-demo dummies must never email real mailboxes, even with --send-email.
         with override_settings(EMAIL_BACKEND=LOCMEM_EMAIL_BACKEND):
             rows.extend(self._seed_car_demo(creator, actors, start_index=index))
+
+        for posting in PositionPosting.objects.filter(branch=PositionPosting.Branch.PLANTILLA):
+            posting.panel_end_users.set([end_user_member])
 
         return {
             "purged_entries": purged_entries,

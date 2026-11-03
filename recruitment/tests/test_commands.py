@@ -132,3 +132,27 @@ class E2ESeedCommandTests(BaseRecruitmentTestCase):
             ).count(),
             1,
         )
+
+
+class SeedDemoPanelTests(BaseRecruitmentTestCase):
+    """Round G (G4): the demo seed models the office's panel rule."""
+
+    def test_seed_sets_a_standing_panel_and_one_end_user_per_plantilla_vacancy(self):
+        from recruitment.models import OfficePolicy, PositionPosting
+        from recruitment.services import get_office_policy
+
+        call_command("seed_demo_data", force=True, stdout=io.StringIO())
+        core = set(get_office_policy().core_panel_members.values_list("pk", flat=True))
+        self.assertEqual(len(core), 3)
+        self.assertIn(self.hrmpsb.pk, core)
+        plantilla = PositionPosting.objects.filter(branch=PositionPosting.Branch.PLANTILLA)
+        self.assertTrue(plantilla.exists())
+        for posting in plantilla:
+            end_users = set(posting.panel_end_users.values_list("pk", flat=True))
+            self.assertEqual(len(end_users), 1, posting.job_code)
+            self.assertFalse(end_users & core)
+
+        # A second run leaves the same shape (the reseed on every deploy).
+        call_command("seed_demo_data", force=True, stdout=io.StringIO())
+        self.assertEqual(get_office_policy().core_panel_members.count(), 3)
+        self.assertEqual(OfficePolicy.objects.count(), 1)

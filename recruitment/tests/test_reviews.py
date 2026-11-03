@@ -22,6 +22,7 @@ from ..models import (
     ExamSchedule,
     FinalSelection,
     CompetencyRatingTemplate,
+    InterviewRating,
     Notification,
     NotificationLog,
     PositionPosting,
@@ -1215,6 +1216,9 @@ class RoundBTests(BatchExamHelpers, BaseRecruitmentTestCase):
         url = reverse("vacancy-batch-cos-deliberation", args=[posting.pk])
         page = chief.get(url)
         self.assertContains(page, 'name="chosen_case"')
+        # Round G (G1): the page uses the intake mode's name.
+        self.assertContains(page, "an open pool")
+        self.assertNotContains(page, "continuous intake")
         with self.captureOnCommitCallbacks(execute=True):
             chief.post(url, {"operation": "finalize", "chosen_case": str(first.case.id), "notes": "Fills the slot."})
         first.refresh_from_db()
@@ -1278,6 +1282,8 @@ class HrmpsbRoundCTests(InterviewSessionHelpers, BaseRecruitmentTestCase):
     # P1-1: a closed case's timeline must not name the applicant to the panel.
     def test_closed_case_timeline_does_not_name_the_applicant_to_the_panel(self):
         application = self._submitted()
+        # Round G (G3): a member's past records are their own vacancies.
+        application.position.panel_end_users.add(self.hrmpsb)
         with self.captureOnCommitCallbacks(execute=True):
             process_workflow_action(application, self.secretariat, "reject", "Not eligible.")
         url = reverse("application-detail", args=[application.pk])
@@ -1669,3 +1675,87 @@ class RoundBLeftoverCheckTests(BaseRecruitmentTestCase):
             % self.hrmpsb.pk,
         )
         self.assertNotRegex(html, r'name="core_panel_members"[^>]*class="[^"]*form-control')
+
+
+class RoundGTests(BaseRecruitmentTestCase):
+    """Round G (docs/polish-round-g-2026-11.md): the Director's calendar and a panel
+    member's past records."""
+
+    def _client_for(self, user):
+        client = Client()
+        self.force_login_with_mfa(client, user)
+        return client
+
+    # G2: the Director has no calendar of their own.
+    def test_the_director_has_no_schedule_and_no_coming_up(self):
+        director = self._client_for(self.appointing)
+        self.assertEqual(director.get(reverse("schedule-calendar")).status_code, 403)
+        landing = director.get(reverse("vacancy-batches"))
+        self.assertEqual(landing.status_code, 200)
+        self.assertNotContains(landing, "data-coming-up")
+        self.assertNotContains(landing, f'href="{reverse("schedule-calendar")}"')
+
+    def test_the_offices_keep_their_schedule_and_coming_up(self):
+        secretariat = self._client_for(self.secretariat)
+        self.assertEqual(secretariat.get(reverse("schedule-calendar")).status_code, 200)
+        landing = secretariat.get(reverse("vacancy-batches"))
+        self.assertContains(landing, "data-coming-up")
+        self.assertContains(landing, f'href="{reverse("schedule-calendar")}"')
+
+    # G3: a panel member's past records are their own vacancies.
+    def _rated_and_closed(self):
+        application = self.make_application(self.level1_position)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.move_application_to_appointing_review(application)
+        self.assertTrue(InterviewRating.objects.filter(rated_by=self.hrmpsb, application=application).exists())
+        RecruitmentApplication.objects.filter(pk=application.pk).update(status=RecruitmentApplication.Status.REJECTED)
+        RecruitmentCase.objects.filter(pk=application.case.pk).update(current_stage=RecruitmentCase.Stage.CLOSED)
+        application.refresh_from_db()
+        return application
+
+    def _closed_without_the_member(self):
+        application = self.make_application(self.level2_position)
+        self.verify_application_for_submission(application)
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(application, self.applicant)
+        application.refresh_from_db()
+        with self.captureOnCommitCallbacks(execute=True):
+            process_workflow_action(application, self.hrm_chief, "reject", "Not eligible.")
+        application.refresh_from_db()
+        return application
+
+    def test_a_member_sees_closed_cases_of_vacancies_they_rated_on_only(self):
+        from recruitment.services import get_closed_cases_for_user, user_can_view_application
+
+        rated = self._rated_and_closed()
+        other = self._closed_without_the_member()
+        closed_ids = set(get_closed_cases_for_user(self.hrmpsb).values_list("pk", flat=True))
+        self.assertIn(rated.pk, closed_ids)
+        self.assertNotIn(other.pk, closed_ids)
+        self.assertTrue(user_can_view_application(self.hrmpsb, rated))
+        self.assertFalse(user_can_view_application(self.hrmpsb, other))
+        self.assertEqual(
+            self._client_for(self.hrmpsb).get(reverse("application-detail", args=[other.pk])).status_code,
+            404,
+        )
+
+    def test_a_named_end_user_sees_that_vacancys_closed_cases(self):
+        from recruitment.services import get_closed_cases_for_user, user_can_view_application
+
+        other = self._closed_without_the_member()
+        self.level2_position.panel_end_users.add(self.hrmpsb)
+        self.assertIn(other.pk, set(get_closed_cases_for_user(self.hrmpsb).values_list("pk", flat=True)))
+        self.assertTrue(user_can_view_application(self.hrmpsb, other))
+
+    def test_a_standing_member_does_not_get_every_closed_case(self):
+        from recruitment.services import get_closed_cases_for_user
+
+        other = self._closed_without_the_member()
+        get_office_policy().core_panel_members.set([self.hrmpsb])
+        self.assertNotIn(other.pk, set(get_closed_cases_for_user(self.hrmpsb).values_list("pk", flat=True)))
+
+    def test_the_offices_closed_lists_are_unchanged(self):
+        from recruitment.services import get_closed_cases_for_user
+
+        other = self._closed_without_the_member()
+        self.assertIn(other.pk, set(get_closed_cases_for_user(self.hrm_chief).values_list("pk", flat=True)))

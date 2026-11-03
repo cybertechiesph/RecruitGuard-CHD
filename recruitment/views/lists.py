@@ -199,6 +199,13 @@ class ScheduleCalendarView(LoginRequiredMixin, WorkflowProcessorRequiredMixin, T
     template_name = "recruitment/schedule_calendar.html"
     AGENDA_DAYS = 30
 
+    def dispatch(self, request, *args, **kwargs):
+        # Round G (G2): every event on it belongs to the HR office or the panel; the
+        # Appointing Authority has none of their own, so the calendar is not theirs.
+        if getattr(request.user, "role", None) == RecruitmentUser.Role.APPOINTING_AUTHORITY:
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         today = timezone.localdate()
