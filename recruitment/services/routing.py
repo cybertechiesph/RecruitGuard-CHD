@@ -126,6 +126,12 @@ def get_loaned_out_applications(user):
 
 
 def _batch_cases_held_by(posting, actor):
+    """The cases of this vacancy the office holds at the vacancy's intake stage (screening and
+    exam), the only stage a batch is lent at. A Level 1 COS case also sits at the HRM Chief's
+    review stage for the Chief's own re-check, interview and selection; those are the Chief's
+    steps, not a lendable batch, and sending them would strand the case (it would not count as
+    a loan, so it could not be recalled)."""
+    intake_stage = screening._vacancy_screening_stage(posting)
     return [
         application
         for application in RecruitmentApplication.objects.filter(
@@ -134,7 +140,7 @@ def _batch_cases_held_by(posting, actor):
         if getattr(application, "case", None)
         and not application.case.is_stage_locked
         and application.case.case_status in LOANABLE_CASE_STATUSES
-        and application.case.current_stage in common.SCREENING_STAGES
+        and application.case.current_stage == intake_stage
     ]
 
 

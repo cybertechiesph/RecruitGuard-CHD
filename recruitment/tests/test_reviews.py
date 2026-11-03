@@ -52,6 +52,7 @@ from ..services import (
     rescind_final_selection,
     save_interview_rating,
     user_can_record_withdrawal,
+    user_can_send_vacancy_batch,
 )
 from ..notification_services import resend_notification
 from ..schedule_services import EventKind, get_schedule_events_for_user
@@ -1603,3 +1604,68 @@ class WithdrawalOwningOfficeSwitchTests(BaseRecruitmentTestCase):
         application = self._lent()
         self.assertFalse(user_can_record_withdrawal(self.secretariat, application))
         self.assertTrue(user_can_record_withdrawal(self.hrm_chief, application))
+
+
+class RoundBLeftoverCheckTests(BaseRecruitmentTestCase):
+    """Fixes from the Round B browser check (2026-11-03)."""
+
+    def _client_for(self, user):
+        client = Client()
+        self.force_login_with_mfa(client, user)
+        return client
+
+    def _cos_case_at_chief_step(self):
+        application = self.make_application(self.cos_position)
+        application = self.move_application_to_hrm_chief_review(application)
+        self.assertEqual(application.case.current_stage, RecruitmentCase.Stage.HRM_CHIEF_REVIEW)
+        self.assertEqual(application.case.current_handler_role, RecruitmentUser.Role.HRM_CHIEF)
+        return application
+
+    # A Level 1 COS case at the Chief's own steps is not a lendable batch.
+    def test_chief_cannot_send_a_level1_cos_batch_from_the_chiefs_own_steps(self):
+        application = self._cos_case_at_chief_step()
+        self.assertFalse(user_can_send_vacancy_batch(self.hrm_chief, self.cos_position))
+        with self.assertRaisesMessage(ValueError, "You hold no cases in this vacancy's batch"):
+            hand_off_vacancy_batch(self.cos_position, self.hrm_chief, "Lending it.")
+        page = self._client_for(self.hrm_chief).get(
+            reverse("vacancy-batch-detail", args=[self.cos_position.pk])
+        )
+        self.assertNotContains(page, "Send the batch to the Secretariat")
+        self._client_for(self.hrm_chief).post(
+            reverse("vacancy-batch-handoff", args=[self.cos_position.pk]),
+            {"operation": "send", "remarks": "Lending it."},
+        )
+        application.case.refresh_from_db()
+        self.assertEqual(application.case.current_handler_role, RecruitmentUser.Role.HRM_CHIEF)
+
+    # Lending at screening still works both ways: send, and the borrower sends it back.
+    def test_level1_batch_at_screening_can_still_be_lent_and_sent_back(self):
+        application = self.make_application(self.cos_position)
+        self.verify_application_for_submission(application)
+        with self.captureOnCommitCallbacks(execute=True):
+            submit_application(application, self.applicant)
+        self.assertTrue(user_can_send_vacancy_batch(self.secretariat, self.cos_position))
+        with self.captureOnCommitCallbacks(execute=True):
+            hand_off_vacancy_batch(self.cos_position, self.secretariat, "Lending it.")
+        application.case.refresh_from_db()
+        self.assertEqual(application.case.current_handler_role, RecruitmentUser.Role.HRM_CHIEF)
+        self.assertTrue(user_can_send_vacancy_batch(self.hrm_chief, self.cos_position))
+        with self.captureOnCommitCallbacks(execute=True):
+            hand_off_vacancy_batch(self.cos_position, self.hrm_chief, "Sending it back.")
+        application.case.refresh_from_db()
+        self.assertEqual(application.case.current_handler_role, RecruitmentUser.Role.SECRETARIAT)
+
+    # The standing-panel field renders as a list of real checkboxes.
+    def test_office_policy_panel_field_renders_as_checkboxes(self):
+        policy = get_office_policy()
+        policy.core_panel_members.set([self.hrmpsb])
+        page = self._client_for(self.hrm_chief).get(reverse("office-policy"))
+        html = page.content.decode()
+        self.assertContains(page, "data-checkbox-list")
+        self.assertContains(page, "<legend class=\"form-label\">Standing HRMPSB panel")
+        self.assertRegex(
+            html,
+            r'<input type="checkbox" name="core_panel_members" value="%d" class="form-check-input"[^>]*checked'
+            % self.hrmpsb.pk,
+        )
+        self.assertNotRegex(html, r'name="core_panel_members"[^>]*class="[^"]*form-control')

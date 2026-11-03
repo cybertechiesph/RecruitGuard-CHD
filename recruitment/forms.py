@@ -101,7 +101,7 @@ class BootstrapFormMixin:
             css_class = field.widget.attrs.get("class", "")
             if isinstance(field.widget, forms.HiddenInput):
                 continue
-            if isinstance(field.widget, forms.CheckboxInput):
+            if isinstance(field.widget, (forms.CheckboxInput, forms.CheckboxSelectMultiple)):
                 field.widget.attrs["class"] = f"{css_class} form-check-input".strip()
             elif isinstance(field.widget, (forms.Select, forms.SelectMultiple)):
                 field.widget.attrs["class"] = f"{css_class} form-select".strip()
