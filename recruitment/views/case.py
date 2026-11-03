@@ -1,5 +1,9 @@
 """The case page (ApplicationDetailView) and the case-level actions: workflow action,
 handoff, override, reopen, withdrawal, contact update and resubmission deadline.
+
+The page shows one workflow step at a time. Its context is the step-independent part from
+`case_shared` plus the current step's keys from that step's `case_<step>` module
+(SECTION_BUILDERS); a step's keys are absent while another step shows.
 """
 
 from django.contrib import messages

@@ -289,6 +289,10 @@ user-visible text.
 | 4 — clock | **Done 2026-11-03.** See below. |
 | 5 — tests split | **Done 2026-11-03.** See below. |
 | 6 — views split | **Done 2026-11-03** (the mechanical split only). See below. |
+| 6b — case page split | **Done 2026-11-04** as Round H (`docs/case-page-split-plan.md`). |
+
+**F15 is complete.** Every round, including the case-page split deferred from round 6, has
+landed with the suite green.
 
 **Round 1 as built, where it differs from section 2:**
 
@@ -424,3 +428,5 @@ user-visible text.
 - **Not done, on purpose:** splitting `ApplicationDetailView` (about 640 lines) into one class
   per tab. That is a redesign of the most-used page, not a move. It should wait until the
   HRMPSB Member and Appointing Authority walkthroughs show what that page needs.
+  *Done after the walkthroughs, as Round H (2026-11-04): a shared part plus one builder per
+  step rather than one class per tab. See `docs/case-page-split-plan.md` section 8.*

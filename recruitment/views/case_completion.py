@@ -4,22 +4,15 @@ application_detail.html; built only when the case is on that step. The completio
 recorded decision and the CAR summary shown there are shared, in case_shared.
 """
 
-from ..forms import (
-    CaseClosureForm,
-    CompletionRequirementFormSet,
-    CompletionTrackingForm,
-    EvidenceUploadForm,
-)
+from ..forms import CaseClosureForm, CompletionRequirementFormSet, CompletionTrackingForm
 from ..models import CompletionRecord
-from ..services import user_can_close_case, user_can_manage_completion, user_can_upload_evidence
+from ..services import user_can_close_case, user_can_manage_completion
 
 
 def build(context, request, application):
     """The completion keys, given the shared context (which holds the completion record)."""
     user = request.user
     section = {}
-    if user_can_upload_evidence(user, application):
-        section["evidence_form"] = EvidenceUploadForm()
     if user_can_manage_completion(user, application):
         completion_record = context["completion_record"]
         requirement_instance = completion_record or CompletionRecord(

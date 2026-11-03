@@ -5,7 +5,7 @@ The last piece of the F15 restructure: `ApplicationDetailView.get_context_data` 
 on every visit, whichever step the page is on. This round splits it into a shared part and one
 builder per step. **Nothing changes for the office**: the page renders exactly the same HTML.
 
-## Status: H1 done (shared + screening + exam), H2 done (interview + CAR/deliberation), H3 done (decision + completion; inline remainder gone); H4 to do
+## Status: done (H1–H4, 2026-11-04); see section 8
 
 ## 1. What the page does today
 
@@ -160,3 +160,35 @@ case per step as the Secretariat and as the panel member.
 
 About half a day of Opus work. The risk is low because the capture compares the rendered page
 itself, not just the tests.
+
+## 8. Implementation status
+
+| Round | Status |
+|---|---|
+| H1 — shared + screening + exam | **Done** `4c5392e`. |
+| H2 — interview + CAR/deliberation | **Done** `52264d7`. |
+| H3 — decision + completion | **Done** `830b183`. `get_context_data` is the short version. |
+| H4 — polish | **Done.** This table; F15 plan marked complete. |
+
+Every round: capture HTML identical to the pre-H1 baseline on all 118 pages the four staff
+roles can open (55 cases × 4 roles = 220 requests), suite green (900 tests).
+
+**Where the build differs from sections 2–5:**
+
+- `case_shared.build(application, user)` takes no `request`; it never needed one. The step
+  builders keep `build(context, request, application)`.
+- **The architecture test is stricter than planned.** The old check only looked at
+  `from .x import …`, so `from . import case_shared` would have slipped past it. It now counts
+  both forms, lists the step modules in `case_parts`, and fails if a `case_*.py` file exists
+  that is not listed (add new step modules there).
+- **`evidence_form` is gone too** (H4). It was built for processors on Completion, but no
+  template ever rendered it, so it was dead weight on every Completion visit.
+- **The three evidence keys were never in the template**, so H3 removed them from the view
+  only.
+- No test patched `recruitment.views.case.<fn>`, so no patch target moved.
+- Coverage note: the demo data has one screening, one exam, six interview and one
+  deliberation page; the decision and completion pages are plentiful. The suite covers the
+  rest of the step-specific paths.
+- Capture method gotchas, for the next time: freeze `django.utils.timezone.now` (the
+  submission packet stamps `built_at`), strip the "N minutes ago" text (`timesince` reads the
+  real clock), and read capture scripts as UTF-8 (Windows defaults to cp1252).
