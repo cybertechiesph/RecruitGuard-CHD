@@ -703,3 +703,56 @@ class AdminAreaRoundF3Tests(BaseRecruitmentTestCase):
         duplicate = self.admin.post(reverse("position-reference-create"), self._reference_data(position_title="records  officer ii"))
         self.assertContains(duplicate, "An active reference with this title and salary grade already exists.")
         self.assertEqual(PositionReference.objects.filter(position_title__iexact="Records Officer II").count(), 1)
+
+
+class AdminAreaRoundF4Tests(BaseRecruitmentTestCase):
+    """Round F4: copy and the case-trail link (docs/admin-area-rebuild-plan.md section 6)."""
+
+    def setUp(self):
+        super().setUp()
+        self.admin = Client()
+        self.force_login_with_mfa(self.admin, self.sysadmin)
+
+    def test_case_numbers_in_the_log_open_the_case_trail(self):
+        application = self.make_application(self.level1_position)
+        self.verify_application_for_submission(application)
+        submit_application(application, self.applicant)
+        application.refresh_from_db()
+        response = self.admin.get(reverse("audit-log-list"), {"category": "case"})
+        trail = reverse("application-audit-log", kwargs={"pk": application.pk})
+        self.assertContains(response, f'href="{trail}"')
+        case_page = self.admin.get(trail)
+        self.assertNotContains(case_page, "data-case-trail-link")
+
+    def test_admin_notifications_point_to_home_and_the_log(self):
+        response = self.admin.get(reverse("notification-list"))
+        self.assertContains(response, "Locked accounts, failed sign-ins and account changes")
+        self.assertContains(response, f'href="{reverse("audit-log-list")}"')
+
+    def test_deactivating_says_what_it_means_for_the_person(self):
+        response = self.admin.post(
+            reverse("internal-user-toggle-active", kwargs={"pk": self.hrmpsb.pk}), follow=True
+        )
+        name = self.hrmpsb.get_full_name() or self.hrmpsb.username
+        messages = [str(m) for m in response.context["messages"]]
+        self.assertIn(f"{name} can no longer sign in.", messages)
+
+    def test_audit_filters_use_plain_labels(self):
+        response = self.admin.get(reverse("audit-log-list"))
+        self.assertNotContains(response, "User Role")
+        self.assertContains(response, ">Role<")
+
+    def test_sidebar_lists_the_six_admin_pages_in_order(self):
+        html = self.admin.get(reverse("dashboard")).content.decode()
+        order = [
+            reverse("dashboard"),
+            reverse("internal-user-list"),
+            reverse("audit-log-list"),
+            reverse("evidence-vault-list"),
+            reverse("position-reference-list"),
+            reverse("maintenance"),
+        ]
+        sidebar = html[html.index("rg-sidebar__nav"):html.index("rg-sidebar__footer")]
+        positions = [sidebar.index(f'href="{url}"') for url in order]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn("Change password", html)

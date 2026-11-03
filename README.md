@@ -158,6 +158,30 @@ Open these URLs after the server starts:
 - Internal dashboard: `http://127.0.0.1:8000/internal/`
 - Django admin: `http://127.0.0.1:8000/admin/`
 
+## For the System Administrator
+
+The administrator's pages are the six links in the sidebar. The administrator manages staff
+accounts and reviews the record; they never open a case, a vacancy or a file's contents.
+
+- **Home**: what needs attention (locked accounts, inactive accounts, failed sign-ins today,
+  days since the last audit archive), shortcuts, and the last ten account and security events.
+- **Accounts**: search staff by name, username or email; filter by role or status.
+  - *Create account*: by default the person is emailed a one-time link to set their own
+    password. Choose "Set a temporary password now" only when their email is not working
+    yet, and give it to them in person.
+  - *An account page* has **Unlock now** (after too many wrong passwords), **Send password
+    reset email** (or resend the invitation), **Deactivate** / **Reactivate**, and that
+    person's recent activity. An administrator cannot deactivate or demote their own account.
+- **Audit Log**: everything the system recorded, newest first, grouped by day. Routine
+  sign-ins are hidden unless you ask for them. Click a case number to see that case's whole
+  trail. Export CSV and the printable report follow the filters on screen.
+- **Secured Files**: every file saved to a case, with its SHA-256 fingerprint, uploader and
+  version. Contents stay with the workflow team.
+- **Position References**: the official positions vacancies are created from. Add or edit
+  them here; nothing is deleted — untick *Active* to retire one, and existing vacancies keep it.
+- **Maintenance**: failed emails in the last 7 days, the audit trail exported for a date
+  range, and audit archives (entries older than six months move to an encrypted file).
+
 ## Scheduled jobs
 
 Run these once a day on the server (for example from cron). Both are safe to re-run.
@@ -203,7 +227,7 @@ Fill in the empty `msgstr ""` entries in the `.po` file, then run the first comm
 
 `createsuperuser` gives you Django admin access, but the internal portal only allows internal roles. That is why the setup commands above also set the account role to `system_admin`.
 
-After logging into `/internal/login/` as that account, you can create the rest of the internal users from the protected internal user management screens.
+After logging into `/internal/login/` as that account, create the rest of the staff from **Accounts** (see "For the System Administrator" above).
 
 Internal roles used by the system:
 
@@ -220,8 +244,12 @@ Internal roles used by the system:
 - Public status lookup: `/apply/status/`
 - Internal login: `/internal/login/`
 - Workflow queue: `/internal/workflow/queue/`
-- Evidence vault: `/internal/evidence/`
+- Administrator home: `/internal/` (System Administrator only)
+- Accounts: `/internal/users/`
 - Audit log: `/internal/audit/`
+- Secured files: `/internal/evidence/`
+- Position references: `/internal/position-references/`
+- Maintenance: `/internal/maintenance/`
 - Django admin: `/admin/`
 
 ## Where the workflow rules live

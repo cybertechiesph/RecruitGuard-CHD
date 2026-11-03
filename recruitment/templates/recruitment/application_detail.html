@@ -6,11 +6,7 @@
 
 {% block breadcrumb %}
 <span class="rg-breadcrumb-sep">&rsaquo;</span>
-{% if request.user.role == "system_admin" %}
-    <a href="{% url 'recruitment-entry-list' %}">Entries</a>
-{% else %}
-    <a href="{% url 'workflow-queue' %}">My Queue</a>
-{% endif %}
+<a href="{% url 'workflow-queue' %}">My Queue</a>
 <span class="rg-breadcrumb-sep">&rsaquo;</span>
 <span class="rg-breadcrumb-current">{% if request.user.role == "hrmpsb_member" %}Candidate {{ application.candidate_code_label }}{% else %}{{ application.reference_label }}{% endif %}</span>
 {% endblock %}
@@ -133,20 +129,8 @@
 {% endif %}
 
 
-{% if request.user.role == "system_admin" %}
-<div class="rg-cws-observer-notice">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-         stroke-width="2" aria-hidden="true">
-        <circle cx="12" cy="12" r="10"/>
-        <path d="M12 8v4m0 4h.01"/>
-    </svg>
-    System Administrator review mode. Case forms are hidden for this role.
-    Case content is visible for audit and user-management purposes only.
-</div>
-{% endif %}
-
 <div class="rg-cws-body">
-    <div class="rg-cws-layout{% if request.user.role != 'system_admin' %} rg-cws-layout--full{% endif %}">
+    <div class="rg-cws-layout rg-cws-layout--full">
 
         
         <div class="rg-cws-main">
@@ -377,87 +361,6 @@
             {% include "internal_includes/notifications_sent_panel.html" %}
 
 
-            {% if request.user.role == "system_admin" %}
-            <details class="rg-cws-disclosure" id="cws-evidence">
-                <summary class="rg-cws-disclosure__summary">Secured files (evidence)</summary>
-
-                <div class="rg-icard">
-                    <div class="rg-icard__header">
-                        <div>
-                            <h3 class="rg-icard__title">Stored Files</h3>
-                            <p class="rg-icard__subtitle">
-                                Files saved for this case.
-                            </p>
-                        </div>
-                    </div>
-                    {% if evidence_items %}
-                        <div class="rg-list-stack">
-                            {% for item in evidence_items %}
-                                <article class="rg-record">
-                                    <div class="rg-record__header">
-                                        <div>
-                                            <strong>{{ item.label }}</strong>
-                                            <div class="rg-record__meta">
-                                                {{ item.original_filename }} &mdash; {{ item.version_label }}
-                                            </div>
-                                        </div>
-                                        <span class="rg-note">{{ item.created_at|date:"M j, Y g:i A" }}</span>
-                                    </div>
-                                    <div class="d-flex flex-wrap gap-2 mb-2">
-                                        <span class="rg-pill rg-pill--neutral rg-pill--sm">
-                                            SHA-256: {{ item.sha256_digest|truncatechars:18 }}
-                                        </span>
-                                        {% if item.stage %}
-                                            <span class="rg-pill rg-pill--info rg-pill--sm">
-                                                {{ item.stage|stage_label }}
-                                            </span>
-                                        {% endif %}
-                                        <span class="rg-pill rg-pill--neutral rg-pill--sm">
-                                            {{ item.get_artifact_scope_display }}
-                                        </span>
-                                        {% if item.is_archived %}
-                                            <span class="rg-pill rg-pill--warning rg-pill--sm">
-                                                Archived{% if item.archive_tag %}: {{ item.archive_tag }}{% endif %}
-                                            </span>
-                                        {% endif %}
-                                    </div>
-                                    <a href="{% url 'evidence-download' application.pk item.pk %}"
-                                       class="btn btn-outline-secondary btn-sm">Download</a>
-                                </article>
-                            {% endfor %}
-                        </div>
-                    {% else %}
-                        {% include "internal_includes/state_empty.html" with title="No files uploaded yet" copy="Files will appear here after upload." %}
-                    {% endif %}
-                </div>
-
-                {% if evidence_form %}
-                    <div class="rg-icard">
-                        <div class="rg-icard__header">
-                            <div>
-                                <h3 class="rg-icard__title">Upload File</h3>
-                                <p class="rg-icard__subtitle">
-                                    Add a supporting file for this case.
-                                </p>
-                            </div>
-                        </div>
-                        <form method="post" action="{% url 'evidence-upload' application.pk %}"
-                              enctype="multipart/form-data">
-                            {% csrf_token %}
-                            <div class="rg-form-grid">
-                                {% for field in evidence_form %}
-                                    {% include "recruitment/includes/form_field.html" with field=field %}
-                                {% endfor %}
-                            </div>
-                            <div class="rg-form-actions">
-                                <button type="submit" class="btn btn-rg-primary">Save File</button>
-                            </div>
-                        </form>
-                    </div>
-                {% endif %}
-            </details>
-            {% endif %}
-
             
             <details class="rg-cws-disclosure" id="cws-timeline">
                 <summary class="rg-cws-disclosure__summary">Case history</summary>
@@ -470,13 +373,6 @@
                                 Important case events and step changes.
                             </p>
                         </div>
-                        {% if audit_log_url %}
-                        <div class="rg-icard__actions">
-                            <a href="{{ audit_log_url }}" class="btn btn-outline-secondary btn-sm">
-                                Full Audit Log
-                            </a>
-                        </div>
-                        {% endif %}
                     </div>
                     {% if case_timeline %}
                         <div class="rg-timeline">
@@ -524,12 +420,6 @@
 
         </div>
         
-
-        {% if request.user.role == "system_admin" %}
-        <div class="rg-cws-sidebar">
-            {% include "internal_includes/case_meta_sidebar.html" %}
-        </div>
-        {% endif %}
 
     </div>
 </div>

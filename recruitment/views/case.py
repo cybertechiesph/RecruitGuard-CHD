@@ -112,7 +112,6 @@ from ..services import (
     case_is_on_loan,
     get_deliberation_record,
     get_deliberation_records,
-    get_evidence_queryset_for_user,
     get_exam_record,
     get_exam_schedule,
     get_notified_exam_sitting,
@@ -141,7 +140,6 @@ from ..services import (
     user_can_close_case,
     user_can_manage_comparative_assessment_report,
     user_can_manage_deliberation,
-    user_can_manage_evidence_archive,
     user_can_manage_completion,
     user_can_export_application,
     user_can_manage_exam,
@@ -420,19 +418,6 @@ class ApplicationDetailView(LoginRequiredMixin, InternalUserRequiredMixin, Detai
         context["completion_handler_label"] = RecruitmentUser.Role(
             _completion_handler_role(application)
         ).label
-        if user.role == RecruitmentUser.Role.SYSTEM_ADMIN:
-            context["audit_log_url"] = reverse("application-audit-log", kwargs={"pk": application.pk})
-            context["evidence_items"] = list(
-                get_evidence_queryset_for_user(
-                    user,
-                    application=application,
-                    archival_status="all",
-                )
-            )
-            context["can_archive_evidence"] = user_can_manage_evidence_archive(user, application)
-            context["evidence_vault_url"] = (
-                f"{reverse('evidence-vault-list')}?q={application.reference_label}"
-            )
         if user_can_upload_evidence(user, application):
             context["evidence_form"] = EvidenceUploadForm()
         if user_can_manage_screening(user, application):

@@ -508,12 +508,14 @@ class InternalUserUpdateView(LoginRequiredMixin, SystemAdministratorRequiredMixi
             except Exception as exc:
                 messages.error(
                     self.request,
-                    f"Account was updated, but email verification could not be sent: {exc}",
+                    "The account was saved, but the confirmation email to the new address "
+                    "could not be sent. Try again in a few minutes.",
                 )
             else:
                 messages.info(
                     self.request,
-                    "Email change is pending verification from the requested address.",
+                    "We emailed a confirmation link to the new address. The email changes "
+                    "once they click it.",
                 )
         record_system_audit_event(
             actor=self.request.user,
@@ -594,7 +596,11 @@ class InternalUserToggleActiveView(LoginRequiredMixin, SystemAdministratorRequir
             description=description,
             metadata={"target_user_id": user.id, "target_username": user.username},
         )
-        messages.success(request, description)
+        name = user.get_full_name() or user.username
+        messages.success(
+            request,
+            f"{name} can sign in again." if user.is_active else f"{name} can no longer sign in.",
+        )
         if back_to_detail:
             return redirect("internal-user-detail", pk=user.pk)
         return redirect("internal-user-list")
@@ -607,5 +613,5 @@ class InternalEmailChangeVerifyView(View):
         except ValueError as exc:
             messages.error(request, str(exc))
         else:
-            messages.success(request, "Internal account email address verified.")
+            messages.success(request, "Email address confirmed. You can sign in with it now.")
         return redirect("login")

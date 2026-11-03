@@ -71,7 +71,8 @@ class ApplicationAuditLogView(
         context["result_count"] = len(audit_logs)
         context["review_scope"] = "application"
         context["recruitment_case"] = getattr(application, "case", None)
-        context.update(_toolbar_context(self.request, cleaned_data, signins_hidden=False))
+        # A case trail never hides sign-ins, so it offers no toggle for them.
+        context.update(_toolbar_context(self.request, cleaned_data, signins_hidden=False, signins_toggleable=False))
         if _should_record_audit_review(self.request, f"application:{application.pk}"):
             record_audit_log_review(
                 actor=self.request.user,
@@ -150,7 +151,7 @@ def _routine_sign_ins_hidden(request, cleaned, session_tag):
     return True
 
 
-def _toolbar_context(request, cleaned, *, signins_hidden):
+def _toolbar_context(request, cleaned, *, signins_hidden, signins_toggleable=True):
     """The chips, quick ranges and "more filters" state the toolbar draws."""
     today = timezone.localdate()
     ranges = [
@@ -178,7 +179,7 @@ def _toolbar_context(request, cleaned, *, signins_hidden):
         "custom_range": custom_range,
         "sensitive_only": bool(cleaned.get("sensitive_only")),
         "signins_hidden": signins_hidden,
-        "signins_toggleable": cleaned.get("category") != "security",
+        "signins_toggleable": signins_toggleable and cleaned.get("category") != "security",
         "more_filters_count": sum(
             1 for value in (cleaned.get("actor_role"), cleaned.get("actor"), custom_range) if value
         ),

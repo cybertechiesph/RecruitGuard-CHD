@@ -1089,7 +1089,7 @@ class AuditLogSearchForm(BootstrapFormMixin, forms.Form):
     actor_role = forms.ChoiceField(
         required=False,
         choices=[("", "All roles"), *RecruitmentUser.Role.choices],
-        label="User Role",
+        label="Role",
     )
     actor = forms.ModelChoiceField(
         required=False,

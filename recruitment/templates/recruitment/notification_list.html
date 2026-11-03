@@ -72,7 +72,7 @@
             <path fill="currentColor" d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
         </svg>
         <h2 class="rg-notif-page__empty-title">You&rsquo;re all caught up.</h2>
-        <p class="rg-notif-page__empty-text">{% if user.role == "system_admin" %}When something needs your attention &mdash; an account change or a security event &mdash; it will appear here.{% else %}When something needs your attention &mdash; a case assignment, a returned application, or a scheduled interview &mdash; it will appear here.{% endif %}</p>
+        <p class="rg-notif-page__empty-text">{% if user.role == "system_admin" %}Locked accounts, failed sign-ins and account changes are on <a href="{% url 'dashboard' %}">Home</a> and in the <a href="{% url 'audit-log-list' %}">Audit Log</a>.{% else %}When something needs your attention &mdash; a case assignment, a returned application, or a scheduled interview &mdash; it will appear here.{% endif %}</p>
     </div>
     {% endif %}
 </div>

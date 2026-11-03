@@ -6,7 +6,7 @@ not open was probed, and each page was judged for how it looks and reads. The of
 verdict going in was that this part "looks clunky and not professional"; section 4 says why, and
 section 8 proposes the redesign. Review only; nothing in the code was changed.
 
-## Status: review written (Round F brief in section 8, not implemented)
+## Status: Round F done (rebuilt per docs/admin-area-rebuild-plan.md, rounds F1 to F4)
 
 ## 0. How this was tested
 
@@ -236,3 +236,22 @@ numbered item is fine.
 
 Then: the full suite; walk the four pages in the browser at desktop and phone width, dark and
 light.
+
+## 9. Round F implementation status (2026-11-03)
+
+The area was rebuilt from scratch rather than patched; the page-by-page spec is
+docs/admin-area-rebuild-plan.md.
+
+| Finding | Closed by | What shipped |
+|---|---|---|
+| P2-1 Position References unmaintainable | F3 | An in-portal Position References page (list, add, edit, retire; no delete; audited). Django admin is not offered to the office. |
+| P2-2 No password help or unlock | F1 | The account page has Send password reset email (or resend the invitation) and Unlock now; locked accounts show in the list and on Home. New accounts are invited by email by default. |
+| P2-3 Dashboard for another role | F1 | Home: needs attention, shortcuts, recent account and security events. No recruitment numbers; no link that 403s. |
+| P3-1 Archive control first on the audit page | F2, F3 | The log comes first; archives moved to the Maintenance page. |
+| P3-2 Events as badge-heavy cards | F2 | A table grouped by day, one Sensitive badge at most, details on demand; routine sign-ins hidden by default. |
+| P3-3 Statistic cards above every list | F1, F2 | Replaced by one count line in each toolbar. |
+| P3-4 User list without search or sort | F1 | Search, role and status chips, sort by last sign-in, one Open per row. |
+| P3-5 Copy | F1, F4 | "Change password" in the sidebar; Django default help texts replaced; page subtitles and account messages rewritten in plain words. |
+| P3-6 Case audit sub-page | F2, F4 | Kept as the "Case trail" page with a proper header and breadcrumb, reached by clicking a case number in the Audit Log. Chosen over a 404 because "who did what on this case" is one of the administrator's six jobs. |
+| Notifications page promised notices nothing sends | F4 | The administrator's empty state now points to Home and the Audit Log. |
+| Unreachable administrator code on the case page | F4 | The `system_admin` branches in the case page template and view, and the orphan case sidebar include, were removed. |

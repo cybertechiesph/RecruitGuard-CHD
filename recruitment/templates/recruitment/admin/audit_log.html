@@ -168,7 +168,7 @@
                                     {% endif %}
                                 {% endwith %}
                             </td>
-                            <td class="rg-adm-num">{% if log.case_reference %}{{ log.case_reference }}{% else %}<span class="rg-adm-muted">&mdash;</span>{% endif %}</td>
+                            <td class="rg-adm-num">{% if log.case_reference %}{% if review_scope != "application" and log.application_id %}<a href="{% url 'application-audit-log' log.application_id %}" title="Everything recorded for this case" data-case-trail-link>{{ log.case_reference }}</a>{% else %}{{ log.case_reference }}{% endif %}{% else %}<span class="rg-adm-muted">&mdash;</span>{% endif %}</td>
                         </tr>
                     {% empty %}
                         <tr><td colspan="4" class="rg-adm-muted">No entries match. {% if review_scope != "application" %}<a href="{% url 'audit-log-list' %}">Show everything</a>{% endif %}</td></tr>
