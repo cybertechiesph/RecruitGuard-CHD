@@ -7,7 +7,7 @@ This one asks a single question of every heading, button, notice, error, email a
 system: does a first-time reader understand it without a manual? Review only; nothing in the
 code was changed.
 
-## Status: review written; I1–I3 done, I4–I6 to do
+## Status: review written; I1–I4 done, I5–I6 to do
 
 ## 0. How this was tested
 
@@ -404,7 +404,7 @@ kind from the console backend.
 | I1 — wrong and stale | **Done.** See the note below. |
 | I2 — one name per thing | **Done** with the defaults. See the note below. |
 | I3 — applicant side and emails | **Done.** See the note below. |
-| I4 — Filipino consistency | not started |
+| I4 — Filipino consistency | **Done.** See the note below. |
 | I5 — staff jargon and locked panels | not started |
 | I6 — hard words | not started |
 
@@ -482,3 +482,21 @@ kind from the console backend.
 - **Filipino**: 38 new or changed strings translated in the existing Taglish voice; 892 of 892
   translated, `update_translations --check` green. Every applicant page re-rendered in
   Filipino: no untranslated line.
+
+**I4 as built:**
+
+- **F-01** The status chips are translated as a set: "Nire-review", "Ine-evaluate",
+  "Pino-process" (beside the existing "May Kailangan Kang Gawin", "Hindi Napili",
+  "Na-withdraw", "Na-cancel ang Vacancy"); "Approved" stays, as Filipinos say it. The
+  progress steps "Document check" and "Final decision" are "Check ng documents" and "Final na
+  desisyon".
+- **F-02** Every Filipino email greeting opens "Hi %(name)s," (13 entries changed from "Dear"
+  or "Hello"). The English emails are unchanged.
+- **F-03, narrower than proposed.** The four download links (blank PDS, the plain-language
+  guide, the CSC guide, the blank WES) now go through translation. The requirement *titles*
+  ("Personal Data Sheet (CS Form No. 212, Revised 2026) with recent passport-sized picture",
+  "Signed Application Letter addressed to …") stay English: they are copied onto each
+  screening record, so a title translated while an applicant browses in Filipino could be
+  stored in Filipino on the staff side. They are official document names anyway.
+- 896 of 896 strings translated; every applicant page re-rendered in Filipino with no
+  untranslated line.

@@ -19,22 +19,22 @@ class RequirementDownload:
 # Official CSC files served from static/forms/ (public government forms; metadata cleaned).
 # A new CSC revision gets a new file name, so a cached old copy is never served for it.
 PDS_FORM_DOWNLOAD = RequirementDownload(
-    label="Blank PDS form (CS Form No. 212, Revised 2026)",
+    label=gettext_lazy("Blank PDS form (CS Form No. 212, Revised 2026)"),
     format_label="Excel",
     static_path="forms/cs-form-212-pds-revised-2026.xlsx",
 )
 PDS_GUIDE_PAGE = RequirementDownload(
-    label="How to fill up your PDS (plain-language guide)",
+    label=gettext_lazy("How to fill up your PDS (plain-language guide)"),
     format_label="Guide",
     guide_url_name="applicant-pds-guide",
 )
 PDS_OFFICIAL_GUIDE_DOWNLOAD = RequirementDownload(
-    label="Official CSC guide to filling out the PDS (Revised 2026)",
+    label=gettext_lazy("Official CSC guide to filling out the PDS (Revised 2026)"),
     format_label="PDF",
     static_path="forms/csc-pds-guide-revised-2026.pdf",
 )
 WES_FORM_DOWNLOAD = RequirementDownload(
-    label="Blank Work Experience Sheet (attachment to CS Form No. 212)",
+    label=gettext_lazy("Blank Work Experience Sheet (attachment to CS Form No. 212)"),
     format_label="Word",
     static_path="forms/cs-form-212-work-experience-sheet.docx",
 )

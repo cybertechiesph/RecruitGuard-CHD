@@ -79,7 +79,7 @@ msgstr "Na-update ang contact info"
 
 #: templates/email/applicant_contact_updated.html
 msgid "Dear %(name)s, the contact information on your recruitment application was corrected by the office."
-msgstr "Dear %(name)s, inayos ng office ang contact info sa application mo."
+msgstr "Hi %(name)s, inayos ng office ang contact info sa application mo."
 
 #: templates/email/applicant_contact_updated.html recruitment/notification_services.py
 msgid "Future recruitment notices will no longer be sent to this email address."
@@ -107,7 +107,7 @@ msgstr "Naka-save ang application mo para sa %(title)s pero hindi pa na-submit. 
 
 #: templates/email/applicant_draft_reminder.html
 msgid "Hello %(name)s, you started an application for <strong>%(title)s</strong>, but it has not been submitted yet."
-msgstr "Hello %(name)s, nagsimula ka ng application para sa <strong>%(title)s</strong>, pero hindi pa ito na-submit."
+msgstr "Hi %(name)s, nagsimula ka ng application para sa <strong>%(title)s</strong>, pero hindi pa ito na-submit."
 
 #: templates/email/applicant_draft_reminder.html
 msgid "Applications close on <strong>%(date)s</strong>."
@@ -165,7 +165,7 @@ msgstr "Interview Schedule"
 
 #: templates/email/applicant_interview_notice.html
 msgid "Dear %(name)s, you are scheduled for an interview for %(title)s. Please note the details below."
-msgstr "Dear %(name)s, may schedule ka ng interview para sa %(title)s. Pakitingnan ang details sa baba."
+msgstr "Hi %(name)s, may schedule ka ng interview para sa %(title)s. Pakitingnan ang details sa baba."
 
 #: templates/email/applicant_interview_notice.html
 msgid "Interview details"
@@ -243,7 +243,7 @@ msgstr "Natanggap ang Application"
 
 #: templates/email/application_received.html
 msgid "Dear %(name)s, your application has been received by the DOH–CHD CALABARZON Recruitment Portal and is recorded for review by the Human Resource Management Unit."
-msgstr "Dear %(name)s, natanggap na ng DOH–CHD CALABARZON Recruitment Portal ang application mo at naka-record na ito para i-review ng Human Resource Management Unit."
+msgstr "Hi %(name)s, natanggap na ng DOH–CHD CALABARZON Recruitment Portal ang application mo at naka-record na ito para i-review ng Human Resource Management Unit."
 
 #: templates/email/application_received.html templates/email/non_selected_applicant.html recruitment/templates/recruitment/applicant_status_lookup.html
 msgid "Application details"
@@ -303,7 +303,7 @@ msgstr "Natanggap ang itinamang documents"
 
 #: templates/email/document_resubmission_received.html
 msgid "Dear %(name)s, we received your corrected documents for %(title)s."
-msgstr "Dear %(name)s, natanggap namin ang itinamang documents mo para sa %(title)s."
+msgstr "Hi %(name)s, natanggap namin ang itinamang documents mo para sa %(title)s."
 
 #: templates/email/document_resubmission_received.html recruitment/notification_services.py
 msgid "Case No. %(ref)s"
@@ -369,7 +369,7 @@ msgstr "I-upload ang inayos na documents"
 
 #: templates/email/document_resubmission_request.txt templates/email/non_selected_applicant.html templates/email/reminder.html recruitment/notification_services.py
 msgid "Dear %(name)s,"
-msgstr "Dear %(name)s,"
+msgstr "Hi %(name)s,"
 
 #: templates/email/document_resubmission_request.txt recruitment/notification_services.py
 msgid "Some documents in your application for %(title)s need to be corrected and uploaded again."
@@ -423,7 +423,7 @@ msgstr "Imbitasyon sa Exam"
 
 #: templates/email/exam_invitation.html
 msgid "Dear %(name)s, you passed the initial screening for %(title)s and are invited to take the examination. Please note the details below."
-msgstr "Dear %(name)s, pumasa ka sa initial screening para sa %(title)s at imbitado kang mag-exam. Pakitingnan ang details sa baba."
+msgstr "Hi %(name)s, pumasa ka sa initial screening para sa %(title)s at imbitado kang mag-exam. Pakitingnan ang details sa baba."
 
 #: templates/email/exam_invitation.html
 msgid "Examination details"
@@ -495,7 +495,7 @@ msgstr "Requirements Checklist"
 
 #: templates/email/requirement_checklist.html
 msgid "Dear %(name)s, you have been selected for %(title)s. Please complete the following %(what)s requirements."
-msgstr "Dear %(name)s, napili ka para sa %(title)s. Pakikumpleto ang mga sumusunod na requirements para sa %(what)s mo."
+msgstr "Hi %(name)s, napili ka para sa %(title)s. Pakikumpleto ang mga sumusunod na requirements para sa %(what)s mo."
 
 #: templates/email/requirement_checklist.html
 msgid "Requirements"
@@ -515,7 +515,7 @@ msgstr "Paki-submit ang corrected documents mo para sa %(title)s hanggang %(date
 
 #: templates/email/resubmission_reminder.html
 msgid "Hello %(name)s, the recruitment team is still waiting for the corrected documents for your application for <strong>%(title)s</strong> (Case No. %(case)s)."
-msgstr "Hello %(name)s, hinihintay pa rin ng recruitment team ang corrected documents para sa application mo sa <strong>%(title)s</strong> (Case No. %(case)s)."
+msgstr "Hi %(name)s, hinihintay pa rin ng recruitment team ang corrected documents para sa application mo sa <strong>%(title)s</strong> (Case No. %(case)s)."
 
 #: templates/email/resubmission_reminder.html
 msgid "Please send them on or before <strong>%(date)s</strong>."
@@ -539,7 +539,7 @@ msgstr "Resulta ng Application &mdash; Napili"
 
 #: templates/email/selected_applicant.html
 msgid "Dear %(name)s, you have been selected for %(title)s (%(branch)s)."
-msgstr "Dear %(name)s, napili ka para sa %(title)s (%(branch)s)."
+msgstr "Hi %(name)s, napili ka para sa %(title)s (%(branch)s)."
 
 #: templates/email/selected_applicant.html
 msgid "Result details"
@@ -567,7 +567,7 @@ msgstr "Nire-review ulit ang pagpili"
 
 #: templates/email/selection_under_review.html
 msgid "Dear %(name)s, the earlier selection notice for your application for %(title)s is no longer final."
-msgstr "Dear %(name)s, hindi na final ang naunang notice na napili ka para sa %(title)s."
+msgstr "Hi %(name)s, hindi na final ang naunang notice na napili ka para sa %(title)s."
 
 #: templates/email/selection_under_review.html recruitment/notification_services.py
 msgid "The office is re-deliberating the vacancy. You will be informed when a new decision is recorded."
@@ -2513,7 +2513,7 @@ msgstr "Hindi kami makapagpadala ng code ngayon. Subukan ulit maya-maya."
 
 #: recruitment/applicant_labels.py
 msgid "Under Review"
-msgstr "Under Review"
+msgstr "Nire-review"
 
 #: recruitment/applicant_labels.py
 msgid "Your application is currently being reviewed by our recruitment team. You will be contacted if additional information is needed."
@@ -2525,7 +2525,7 @@ msgstr "Nire-review na ng recruitment team namin ang application mo."
 
 #: recruitment/applicant_labels.py
 msgid "Under Evaluation"
-msgstr "Under Evaluation"
+msgstr "Ine-evaluate"
 
 #: recruitment/applicant_labels.py
 msgid "Your application is currently being evaluated. You may be contacted for an examination or interview schedule."
@@ -2533,7 +2533,7 @@ msgstr "Ine-evaluate na ang application mo. Puwede kang i-contact para sa schedu
 
 #: recruitment/applicant_labels.py
 msgid "Under Processing"
-msgstr "Under Processing"
+msgstr "Pino-process"
 
 #: recruitment/applicant_labels.py
 msgid "Your application is being processed for the next steps. You will be contacted with further instructions."
@@ -3161,7 +3161,7 @@ msgstr "Hindi puwede ang action na ito."
 
 #: recruitment/portal_views.py
 msgid "Document check"
-msgstr "Document check"
+msgstr "Check ng documents"
 
 #: recruitment/portal_views.py
 msgid "Examination and interview"
@@ -3297,7 +3297,7 @@ msgstr "Resulta: %(status)s"
 
 #: recruitment/portal_views.py
 msgid "Final decision"
-msgstr "Final decision"
+msgstr "Final na desisyon"
 
 #: recruitment/portal_views.py
 msgid "Your application is with the office for the final decision."
@@ -3322,6 +3322,22 @@ msgstr "Kung may application ang email na ito sa amin, nagpadala kami ng bagong 
 #: recruitment/portal_views.py
 msgid "Email verified. You can now re-upload the requested documents."
 msgstr "Verified na ang email mo. Puwede mo nang i-upload ulit ang hinihinging documents."
+
+#: recruitment/requirements.py
+msgid "Blank PDS form (CS Form No. 212, Revised 2026)"
+msgstr "Blangkong PDS form (CS Form No. 212, Revised 2026)"
+
+#: recruitment/requirements.py
+msgid "How to fill up your PDS (plain-language guide)"
+msgstr "Paano mag-fill up ng PDS (simpleng gabay)"
+
+#: recruitment/requirements.py
+msgid "Official CSC guide to filling out the PDS (Revised 2026)"
+msgstr "Official na gabay ng CSC sa pag-fill up ng PDS (Revised 2026)"
+
+#: recruitment/requirements.py
+msgid "Blank Work Experience Sheet (attachment to CS Form No. 212)"
+msgstr "Blangkong Work Experience Sheet (kasama ng CS Form No. 212)"
 
 #: recruitment/requirements.py
 msgid "Upload the signed cover letter for this application."
@@ -3510,7 +3526,7 @@ msgid ""
 "\n"
 "DOH–CHD CALABARZON Recruitment Portal"
 msgstr ""
-"Hello %(name)s,\n"
+"Hi %(name)s,\n"
 "\n"
 "Nagsimula ka ng application para sa %(title)s, pero hindi pa ito na-submit. Magsasara ang applications sa %(date)s.\n"
 "\n"
@@ -3536,7 +3552,7 @@ msgid ""
 "\n"
 "DOH–CHD CALABARZON Recruitment Portal"
 msgstr ""
-"Hello %(name)s,\n"
+"Hi %(name)s,\n"
 "\n"
 "Hinihintay pa rin ng recruitment team ang corrected documents para sa application mo sa %(title)s (Case No. %(case)s). Paki-submit hanggang %(date)s.\n"
 "\n"
