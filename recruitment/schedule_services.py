@@ -37,6 +37,8 @@ from .services import (
     ENTRY_MANAGER_ROLES,
     local_day,
     get_closed_cases_for_user,
+    get_followed_applications,
+    get_loaned_out_applications,
     get_manageable_recruitment_entries,
     get_queue_for_user,
 )
@@ -109,6 +111,22 @@ def _case_label(user, application):
     return application.reference_label
 
 
+def _case_has_ended(application):
+    case = getattr(application, "case", None)
+    return bool(case and case.is_stage_locked)
+
+
+def _link_to_a_page_that_opens(user, events):
+    """A batch page opens only while the user has cases in it. For a vacancy they have finished
+    with, the event links to the case itself; the batch link would bounce them back."""
+    open_batches = set(get_queue_for_user(user).values_list("position_id", flat=True))
+    open_batches.update(get_followed_applications(user).values_list("position_id", flat=True))
+    open_batches.update(get_loaned_out_applications(user).values_list("position_id", flat=True))
+    for event in events:
+        if event.application_ids and event.vacancy.pk not in open_batches and "/vacancies/" in event.url:
+            event.url = reverse("application-detail", args=[event.application_ids[0]])
+
+
 def _aware_range(start, end):
     tz = timezone.get_current_timezone()
     return (
@@ -121,11 +139,14 @@ def get_schedule_events_for_user(user, start, end):
     """All scoped events with a date in [start, end], sorted by day then time."""
     app_ids = scoped_application_ids(user)
     lo, hi = _aware_range(start, end)
+    now = timezone.now()
     events = []
 
     def _grouped(queryset, kind, place_attr):
         groups = OrderedDict()
-        for item in queryset.select_related("application__position").order_by("scheduled_for", "pk"):
+        for item in queryset.select_related("application__position", "application__case").order_by("scheduled_for", "pk"):
+            if item.scheduled_for > now and _case_has_ended(item.application):
+                continue  # A finished case has nothing coming up; past dates stay as the record.
             position = item.application.position
             local = timezone.localtime(item.scheduled_for)
             key = (position.pk, local.replace(second=0, microsecond=0))
@@ -222,6 +243,7 @@ def get_schedule_events_for_user(user, start, end):
                     at=local,
                     vacancy=record.application.position,
                     url=reverse("vacancy-batch-detail", args=[record.application.position_id]),
+                    application_ids=[record.application_id],
                 )
             )
 
@@ -256,6 +278,7 @@ def get_schedule_events_for_user(user, start, end):
         # HRMPSB review P3-3: the panel sits interviews; the exam sittings and the office's
         # deadlines of its vacancies are not its calendar.
         events = [event for event in events if event.kind == EventKind.INTERVIEW]
+    _link_to_a_page_that_opens(user, events)
     events.sort(key=lambda e: (e.day, e.at.time() if e.at else time.min, e.kind, e.vacancy.pk))
     return events
 

@@ -691,6 +691,10 @@ class PositionReferenceForm(BootstrapFormMixin, forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
+        # The status is worked out again on save. Without this, the model's "a verified
+        # reference must be complete" check runs against the stored status and reports on a
+        # field this form does not have, which Django turns into a crash.
+        self.instance.reference_status = PositionReference.ReferenceStatus.INCOMPLETE_REFERENCE
         title = cleaned.get("position_title")
         grade = cleaned.get("salary_grade")
         if title and grade:

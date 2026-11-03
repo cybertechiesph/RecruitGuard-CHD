@@ -336,5 +336,5 @@ class RecruitmentEntryStatusUpdateView(LoginRequiredMixin, EntryManagerRequiredM
         except ValidationError as error:
             _add_validation_messages(request, error)
             return redirect("recruitment-entry-list")
-        messages.success(request, f"Recruitment entry status updated to {entry.get_status_display()}.")
+        messages.success(request, f"Vacancy status updated to {entry.get_status_display()}.")
         return redirect("recruitment-entry-list")
