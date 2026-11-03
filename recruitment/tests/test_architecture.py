@@ -272,7 +272,7 @@ class ViewsPackageArchitectureTests(SimpleTestCase):
     `common`."""
 
     package_dir = Path(__file__).resolve().parent.parent / "views"
-    case_parts = {"case_shared", "case_screening", "case_exam"}
+    case_parts = {"case_shared", "case_screening", "case_exam", "case_interview", "case_car"}
     allowed = {"common": set(), "case": {"common"} | case_parts}
 
     def _allowed_for(self, module):
