@@ -671,7 +671,7 @@ class Command(BaseCommand):
         )
 
     def _finalize_exam(self, application, actor, score="89.00"):
-        save_exam_schedule(
+        schedule = save_exam_schedule(
             application=application,
             actor=actor,
             cleaned_data={
@@ -680,6 +680,7 @@ class Command(BaseCommand):
                 "instructions": "Bring a valid government ID.",
             },
         )
+        self._mark_as_held(schedule, timezone.now() - timedelta(hours=3))
         return save_exam_record(
             application=application,
             actor=actor,
@@ -701,6 +702,12 @@ class Command(BaseCommand):
             finalize=True,
         )
 
+    @staticmethod
+    def _mark_as_held(event, held_at):
+        """Moves a demo sitting into the past. Dates can only be set in the future and results
+        can only be finalized after the date, so the seed has to step around one of the two."""
+        type(event).objects.filter(pk=event.pk).update(scheduled_for=held_at)
+
     def _ensure_published_rating_sheet(self, application, actor):
         entry = application.position
         template = get_published_competency_rating_template(entry)
@@ -716,7 +723,7 @@ class Command(BaseCommand):
 
     def _finalize_interview(self, application, *, session_actor, rating_actors, score):
         scheduled_for = timezone.now() + timedelta(days=2)
-        save_interview_session(
+        session = save_interview_session(
             application=application,
             actor=session_actor,
             cleaned_data={
@@ -726,6 +733,8 @@ class Command(BaseCommand):
             },
             finalize=False,
         )
+        held_at = timezone.now() - timedelta(hours=1)
+        self._mark_as_held(session, held_at)
         template = self._ensure_published_rating_sheet(application, session_actor)
         level = self._competency_level(score, template.scale_max)
         competency_scores = {
@@ -747,7 +756,7 @@ class Command(BaseCommand):
             application=application,
             actor=session_actor,
             cleaned_data={
-                "scheduled_for": scheduled_for,
+                "scheduled_for": held_at,
                 "location": "Demo Interview Room",
                 "session_notes": "Demo interview session finalized.",
             },

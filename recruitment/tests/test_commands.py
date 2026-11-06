@@ -134,6 +134,27 @@ class E2ESeedCommandTests(BaseRecruitmentTestCase):
         )
 
 
+class SeedDemoRealClockTests(BaseRecruitmentTestCase):
+    """The suite normally switches off the "has this exam happened yet" rule. A real server
+    does not, and the seed crashed there on its first run."""
+
+    enforce_event_held = True
+
+    def test_seed_runs_with_the_real_clock_and_leaves_held_events_in_the_past(self):
+        from django.utils import timezone
+
+        from recruitment.models import ExamRecord, PositionPosting
+
+        call_command("seed_demo_data", force=True, stdout=io.StringIO())
+
+        self.assertTrue(PositionPosting.objects.exists())
+        finalized = ExamRecord.objects.filter(finalized_at__isnull=False)
+        self.assertTrue(finalized.exists())
+        for record in finalized.select_related("application"):
+            for sitting in record.application.exam_schedules.all():
+                self.assertLess(sitting.scheduled_for, timezone.now())
+
+
 class SeedDemoPanelTests(BaseRecruitmentTestCase):
     """Round G (G4): the demo seed models the office's panel rule."""
 
