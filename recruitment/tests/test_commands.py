@@ -155,6 +155,72 @@ class SeedDemoRealClockTests(BaseRecruitmentTestCase):
                 self.assertLess(sitting.scheduled_for, timezone.now())
 
 
+class SeedExhibitDemoTests(BaseRecruitmentTestCase):
+    """The exhibit story has to run on a real server's clock and leave every role with work."""
+
+    enforce_event_held = True
+
+    def seed(self):
+        call_command("seed_exhibit_demo", force=True, stdout=io.StringIO())
+
+    def test_every_role_has_work_and_nothing_points_at_a_real_inbox(self):
+        from recruitment.models import PositionPosting, RecruitmentApplication, RecruitmentCase
+        from recruitment.services import get_queue_for_user
+
+        self.seed()
+
+        self.assertEqual(PositionPosting.objects.count(), 7)
+        open_vacancies = PositionPosting.objects.exclude(status=PositionPosting.EntryStatus.CLOSED)
+        self.assertEqual(open_vacancies.count(), 2)
+        for application in RecruitmentApplication.objects.all():
+            self.assertTrue(application.applicant_email.startswith("cybertechiesph+"))
+        stages = set(RecruitmentCase.objects.values_list("current_stage", flat=True))
+        self.assertIn(RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW, stages)
+        for user in (self.secretariat, self.hrm_chief, self.hrmpsb, self.appointing):
+            self.assertTrue(get_queue_for_user(user).exists(), user.role)
+
+    def test_the_signed_in_panel_member_still_has_a_rating_to_give(self):
+        from recruitment.models import RecruitmentApplication
+        from recruitment.services import get_interview_session, user_can_manage_interview_rating
+        from recruitment.services.interview import interview_scoring_is_open
+
+        self.seed()
+
+        application = RecruitmentApplication.objects.get(applicant_last_name="Aguilar")
+        session = get_interview_session(application, stage=application.case.current_stage)
+        self.assertTrue(interview_scoring_is_open(session))
+        self.assertTrue(user_can_manage_interview_rating(self.hrmpsb, application))
+        raters = set(session.ratings.values_list("rated_by_id", flat=True))
+        self.assertEqual(len(raters), 3)
+        self.assertNotIn(self.hrmpsb.pk, raters)
+
+    def test_no_role_meets_a_broken_page_in_the_story(self):
+        from django.test import Client
+
+        from recruitment.tests.test_crawl import crawl
+
+        self.seed()
+
+        for user in (self.secretariat, self.hrm_chief, self.hrmpsb, self.appointing):
+            client = Client(raise_request_exception=False)
+            self.force_login_with_mfa(client, user)
+            problems, seen = crawl(client, ["/internal/"])
+            self.assertGreater(len(seen), 5, user.role)
+            self.assertEqual(problems, [], user.role)
+
+    def test_dates_read_like_weeks_of_work_not_one_click(self):
+        from django.utils import timezone
+
+        from recruitment.models import AuditLog, RecruitmentApplication
+
+        self.seed()
+
+        oldest = RecruitmentApplication.objects.order_by("created_at").first().created_at
+        self.assertGreater((timezone.now() - oldest).days, 30)
+        days = {timezone.localtime(when).date() for when in AuditLog.objects.values_list("created_at", flat=True)}
+        self.assertGreater(len(days), 10)
+
+
 class SeedDemoPanelTests(BaseRecruitmentTestCase):
     """Round G (G4): the demo seed models the office's panel rule."""
 

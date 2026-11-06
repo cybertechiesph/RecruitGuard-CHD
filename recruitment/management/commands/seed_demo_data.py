@@ -659,13 +659,13 @@ class Command(BaseCommand):
             actor=actor,
             cleaned_data={
                 "completeness_status": ScreeningRecord.CompletenessStatus.COMPLETE,
-                "completeness_notes": "All required demo documents were reviewed.",
+                "completeness_notes": "All required documents were reviewed and are complete.",
                 "qualification_outcome": ScreeningRecord.QualificationOutcome.QUALIFIED,
                 "education_score": score,
                 "training_score": score,
                 "experience_score": score,
                 "document_review_score": "",
-                "screening_notes": "Demo screening finalized as qualified.",
+                "screening_notes": "Meets the minimum qualifications for the position.",
             },
             finalize=True,
         )
@@ -697,7 +697,7 @@ class Command(BaseCommand):
                 "administered_by": ExamRecord.AdministeredBy.HRMS,
                 "valid_from": None,
                 "valid_until": None,
-                "exam_notes": "Demo examination record finalized.",
+                "exam_notes": "Written examination completed.",
             },
             finalize=True,
         )
@@ -728,8 +728,8 @@ class Command(BaseCommand):
             actor=session_actor,
             cleaned_data={
                 "scheduled_for": scheduled_for,
-                "location": "Demo Interview Room",
-                "session_notes": "Demo interview session scheduled.",
+                "location": "Conference Room A, 3rd Floor",
+                "session_notes": "Panel interview scheduled.",
             },
             finalize=False,
         )
@@ -748,7 +748,7 @@ class Command(BaseCommand):
                 actor=rating_actor,
                 cleaned_data={
                     "competency_scores": competency_scores,
-                    "rating_notes": "Demo interview rating recorded.",
+                    "rating_notes": "Answered clearly and gave concrete examples from past work.",
                     "justification": "Consistent competency performance across the panel sheet.",
                 },
             )
@@ -757,8 +757,8 @@ class Command(BaseCommand):
             actor=session_actor,
             cleaned_data={
                 "scheduled_for": held_at,
-                "location": "Demo Interview Room",
-                "session_notes": "Demo interview session finalized.",
+                "location": "Conference Room A, 3rd Floor",
+                "session_notes": "Panel interview completed with quorum.",
             },
             finalize=True,
         )
