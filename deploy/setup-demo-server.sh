@@ -256,6 +256,11 @@ EOF
 echo 'PasswordAuthentication no' > /etc/ssh/sshd_config.d/00-no-password.conf
 systemctl reload ssh || systemctl restart ssh || true
 
+printf '#!/usr/bin/env bash
+exec bash %s/deploy/reset-demo.sh "$@"
+' "$APP_DIR" > /usr/local/bin/demo-reset
+chmod 755 /usr/local/bin/demo-reset
+
 # ---- HTTPS ----------------------------------------------------------------------
 step "HTTPS"
 SERVER_IP=$(curl -fsS -m 5 http://169.254.169.254/metadata/v1/interfaces/public/0/ipv4/address || true)
