@@ -1531,10 +1531,19 @@ class VacancyAssessmentWeightsTests(BaseRecruitmentTestCase):
                 "exam_technical_weight": "45",
             },
         )
-        self.assertEqual(response.status_code, 302)
+        # Refused in the response itself: an error status and the reason, not a quiet redirect.
+        self.assertEqual(response.status_code, 409)
+        self.assertContains(
+            response,
+            "Assessment weights are locked because scoring has started for this vacancy.",
+            status_code=409,
+        )
         weights = VacancyAssessmentWeights.objects.get(recruitment_entry=self.level1_position)
         # Refused — scoring has started, so the weights stay at the defaults.
         self.assertEqual(weights.exam_general_weight, Decimal("60.00"))
+        self.assertEqual(weights.ete_weight, Decimal("40.00"))
+        # The page shown back carries the stored split, not the values that were sent.
+        self.assertEqual(response.context["form"]["ete_weight"].value(), Decimal("40.00"))
 
     def test_locked_weights_can_be_unlocked_with_an_audited_reason(self):
         # SL-00: the lock is deliberate, but an encoding error in the split still has to be

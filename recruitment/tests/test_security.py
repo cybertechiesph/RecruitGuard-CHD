@@ -1087,7 +1087,8 @@ class BusinessLogicBypassHardeningTests(BaseRecruitmentTestCase):
                 "exam_technical_weight": "45",
             },
         )
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 409)
+        self.assertContains(response, "Assessment weights are locked", status_code=409)
         weights.refresh_from_db()
         self.assertEqual(weights.ete_weight, original_ete)
 

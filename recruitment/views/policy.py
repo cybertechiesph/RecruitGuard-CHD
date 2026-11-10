@@ -87,7 +87,15 @@ class VacancyAssessmentWeightsView(LoginRequiredMixin, EntryManagerRequiredMixin
                 "Assessment weights are locked because scoring has started for this vacancy. "
                 "Unlock them for correction if the split was entered wrongly.",
             )
-            return redirect("vacancy-assessment-weights", pk=entry.pk)
+            # Answer the refused save directly, with an error status and the stored split,
+            # so the refusal is visible in the response itself and not only after a redirect.
+            form = VacancyAssessmentWeightsForm(instance=weights)
+            return render(
+                request,
+                self.template_name,
+                self._context(entry, weights, form),
+                status=409,
+            )
         form = VacancyAssessmentWeightsForm(request.POST, instance=weights)
         if form.is_valid():
             try:
