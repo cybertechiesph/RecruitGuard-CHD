@@ -89,6 +89,12 @@ class InternalLoginView(LoginView):
         # page can say why, instead of looking like an unexplained crash.
         context["signed_out_for_inactivity"] = self.request.GET.get("reason") == "timeout"
         context["inactivity_timeout_minutes"] = settings.SESSION_INACTIVITY_TIMEOUT_SECONDS // 60
+        # Demonstration servers may turn the emailed code off for reviewers; say so plainly
+        # on the sign-in page instead of leaving the missing step unexplained.
+        context["email_code_step_off_for_demo"] = bool(
+            getattr(settings, "DEMO_ALLOW_INTERNAL_MFA_OFF", False)
+            and not getattr(settings, "INTERNAL_MFA_ENABLED", True)
+        )
         return context
 
     def post(self, request, *args, **kwargs):

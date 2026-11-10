@@ -11,6 +11,8 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
+from config.settings import internal_mfa_setting_is_refused
+
 from ..models import (
     AuditLog,
     InternalLoginAttempt,
@@ -135,6 +137,49 @@ class FoundationSmokeTests(TestCase):
         self.assertEqual(mail.outbox, [])
         self.assertTrue(self.client.session[INTERNAL_MFA_VERIFIED_SESSION_KEY])
         self.assertEqual(self.client.session[INTERNAL_MFA_USER_SESSION_KEY], user.id)
+
+    def test_mfa_off_outside_debug_needs_the_demo_switch(self):
+        # (debug, mfa_enabled, demo_override) -> must the server refuse to start?
+        self.assertTrue(internal_mfa_setting_is_refused(False, False, False))
+        self.assertFalse(internal_mfa_setting_is_refused(False, False, True))
+        # The switch does nothing on its own, and MFA on is always fine.
+        self.assertFalse(internal_mfa_setting_is_refused(False, True, False))
+        self.assertFalse(internal_mfa_setting_is_refused(False, True, True))
+        # Local debug runs may turn the step off without the switch, as before.
+        self.assertFalse(internal_mfa_setting_is_refused(True, False, False))
+
+    def test_sign_in_page_says_so_only_when_the_demo_switch_turns_the_code_off(self):
+        marker = "data-demo-email-code-off"
+        self.assertNotContains(self.client.get(reverse("login")), marker)
+        with override_settings(INTERNAL_MFA_ENABLED=False):
+            self.assertNotContains(self.client.get(reverse("login")), marker)
+        with override_settings(DEMO_ALLOW_INTERNAL_MFA_OFF=True):
+            self.assertNotContains(self.client.get(reverse("login")), marker)
+        with override_settings(INTERNAL_MFA_ENABLED=False, DEMO_ALLOW_INTERNAL_MFA_OFF=True):
+            response = self.client.get(reverse("login"))
+            self.assertContains(response, marker)
+            self.assertContains(response, "the emailed sign-in code is turned off")
+
+    @override_settings(INTERNAL_MFA_ENABLED=False, DEMO_ALLOW_INTERNAL_MFA_OFF=True)
+    def test_demo_sign_in_without_the_code_is_still_audit_logged(self):
+        user = User.objects.create_user(
+            username="secretariat",
+            password="testpass123",
+            email="secretariat@example.com",
+            role=RecruitmentUser.Role.SECRETARIAT,
+        )
+
+        response = self.client.post(
+            reverse("login"),
+            {"username": "secretariat", "password": "testpass123"},
+            follow=True,
+        )
+
+        self.assertEqual(response.request["PATH_INFO"], reverse("vacancy-batches"))
+        self.assertEqual(mail.outbox, [])
+        self.assertTrue(
+            AuditLog.objects.filter(action=AuditLog.Action.INTERNAL_LOGIN, actor=user).exists()
+        )
 
     def test_internal_mfa_email_falls_back_to_text_when_html_render_fails(self):
         user = User.objects.create_user(

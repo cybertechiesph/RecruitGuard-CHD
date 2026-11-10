@@ -205,9 +205,24 @@ if not APPLICATION_OTP_HASH_SECRET:
             "APPLICATION_OTP_HASH_SECRET must be set when DJANGO_DEBUG is False."
         )
 
+def internal_mfa_setting_is_refused(debug, mfa_enabled, demo_override):
+    """True when the staff email-code step is off in a way the server must not start with.
+
+    Outside debug mode the step may be off only when the demonstration switch is also set
+    on purpose. The switch does nothing on its own.
+    """
+    return not debug and not mfa_enabled and not demo_override
+
+
 INTERNAL_MFA_ENABLED = env_bool("INTERNAL_MFA_ENABLED", True)
-if not DEBUG and not INTERNAL_MFA_ENABLED:
-    raise ImproperlyConfigured("INTERNAL_MFA_ENABLED cannot be disabled when DJANGO_DEBUG is False.")
+# Demonstration servers only: lets reviewers sign in with the test accounts without the
+# emailed code. Both settings must be set on purpose, and the sign-in page then says so.
+DEMO_ALLOW_INTERNAL_MFA_OFF = env_bool("DEMO_ALLOW_INTERNAL_MFA_OFF", False)
+if internal_mfa_setting_is_refused(DEBUG, INTERNAL_MFA_ENABLED, DEMO_ALLOW_INTERNAL_MFA_OFF):
+    raise ImproperlyConfigured(
+        "INTERNAL_MFA_ENABLED cannot be disabled when DJANGO_DEBUG is False, "
+        "unless DEMO_ALLOW_INTERNAL_MFA_OFF is also set for a demonstration server."
+    )
 
 INTERNAL_MFA_OTP_VALIDITY_MINUTES = env_int("INTERNAL_MFA_OTP_VALIDITY_MINUTES", 5)
 INTERNAL_MFA_MAX_ATTEMPTS = env_int("INTERNAL_MFA_MAX_ATTEMPTS", 5)

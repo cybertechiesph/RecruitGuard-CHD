@@ -34,6 +34,12 @@ This document summarizes the key cybersecurity rules and protection logic of Rec
   email and IP throttles.
 - Internal MFA must remain enabled outside debug/local demonstration mode.
   `INTERNAL_MFA_ENABLED=False` is allowed only while `DJANGO_DEBUG=True`.
+  One exception exists for a hosted demonstration server that reviewers must
+  reach with test accounts: the step may be off when
+  `DEMO_ALLOW_INTERNAL_MFA_OFF=True` is also set on purpose. The server still
+  refuses to start with MFA off and that switch unset, the sign-in page states
+  that the emailed code is turned off, and sign-ins are still audit-logged.
+  The switch must never be set where real applicant data is held.
 - For public deployment, CAPTCHA should use Google reCAPTCHA v2 with
   server-side token verification. The local arithmetic CAPTCHA is only a
   fallback for offline development and demonstration.
