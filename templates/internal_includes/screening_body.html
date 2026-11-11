@@ -138,11 +138,16 @@
                             {% if item.evidence %}
                                 <div class="rg-scr-doc-actions">
                                     {% if item.evidence.is_inline_viewable %}
+                                        {# Opens in the side viewer on a wide screen; the link itself still works in a new tab. #}
                                         <a href="{% url 'evidence-download' application.pk item.evidence.pk %}?disposition=inline"
                                            class="rg-scr-doc-view"
                                            target="_blank" rel="noopener"
-                                           title="View {{ item.requirement.title }} in a new tab"
-                                           aria-label="View {{ item.requirement.title }} in a new tab">
+                                           data-doc-preview
+                                           data-doc-title="{{ item.requirement.title }}"
+                                           data-doc-filename="{{ item.evidence.original_filename }}"
+                                           data-doc-download="{% url 'evidence-download' application.pk item.evidence.pk %}"
+                                           title="View {{ item.requirement.title }}"
+                                           aria-label="View {{ item.requirement.title }}">
                                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                                 <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/>
                                                 <circle cx="12" cy="12" r="3"/>
@@ -298,9 +303,12 @@
 </div>
 
 {# ── Off-canvas document viewer drawer ───────────────────────── #}
+{# No backdrop and no scroll lock: the checklist stays usable beside the open document. #}
 <div class="offcanvas offcanvas-end rg-scr-doc-drawer"
      tabindex="-1"
      id="rg-scr-doc-drawer"
+     data-bs-backdrop="false"
+     data-bs-scroll="true"
      aria-labelledby="rg-scr-doc-drawer-title">
     <div class="offcanvas-header rg-scr-doc-drawer__header">
         <div class="rg-scr-doc-drawer__copy">
@@ -309,6 +317,7 @@
             <p class="rg-scr-doc-drawer__filename" id="rg-scr-doc-drawer-filename"></p>
         </div>
         <div class="rg-scr-doc-drawer__actions">
+            <a href="#" class="btn btn-sm btn-outline-secondary" id="rg-scr-doc-drawer-newtab" target="_blank" rel="noopener">Open in new tab</a>
             <a href="#" class="btn btn-sm btn-outline-secondary" id="rg-scr-doc-drawer-download" download>Download</a>
             <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close document viewer"></button>
         </div>
@@ -318,7 +327,7 @@
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
             </svg>
-            <p>Select a document to view it here.</p>
+            <p id="rg-scr-doc-drawer-empty-text" role="status">Select a document to view it here.</p>
         </div>
         <iframe class="rg-scr-doc-drawer__frame" id="rg-scr-doc-drawer-frame" title="Document preview" hidden></iframe>
         <img class="rg-scr-doc-drawer__image" id="rg-scr-doc-drawer-image" alt="Document preview" hidden>
@@ -936,6 +945,124 @@ function rgInitScreeningDocDrawer() {}
                         " values from the Secretariat review — review and adjust each before finalizing.";
                 }
             });
+        }
+    });
+})();
+</script>
+
+<script>
+/* Side document viewer.
+   The eye link stays a normal new-tab link. On a wide screen this script shows the file in the
+   drawer instead, so the reviewer can read it and set its status without leaving the page.
+   The file is fetched through the same access-checked, audit-logged link and shown from a local
+   copy (a blob), because the server forbids framing the file response itself. */
+(function () {
+    "use strict";
+    var drawer = document.getElementById("rg-scr-doc-drawer");
+    if (!drawer) return;
+    var frame = document.getElementById("rg-scr-doc-drawer-frame");
+    var image = document.getElementById("rg-scr-doc-drawer-image");
+    var empty = document.getElementById("rg-scr-doc-drawer-empty");
+    var emptyText = document.getElementById("rg-scr-doc-drawer-empty-text");
+    var titleEl = document.getElementById("rg-scr-doc-drawer-title");
+    var filenameEl = document.getElementById("rg-scr-doc-drawer-filename");
+    var downloadLink = document.getElementById("rg-scr-doc-drawer-download");
+    var newTabLink = document.getElementById("rg-scr-doc-drawer-newtab");
+    var IDLE_TEXT = "Select a document to view it here.";
+    var FAILED_TEXT = "This document could not be shown here. Open it in a new tab or download it.";
+    var SIDE_BY_SIDE = "(min-width: 1200px)";
+    var blobUrl = null;
+    var requestNumber = 0;
+    var queuedLink = null;
+
+    function clearViewer(message) {
+        frame.hidden = true;
+        frame.removeAttribute("src");
+        image.hidden = true;
+        image.removeAttribute("src");
+        if (blobUrl) {
+            URL.revokeObjectURL(blobUrl);
+            blobUrl = null;
+        }
+        emptyText.textContent = message;
+        empty.hidden = false;
+    }
+
+    function markActiveRow(link) {
+        document.querySelectorAll("[data-document-row].is-viewing").forEach(function (row) {
+            row.classList.remove("is-viewing");
+        });
+        var row = link && link.closest("[data-document-row]");
+        if (row) row.classList.add("is-viewing");
+    }
+
+    function showDocument(link) {
+        // Clicked while the drawer is still sliding shut: wait for it, then open this one.
+        if (drawer.classList.contains("hiding")) {
+            queuedLink = link;
+            return;
+        }
+        var thisRequest = ++requestNumber;
+        titleEl.textContent = link.getAttribute("data-doc-title") || "Document";
+        filenameEl.textContent = link.getAttribute("data-doc-filename") || "";
+        downloadLink.href = link.getAttribute("data-doc-download") || link.href;
+        newTabLink.href = link.href;
+        markActiveRow(link);
+        clearViewer("Loading the document…");
+        window.bootstrap.Offcanvas.getOrCreateInstance(drawer).show();
+
+        fetch(link.href, { credentials: "same-origin" })
+            .then(function (response) {
+                if (!response.ok) throw new Error("status " + response.status);
+                return response.blob();
+            })
+            .then(function (blob) {
+                if (thisRequest !== requestNumber) return;
+                var type = (blob.type || "").split(";")[0].trim().toLowerCase();
+                var isImage = type.indexOf("image/") === 0;
+                // Anything else (an expired session answers with a sign-in page) is not shown.
+                if (!isImage && type !== "application/pdf") throw new Error("unexpected type " + type);
+                blobUrl = URL.createObjectURL(blob);
+                empty.hidden = true;
+                if (isImage) {
+                    image.src = blobUrl;
+                    image.alt = titleEl.textContent;
+                    image.hidden = false;
+                } else {
+                    // Standard PDF open parameters: no thumbnail strip, page fitted to the width.
+                    frame.src = blobUrl + "#navpanes=0&view=FitH";
+                    frame.hidden = false;
+                }
+            })
+            .catch(function () {
+                if (thisRequest !== requestNumber) return;
+                clearViewer(FAILED_TEXT);
+            });
+    }
+
+    document.addEventListener("click", function (event) {
+        var link = event.target.closest ? event.target.closest("[data-doc-preview]") : null;
+        if (!link) return;
+        // Ctrl, Shift, Cmd or middle click still mean "new tab", as does a narrow screen.
+        if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+        if (!window.matchMedia(SIDE_BY_SIDE).matches) return;
+        if (!window.bootstrap || !window.fetch || !window.URL || !URL.createObjectURL) return;
+        event.preventDefault();
+        showDocument(link);
+    });
+
+    drawer.addEventListener("show.bs.offcanvas", function () {
+        document.body.classList.add("rg-doc-drawer-open");
+    });
+    drawer.addEventListener("hidden.bs.offcanvas", function () {
+        requestNumber++;
+        document.body.classList.remove("rg-doc-drawer-open");
+        markActiveRow(null);
+        clearViewer(IDLE_TEXT);
+        if (queuedLink) {
+            var next = queuedLink;
+            queuedLink = null;
+            showDocument(next);
         }
     });
 })();

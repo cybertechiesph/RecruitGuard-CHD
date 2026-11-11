@@ -435,6 +435,13 @@ class EvidenceVaultTests(BaseRecruitmentTestCase):
         # the download link, but the Evidence Vault and audit links stay hidden.
         self.assertContains(response, f"{evidence_url}?disposition=inline")
         self.assertContains(response, evidence_url)
+        # The same link feeds the side viewer: it names the document and its download
+        # address, and the viewer leaves the checklist usable beside it (no backdrop).
+        self.assertContains(response, "data-doc-preview")
+        self.assertContains(response, f'data-doc-download="{evidence_url}"')
+        self.assertContains(response, 'id="rg-scr-doc-drawer"')
+        self.assertContains(response, 'data-bs-backdrop="false"')
+        self.assertContains(response, 'id="rg-scr-doc-drawer-newtab"')
         self.assertNotContains(response, audit_url)
         self.assertContains(response, "Download")
         self.assertNotContains(response, "Evidence Vault")

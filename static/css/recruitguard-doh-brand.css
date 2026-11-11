@@ -1300,6 +1300,39 @@ body.applicant-portal-body {
 }
 .rg-scr-doc-drawer__empty p { margin-top: 0.75rem; font-size: 0.85rem; }
 
+/* Side-by-side reading: on a wide screen the page makes room for the open document, so the
+   checklist stays fully usable beside it. The File column steps aside; the drawer names the file. */
+@media (min-width: 1200px) {
+    .rg-scr-doc-drawer { width: min(44vw, 740px) !important; }
+    .rg-main-area { transition: margin-right 0.3s ease-in-out; }
+    body.rg-doc-drawer-open .rg-main-area { margin-right: min(44vw, 740px); }
+    /* The page column is narrow now, so each requirement becomes a small card: its name on
+       top, then its status on the left and its actions on the right. */
+    body.rg-doc-drawer-open .rg-scr-doc-table { display: block; min-width: 0; }
+    body.rg-doc-drawer-open .rg-scr-doc-table thead { display: none; }
+    body.rg-doc-drawer-open .rg-scr-doc-table tbody { display: block; }
+    body.rg-doc-drawer-open .rg-scr-doc-table tr {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: stretch;
+        border-bottom: 1px solid rgba(100, 116, 139, 0.22);
+    }
+    body.rg-doc-drawer-open .rg-scr-doc-table tr:last-child { border-bottom: 0; }
+    body.rg-doc-drawer-open .rg-scr-doc-table td { display: block; border-bottom: 0; }
+    body.rg-doc-drawer-open .rg-scr-doc-table td:nth-child(1) { grid-column: 1 / -1; padding-bottom: 0.2rem; }
+    body.rg-doc-drawer-open .rg-scr-doc-table td:nth-child(2) { display: none; }
+    body.rg-doc-drawer-open .rg-scr-doc-table td:nth-child(3) { grid-column: 1; padding-top: 0.3rem; }
+    body.rg-doc-drawer-open .rg-scr-doc-table td:nth-child(4) { grid-column: 2; padding-top: 0.3rem; }
+    /* The requirement whose document is open in the viewer. */
+    body.rg-doc-drawer-open .rg-scr-doc-table tr.is-viewing {
+        box-shadow: inset 4px 0 0 var(--rg-brand-gold);
+        background-image: linear-gradient(rgba(253, 184, 19, 0.12), rgba(253, 184, 19, 0.12));
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .rg-main-area { transition: none; }
+}
+
 /* Score-grid disclosure */
 .rg-scr-disclosure {
     border: 1px solid #e3e8ee;
