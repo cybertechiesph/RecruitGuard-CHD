@@ -45,6 +45,7 @@ conflict with anything.
                 {% endif %}
             </strong>
         </div>
+        {% if current_exam_record.exam_score is not None or current_exam_record.general_score is not None or current_exam_record.technical_score is not None %}
         <div>
             <span class="rg-int-readout-grid__label">General Ability</span>
             <strong>{{ current_exam_record.general_score|default_if_none:"—" }}</strong>
@@ -57,5 +58,6 @@ conflict with anything.
             <span class="rg-int-readout-grid__label">Overall</span>
             <strong>{{ current_exam_record.exam_score|default_if_none:"—" }}</strong>
         </div>
+        {% endif %}
     </div>
 </div>

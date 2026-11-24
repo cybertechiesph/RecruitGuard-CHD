@@ -3,6 +3,13 @@
 
 {% block internal_title %}Assessment Weights{% endblock %}
 
+{% block breadcrumb %}
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<a class="rg-breadcrumb-link" href="{% url 'recruitment-entry-list' %}">Vacancies</a>
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<span class="rg-breadcrumb-current">{{ entry.job_code }} &middot; Assessment weights</span>
+{% endblock %}
+
 {% block content %}
 <div class="rg-page-header">
     <div>

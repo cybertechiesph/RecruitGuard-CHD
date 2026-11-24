@@ -344,15 +344,28 @@ def password_reuses_internal_history(user, raw_password):
     )
 
 
+NEW_PASSWORD_HELP = (
+    "At least 8 characters. Not only numbers, not a common password, "
+    "not close to your name or email, and not one you used here recently."
+)
+
+
 class PasswordReuseValidationMixin:
     reuse_error_message = (
         "Use a password that has not been used recently for this internal account."
     )
 
     def _apply_password_strength_fields(self):
-        for field_name in ("password1", "password2", "new_password1", "new_password2"):
+        # The strength meter belongs on the box where the new password is chosen, not on
+        # the box that only repeats it.
+        for field_name in ("password1", "new_password1"):
             if field_name in self.fields:
                 _apply_password_strength_widget(self.fields[field_name])
+                self.fields[field_name].help_text = NEW_PASSWORD_HELP
+        for field_name in ("password2", "new_password2"):
+            if field_name in self.fields:
+                self.fields[field_name].label = "Type the new password again"
+                self.fields[field_name].help_text = ""
 
     def clean(self):
         cleaned_data = super().clean()

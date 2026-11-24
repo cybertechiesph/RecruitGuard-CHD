@@ -45,8 +45,8 @@
                                         <span class="rg-pill rg-pill--neutral rg-pill--sm">Waiting</span>
                                     {% endif %}
                                 </td>
-                                <td class="rg-imeta">
-                                    {{ log.created_at|date:"M j, Y g:i A" }}
+                                <td>
+                                    <span class="rg-imeta">{{ log.created_at|date:"M j, Y g:i A" }}</span>
                                 </td>
                                 <td>
                                     <form method="post"

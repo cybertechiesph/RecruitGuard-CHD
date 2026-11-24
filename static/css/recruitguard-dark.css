@@ -1773,3 +1773,16 @@ html[data-theme="dark"] .rg-scr-return-card {
 }
 html[data-theme="dark"] .rg-scr-return-card__body,
 html[data-theme="dark"] .rg-scr-return-card__body strong { color: #f0c661; }
+
+/* Inner form cards (Office Policy switches, vacancy form sections) kept their
+   light-theme border colour, which reads as a bright white outline on dark.
+   The case-page action bars and the rating-sheet column labels follow suit. */
+@media screen {
+html[data-theme="dark"] .internal-portal-body :is(.rg-form-section, .rg-field--checkbox) {
+    border-color: rgba(255, 255, 255, 0.10);
+}
+html[data-theme="dark"] :is(.rg-scr-actionbar, .rg-int-actionbar) {
+    border-color: rgba(255, 255, 255, 0.10);
+}
+html[data-theme="dark"] .rg-competency-head { color: #9aa7b4; }
+}

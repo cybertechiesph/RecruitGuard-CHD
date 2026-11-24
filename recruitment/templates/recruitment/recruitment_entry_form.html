@@ -13,7 +13,7 @@
 <div class="rg-page-header">
     <div>
         <h1 class="rg-page-title">{% if object %}Edit vacancy{% else %}New vacancy{% endif %}</h1>
-        <p class="rg-page-copy">Create the vacancy by choosing an official position, reviewing its details, and setting when applications open and close.</p>
+        <p class="rg-page-copy">{% if object %}Change this vacancy's details, dates and required documents.{% else %}Create the vacancy by choosing an official position, reviewing its details, and setting when applications open and close.{% endif %}</p>
     </div>
     <div class="rg-page-actions">
         <a href="{% url 'recruitment-entry-list' %}" class="btn btn-outline-secondary">Back to vacancies</a>

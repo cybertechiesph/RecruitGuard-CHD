@@ -37,7 +37,7 @@
             </div>
             <div class="row g-4">
                 {% for field in form %}
-                    <div class="col-12{% if field.field.widget.input_type != 'checkbox' %} col-lg-6{% endif %}">
+                    <div class="col-12">
                         {% include "recruitment/includes/form_field.html" with field=field %}
                     </div>
                 {% endfor %}

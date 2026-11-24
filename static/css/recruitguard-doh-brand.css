@@ -5227,3 +5227,60 @@ a.rg-sched-event__title { color: var(--rg-brand-green); }
     .rg-public-topbar__inner { gap: 0.3rem; padding-top: 0.5rem; padding-bottom: 0.5rem; }
     .rg-public-nav .rg-nav-link { padding: 0.35rem 0.6rem; }
 }
+
+/* ==========================================================================
+   Case page: everything lines up with the cards
+   The applicant panel and the "next in this batch" notice sit outside the
+   padded body, and the two action bars used negative side margins, so all
+   four were wider than the cards around them.
+   ========================================================================== */
+.rg-cws-page .rg-main-content > .rg-applicant-panel,
+.rg-cws-page .rg-main-content > .alert {
+    margin-left: 1.5rem;
+    margin-right: 1.5rem;
+}
+.rg-cws-page .rg-main-content > .rg-applicant-panel {
+    margin-bottom: 0;
+}
+.rg-scr-actionbar,
+.rg-int-actionbar {
+    margin: 1.25rem 0 0.875rem;
+    border: 1px solid #d7dde3;
+    border-radius: 8px;
+}
+
+/* ==========================================================================
+   Interview rating sheet set-up: column labels once, not on every row
+   ========================================================================== */
+.rg-competency-head {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #5f6c78;
+    margin-bottom: 0.35rem;
+}
+.rg-competency-row .rg-field > .form-label,
+.rg-competency-row__remove > .form-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+}
+.rg-competency-row .rg-field { margin-bottom: 0; }
+.rg-competency-row__remove {
+    display: flex;
+    align-items: center;
+    min-height: 2.375rem;
+}
+@media (max-width: 767px) {
+    .rg-competency-head { display: none; }
+    .rg-competency-row .rg-field > .form-label,
+    .rg-competency-row__remove > .form-label {
+        position: static;
+        width: auto;
+        height: auto;
+        clip: auto;
+        margin-right: 0.5rem;
+    }
+}
