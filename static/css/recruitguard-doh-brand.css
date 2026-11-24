@@ -5447,3 +5447,34 @@ details.rg-ta-facts[open] > summary { margin-bottom: 0.5rem; }
     border-radius: 8px;
     border-width: 1px;
 }
+
+/* ==========================================================================
+   Staff form pages: one look
+   ========================================================================== */
+/* Tick boxes and radio buttons use the brand green, not Bootstrap blue */
+.internal-portal-body .form-check-input:checked {
+    background-color: var(--rg-brand-green);
+    border-color: var(--rg-brand-green);
+}
+.internal-portal-body .form-check-input:focus {
+    border-color: var(--rg-brand-green);
+    box-shadow: 0 0 0 0.2rem rgba(30, 92, 45, 0.18);
+}
+.internal-portal-body input[type="checkbox"],
+.internal-portal-body input[type="radio"] {
+    accent-color: var(--rg-brand-green);
+}
+/* Plain cards (batch pages, weights, rating sheet) share the card heading
+   and helper sizes used everywhere else in the staff portal */
+.internal-portal-body .card > h2.h6,
+.internal-portal-body .card > h2.h5 {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #111827;
+}
+.internal-portal-body .card .rg-note,
+.internal-portal-body .rg-page-header .rg-note {
+    font-size: 0.8125rem;
+}
+/* Vacancy form: the sections are the cards; no card around the cards */
+.rg-entry-form .rg-form-section { background: #fff; }

@@ -40,7 +40,7 @@
 
 {# ── One schedule for the whole batch ─────────────────────────── #}
 <div class="card p-4 mb-3">
-    <h2 class="h6 mb-1">1 — Schedule the interview (applies to every candidate)</h2>
+    <h2 class="h6 mb-1">1. Schedule the interview (applies to every candidate)</h2>
     {% if current_interview %}
         <div class="alert alert-success mb-3" role="status" data-current-interview>
             <strong>Sent to {{ candidates|length }} candidate{{ candidates|length|pluralize }}:</strong>
@@ -88,7 +88,7 @@
 {% if is_plantilla %}
 {# ── Plantilla: competency scoring stays per-case; batch finalize ── #}
 <div class="card p-4 mb-3">
-    <h2 class="h6 mb-1">2 — Score &amp; finalize</h2>
+    <h2 class="h6 mb-1">2. Score &amp; finalize</h2>
     <p class="rg-note mb-3">
         Each candidate is scored on the competency rating sheet from their case page
         (the HRMPSB rates online, or the Secretariat types in paper sheets). Finalize the whole pool once every
@@ -182,7 +182,7 @@
 {% else %}
 {# ── COS: single end-user score per candidate, inline ─────────── #}
 <div class="card p-4 mb-3">
-    <h2 class="h6 mb-1">2 — Record interview scores</h2>
+    <h2 class="h6 mb-1">2. Record interview scores</h2>
     <p class="rg-note mb-3">
         Enter each candidate's interview score from the end user (0–100). Add a reason when a
         score lands below 75 or above 98.

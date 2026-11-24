@@ -1793,3 +1793,11 @@ html[data-theme="dark"] .rg-fs-candidate .rg-del-rank-badge { color: #9aa8b6 !im
 html[data-theme="dark"] .rg-prior-review__ok { color: #9aa7b4; }
 html[data-theme="dark"] .rg-fs-fold > .rg-fs-fold__summary { color: var(--rg-ink); }
 }
+@media screen {
+html[data-theme="dark"] .internal-portal-body .card > :is(h2.h6, h2.h5) { color: var(--rg-ink); }
+html[data-theme="dark"] .internal-portal-body .form-check-input:checked {
+    background-color: #2f8f46;
+    border-color: #2f8f46;
+}
+html[data-theme="dark"] .rg-entry-form .rg-form-section { background: #1b2733; }
+}
