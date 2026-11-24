@@ -442,3 +442,143 @@
     .rg-gov-menu,
     .rg-gov-foot { display: none !important; }
 }
+
+/* ==========================================================================
+   No pills on applicant pages
+   --------------------------------------------------------------------------
+   The step tracker, the status on the status page and the small tags are
+   plain words. The current step is underlined in green; a finished step
+   shows a tick. Colour stays only where it tells the applicant something.
+   ========================================================================== */
+.applicant-portal-body .rg-journey {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1.5rem;
+    justify-content: flex-start;
+    padding: 0;
+    margin: 0 0 1.25rem;
+    border-bottom: 1px solid var(--rg-gov-rule);
+    list-style: none;
+}
+.applicant-portal-body .rg-journey__step {
+    display: flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    padding: 0 0 0.45rem;
+    margin: 0 0 -1px;
+    border: 0;
+    border-bottom: 3px solid transparent;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    color: var(--rg-gov-soft);
+    font-family: var(--rg-font-display);
+    font-size: 1rem;
+    font-weight: 500;
+}
+.applicant-portal-body .rg-journey__num {
+    width: auto;
+    height: auto;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    color: inherit;
+    font-size: inherit;
+    font-weight: 700;
+    line-height: inherit;
+}
+.applicant-portal-body .rg-journey__step.is-done { color: var(--rg-brand-green); }
+.applicant-portal-body .rg-journey__step.is-current {
+    border-bottom-color: var(--rg-brand-green);
+    color: var(--rg-gov-ink);
+    font-weight: 700;
+}
+.applicant-portal-body .rg-journey__label { color: inherit; font-weight: inherit; }
+
+.applicant-portal-body .rg-pub-status-badge {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    font-size: 1.0625rem;
+    font-weight: 700;
+}
+.applicant-portal-body .rg-req-downloads__format,
+.applicant-portal-body .rg-pub-optional-tag,
+.applicant-portal-body .rg-pub-chip,
+.applicant-portal-body .rg-pub-badge,
+.applicant-portal-body .rg-doc-card__status,
+.applicant-portal-body .rg-ta-checklist__tag,
+.applicant-portal-body .rg-intake-journey__phase {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+}
+.applicant-portal-body .rg-req-downloads__format::before { content: "("; }
+.applicant-portal-body .rg-req-downloads__format::after { content: ")"; }
+.applicant-portal-body .rg-doc-part__btn,
+.applicant-portal-body .rg-intake-review__view,
+.applicant-portal-body .rg-pub-upload-slot__view { border-radius: 3px; }
+.applicant-portal-body .rg-journey__step.is-done .rg-journey__num,
+.applicant-portal-body .rg-journey__step.is-current .rg-journey__num {
+    background: none;
+    color: inherit;
+}
+
+/* ── Error pages (403 / 404 / 500) share the masthead ────────── */
+.rg-errpage .rg-gov-mast__in { padding-block: 1.25rem; }
+.rg-errpage .rg-errpage__main { width: min(1170px, calc(100% - 2.5rem)); max-width: none; margin-inline: auto; padding: 2.5rem 0; }
+.rg-errpage .rg-errpage__main > * { max-width: 40rem; }
+.rg-errpage .rg-errpage__title { font-family: var(--rg-font-display); font-size: 2rem; color: var(--rg-gov-ink); }
+.rg-errpage .rg-errpage__btn { border-radius: 3px; }
+
+/* ==========================================================================
+   Inner applicant pages line up with the home page
+   --------------------------------------------------------------------------
+   Same 1170px frame and the same left edge as the masthead and the Job
+   Openings heading, instead of a narrow column floating in the centre.
+   The reading column stays 760px wide. On the status and receipt pages the
+   "what next / who to ask" boxes move into a side column, like the side
+   panels on the home page.
+   ========================================================================== */
+.applicant-portal-body main > .rg-pub-wrap {
+    width: min(1170px, calc(100% - 2.5rem));
+    max-width: none !important;
+    margin-inline: auto;
+}
+.applicant-portal-body main > .rg-pub-wrap > * { max-width: 760px; }
+.applicant-portal-body main > .rg-pub-wrap > .rg-journey { max-width: none; }
+.applicant-portal-body main > .rg-pub-wrap [style*="text-align:center"] { text-align: left !important; }
+.applicant-portal-body main > .rg-pub-wrap [style*="margin:0 auto"] { margin-left: 0 !important; }
+.applicant-portal-body main > .rg-pub-wrap [style*="justify-content:center"] { justify-content: flex-start !important; }
+.applicant-portal-body .rg-ta-intro,
+.applicant-portal-body .rg-pub-page-header,
+.applicant-portal-body .rg-pub-receipt-card { text-align: left; }
+.applicant-portal-body .rg-ta-intro__copy,
+.applicant-portal-body .rg-ta-intro__copy.rg-hub-alt { margin-left: 0; margin-right: 0; }
+.applicant-portal-body .rg-pub-receipt-id { text-align: left; }
+.applicant-portal-body .rg-pub-receipt-links { justify-content: flex-start; }
+.applicant-portal-body .rg-ta-back,
+.applicant-portal-body .rg-ta-lookup-again-link,
+.applicant-portal-body .rg-hub-back { text-align: left; }
+
+@media (min-width: 992px) {
+    /* status page: main column + a side column for help */
+    .applicant-portal-body main > .rg-pub-wrap.rg-ta-wrap:has(> .rg-ta-help) {
+        display: grid;
+        grid-template-columns: minmax(0, 760px) minmax(0, 320px);
+        column-gap: 2.5rem;
+        align-items: start;
+        justify-content: start;
+    }
+    .applicant-portal-body main > .rg-pub-wrap.rg-ta-wrap:has(> .rg-ta-help) > * { grid-column: 1; }
+    .applicant-portal-body main > .rg-pub-wrap.rg-ta-wrap:has(> .rg-ta-help) > .rg-ta-help {
+        grid-column: 2;
+        grid-row: 1 / span 3;
+    }
+    .applicant-portal-body .rg-ta-wrap .rg-ta-help__grid { grid-template-columns: 1fr; }
+}

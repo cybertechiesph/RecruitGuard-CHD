@@ -11,7 +11,7 @@
         {% blocktranslate trimmed with ref=application.case_number_short %}Case No. {{ ref }}{% endblocktranslate %}
     </p>
     {% if meta.document_titles %}
-    <p style="margin:16px 0 6px; color:#374151; font-size:13px; line-height:1.5; font-weight:700; text-transform:uppercase; letter-spacing:0.06em;">
+    <p style="margin:16px 0 6px; color:#374151; font-size:13px; line-height:1.5; font-weight:700;">
         {% translate "Documents received" %}
     </p>
     {% for title in meta.document_titles %}

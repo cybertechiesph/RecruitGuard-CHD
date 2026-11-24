@@ -4,15 +4,17 @@
        has no other recovery path (nothing retries automatically, and re-saving
        a schedule deliberately doesn't re-notify). Never rendered for HRMPSB:
        the subjects carry applicant names (REV-B blinding). {% endcomment %}
-    <div class="rg-icard">
-        <div class="rg-icard__header">
-            <div>
-                <h3 class="rg-icard__title">Notifications sent</h3>
-                <p class="rg-icard__subtitle">
-                    Every email queued to this applicant, and whether it was delivered.
-                </p>
-            </div>
-        </div>
+    {# Folded like the other secondary sections; it opens by itself when a send failed. #}
+    <details class="rg-icard" id="notifications-sent"{% if notification_log_has_failure %} open{% endif %}>
+        <summary class="rg-icard__title" style="cursor:pointer; padding:0.25rem 0;">
+            Notifications sent
+            <span class="rg-imeta" style="display:inline; font-weight:400;">
+                &middot; {{ notification_log_entries|length }} email{{ notification_log_entries|length|pluralize }}{% if notification_log_has_failure %} &middot; <strong>one did not send</strong>{% endif %}
+            </span>
+        </summary>
+        <p class="rg-icard__subtitle" style="margin:0.25rem 0 0.75rem;">
+            Every email queued to this applicant, and whether it was delivered.
+        </p>
         <div class="rg-itbl">
             <div class="table-responsive">
                 <table class="table align-middle" style="font-size:0.8125rem;">
@@ -65,7 +67,7 @@
                 </table>
             </div>
         </div>
-    </div>
+    </details>
 {% endif %}
 <script>
 (function () {

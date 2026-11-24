@@ -7,16 +7,25 @@
     <title>No access to this page | Internal Portal</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Condensed:wght@400;500;700&display=swap" rel="stylesheet">
     <link href="{% static 'css/recruitguard.css' %}?v=20261125-deslop12" rel="stylesheet">
     <link href="{% static 'css/recruitguard-doh-brand.css' %}?v=20261125-deslop12" rel="stylesheet">
+    <link href="{% static 'css/recruitguard-gov.css' %}?v=20261125-gov6" rel="stylesheet">
 </head>
-<body class="rg-errpage">
-<header class="rg-errpage__head">
-    <img src="{% static 'img/brand/chd-calabarzon-seal.png' %}" alt="" width="44" height="44">
-    <div>
-        <div class="rg-errpage__office">Department of Health &ndash; CHD CALABARZON</div>
-        <div class="rg-errpage__portal">Internal Portal</div>
+<body class="applicant-portal-body rg-errpage">
+<header class="rg-gov-mast">
+    <div class="rg-gov-in rg-gov-mast__in">
+        <a class="rg-gov-mast__brand" href="/internal/">
+            <img class="rg-gov-mast__lockup" src="{% static 'img/brand/masthead-lockup.png' %}" width="1600" height="202"
+                 alt="Republic of the Philippines. Department of Health. CALABARZON Center for Health Development">
+            <span class="rg-gov-mast__small">
+                <img src="{% static 'img/brand/chd-calabarzon-seal.png' %}" width="56" height="56" alt="">
+                <span>
+                    <span class="rg-gov-mast__rp">Republic of the Philippines</span>
+                    <span class="rg-gov-mast__office">Department of Health &ndash; CHD CALABARZON</span>
+                </span>
+            </span>
+        </a>
     </div>
 </header>
 <main class="rg-errpage__main">

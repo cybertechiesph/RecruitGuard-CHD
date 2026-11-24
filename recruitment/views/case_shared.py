@@ -390,5 +390,9 @@ def build(application, user):
             .exclude(notification_type__in=INTERNAL_AUDIENCE_NOTIFICATION_TYPES)
             .order_by("-created_at")[:25]
         )
+        # The box is folded on the page; it opens by itself when a send failed.
+        context["notification_log_has_failure"] = any(
+            entry.delivery_status == "failed" for entry in context["notification_log_entries"]
+        )
     context["can_export"] = user_can_export_application(user, application)
     return context

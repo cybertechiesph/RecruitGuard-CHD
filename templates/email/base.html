@@ -21,7 +21,7 @@ CSS/JS, absolute image URL. If `logo_url` is empty the header degrades to a text
     <meta name="supported-color-schemes" content="light only">
     <title>{% block title %}{% blocktranslate trimmed %}DOH–CHD CALABARZON Recruitment Portal{% endblocktranslate %}{% endblock %}</title>
 </head>
-<body style="margin:0; padding:0; background:#f4f6fa; color:#1f2933; font-family:Arial, Helvetica, sans-serif;">
+<body style="margin:0; padding:0; background:#f4f6fa; color:#1f2933; font-family:Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif;">
     <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:transparent;">{% block preheader %}{% endblock %}</div>
 
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f6fa; margin:0; padding:28px 12px;">
@@ -31,7 +31,7 @@ CSS/JS, absolute image URL. If `logo_url` is empty the header degrades to a text
 
                     {# ── Header band: seal + agency wordmark ── #}
                     <tr>
-                        <td style="background:#1e5c2d; padding:18px 24px; border-bottom:4px solid #fdb813;">
+                        <td style="background:#073606; padding:18px 24px; border-bottom:4px solid #f1a208;">
                             <table role="presentation" cellspacing="0" cellpadding="0">
                                 <tr>
                                     {% if logo_url %}
@@ -40,7 +40,7 @@ CSS/JS, absolute image URL. If `logo_url` is empty the header degrades to a text
                                     </td>
                                     {% endif %}
                                     <td style="vertical-align:middle;">
-                                        <div style="font-size:12px; line-height:1.4; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#fdb813;">
+                                        <div style="font-size:12px; line-height:1.4; font-weight:700; color:#fdb813;">
                                             {% blocktranslate trimmed %}DOH–CHD CALABARZON{% endblocktranslate %}
                                         </div>
                                         <div style="font-size:22px; line-height:1.25; font-weight:700; color:#ffffff; margin-top:2px;">
@@ -71,7 +71,7 @@ CSS/JS, absolute image URL. If `logo_url` is empty the header degrades to a text
                     {% else %}
                     <tr>
                         <td style="padding:18px 28px 4px; background:#f8fafc; border-top:1px solid #edf0f3;">
-                            <div style="font-size:11px; line-height:1.4; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:#8a96a3;">
+                            <div style="font-size:11px; line-height:1.4; font-weight:700; color:#8a96a3;">
                                 {% blocktranslate trimmed %}For inquiries{% endblocktranslate %}
                             </div>
                             <div style="margin-top:6px; color:#374151; font-size:13px; line-height:1.65;">
