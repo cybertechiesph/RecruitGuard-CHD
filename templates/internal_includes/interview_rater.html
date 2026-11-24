@@ -1,7 +1,10 @@
 {% load recruitment_ui %}
 
 {# ── Previous step summary ───────────────────────────────────── #}
+{# The fuller "Earlier review" card above already states these; show the short row only without it. #}
+{% if not prior_screening_record and not prior_exam_record %}
 {% include "internal_includes/interview_previous_step.html" %}
+{% endif %}
 
 {# ── Session info (read-only for raters) ────────────────────── #}
 {% if current_interview_session %}

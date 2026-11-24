@@ -48,9 +48,11 @@ independent re-validation step is unchanged.
                     style="border-bottom:1px solid rgba(100, 116, 139, 0.18);"
                     data-prior-doc-key="{{ review.document_key }}" data-prior-doc-status="{{ review.status }}">
                     <span style="font-size:0.8125rem;">{{ review.requirement_title }}</span>
+                    {% if review.status == 'complied' %}<span class="rg-prior-review__ok">{{ review.get_status_display }}</span>{% else %}
                     <span class="rg-pill rg-pill--sm rg-pill--{% if review.status == 'complied' %}success{% elif review.status == 'return_for_resubmission' %}warning{% elif review.status == 'not_submitted' %}danger{% else %}neutral{% endif %}">
                         {{ review.get_status_display }}
                     </span>
+                    {% endif %}
                 </li>
                 {% endfor %}
             </ul>

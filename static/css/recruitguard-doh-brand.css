@@ -5410,3 +5410,40 @@ details.rg-ta-facts[open] > summary { margin-bottom: 0.5rem; }
     flex: 1 0 auto;
     width: 100%;
 }
+
+/* ==========================================================================
+   Panel member and Appointing Authority pages: less on the page
+   ========================================================================== */
+/* Rare outcomes on the final-selection page start folded */
+.rg-fs-fold > .rg-fs-fold__summary {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #111827;
+    cursor: pointer;
+}
+.rg-fs-fold[open] > .rg-fs-fold__summary { margin-bottom: 0.35rem; }
+.rg-fs-fold__copy { margin: 0 0 1rem; }
+/* Rank is a plain number, not a green disc */
+.rg-fs-candidate .rg-del-rank-badge {
+    width: 2rem;
+    height: auto;
+    border-radius: 0;
+    background: none !important;
+    border: 0 !important;
+    box-shadow: none;
+    color: #5f6c78 !important;
+    font-size: 1rem;
+    font-weight: 700;
+    justify-content: flex-start;
+    align-items: flex-start;
+}
+/* A complied document is the normal case: quiet text, not a pill */
+.rg-prior-review__ok { font-size: 0.75rem; color: #5f6c78; }
+/* Computed rating: a plain box, not a ring */
+.rg-int-score-dial {
+    width: 5.5rem;
+    height: auto;
+    padding: 0.6rem 0.5rem;
+    border-radius: 8px;
+    border-width: 1px;
+}

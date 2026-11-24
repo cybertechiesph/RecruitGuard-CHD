@@ -1786,3 +1786,10 @@ html[data-theme="dark"] :is(.rg-scr-actionbar, .rg-int-actionbar) {
 }
 html[data-theme="dark"] .rg-competency-head { color: #9aa7b4; }
 }
+
+/* Panel member / Appointing Authority clean-up, dark side */
+@media screen {
+html[data-theme="dark"] .rg-fs-candidate .rg-del-rank-badge { color: #9aa8b6 !important; }
+html[data-theme="dark"] .rg-prior-review__ok { color: #9aa7b4; }
+html[data-theme="dark"] .rg-fs-fold > .rg-fs-fold__summary { color: var(--rg-ink); }
+}

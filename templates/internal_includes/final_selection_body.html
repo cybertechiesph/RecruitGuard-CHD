@@ -119,8 +119,7 @@ Standards applied:
                                     <span class="rg-del-car-item__score-cell">
                                         <span class="rg-del-car-item__score-label">Document review</span>
                                         <span class="rg-del-car-item__score-val">
-                                            {{ item.qualification_outcome }}
-                                            {% if item.document_review_score is not None %}{{ item.document_review_score }}{% endif %}
+                                            {% if item.document_review_score is not None %}{{ item.document_review_score }}{% else %}{{ item.qualification_outcome|capfirst }}{% endif %}
                                         </span>
                                     </span>
                                 {% endif %}
@@ -142,7 +141,7 @@ Standards applied:
                                         <span class="rg-del-car-item__score-val">{{ item.assessment_score }}</span>
                                     </span>
                                 {% endif %}
-                                {% if item.preliminary_rank_order %}
+                                {% if item.preliminary_rank_order and item.preliminary_rank_order != item.rank_order %}
                                     <span class="rg-del-car-item__score-cell">
                                         <span class="rg-del-car-item__score-label">System rank</span>
                                         <span class="rg-del-car-item__score-val">#{{ item.preliminary_rank_order }}</span>
@@ -239,15 +238,11 @@ Standards applied:
 
 {# ─── Card 4: No appointment / failure of search ─── #}
 {% if no_appointment_form %}
-<div class="rg-icard">
-    <div class="rg-icard__header">
-        <div>
-            <h3 class="rg-icard__title">No appointment (failure of search)</h3>
-            <p class="rg-icard__subtitle">
-                Every remaining candidate is told they were not selected. The vacancy can then be published again as a new vacancy.
-            </p>
-        </div>
-    </div>
+<details class="rg-icard rg-fs-fold"{% if no_appointment_form.errors %} open{% endif %}>
+    <summary class="rg-fs-fold__summary">No appointment (failure of search)</summary>
+    <p class="rg-icard__subtitle rg-fs-fold__copy">
+        Every remaining candidate is told they were not selected. The vacancy can then be published again as a new vacancy.
+    </p>
     <form method="post" action="{% url 'no-appointment-record' application.pk %}" novalidate>
         {% csrf_token %}
         <div class="rg-field">
@@ -269,7 +264,7 @@ Standards applied:
             </div>
         </div>
     </form>
-</div>
+</details>
 {% endif %}
 
 {# ─── Card 5: Return CAR for correction (when applicable) ─── #}
@@ -280,15 +275,11 @@ Standards applied:
       novalidate>
     {% csrf_token %}
 
-    <div class="rg-icard rg-fs-return-card">
-        <div class="rg-icard__header">
-            <div>
-                <h3 class="rg-icard__title">Return CAR for correction (ETE / recommendation)</h3>
-                <p class="rg-icard__subtitle">
-                    A return reopens the ETE ratings and the recommendation. Finalized exam and interview scores are not re-opened.
-                </p>
-            </div>
-        </div>
+    <details class="rg-icard rg-fs-return-card rg-fs-fold"{% if action_form.errors %} open{% endif %}>
+        <summary class="rg-fs-fold__summary">Return CAR for correction (ETE / recommendation)</summary>
+        <p class="rg-icard__subtitle rg-fs-fold__copy">
+            A return reopens the ETE ratings and the recommendation. Finalized exam and interview scores are not re-opened.
+        </p>
 
         <div class="rg-form-grid">
             {% if action_form.action_is_fixed %}
@@ -329,7 +320,7 @@ Standards applied:
                 </button>
             </div>
         </div>
-    </div>
+    </details>
 </form>
 {% endif %}
 
