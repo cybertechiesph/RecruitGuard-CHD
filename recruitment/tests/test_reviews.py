@@ -1113,7 +1113,8 @@ class RoundBTests(BatchExamHelpers, BaseRecruitmentTestCase):
         application = self.make_application(self.level1_position)
         self.move_application_to_hrmpsb_review(application)
         page = self._staff_client(self.hrmpsb).get(reverse("application-detail", args=[application.pk]))
-        self.assertContains(page, "rg-int-prev-step")
+        # The fuller earlier-review card carries these results, so the short row is not repeated.
+        self.assertContains(page, 'id="prior-review-summary"')
         self.assertNotContains(page, "rg-int-prev-step__empty")
 
     # F8: a refused online rating says what is missing
