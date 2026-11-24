@@ -1244,7 +1244,7 @@ class NotificationManagementTests(BaseRecruitmentTestCase):
         self.assertContains(after, "Medical certificate")
         self.assertContains(after, "Received")
         self.assertNotContains(after, "Waived item")
-        self.assertContains(after, date_format(deadline, "F d, Y"))
+        self.assertContains(after, date_format(deadline, "F j, Y"))
 
     def test_return_to_applicant_falls_back_to_text_when_resubmission_template_fails(self):
         application = self.make_submitted_application()
