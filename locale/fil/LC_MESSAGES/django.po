@@ -10,8 +10,8 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
 #: templates/404.html
-msgid "Page Not Found"
-msgstr "Hindi Mahanap ang Page"
+msgid "Page not found"
+msgstr "Hindi mahanap ang page"
 
 #: templates/404.html
 msgid "We couldn&rsquo;t find that page. The link may be old or mistyped."
