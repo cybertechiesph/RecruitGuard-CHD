@@ -1,0 +1,25 @@
+{% load recruitment_ui %}
+{% comment %}
+How long a case has waited at its current step, as plain text for list tables:
+the number of days, then a short line only when it is close to or past the limit.
+Input: recruitment_case (RecruitmentCase | None). Renders a dash when there is no
+open case.
+{% endcomment %}
+{% if recruitment_case and recruitment_case.current_stage and recruitment_case.current_stage != "closed" %}
+    {% stage_sla_context recruitment_case as sla %}
+    <span class="rg-wait rg-wait--{{ sla.state }}">
+        {% if sla.is_paused %}
+            <strong class="rg-wait__days">Paused</strong>
+            <span class="rg-wait__note">Waiting for the applicant</span>
+        {% else %}
+            <strong class="rg-wait__days">{% if sla.elapsed_days == 0 %}Today{% elif sla.elapsed_days == 1 %}1 day{% else %}{{ sla.elapsed_days }} days{% endif %}</strong>
+            {% if sla.is_overdue %}
+                <span class="rg-wait__note">Past the {{ sla.overdue_days }}-day limit</span>
+            {% elif sla.is_warning %}
+                <span class="rg-wait__note">Close to the {{ sla.overdue_days }}-day limit</span>
+            {% endif %}
+        {% endif %}
+    </span>
+{% else %}
+    <span class="rg-imeta">&mdash;</span>
+{% endif %}

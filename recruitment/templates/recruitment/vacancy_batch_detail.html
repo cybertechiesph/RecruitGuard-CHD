@@ -136,7 +136,7 @@
                 <tr>
                     <th>Case</th>
                     <th>Needed step</th>
-                    <th>Last updated</th>
+                    <th>Waiting</th>
                     <th class="col-actions"><span class="visually-hidden">Actions</span></th>
                 </tr>
             </thead>
@@ -153,15 +153,13 @@
                         <td>
                             {% queue_task_theme application as task_theme %}
                             {% queue_task_label application as task_label %}
-                            <span class="rg-pill rg-pill--{{ task_theme }} rg-pill--sm">{{ task_label }}</span>
-                            {% include "internal_includes/stage_sla_badge.html" with recruitment_case=application.case variant="sm" %}
+                            <span class="rg-step-label">{{ task_label }}</span>
                             {% queue_waiting_on_car application as waiting_on_car %}
                             {% if waiting_on_car %}<div class="rg-imeta mt-1">Waiting for the {{ waiting_on_car }}'s CAR</div>{% endif %}
                                 {% include "internal_includes/case_flags.html" with application=application %}
                         </td>
                         <td>
-                            <div style="font-size:0.8125rem;color:#374151;">{{ application.updated_at|timesince_short }} ago</div>
-                            <div class="rg-imeta mt-1">{{ application.updated_at|date:"M j, Y" }}</div>
+                            {% include "internal_includes/stage_waiting.html" with recruitment_case=application.case %}
                         </td>
                         <td class="col-actions">
                             <div class="rg-itbl-actions">

@@ -161,3 +161,191 @@ html:not([data-theme="dark"]) .internal-portal-body .rg-itbl tbody tr:nth-child(
 /* ── Sign-in pages ───────────────────────────────────────────── */
 .rg-login-body-wrap .rg-login-card__title { font-family: var(--rg-font-display); }
 .rg-login-body-wrap .rg-login-card__eyebrow { text-transform: none; letter-spacing: 0; }
+
+
+/* ==========================================================================
+   No pills on staff pages
+   --------------------------------------------------------------------------
+   A status is plain words. Colour is kept only where it warns: red for late
+   or refused, amber for close to a limit. Nothing has a coloured capsule
+   behind it. (The role in the green band keeps its thin white outline.)
+   ========================================================================== */
+html .internal-portal-body .rg-pill,
+html .internal-portal-body .rg-sla-badge {
+    display: inline;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    font-size: 0.8125rem;
+    font-weight: 400;
+    line-height: inherit;
+    white-space: normal;
+}
+html .internal-portal-body .rg-pill--sm,
+html .internal-portal-body .rg-sla-badge--sm { font-size: 0.8125rem; }
+html .internal-portal-body .rg-sla-badge__dot { display: none; }
+html .internal-portal-body .rg-context-bar__role .rg-pill {
+    display: inline-flex;
+    padding: 0.2rem 0.6rem;
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    border-radius: 3px;
+    color: #fff;
+}
+/* two statuses side by side read as "A · B" */
+html .internal-portal-body :is(.rg-pill, .rg-sla-badge, .rg-step-label) + :is(.rg-pill, .rg-sla-badge)::before {
+    content: "\00b7";
+    margin: 0 0.35rem;
+    color: #8a94a0;
+    font-weight: 400;
+}
+
+html:not([data-theme="dark"]) .internal-portal-body .rg-pill,
+html:not([data-theme="dark"]) .internal-portal-body .rg-sla-badge { color: #374151; }
+html:not([data-theme="dark"]) .internal-portal-body :is(.rg-pill--success, .rg-pill--active) { color: #1e5c2d; font-weight: 500; }
+html:not([data-theme="dark"]) .internal-portal-body :is(.rg-pill--warning, .rg-pill--on-hold, .rg-pill--reopened, .rg-sla-badge--warning) { color: #8a5a00; font-weight: 700; }
+html:not([data-theme="dark"]) .internal-portal-body :is(.rg-pill--danger, .rg-pill--suspended, .rg-sla-badge--overdue) { color: #9b2c1f; font-weight: 700; }
+html:not([data-theme="dark"]) .internal-portal-body :is(.rg-pill--closed, .rg-pill--withdrawn, .rg-pill--draft, .rg-pill--locked) { color: #5f6c78; }
+html[data-theme="dark"] .internal-portal-body :is(.rg-pill--warning, .rg-pill--danger, .rg-sla-badge--warning, .rg-sla-badge--overdue) { font-weight: 700; }
+
+/* the step a case needs, and how long it has waited */
+.rg-step-label { font-size: 0.8125rem; font-weight: 500; }
+.rg-wait__days { display: block; font-size: 0.875rem; font-weight: 500; }
+.rg-wait__note { display: block; font-size: 0.75rem; }
+html:not([data-theme="dark"]) .rg-wait--warning :is(.rg-wait__days, .rg-wait__note) { color: #8a5a00; }
+html:not([data-theme="dark"]) .rg-wait--overdue :is(.rg-wait__days, .rg-wait__note) { color: #9b2c1f; }
+html[data-theme="dark"] .rg-wait--warning :is(.rg-wait__days, .rg-wait__note) { color: #f0c661; }
+html[data-theme="dark"] .rg-wait--overdue :is(.rg-wait__days, .rg-wait__note) { color: #f0a8a2; }
+.rg-wait--warning .rg-wait__days,
+.rg-wait--overdue .rg-wait__days { font-weight: 700; }
+html:not([data-theme="dark"]) .rg-wait--paused .rg-wait__note { color: #5f6c78; }
+
+/* case numbers are ordinary text, not typewriter type */
+html .internal-portal-body .rg-itbl .col-ref .fw-bold,
+html .internal-portal-body .rg-cws-header__ref,
+html .internal-portal-body .rg-ref {
+    font-family: var(--rg-font-sans) !important;
+    font-size: 0.875rem !important;
+    letter-spacing: 0 !important;
+}
+
+/* the type filter above a list: plain tabs with an underline, not capsules */
+html .internal-portal-body .rg-queue-chip {
+    padding: 0.3rem 0.1rem;
+    margin-right: 1rem;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    font-weight: 500;
+    text-decoration: none;
+}
+html:not([data-theme="dark"]) .internal-portal-body .rg-queue-chip { color: #374151; }
+html .internal-portal-body .rg-queue-chip.is-active {
+    border-bottom-color: var(--rg-brand-green);
+    color: var(--rg-brand-green);
+    font-weight: 700;
+}
+html[data-theme="dark"] .internal-portal-body .rg-queue-chip.is-active { border-bottom-color: #6fbf73; color: #a9dd76; }
+
+/* notes and notices: a thin outline, not a thick coloured bar down the left */
+html .internal-portal-body .rg-banner--blocked,
+html .internal-portal-body .rg-banner--locked,
+html .internal-portal-body .rg-banner--observer,
+html .internal-portal-body .rg-branch-note,
+html .internal-portal-body .rg-cmp-archive-meta,
+html .internal-portal-body .rg-cmp-blockers,
+html .internal-portal-body .rg-cmp-checklist__help,
+html .internal-portal-body .rg-cmp-decision-ref,
+html .internal-portal-body .rg-dec-handoff,
+html .internal-portal-body .rg-dec-permanence-warning,
+html .internal-portal-body .rg-del-car__msg,
+html .internal-portal-body .rg-del-car__summary-notes,
+html .internal-portal-body .rg-del-locked-summary,
+html .internal-portal-body .rg-del-rating-row__justification,
+html .internal-portal-body .rg-del-recorder__msg,
+html .internal-portal-body .rg-exam-validation-alert,
+html .internal-portal-body .rg-fs-actions__msg,
+html .internal-portal-body .rg-fs-deep-lock,
+html .internal-portal-body .rg-icard--accent,
+html .internal-portal-body .rg-icard--alert,
+html .internal-portal-body .rg-icard--hero,
+html .internal-portal-body .rg-int-actionbar__msg,
+html .internal-portal-body .rg-int-readout-notes,
+html .internal-portal-body .rg-int-revise-notice,
+html .internal-portal-body .rg-pipeline-summary,
+html .internal-portal-body .rg-pkt-overview,
+html .internal-portal-body .rg-pkt-section__notes,
+html .internal-portal-body .rg-scr-actionbar__msg,
+html .internal-portal-body .rg-scr-doccheck[data-complete="false"],
+html .internal-portal-body .rg-scr-doccheck[data-complete="true"],
+html .internal-portal-body .rg-scr-locked-remark,
+html .internal-portal-body .rg-scr-resub-notice,
+html .internal-portal-body .rg-scr-return-card {
+    border-left-width: 1px;
+}
+
+/* the role in the green band stays white on every theme */
+html .internal-portal-body .rg-context-bar .rg-context-bar__role .rg-pill { color: #fff; font-weight: 500; }
+
+/* ==========================================================================
+   The remaining capsules on staff pages
+   --------------------------------------------------------------------------
+   Status words inside steps, packets, the calendar and the admin filters were
+   their own capsule classes. They become plain words too. Calendar event
+   types keep their colour, as coloured text, because the colour is the key
+   to the legend.
+   ========================================================================== */
+html .internal-portal-body .rg-cmp-req-status-badge,
+html .internal-portal-body .rg-dec-outcome-pill,
+html .internal-portal-body .rg-int-monitor-item__tag,
+html .internal-portal-body .rg-pkt-outcome-pill,
+html .internal-portal-body .rg-pkt-section__badge,
+html .internal-portal-body .rg-sched-event__kind,
+html .internal-portal-body .rg-scr-panel__tag,
+html .internal-portal-body .rg-scr-status-pill,
+html .internal-portal-body .rg-scr-step-state__item,
+html .internal-portal-body .rg-wf-action-btn__badge {
+    padding: 0;
+    border: 0 !important;
+    border-radius: 0;
+    background: none !important;
+    box-shadow: none;
+    font-weight: 700;
+}
+html .internal-portal-body .rg-sched-legend .rg-sched-event__kind { margin-right: 0.9rem; }
+
+/* filter chips above the admin lists: plain tabs, as on the queue */
+html .internal-portal-body .rg-adm-chip {
+    padding: 0.3rem 0.1rem;
+    margin-right: 0.9rem;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    font-weight: 500;
+}
+html .internal-portal-body .rg-adm-chip.is-active,
+html .internal-portal-body .rg-adm-chip[aria-current] {
+    border-bottom-color: var(--rg-brand-green);
+    color: var(--rg-brand-green);
+    font-weight: 700;
+    background: none;
+}
+html[data-theme="dark"] .internal-portal-body .rg-adm-chip.is-active,
+html[data-theme="dark"] .internal-portal-body .rg-adm-chip[aria-current] { border-bottom-color: #6fbf73; color: #a9dd76; }
+
+/* the dark theme paints its own tint behind each status: take that off as well */
+html[data-theme="dark"] .internal-portal-body .rg-pill,
+html[data-theme="dark"] .internal-portal-body .rg-sla-badge {
+    background: none !important;
+    border-color: transparent !important;
+}
+html[data-theme="dark"] .internal-portal-body .rg-context-bar .rg-context-bar__role .rg-pill {
+    border-color: rgba(255, 255, 255, 0.45) !important;
+}
