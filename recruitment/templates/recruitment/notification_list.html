@@ -11,7 +11,6 @@
 {% block content %}
 <div class="rg-page-header">
     <div>
-        <p class="rg-eyebrow">Notifications</p>
         <h1 class="rg-page-title">Notifications</h1>
         <p class="rg-page-subtitle">{% if user.role == "system_admin" %}Updates about accounts, access, and system activity.{% else %}Updates about cases and applications assigned to you.{% endif %}</p>
     </div>
@@ -26,17 +25,9 @@
     {% endif %}
 </div>
 
-<div class="rg-istat-row" aria-label="Notifications summary">
-    <div class="rg-istat">
-        <span class="rg-istat__value">{{ notifications|length }}</span>
-        <span class="rg-istat__label">Recent</span>
-    </div>
-    <div class="rg-istat-row__divider"></div>
-    <div class="rg-istat">
-        <span class="rg-istat__value">{{ unread_count }}</span>
-        <span class="rg-istat__label">Unread</span>
-    </div>
-</div>
+{% if has_unread %}
+<p class="rg-imeta mb-2">{{ unread_count }} unread of {{ notifications|length }} recent.</p>
+{% endif %}
 
 <div class="rg-notif-page">
     {% if notifications %}
@@ -53,11 +44,6 @@
                         <span class="rg-notif-page__text">{{ notification.body }}</span>
                         {% endif %}
                         <span class="rg-notif-page__meta">
-                            {% if not notification.read_at %}
-                                <span class="rg-pill rg-pill--success" style="font-size:0.65rem;min-height:1.4rem;padding:0.1rem 0.5rem;">New</span>
-                            {% else %}
-                                <span class="rg-notif-page__meta-tag">Read</span>
-                            {% endif %}
                             <span class="rg-notif-page__meta-time">{{ notification.created_at|timesince }} ago</span>
                         </span>
                     </span>

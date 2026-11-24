@@ -13,8 +13,7 @@
     <div>
         <h1 class="rg-page-title">Vacancy Batches</h1>
         <p class="rg-page-copy">
-            Your queue grouped by vacancy. The office runs recruitment by batch per
-            vacancy &mdash; open a vacancy to see its applicants and act on each case.
+            Your cases, grouped by vacancy. Open a vacancy to see its applicants.
         </p>
     </div>
     <div class="rg-page-actions">
@@ -26,13 +25,12 @@
   TI-5: the next seven days from the Schedule page, so nobody has to open each case to find
   out what is happening this week.
 {% endcomment %}
-{% if show_coming_up %}
+{% if show_coming_up and coming_up %}
 <section class="rg-icard rg-sched-comingup mb-3" aria-labelledby="coming-up-title" data-coming-up>
     <div class="rg-sched-comingup__head">
         <h2 class="rg-sched-comingup__title" id="coming-up-title">Coming up &middot; next 7 days</h2>
         <a href="{% url 'schedule-calendar' %}" class="btn btn-outline-secondary btn-sm">Open schedule</a>
     </div>
-    {% if coming_up %}
         <div class="rg-sched-comingup__days">
             {% for day, day_events in coming_up.items %}
                 <div class="rg-sched-comingup__day">
@@ -41,10 +39,9 @@
                 </div>
             {% endfor %}
         </div>
-    {% else %}
-        <p class="rg-imeta mb-0">No exams, interviews or deadlines in the next 7 days.</p>
-    {% endif %}
 </section>
+{% elif show_coming_up %}
+<p class="rg-imeta mb-3" data-coming-up>Nothing is scheduled in the next 7 days. <a href="{% url 'schedule-calendar' %}">Open schedule</a></p>
 {% endif %}
 
 {% if not vacancies %}

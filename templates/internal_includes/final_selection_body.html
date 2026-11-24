@@ -219,7 +219,7 @@ Standards applied:
                       id="{{ final_selection_form.decision_notes.id_for_label }}"
                       class="form-control{% if final_selection_form.decision_notes.errors %} is-invalid{% endif %}"
                       rows="5">{{ final_selection_form.decision_notes.value|default:"" }}</textarea>
-            <div class="form-text">Notes are preserved with the CAR-level final selection record.</div>
+            <div class="form-text">Saved with the final selection.</div>
             {% for error in final_selection_form.decision_notes.errors %}
                 <div class="invalid-feedback d-block">{{ error }}</div>
             {% endfor %}

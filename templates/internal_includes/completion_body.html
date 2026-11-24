@@ -264,12 +264,16 @@ Bootstrap Icons CSS).
                 {% endif %}
 
                 <p class="rg-cmp-checklist__help">
-                    Fill any blank slot below to add a new requirement. New entries are saved when you click <strong>Save progress</strong>.
+                    Add a requirement below, then click <strong>Save progress</strong>.
                 </p>
 
                 <div id="req-formset-container">
                     {% for req_form in completion_requirement_formset %}
                         {% with status_val=req_form.status.value %}
+                        {% if forloop.counter0 > completion_requirement_formset.initial_form_count %}
+                        <details class="rg-cmp-req-more"{% if req_form.errors %} open{% endif %}>
+                            <summary>Add another requirement</summary>
+                        {% endif %}
                         <div class="rg-cmp-req-form-row {% if not req_form.instance.pk %}is-new{% endif %}"
                              id="req-row-{{ forloop.counter0 }}"
                              data-req-status="{{ status_val|lower }}">
@@ -336,6 +340,7 @@ Bootstrap Icons CSS).
                                 </div>
                             </div>
                         </div>
+                        {% if forloop.counter0 > completion_requirement_formset.initial_form_count %}</details>{% endif %}
                         {% endwith %}
                     {% empty %}
                         <p class="rg-cmp-checklist__empty">

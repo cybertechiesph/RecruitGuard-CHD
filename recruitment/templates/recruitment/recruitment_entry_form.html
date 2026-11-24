@@ -25,7 +25,6 @@
 
                 <div class="rg-form-section mb-4">
                     <h2 class="rg-form-section__title">1. Select Official Position</h2>
-                    <p class="rg-form-section__copy">Choose the official position from the Position Reference list. Official Plantilla or COS positions are not typed in manually here.</p>
                     <div class="row g-3">
                         <div class="col-lg-8">{% include "recruitment/includes/form_field.html" with field=form.position_reference %}</div>
                     </div>
@@ -33,7 +32,7 @@
 
                 <div class="rg-form-section mb-4">
                     <h2 class="rg-form-section__title">2. Review Position Details</h2>
-                    <p class="rg-form-section__copy">These official details stay linked to the selected position. The case level comes from the position classification.</p>
+                    <p class="rg-form-section__copy">Filled in from the position you chose.</p>
                     <div class="card bg-light border-0 p-3" id="position-reference-review">
                         <div id="position-reference-empty"{% if selected_position_reference %} class="d-none"{% endif %}>
                             <p class="text-muted mb-0">Select a position to review its title, salary grade, level, and class ID.</p>
@@ -64,9 +63,9 @@
                 <div class="rg-form-section mb-4">
                     <h2 class="rg-form-section__title">3. Set vacancy details</h2>
                     {% if form.status %}
-                        <p class="rg-form-section__copy">Review the generated vacancy code, then set the position type, status, application dates, and notes for screening.</p>
+                        <p class="rg-form-section__copy">Set the position type, status and application dates.</p>
                     {% else %}
-                        <p class="rg-form-section__copy">Review the generated vacancy code, position type, application dates, and notes for screening.</p>
+                        <p class="rg-form-section__copy">Check the position type and application dates.</p>
                     {% endif %}
                     <div class="row g-3">
                         <div class="col-md-4">{% include "recruitment/includes/form_field.html" with field=form.job_code %}</div>
@@ -96,7 +95,7 @@
 
                 <div class="rg-form-section">
                     <h2 class="rg-form-section__title">4. Notes</h2>
-                    <p class="rg-form-section__copy">Use this area only for notes specific to this vacancy. Official position details remain linked to the selected position.</p>
+                    <p class="rg-form-section__copy">Notes for this vacancy only.</p>
                     {% include "recruitment/includes/form_field.html" with field=form.qualification_reference %}
                 </div>
 

@@ -1507,9 +1507,18 @@ body.applicant-portal-body {
 
 /* Visually distinguish blank "add new" rows from saved requirements. */
 .rg-cmp-req-form-row.is-new {
-    border-style: dashed;
     background: #fafbfc;
 }
+.rg-cmp-req-form-row.is-new { border-color: rgba(100, 116, 139, 0.35); }
+.rg-cmp-req-more { margin-top: 0.75rem; }
+/* Offer one "add another" at a time: the next one appears once this one is opened. */
+.rg-cmp-req-more:not([open]) + .rg-cmp-req-more { display: none; }
+.rg-cmp-req-more > summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--rg-brand-green);
+}
+.rg-cmp-req-more[open] > summary { margin-bottom: 0.5rem; }
 .rg-cmp-req-form-row.is-new .rg-cmp-req-form-row__seq {
     color: var(--rg-brand-green);
     font-weight: 700;
@@ -3352,8 +3361,6 @@ html[data-theme="dark"] .rg-pipeline__stage.is-ended .rg-pipeline__label {
     outline: none;
     box-shadow: inset 0 0 0 2px rgba(22, 163, 74, 0.45);
 }
-.rg-notif-page__item--unread .rg-notif-page__row { background: var(--rg-brand-green-soft, #e6f0dc); }
-.rg-notif-page__item--unread .rg-notif-page__row:hover { background: #d4e8c0; }
 .rg-notif-page__dot {
     width: 0.6rem;
     height: 0.6rem;
@@ -3375,10 +3382,11 @@ html[data-theme="dark"] .rg-pipeline__stage.is-ended .rg-pipeline__label {
 }
 .rg-notif-page__title {
     font-size: 0.95rem;
-    font-weight: 700;
+    font-weight: 500;
     color: #0f172a;
     line-height: 1.3;
 }
+.rg-notif-page__item--unread .rg-notif-page__title { font-weight: 700; }
 .rg-notif-page__text {
     font-size: 0.85rem;
     color: #475569;
