@@ -625,15 +625,15 @@ html[data-theme="dark"] :is(
     .rg-pill--success, .rg-pill--active, .rg-progress-step.is-complete
 ) { background: rgba(126, 187, 66, 0.16); }
 html[data-theme="dark"] :is(
-    .rg-pill--info, .rg-pill--level-1, .rg-pill--applicant, .rg-progress-step.is-current, .rg-pill--reopened
+    .rg-pill--info, .rg-pill--applicant, .rg-progress-step.is-current, .rg-pill--reopened
 ) { background: rgba(75, 180, 232, 0.14); }
 html[data-theme="dark"] :is(
-    .rg-pill--warning, .rg-pill--cos, .rg-pill--locked, .rg-pill--suspended
+    .rg-pill--warning, .rg-pill--locked, .rg-pill--suspended
 ) { background: rgba(253, 184, 19, 0.14); }
 html[data-theme="dark"] :is(
-    .rg-pill--danger, .rg-pill--level-2, .rg-pill--appointing-authority, .rg-pill--on-hold
+    .rg-pill--danger, .rg-pill--appointing-authority, .rg-pill--on-hold
 ) { background: rgba(236, 111, 104, 0.14); }
-html[data-theme="dark"] :is(.rg-pill--plantilla, .rg-pill--secretariat) { background: rgba(75, 180, 232, 0.14); }
+html[data-theme="dark"] :is(.rg-pill--secretariat) { background: rgba(75, 180, 232, 0.14); }
 html[data-theme="dark"] .rg-pill--hrm-chief { background: rgba(100, 130, 220, 0.18); }
 html[data-theme="dark"] .rg-pill--hrmpsb-member { background: rgba(168, 130, 224, 0.18); }
 html[data-theme="dark"] :is(
@@ -643,11 +643,11 @@ html[data-theme="dark"] :is(
 /* -------- Pills — text -------- */
 html[data-theme="dark"] :is(.rg-pill--success, .rg-pill--active) { color: #a9dd76; }
 html[data-theme="dark"] :is(
-    .rg-pill--info, .rg-pill--level-1, .rg-pill--applicant, .rg-pill--plantilla, .rg-pill--secretariat, .rg-pill--reopened
+    .rg-pill--info, .rg-pill--applicant, .rg-pill--secretariat, .rg-pill--reopened
 ) { color: #7cc6ec; }
-html[data-theme="dark"] :is(.rg-pill--warning, .rg-pill--cos, .rg-pill--locked, .rg-pill--suspended) { color: #f0c661; }
+html[data-theme="dark"] :is(.rg-pill--warning, .rg-pill--locked, .rg-pill--suspended) { color: #f0c661; }
 html[data-theme="dark"] :is(.rg-pill--danger) { color: #f0a8a2; }
-html[data-theme="dark"] :is(.rg-pill--level-2, .rg-pill--appointing-authority, .rg-pill--on-hold) { color: #f0a877; }
+html[data-theme="dark"] :is(.rg-pill--appointing-authority, .rg-pill--on-hold) { color: #f0a877; }
 html[data-theme="dark"] .rg-pill--hrm-chief { color: #9db0f0; }
 html[data-theme="dark"] .rg-pill--hrmpsb-member { color: #c9adf2; }
 html[data-theme="dark"] :is(
@@ -657,11 +657,11 @@ html[data-theme="dark"] :is(
 /* -------- Pills — border -------- */
 html[data-theme="dark"] :is(.rg-pill--success, .rg-pill--active) { border-color: rgba(126, 187, 66, 0.34); }
 html[data-theme="dark"] :is(
-    .rg-pill--info, .rg-pill--level-1, .rg-pill--applicant, .rg-pill--reopened
+    .rg-pill--info, .rg-pill--applicant, .rg-pill--reopened
 ) { border-color: rgba(75, 180, 232, 0.32); }
-html[data-theme="dark"] :is(.rg-pill--plantilla, .rg-pill--secretariat) { border-color: rgba(63, 169, 176, 0.32); }
-html[data-theme="dark"] :is(.rg-pill--warning, .rg-pill--cos, .rg-pill--locked, .rg-pill--suspended) { border-color: rgba(253, 184, 19, 0.36); }
-html[data-theme="dark"] :is(.rg-pill--danger, .rg-pill--level-2, .rg-pill--appointing-authority, .rg-pill--on-hold) { border-color: rgba(236, 111, 104, 0.36); }
+html[data-theme="dark"] :is(.rg-pill--secretariat) { border-color: rgba(63, 169, 176, 0.32); }
+html[data-theme="dark"] :is(.rg-pill--warning, .rg-pill--locked, .rg-pill--suspended) { border-color: rgba(253, 184, 19, 0.36); }
+html[data-theme="dark"] :is(.rg-pill--danger, .rg-pill--appointing-authority, .rg-pill--on-hold) { border-color: rgba(236, 111, 104, 0.36); }
 html[data-theme="dark"] .rg-pill--hrm-chief { border-color: rgba(100, 130, 220, 0.35); }
 html[data-theme="dark"] .rg-pill--hrmpsb-member { border-color: rgba(168, 130, 224, 0.32); }
 html[data-theme="dark"] :is(.rg-pill--neutral, .rg-pill--system-admin, .rg-pill--draft, .rg-pill--closed, .rg-pill--withdrawn) { border-color: rgba(255, 255, 255, 0.14); }
@@ -1318,9 +1318,6 @@ html[data-theme="dark"] .rg-entry-row__summary { color: #d4dde6; }
 html[data-theme="dark"] .rg-level-label { color: #d4dde6; }
 html[data-theme="dark"] .rg-path-panel--plantilla .rg-level-label { color: #7fd3d6; }
 html[data-theme="dark"] .rg-path-panel--cos .rg-level-label { color: #f0c661; }
-html[data-theme="dark"] .rg-pill--cos { color: #f0c661; }
-html[data-theme="dark"] .rg-pill--level-1 { color: #8fbdf0; }
-html[data-theme="dark"] .rg-pill--level-2 { color: #f0a877; }
 html[data-theme="dark"] .rg-pill--success { color: #a9dd76; }
 html[data-theme="dark"] .rg-pill--warning { color: #f0c661; }
 html[data-theme="dark"] .rg-pill--danger { color: #f0a8a2; }
@@ -1589,7 +1586,6 @@ html[data-theme="dark"] .rg-scr-optional-label { color: #8a99a8; }
 html[data-theme="dark"] .rg-scr-reference-note { color: #d4dde6; }
 html[data-theme="dark"] .rg-scr-reference-grid span { color: #9aa8b6; }
 html[data-theme="dark"] .rg-scr-reference-grid strong { color: #e8edf2; }
-html[data-theme="dark"] .rg-pill--plantilla { color: #f0c661; }
 html[data-theme="dark"] .btn-rg-finalize.is-blocked, html[data-theme="dark"] .btn-rg-finalize:disabled { color: #8a99a8; }
 html[data-theme="dark"] .rg-login-card__sub { color: #9aa8b6; }
 html[data-theme="dark"] .rg-login-card__notice { color: #9aa8b6; }

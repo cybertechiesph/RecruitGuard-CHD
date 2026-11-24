@@ -833,7 +833,7 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         response = client.get(reverse("workflow-queue"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Needed Step")
+        self.assertContains(response, "Needed step")
         self.assertContains(response, "Screening")
         self.assertNotContains(response, "HRM Chief Review")
         # Guard against multi-line {# #} template comments leaking to the page
@@ -851,7 +851,7 @@ class ViewAndExportTests(BaseRecruitmentTestCase):
         response = client.get(reverse("workflow-queue"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Needed Step")
+        self.assertContains(response, "Needed step")
         self.assertContains(response, "Exam")
         self.assertNotContains(response, "HRM Chief Review")
 

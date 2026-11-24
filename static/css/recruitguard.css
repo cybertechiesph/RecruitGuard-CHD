@@ -89,10 +89,8 @@ code {
 .rg-eyebrow {
     margin-bottom: 0.75rem;
     color: var(--rg-muted);
-    font-size: 0.76rem;
+    font-size: 0.78rem;
     font-weight: 700;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
 }
 
 .rg-page-header {
@@ -682,10 +680,8 @@ textarea.form-control {
     border-radius: 0.7rem;
     background: #f4f7f9;
     color: #33475a;
-    font-size: 0.76rem;
+    font-size: 0.78rem;
     font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
     white-space: nowrap;
 }
 
@@ -927,8 +923,6 @@ textarea.form-control {
     color: var(--rg-muted);
     font-size: 0.78rem;
     font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
 }
 
 .table tbody tr:hover {
@@ -944,34 +938,30 @@ textarea.form-control {
     padding: 0.35rem 0.78rem;
     border-radius: 999px;
     font-size: 0.78rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    font-weight: 600;
     border: 1px solid transparent;
 }
 
-.rg-pill--plantilla {
-    background: #e3f6f1;
-    color: var(--rg-primary);
-    border-color: #c1ece3;
+/* Position type and level are facts about a vacancy, not statuses, so they read as
+   plain text. Pills are kept for things staff must notice (overdue, rejected, ...). */
+.rg-pill.rg-pill--plantilla,
+.rg-pill.rg-pill--cos,
+.rg-pill.rg-pill--level-1,
+.rg-pill.rg-pill--level-2 {
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    color: inherit;
+    font-size: 0.8125rem;
+    font-weight: 400;
 }
 
-.rg-pill--cos {
-    background: #fff4dd;
-    color: #946008;
-    border-color: #ffdfa0;
-}
-
-.rg-pill--level-1 {
-    background: #edf5ff;
-    color: #19509a;
-    border-color: #d3e4ff;
-}
-
-.rg-pill--level-2 {
-    background: #fff0ea;
-    color: #ad4d1d;
-    border-color: #ffcbb8;
+:is(.rg-pill--plantilla, .rg-pill--cos) + :is(.rg-pill--level-1, .rg-pill--level-2)::before {
+    content: "\00b7";
+    margin-left: 0.2rem;
+    opacity: 0.6;
 }
 
 .rg-pill--success {
@@ -1271,10 +1261,8 @@ textarea.form-control {
    ---------------------------------------------------------- */
 .rg-sidebar__section-label {
     padding: 1rem 1rem 0.3rem;
-    font-size: 0.67rem;
+    font-size: 0.78rem;
     font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     color: #9aa4af;
 }
 
@@ -1424,11 +1412,9 @@ textarea.form-control {
 }
 
 .rg-dash-stat__label {
-    font-size: 0.75rem;
+    font-size: 0.78rem;
     font-weight: 600;
     color: #7f8a96;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
 }
 
 /* ----------------------------------------------------------
@@ -1530,8 +1516,6 @@ textarea.form-control {
     display: block;
     font-size: 0.82rem;
     font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
 }
 
 .rg-progress-step__meta {
@@ -1984,11 +1968,9 @@ textarea.form-control {
     width: 7.25rem;
     flex-shrink: 0;
     color: #5f6c78;
-    font-size: 0.6875rem;
+    font-size: 0.78rem;
     font-weight: 600;
     line-height: 1.35;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
 }
 
 .rg-public-opening__meta-item strong {
@@ -2892,8 +2874,6 @@ textarea.form-control {
     margin: 0 0 1rem;
     font-size: 0.78rem;
     font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     color: #5f6c78;
 }
 
@@ -3093,8 +3073,6 @@ textarea.form-control {
 .rg-pub-form-group__heading {
     font-size: 0.78rem;
     font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     color: #5f6c78;
     border-top: 1px solid #e5e9ed;
     padding-top: 1.25rem;
@@ -3583,8 +3561,6 @@ textarea.form-control {
 .rg-pub-faq-group-title {
     font-size: 0.78rem;
     font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     color: #5f6c78;
     margin: 2rem 0 0.75rem;
     padding-bottom: 0.5rem;
@@ -4019,15 +3995,13 @@ textarea.form-control {
     position: absolute;
     top: .85rem;
     right: 1rem;
-    font-size: .65rem;
+    font-size: 0.78rem;
     font-weight: 700;
     color: #16a34a;
     background: #e9f9f0;
     border: 1px solid #c8ebd6;
     padding: .15rem .45rem;
     border-radius: .2rem;
-    text-transform: uppercase;
-    letter-spacing: .04em;
 }
 
 .rg-vacancy-detail {
@@ -4037,11 +4011,9 @@ textarea.form-control {
 }
 
 .rg-vacancy-detail__heading {
-    font-size: .75rem;
+    font-size: 0.78rem;
     font-weight: 600;
     color: #5f6c78;
-    text-transform: uppercase;
-    letter-spacing: .06em;
     margin: 0 0 .25rem;
 }
 
@@ -4139,11 +4111,9 @@ textarea.form-control {
     padding: .55rem .75rem;
     background: #f8f9fa;
     border-bottom: 1px solid #d7dde3;
-    font-size: .7rem;
+    font-size: 0.78rem;
     font-weight: 700;
     color: #5f6c78;
-    text-transform: uppercase;
-    letter-spacing: .06em;
 }
 
 .rg-doc-inventory td {
@@ -4156,10 +4126,9 @@ textarea.form-control {
     display: inline-flex;
     align-items: center;
     gap: .25rem;
-    font-size: .7rem;
+    font-size: 0.78rem;
     font-weight: 700;
     color: #16a34a;
-    text-transform: uppercase;
 }
 
 /* ── Split Pane (Evidence + Audit) ── */
@@ -4676,7 +4645,7 @@ textarea.form-control {
 }
 
 .rg-pill--sm {
-    font-size: 0.67rem;
+    font-size: 0.75rem;
     padding: 0.15rem 0.5rem;
     min-height: 1.5rem;
 }
@@ -4784,10 +4753,8 @@ textarea.form-control {
 .rg-itbl thead th {
     background: #f8f9fa;
     color: #5f6c78;
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
     border-bottom: 1px solid #d7dde3;
     white-space: nowrap;
 }
@@ -5386,10 +5353,8 @@ textarea.form-control {
 }
 
 .rg-drawer__section-title {
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     font-weight: 700;
-    letter-spacing: 0.09em;
-    text-transform: uppercase;
     color: #9aa4af;
     margin-bottom: 0.65rem;
 }
@@ -5435,11 +5400,9 @@ textarea.form-control {
 }
 
 .rg-istat__label {
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     font-weight: 700;
     color: #7f8a96;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
 }
 
 .rg-istat-row__divider {
@@ -5555,10 +5518,8 @@ textarea.form-control {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
-    font-size: 0.67rem;
+    font-size: 0.78rem;
     font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
     color: #8c6200;
     background: #fff8e7;
     border: 1px solid #f0d58a;
@@ -6008,10 +5969,8 @@ textarea.form-control {
 }
 
 .rg-scr-elig-bar__label {
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     font-weight: 700;
-    letter-spacing: 0.07em;
-    text-transform: uppercase;
     color: #5f6c78;
     margin-bottom: 0.2rem;
 }
@@ -6279,11 +6238,9 @@ textarea.form-control {
 .rg-scr-locked-field:last-child { border-bottom: 0; }
 
 .rg-scr-locked-field__label {
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     font-weight: 700;
     color: #5f6c78;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
     margin-bottom: 0.3rem;
 }
 
@@ -6469,11 +6426,9 @@ textarea.form-control {
 .rg-exam-locked-field:last-child { border-bottom: 0; }
 
 .rg-exam-locked-field__label {
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     font-weight: 700;
     color: #5f6c78;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
     margin-bottom: 0.3rem;
 }
 
@@ -6506,10 +6461,8 @@ textarea.form-control {
 }
 
 .rg-int-context-item__label {
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
     color: #5f6c78;
     margin-bottom: 0.2rem;
 }
@@ -6536,10 +6489,8 @@ textarea.form-control {
 .rg-int-session-info-row:last-child { border-bottom: 0; }
 
 .rg-int-session-info-row__label {
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
     color: #5f6c78;
     min-width: 120px;
     flex-shrink: 0;
@@ -6594,10 +6545,8 @@ textarea.form-control {
 }
 
 .rg-int-score-dial-label {
-    font-size: 0.6rem;
+    font-size: 0.78rem;
     font-weight: 600;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
     color: #9aa4af;
     margin-top: 0.1rem;
     transition: color 0.2s;
@@ -6649,10 +6598,8 @@ textarea.form-control {
 .rg-int-competency-group:last-of-type { margin-bottom: 0.25rem; }
 
 .rg-int-competency-group__head {
-    font-size: 0.68rem;
+    font-size: 0.78rem;
     font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
     color: #64748b;
     padding-bottom: 0.3rem;
     margin-bottom: 0.4rem;
@@ -6745,10 +6692,8 @@ textarea.form-control {
 }
 
 .rg-int-submitted-dial__label {
-    font-size: 0.58rem;
+    font-size: 0.78rem;
     font-weight: 600;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
     color: #16a34a;
     margin-top: 0.1rem;
 }
@@ -6920,10 +6865,8 @@ textarea.form-control {
 }
 
 .rg-del-score-badge__sub {
-    font-size: 0.57rem;
+    font-size: 0.78rem;
     font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
     color: #9aa4af;
     margin-top: 0.05rem;
 }
@@ -6989,10 +6932,8 @@ textarea.form-control {
 }
 
 .rg-del-avg-strip__label {
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     font-weight: 600;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
     color: rgba(255,255,255,0.7);
 }
 
@@ -7085,7 +7026,7 @@ textarea.form-control {
 }
 
 .rg-del-car-item__score-cell { display: flex; gap: 0.35rem; align-items: baseline; }
-.rg-del-car-item__score-label { color: #9aa4af; font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.rg-del-car-item__score-label { color: #9aa4af; font-size: 0.78rem; font-weight: 600;}
 .rg-del-car-item__score-val { font-weight: 600; color: #374151; }
 
 .rg-del-car-item__decision {
@@ -7149,12 +7090,10 @@ textarea.form-control {
 }
 
 .rg-pkt-section__badge {
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     font-weight: 600;
     padding: 0.15rem 0.5rem;
     border-radius: 2rem;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
 }
 
 .rg-pkt-section__badge--ok {
@@ -7200,9 +7139,7 @@ textarea.form-control {
     width: 160px;
     color: #64748b;
     font-weight: 600;
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
+    font-size: 0.78rem;
     padding-top: 0.05rem;
 }
 
@@ -7422,8 +7359,6 @@ textarea.form-control {
     border-radius: 2rem;
     font-size: 0.8125rem;
     font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
 }
 
 .rg-dec-outcome-pill--selected {
@@ -7582,12 +7517,10 @@ textarea.form-control {
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     font-weight: 600;
     opacity: 0.7;
     margin-top: 0.35rem;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
 }
 
 /* ──────────────────────────────────────────────────────────────
@@ -7631,10 +7564,8 @@ textarea.form-control {
     gap: 0.25rem;
     padding: 0.15rem 0.55rem;
     border-radius: 2rem;
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     font-weight: 600;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
     white-space: nowrap;
 }
 
@@ -7700,11 +7631,9 @@ textarea.form-control {
 }
 
 .rg-cmp-req-form-row__seq {
-    font-size: 0.69rem;
+    font-size: 0.78rem;
     font-weight: 700;
     color: #94a3b8;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
 }
 
 .rg-cmp-req-form-row__delete-label {
@@ -7797,11 +7726,9 @@ textarea.form-control {
 }
 
 .rg-cmp-archive-meta__label {
-    font-size: 0.69rem;
+    font-size: 0.78rem;
     font-weight: 700;
     color: #94a3b8;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
 }
 
 .rg-cmp-archive-meta__value {
@@ -7962,10 +7889,8 @@ textarea.form-control {
 .rg-scr-kicker {
     margin-bottom: 0.2rem;
     color: #64748b;
-    font-size: 0.68rem;
+    font-size: 0.78rem;
     font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
 }
 
 .rg-scr-decision-strip__title {
@@ -8048,10 +7973,8 @@ textarea.form-control {
     border-radius: 999px;
     color: #475569;
     background: #f8fafc;
-    font-size: 0.68rem;
+    font-size: 0.78rem;
     font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
     white-space: nowrap;
 }
 
@@ -8079,10 +8002,8 @@ textarea.form-control {
 .rg-scr-doc-table th {
     color: #64748b;
     background: #f8fafc;
-    font-size: 0.68rem;
+    font-size: 0.78rem;
     font-weight: 800;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
 }
 
 .rg-scr-doc-table tr:last-child td { border-bottom: 0; }
@@ -8252,10 +8173,8 @@ textarea.form-control {
     display: block;
     margin-bottom: 0.12rem;
     color: #64748b;
-    font-size: 0.68rem;
+    font-size: 0.78rem;
     font-weight: 800;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
 }
 
 .rg-scr-reference-grid strong {

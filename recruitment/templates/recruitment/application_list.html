@@ -123,17 +123,17 @@
                         <th>Case</th>
                         <th>Position</th>
                         {% if not is_queue %}
-                            <th>Type / Level</th>
+                            <th>Type / level</th>
                         {% endif %}
                         {% if is_closed_list %}
                             <th>Outcome</th>
                             <th>Closed</th>
                         {% else %}
-                        <th>{% if is_queue %}Needed Step{% else %}Current Step{% endif %}</th>
+                        <th>{% if is_queue %}Needed step{% else %}Current step{% endif %}</th>
                         {% if not is_queue %}
-                            <th>Assigned To</th>
+                            <th>Assigned to</th>
                         {% endif %}
-                        <th>Last Updated</th>
+                        <th>Last updated</th>
                         {% endif %}
                         <th class="col-actions"><span class="visually-hidden">Actions</span></th>
                     </tr>

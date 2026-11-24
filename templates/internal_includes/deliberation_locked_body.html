@@ -52,8 +52,8 @@
 
         
         <div style="margin-bottom:1.25rem;">
-            <div style="font-size:0.72rem;font-weight:700;color:#5f6c78;
-                        text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem;">
+            <div style="font-size:0.78rem;font-weight:700;color:#5f6c78;
+                        margin-bottom:0.5rem;">
                 Deliberation record
             </div>
 
@@ -146,15 +146,14 @@
         {% if current_deliberation_record.consolidated_snapshot.summary %}
         {% with snap=current_deliberation_record.consolidated_snapshot.summary %}
         <div style="margin-bottom:1.25rem;">
-            <div style="font-size:0.72rem;font-weight:700;color:#5f6c78;
-                        text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem;">
+            <div style="font-size:0.78rem;font-weight:700;color:#5f6c78;
+                        margin-bottom:0.5rem;">
                 Summary when finalized
             </div>
             <div style="display:flex;flex-wrap:wrap;gap:0.5rem 1.5rem;font-size:0.79rem;">
                 {% if snap.latest_qualification_outcome %}
                 <div>
-                    <span style="color:#9aa4af;font-weight:600;text-transform:uppercase;
-                                 font-size:0.68rem;letter-spacing:0.04em;">Document review</span>
+                    <span style="color:#9aa4af;font-weight:600;font-size:0.78rem;">Document review</span>
                     <span style="margin-left:0.35rem;font-weight:600;color:#374151;">
                         {{ snap.latest_qualification_outcome }}
                         {% if snap.latest_document_review_score %}
@@ -165,16 +164,14 @@
                 {% endif %}
                 {% if snap.latest_exam_score %}
                 <div>
-                    <span style="color:#9aa4af;font-weight:600;text-transform:uppercase;
-                                 font-size:0.68rem;letter-spacing:0.04em;">Exam score</span>
+                    <span style="color:#9aa4af;font-weight:600;font-size:0.78rem;">Exam score</span>
                     <span style="margin-left:0.35rem;font-weight:600;color:#374151;">
                         {{ snap.latest_exam_score }}
                     </span>
                 </div>
                 {% elif snap.latest_exam_status %}
                 <div>
-                    <span style="color:#9aa4af;font-weight:600;text-transform:uppercase;
-                                 font-size:0.68rem;letter-spacing:0.04em;">Exam</span>
+                    <span style="color:#9aa4af;font-weight:600;font-size:0.78rem;">Exam</span>
                     <span style="margin-left:0.35rem;font-weight:600;color:#374151;">
                         {{ snap.latest_exam_status }}
                     </span>
@@ -182,8 +179,7 @@
                 {% endif %}
                 {% if snap.latest_interview_average %}
                 <div>
-                    <span style="color:#9aa4af;font-weight:600;text-transform:uppercase;
-                                 font-size:0.68rem;letter-spacing:0.04em;">Interview avg</span>
+                    <span style="color:#9aa4af;font-weight:600;font-size:0.78rem;">Interview avg</span>
                     <span style="margin-left:0.35rem;font-weight:600;color:#374151;">
                         {{ snap.latest_interview_average }} / 100
                     </span>
@@ -191,8 +187,7 @@
                 {% endif %}
                 {% if snap.preliminary_assessment_score %}
                 <div>
-                    <span style="color:#9aa4af;font-weight:600;text-transform:uppercase;
-                                 font-size:0.68rem;letter-spacing:0.04em;">Preliminary score</span>
+                    <span style="color:#9aa4af;font-weight:600;font-size:0.78rem;">Preliminary score</span>
                     <span style="margin-left:0.35rem;font-weight:600;color:#374151;">
                         {{ snap.preliminary_assessment_score }} / 100
                     </span>
@@ -206,8 +201,8 @@
         
         {% if current_interview_ratings %}
         <div style="margin-bottom:1.25rem;">
-            <div style="font-size:0.72rem;font-weight:700;color:#5f6c78;
-                        text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem;">
+            <div style="font-size:0.78rem;font-weight:700;color:#5f6c78;
+                        margin-bottom:0.5rem;">
                 Panel interview ratings
             </div>
             <div class="rg-del-rating-list">
@@ -372,8 +367,7 @@
     {% if current_comparative_assessment_report.summary_notes %}
     <div style="padding:0.6rem 0.875rem;background:#f8fafc;border:1px solid #e2e8f0;
                 border-radius:0.4rem;font-size:0.8125rem;color:#374151;margin-bottom:0.75rem;">
-        <div style="font-size:0.68rem;font-weight:700;color:#9aa4af;text-transform:uppercase;
-                    letter-spacing:0.05em;margin-bottom:0.25rem;">
+        <div style="font-size:0.78rem;font-weight:700;color:#9aa4af;margin-bottom:0.25rem;">
             CAR summary notes
         </div>
         {{ current_comparative_assessment_report.summary_notes }}

@@ -47,8 +47,6 @@
     margin: 2rem 0 0.75rem;
     font-size: 0.78rem;
     font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
     color: var(--rgi-muted);
 }
 .rg-adm-section-title:first-child { margin-top: 0; }
@@ -415,10 +413,8 @@ a.rg-adm-tile:focus-visible {
     padding-bottom: 0.45rem !important;
     background: var(--adm-soft) !important;
     color: var(--rgi-muted);
-    font-size: 0.72rem;
+    font-size: 0.78rem;
     font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
 }
 .rg-adm-who { font-weight: 600; }
 .rg-adm-what { font-weight: 600; }
