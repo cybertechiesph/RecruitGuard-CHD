@@ -2,9 +2,9 @@
 
 This command wipes ALL existing applications and postings and replaces them with:
 
-  * A PLANTILLA vacancy with two real-inbox applicants -- one freshly submitted
+  * A PLANTILLA vacancy with two sample applicants -- one freshly submitted
     and one advanced to the exam step (screening passed, awaiting the exam).
-  * A COS vacancy with two real-inbox applicants -- one freshly submitted and one
+  * A COS vacancy with two sample applicants -- one freshly submitted and one
     advanced to the exam step.
   * A SEPARATE, self-contained plantilla vacancy carried all the way to a
     FINALIZED Comparative Assessment Report (CAR) parked at the Appointing
@@ -41,6 +41,7 @@ from django.test.utils import override_settings
 from django.utils import timezone
 
 from recruitment.models import (
+    AttendanceException,
     ComparativeAssessmentReport,
     ComparativeAssessmentReportItem,
     CompetencyRatingTemplate,
@@ -51,6 +52,7 @@ from recruitment.models import (
     ExamRecord,
     FinalDecision,
     FinalSelection,
+    InterviewFallbackRating,
     PositionPosting,
     PositionReference,
     RecruitmentApplication,
@@ -90,19 +92,19 @@ DEMO_STAFF_PREFIX = "demo_staff_"
 
 
 # --- curated demo cases --------------------------------------------------------
-# Two real-inbox applicants share one open plantilla vacancy: one fresh, one at exam.
+# Two sample applicants share one open plantilla vacancy: one fresh, one at exam.
 PLANTILLA_VACANCY_TITLE = "Administrative Aide VI"
 PLANTILLA_CASES = [
     # (first_name, last_name, email, at_exam)
-    ("Christian James", "Able", "christianjamesable@gmail.com", False),
-    ("Roeb", "Dela Cruz", "delacruz.roeb.ths@gmail.com", True),
+    ("Christian James", "Able", "christian.able@example.com", False),
+    ("Roeb", "Dela Cruz", "roeb.delacruz@example.com", True),
 ]
 
-# Two real-inbox applicants share one open COS vacancy: one fresh, one at exam.
+# Two sample applicants share one open COS vacancy: one fresh, one at exam.
 COS_VACANCY_TITLE = "Administrative Assistant I"
 COS_CASES = [
-    ("Luis Miguel", "Mina", "luismiguelmina0010@gmail.com", False),
-    ("Jeric", "Salvador", "j3r1c02@gmail.com", True),
+    ("Luis Miguel", "Mina", "luis.mina@example.com", False),
+    ("Jeric", "Salvador", "jeric.salvador@example.com", True),
 ]
 
 # A separate plantilla vacancy carried to a finalized CAR at the Appointing
@@ -149,7 +151,7 @@ TITLE_PROFILES = {
 
 class Command(BaseCommand):
     help = (
-        "Wipe all applications/postings and seed a curated demo set: real-inbox "
+        "Wipe all applications/postings and seed a curated demo set: sample "
         "plantilla and COS applicants at the fresh/exam steps, plus a separate "
         "dummy CAR finalized at the Appointing Authority."
     )
@@ -164,7 +166,7 @@ class Command(BaseCommand):
             "--send-email",
             action="store_true",
             help=(
-                "Allow real notification email to the real-inbox applicants while "
+                "Allow real notification email to the sample applicants while "
                 "seeding (off by default; the CAR-demo dummies never send email)."
             ),
         )
@@ -295,6 +297,11 @@ class Command(BaseCommand):
         # SL-02: the selection-round membership snapshot PROTECTs its cases.
         CosSelectionRound.objects.all().delete()
         ComparativeAssessmentReport.objects.all().delete()
+        # Absence records and paper rating sheets PROTECT the stored file they point at, so
+        # they go first; without this the purge stops halfway on any database where an
+        # absence letter or a paper rating sheet was recorded.
+        AttendanceException.objects.all().delete()
+        InterviewFallbackRating.objects.all().delete()
         EvidenceVaultItem.objects.all().delete()
 
         purged_entries = PositionPosting.objects.count()
@@ -320,12 +327,15 @@ class Command(BaseCommand):
                 "first_name": "Demo",
                 "last_name": "Data Loader",
                 "email": "demo-data-loader@example.invalid",
-                "is_active": True,
+                "is_active": False,
                 "is_staff": False,
             },
         )
+        # Nobody signs in as the loader; it only authors the demo records, so it stays
+        # switched off and does not read as a live administrator in Accounts.
+        creator.is_active = False
         creator.set_unusable_password()
-        creator.save(update_fields=["password"])
+        creator.save(update_fields=["password", "is_active"])
         return creator
 
     def _resolve_hrmpsb_panel(self, count):
@@ -555,7 +565,7 @@ class Command(BaseCommand):
 
     # -- case builders ----------------------------------------------------------
     def _seed_intake_group(self, title, branch, cases, creator, actors, *, start_index):
-        """One open vacancy with real-inbox applicants at the fresh and/or exam step."""
+        """One open vacancy with sample applicants at the fresh and/or exam step."""
         entry = self._create_entry(
             title=title, branch=branch, creator=creator, require_level=1
         )
