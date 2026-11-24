@@ -179,7 +179,7 @@ msgstr "Schedule"
 msgid "Location / medium"
 msgstr "Lugar / paano"
 
-#: templates/email/applicant_interview_notice.html templates/email/application_received.html templates/email/document_resubmission_request.html templates/email/exam_invitation.html templates/email/non_selected_applicant.html templates/email/reminder.html templates/email/requirement_checklist.html templates/email/selected_applicant.html recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_status_lookup.html
+#: templates/email/applicant_interview_notice.html templates/email/application_received.html templates/email/document_resubmission_request.html templates/email/exam_invitation.html templates/email/non_selected_applicant.html templates/email/reminder.html templates/email/requirement_checklist.html templates/email/selected_applicant.html
 msgid "Case Reference"
 msgstr "Case Reference"
 
@@ -1632,20 +1632,16 @@ msgid "Application Submission Receipt"
 msgstr "Resibo ng Application"
 
 #: recruitment/templates/recruitment/applicant_receipt.html
-msgid "Success"
-msgstr "Success"
-
-#: recruitment/templates/recruitment/applicant_receipt.html
-msgid "Your Application Has Been Submitted"
-msgstr "Na-submit na ang Application Mo"
+msgid "Your application has been submitted"
+msgstr "Na-submit na ang application mo"
 
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "Thank you for applying. Your application has been received by DOH&ndash;CHD CALABARZON."
 msgstr "Salamat sa pag-apply. Natanggap na ng DOH&ndash;CHD CALABARZON ang application mo."
 
 #: recruitment/templates/recruitment/applicant_receipt.html
-msgid "Your Tracking Code"
-msgstr "Ang Tracking Code Mo"
+msgid "Your tracking code"
+msgstr "Ang Tracking Code mo"
 
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "(keep private)"
@@ -1662,6 +1658,10 @@ msgstr "I-copy ang Tracking Code"
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "Copied!"
 msgstr "Na-copy na!"
+
+#: recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_status_lookup.html
+msgid "Case reference"
+msgstr "Case reference"
 
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "Quote this case number if you call or email the office about your application."
@@ -1689,9 +1689,9 @@ msgid_plural "%(counter)s files submitted"
 msgstr[0] "%(counter)s file ang na-submit"
 msgstr[1] "%(counter)s files ang na-submit"
 
-#: recruitment/templates/recruitment/applicant_receipt.html recruitment/services/evidence_vault.py
-msgid "What Happens Next"
-msgstr "Ano ang Susunod"
+#: recruitment/templates/recruitment/applicant_receipt.html
+msgid "What happens next"
+msgstr "Ano ang susunod"
 
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "Your application will be reviewed by our recruitment team."
@@ -3442,6 +3442,10 @@ msgstr "Puwede ka naming i-contact sa email o phone para sa updates o dagdag na 
 #: recruitment/services/evidence_vault.py
 msgid "Check your status anytime on My Applications with just your email."
 msgstr "I-check ang status mo anytime sa My Applications gamit lang ang email mo."
+
+#: recruitment/services/evidence_vault.py
+msgid "What Happens Next"
+msgstr "Ano ang Susunod"
 
 #: recruitment/services/evidence_vault.py
 msgid "Keep this receipt and your Tracking Code safe."

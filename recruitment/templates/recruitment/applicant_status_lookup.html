@@ -353,11 +353,11 @@
 
 
     {# ── Facts ────────────────────────────────────────────────────── #}
-    <div class="rg-ta-facts">
-        <p class="rg-ta-facts__title">{% translate "Application details" %}</p>
+    <details class="rg-ta-facts">
+        <summary class="rg-ta-facts__title">{% translate "Application details" %}</summary>
         <dl class="rg-ta-facts__list">
             <div class="rg-ta-facts__row">
-                <dt>{% translate "Case Reference" %}</dt>
+                <dt>{% translate "Case reference" %}</dt>
                 <dd><span class="rg-ta-mono">{% blocktranslate with case=application.case_number_short %}Case No. {{ case }}{% endblocktranslate %}</span></dd>
             </div>
             <div class="rg-ta-facts__row">
@@ -373,7 +373,7 @@
                 <dd>{{ application.submitted_at|date:"F j, Y" }}</dd>
             </div>
         </dl>
-    </div>
+    </details>
 
 
     {# ── Help block: the HR unit handles questions about an application ── #}

@@ -26,9 +26,8 @@
 
     {# Success icon + headline #}
     <div style="text-align:center; margin-bottom:2rem;">
-        <div class="rg-pub-success-icon" role="img" aria-label="{% translate 'Success' %}">&#10003;</div>
         <h1 style="font-size:1.6rem; font-weight:700; color:#111827; margin:0 0 0.5rem;">
-            {% translate "Your Application Has Been Submitted" %}
+            {% translate "Your application has been submitted" %}
         </h1>
         <p style="font-size:0.9375rem; color:#5f6c78; max-width:42ch; margin:0 auto;">
             {% translate "Thank you for applying. Your application has been received by DOH&ndash;CHD CALABARZON." %}
@@ -39,8 +38,8 @@
        code is the applicant's private key to online status checking; the case
        number is the public reference safe to quote to the office. {% endcomment %}
     <div class="rg-pub-receipt-card">
-        <p style="font-size:0.8125rem; font-weight:600; color:#5f6c78; margin-bottom:0.35rem; text-transform:uppercase; letter-spacing:0.08em;">
-            {% translate "Your Tracking Code" %} <span style="text-transform:none; letter-spacing:0; font-weight:500;">{% translate "(keep private)" %}</span>
+        <p class="rg-pub-receipt-label">
+            {% translate "Your tracking code" %} <span>{% translate "(keep private)" %}</span>
         </p>
         <p class="rg-pub-receipt-id">{{ application.tracking_code }}</p>
         <p style="font-size:0.8125rem; color:#5f6c78; margin:0 0 0.75rem;">
@@ -55,8 +54,8 @@
             {% translate "Copy Tracking Code" %}
         </button>
 
-        <p style="font-size:0.8125rem; font-weight:600; color:#5f6c78; margin-bottom:0.35rem; text-transform:uppercase; letter-spacing:0.08em;">
-            {% translate "Case Reference" %}
+        <p class="rg-pub-receipt-label">
+            {% translate "Case reference" %}
         </p>
         <p class="rg-pub-receipt-id" style="font-size:1.05rem;">{% blocktranslate with case=application.case_number_short %}Case No. {{ case }}{% endblocktranslate %}</p>
         <p style="font-size:0.8125rem; color:#5f6c78; margin:0 0 1rem;">
@@ -104,8 +103,8 @@
     </div>
 
     {# What happens next #}
-    <div class="card p-4 mb-3">
-        <h2 style="font-size:1rem; font-weight:700; color:#111827; margin:0 0 1rem;">{% translate "What Happens Next" %}</h2>
+    <div class="rg-pub-receipt-next">
+        <h2 style="font-size:1rem; font-weight:700; color:#111827; margin:0 0 0.5rem;">{% translate "What happens next" %}</h2>
         <ol style="padding-left:1.25rem; margin:0; font-size:0.9375rem; color:#374151; line-height:1.7;">
             <li>{% translate "Your application will be reviewed by our recruitment team." %}</li>
             <li>{% translate "You may be contacted at your email or phone number for updates or additional requirements." %}</li>
@@ -138,13 +137,11 @@
            class="btn btn-outline-secondary btn-lg">
             {% translate "Check my status" %}
         </a>
-        <button type="button" class="btn btn-outline-secondary btn-lg" onclick="window.print()">
-            {% translate "Print Receipt" %}
-        </button>
-        <a href="{% url 'applicant-portal' %}" class="btn btn-outline-secondary btn-lg">
-            {% translate "Back to Job Openings" %}
-        </a>
     </div>
+    <p class="rg-pub-receipt-links">
+        <button type="button" class="rg-pub-receipt-linkbtn" onclick="window.print()">{% translate "Print Receipt" %}</button>
+        <a href="{% url 'applicant-portal' %}">{% translate "Back to Job Openings" %}</a>
+    </p>
 
 </div>
 
@@ -153,7 +150,7 @@
 @media print {
     /* Only the official heading and the receipt card reach paper. */
     header, footer, .rg-public-footer, #copy-btn, .btn,
-    .rg-pub-success-icon, .rg-pub-info-box, .card { display: none !important; }
+    .rg-pub-info-box, .rg-pub-receipt-next, .rg-pub-receipt-links { display: none !important; }
     .rg-pub-wrap > div:first-child h1, .rg-pub-wrap > div:first-child p { display: none !important; }
     .rg-receipt-print-head {
         display: block !important;
