@@ -1,0 +1,33 @@
+{% load i18n recruitment_ui %}{% comment %}
+  One row of the Job Openings table. Parameters: entry, branch ("plantilla" or "cos").
+  The js-job-card / rg-pub-job-card__title / rg-pub-job-card__ref hooks are what the
+  search box and the type filter on the page read.
+{% endcomment %}
+<tr class="js-job-card" data-type="{{ branch }}">
+    <td class="rg-gov-jobs__position">
+        <a class="rg-pub-job-card__title" href="{% url 'applicant-vacancy-detail' entry.pk %}">{{ entry.title }}</a>
+        <span class="rg-pub-job-card__ref">{{ entry.job_code }}{% if entry.item_number %} &middot; {% translate "Item No." %} {{ entry.item_number }}{% endif %}</span>
+        <span class="rg-gov-jobs__meta">
+            {{ entry.official_office_label|default:"CHD CALABARZON" }}
+            &middot; {% blocktranslate with date=entry.plantilla_publication_start_date|date:"M j, Y" %}Posted {{ date }}{% endblocktranslate %}
+        </span>
+    </td>
+    <td data-label="{% translate 'Type' %}">
+        {% if branch == "plantilla" %}{% translate "Permanent" %}{% else %}{% translate "Contract of Service" %}{% endif %}
+        <span class="rg-gov-jobs__meta">{% blocktranslate with level=entry.level|roman_numeral %}Level {{ level }}{% endblocktranslate %}</span>
+    </td>
+    <td data-label="{% translate 'Salary Grade' %}">{{ entry.salary_grade_display|default:"&mdash;" }}</td>
+    <td data-label="{% translate 'Closing date' %}" class="rg-gov-jobs__closing{% if entry.is_closing_soon %} is-urgent{% endif %}">
+        {% if entry.closing_date %}
+            {% if entry.intake_closes_today %}{% translate "Closes today, 11:59 PM" %}{% else %}{{ entry.closing_date|date:"F j, Y" }}{% endif %}
+            {% if entry.is_closing_soon %}<span class="rg-gov-jobs__flag">{% translate "Closing soon" %}</span>{% endif %}
+            {% if entry.deadline_extended %}<span class="rg-gov-jobs__meta">{% translate "Deadline extended" %}</span>{% endif %}
+        {% else %}
+            {% translate "Always accepting applications" %}
+        {% endif %}
+    </td>
+    <td class="rg-gov-jobs__action">
+        <a class="btn btn-rg-primary btn-sm" href="{% url 'applicant-vacancy-detail' entry.pk %}"
+           aria-label="{% blocktranslate with title=entry.title %}View details for {{ title }}{% endblocktranslate %}">{% translate "View Details" %}</a>
+    </td>
+</tr>

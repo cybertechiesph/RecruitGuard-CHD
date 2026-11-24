@@ -1,0 +1,444 @@
+/* ==========================================================================
+   Applicant portal — government-standard look
+   --------------------------------------------------------------------------
+   Laid out like the office's own website (ro4a.doh.gov.ph), which follows the
+   national Government Website Template: a grey utility bar, a dark green
+   masthead with the office seals and name, a grey menu bar, plain white
+   content with thin rules, and Roboto / Roboto Condensed type.
+
+   Loaded only by templates/applicant_base.html, after the shared stylesheets,
+   so every rule here is for applicant pages.
+   ========================================================================== */
+
+.applicant-portal-body {
+    --rg-gov-mast: #073606;          /* the masthead green of the office's site */
+    --rg-gov-bar: #f7f7f7;
+    --rg-gov-rule: #dcdfdc;
+    --rg-gov-ink: #0a0a0a;
+    --rg-gov-soft: #555e57;
+    --rg-font-sans: Roboto, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --rg-font-display: "Roboto Condensed", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-family: var(--rg-font-sans);
+    color: var(--rg-gov-ink);
+    background: #fefefe;
+}
+
+.rg-gov-in {
+    width: min(1170px, calc(100% - 2.5rem));
+    margin-inline: auto;
+}
+
+/* ── Utility bar ─────────────────────────────────────────────── */
+.rg-gov-util {
+    background: var(--rg-gov-bar);
+    border-bottom: 1px solid var(--rg-gov-rule);
+    font-size: 0.875rem;
+}
+.rg-gov-util__in {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    min-height: 44px;
+}
+.rg-gov-util__site { color: var(--rg-gov-ink); text-decoration: none; }
+.rg-gov-util__site:hover { text-decoration: underline; }
+.rg-gov-util__tools { display: flex; align-items: center; gap: 1.25rem; }
+
+.rg-gov-util .rg-langswitch {
+    display: flex;
+    gap: 0;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+}
+.rg-gov-util .rg-langswitch__btn {
+    padding: 0.2rem 0.55rem;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    color: var(--rg-gov-ink);
+    font: inherit;
+    font-weight: 400;
+    box-shadow: none;
+}
+.rg-gov-util .rg-langswitch__btn:hover { text-decoration: underline; }
+.rg-gov-util .rg-langswitch__btn.is-current {
+    background: var(--rg-brand-green);
+    color: #fff;
+    text-decoration: none;
+}
+.rg-gov-util .rg-textsize {
+    display: flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+}
+.rg-gov-util .rg-textsize__label { color: var(--rg-gov-ink); font-size: inherit; margin-right: 0.15rem; }
+.rg-gov-util .rg-textsize__btn {
+    width: auto;
+    height: auto;
+    min-width: 0;
+    padding: 0 0.2rem;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    color: var(--rg-gov-ink);
+    font-weight: 700;
+    line-height: 1.2;
+    box-shadow: none;
+}
+.rg-gov-util .rg-textsize__btn--default { font-size: 0.8125rem; }
+.rg-gov-util .rg-textsize__btn--large { font-size: 1rem; }
+.rg-gov-util .rg-textsize__btn--larger { font-size: 1.1875rem; }
+.rg-gov-util .rg-textsize__btn[aria-pressed="true"] {
+    background: none;
+    color: var(--rg-brand-green);
+    box-shadow: inset 0 -2px 0 var(--rg-brand-green);
+}
+
+/* ── Masthead ────────────────────────────────────────────────── */
+.rg-gov-mast {
+    background:
+        linear-gradient(rgba(7, 54, 6, 0.8), rgba(7, 54, 6, 0.8)),
+        url("../img/brand/login-background.jpg") center 38% / cover no-repeat var(--rg-gov-mast);
+    color: #fff;
+    border-bottom: 4px solid var(--rg-brand-gold, #f1a208);
+}
+.rg-gov-mast__in {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    padding-block: 1.75rem;
+}
+.applicant-portal-body .rg-gov-mast__brand { display: block; color: #fff; text-decoration: none; min-width: 0; }
+.rg-gov-mast__lockup { display: block; height: 92px; width: auto; max-width: 100%; }
+.rg-gov-mast__small { display: none; align-items: center; gap: 0.75rem; }
+.rg-gov-mast__small img { flex-shrink: 0; }
+.rg-gov-mast__rp {
+    display: block;
+    font-size: 0.6875rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #dbe7da;
+    line-height: 1.3;
+}
+.rg-gov-mast__office {
+    display: block;
+    font-family: var(--rg-font-display);
+    font-weight: 700;
+    font-size: 1.125rem;
+    line-height: 1.2;
+}
+.rg-gov-mast__time {
+    margin: 0;
+    align-self: flex-end;
+    text-align: right;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    color: #e6efe5;
+    white-space: nowrap;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+.rg-gov-mast__time span { display: block; color: #fff; font-weight: 500; min-height: 1.4em; }
+
+/* ── Menu bar ────────────────────────────────────────────────── */
+.rg-gov-menu {
+    background: var(--rg-gov-bar);
+    border-bottom: 1px solid var(--rg-gov-rule);
+    font-family: var(--rg-font-display);
+}
+.rg-gov-menu__in { display: flex; align-items: stretch; flex-wrap: wrap; gap: 0; }
+.rg-gov-menu__title {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 1.25rem 0.75rem 0;
+    margin-right: 0.5rem;
+    font-weight: 700;
+    font-size: 1.0625rem;
+    color: var(--rg-gov-ink);
+    text-decoration: none;
+}
+.rg-gov-menu__link {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 1.1rem;
+    margin-bottom: -1px;
+    border-bottom: 3px solid transparent;
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--rg-gov-ink);
+    text-decoration: none;
+}
+.rg-gov-menu__link:hover { background: #ececec; color: var(--rg-gov-ink); }
+.rg-gov-menu__link.is-current {
+    border-bottom-color: var(--rg-brand-green);
+    color: var(--rg-brand-green);
+    font-weight: 700;
+}
+.rg-gov-menu__applying {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin: 0;
+    padding: 0.75rem 0 0.75rem 1.1rem;
+    border-left: 1px solid var(--rg-gov-rule);
+    font-size: 1rem;
+    color: var(--rg-gov-soft);
+}
+.rg-gov-menu__applying strong { color: var(--rg-gov-ink); }
+
+/* ── Footer ──────────────────────────────────────────────────── */
+.rg-gov-foot {
+    margin-top: 3rem;
+    background: #efefef;
+    border-top: 4px solid var(--rg-gov-mast);
+    font-size: 0.875rem;
+    color: #333;
+}
+.rg-gov-foot__in {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr 1fr;
+    gap: 2rem;
+    padding-block: 2rem;
+}
+.rg-gov-foot p { margin: 0 0 0.3rem; }
+.rg-gov-foot a { color: var(--rg-brand-green); }
+.rg-gov-foot__id { display: flex; align-items: flex-start; gap: 0.9rem; }
+.rg-gov-foot__id img { flex-shrink: 0; }
+.rg-gov-foot__agency,
+.rg-gov-foot__head {
+    font-family: var(--rg-font-display);
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--rg-gov-ink);
+}
+
+/* ── Page frame, headings and plain surfaces ─────────────────── */
+.applicant-portal-body h1,
+.applicant-portal-body h2,
+.applicant-portal-body h3,
+.applicant-portal-body .rg-pub-page-title,
+.applicant-portal-body .rg-ta-intro__title {
+    font-family: var(--rg-font-display);
+    color: var(--rg-gov-ink);
+    letter-spacing: 0;
+}
+.applicant-portal-body .rg-pub-page-title { font-size: 2.125rem; font-weight: 700; line-height: 1.15; }
+.applicant-portal-body .btn { border-radius: 3px; }
+.applicant-portal-body .btn-rg-primary,
+.applicant-portal-body .btn-rg-primary:visited { color: #fff; }
+.applicant-portal-body .form-control,
+.applicant-portal-body .form-select { border-radius: 3px; border-color: #8a8f8a; }
+
+.rg-gov-page { padding-block: 1.75rem 1rem; }
+.rg-gov-cols {
+    display: grid;
+    grid-template-columns: minmax(0, 2.6fr) minmax(0, 1fr);
+    gap: 2.5rem;
+    align-items: start;
+}
+.rg-gov-main .rg-pub-page-header { margin: 0 0 1.25rem; text-align: left; }
+.rg-gov-main .rg-pub-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    padding: 0;
+    margin: 0 0 0.9rem;
+    border: 0;
+    background: none;
+    box-shadow: none;
+}
+
+/* ── Job openings table ──────────────────────────────────────── */
+.rg-gov-jobs { width: 100%; border-collapse: collapse; font-size: 0.9375rem; }
+.rg-gov-jobs th {
+    background: var(--rg-gov-mast);
+    color: #fff;
+    text-align: left;
+    font-family: var(--rg-font-display);
+    font-weight: 500;
+    font-size: 0.9375rem;
+    padding: 0.6rem 0.8rem;
+    white-space: nowrap;
+}
+.rg-gov-jobs th:first-child { width: 40%; }
+.rg-gov-jobs td[data-label]:not(.rg-gov-jobs__closing) { white-space: nowrap; }
+.rg-gov-jobs td {
+    padding: 0.85rem 0.8rem;
+    border-bottom: 1px solid var(--rg-gov-rule);
+    vertical-align: top;
+}
+.rg-gov-jobs tbody tr:nth-child(even) td { background: #fafafa; }
+.rg-gov-jobs .rg-pub-job-card__title {
+    display: block;
+    margin: 0;
+    font-family: var(--rg-font-sans);
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--rg-gov-ink);
+    text-decoration: none;
+}
+.rg-gov-jobs .rg-pub-job-card__title:hover { color: var(--rg-brand-green); text-decoration: underline; }
+.rg-gov-jobs .rg-pub-job-card__ref,
+.rg-gov-jobs__meta {
+    display: block;
+    margin: 0;
+    font-family: var(--rg-font-sans);
+    font-size: 0.8125rem;
+    color: var(--rg-gov-soft);
+    letter-spacing: 0;
+}
+.rg-gov-jobs .rg-pub-job-card__ref::before { content: none; }
+.rg-gov-jobs__flag { display: block; font-size: 0.8125rem; font-weight: 500; color: #8a5a00; }
+.rg-gov-jobs__action { text-align: right; white-space: nowrap; }
+
+/* ── Side panels ─────────────────────────────────────────────── */
+.rg-gov-box {
+    border: 1px solid rgba(10, 10, 10, 0.25);
+    background: #fcfcfc;
+    margin-bottom: 1.25rem;
+}
+.applicant-portal-body .rg-gov-box__title {
+    margin: 0;
+    padding: 0.7rem 0.9rem;
+    background: var(--rg-gov-bar);
+    border-bottom: 1px solid rgba(10, 10, 10, 0.15);
+    font-family: var(--rg-font-sans);
+    font-size: 0.9375rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+.rg-gov-box__body { padding: 0.9rem; margin: 0; font-size: 0.9375rem; }
+.rg-gov-box__body--foot { padding-top: 0; }
+.rg-gov-steps { padding-left: 2.1rem; }
+.rg-gov-steps li { margin-bottom: 0.55rem; }
+.rg-gov-steps li:last-child { margin-bottom: 0; }
+.rg-gov-steps strong { display: block; }
+.rg-gov-contact { margin: 0 0 0.8rem; }
+.rg-gov-contact:last-child { margin-bottom: 0; }
+.rg-gov-contact strong,
+.rg-gov-contact a { display: block; }
+.rg-gov-contact a { overflow-wrap: anywhere; }
+
+/* ── Every boxed panel on applicant pages: square-ish corners, no drop shadow,
+      so the inner pages match the home page ─────────────────────────────── */
+.applicant-portal-body .rg-apply-card,
+.applicant-portal-body .rg-apply-deadline,
+.applicant-portal-body .rg-doc-card,
+.applicant-portal-body .rg-doc-missing,
+.applicant-portal-body .rg-doc-progress,
+.applicant-portal-body .rg-doc-reuse,
+.applicant-portal-body .rg-help-pad,
+.applicant-portal-body .rg-help-pad__channel,
+.applicant-portal-body .rg-hub-item,
+.applicant-portal-body .rg-intake-confirm,
+.applicant-portal-body .rg-intake-review__card,
+.applicant-portal-body .rg-intake-step,
+.applicant-portal-body .rg-intake-steprail,
+.applicant-portal-body .rg-pds-guide__way,
+.applicant-portal-body .rg-pub-action-card,
+.applicant-portal-body .rg-pub-checklist-box,
+.applicant-portal-body .rg-pub-confirm-box,
+.applicant-portal-body .rg-pub-contact-box,
+.applicant-portal-body .rg-pub-english-only,
+.applicant-portal-body .rg-pub-help-box,
+.applicant-portal-body .rg-pub-info-box,
+.applicant-portal-body .rg-pub-otp-card,
+.applicant-portal-body .rg-pub-position-header,
+.applicant-portal-body .rg-pub-receipt-card,
+.applicant-portal-body .rg-pub-review-card,
+.applicant-portal-body .rg-pub-tips-box,
+.applicant-portal-body .rg-pub-upload-slot,
+.applicant-portal-body .rg-qs-check,
+.applicant-portal-body .rg-ta-action-card,
+.applicant-portal-body .rg-ta-expectation,
+.applicant-portal-body .rg-ta-facts,
+.applicant-portal-body .rg-ta-help,
+.applicant-portal-body .rg-ta-help__channel,
+.applicant-portal-body .rg-ta-lookup-card,
+.applicant-portal-body .rg-ta-result-card,
+.applicant-portal-body .rg-ta-withdraw,
+.applicant-portal-body .card,
+.applicant-portal-body .alert {
+    border-radius: 3px;
+    box-shadow: none;
+}
+.applicant-portal-body .rg-pub-wrap { padding-block: 1.75rem 1.5rem; }
+
+/* ── Privacy note at the foot of the home page: a plain panel, not a dark band ── */
+.applicant-portal-body .rg-pub-privacy {
+    margin: 2rem 0 0;
+    padding: 0;
+    background: var(--rg-gov-bar);
+    border-top: 1px solid var(--rg-gov-rule);
+    color: var(--rg-gov-ink);
+}
+.applicant-portal-body .rg-pub-privacy::before,
+.applicant-portal-body .rg-pub-privacy::after { content: none; }
+.applicant-portal-body .rg-pub-privacy__inner {
+    width: min(1170px, calc(100% - 2.5rem));
+    max-width: none;
+    margin-inline: auto;
+    padding: 1.75rem 0;
+}
+.applicant-portal-body .rg-pub-privacy__eyebrow { display: none; }
+.applicant-portal-body .rg-pub-privacy__title { font-size: 1.25rem; font-weight: 700; margin: 0 0 0.5rem; color: var(--rg-gov-ink); }
+.applicant-portal-body .rg-pub-privacy__copy,
+.applicant-portal-body .rg-pub-privacy__footnote {
+    max-width: 80ch;
+    margin: 0 0 0.6rem;
+    font-size: 0.9375rem;
+    color: #333;
+    border: 0;
+    padding: 0;
+}
+.applicant-portal-body .rg-pub-privacy__footnote { font-size: 0.875rem; color: var(--rg-gov-soft); margin-bottom: 0; }
+.applicant-portal-body .rg-pub-privacy__footnote strong { color: var(--rg-gov-ink); }
+.applicant-portal-body .rg-pub-privacy + .rg-gov-foot,
+.applicant-portal-body main:has(.rg-pub-privacy) + .rg-gov-foot { margin-top: 0; }
+
+/* ── Phones and small tablets ────────────────────────────────── */
+@media (max-width: 860px) {
+    .rg-gov-util__site { display: none; }
+    .rg-gov-util__in { justify-content: flex-end; }
+    .rg-gov-mast__in { padding-block: 0.9rem; }
+    .rg-gov-mast__lockup { display: none; }
+    .rg-gov-mast__small { display: flex; }
+    .rg-gov-mast__time { display: none; }
+    .rg-gov-menu__title { display: none; }
+    .rg-gov-menu__link { padding: 0.7rem 0.8rem; font-size: 0.9375rem; }
+    .rg-gov-menu__applying { padding-left: 0; border-left: 0; }
+    .rg-gov-cols { grid-template-columns: 1fr; gap: 1.5rem; }
+    .applicant-portal-body .rg-pub-page-title { font-size: 1.75rem; }
+    .rg-gov-foot__in { grid-template-columns: 1fr; gap: 1.25rem; }
+
+    .rg-gov-jobs thead { display: none; }
+    .rg-gov-jobs,
+    .rg-gov-jobs tbody,
+    .rg-gov-jobs tr,
+    .rg-gov-jobs td { display: block; width: 100%; }
+    .rg-gov-jobs tr { border: 1px solid var(--rg-gov-rule); margin-bottom: 0.9rem; }
+    .rg-gov-jobs td { border-bottom: 0; padding: 0.3rem 0.8rem; }
+    .rg-gov-jobs td[data-label]:not(.rg-gov-jobs__closing) { white-space: normal; }
+    .rg-gov-jobs td:first-child { padding-top: 0.8rem; }
+    .rg-gov-jobs td:last-child { padding-bottom: 0.8rem; text-align: left; }
+    .rg-gov-jobs td[data-label]::before { content: attr(data-label) ": "; color: var(--rg-gov-soft); }
+    .rg-gov-jobs td[data-label] .rg-gov-jobs__meta,
+    .rg-gov-jobs td[data-label] .rg-gov-jobs__flag { display: inline; margin-left: 0.35rem; }
+    .rg-gov-jobs tbody tr:nth-child(even) td { background: none; }
+}
+
+@media print {
+    .rg-gov-util,
+    .rg-gov-menu,
+    .rg-gov-foot { display: none !important; }
+}

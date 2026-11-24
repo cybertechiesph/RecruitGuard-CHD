@@ -1,0 +1,80 @@
+{% load i18n static %}{% comment %}
+  The top of every applicant page, laid out like the office's own website
+  (ro4a.doh.gov.ph): a grey utility bar, the green masthead with the office
+  seals and name, and a grey menu bar. Parameters:
+    applying_title : when set, the menu bar shows "Applying for <title>" in
+                     place of the three links (inside the application flow).
+    applying_label : optional replacement for the words "Applying for".
+{% endcomment %}
+<div class="rg-gov-util">
+    <div class="rg-gov-in rg-gov-util__in">
+        <a class="rg-gov-util__site" href="https://ro4a.doh.gov.ph" target="_blank" rel="noopener">ro4a.doh.gov.ph</a>
+        <div class="rg-gov-util__tools">
+            {% include "recruitment/includes/language_switch.html" %}
+            {% include "text_size_control.html" with show_label=True %}
+        </div>
+    </div>
+</div>
+<header class="rg-gov-mast">
+    <div class="rg-gov-in rg-gov-mast__in">
+        <a class="rg-gov-mast__brand" href="{% url 'applicant-portal' %}">
+            <img class="rg-gov-mast__lockup" src="{% static 'img/brand/masthead-lockup.png' %}" width="1600" height="202"
+                 alt="{% translate 'Republic of the Philippines' %}. {% translate 'Department of Health &ndash; Center for Health Development CALABARZON (Region IV-A)' %}">
+            <span class="rg-gov-mast__small">
+                <img src="{% static 'img/brand/chd-calabarzon-seal.png' %}" width="56" height="56" alt="">
+                <span>
+                    <span class="rg-gov-mast__rp">{% translate "Republic of the Philippines" %}</span>
+                    <span class="rg-gov-mast__office">{% translate "Department of Health &ndash; CHD CALABARZON" %}</span>
+                </span>
+            </span>
+        </a>
+        <p class="rg-gov-mast__time">
+            {% translate "Philippine Standard Time" %}
+            <span data-rg-pst aria-live="off"></span>
+        </p>
+    </div>
+</header>
+<nav class="rg-gov-menu" aria-label="{% translate 'Applicant navigation' %}">
+    <div class="rg-gov-in rg-gov-menu__in">
+        <a class="rg-gov-menu__title" href="{% url 'applicant-portal' %}">{% translate "Applicant Portal" %}</a>
+        {% if applying_title %}
+            <p class="rg-gov-menu__applying">
+                {% if applying_label %}{{ applying_label }}{% else %}{% translate "Applying for" %}{% endif %}
+                <strong>{{ applying_title }}</strong>
+            </p>
+        {% else %}
+            {% with here=request.resolver_match.url_name %}
+            <a href="{% url 'applicant-portal' %}"
+               class="rg-gov-menu__link{% if here == 'applicant-portal' or here == 'applicant-vacancy-detail' %} is-current{% endif %}"
+               {% if here == 'applicant-portal' or here == 'applicant-vacancy-detail' %}aria-current="page"{% endif %}>{% translate "Job Openings" %}</a>
+            {% comment %}One place for everything after applying: My Applications (email + code).
+              The tracking-code lookup is still there, linked from it, for anyone who prefers it.{% endcomment %}
+            <a href="{% url 'applicant-my-applications' %}"
+               class="rg-gov-menu__link{% if here == 'applicant-my-applications' or here == 'applicant-status-lookup' or here == 'applicant-status-link' %} is-current{% endif %}"
+               {% if here == 'applicant-my-applications' or here == 'applicant-status-lookup' or here == 'applicant-status-link' %}aria-current="page"{% endif %}>{% translate "My Applications" %}</a>
+            <a href="{% url 'applicant-help' %}"
+               class="rg-gov-menu__link{% if here == 'applicant-help' %} is-current{% endif %}"
+               {% if here == 'applicant-help' %}aria-current="page"{% endif %}>{% translate "Help" %}</a>
+            {% endwith %}
+        {% endif %}
+    </div>
+</nav>
+<script>
+(function () {
+    "use strict";
+    // Philippine Standard Time, as on the office's website. Shown in the page's language.
+    var slot = document.querySelector("[data-rg-pst]");
+    if (!slot || !window.Intl) return;
+    var lang = document.documentElement.lang === "fil" ? "fil-PH" : "en-PH";
+    var format;
+    try {
+        format = new Intl.DateTimeFormat(lang, {
+            timeZone: "Asia/Manila", weekday: "long", year: "numeric", month: "long",
+            day: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit"
+        });
+    } catch (error) { return; }
+    function tick() { slot.textContent = format.format(new Date()); }
+    tick();
+    setInterval(tick, 1000);
+})();
+</script>

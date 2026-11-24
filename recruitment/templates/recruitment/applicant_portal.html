@@ -4,139 +4,101 @@
 {% block main_class %}{% endblock %}
 
 {% block content %}
-{# ── Photographic institutional hero ──────────────────────────── #}
-<section class="rg-pub-hero rg-pub-hero--photo" aria-label="{% translate 'DOH–CHD CALABARZON recruitment portal' %}">
-    <div class="rg-pub-wrap">
-        <span class="rg-pub-hero__eyebrow">{% translate "Official Online Recruitment" %}</span>
-        <h1 class="rg-pub-hero__title">{% translate "Apply for a Position at <br>DOH&ndash;CHD CALABARZON" %}</h1>
-        <p class="rg-pub-hero__copy">
-            {% blocktranslate trimmed %}
-            Browse current job openings, submit your application online,
-            and track your status &mdash; all in one secure place.
-            {% endblocktranslate %}
-        </p>
-        <div class="rg-pub-hero-ctas">
-            <a href="#job-openings" class="rg-pub-btn rg-pub-btn--primary" id="browse-cta">
-                {% translate "Browse Openings" %}
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M5 12h14"/><path d="m13 6 6 6-6 6"/>
-                </svg>
-            </a>
-            <a href="{% url 'applicant-my-applications' %}" class="rg-pub-btn rg-pub-btn--ghost">
-                {% translate "My Applications" %}
-            </a>
-        </div>
-    </div>
-</section>
-
-{# ── How it works (3-step orientation for first-time visitors) ─ #}
-<section class="rg-pub-wrap rg-pub-howitworks" aria-labelledby="how-it-works-heading">
-    <h2 id="how-it-works-heading" class="rg-pub-howitworks__heading">{% translate "How it works" %}</h2>
-    <ol class="rg-pub-howitworks__steps">
-        <li class="rg-pub-howitworks__step">
-            <span class="rg-pub-howitworks__num" aria-hidden="true">1</span>
-            <div>
-                <p class="rg-pub-howitworks__title">{% translate "Browse openings" %}</p>
-                <p class="rg-pub-howitworks__copy">{% translate "Find a position that fits you." %}</p>
+{# ── Job openings (the page opens on the list, like a notice of vacancies) ── #}
+<div class="rg-gov-in rg-gov-page" id="job-openings">
+    <div class="rg-gov-cols">
+        <div class="rg-gov-main">
+            <div class="rg-pub-page-header">
+                <h1 class="rg-pub-page-title">{% translate "Job Openings" %}</h1>
+                <p class="rg-pub-page-copy">{% translate "These are the positions currently accepting applications." %}</p>
+                {% include "recruitment/includes/branch_explainer.html" with mode="legend" %}
             </div>
-        </li>
-        <li class="rg-pub-howitworks__step">
-            <span class="rg-pub-howitworks__num" aria-hidden="true">2</span>
-            <div>
-                <p class="rg-pub-howitworks__title">{% translate "Apply online" %}</p>
-                <p class="rg-pub-howitworks__copy">{% translate "Verify your email, then add your documents &mdash; phone photos are fine. Finish later if you need to." %}</p>
+
+            {# Filter bar #}
+            {% if plantilla_entries or cos_entries %}
+            <div class="rg-pub-filters">
+                <label class="visually-hidden" for="rg-job-filter">{% translate "Filter positions by name" %}</label>
+                <input id="rg-job-filter" class="form-control" type="search"
+                       placeholder="{% translate 'Type a position name, e.g. Nurse' %}" autocomplete="off" style="max-width:280px;">
+                <select class="form-select" id="filter-type" aria-label="{% translate 'Filter by position type' %}" style="max-width:220px;">
+                    <option value="">{% translate "All Position Types" %}</option>
+                    <option value="plantilla">{% translate "Permanent (Plantilla)" %}</option>
+                    <option value="cos">{% translate "Contract of Service" %}</option>
+                </select>
             </div>
-        </li>
-        <li class="rg-pub-howitworks__step">
-            <span class="rg-pub-howitworks__num" aria-hidden="true">3</span>
-            <div>
-                <p class="rg-pub-howitworks__title">{% translate "Track your application" %}</p>
-                <p class="rg-pub-howitworks__copy">{% translate "Check your status anytime on My Applications &mdash; just your email, no Tracking Code needed." %}</p>
+            <p id="rg-job-no-match" class="rg-pub-page-copy" role="status" hidden style="margin:0.75rem 0 0;"></p>
+
+            <table class="rg-gov-jobs">
+                <thead>
+                    <tr>
+                        <th scope="col">{% translate "Position" %}</th>
+                        <th scope="col">{% translate "Type" %}</th>
+                        <th scope="col">{% translate "Salary Grade" %}</th>
+                        <th scope="col">{% translate "Closing date" %}</th>
+                        <th scope="col"><span class="visually-hidden">{% translate "View Details" %}</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {# Plantilla entries #}
+                    {% for entry in plantilla_entries %}
+                    {% include "recruitment/includes/job_row.html" with branch="plantilla" %}
+                    {% endfor %}
+
+                    {# COS entries #}
+                    {% for entry in cos_entries %}
+                    {% include "recruitment/includes/job_row.html" with branch="cos" %}
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            {# Empty state #}
+            {% if not plantilla_entries and not cos_entries %}
+            <div class="rg-pub-info-box rg-pub-info-box--info" style="text-align:center; padding:2rem;">
+                {% office_contact as contact %}
+                <p style="font-weight:600; margin-bottom:0.35rem;">{% translate "No open positions at this time." %}</p>
+                <p style="font-size:0.875rem; margin:0;">{% translate "Please check back later. For questions, email" %} <a href="mailto:{{ contact.hrmu.email }}">{{ contact.hrmu.email }}</a>.</p>
             </div>
-        </li>
-    </ol>
-</section>
+            {% endif %}
 
-{# ── Job Openings List ───────────────────────────────────────── #}
-<div class="rg-pub-wrap" id="job-openings">
-
-    <div class="rg-pub-page-header" style="margin-top:2rem;">
-        <h2 class="rg-pub-page-title">{% translate "Job Openings" %}</h2>
-        <p class="rg-pub-page-copy">{% translate "These are the positions currently accepting applications." %}</p>
-        {% include "recruitment/includes/branch_explainer.html" with mode="legend" %}
-    </div>
-
-    {# Filter bar #}
-    {% if plantilla_entries or cos_entries %}
-    <div class="rg-pub-filters">
-        <label class="visually-hidden" for="rg-job-filter">{% translate "Filter positions by name" %}</label>
-        <input id="rg-job-filter" class="form-control" type="search"
-               placeholder="{% translate 'Type a position name, e.g. Nurse' %}" autocomplete="off" style="max-width:280px;">
-        <select class="form-select" id="filter-type" aria-label="{% translate 'Filter by position type' %}" style="max-width:220px;">
-            <option value="">{% translate "All Position Types" %}</option>
-            <option value="plantilla">{% translate "Permanent (Plantilla)" %}</option>
-            <option value="cos">{% translate "Contract of Service" %}</option>
-        </select>
-    </div>
-    <p id="rg-job-no-match" class="rg-pub-page-copy" role="status" hidden style="margin:0.75rem 0 0;"></p>
-    {% endif %}
-
-    {# Plantilla entries #}
-    {% for entry in plantilla_entries %}
-    {% include "recruitment/includes/job_card.html" with branch="plantilla" %}
-    {% endfor %}
-
-    {# COS entries #}
-    {% for entry in cos_entries %}
-    {% include "recruitment/includes/job_card.html" with branch="cos" %}
-    {% endfor %}
-
-    {# Empty state #}
-    {% if not plantilla_entries and not cos_entries %}
-    <div class="rg-pub-info-box rg-pub-info-box--info" style="text-align:center; padding:2rem;">
-        {% office_contact as contact %}
-        <p style="font-weight:600; margin-bottom:0.35rem;">{% translate "No open positions at this time." %}</p>
-        <p style="font-size:0.875rem; margin:0;">{% translate "Please check back later. For questions, email" %} <a href="mailto:{{ contact.hrmu.email }}">{{ contact.hrmu.email }}</a>.</p>
-    </div>
-    {% endif %}
-
-    <p class="rg-pub-result-count js-result-count" style="margin-top:1rem;" aria-live="polite"></p>
-
-    {# Need help applying? HRMU for applications; Public Assistance Desk for general questions. #}
-    {% office_contact as contact %}
-    <aside class="rg-pub-help-box" aria-label="{% translate 'Need help applying?' %}">
-        <div class="rg-pub-help-box__icon" aria-hidden="true">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="9"/>
-                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-                <line x1="12" y1="17" x2="12.01" y2="17"/>
-            </svg>
+            <p class="rg-pub-result-count js-result-count" style="margin-top:1rem;" aria-live="polite"></p>
         </div>
-        <div class="rg-pub-help-box__body">
-            <p class="rg-pub-help-box__title">{% translate "Need help applying?" %}</p>
-            <p class="rg-pub-help-box__copy">
-                <strong>{% translate "About an application:" %}</strong>
-                {% translate "Human Resource Management Unit (HRMU)" %} &middot;
-                <a href="tel:{{ contact.hrmu.tel }}">{{ contact.hrmu.phone }}</a> &middot;
-                <a href="mailto:{{ contact.hrmu.email }}">{{ contact.hrmu.email }}</a>
-            </p>
-            <p class="rg-pub-help-box__copy">
-                <strong>{% translate "General questions:" %}</strong>
-                {% translate "Public Assistance Desk" %} &middot;
-                <a href="tel:{{ contact.desk.tel }}">{{ contact.desk.phone }}</a> &middot;
-                <a href="mailto:{{ contact.desk.email }}">{{ contact.desk.email }}</a>
-            </p>
-        </div>
-    </aside>
 
-    <div class="rg-pub-home-footer-notes" aria-label="{% translate 'Recruitment portal notes' %}">
-        <span class="rg-pub-home-footer-notes__item">{% translate "Official DOH&ndash;CHD CALABARZON portal" %}</span>
-        <span class="rg-pub-home-footer-notes__item">{% translate "RA 10173 Data Privacy compliant" %}</span>
-        <span class="rg-pub-home-footer-notes__item">
-            <a href="https://ro4a.doh.gov.ph" target="_blank" rel="noopener">ro4a.doh.gov.ph</a>
-        </span>
+        <aside class="rg-gov-side">
+            {# How it works: the same three steps, as a side panel #}
+            <section class="rg-gov-box" aria-labelledby="how-it-works-heading">
+                <h2 id="how-it-works-heading" class="rg-gov-box__title">{% translate "How it works" %}</h2>
+                <ol class="rg-gov-box__body rg-gov-steps">
+                    <li><strong>{% translate "Browse openings" %}</strong> {% translate "Find a position that fits you." %}</li>
+                    <li><strong>{% translate "Apply online" %}</strong> {% translate "Verify your email, then add your documents &mdash; phone photos are fine. Finish later if you need to." %}</li>
+                    <li><strong>{% translate "Track your application" %}</strong> {% translate "Check your status anytime on My Applications &mdash; just your email, no Tracking Code needed." %}</li>
+                </ol>
+                <div class="rg-gov-box__body rg-gov-box__body--foot">
+                    <a href="{% url 'applicant-my-applications' %}" class="btn btn-rg-primary w-100">{% translate "My Applications" %}</a>
+                </div>
+            </section>
+
+            {# Need help applying? HRMU for applications; Public Assistance Desk for general questions. #}
+            {% office_contact as contact %}
+            <section class="rg-gov-box" aria-label="{% translate 'Need help applying?' %}">
+                <h2 class="rg-gov-box__title">{% translate "Need help applying?" %}</h2>
+                <div class="rg-gov-box__body">
+                    <p class="rg-gov-contact">
+                        <strong>{% translate "About an application:" %}</strong>
+                        {% translate "Human Resource Management Unit (HRMU)" %}
+                        <a href="tel:{{ contact.hrmu.tel }}">{{ contact.hrmu.phone }}</a>
+                        <a href="mailto:{{ contact.hrmu.email }}">{{ contact.hrmu.email }}</a>
+                    </p>
+                    <p class="rg-gov-contact">
+                        <strong>{% translate "General questions:" %}</strong>
+                        {% translate "Public Assistance Desk" %}
+                        <a href="tel:{{ contact.desk.tel }}">{{ contact.desk.phone }}</a>
+                        <a href="mailto:{{ contact.desk.email }}">{{ contact.desk.email }}</a>
+                    </p>
+                </div>
+            </section>
+        </aside>
     </div>
-
 </div>
 
 {# ── Privacy & Data Protection (RA 10173 assurance) ───────────── #}
@@ -220,17 +182,6 @@
     // Run once on load so the count reflects the rendered cards from the start.
     applyFilters();
 
-    // Smooth-scroll the hero "Browse Openings" CTA to the job-openings section.
-    var browseCta = document.getElementById('browse-cta');
-    if (browseCta) {
-        browseCta.addEventListener('click', function (e) {
-            var target = document.getElementById('job-openings');
-            if (target) {
-                e.preventDefault();
-                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        });
-    }
 })();
 </script>
 {% endblock %}

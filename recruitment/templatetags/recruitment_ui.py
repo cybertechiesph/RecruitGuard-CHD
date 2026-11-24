@@ -78,6 +78,7 @@ def office_contact():
     from recruitment import email_branding as branding
 
     return {
+        "office_address": branding.OFFICE_ADDRESS,
         "hrmu": {
             "name": "Human Resource Management Unit (HRMU)",
             "phone": branding.CONTACT_PHONE,

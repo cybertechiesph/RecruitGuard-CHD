@@ -17,7 +17,7 @@ msgstr "Hindi mahanap ang page"
 msgid "We couldn&rsquo;t find that page. The link may be old or mistyped."
 msgstr "Hindi namin mahanap ang page na iyan. Baka luma na o mali ang pagkaka-type ng link."
 
-#: templates/404.html templates/applicant_base.html recruitment/templates/recruitment/applicant_portal.html recruitment/templates/recruitment/applicant_vacancy_detail.html
+#: templates/404.html recruitment/templates/recruitment/applicant_portal.html recruitment/templates/recruitment/applicant_vacancy_detail.html recruitment/templates/recruitment/includes/applicant_masthead.html
 msgid "Job Openings"
 msgstr "Job Openings"
 
@@ -25,37 +25,29 @@ msgstr "Job Openings"
 msgid "Staff Sign-in"
 msgstr "Sign-in ng Staff"
 
-#: templates/applicant_base.html recruitment/templates/recruitment/includes/applicant_flow_header.html
-msgid "Republic of the Philippines"
-msgstr "Republika ng Pilipinas"
+#: templates/applicant_base.html recruitment/templates/recruitment/includes/applicant_masthead.html
+msgid "Department of Health &ndash; Center for Health Development CALABARZON (Region IV-A)"
+msgstr "Department of Health &ndash; Center for Health Development CALABARZON (Region IV-A)"
 
-#: templates/applicant_base.html recruitment/templates/recruitment/includes/applicant_flow_header.html
-msgid "Department of Health &ndash; CHD CALABARZON"
-msgstr "Department of Health &ndash; CHD CALABARZON"
-
-#: templates/applicant_base.html recruitment/templates/recruitment/applicant_application.html recruitment/templates/recruitment/applicant_help.html recruitment/templates/recruitment/applicant_my_applications.html recruitment/templates/recruitment/applicant_otp.html recruitment/templates/recruitment/applicant_pds_guide.html recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_resubmission.html recruitment/templates/recruitment/applicant_start.html recruitment/templates/recruitment/applicant_status_lookup.html recruitment/templates/recruitment/applicant_vacancy_detail.html recruitment/templates/recruitment/includes/applicant_flow_header.html
+#: templates/applicant_base.html recruitment/templates/recruitment/applicant_application.html recruitment/templates/recruitment/applicant_help.html recruitment/templates/recruitment/applicant_my_applications.html recruitment/templates/recruitment/applicant_otp.html recruitment/templates/recruitment/applicant_pds_guide.html recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_resubmission.html recruitment/templates/recruitment/applicant_start.html recruitment/templates/recruitment/applicant_status_lookup.html recruitment/templates/recruitment/applicant_vacancy_detail.html recruitment/templates/recruitment/includes/applicant_masthead.html
 msgid "Applicant Portal"
 msgstr "Applicant Portal"
 
 #: templates/applicant_base.html
-msgid "Applicant navigation"
-msgstr "Menu ng applicant"
-
-#: templates/applicant_base.html templates/email/applicant_hub_code.html recruitment/templates/recruitment/applicant_my_applications.html recruitment/templates/recruitment/applicant_portal.html
-msgid "My Applications"
-msgstr "My Applications"
-
-#: templates/applicant_base.html
-msgid "Help"
-msgstr "Tulong"
-
-#: templates/applicant_base.html
-msgid "Department of Health &ndash; Center for Health Development CALABARZON (Region IV-A)"
-msgstr "Department of Health &ndash; Center for Health Development CALABARZON (Region IV-A)"
-
-#: templates/applicant_base.html
 msgid "Questions about an application:"
 msgstr "May tanong tungkol sa application mo?"
+
+#: templates/applicant_base.html
+msgid "Official DOH&ndash;CHD CALABARZON portal"
+msgstr "Official na portal ng DOH&ndash;CHD CALABARZON"
+
+#: templates/applicant_base.html
+msgid "RA 10173 Data Privacy compliant"
+msgstr "Sumusunod sa RA 10173 (Data Privacy)"
+
+#: templates/applicant_base.html recruitment/templates/recruitment/includes/applicant_masthead.html
+msgid "Help"
+msgstr "Tulong"
 
 #: templates/email/_reporting_instructions.html
 msgid "<strong>Reporting instructions</strong>"
@@ -132,6 +124,10 @@ msgstr "Code mo para makita ang mga application mo"
 #: templates/email/applicant_hub_code.html
 msgid "Your code is %(otp_code)s."
 msgstr "Ang code mo ay %(otp_code)s."
+
+#: templates/email/applicant_hub_code.html recruitment/templates/recruitment/applicant_my_applications.html recruitment/templates/recruitment/applicant_portal.html recruitment/templates/recruitment/includes/applicant_masthead.html
+msgid "My Applications"
+msgstr "My Applications"
 
 #: templates/email/applicant_hub_code.html
 msgid "Use this code to see every application you made with this email."
@@ -253,7 +249,7 @@ msgstr "Details ng application"
 msgid "Tracking Code (keep private)"
 msgstr "Tracking Code (huwag ibigay sa iba)"
 
-#: templates/email/application_received.html templates/email/non_selected_applicant.html templates/email/selected_applicant.html recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_status_lookup.html recruitment/services/evidence_vault.py
+#: templates/email/application_received.html templates/email/non_selected_applicant.html templates/email/selected_applicant.html recruitment/templates/recruitment/applicant_portal.html recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_status_lookup.html recruitment/services/evidence_vault.py
 msgid "Position"
 msgstr "Position"
 
@@ -1472,24 +1468,56 @@ msgid "<a href=\"%(link8)s\" class=\"rg-pub-back\">&larr; Back to Help</a>"
 msgstr "<a href=\"%(link8)s\" class=\"rg-pub-back\">&larr; Bumalik sa Tulong</a>"
 
 #: recruitment/templates/recruitment/applicant_portal.html
-msgid "DOH–CHD CALABARZON recruitment portal"
-msgstr "Recruitment portal ng DOH–CHD CALABARZON"
+msgid "These are the positions currently accepting applications."
+msgstr "Ito ang mga position na tumatanggap ng applicants ngayon."
 
 #: recruitment/templates/recruitment/applicant_portal.html
-msgid "Official Online Recruitment"
-msgstr "Official na Online Recruitment"
+msgid "Filter positions by name"
+msgstr "Hanapin ang position ayon sa pangalan"
 
 #: recruitment/templates/recruitment/applicant_portal.html
-msgid "Apply for a Position at <br>DOH&ndash;CHD CALABARZON"
-msgstr "Mag-apply ng trabaho sa <br>DOH&ndash;CHD CALABARZON"
+msgid "Type a position name, e.g. Nurse"
+msgstr "I-type ang position, hal. Nurse"
 
 #: recruitment/templates/recruitment/applicant_portal.html
-msgid "Browse current job openings, submit your application online, and track your status &mdash; all in one secure place."
-msgstr "Tingnan ang job openings, mag-apply online, at i-track ang status ng application mo &mdash; lahat dito na."
+msgid "Filter by position type"
+msgstr "Piliin ang klase ng position"
 
 #: recruitment/templates/recruitment/applicant_portal.html
-msgid "Browse Openings"
-msgstr "Tingnan ang Job Openings"
+msgid "All Position Types"
+msgstr "Lahat ng klase ng position"
+
+#: recruitment/templates/recruitment/applicant_portal.html recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_status_lookup.html recruitment/templates/recruitment/applicant_vacancy_detail.html recruitment/services/evidence_vault.py
+msgid "Permanent (Plantilla)"
+msgstr "Permanent (Plantilla)"
+
+#: recruitment/templates/recruitment/applicant_portal.html recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_status_lookup.html recruitment/templates/recruitment/applicant_vacancy_detail.html recruitment/templates/recruitment/includes/branch_explainer.html recruitment/templates/recruitment/includes/job_row.html recruitment/services/evidence_vault.py
+msgid "Contract of Service"
+msgstr "Contract of Service"
+
+#: recruitment/templates/recruitment/applicant_portal.html recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_status_lookup.html recruitment/templates/recruitment/includes/job_row.html
+msgid "Type"
+msgstr "Klase"
+
+#: recruitment/templates/recruitment/applicant_portal.html recruitment/templates/recruitment/applicant_vacancy_detail.html recruitment/templates/recruitment/includes/job_row.html
+msgid "Salary Grade"
+msgstr "Salary Grade"
+
+#: recruitment/templates/recruitment/applicant_portal.html recruitment/templates/recruitment/includes/job_row.html
+msgid "Closing date"
+msgstr "Huling araw ng pag-apply"
+
+#: recruitment/templates/recruitment/applicant_portal.html recruitment/templates/recruitment/includes/job_row.html
+msgid "View Details"
+msgstr "Tingnan ang Details"
+
+#: recruitment/templates/recruitment/applicant_portal.html
+msgid "No open positions at this time."
+msgstr "Wala pang job openings sa ngayon."
+
+#: recruitment/templates/recruitment/applicant_portal.html
+msgid "Please check back later. For questions, email"
+msgstr "Bumalik na lang ulit mamaya. May tanong? Mag-email sa"
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "How it works"
@@ -1520,42 +1548,6 @@ msgid "Check your status anytime on My Applications &mdash; just your email, no 
 msgstr "I-check ang status mo anytime sa My Applications &mdash; email mo lang ang kailangan, hindi na ang Tracking Code."
 
 #: recruitment/templates/recruitment/applicant_portal.html
-msgid "These are the positions currently accepting applications."
-msgstr "Ito ang mga position na tumatanggap ng applicants ngayon."
-
-#: recruitment/templates/recruitment/applicant_portal.html
-msgid "Filter positions by name"
-msgstr "Hanapin ang position ayon sa pangalan"
-
-#: recruitment/templates/recruitment/applicant_portal.html
-msgid "Type a position name, e.g. Nurse"
-msgstr "I-type ang position, hal. Nurse"
-
-#: recruitment/templates/recruitment/applicant_portal.html
-msgid "Filter by position type"
-msgstr "Piliin ang klase ng position"
-
-#: recruitment/templates/recruitment/applicant_portal.html
-msgid "All Position Types"
-msgstr "Lahat ng klase ng position"
-
-#: recruitment/templates/recruitment/applicant_portal.html recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_status_lookup.html recruitment/templates/recruitment/applicant_vacancy_detail.html recruitment/services/evidence_vault.py
-msgid "Permanent (Plantilla)"
-msgstr "Permanent (Plantilla)"
-
-#: recruitment/templates/recruitment/applicant_portal.html recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_status_lookup.html recruitment/templates/recruitment/applicant_vacancy_detail.html recruitment/templates/recruitment/includes/branch_explainer.html recruitment/templates/recruitment/includes/job_card.html recruitment/services/evidence_vault.py
-msgid "Contract of Service"
-msgstr "Contract of Service"
-
-#: recruitment/templates/recruitment/applicant_portal.html
-msgid "No open positions at this time."
-msgstr "Wala pang job openings sa ngayon."
-
-#: recruitment/templates/recruitment/applicant_portal.html
-msgid "Please check back later. For questions, email"
-msgstr "Bumalik na lang ulit mamaya. May tanong? Mag-email sa"
-
-#: recruitment/templates/recruitment/applicant_portal.html
 msgid "Need help applying?"
 msgstr "Kailangan ng tulong sa pag-apply?"
 
@@ -1574,18 +1566,6 @@ msgstr "Ibang tanong:"
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "Public Assistance Desk"
 msgstr "Public Assistance Desk"
-
-#: recruitment/templates/recruitment/applicant_portal.html
-msgid "Recruitment portal notes"
-msgstr "Mga paalala tungkol sa portal"
-
-#: recruitment/templates/recruitment/applicant_portal.html
-msgid "Official DOH&ndash;CHD CALABARZON portal"
-msgstr "Official na portal ng DOH&ndash;CHD CALABARZON"
-
-#: recruitment/templates/recruitment/applicant_portal.html
-msgid "RA 10173 Data Privacy compliant"
-msgstr "Sumusunod sa RA 10173 (Data Privacy)"
 
 #: recruitment/templates/recruitment/applicant_portal.html
 msgid "Privacy &amp; Data Protection"
@@ -1666,10 +1646,6 @@ msgstr "Case reference"
 #: recruitment/templates/recruitment/applicant_receipt.html
 msgid "Quote this case number if you call or email the office about your application."
 msgstr "Sabihin ang case number na ito kapag tumawag o nag-email ka sa office tungkol sa application mo."
-
-#: recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_status_lookup.html
-msgid "Type"
-msgstr "Klase"
 
 #: recruitment/templates/recruitment/applicant_receipt.html recruitment/templates/recruitment/applicant_status_lookup.html recruitment/templates/recruitment/includes/applicant_journey.html
 msgid "Submitted"
@@ -2065,7 +2041,7 @@ msgstr "Plantilla Item Number"
 msgid "Item No.:"
 msgstr "Item No.:"
 
-#: recruitment/templates/recruitment/applicant_vacancy_detail.html recruitment/templates/recruitment/includes/job_card.html
+#: recruitment/templates/recruitment/applicant_vacancy_detail.html recruitment/templates/recruitment/includes/job_row.html
 msgid "Posted %(date)s"
 msgstr "Na-post noong %(date)s"
 
@@ -2112,10 +2088,6 @@ msgstr "Tungkol sa Position"
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Salary and level"
 msgstr "Sahod at level"
-
-#: recruitment/templates/recruitment/applicant_vacancy_detail.html
-msgid "Salary Grade"
-msgstr "Salary Grade"
 
 #: recruitment/templates/recruitment/applicant_vacancy_detail.html
 msgid "Not recorded"
@@ -2269,10 +2241,6 @@ msgstr "Tanggalin ang %(name)s"
 msgid "Remove"
 msgstr "Tanggalin"
 
-#: recruitment/templates/recruitment/includes/applicant_flow_header.html
-msgid "Applying for"
-msgstr "Nag-a-apply para sa"
-
 #: recruitment/templates/recruitment/includes/applicant_journey.html
 msgid "Application steps"
 msgstr "Steps sa pag-apply"
@@ -2280,6 +2248,26 @@ msgstr "Steps sa pag-apply"
 #: recruitment/templates/recruitment/includes/applicant_journey.html
 msgid "Verify email"
 msgstr "I-verify ang email"
+
+#: recruitment/templates/recruitment/includes/applicant_masthead.html
+msgid "Republic of the Philippines"
+msgstr "Republika ng Pilipinas"
+
+#: recruitment/templates/recruitment/includes/applicant_masthead.html
+msgid "Department of Health &ndash; CHD CALABARZON"
+msgstr "Department of Health &ndash; CHD CALABARZON"
+
+#: recruitment/templates/recruitment/includes/applicant_masthead.html
+msgid "Philippine Standard Time"
+msgstr "Philippine Standard Time"
+
+#: recruitment/templates/recruitment/includes/applicant_masthead.html
+msgid "Applicant navigation"
+msgstr "Menu ng applicant"
+
+#: recruitment/templates/recruitment/includes/applicant_masthead.html
+msgid "Applying for"
+msgstr "Nag-a-apply para sa"
 
 #: recruitment/templates/recruitment/includes/applicant_upload_shared.html
 msgid "Your file"
@@ -2341,7 +2329,7 @@ msgstr "Nag-a-apply ka para sa <strong>Permanent (Plantilla)</strong> na positio
 msgid "You are applying for a <strong>Contract of Service</strong> position &mdash; a time-bound engagement for specific work or projects, without Civil Service tenure."
 msgstr "Nag-a-apply ka para sa <strong>Contract of Service</strong> na position &mdash; trabahong may takdang panahon para sa specific na trabaho o project, walang Civil Service tenure."
 
-#: recruitment/templates/recruitment/includes/branch_explainer.html recruitment/templates/recruitment/includes/job_card.html
+#: recruitment/templates/recruitment/includes/branch_explainer.html recruitment/templates/recruitment/includes/job_row.html
 msgid "Permanent"
 msgstr "Permanent"
 
@@ -2377,41 +2365,33 @@ msgstr "Binuksan mo ang page na ito sa loob ng isang app."
 msgid "If adding files or taking a photo doesn&rsquo;t work, open this page in Chrome or Safari: tap <strong>&middot;&middot;&middot;</strong> or <strong>&#8942;</strong> (top right) and choose <strong>Open in browser</strong>. Anything you already saved stays saved."
 msgstr "Kung ayaw gumana ng pag-upload o pag-picture, buksan ang page na ito sa Chrome o Safari: i-tap ang <strong>&middot;&middot;&middot;</strong> o <strong>&#8942;</strong> (sa kanang taas) at piliin ang <strong>Open in browser</strong>. Naka-save pa rin ang lahat ng na-save mo na."
 
-#: recruitment/templates/recruitment/includes/job_card.html
-msgid "View details for %(title)s"
-msgstr "Tingnan ang details ng %(title)s"
-
-#: recruitment/templates/recruitment/includes/job_card.html
+#: recruitment/templates/recruitment/includes/job_row.html
 msgid "Item No."
 msgstr "Item No."
 
-#: recruitment/templates/recruitment/includes/job_card.html
+#: recruitment/templates/recruitment/includes/job_row.html
 msgid "Level %(level)s"
 msgstr "Level %(level)s"
 
-#: recruitment/templates/recruitment/includes/job_card.html
-msgid "Closing soon"
-msgstr "Malapit nang magsara"
-
-#: recruitment/templates/recruitment/includes/job_card.html
+#: recruitment/templates/recruitment/includes/job_row.html
 msgid "Closes today, 11:59 PM"
 msgstr "Magsasara ngayong araw, 11:59 PM"
 
-#: recruitment/templates/recruitment/includes/job_card.html
-msgid "Closes %(date)s"
-msgstr "Magsasara sa %(date)s"
+#: recruitment/templates/recruitment/includes/job_row.html
+msgid "Closing soon"
+msgstr "Malapit nang magsara"
 
-#: recruitment/templates/recruitment/includes/job_card.html
+#: recruitment/templates/recruitment/includes/job_row.html
 msgid "Deadline extended"
 msgstr "Na-extend ang deadline"
 
-#: recruitment/templates/recruitment/includes/job_card.html
+#: recruitment/templates/recruitment/includes/job_row.html
 msgid "Always accepting applications"
 msgstr "Laging tumatanggap ng applicants"
 
-#: recruitment/templates/recruitment/includes/job_card.html
-msgid "View Details"
-msgstr "Tingnan ang Details"
+#: recruitment/templates/recruitment/includes/job_row.html
+msgid "View details for %(title)s"
+msgstr "Tingnan ang details ng %(title)s"
 
 #: recruitment/templates/recruitment/includes/language_switch.html
 msgid "Language"

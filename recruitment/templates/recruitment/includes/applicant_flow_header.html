@@ -1,23 +1,6 @@
 {% load i18n %}{% comment %}
-  Simplified top bar used while an applicant is inside the application flow
-  (start, verify, application page). Parameters: position_title, label ("Applying for").
+  Top of the page while an applicant is inside the application flow (start, verify,
+  application page): the same masthead, with "Applying for <position>" in the menu bar
+  instead of the three links. Parameters: position_title, label ("Applying for").
 {% endcomment %}
-<header class="rg-topbar rg-public-topbar">
-    <div class="rg-container rg-topbar__inner rg-public-topbar__inner">
-        <a class="rg-brand rg-public-brand" href="{% url 'applicant-portal' %}">
-            <span class="rg-brand-copy">
-                <span class="rg-brand-kicker">{% translate "Republic of the Philippines" %}</span>
-                <span class="rg-brand-agency">{% translate "Department of Health &ndash; CHD CALABARZON" %}</span>
-                <span class="rg-brand-title">{% translate "Applicant Portal" %}</span>
-            </span>
-        </a>
-        <div class="rg-public-topbar__applying">
-            {% if label %}{{ label }}{% else %}{% translate "Applying for" %}{% endif %}<br>
-            <strong>{{ position_title }}</strong>
-        </div>
-        <div class="rg-public-topbar__tools">
-            {% include "recruitment/includes/language_switch.html" %}
-            {% include "text_size_control.html" %}
-        </div>
-    </div>
-</header>
+{% include "recruitment/includes/applicant_masthead.html" with applying_title=position_title applying_label=label %}

@@ -272,7 +272,8 @@ class ApplicantPortalFlowTests(BaseRecruitmentTestCase):
         response = self.client.get(reverse("applicant-portal"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "rg-pub-home-footer-notes")
+        # The trust notes now sit in the page footer.
+        self.assertContains(response, "rg-gov-foot")
         self.assertNotContains(response, "rg-pub-trust-strip")
         self.assertContains(response, "Official DOH&ndash;CHD CALABARZON portal")
         self.assertContains(response, "RA 10173 Data Privacy compliant")
@@ -2637,8 +2638,8 @@ class ApplicantPortalLanguageTests(BaseRecruitmentTestCase):
     def test_language_switch_shows_the_portal_in_filipino(self):
         page = self.filipino_client().get(reverse("applicant-portal"))
         self.assertContains(page, '<html lang="fil">')
-        self.assertContains(page, "Tingnan ang Job Openings")
         self.assertContains(page, "Paano mag-apply")
+        self.assertContains(page, "Kailangan ng tulong sa pag-apply?")
         self.assertContains(page, 'value="fil" lang="fil" class="rg-langswitch__btn is-current"')
 
     def test_english_is_the_default(self):
@@ -2649,13 +2650,13 @@ class ApplicantPortalLanguageTests(BaseRecruitmentTestCase):
 
     def test_a_filipino_phone_gets_filipino_automatically(self):
         page = Client().get(reverse("applicant-portal"), HTTP_ACCEPT_LANGUAGE="fil-PH,fil;q=0.9")
-        self.assertContains(page, "Tingnan ang Job Openings")
+        self.assertContains(page, "Paano mag-apply")
 
     def test_staff_pages_stay_in_english(self):
         client = self.filipino_client()
         page = client.get(reverse("login"))
         self.assertContains(page, '<html lang="en">')
-        self.assertNotContains(page, "Tingnan ang Job Openings")
+        self.assertNotContains(page, "Paano mag-apply")
 
     def test_application_flow_messages_follow_the_language(self):
         client = self.filipino_client()
