@@ -43,7 +43,6 @@
         {% if request.user.role != "system_admin" %}
             {% if batch_url %}
                 <a href="{{ batch_url }}" class="btn btn-outline-secondary btn-sm">&larr; Back to batch</a>
-                <a href="{% url 'workflow-queue' %}" class="btn btn-outline-secondary btn-sm">Queue</a>
             {% else %}
                 <a href="{% url 'workflow-queue' %}" class="btn btn-outline-secondary btn-sm">&larr; Back to queue</a>
             {% endif %}

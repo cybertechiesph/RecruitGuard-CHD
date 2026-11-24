@@ -6988,8 +6988,10 @@ textarea.form-control {
     background: #fff;
 }
 
-.rg-del-car-item:first-child { border-color: #86efac; background: #f0fdf4; }
-.rg-del-car-item:first-child .rg-del-rank-badge { background: #dcfce7; border-color: #86efac; color: #15803d; }
+li:first-child > .rg-del-car-item:first-child,
+.rg-del-car-list > .rg-del-car-item:first-child { border-color: #86efac; background: #f0fdf4; }
+li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
+.rg-del-car-list > .rg-del-car-item:first-child .rg-del-rank-badge { background: #dcfce7; border-color: #86efac; color: #15803d; }
 
 .rg-del-rank-badge {
     flex-shrink: 0;

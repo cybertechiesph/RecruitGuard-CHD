@@ -1372,6 +1372,9 @@ body.applicant-portal-body {
     cursor: pointer;
     transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
 }
+/* The appointing authority chooses: no card is highlighted in advance, only the one picked. */
+html:not([data-theme="dark"]) .rg-fs-candidate-list .rg-del-car-item:not(.is-picked) { background: #fff; border-color: #e3e8ee; }
+html:not([data-theme="dark"]) .rg-fs-candidate-list .rg-del-car-item:not(.is-picked) .rg-del-rank-badge { background: #f1f5f9; border-color: #d7dde3; color: #5f6c78; }
 .rg-fs-candidate:hover {
     border-color: var(--rg-brand-green);
     background: #f8fafc;

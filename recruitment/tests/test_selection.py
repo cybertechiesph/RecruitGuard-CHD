@@ -3530,7 +3530,7 @@ class FinalDecisionHandlingTests(BaseRecruitmentTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "COS vacancy deliberation pick")
-        self.assertContains(response, "recorded once on the")
+        self.assertContains(response, "The pick recorded for this vacancy")
         self.assertContains(response, "This applicant")
         self.assertNotContains(response, "Record your decision")
         self.assertNotContains(response, "Pick the appointee")

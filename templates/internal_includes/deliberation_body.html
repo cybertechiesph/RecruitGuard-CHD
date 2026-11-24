@@ -23,6 +23,9 @@ because it's a small read-only card.
 
 {# ── COS: one per-vacancy deliberation pick, recorded on the console ── #}
 {% if cos_deliberation_section %}
+{% if cos_authoritative_pick and cos_deliberation_pick and cos_deliberation_pick.is_effective %}
+{# The recorded pick is already shown in the card above the step. #}
+{% else %}
 <div class="rg-icard">
     <div class="rg-icard__header">
         <div>
@@ -51,6 +54,7 @@ because it's a small read-only card.
         </p>
     {% endif %}
 </div>
+{% endif %}
 {% endif %}
 
 {# ── CAR-draft prerequisite banner (deliberation can't start yet) ── #}

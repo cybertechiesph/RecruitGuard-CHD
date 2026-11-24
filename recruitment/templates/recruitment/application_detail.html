@@ -33,7 +33,7 @@
    panel carries the applicant's name, contact details, and self-written text.
    The rating context they need lives in the interview and CAR sections. {% endcomment %}
 {% if request.user.role != "hrmpsb_member" %}
-<details class="rg-applicant-panel" open>
+<details class="rg-applicant-panel"{% if current_detail_tab.key == "screening" %} open{% endif %}>
     <summary class="rg-applicant-panel__summary">
         <svg class="rg-applicant-panel__icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -137,11 +137,7 @@
 
             {% include "internal_includes/prior_stage_summary.html" %}
             {% include "internal_includes/attendance_exception_card.html" %}
-            {% include "internal_includes/car_filing_copy_card.html" %}
-            {% include "internal_includes/final_selection_rescind_card.html" %}
-            {% include "internal_includes/withdrawal_card.html" %}
             {% include "internal_includes/cos_authoritative_pick.html" %}
-            {% include "internal_includes/cos_pick_rescind_card.html" %}
 
             {% comment %}
             The original "Overview" tab rendered an Applicant Snapshot card.
@@ -358,6 +354,11 @@
                EVERY tab (an exam invite that failed must surface at the exam
                stage, not only after it). Context is set for the sending roles
                only, never HRMPSB (subjects carry applicant names). {% endcomment %}
+            {# Less common actions sit below the step's own work, so the task comes first. #}
+            {% include "internal_includes/car_filing_copy_card.html" %}
+            {% include "internal_includes/final_selection_rescind_card.html" %}
+            {% include "internal_includes/cos_pick_rescind_card.html" %}
+            {% include "internal_includes/withdrawal_card.html" %}
             {% include "internal_includes/notifications_sent_panel.html" %}
 
 
