@@ -1,0 +1,163 @@
+/* ==========================================================================
+   Internal portal — government-standard look
+   --------------------------------------------------------------------------
+   The staff side of the same look the applicant portal uses (see
+   recruitguard-gov.css): the office's dark green across the top, a plain grey
+   side menu, white content with thin rules, dark green table headers, small
+   corners, and Roboto / Roboto Condensed type.
+
+   Loaded after every other stylesheet (through internal_includes/gov_head.html),
+   so it also sits on top of the dark theme. Rules that would undo the dark
+   theme are limited to the light theme with html:not([data-theme="dark"]).
+   ========================================================================== */
+
+.internal-portal-body {
+    --rg-gov-mast: #073606;
+    --rg-gov-bar: #f7f7f7;
+    --rg-gov-rule: #dcdfdc;
+    --rg-font-sans: Roboto, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --rg-font-display: "Roboto Condensed", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-family: var(--rg-font-sans);
+}
+html:not([data-theme="dark"]) body.internal-portal-body:not(.rg-login-body-wrap) {
+    background: #fefefe;
+}
+
+/* ── The green band across the top: brand on the left, the signed-in user on
+      the right. It is the side menu's brand block and the top bar, coloured
+      as one. ─────────────────────────────────────────────────────────────── */
+html .internal-portal-body .rg-sidebar { padding-top: 0; }
+html .internal-portal-body .rg-sidebar__brand {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    box-sizing: border-box;
+    min-height: 64px;
+    margin: 0 0 0.75rem;
+    padding: 0.6rem 1rem;
+    background: var(--rg-gov-mast);
+    border-bottom: 3px solid var(--rg-brand-gold, #f1a208);
+    color: #fff;
+    font-family: var(--rg-font-display);
+    font-size: 1.125rem;
+}
+html .internal-portal-body .rg-sidebar__brand small {
+    color: #dbe7da;
+    font-family: var(--rg-font-sans);
+    letter-spacing: 0.04em;
+}
+html .internal-portal-body .rg-context-bar {
+    box-sizing: border-box;
+    min-height: 64px;
+    background: var(--rg-gov-mast);
+    border-bottom: 3px solid var(--rg-brand-gold, #f1a208);
+    color: #fff;
+}
+html .internal-portal-body .rg-context-bar__breadcrumb,
+html .internal-portal-body .rg-context-bar__breadcrumb a,
+html .internal-portal-body .rg-context-bar .rg-breadcrumb-sep { color: #dbe7da; }
+html .internal-portal-body .rg-context-bar .rg-breadcrumb-home,
+html .internal-portal-body .rg-context-bar .rg-breadcrumb-current { color: #fff; }
+html .internal-portal-body .rg-context-bar__breadcrumb a:hover { color: #fff; }
+html .internal-portal-body .rg-context-bar .rg-topbar__menu-btn { color: #fff; border-color: rgba(255, 255, 255, 0.4); background: none; }
+
+/* role, display, theme, bell and name: quiet white outlines on the band */
+html .internal-portal-body .rg-context-bar__role .rg-pill {
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    color: #fff;
+}
+html .internal-portal-body .rg-context-bar .rg-display-menu__toggle,
+html .internal-portal-body .rg-context-bar .rg-theme-toggle,
+html .internal-portal-body .rg-context-bar .rg-notif__bell,
+html .internal-portal-body .rg-context-bar .rg-user-pill {
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    border-radius: 3px;
+    color: #fff;
+    box-shadow: none;
+}
+html .internal-portal-body .rg-context-bar .rg-user-pill { border-color: transparent; font-weight: 500; padding-inline: 0.25rem; }
+html .internal-portal-body .rg-context-bar .rg-display-menu__toggle:hover,
+html .internal-portal-body .rg-context-bar .rg-theme-toggle:hover,
+html .internal-portal-body .rg-context-bar .rg-notif__bell:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+html .internal-portal-body .rg-context-bar svg { color: #fff; stroke: currentColor; }
+
+/* ── Side menu ───────────────────────────────────────────────── */
+html .internal-portal-body .rg-sidebar__link {
+    border-radius: 0;
+    margin-inline: 0;
+    padding-left: 1.1rem;
+    border-left: 4px solid transparent;
+    font-family: var(--rg-font-display);
+    font-size: 1rem;
+}
+html:not([data-theme="dark"]) .internal-portal-body .rg-sidebar {
+    background: var(--rg-gov-bar);
+    border-right: 1px solid var(--rg-gov-rule);
+}
+html:not([data-theme="dark"]) .internal-portal-body .rg-sidebar__link { color: #0a0a0a; }
+html:not([data-theme="dark"]) .internal-portal-body .rg-sidebar__link:hover { background: #ececec; }
+html:not([data-theme="dark"]) .internal-portal-body .rg-sidebar__link.is-active {
+    background: #fff;
+    border-left-color: var(--rg-brand-green);
+    color: var(--rg-brand-green);
+    font-weight: 700;
+    box-shadow: inset 0 1px 0 var(--rg-gov-rule), inset 0 -1px 0 var(--rg-gov-rule);
+}
+html[data-theme="dark"] .internal-portal-body .rg-sidebar__link.is-active { border-left-color: #6fbf73; }
+
+/* ── Type and plain surfaces ─────────────────────────────────── */
+.internal-portal-body .rg-page-title,
+.internal-portal-body h1,
+.internal-portal-body h2,
+.internal-portal-body h3 {
+    font-family: var(--rg-font-display);
+    letter-spacing: 0;
+}
+.internal-portal-body .rg-page-title { font-size: 1.875rem; font-weight: 700; }
+.internal-portal-body .rg-icard__title,
+.internal-portal-body .card > h2.h6,
+.internal-portal-body .card > h2.h5 { font-family: var(--rg-font-sans); }
+
+html .internal-portal-body .rg-icard,
+html .internal-portal-body .card,
+html .internal-portal-body .rg-itbl,
+html .internal-portal-body .alert,
+html .internal-portal-body .btn,
+html .internal-portal-body .form-control,
+html .internal-portal-body .form-select,
+html .internal-portal-body .rg-pill,
+html .internal-portal-body .rg-form-section,
+html .internal-portal-body .rg-field--checkbox,
+html .internal-portal-body .rg-applicant-panel,
+html .internal-portal-body .rg-pipeline-summary,
+html .internal-portal-body .rg-scr-actionbar,
+html .internal-portal-body .rg-int-actionbar,
+html .internal-portal-body .rg-del-car-item,
+html .internal-portal-body .rg-login-card,
+html .internal-portal-body .modal-content {
+    border-radius: 3px;
+}
+html .internal-portal-body .rg-icard,
+html .internal-portal-body .card,
+html .internal-portal-body .rg-itbl { box-shadow: none; }
+html:not([data-theme="dark"]) .internal-portal-body .rg-icard,
+html:not([data-theme="dark"]) .internal-portal-body .card,
+html:not([data-theme="dark"]) .internal-portal-body .rg-itbl { border-color: var(--rg-gov-rule); }
+
+/* ── Tables: dark green header row, thin rules ───────────────── */
+html .internal-portal-body .rg-itbl thead th {
+    background: var(--rg-gov-mast);
+    color: #fff;
+    font-family: var(--rg-font-display);
+    font-weight: 500;
+    font-size: 0.875rem;
+    border-bottom: 0;
+}
+html .internal-portal-body .rg-itbl thead th a { color: #fff; }
+html:not([data-theme="dark"]) .internal-portal-body .rg-itbl tbody tr:nth-child(even) > td { background: #fafafa; }
+
+/* ── Sign-in pages ───────────────────────────────────────────── */
+.rg-login-body-wrap .rg-login-card__title { font-family: var(--rg-font-display); }
+.rg-login-body-wrap .rg-login-card__eyebrow { text-transform: none; letter-spacing: 0; }
