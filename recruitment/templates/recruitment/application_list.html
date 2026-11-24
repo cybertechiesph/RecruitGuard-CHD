@@ -13,7 +13,7 @@
     <div>
         <h1 class="rg-page-title">{% if is_queue %}My Queue{% elif is_closed_list %}Past Records{% else %}Cases I Can View{% endif %}</h1>
         {% if is_closed_list %}
-            <p class="rg-imeta mt-1">
+            <p class="rg-page-copy">
                 Finished cases &mdash; selected, not selected, withdrawn or cancelled. Open a case to see its
                 documents and history, or to export it.
                 {% if user.role == "secretariat" or user.role == "hrm_chief" %}
@@ -26,7 +26,7 @@
         {% if is_queue %}
             <a href="{% url 'workflow-closed' %}" class="btn btn-outline-secondary btn-sm">Past records &rarr;</a>
         {% else %}
-            <a href="{% url 'workflow-queue' %}" class="btn btn-rg-primary btn-sm">&larr; Back to My Queue</a>
+            <a href="{% url 'workflow-queue' %}" class="btn btn-outline-secondary btn-sm">&larr; Back to My Queue</a>
         {% endif %}
     </div>
 </div>

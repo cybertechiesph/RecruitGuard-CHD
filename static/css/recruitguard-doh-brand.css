@@ -5200,3 +5200,31 @@ a.rg-sched-event__title { color: var(--rg-brand-green); }
 
 /* Track page: the "lost your code" line sits centred under the intro. */
 .rg-ta-intro__copy.rg-hub-alt { margin: 0.75rem auto 0; }
+
+/* ── Applicant job detail ──────────────────────────────────────────────────
+   The facts under the title read as one plain line, not a row of boxes, and
+   only the documents that are NOT simply required carry a tag. */
+.rg-pub-position-badges { gap: 0; row-gap: 0.25rem; }
+.rg-pub-badge,
+.rg-pub-badge--type {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    color: #374151;
+    font-size: 0.9rem;
+}
+.rg-pub-badge--type { font-weight: 600; }
+.rg-pub-position-badges .rg-pub-badge + .rg-pub-badge::before {
+    content: "\00b7";
+    margin: 0 0.55rem;
+    color: #94a3b8;
+    font-weight: 400;
+}
+.rg-pub-optional-tag--required { display: none; }
+
+/* Applicant header on phones: a little less height. */
+@media (max-width: 600px) {
+    .rg-public-topbar__inner { gap: 0.3rem; padding-top: 0.5rem; padding-bottom: 0.5rem; }
+    .rg-public-nav .rg-nav-link { padding: 0.35rem 0.6rem; }
+}

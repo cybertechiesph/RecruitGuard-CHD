@@ -12,7 +12,7 @@
 <div class="rg-page-header">
     <div>
         <h1 class="rg-page-title">Notifications</h1>
-        <p class="rg-page-subtitle">{% if user.role == "system_admin" %}Updates about accounts, access, and system activity.{% else %}Updates about cases and applications assigned to you.{% endif %}</p>
+        <p class="rg-page-copy">{% if user.role == "system_admin" %}Updates about accounts, access, and system activity.{% else %}Updates about cases and applications assigned to you.{% endif %}</p>
     </div>
     {% if has_unread %}
     <div class="rg-page-actions">

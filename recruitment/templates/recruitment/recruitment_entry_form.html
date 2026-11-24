@@ -2,10 +2,16 @@
 
 {% block internal_title %}{% if object %}Edit vacancy{% else %}New vacancy{% endif %}{% endblock %}
 
+{% block breadcrumb %}
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<a href="{% url 'recruitment-entry-list' %}">Vacancies</a>
+<span class="rg-breadcrumb-sep">&rsaquo;</span>
+<span class="rg-breadcrumb-current">{% if object %}Edit vacancy{% else %}New vacancy{% endif %}</span>
+{% endblock %}
+
 {% block content %}
 <div class="rg-page-header">
     <div>
-        <p class="rg-eyebrow">Vacancies</p>
         <h1 class="rg-page-title">{% if object %}Edit vacancy{% else %}New vacancy{% endif %}</h1>
         <p class="rg-page-copy">Create the vacancy by choosing an official position, reviewing its details, and setting when applications open and close.</p>
     </div>
