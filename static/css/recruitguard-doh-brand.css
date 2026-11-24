@@ -5137,3 +5137,66 @@ a.rg-sched-event__title { color: var(--rg-brand-green); }
     border-color: #b42318;
     box-shadow: 0 0 0 0.2rem rgba(180, 35, 24, 0.12);
 }
+
+/* ── Applicant job list: compact rows ─────────────────────────────────────
+   One job per row: the title, then one line of plain facts, then the deadline.
+   The type, level and salary grade are facts, so they read as text, not pills;
+   the "Closing soon" tag stays a pill because it needs attention. */
+.rg-pub-job-card {
+    padding: 0.8rem 1.1rem;
+    border-left-width: 1px;
+}
+.rg-pub-job-card--plantilla,
+.rg-pub-job-card--cos { border-left-color: #d7dde3; }
+.rg-pub-job-card--plantilla:hover,
+.rg-pub-job-card--cos:hover { border-left-color: var(--rg-primary); }
+.rg-pub-job-card__inner { align-items: center; }
+.rg-pub-job-card__body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 0.55rem;
+    row-gap: 0.2rem;
+}
+.rg-pub-job-card__title { order: 1; flex: 0 0 100%; margin: 0; font-size: 1.05rem; }
+.rg-pub-job-card__chips { order: 2; margin: 0; gap: 0; }
+.rg-pub-job-card__meta { order: 3; margin: 0; }
+/* Line 2 is the facts; line 3 is the deadline with the vacancy code after it. */
+.rg-pub-job-card__body::after { content: ""; order: 4; flex: 0 0 100%; height: 0; }
+.rg-pub-job-card__deadline { order: 5; margin: 0; }
+.rg-pub-job-card__ref { order: 6; margin: 0; }
+.applicant-portal-body .rg-pub-chip {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    color: #374151;
+    font-weight: 600;
+    letter-spacing: 0;
+    font-size: 0.8125rem !important;
+}
+.rg-pub-job-card__chips .rg-pub-chip + .rg-pub-chip::before,
+.rg-pub-job-card__meta::before,
+.rg-pub-job-card__ref::before {
+    content: "\00b7";
+    margin-right: 0.55rem;
+    color: #94a3b8;
+    font-weight: 400;
+}
+.rg-pub-job-card__chips .rg-pub-chip + .rg-pub-chip::before { margin-left: 0.55rem; }
+@media (max-width: 600px) {
+    .rg-pub-job-card__meta,
+    .rg-pub-job-card__deadline,
+    .rg-pub-job-card__ref { flex: 0 0 100%; }
+    .rg-pub-job-card__meta::before,
+    .rg-pub-job-card__ref::before { content: none; }
+    /* The whole row is the link, so on a phone the label shrinks to an arrow. */
+    .rg-pub-job-card__action { font-size: 0; }
+    .rg-pub-job-card__action::after { content: "\2192"; font-size: 1.15rem; }
+}
+
+/* One heading style on the applicant home page. */
+.rg-pub-howitworks__heading { font-size: 1.25rem; font-weight: 700; color: #111827; }
+
+/* Track page: the "lost your code" line sits centred under the intro. */
+.rg-ta-intro__copy.rg-hub-alt { margin: 0.75rem auto 0; }
