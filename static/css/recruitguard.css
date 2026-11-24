@@ -2,7 +2,7 @@
     --rg-font-sans: "Public Sans", "Segoe UI", sans-serif;
     --rg-font-display: "Source Serif 4", Georgia, serif;
     --rg-ink: #183046;
-    --rg-muted: #60758a;
+    --rg-muted: #64748b;
     --rg-border: rgba(23, 48, 66, 0.12);
     --rg-border-strong: rgba(23, 48, 66, 0.18);
     --rg-surface-elevated: rgba(255, 255, 255, 0.92);
@@ -15,11 +15,11 @@
     --rg-radius-sm: 14px;
     --rg-primary: #0a5c63;
     --rg-primary-strong: #08484d;
-    --rg-primary-soft: #e8f0fe;
+    --rg-primary-soft: #e8f4fb;
     --rg-secondary: #d8efe8;
     --rg-accent: #f1a208;
     --rg-accent-strong: #b97700;
-    --rg-surface: #f8fbfc;
+    --rg-surface: #f8fafc;
 }
 
 html {
@@ -89,7 +89,7 @@ code {
 .rg-eyebrow {
     margin-bottom: 0.75rem;
     color: var(--rg-muted);
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 700;
 }
 
@@ -142,7 +142,7 @@ code {
 
 .rg-stat-chip span {
     color: var(--rg-muted);
-    font-size: 0.88rem;
+    font-size: 0.875rem;
 }
 
 .rg-topbar {
@@ -182,7 +182,7 @@ code {
     place-items: center;
     width: 2.75rem;
     height: 2.75rem;
-    border-radius: 0.95rem;
+    border-radius: 16px;
     background: linear-gradient(135deg, var(--rg-primary), color-mix(in srgb, var(--rg-primary) 60%, white));
     color: #fff;
     font-size: 1rem;
@@ -203,7 +203,7 @@ code {
 
 .rg-brand-subtitle {
     color: var(--rg-muted);
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     line-height: 1.1;
 }
 
@@ -223,7 +223,7 @@ code {
     border-radius: 999px;
     border: 1px solid transparent;
     color: inherit;
-    font-size: 0.93rem;
+    font-size: 0.9375rem;
     font-weight: 600;
     text-decoration: none;
     transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
@@ -240,7 +240,7 @@ code {
     gap: 0.55rem;
     padding: 0.5rem 0.85rem;
     border-radius: 999px;
-    font-size: 0.88rem;
+    font-size: 0.875rem;
     font-weight: 600;
 }
 
@@ -256,9 +256,9 @@ code {
 }
 
 .alert-success {
-    background: #ebf8f0;
-    border-color: #c5e9d3;
-    color: #19603a;
+    background: #e9f9f0;
+    border-color: #c8ebd6;
+    color: #15603a;
 }
 
 .rg-detail-anchor {
@@ -276,7 +276,7 @@ code {
 .rg-admin-note strong {
     display: block;
     margin-bottom: 0.35rem;
-    font-size: 0.98rem;
+    font-size: 1rem;
 }
 
 .rg-admin-note p {
@@ -285,21 +285,21 @@ code {
 }
 
 .alert-info {
-    background: #edf5ff;
+    background: #eff6ff;
     border-color: #c9ddff;
     color: #1b4a94;
 }
 
 .alert-warning {
     background: #fff6e7;
-    border-color: #ffe0a3;
+    border-color: #ffe2a6;
     color: #8a5a00;
 }
 
 .alert-danger,
 .alert-error {
-    background: #fff0ee;
-    border-color: #ffc7be;
+    background: #fef2f2;
+    border-color: #ffc5bc;
     color: #a9342f;
 }
 
@@ -436,7 +436,7 @@ textarea.form-control {
 .rg-form-section__copy {
     margin-bottom: 1rem;
     color: var(--rg-muted);
-    font-size: 0.92rem;
+    font-size: 0.9375rem;
 }
 
 .rg-form-actions {
@@ -448,7 +448,7 @@ textarea.form-control {
 
 .rg-secondary-link {
     color: var(--rg-muted);
-    font-size: 0.86rem;
+    font-size: 0.875rem;
     font-weight: 600;
     text-decoration: none;
 }
@@ -474,14 +474,14 @@ textarea.form-control {
 
 .rg-kpi__label {
     color: var(--rg-muted);
-    font-size: 0.85rem;
+    font-size: 0.875rem;
     font-weight: 600;
 }
 
 .rg-kpi__value {
     display: block;
     margin-top: 0.35rem;
-    font-size: 1.7rem;
+    font-size: 1.75rem;
     font-weight: 700;
     line-height: 1.05;
 }
@@ -490,7 +490,7 @@ textarea.form-control {
     display: block;
     margin-top: 0.35rem;
     color: var(--rg-muted);
-    font-size: 0.85rem;
+    font-size: 0.875rem;
 }
 
 .rg-service-layout {
@@ -500,8 +500,8 @@ textarea.form-control {
 
 .rg-service-banner {
     padding: 1.25rem 1.4rem;
-    border: 1px solid #d5dee6;
-    border-radius: 1.15rem;
+    border: 1px solid #d7dde3;
+    border-radius: 16px;
     background: rgba(255, 255, 255, 0.94);
     box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
 }
@@ -538,20 +538,20 @@ textarea.form-control {
     grid-column: span 4;
     padding: 0.95rem 1rem;
     border: 1px solid #dbe3ea;
-    border-radius: 0.95rem;
+    border-radius: 16px;
     background: rgba(255, 255, 255, 0.88);
 }
 
 .rg-service-notice strong {
     display: block;
     margin-bottom: 0.3rem;
-    font-size: 0.96rem;
+    font-size: 0.9375rem;
 }
 
 .rg-service-notice p {
     margin: 0;
     color: var(--rg-muted);
-    font-size: 0.9rem;
+    font-size: 0.875rem;
 }
 
 .rg-service-section {
@@ -567,9 +567,9 @@ textarea.form-control {
 .rg-path-panel {
     grid-column: span 6;
     padding: 1.25rem 1.3rem;
-    border: 1px solid #d5dee6;
+    border: 1px solid #d7dde3;
     border-top-width: 4px;
-    border-radius: 1.1rem;
+    border-radius: 16px;
     background: rgba(255, 255, 255, 0.96);
     box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
 }
@@ -589,29 +589,29 @@ textarea.form-control {
     gap: 1rem;
     padding-bottom: 0.95rem;
     margin-bottom: 0.35rem;
-    border-bottom: 1px solid #e6ebf0;
+    border-bottom: 1px solid #e8edf2;
 }
 
 .rg-path-panel__title {
     margin: 0 0 0.25rem;
-    font-size: 1.2rem;
+    font-size: 1.25rem;
     line-height: 1.25;
 }
 
 .rg-path-panel__copy {
     margin: 0;
     color: var(--rg-muted);
-    font-size: 0.93rem;
+    font-size: 0.9375rem;
 }
 
 .rg-count-badge {
     min-width: 5.25rem;
     padding: 0.55rem 0.7rem;
-    border: 1px solid #dde5ec;
-    border-radius: 0.85rem;
-    background: #f5f7f9;
+    border: 1px solid #dbe3ea;
+    border-radius: 12px;
+    background: #f8fafc;
     color: #12324b;
-    font-size: 0.85rem;
+    font-size: 0.875rem;
     font-weight: 700;
     text-align: center;
     white-space: nowrap;
@@ -623,7 +623,7 @@ textarea.form-control {
 
 .rg-entry-row {
     padding: 1rem 0;
-    border-top: 1px solid #e7ecf1;
+    border-top: 1px solid #e8edf2;
 }
 
 .rg-entry-row:first-child {
@@ -646,13 +646,13 @@ textarea.form-control {
 .rg-entry-row__sub {
     margin: 0;
     color: var(--rg-muted);
-    font-size: 0.9rem;
+    font-size: 0.875rem;
 }
 
 .rg-entry-row__summary {
     margin: 0.65rem 0 0.8rem;
     color: #314456;
-    font-size: 0.94rem;
+    font-size: 0.9375rem;
 }
 
 .rg-entry-row__footer {
@@ -667,7 +667,7 @@ textarea.form-control {
     flex-wrap: wrap;
     gap: 0.45rem 1rem;
     color: var(--rg-muted);
-    font-size: 0.88rem;
+    font-size: 0.875rem;
 }
 
 .rg-level-label {
@@ -676,23 +676,23 @@ textarea.form-control {
     justify-content: center;
     min-height: 1.95rem;
     padding: 0.3rem 0.65rem;
-    border: 1px solid #d8e0e8;
-    border-radius: 0.7rem;
-    background: #f4f7f9;
-    color: #33475a;
-    font-size: 0.78rem;
+    border: 1px solid #d7dde3;
+    border-radius: 12px;
+    background: #f8fafc;
+    color: #314456;
+    font-size: 0.75rem;
     font-weight: 700;
     white-space: nowrap;
 }
 
 .rg-path-panel--plantilla .rg-level-label {
-    background: #eef7f6;
-    border-color: #d9ebe8;
+    background: #f1f5f9;
+    border-color: #d8efe8;
     color: #0f5662;
 }
 
 .rg-path-panel--cos .rg-level-label {
-    background: #fff7e7;
+    background: #fffbeb;
     border-color: #f4dfb2;
     color: #9b6703;
 }
@@ -733,7 +733,7 @@ textarea.form-control {
     max-width: 58ch;
     margin-bottom: 1.5rem;
     color: var(--rg-muted);
-    font-size: 1.05rem;
+    font-size: 1rem;
 }
 
 .rg-inline-metadata {
@@ -766,7 +766,7 @@ textarea.form-control {
 .rg-step p {
     margin: 0;
     color: var(--rg-muted);
-    font-size: 0.92rem;
+    font-size: 0.9375rem;
 }
 
 .rg-section {
@@ -783,7 +783,7 @@ textarea.form-control {
 
 .rg-section-title {
     margin: 0 0 0.35rem;
-    font-size: 1.6rem;
+    font-size: 1.5rem;
 }
 
 .rg-section-copy {
@@ -823,7 +823,7 @@ textarea.form-control {
 
 .rg-entry-card__title {
     margin: 0;
-    font-size: 1.2rem;
+    font-size: 1.25rem;
 }
 
 .rg-entry-card__text,
@@ -868,7 +868,7 @@ textarea.form-control {
 
 .rg-list-item__title {
     margin: 0;
-    font-size: 1.02rem;
+    font-size: 1rem;
 }
 
 .rg-list-item__meta {
@@ -892,7 +892,7 @@ textarea.form-control {
 
 .rg-info-row__label {
     color: var(--rg-muted);
-    font-size: 0.9rem;
+    font-size: 0.875rem;
     font-weight: 600;
 }
 
@@ -921,7 +921,7 @@ textarea.form-control {
     border-bottom-width: 1px;
     background: rgba(15, 23, 42, 0.03);
     color: var(--rg-muted);
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 700;
 }
 
@@ -937,7 +937,7 @@ textarea.form-control {
     min-height: 2rem;
     padding: 0.35rem 0.78rem;
     border-radius: 999px;
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 600;
     border: 1px solid transparent;
 }
@@ -971,39 +971,39 @@ textarea.form-control {
 }
 
 .rg-pill--warning {
-    background: #fff6e6;
-    color: #9a6500;
+    background: #fff6e7;
+    color: #9b6703;
     border-color: #ffe2a6;
 }
 
 .rg-pill--danger {
-    background: #fff0ee;
+    background: #fef2f2;
     color: #a9342f;
     border-color: #ffc5bc;
 }
 
 .rg-pill--info {
-    background: #eef5ff;
-    color: #204c94;
+    background: #eff6ff;
+    color: #1b4a94;
     border-color: #d5e4ff;
 }
 
 .rg-pill--neutral {
-    background: #f2f5f8;
+    background: #f1f5f9;
     color: #526273;
-    border-color: #dbe3eb;
+    border-color: #dbe3ea;
 }
 
 .rg-pill--secretariat {
-    background: #e9f7f7;
+    background: #e8f4fb;
     color: #0b6f73;
     border-color: #cdeced;
 }
 
 .rg-pill--hrm-chief {
-    background: #edf2ff;
+    background: #eff6ff;
     color: #2247a6;
-    border-color: #d9e3ff;
+    border-color: #d5e4ff;
 }
 
 .rg-pill--hrmpsb-member {
@@ -1013,19 +1013,19 @@ textarea.form-control {
 }
 
 .rg-pill--appointing-authority {
-    background: #fff1e7;
+    background: #fff6e7;
     color: #b24e12;
     border-color: #ffd2b5;
 }
 
 .rg-pill--system-admin {
-    background: #eef2f6;
-    color: #364152;
-    border-color: #d8dee6;
+    background: #f1f5f9;
+    color: #374151;
+    border-color: #d7dde3;
 }
 
 .rg-pill--applicant {
-    background: #eef7ff;
+    background: #eff6ff;
     color: #1b5e8f;
     border-color: #d6eafd;
 }
@@ -1133,13 +1133,13 @@ textarea.form-control {
 .rg-login-brand__notice {
     padding: 1rem 1.1rem;
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 0.65rem;
+    border-radius: 12px;
     background: rgba(0, 0, 0, 0.18);
 }
 
 .rg-login-brand__notice p {
     margin: 0;
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     color: rgba(255, 255, 255, 0.6);
     line-height: 1.6;
 }
@@ -1150,7 +1150,7 @@ textarea.form-control {
     align-items: center;
     justify-content: center;
     padding: 2rem;
-    background: #f5f6f7;
+    background: #f1f5f9;
 }
 
 .rg-login-form-card {
@@ -1158,13 +1158,13 @@ textarea.form-control {
     max-width: 440px;
     background: #fff;
     border: 1px solid #d7dde3;
-    border-radius: 0.9rem;
+    border-radius: 16px;
     padding: 2.25rem;
     box-shadow: 0 8px 32px rgba(0, 46, 74, 0.07);
 }
 
 .rg-login-form-card__eyebrow {
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -1173,7 +1173,7 @@ textarea.form-control {
 }
 
 .rg-login-form-card__title {
-    font-size: 1.3rem;
+    font-size: 1.25rem;
     font-weight: 700;
     color: #111827;
     margin-bottom: 0.3rem;
@@ -1181,7 +1181,7 @@ textarea.form-control {
 }
 
 .rg-login-form-card__sub {
-    font-size: 0.85rem;
+    font-size: 0.875rem;
     color: #5f6c78;
     margin-bottom: 1.75rem;
     line-height: 1.5;
@@ -1190,9 +1190,9 @@ textarea.form-control {
 .rg-login-security-notice {
     margin-top: 1.25rem;
     padding-top: 1.25rem;
-    border-top: 1px solid #edf0f3;
-    font-size: 0.76rem;
-    color: #8c99a4;
+    border-top: 1px solid #e8edf2;
+    font-size: 0.75rem;
+    color: #8a99a8;
     text-align: center;
     line-height: 1.55;
 }
@@ -1244,7 +1244,7 @@ textarea.form-control {
 
 .rg-breadcrumb-sep {
     color: #c0c8d0;
-    font-size: 0.65rem;
+    font-size: 0.75rem;
     flex-shrink: 0;
 }
 
@@ -1261,7 +1261,7 @@ textarea.form-control {
    ---------------------------------------------------------- */
 .rg-sidebar__section-label {
     padding: 1rem 1rem 0.3rem;
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 700;
     color: #9aa4af;
 }
@@ -1303,7 +1303,7 @@ textarea.form-control {
     align-items: center;
     gap: 1rem;
     padding: 0.85rem 0;
-    border-bottom: 1px solid #edf0f3;
+    border-bottom: 1px solid #e8edf2;
     text-decoration: none;
     color: inherit;
 }
@@ -1317,7 +1317,7 @@ textarea.form-control {
     margin: 0 -1.25rem;
     padding-left: 1.25rem;
     padding-right: 1.25rem;
-    border-radius: 0.5rem;
+    border-radius: 8px;
 }
 
 .rg-dash-queue-row__main {
@@ -1334,7 +1334,7 @@ textarea.form-control {
 }
 
 .rg-dash-queue-row__name {
-    font-size: 0.9rem;
+    font-size: 0.875rem;
     font-weight: 600;
     color: #111827;
     white-space: nowrap;
@@ -1343,7 +1343,7 @@ textarea.form-control {
 }
 
 .rg-dash-queue-row__meta {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     color: #7f8a96;
     margin-top: 0.15rem;
 }
@@ -1355,9 +1355,9 @@ textarea.form-control {
 .rg-dash-announce {
     padding: 0.85rem 1rem;
     background: #f8fafc;
-    border: 1px solid #edf0f3;
-    border-radius: 0.5rem;
-    font-size: 0.85rem;
+    border: 1px solid #e8edf2;
+    border-radius: 8px;
+    font-size: 0.875rem;
     color: #5f6c78;
     line-height: 1.5;
 }
@@ -1367,7 +1367,7 @@ textarea.form-control {
     flex-direction: column;
     gap: 0.15rem;
     padding: 0.85rem 0;
-    border-bottom: 1px solid #edf0f3;
+    border-bottom: 1px solid #e8edf2;
 }
 
 .rg-dash-sysad-event:last-child {
@@ -1381,7 +1381,7 @@ textarea.form-control {
 }
 
 .rg-dash-sysad-event__desc {
-    font-size: 0.82rem;
+    font-size: 0.8125rem;
     color: #5f6c78;
     line-height: 1.45;
 }
@@ -1412,7 +1412,7 @@ textarea.form-control {
 }
 
 .rg-dash-stat__label {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 600;
     color: #7f8a96;
 }
@@ -1434,7 +1434,7 @@ textarea.form-control {
     width: 64px;
     height: 64px;
     border-radius: 50%;
-    background: #f5f7f9;
+    background: #f8fafc;
     border: 1px solid #d7dde3;
     display: flex;
     align-items: center;
@@ -1445,7 +1445,7 @@ textarea.form-control {
 }
 
 .rg-forbidden-title {
-    font-size: 1.3rem;
+    font-size: 1.25rem;
     font-weight: 700;
     color: #111827;
     margin-bottom: 0.5rem;
@@ -1453,7 +1453,7 @@ textarea.form-control {
 }
 
 .rg-forbidden-copy {
-    font-size: 0.9rem;
+    font-size: 0.875rem;
     color: #5f6c78;
     max-width: 42ch;
     margin: 0 auto 1.75rem;
@@ -1465,14 +1465,14 @@ textarea.form-control {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #f5f6f7;
+    background: #f1f5f9;
     padding: 2rem 1rem;
 }
 
 .rg-standalone-403__card {
     background: #fff;
     border: 1px solid #d7dde3;
-    border-radius: 0.9rem;
+    border-radius: 16px;
     padding: 3rem 2.5rem;
     max-width: 480px;
     width: 100%;
@@ -1514,7 +1514,7 @@ textarea.form-control {
 
 .rg-progress-step__label {
     display: block;
-    font-size: 0.82rem;
+    font-size: 0.8125rem;
     font-weight: 700;
 }
 
@@ -1522,17 +1522,17 @@ textarea.form-control {
     display: block;
     margin-top: 0.25rem;
     color: var(--rg-muted);
-    font-size: 0.9rem;
+    font-size: 0.875rem;
 }
 
 .rg-progress-step.is-complete {
-    background: #eaf8f1;
-    border-color: #c7ead6;
+    background: #e9f9f0;
+    border-color: #c8ebd6;
 }
 
 .rg-progress-step.is-current {
-    background: #eef5ff;
-    border-color: #c6dbff;
+    background: #eff6ff;
+    border-color: #c9ddff;
     box-shadow: inset 0 0 0 1px rgba(31, 79, 160, 0.08);
 }
 
@@ -1557,7 +1557,7 @@ textarea.form-control {
 
 .rg-record__meta {
     color: var(--rg-muted);
-    font-size: 0.9rem;
+    font-size: 0.875rem;
 }
 
 .rg-timeline {
@@ -1649,7 +1649,7 @@ textarea.form-control {
 
 .applicant-portal-body .rg-brand-kicker {
     color: #5f6c78;
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -1669,11 +1669,11 @@ textarea.form-control {
 
 .applicant-portal-body .rg-nav-link {
     padding: 0.62rem 1rem;
-    border-radius: 0.25rem;
+    border-radius: 4px;
     border: 1px solid #9aa4af;
     font-size: 0.8125rem;
     font-weight: 600;
-    color: #1f2937;
+    color: #1b2733;
 }
 
 .applicant-portal-body .rg-nav-link:hover,
@@ -1696,12 +1696,12 @@ textarea.form-control {
 
 .applicant-portal-body .rg-nav-link--secondary {
     background: #fff;
-    color: #1f2937;
+    color: #1b2733;
 }
 
 .applicant-portal-body .rg-nav-link--secondary:hover,
 .applicant-portal-body .rg-nav-link--secondary.is-active {
-    background: #f9fafb;
+    background: #f8fafc;
     border-color: #7f8a96;
     color: #111827;
 }
@@ -1724,7 +1724,7 @@ textarea.form-control {
 }
 
 .applicant-portal-body .btn {
-    border-radius: 0.25rem;
+    border-radius: 4px;
     padding: 0.62rem 1rem;
     font-size: 0.8125rem;
     font-weight: 600;
@@ -1752,12 +1752,12 @@ textarea.form-control {
 .applicant-portal-body .btn-outline-secondary {
     background: #fff;
     border-color: #9aa4af;
-    color: #1f2937;
+    color: #1b2733;
 }
 
 .applicant-portal-body .btn-outline-secondary:hover,
 .applicant-portal-body .btn-outline-secondary:focus {
-    background: #f9fafb;
+    background: #f8fafc;
     border-color: #7f8a96;
     color: #111827;
 }
@@ -1784,7 +1784,7 @@ textarea.form-control {
 .rg-public-intro__title {
     margin: 0 0 0.45rem;
     color: #111827;
-    font-size: 0.96875rem;
+    font-size: 0.9375rem;
     font-weight: 600;
     line-height: 1.4;
     letter-spacing: 0;
@@ -1846,7 +1846,7 @@ textarea.form-control {
 .rg-public-section__title {
     margin: 0 0 0.35rem;
     color: #111827;
-    font-size: 1.0625rem;
+    font-size: 1rem;
     font-weight: 600;
     line-height: 1.35;
     letter-spacing: 0;
@@ -1877,7 +1877,7 @@ textarea.form-control {
     gap: 1rem;
     padding: 0.8rem 1.15rem;
     border-bottom: 2px solid #9aa4af;
-    background: #f8f9fa;
+    background: #f8fafc;
 }
 
 .rg-public-panel__title {
@@ -1954,7 +1954,7 @@ textarea.form-control {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.75rem 1.25rem;
     padding: 0.85rem 1.15rem;
-    border-top: 1px solid #e3e8ec;
+    border-top: 1px solid #e2e8f0;
 }
 
 .rg-public-opening__meta-item {
@@ -1968,7 +1968,7 @@ textarea.form-control {
     width: 7.25rem;
     flex-shrink: 0;
     color: #5f6c78;
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 600;
     line-height: 1.35;
 }
@@ -1985,7 +1985,7 @@ textarea.form-control {
     gap: 0.7rem;
     align-items: flex-start;
     padding: 0.85rem 1.15rem 1rem;
-    border-top: 1px solid #e3e8ec;
+    border-top: 1px solid #e2e8f0;
 }
 
 .rg-public-opening__notes p {
@@ -2023,7 +2023,7 @@ textarea.form-control {
 .rg-public-footer__title {
     margin: 0 0 0.1rem;
     color: #374151;
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     font-weight: 600;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -2032,7 +2032,7 @@ textarea.form-control {
 .rg-public-footer__copy {
     margin: 0;
     color: #6b7280;
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
 }
 
 .internal-portal-body .rg-topbar {
@@ -2069,29 +2069,29 @@ textarea.form-control {
 
 .internal-portal-body .rg-nav-link {
     padding: 0.62rem 1rem;
-    border-radius: 0.25rem;
+    border-radius: 4px;
     border: 1px solid #9aa4af;
     font-size: 0.8125rem;
     font-weight: 600;
-    color: #1f2937;
+    color: #1b2733;
 }
 
 .internal-portal-body .rg-nav-link:hover,
 .internal-portal-body .rg-nav-link.is-active {
-    background: #f5f8fa;
+    background: #f8fafc;
     border-color: #7f8a96;
     color: #111827;
     text-decoration: none;
 }
 
 .internal-portal-body .rg-user-pill {
-    background: #f8f9fa;
+    background: #f8fafc;
     border: 1px solid #cfd6dd;
     color: #5f6c78;
 }
 
 .internal-portal-body .btn {
-    border-radius: 0.35rem;
+    border-radius: 6px;
     padding: 0.62rem 1rem;
     font-size: 0.8125rem;
     font-weight: 600;
@@ -2122,7 +2122,7 @@ textarea.form-control {
 .internal-portal-body textarea:focus-visible {
     outline: 2px solid var(--rg-brand-green, #1e5c2d);
     outline-offset: 2px;
-    border-radius: 2px;
+    border-radius: 4px;
 }
 
 /* UX-04 — Read-only disclosure for Case History / Evidence in the case shell.
@@ -2131,8 +2131,8 @@ textarea.form-control {
    collapsed by default so the main screen still shows only the current step. */
 .internal-portal-body .rg-cws-disclosure {
     margin-top: 1rem;
-    border: 1px solid #d8dee5;
-    border-radius: 0.5rem;
+    border: 1px solid #d7dde3;
+    border-radius: 8px;
     background: #fff;
 }
 .internal-portal-body .rg-cws-disclosure > summary {
@@ -2183,7 +2183,7 @@ textarea.form-control {
 .internal-portal-body .btn-light {
     background: #fff;
     border-color: #9aa4af;
-    color: #1f2937;
+    color: #1b2733;
 }
 
 .internal-portal-body .btn-outline-secondary:hover,
@@ -2192,7 +2192,7 @@ textarea.form-control {
 .internal-portal-body .btn-outline-light:focus,
 .internal-portal-body .btn-light:hover,
 .internal-portal-body .btn-light:focus {
-    background: #f9fafb;
+    background: #f8fafc;
     border-color: #7f8a96;
     color: #111827;
 }
@@ -2204,7 +2204,7 @@ textarea.form-control {
 
 .internal-portal-body .btn-outline-warning:hover,
 .internal-portal-body .btn-outline-warning:focus {
-    background: #fff8e8;
+    background: #fffbeb;
     border-color: #be9a45;
     color: #715400;
 }
@@ -2223,7 +2223,7 @@ textarea.form-control {
 .internal-portal-body .rg-auth-side,
 .internal-portal-body .rg-auth-side__panel {
     border-color: #cfd6dd;
-    border-radius: 0.5rem;
+    border-radius: 8px;
     background: #fff;
     box-shadow: none;
 }
@@ -2272,18 +2272,18 @@ textarea.form-control {
 }
 
 .internal-portal-body .rg-empty-state {
-    background: #f8f9fa;
+    background: #f8fafc;
     border-style: solid;
 }
 
 .internal-portal-body .table thead th {
-    background: #f8f9fa;
+    background: #f8fafc;
     color: #5f6c78;
     border-bottom-color: #d7dde3;
 }
 
 .internal-portal-body .table tbody tr:hover {
-    background: #f8fbfd;
+    background: #f8fafc;
 }
 
 /* ── Sidebar layout ── */
@@ -2309,9 +2309,9 @@ textarea.form-control {
 
 .rg-sidebar__brand {
     padding: 0 1.15rem 1.15rem;
-    border-bottom: 1px solid #e5e9ed;
+    border-bottom: 1px solid #e2e8f0;
     margin-bottom: .75rem;
-    font-size: 1.05rem;
+    font-size: 1rem;
     font-weight: 700;
     color: #111827;
     text-decoration: none;
@@ -2321,7 +2321,7 @@ textarea.form-control {
 
 .rg-sidebar__brand small {
     display: block;
-    font-size: .68rem;
+    font-size: 0.75rem;
     font-weight: 600;
     color: #5f6c78;
     letter-spacing: .06em;
@@ -2342,8 +2342,8 @@ textarea.form-control {
     align-items: center;
     gap: .65rem;
     padding: .65rem .85rem;
-    border-radius: .4rem;
-    font-size: .8125rem;
+    border-radius: 6px;
+    font-size: 0.8125rem;
     font-weight: 600;
     color: #374151;
     text-decoration: none;
@@ -2351,7 +2351,7 @@ textarea.form-control {
 }
 
 .rg-sidebar__link:hover {
-    background: #f3f5f7;
+    background: #f1f5f9;
     color: #111827;
     text-decoration: none;
 }
@@ -2377,7 +2377,7 @@ textarea.form-control {
 
 .rg-sidebar__footer {
     padding: .75rem .65rem 0;
-    border-top: 1px solid #e5e9ed;
+    border-top: 1px solid #e2e8f0;
     margin-top: auto;
 }
 
@@ -2395,8 +2395,8 @@ textarea.form-control {
     gap: 1rem;
     padding: .65rem 1.5rem;
     background: #fff;
-    border-bottom: 1px solid #e5e9ed;
-    font-size: .8125rem;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 0.8125rem;
     min-height: 48px;
 }
 
@@ -2418,7 +2418,7 @@ textarea.form-control {
 .rg-main-content {
     flex: 1;
     padding: 1.25rem 1.5rem 3rem;
-    background: #f5f6f7;
+    background: #f1f5f9;
     overflow-y: auto;
 }
 
@@ -2429,7 +2429,7 @@ textarea.form-control {
 
 /* ── Public body overrides ─────────────────────────────────── */
 .applicant-portal-body {
-    background: #f5f6f8;
+    background: #f1f5f9;
 }
 
 .applicant-portal-body .site-shell {
@@ -2482,7 +2482,7 @@ textarea.form-control {
 
 .rg-pub-page-title {
     margin: 0 0 0.35rem;
-    font-size: 1.6rem;
+    font-size: 1.5rem;
     font-weight: 700;
     color: #111827;
     line-height: 1.2;
@@ -2571,7 +2571,7 @@ textarea.form-control {
     flex-direction: column;
     padding: 1.5rem;
     border: 1px solid #d7dde3;
-    border-radius: 10px;
+    border-radius: 8px;
     background: #fff;
     text-decoration: none;
     color: inherit;
@@ -2723,7 +2723,7 @@ textarea.form-control {
 .rg-pub-position-header {
     padding: 1.5rem;
     border: 1px solid #d7dde3;
-    border-radius: 10px;
+    border-radius: 8px;
     background: #fff;
     margin-bottom: 2rem;
 }
@@ -2750,14 +2750,14 @@ textarea.form-control {
     padding: 0.3rem 0.7rem;
     border: 1px solid #d7dde3;
     border-radius: 4px;
-    background: #f5f6f8;
+    background: #f1f5f9;
     font-size: 0.8125rem;
     font-weight: 600;
     color: #374151;
 }
 
 .rg-pub-badge--type {
-    background: #f5f6f8;
+    background: #f1f5f9;
     border-color: #d7dde3;
     color: #374151;
 }
@@ -2768,7 +2768,7 @@ textarea.form-control {
     gap: 0.5rem;
     padding: 0.6rem 0.9rem;
     border-radius: 6px;
-    background: #fff8e7;
+    background: #fffbeb;
     border: 1px solid #ffe2a6;
     font-size: 0.875rem;
     color: #8a5a00;
@@ -2777,7 +2777,7 @@ textarea.form-control {
 }
 
 .rg-pub-deadline-box--urgent {
-    background: #fff0ee;
+    background: #fef2f2;
     border-color: #ffc5bc;
     color: #a9342f;
 }
@@ -2786,7 +2786,7 @@ textarea.form-control {
 .rg-pub-section {
     margin-top: 2rem;
     padding-top: 1.75rem;
-    border-top: 1px solid #e5e9ed;
+    border-top: 1px solid #e2e8f0;
 }
 
 .rg-pub-section:first-of-type {
@@ -2797,7 +2797,7 @@ textarea.form-control {
 
 .rg-pub-section__title {
     margin: 0 0 0.75rem;
-    font-size: 1.1rem;
+    font-size: 1.125rem;
     font-weight: 700;
     color: #111827;
 }
@@ -2821,7 +2821,7 @@ textarea.form-control {
     display: flex;
     align-items: flex-start;
     gap: 0.6rem;
-    font-size: 0.9rem;
+    font-size: 0.875rem;
     color: #374151;
     line-height: 1.55;
 }
@@ -2841,7 +2841,7 @@ textarea.form-control {
 }
 
 .rg-pub-doc-list li .rg-pub-optional-tag {
-    font-size: 0.8rem;
+    font-size: 0.8125rem;
     color: #9aa4af;
     font-style: italic;
 }
@@ -2864,15 +2864,15 @@ textarea.form-control {
 /* ── Guidance / preparation page ────────────────────────────── */
 .rg-pub-checklist-box {
     padding: 1.25rem 1.5rem;
-    background: #f8fafb;
+    background: #f8fafc;
     border: 1px solid #d7dde3;
-    border-radius: 10px;
+    border-radius: 8px;
     margin-bottom: 1.25rem;
 }
 
 .rg-pub-checklist-box__title {
     margin: 0 0 1rem;
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 700;
     color: #5f6c78;
 }
@@ -2957,13 +2957,13 @@ textarea.form-control {
 }
 
 .rg-pub-info-box--info {
-    background: #edf5ff;
+    background: #eff6ff;
     border-left: 4px solid var(--rg-primary);
     color: #1a4e82;
 }
 
 .rg-pub-info-box--warning {
-    background: #fff8e7;
+    background: #fffbeb;
     border-left: 4px solid #d2a000;
     color: #7a5500;
 }
@@ -3071,10 +3071,10 @@ textarea.form-control {
 }
 
 .rg-pub-form-group__heading {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 700;
     color: #5f6c78;
-    border-top: 1px solid #e5e9ed;
+    border-top: 1px solid #e2e8f0;
     padding-top: 1.25rem;
     margin-bottom: 1rem;
     margin-top: 0;
@@ -3124,11 +3124,11 @@ textarea.form-control {
 
 .rg-pub-upload-slot--error {
     border-color: #fca5a5;
-    background: #fff5f5;
+    background: #fef2f2;
 }
 
 .rg-pub-upload-slot__name {
-    font-size: 0.9rem;
+    font-size: 0.875rem;
     font-weight: 700;
     color: #111827;
     margin: 0 0 0.25rem;
@@ -3169,10 +3169,10 @@ textarea.form-control {
     padding: 0.5rem 0.75rem;
     margin-top: 0.625rem;
     background: #f8fafc;
-    border: 1px solid #cbd5e1;
+    border: 1px solid #cfd6dd;
     border-radius: 6px;
     font-size: 0.8125rem;
-    color: #334155;
+    color: #374151;
 }
 
 .rg-pub-upload-slot__selection[hidden] {
@@ -3186,7 +3186,7 @@ textarea.form-control {
 }
 
 .rg-pub-upload-slot--error .rg-pub-upload-slot__selection {
-    background: #fff5f5;
+    background: #fef2f2;
     border-color: #fca5a5;
     color: #b91c1c;
 }
@@ -3229,7 +3229,7 @@ textarea.form-control {
 .rg-pub-upload-slot__remove:focus-visible {
     outline: 3px solid #1d4ed8;
     outline-offset: 3px;
-    border-radius: 2px;
+    border-radius: 4px;
 }
 
 .rg-pub-optional-tag {
@@ -3237,7 +3237,7 @@ textarea.form-control {
     font-size: 0.75rem;
     font-weight: 500;
     color: #9aa4af;
-    background: #f5f6f8;
+    background: #f1f5f9;
     border: 1px solid #d7dde3;
     border-radius: 4px;
     padding: 0 0.4rem;
@@ -3247,7 +3247,7 @@ textarea.form-control {
 
 .rg-pub-tips-box {
     padding: 1rem 1.25rem;
-    background: #f8fafb;
+    background: #f8fafc;
     border: 1px solid #d7dde3;
     border-radius: 8px;
     margin-top: 1rem;
@@ -3285,7 +3285,7 @@ textarea.form-control {
     align-items: center;
     gap: 0.5rem;
     padding: 0.6rem 0.85rem;
-    background: #f0f4f8;
+    background: #f1f5f9;
     border-radius: 6px;
     margin-bottom: 1.5rem;
     font-size: 0.875rem;
@@ -3311,7 +3311,7 @@ textarea.form-control {
 .rg-pub-otp-help {
     margin-top: 1.25rem;
     padding-top: 1.25rem;
-    border-top: 1px solid #e5e9ed;
+    border-top: 1px solid #e2e8f0;
     font-size: 0.875rem;
     color: #5f6c78;
 }
@@ -3339,12 +3339,12 @@ textarea.form-control {
     justify-content: space-between;
     align-items: center;
     padding: 0.75rem 1.25rem;
-    background: #f8fafb;
+    background: #f8fafc;
     border-bottom: 1px solid #d7dde3;
 }
 
 .rg-pub-review-card__title {
-    font-size: 0.9rem;
+    font-size: 0.875rem;
     font-weight: 700;
     color: #374151;
     margin: 0;
@@ -3375,9 +3375,9 @@ textarea.form-control {
     grid-template-columns: 140px 1fr;
     gap: 0.75rem;
     align-items: baseline;
-    font-size: 0.9rem;
+    font-size: 0.875rem;
     padding-bottom: 0.45rem;
-    border-bottom: 1px solid #f0f2f4;
+    border-bottom: 1px solid #f1f5f9;
 }
 
 .rg-pub-review-row:last-child {
@@ -3424,16 +3424,16 @@ textarea.form-control {
 }
 
 .rg-pub-doc-dash {
-    color: #d1d5db;
+    color: #cfd6dd;
     flex-shrink: 0;
 }
 
 /* ── Confirmation checkboxes ─────────────────────────────────── */
 .rg-pub-confirm-box {
     padding: 1.25rem 1.5rem;
-    background: #f8fafb;
+    background: #f8fafc;
     border: 1px solid #d7dde3;
-    border-radius: 10px;
+    border-radius: 8px;
     margin-bottom: 1.5rem;
 }
 
@@ -3469,7 +3469,7 @@ textarea.form-control {
     justify-content: space-between;
     gap: 1rem;
     padding-top: 1rem;
-    border-top: 1px solid #e5e9ed;
+    border-top: 1px solid #e2e8f0;
     margin-top: 1.5rem;
 }
 
@@ -3498,7 +3498,7 @@ textarea.form-control {
 }
 
 .rg-pub-receipt-id {
-    font-size: 1.65rem;
+    font-size: 1.75rem;
     font-weight: 700;
     font-family: ui-monospace, SFMono-Regular, 'Cascadia Mono', Consolas, Menlo, monospace;
     letter-spacing: 0.05em;
@@ -3510,7 +3510,7 @@ textarea.form-control {
 .rg-pub-receipt-card {
     padding: 1.5rem;
     border: 1px solid #d7dde3;
-    border-radius: 10px;
+    border-radius: 8px;
     background: #fff;
     text-align: center;
     margin-bottom: 1.5rem;
@@ -3528,13 +3528,13 @@ textarea.form-control {
 }
 
 .rg-pub-status-badge--review {
-    background: #edf5ff;
+    background: #eff6ff;
     color: #1a4e82;
     border: 1px solid #c6dcf0;
 }
 
 .rg-pub-status-badge--evaluation {
-    background: #f0f4ff;
+    background: #eff6ff;
     color: #3730a3;
     border: 1px solid #c7d2fe;
 }
@@ -3546,25 +3546,25 @@ textarea.form-control {
 }
 
 .rg-pub-status-badge--not-selected {
-    background: #f8f9fa;
+    background: #f8fafc;
     color: #5f6c78;
     border: 1px solid #d7dde3;
 }
 
 .rg-pub-status-badge--returned {
-    background: #fff8e7;
+    background: #fffbeb;
     color: #8a5a00;
     border: 1px solid #ffe2a6;
 }
 
 /* ── Help / FAQ ──────────────────────────────────────────────── */
 .rg-pub-faq-group-title {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 700;
     color: #5f6c78;
     margin: 2rem 0 0.75rem;
     padding-bottom: 0.5rem;
-    border-bottom: 1px solid #e5e9ed;
+    border-bottom: 1px solid #e2e8f0;
 }
 
 .rg-pub-faq-group-title:first-of-type {
@@ -3573,15 +3573,15 @@ textarea.form-control {
 
 .rg-pub-contact-box {
     padding: 1.5rem;
-    background: #f8fafb;
+    background: #f8fafc;
     border: 1px solid #d7dde3;
-    border-radius: 10px;
+    border-radius: 8px;
     margin-top: 2rem;
 }
 
 .rg-pub-contact-box__title {
     margin: 0 0 1rem;
-    font-size: 1.1rem;
+    font-size: 1.125rem;
     font-weight: 700;
     color: #111827;
 }
@@ -3639,7 +3639,7 @@ textarea.form-control {
     }
 
     .rg-pub-hero__title {
-        font-size: 1.4rem;
+        font-size: 1.375rem;
     }
 
     .rg-pub-otp-card {
@@ -3680,9 +3680,9 @@ textarea.form-control {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: .65rem;
+    font-size: 0.75rem;
     font-weight: 700;
-    color: #9ca3af;
+    color: #9aa4af;
     position: relative;
     z-index: 2;
     transition: all .2s;
@@ -3702,13 +3702,13 @@ textarea.form-control {
 }
 
 .rg-pipeline__stage.is-future .rg-pipeline__circle {
-    background: #f3f4f6;
-    border-color: #d1d5db;
-    color: #9ca3af;
+    background: #f1f5f9;
+    border-color: #cfd6dd;
+    color: #9aa4af;
 }
 
 .rg-pipeline__label {
-    font-size: .7rem;
+    font-size: 0.75rem;
     font-weight: 600;
     color: #6b7280;
     text-align: center;
@@ -3728,7 +3728,7 @@ textarea.form-control {
 .rg-pipeline__connector {
     width: 36px;
     height: 2px;
-    background: #d1d5db;
+    background: #cfd6dd;
     flex-shrink: 0;
     margin-bottom: 1.1rem;
 }
@@ -3748,7 +3748,7 @@ textarea.form-control {
 
 .rg-workspace-tab {
     padding: .75rem 1.25rem;
-    font-size: .875rem;
+    font-size: 0.875rem;
     font-weight: 600;
     color: #6b7280;
     text-decoration: none;
@@ -3774,24 +3774,24 @@ textarea.form-control {
     display: flex;
     gap: .15rem;
     padding: .15rem 0 .75rem;
-    border-bottom: 1px solid #e5e9ed;
+    border-bottom: 1px solid #e2e8f0;
     margin-bottom: 1rem;
     overflow-x: auto;
 }
 
 .rg-stage-tab {
     padding: .45rem .85rem;
-    font-size: .8125rem;
+    font-size: 0.8125rem;
     font-weight: 600;
     color: #6b7280;
     text-decoration: none;
-    border-radius: .3rem;
+    border-radius: 4px;
     transition: background .15s, color .15s;
     white-space: nowrap;
 }
 
 .rg-stage-tab:hover {
-    background: #f3f5f7;
+    background: #f1f5f9;
     color: #111827;
     text-decoration: none;
 }
@@ -3806,7 +3806,7 @@ textarea.form-control {
 .rg-stage-status {
     padding: 1.15rem;
     border: 1px solid #d7dde3;
-    border-radius: .5rem;
+    border-radius: 8px;
     background: #fff;
 }
 
@@ -3815,7 +3815,7 @@ textarea.form-control {
     align-items: flex-start;
     gap: .55rem;
     margin-bottom: 1rem;
-    font-size: .8125rem;
+    font-size: 0.8125rem;
     color: #374151;
 }
 
@@ -3832,11 +3832,11 @@ textarea.form-control {
     gap: .5rem;
     width: 100%;
     padding: .75rem 1rem;
-    border-radius: .35rem;
+    border-radius: 6px;
     background: #2563eb;
     border: 1px solid #2563eb;
     color: #fff;
-    font-size: .875rem;
+    font-size: 0.875rem;
     font-weight: 700;
     cursor: pointer;
     transition: background .15s;
@@ -3848,14 +3848,14 @@ textarea.form-control {
 }
 
 .rg-finalize-btn:disabled {
-    background: #9ca3af;
-    border-color: #9ca3af;
+    background: #9aa4af;
+    border-color: #9aa4af;
     cursor: not-allowed;
 }
 
 .rg-stage-status__warning {
     margin-top: .75rem;
-    font-size: .75rem;
+    font-size: 0.75rem;
     color: #dc2626;
     font-weight: 500;
 }
@@ -3873,9 +3873,9 @@ textarea.form-control {
     display: flex;
     align-items: center;
     gap: .45rem;
-    font-size: .8125rem;
+    font-size: 0.8125rem;
     font-weight: 600;
-    color: #9ca3af;
+    color: #9aa4af;
 }
 
 .rg-step-indicator__step.is-active {
@@ -3893,8 +3893,8 @@ textarea.form-control {
     width: 26px;
     height: 26px;
     border-radius: 50%;
-    border: 2px solid #d1d5db;
-    font-size: .75rem;
+    border: 2px solid #cfd6dd;
+    font-size: 0.75rem;
     font-weight: 700;
     background: #fff;
 }
@@ -3913,8 +3913,8 @@ textarea.form-control {
 
 .rg-step-indicator__arrow {
     margin: 0 .75rem;
-    color: #d1d5db;
-    font-size: .875rem;
+    color: #cfd6dd;
+    font-size: 0.875rem;
 }
 
 /* ── Vacancy Master-Detail ── */
@@ -3935,7 +3935,7 @@ textarea.form-control {
 
 .rg-vacancy-list__header {
     padding: .85rem 1rem;
-    border-bottom: 1px solid #e5e9ed;
+    border-bottom: 1px solid #e2e8f0;
     position: sticky;
     top: 0;
     background: #fff;
@@ -3958,16 +3958,16 @@ textarea.form-control {
 .rg-vacancy-filters .form-select,
 .rg-vacancy-filters .form-control {
     min-height: 2.25rem;
-    font-size: .75rem;
+    font-size: 0.75rem;
     padding: .35rem .65rem;
-    border-radius: .25rem;
+    border-radius: 4px;
     flex: 1;
     min-width: 100px;
 }
 
 .rg-vacancy-card {
     padding: .85rem 1rem;
-    border-bottom: 1px solid #e5e9ed;
+    border-bottom: 1px solid #e2e8f0;
     cursor: pointer;
     transition: background .12s;
     position: relative;
@@ -3975,18 +3975,18 @@ textarea.form-control {
 
 .rg-vacancy-card:hover,
 .rg-vacancy-card.is-selected {
-    background: #f0f4ff;
+    background: #eff6ff;
 }
 
 .rg-vacancy-card__title {
-    font-size: .875rem;
+    font-size: 0.875rem;
     font-weight: 600;
     color: #111827;
     margin: 0 0 .2rem;
 }
 
 .rg-vacancy-card__meta {
-    font-size: .75rem;
+    font-size: 0.75rem;
     color: #5f6c78;
     margin: 0;
 }
@@ -3995,13 +3995,13 @@ textarea.form-control {
     position: absolute;
     top: .85rem;
     right: 1rem;
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 700;
     color: #16a34a;
     background: #e9f9f0;
     border: 1px solid #c8ebd6;
     padding: .15rem .45rem;
-    border-radius: .2rem;
+    border-radius: 4px;
 }
 
 .rg-vacancy-detail {
@@ -4011,7 +4011,7 @@ textarea.form-control {
 }
 
 .rg-vacancy-detail__heading {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 600;
     color: #5f6c78;
     margin: 0 0 .25rem;
@@ -4025,7 +4025,7 @@ textarea.form-control {
 }
 
 .rg-vacancy-detail h3 {
-    font-size: .8125rem;
+    font-size: 0.8125rem;
     font-weight: 700;
     color: #111827;
     margin: 1.15rem 0 .4rem;
@@ -4034,7 +4034,7 @@ textarea.form-control {
 .rg-vacancy-detail ul {
     margin: 0;
     padding-left: 1.1rem;
-    font-size: .8125rem;
+    font-size: 0.8125rem;
     color: #374151;
 }
 
@@ -4050,14 +4050,14 @@ textarea.form-control {
 
 .rg-vacancy-detail__privacy {
     margin-top: 1rem;
-    font-size: .75rem;
+    font-size: 0.75rem;
     color: #6b7280;
 }
 
 .rg-vacancy-detail__note {
     margin-top: .5rem;
-    font-size: .7rem;
-    color: #9ca3af;
+    font-size: 0.75rem;
+    color: #9aa4af;
     font-style: italic;
 }
 
@@ -4097,28 +4097,28 @@ textarea.form-control {
 .rg-receipt-success p {
     margin: 0;
     color: #5f6c78;
-    font-size: .875rem;
+    font-size: 0.875rem;
 }
 
 .rg-doc-inventory {
     width: 100%;
     border-collapse: collapse;
-    font-size: .8125rem;
+    font-size: 0.8125rem;
 }
 
 .rg-doc-inventory th {
     text-align: left;
     padding: .55rem .75rem;
-    background: #f8f9fa;
+    background: #f8fafc;
     border-bottom: 1px solid #d7dde3;
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 700;
     color: #5f6c78;
 }
 
 .rg-doc-inventory td {
     padding: .6rem .75rem;
-    border-bottom: 1px solid #e5e9ed;
+    border-bottom: 1px solid #e2e8f0;
     color: #374151;
 }
 
@@ -4126,7 +4126,7 @@ textarea.form-control {
     display: inline-flex;
     align-items: center;
     gap: .25rem;
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 700;
     color: #16a34a;
 }
@@ -4147,9 +4147,9 @@ textarea.form-control {
     margin-top: .75rem;
     padding: 1rem;
     border: 1px solid #d7dde3;
-    border-radius: .5rem;
-    background: #f8f9fa;
-    font-size: .8125rem;
+    border-radius: 8px;
+    background: #f8fafc;
+    font-size: 0.8125rem;
 }
 
 .rg-evidence-detail dt {
@@ -4177,7 +4177,7 @@ textarea.form-control {
 .rg-upload-card {
     padding: 1rem .75rem;
     border: 1px solid #d7dde3;
-    border-radius: .4rem;
+    border-radius: 6px;
     background: #fff;
     text-align: center;
     cursor: pointer;
@@ -4190,32 +4190,32 @@ textarea.form-control {
 
 .rg-upload-card__icon {
     font-size: 1.5rem;
-    color: #9ca3af;
+    color: #9aa4af;
     margin-bottom: .35rem;
 }
 
 .rg-upload-card__label {
-    font-size: .75rem;
+    font-size: 0.75rem;
     font-weight: 600;
     color: #374151;
     margin: 0 0 .15rem;
 }
 
 .rg-upload-card__hint {
-    font-size: .65rem;
-    color: #9ca3af;
+    font-size: 0.75rem;
+    color: #9aa4af;
 }
 
 /* ── Checklist panel (applicant) ── */
 .rg-checklist-panel {
     padding: 1rem;
     border: 1px solid #d7dde3;
-    border-radius: .5rem;
+    border-radius: 8px;
     background: #fff;
 }
 
 .rg-checklist-panel__title {
-    font-size: .8125rem;
+    font-size: 0.8125rem;
     font-weight: 700;
     margin: 0 0 .65rem;
     color: #111827;
@@ -4226,7 +4226,7 @@ textarea.form-control {
     align-items: center;
     gap: .45rem;
     padding: .3rem 0;
-    font-size: .75rem;
+    font-size: 0.75rem;
     color: #374151;
 }
 
@@ -4234,7 +4234,7 @@ textarea.form-control {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #d1d5db;
+    background: #cfd6dd;
     flex-shrink: 0;
 }
 
@@ -4295,7 +4295,7 @@ textarea.form-control {
     }
 
     .rg-page-title {
-        font-size: 1.85rem;
+        font-size: 1.75rem;
     }
 
     .rg-service-header,
@@ -4465,7 +4465,7 @@ textarea.form-control {
     --rgi-primary:       var(--rg-primary);
     --rgi-primary-hover: #004d72;
     --rgi-accent:        #b97700;
-    --rgi-surface:       #f5f6f7;
+    --rgi-surface:       #f1f5f9;
     --rgi-card:          #ffffff;
     --rgi-border:        #d7dde3;
     --rgi-border-strong: #b8c0ca;
@@ -4492,7 +4492,7 @@ textarea.form-control {
 .rg-icard {
     background: #fff;
     border: 1px solid #d7dde3;
-    border-radius: 0.5rem;
+    border-radius: 8px;
     padding: 1.25rem;
 }
 
@@ -4507,7 +4507,7 @@ textarea.form-control {
     gap: 1rem;
     margin-bottom: 1rem;
     padding-bottom: 0.75rem;
-    border-bottom: 1px solid #edf0f3;
+    border-bottom: 1px solid #e8edf2;
 }
 
 .rg-icard__header--flush {
@@ -4524,7 +4524,7 @@ textarea.form-control {
 }
 
 .rg-icard__subtitle {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     color: #5f6c78;
     margin: 0.2rem 0 0;
     line-height: 1.45;
@@ -4555,15 +4555,15 @@ textarea.form-control {
 
 /* Flat — for nested sections, read-only summaries */
 .rg-icard--flat {
-    background: #f8f9fa;
+    background: #f8fafc;
     box-shadow: none;
 }
 
 /* Inset — dashed border for empty or placeholder areas */
 .rg-icard--inset {
-    background: #f5f6f7;
+    background: #f1f5f9;
     border-style: dashed;
-    border-color: #c5cdd5;
+    border-color: #c6ccd2;
 }
 
 /* Section card — like a form section or info group */
@@ -4582,50 +4582,50 @@ textarea.form-control {
 
 /* Workflow vocabulary chips */
 .rg-pill--draft {
-    background: #f5f6f7;
+    background: #f1f5f9;
     color: #5f6c78;
     border-color: #d7dde3;
 }
 
 .rg-pill--active {
-    background: #e9f7ee;
+    background: #e9f9f0;
     color: #1a6b3c;
     border-color: #b8e6cc;
 }
 
 .rg-pill--locked {
-    background: #fff8e7;
+    background: #fffbeb;
     color: #8c6200;
     border-color: #f0d58a;
 }
 
 .rg-pill--on-hold {
-    background: #fff3e6;
+    background: #fff6e7;
     color: #b24e12;
     border-color: #f8cba0;
 }
 
 .rg-pill--reopened {
-    background: #e6f4ff;
+    background: #e8f4fb;
     color: #1d5fa0;
     border-color: #b8d9f8;
 }
 
 .rg-pill--withdrawn {
-    background: #f5f6f7;
+    background: #f1f5f9;
     color: #9aa4af;
-    border-color: #d0d8e0;
+    border-color: #cfd6dd;
 }
 
 .rg-pill--closed {
-    background: #f5f6f7;
+    background: #f1f5f9;
     color: #5f6c78;
-    border-color: #c5cdd5;
+    border-color: #c6ccd2;
 }
 
 .rg-pill--suspended {
     background: #fff8e0;
-    color: #8a6200;
+    color: #8c6200;
     border-color: #f0d875;
 }
 
@@ -4638,7 +4638,7 @@ textarea.form-control {
 
 /* Pill size variants */
 .rg-pill--lg {
-    font-size: 0.82rem;
+    font-size: 0.8125rem;
     padding: 0.45rem 0.95rem;
     min-height: 2.2rem;
     letter-spacing: 0.03em;
@@ -4679,7 +4679,7 @@ textarea.form-control {
 
 .internal-portal-body .btn-rg-ghost:hover,
 .internal-portal-body .btn-rg-ghost:focus {
-    background: #f3f5f7;
+    background: #f1f5f9;
     color: #111827;
 }
 
@@ -4733,7 +4733,7 @@ textarea.form-control {
    ────────────────────────────────────────────────────────────── */
 .rg-itbl {
     overflow: hidden;
-    border-radius: 0.5rem;
+    border-radius: 8px;
     border: 1px solid #d7dde3;
     background: #fff;
 }
@@ -4746,14 +4746,14 @@ textarea.form-control {
 /* Tighter padding than public portal table */
 .rg-itbl .table > :not(caption) > * > * {
     padding: 0.8rem 1rem;
-    border-color: #edf0f3;
+    border-color: #e8edf2;
     vertical-align: middle;
 }
 
 .rg-itbl thead th {
-    background: #f8f9fa;
+    background: #f8fafc;
     color: #5f6c78;
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 700;
     border-bottom: 1px solid #d7dde3;
     white-space: nowrap;
@@ -4768,12 +4768,12 @@ textarea.form-control {
 
 /* Zebra striping */
 .rg-itbl--zebra tbody tr:nth-child(even) td {
-    background: #fafbfc;
+    background: #f8fafc;
 }
 
 /* Row hover */
 .rg-itbl tbody tr:hover td {
-    background: #f0f6fb;
+    background: #f1f5f9;
 }
 
 /* Clickable row */
@@ -4791,7 +4791,7 @@ textarea.form-control {
 /* Monospace reference column */
 .rg-itbl .col-ref {
     font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, Menlo, monospace;
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 700;
     color: #5f6c78;
     white-space: nowrap;
@@ -4813,7 +4813,7 @@ textarea.form-control {
 .rg-fsect {
     background: #fff;
     border: 1px solid #d7dde3;
-    border-radius: 0.5rem;
+    border-radius: 8px;
     margin-bottom: 1.25rem;
     overflow: hidden;
 }
@@ -4824,8 +4824,8 @@ textarea.form-control {
 
 .rg-fsect__header {
     padding: 1rem 1.25rem 0.85rem;
-    border-bottom: 1px solid #edf0f3;
-    background: #fafbfc;
+    border-bottom: 1px solid #e8edf2;
+    background: #f8fafc;
 }
 
 .rg-fsect__title {
@@ -4851,8 +4851,8 @@ textarea.form-control {
 
 .rg-fsect__footer {
     padding: 0.875rem 1.25rem;
-    border-top: 1px solid #edf0f3;
-    background: #fafbfc;
+    border-top: 1px solid #e8edf2;
+    background: #f8fafc;
     display: flex;
     gap: 0.5rem;
     align-items: center;
@@ -4869,7 +4869,7 @@ textarea.form-control {
 .rg-field.has-error .form-control,
 .rg-field.has-error .form-select {
     border-color: #dc2626;
-    background: #fff8f8;
+    background: #fffbf5;
 }
 
 .rg-field.has-error .form-control:focus,
@@ -4878,7 +4878,7 @@ textarea.form-control {
 }
 
 .rg-field__error {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     color: #b91c1c;
     font-weight: 500;
     margin-top: 0.3rem;
@@ -4892,8 +4892,8 @@ textarea.form-control {
 .internal-portal-body .form-select {
     min-height: 2.6rem;
     font-size: 0.875rem;
-    border-radius: 0.4rem;
-    border-color: #c8d0d9;
+    border-radius: 6px;
+    border-color: #c3d0dc;
 }
 
 .internal-portal-body .form-control:focus,
@@ -4910,7 +4910,7 @@ textarea.form-control {
 }
 
 .internal-portal-body .form-text {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     color: #5f6c78;
 }
 
@@ -4972,13 +4972,13 @@ textarea.form-control {
 .rg-skeleton {
     background: linear-gradient(
         90deg,
-        #f0f3f5 25%,
-        #e6eaed 50%,
-        #f0f3f5 75%
+        #f1f5f9 25%,
+        #e2e8f0 50%,
+        #f1f5f9 75%
     );
     background-size: 200% 100%;
     animation: rg-shimmer 1.5s infinite linear;
-    border-radius: 0.35rem;
+    border-radius: 6px;
 }
 
 @keyframes rg-shimmer {
@@ -4991,7 +4991,7 @@ textarea.form-control {
     display: grid;
     gap: 0.5rem;
     padding: 1rem 0;
-    border-bottom: 1px solid #edf0f3;
+    border-bottom: 1px solid #e8edf2;
 }
 
 .rg-skeleton-row:last-child {
@@ -5000,7 +5000,7 @@ textarea.form-control {
 
 .rg-skeleton-line {
     height: 0.85rem;
-    border-radius: 0.25rem;
+    border-radius: 4px;
 }
 
 .rg-skeleton-line--sm { height: 0.65rem; }
@@ -5067,9 +5067,9 @@ textarea.form-control {
     align-items: flex-start;
     gap: 0.75rem;
     padding: 0.875rem 1rem;
-    border-radius: 0.5rem;
+    border-radius: 8px;
     border: 1px solid transparent;
-    font-size: 0.85rem;
+    font-size: 0.875rem;
     line-height: 1.55;
     margin-bottom: 1rem;
 }
@@ -5111,7 +5111,7 @@ textarea.form-control {
 
 /* Standard semantic variants */
 .rg-banner--info {
-    background: #eef5ff;
+    background: #eff6ff;
     border-color: #c0d6f8;
     color: #1b4a94;
 }
@@ -5123,13 +5123,13 @@ textarea.form-control {
 }
 
 .rg-banner--success {
-    background: #edf9f1;
+    background: #f0fdf4;
     border-color: #b8e6cc;
     color: #15603a;
 }
 
 .rg-banner--error {
-    background: #fff1f0;
+    background: #fef2f2;
     border-color: #ffc5bc;
     color: #a9342f;
 }
@@ -5138,7 +5138,7 @@ textarea.form-control {
 
 /* Observer / read-only mode — neutral, left-ruled */
 .rg-banner--observer {
-    background: #f5f7f9;
+    background: #f8fafc;
     border-color: #d7dde3;
     border-left: 3px solid #7f8a96;
     color: #374151;
@@ -5147,7 +5147,7 @@ textarea.form-control {
 
 /* Action blocked — amber-left-ruled, soft warm tint */
 .rg-banner--blocked {
-    background: #fff8f0;
+    background: #fffbeb;
     border-color: #f8cba0;
     border-left: 3px solid #c05c00;
     color: #7d3b00;
@@ -5156,8 +5156,8 @@ textarea.form-control {
 
 /* Record locked — gold-left-ruled for finalized/locked state */
 .rg-banner--locked {
-    background: #fdfaf0;
-    border-color: #f0d88a;
+    background: #fffbeb;
+    border-color: #f0d58a;
     border-left: 3px solid #b97700;
     color: #5c4200;
     border-radius: 0 0.5rem 0.5rem 0;
@@ -5175,13 +5175,13 @@ textarea.form-control {
 
 .rg-modal-confirm .modal-content {
     border: 1px solid #d7dde3;
-    border-radius: 0.65rem;
+    border-radius: 12px;
     box-shadow: 0 20px 60px rgba(0, 46, 74, 0.15);
 }
 
 .rg-modal-confirm .modal-header {
     padding: 1.25rem 1.5rem 0.875rem;
-    border-bottom: 1px solid #edf0f3;
+    border-bottom: 1px solid #e8edf2;
     border-radius: 0.65rem 0.65rem 0 0;
 }
 
@@ -5207,7 +5207,7 @@ textarea.form-control {
 
 .rg-modal-confirm .modal-footer {
     padding: 0.75rem 1.5rem 1.25rem;
-    border-top: 1px solid #edf0f3;
+    border-top: 1px solid #e8edf2;
     gap: 0.5rem;
     border-radius: 0 0 0.65rem 0.65rem;
 }
@@ -5215,9 +5215,9 @@ textarea.form-control {
 /* Confirm body — checklist / summary area */
 .rg-modal-confirm__summary {
     padding: 0.875rem 1rem;
-    background: #f8f9fa;
-    border: 1px solid #edf0f3;
-    border-radius: 0.4rem;
+    background: #f8fafc;
+    border: 1px solid #e8edf2;
+    border-radius: 6px;
     margin-top: 0.75rem;
 }
 
@@ -5231,7 +5231,7 @@ textarea.form-control {
 }
 
 .rg-modal-confirm__summary-item + .rg-modal-confirm__summary-item {
-    border-top: 1px solid #edf0f3;
+    border-top: 1px solid #e8edf2;
 }
 
 /* Variant: destructive (close case, delete, deactivate) */
@@ -5297,8 +5297,8 @@ textarea.form-control {
     justify-content: space-between;
     gap: 1rem;
     padding: 1rem 1.25rem;
-    border-bottom: 1px solid #edf0f3;
-    background: #fafbfc;
+    border-bottom: 1px solid #e8edf2;
+    background: #f8fafc;
     flex-shrink: 0;
 }
 
@@ -5311,7 +5311,7 @@ textarea.form-control {
 }
 
 .rg-drawer__meta {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     color: #5f6c78;
     margin: 0.1rem 0 0;
 }
@@ -5324,7 +5324,7 @@ textarea.form-control {
     height: 2rem;
     border: 1px solid transparent;
     background: none;
-    border-radius: 0.35rem;
+    border-radius: 6px;
     color: #7f8a96;
     cursor: pointer;
     flex-shrink: 0;
@@ -5333,7 +5333,7 @@ textarea.form-control {
 }
 
 .rg-drawer__close:hover {
-    background: #f3f5f7;
+    background: #f1f5f9;
     border-color: #d7dde3;
     color: #111827;
 }
@@ -5353,7 +5353,7 @@ textarea.form-control {
 }
 
 .rg-drawer__section-title {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 700;
     color: #9aa4af;
     margin-bottom: 0.65rem;
@@ -5361,12 +5361,12 @@ textarea.form-control {
 
 .rg-drawer__footer {
     padding: 0.875rem 1.25rem;
-    border-top: 1px solid #edf0f3;
+    border-top: 1px solid #e8edf2;
     display: flex;
     gap: 0.5rem;
     justify-content: flex-end;
     flex-shrink: 0;
-    background: #fafbfc;
+    background: #f8fafc;
 }
 
 /* ──────────────────────────────────────────────────────────────
@@ -5381,7 +5381,7 @@ textarea.form-control {
     padding: 0.875rem 1.25rem;
     background: #fff;
     border: 1px solid #d7dde3;
-    border-radius: 0.5rem;
+    border-radius: 8px;
     margin-bottom: 1.25rem;
 }
 
@@ -5392,7 +5392,7 @@ textarea.form-control {
 }
 
 .rg-istat__value {
-    font-size: 1.35rem;
+    font-size: 1.375rem;
     font-weight: 700;
     color: #111827;
     letter-spacing: -0.03em;
@@ -5400,7 +5400,7 @@ textarea.form-control {
 }
 
 .rg-istat__label {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 700;
     color: #7f8a96;
 }
@@ -5408,7 +5408,7 @@ textarea.form-control {
 .rg-istat-row__divider {
     width: 1px;
     height: 2rem;
-    background: #e5e9ed;
+    background: #e2e8f0;
     flex-shrink: 0;
 }
 
@@ -5446,7 +5446,7 @@ textarea.form-control {
 .rg-ifilter-bar .form-select {
     min-height: 2.25rem;
     font-size: 0.8125rem;
-    border-radius: 0.35rem;
+    border-radius: 6px;
     padding-block: 0.35rem;
 }
 
@@ -5473,7 +5473,7 @@ textarea.form-control {
     font-size: 0.875rem;
     color: #111827;
     padding: 0.55rem 0;
-    border-bottom: 1px solid #edf0f3;
+    border-bottom: 1px solid #e8edf2;
     display: flex;
     justify-content: space-between;
     align-items: baseline;
@@ -5481,7 +5481,7 @@ textarea.form-control {
 }
 
 .rg-ifield-display__label {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 600;
     color: #5f6c78;
     flex-shrink: 0;
@@ -5518,12 +5518,12 @@ textarea.form-control {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 700;
     color: #8c6200;
-    background: #fff8e7;
+    background: #fffbeb;
     border: 1px solid #f0d58a;
-    border-radius: 0.3rem;
+    border-radius: 4px;
     padding: 0.15rem 0.45rem;
 }
 
@@ -5583,7 +5583,7 @@ textarea.form-control {
 }
 
 .rg-cws-header__title {
-    font-size: 1.0625rem;
+    font-size: 1rem;
     font-weight: 700;
     color: #111827;
     line-height: 1.3;
@@ -5611,7 +5611,7 @@ textarea.form-control {
     gap: 0.45rem 0.7rem;
     align-items: center;
     color: #5f6c78;
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     flex-shrink: 1;
     min-width: 0;
 }
@@ -5648,7 +5648,7 @@ textarea.form-control {
     top: var(--rg-cws-header-h, 72px);
     z-index: 29;
     background: #fff;
-    border-bottom: 1px solid #edf0f3;
+    border-bottom: 1px solid #e8edf2;
     padding: 0 1.5rem;
     overflow-x: auto;
     scrollbar-width: none;
@@ -5667,7 +5667,7 @@ textarea.form-control {
 }
 
 .rg-cws-pipeline .rg-pipeline__stage.is-complete .rg-pipeline__circle {
-    background: #eef7f1;
+    background: #e9f9f0;
     border-color: #b8d8c4;
     color: var(--rg-primary);
 }
@@ -5694,11 +5694,11 @@ textarea.form-control {
 }
 
 .rg-cws-pipeline .rg-pipeline__label {
-    font-size: 0.66rem;
+    font-size: 0.75rem;
 }
 
 .rg-cws-pipeline .rg-pipeline__connector {
-    background: #e7ecef;
+    background: #e8edf2;
 }
 
 .rg-cws-pipeline .rg-pipeline__connector.is-complete { background: #bdd0c4; }
@@ -5710,7 +5710,7 @@ textarea.form-control {
     background: linear-gradient(90deg, var(--rg-primary-strong) 0%, var(--rg-primary) 100%);
     color: #fff;
     padding: 0.45rem 1.5rem;
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 600;
     display: flex;
     align-items: center;
@@ -5788,7 +5788,7 @@ textarea.form-control {
     gap: 0.75rem;
     padding: 0.1rem 0 0.75rem;
     margin-bottom: 0.875rem;
-    border-bottom: 1px solid #edf0f3;
+    border-bottom: 1px solid #e8edf2;
 }
 
 .rg-cws-stage-titlebar__left {
@@ -5816,10 +5816,10 @@ textarea.form-control {
    ────────────────────────────────────────────────────────────── */
 .rg-cws-locked-frame {
     position: relative;
-    border-radius: 0.5rem;
+    border-radius: 8px;
     overflow: hidden;
     border: 1px solid #e2e8f0;
-    background: #fafbfc;
+    background: #f8fafc;
     margin-bottom: 0.875rem;
 }
 
@@ -5831,7 +5831,7 @@ textarea.form-control {
     padding: 3px 0;
     background: var(--rg-primary);
     color: #fff;
-    font-size: 0.6rem;
+    font-size: 0.75rem;
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -5899,7 +5899,7 @@ textarea.form-control {
     align-items: center;
     gap: 1rem;
     padding: 0.45rem 0;
-    border-bottom: 1px solid #edf0f3;
+    border-bottom: 1px solid #e8edf2;
     font-size: 0.8125rem;
 }
 
@@ -5947,9 +5947,9 @@ textarea.form-control {
     align-items: flex-start;
     gap: 1rem;
     padding: 0.875rem 1.25rem;
-    border-radius: 0.5rem;
+    border-radius: 8px;
     border: 1px solid #d7dde3;
-    background: #fafbfc;
+    background: #f8fafc;
     margin-bottom: 1rem;
     transition: background 0.2s, border-color 0.2s;
 }
@@ -5962,14 +5962,14 @@ textarea.form-control {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #edf0f3;
+    background: #e8edf2;
     color: #9aa4af;
     margin-top: 0.1rem;
     transition: background 0.2s, color 0.2s;
 }
 
 .rg-scr-elig-bar__label {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 700;
     color: #5f6c78;
     margin-bottom: 0.2rem;
@@ -5984,7 +5984,7 @@ textarea.form-control {
 }
 
 .rg-scr-elig-bar__meta {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     color: #5f6c78;
     margin-top: 0.2rem;
 }
@@ -6004,7 +6004,7 @@ textarea.form-control {
 
 /* State: Not Qualified */
 .rg-scr-elig-bar--not-qualified {
-    background: #fff1f2;
+    background: #fef2f2;
     border-color: #fca5a5;
 }
 
@@ -6017,7 +6017,7 @@ textarea.form-control {
 
 /* State: Pending (default) */
 .rg-scr-elig-bar--pending {
-    background: #fafbfc;
+    background: #f8fafc;
     border-color: #d7dde3;
 }
 
@@ -6030,7 +6030,7 @@ textarea.form-control {
     flex-wrap: wrap;
     gap: 0.75rem;
     padding: 0.55rem 0;
-    border-bottom: 1px solid #edf0f3;
+    border-bottom: 1px solid #e8edf2;
     font-size: 0.8125rem;
 }
 
@@ -6056,7 +6056,7 @@ textarea.form-control {
 }
 
 .rg-scr-doc-row__tag {
-    font-size: 0.68rem;
+    font-size: 0.75rem;
     font-weight: 600;
     letter-spacing: 0.02em;
     color: #9aa4af;
@@ -6080,10 +6080,10 @@ textarea.form-control {
 /* Verdict micro-buttons (UI-only, not persisted) */
 .rg-scr-doc-verdict-btn {
     padding: 0.18rem 0.48rem;
-    font-size: 0.69rem;
+    font-size: 0.75rem;
     font-weight: 600;
     border: 1px solid #d7dde3;
-    border-radius: 0.28rem;
+    border-radius: 4px;
     background: #fff;
     color: #5f6c78;
     cursor: pointer;
@@ -6108,7 +6108,7 @@ textarea.form-control {
 }
 
 .rg-scr-doc-verdict-btn.is-absent {
-    background: #fff1f2;
+    background: #fef2f2;
     border-color: #fca5a5;
     color: #b91c1c;
 }
@@ -6126,7 +6126,7 @@ textarea.form-control {
     display: flex;
     align-items: center;
     gap: 0.45rem;
-    font-size: 0.79rem;
+    font-size: 0.8125rem;
     color: #9aa4af;
     transition: color 0.15s;
 }
@@ -6170,15 +6170,15 @@ textarea.form-control {
     letter-spacing: 0.01em;
     padding: 0.45rem 1.1rem;
     font-size: 0.875rem;
-    border-radius: 0.4rem;
+    border-radius: 6px;
     cursor: pointer;
     transition: background 0.15s, border-color 0.15s;
     white-space: nowrap;
 }
 
 .btn-rg-finalize:hover:not(:disabled):not(.is-blocked) {
-    background: #004a72;
-    border-color: #004a72;
+    background: #004d72;
+    border-color: #004d72;
     color: #fff;
 }
 
@@ -6198,7 +6198,7 @@ textarea.form-control {
 .rg-scr-modal-summary {
     background: #f8fafc;
     border: 1px solid #d7dde3;
-    border-radius: 0.4rem;
+    border-radius: 6px;
     padding: 0.75rem 1rem;
     margin-top: 0.75rem;
     font-size: 0.8125rem;
@@ -6210,7 +6210,7 @@ textarea.form-control {
     align-items: baseline;
     gap: 1rem;
     padding: 0.3rem 0;
-    border-bottom: 1px solid #edf0f3;
+    border-bottom: 1px solid #e8edf2;
 }
 
 .rg-scr-modal-summary__row:last-child { border-bottom: 0; }
@@ -6232,13 +6232,13 @@ textarea.form-control {
    ────────────────────────────────────────────────────────────── */
 .rg-scr-locked-field {
     padding: 0.6rem 0;
-    border-bottom: 1px solid #edf0f3;
+    border-bottom: 1px solid #e8edf2;
 }
 
 .rg-scr-locked-field:last-child { border-bottom: 0; }
 
 .rg-scr-locked-field__label {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 700;
     color: #5f6c78;
     margin-bottom: 0.3rem;
@@ -6276,7 +6276,7 @@ textarea.form-control {
     font-size: 0.8125rem;
     font-weight: 600;
     border: 1.5px solid #d7dde3;
-    border-radius: 0.4rem;
+    border-radius: 6px;
     background: #fff;
     color: #5f6c78;
     cursor: pointer;
@@ -6308,7 +6308,7 @@ textarea.form-control {
 
 /* Active — danger (Not Qualified) */
 .rg-scr-choice-btn.is-active-danger {
-    background: #fff1f2;
+    background: #fef2f2;
     border-color: #fca5a5;
     color: #b91c1c;
     box-shadow: 0 0 0 2px rgba(252, 165, 165, 0.3);
@@ -6326,7 +6326,7 @@ textarea.form-control {
 
 /* No status yet */
 .rg-scr-elig-bar--no-status {
-    background: #fafbfc;
+    background: #f8fafc;
     border-color: #d7dde3;
 }
 
@@ -6358,7 +6358,7 @@ textarea.form-control {
 
 /* Absent */
 .rg-scr-elig-bar--absent {
-    background: #fff1f2;
+    background: #fef2f2;
     border-color: #fca5a5;
 }
 
@@ -6394,7 +6394,7 @@ textarea.form-control {
     margin-bottom: 0.875rem;
     padding: 0.65rem 0.8rem;
     border: 1px solid #fca5a5;
-    border-radius: 0.35rem;
+    border-radius: 6px;
     background: #fef2f2;
     color: #991b1b;
     font-size: 0.8125rem;
@@ -6420,13 +6420,13 @@ textarea.form-control {
    ────────────────────────────────────────────────────────────── */
 .rg-exam-locked-field {
     padding: 0.6rem 0;
-    border-bottom: 1px solid #edf0f3;
+    border-bottom: 1px solid #e8edf2;
 }
 
 .rg-exam-locked-field:last-child { border-bottom: 0; }
 
 .rg-exam-locked-field__label {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 700;
     color: #5f6c78;
     margin-bottom: 0.3rem;
@@ -6461,7 +6461,7 @@ textarea.form-control {
 }
 
 .rg-int-context-item__label {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 700;
     color: #5f6c78;
     margin-bottom: 0.2rem;
@@ -6482,14 +6482,14 @@ textarea.form-control {
     align-items: baseline;
     gap: 1rem;
     padding: 0.5rem 0;
-    border-bottom: 1px solid #edf0f3;
+    border-bottom: 1px solid #e8edf2;
     font-size: 0.8125rem;
 }
 
 .rg-int-session-info-row:last-child { border-bottom: 0; }
 
 .rg-int-session-info-row__label {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 700;
     color: #5f6c78;
     min-width: 120px;
@@ -6512,7 +6512,7 @@ textarea.form-control {
     padding: 1rem 1.25rem;
     background: #f8fafc;
     border: 1px solid #d7dde3;
-    border-radius: 0.5rem;
+    border-radius: 8px;
     margin-bottom: 1rem;
 }
 
@@ -6545,7 +6545,7 @@ textarea.form-control {
 }
 
 .rg-int-score-dial-label {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 600;
     color: #9aa4af;
     margin-top: 0.1rem;
@@ -6576,19 +6576,19 @@ textarea.form-control {
     padding: 0.3rem 0.6rem;
     background: #f8fafc;
     border: 1px solid #e2e8f0;
-    border-radius: 0.4rem;
+    border-radius: 6px;
 }
 .rg-car-ete-row__name {
-    font-size: 0.85rem;
-    color: #334155;
+    font-size: 0.875rem;
+    color: #374151;
     min-width: 0;
 }
 .rg-car-ete-input {
     width: 88px;
     text-align: center;
     padding: 0.3rem 0.4rem;
-    border: 1px solid #cbd5e1;
-    border-radius: 0.4rem;
+    border: 1px solid #cfd6dd;
+    border-radius: 6px;
     font-weight: 600;
     flex-shrink: 0;
 }
@@ -6598,7 +6598,7 @@ textarea.form-control {
 .rg-int-competency-group:last-of-type { margin-bottom: 0.25rem; }
 
 .rg-int-competency-group__head {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 700;
     color: #64748b;
     padding-bottom: 0.3rem;
@@ -6615,8 +6615,8 @@ textarea.form-control {
 }
 
 .rg-int-competency-row__label {
-    font-size: 0.83rem;
-    color: #334155;
+    font-size: 0.8125rem;
+    color: #374151;
     margin: 0;
     flex: 1;
     min-width: 0;
@@ -6628,13 +6628,13 @@ textarea.form-control {
     width: 64px;
     text-align: center;
     padding: 0.3rem 0.4rem;
-    border: 1px solid #cbd5e1;
-    border-radius: 0.4rem;
+    border: 1px solid #cfd6dd;
+    border-radius: 6px;
     font-weight: 600;
 }
 
 .rg-int-competency-scale-note {
-    font-size: 0.74rem;
+    font-size: 0.75rem;
     color: #64748b;
     margin: 0.5rem 0 0;
 }
@@ -6649,8 +6649,8 @@ textarea.form-control {
     padding: 0.55rem 0.875rem;
     background: #fffbeb;
     border: 1px solid #fcd34d;
-    border-radius: 0.4rem;
-    font-size: 0.79rem;
+    border-radius: 6px;
+    font-size: 0.8125rem;
     color: #92400e;
     margin-bottom: 0.75rem;
 }
@@ -6667,7 +6667,7 @@ textarea.form-control {
     padding: 1rem 1.25rem;
     background: #f0fdf4;
     border: 1px solid #86efac;
-    border-radius: 0.5rem;
+    border-radius: 8px;
     margin-bottom: 0.875rem;
 }
 
@@ -6686,13 +6686,13 @@ textarea.form-control {
 }
 
 .rg-int-submitted-dial__score {
-    font-size: 1.35rem;
+    font-size: 1.375rem;
     font-weight: 700;
     color: #15803d;
 }
 
 .rg-int-submitted-dial__label {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 600;
     color: #16a34a;
     margin-top: 0.1rem;
@@ -6708,14 +6708,14 @@ textarea.form-control {
 }
 
 .rg-int-submitted-state__meta {
-    font-size: 0.79rem;
+    font-size: 0.8125rem;
     color: #374151;
     margin-bottom: 0.5rem;
     line-height: 1.5;
 }
 
 .rg-int-submitted-state__notice {
-    font-size: 0.77rem;
+    font-size: 0.75rem;
     color: #5f6c78;
     font-style: italic;
 }
@@ -6723,9 +6723,9 @@ textarea.form-control {
 /* Rating locked — no prior submission */
 .rg-int-no-submission {
     padding: 0.875rem 1.25rem;
-    background: #fafbfc;
+    background: #f8fafc;
     border: 1px dashed #c0c8d0;
-    border-radius: 0.5rem;
+    border-radius: 8px;
     font-size: 0.8125rem;
     color: #5f6c78;
 }
@@ -6744,7 +6744,7 @@ textarea.form-control {
     align-items: center;
     gap: 0.75rem;
     padding: 0.5rem 0.875rem;
-    border-radius: 0.375rem;
+    border-radius: 6px;
     font-size: 0.8125rem;
     border: 1px solid #e2e8f0;
     background: #f8fafc;
@@ -6765,10 +6765,10 @@ textarea.form-control {
 .rg-int-progress-item--submitted .rg-int-progress-item__dot { background: #16a34a; }
 
 .rg-int-progress-item__name { flex: 1; font-weight: 500; color: #111827; }
-.rg-int-progress-item__role { font-size: 0.72rem; color: #5f6c78; }
+.rg-int-progress-item__role { font-size: 0.75rem; color: #5f6c78; }
 
 .rg-int-progress-item__tag {
-    font-size: 0.68rem;
+    font-size: 0.75rem;
     font-weight: 600;
     letter-spacing: 0.02em;
     color: #16a34a;
@@ -6786,7 +6786,7 @@ textarea.form-control {
 }
 
 .rg-int-revise-notice {
-    font-size: 0.79rem;
+    font-size: 0.8125rem;
     color: #5f6c78;
     margin-bottom: 0.75rem;
     padding: 0.5rem 0.75rem;
@@ -6800,10 +6800,10 @@ textarea.form-control {
    ────────────────────────────────────────────────────────────── */
 .rg-int-lock-distinction {
     padding: 0.75rem 1rem;
-    background: #f0f9ff;
+    background: #eff6ff;
     border: 1px solid #bae6fd;
-    border-radius: 0.4rem;
-    font-size: 0.79rem;
+    border-radius: 6px;
+    font-size: 0.8125rem;
     color: #0c4a6e;
     margin-bottom: 0.875rem;
     line-height: 1.55;
@@ -6838,11 +6838,11 @@ textarea.form-control {
     padding: 0.75rem 1rem;
     background: #f8fafc;
     border: 1px solid #e2e8f0;
-    border-radius: 0.4rem;
+    border-radius: 6px;
     transition: border-color 0.1s;
 }
 
-.rg-del-rating-row:hover { border-color: #c7d2dc; }
+.rg-del-rating-row:hover { border-color: #c3d0dc; }
 
 .rg-del-score-badge {
     flex-shrink: 0;
@@ -6859,13 +6859,13 @@ textarea.form-control {
 }
 
 .rg-del-score-badge__num {
-    font-size: 1.1rem;
+    font-size: 1.125rem;
     font-weight: 700;
     color: #5f6c78;
 }
 
 .rg-del-score-badge__sub {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 600;
     color: #9aa4af;
     margin-top: 0.05rem;
@@ -6898,24 +6898,24 @@ textarea.form-control {
 }
 
 .rg-del-rating-row__role {
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     color: #5f6c78;
 }
 
 .rg-del-rating-row__notes {
-    font-size: 0.79rem;
+    font-size: 0.8125rem;
     color: #374151;
     margin-top: 0.3rem;
     line-height: 1.5;
 }
 
 .rg-del-rating-row__justification {
-    font-size: 0.77rem;
+    font-size: 0.75rem;
     color: #92400e;
     margin-top: 0.2rem;
     padding: 0.3rem 0.6rem;
     background: #fffbeb;
-    border-radius: 0.25rem;
+    border-radius: 4px;
     border-left: 3px solid #fcd34d;
 }
 
@@ -6928,17 +6928,17 @@ textarea.form-control {
     margin-top: 0.75rem;
     padding: 0.6rem 1rem;
     background: var(--rg-primary);
-    border-radius: 0.4rem;
+    border-radius: 6px;
 }
 
 .rg-del-avg-strip__label {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 600;
     color: rgba(255,255,255,0.7);
 }
 
 .rg-del-avg-strip__value {
-    font-size: 1.2rem;
+    font-size: 1.25rem;
     font-weight: 700;
     color: #fff;
 }
@@ -6951,7 +6951,7 @@ textarea.form-control {
     padding: 1rem 1.25rem;
     background: #f8fafc;
     border: 1px solid #d7dde3;
-    border-radius: 0.5rem;
+    border-radius: 8px;
     border-left: 4px solid var(--rg-primary);
 }
 
@@ -6984,13 +6984,13 @@ textarea.form-control {
     gap: 1rem;
     padding: 0.875rem 1rem;
     border: 1px solid #e2e8f0;
-    border-radius: 0.5rem;
+    border-radius: 8px;
     background: #fff;
 }
 
-li:first-child > .rg-del-car-item:first-child,
+li:first-child > .rg-del-car-item:first-child:not(.rg-fs-candidate),
 .rg-del-car-list > .rg-del-car-item:first-child { border-color: #86efac; background: #f0fdf4; }
-li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
+li:first-child > .rg-del-car-item:first-child:not(.rg-fs-candidate) .rg-del-rank-badge,
 .rg-del-car-list > .rg-del-car-item:first-child .rg-del-rank-badge { background: #dcfce7; border-color: #86efac; color: #15803d; }
 
 .rg-del-rank-badge {
@@ -7022,17 +7022,17 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
     display: flex;
     flex-wrap: wrap;
     gap: 0.4rem 1rem;
-    font-size: 0.79rem;
+    font-size: 0.8125rem;
     color: #5f6c78;
     margin-bottom: 0.3rem;
 }
 
 .rg-del-car-item__score-cell { display: flex; gap: 0.35rem; align-items: baseline; }
-.rg-del-car-item__score-label { color: #9aa4af; font-size: 0.78rem; font-weight: 600;}
+.rg-del-car-item__score-label { color: #9aa4af; font-size: 0.75rem; font-weight: 600;}
 .rg-del-car-item__score-val { font-weight: 600; color: #374151; }
 
 .rg-del-car-item__decision {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     color: #5f6c78;
     margin-top: 0.2rem;
     font-style: italic;
@@ -7064,7 +7064,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
    ────────────────────────────────────────────────────────────── */
 .rg-pkt-section {
     border: 1px solid #d7dde3;
-    border-radius: 0.5rem;
+    border-radius: 8px;
     overflow: hidden;
 }
 
@@ -7078,7 +7078,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
 }
 
 .rg-pkt-section__icon {
-    font-size: 0.9rem;
+    font-size: 0.875rem;
     color: var(--rg-primary);
     flex-shrink: 0;
 }
@@ -7092,7 +7092,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
 }
 
 .rg-pkt-section__badge {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 600;
     padding: 0.15rem 0.5rem;
     border-radius: 2rem;
@@ -7113,7 +7113,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
 .rg-pkt-section__badge--none {
     background: #f1f5f9;
     color: #64748b;
-    border: 1px solid #cbd5e1;
+    border: 1px solid #cfd6dd;
 }
 
 .rg-pkt-section__body {
@@ -7132,7 +7132,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
 .rg-pkt-row {
     display: flex;
     gap: 0.75rem;
-    font-size: 0.8rem;
+    font-size: 0.8125rem;
     line-height: 1.5;
 }
 
@@ -7141,7 +7141,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
     width: 160px;
     color: #64748b;
     font-weight: 600;
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     padding-top: 0.05rem;
 }
 
@@ -7177,7 +7177,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
 .rg-pkt-outcome-pill--pending {
     background: #f1f5f9;
     color: #475569;
-    border: 1px solid #cbd5e1;
+    border: 1px solid #cfd6dd;
 }
 
 /* ──────────────────────────────────────────────────────────────
@@ -7196,17 +7196,17 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
     padding: 0.55rem 0.75rem;
     background: #f8fafc;
     border: 1px solid #e2e8f0;
-    border-radius: 0.35rem;
+    border-radius: 6px;
 }
 
 .rg-pkt-session-item__label {
     flex: 1;
-    font-size: 0.79rem;
+    font-size: 0.8125rem;
     color: #374151;
 }
 
 .rg-pkt-session-item__avg {
-    font-size: 0.79rem;
+    font-size: 0.8125rem;
     font-weight: 700;
     color: var(--rg-primary);
 }
@@ -7224,16 +7224,16 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
     display: flex;
     align-items: baseline;
     gap: 0.5rem;
-    font-size: 0.79rem;
+    font-size: 0.8125rem;
     color: #374151;
     padding: 0.3rem 0.5rem;
-    border-radius: 0.25rem;
+    border-radius: 4px;
 }
 
 .rg-pkt-evidence-item:nth-child(odd) { background: #f8fafc; }
 
 .rg-pkt-evidence-item__icon {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     color: var(--rg-primary);
     flex-shrink: 0;
 }
@@ -7247,7 +7247,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
     padding: 0.75rem 1rem;
     background: #fef9c3;
     border: 1px solid #fde047;
-    border-radius: 0.4rem;
+    border-radius: 6px;
     font-size: 0.8125rem;
     color: #854d0e;
     line-height: 1.55;
@@ -7275,7 +7275,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
     padding: 0.875rem 1rem;
     background: #f8fafc;
     border: 1px solid #d7dde3;
-    border-radius: 0.5rem;
+    border-radius: 8px;
     border-left: 4px solid var(--rg-primary);
 }
 
@@ -7301,7 +7301,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
     gap: 0.6rem;
     padding: 0.75rem 1rem;
     border: 2px solid #d7dde3;
-    border-radius: 0.5rem;
+    border-radius: 8px;
     background: #fff;
     cursor: pointer;
     transition: border-color 0.15s, background 0.15s;
@@ -7326,7 +7326,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
 }
 
 .rg-dec-choice-btn__icon {
-    font-size: 1.1rem;
+    font-size: 1.125rem;
     flex-shrink: 0;
 }
 
@@ -7341,7 +7341,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
 
 .rg-dec-choice-btn__sub {
     display: block;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     font-weight: 400;
     color: #64748b;
     margin-top: 0.1rem;
@@ -7383,7 +7383,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
     align-items: center;
     gap: 0.6rem;
     padding: 0.6rem 1rem;
-    border-radius: 0.4rem;
+    border-radius: 6px;
     font-size: 0.8125rem;
     font-weight: 600;
 }
@@ -7405,7 +7405,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
    ────────────────────────────────────────────────────────────── */
 .rg-dec-locked-frame {
     border: 1px solid #d7dde3;
-    border-radius: 0.5rem;
+    border-radius: 8px;
     overflow: hidden;
 }
 
@@ -7439,9 +7439,9 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
     display: flex;
     gap: 0.75rem;
     padding: 0.75rem 1rem;
-    background: #f0f9ff;
+    background: #eff6ff;
     border: 1px solid #bae6fd;
-    border-radius: 0.4rem;
+    border-radius: 6px;
     border-left: 4px solid #0284c7;
     font-size: 0.8125rem;
     color: #0c4a6e;
@@ -7470,7 +7470,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
     align-items: flex-start;
     gap: 1rem;
     padding: 1rem 1.25rem;
-    border-radius: 0.5rem;
+    border-radius: 8px;
     border: 1.5px solid;
 }
 
@@ -7509,7 +7509,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
 }
 
 .rg-cmp-closed-banner__meta {
-    font-size: 0.79rem;
+    font-size: 0.8125rem;
     opacity: 0.85;
     margin: 0;
     line-height: 1.5;
@@ -7519,7 +7519,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 600;
     opacity: 0.7;
     margin-top: 0.35rem;
@@ -7540,7 +7540,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
     gap: 0.75rem;
     padding: 0.55rem 0.75rem;
     border: 1px solid #e2e8f0;
-    border-radius: 0.35rem;
+    border-radius: 6px;
     background: #f8fafc;
     font-size: 0.8125rem;
     line-height: 1.5;
@@ -7566,7 +7566,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
     gap: 0.25rem;
     padding: 0.15rem 0.55rem;
     border-radius: 2rem;
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 600;
     white-space: nowrap;
 }
@@ -7586,7 +7586,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
 .rg-cmp-req-status-badge--na {
     background: #f1f5f9;
     color: #475569;
-    border: 1px solid #cbd5e1;
+    border: 1px solid #cfd6dd;
 }
 
 /* ──────────────────────────────────────────────────────────────
@@ -7595,7 +7595,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
 .rg-cmp-req-form-row {
     padding: 0.875rem 1rem;
     border: 2px solid #e2e8f0;
-    border-radius: 0.4rem;
+    border-radius: 6px;
     background: #fff;
     transition: border-color 0.15s, background 0.15s;
 }
@@ -7609,7 +7609,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
 
 .rg-cmp-req-form-row[data-req-status="pending"] {
     border-color: #fde047;
-    background: #fefce8;
+    background: #fffbeb;
 }
 
 .rg-cmp-req-form-row[data-req-status="not_applicable"] {
@@ -7633,7 +7633,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
 }
 
 .rg-cmp-req-form-row__seq {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 700;
     color: #94a3b8;
 }
@@ -7657,8 +7657,8 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
     padding: 0.5rem 0.75rem;
     background: #f8fafc;
     border: 1px solid #e2e8f0;
-    border-radius: 0.35rem;
-    font-size: 0.79rem;
+    border-radius: 6px;
+    font-size: 0.8125rem;
     color: #374151;
     margin-bottom: 0.75rem;
 }
@@ -7674,7 +7674,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
     flex: 1;
     height: 6px;
     background: #e2e8f0;
-    border-radius: 3px;
+    border-radius: 4px;
     overflow: hidden;
     min-width: 40px;
 }
@@ -7682,7 +7682,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
 .rg-cmp-req-progress__fill {
     height: 100%;
     background: #22c55e;
-    border-radius: 3px;
+    border-radius: 4px;
 }
 
 /* ──────────────────────────────────────────────────────────────
@@ -7692,10 +7692,10 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
     display: flex;
     gap: 0.75rem;
     padding: 0.75rem 1rem;
-    background: #f0f9ff;
+    background: #eff6ff;
     border: 1px solid #bae6fd;
     border-left: 4px solid #0284c7;
-    border-radius: 0.4rem;
+    border-radius: 6px;
     font-size: 0.8125rem;
     color: #0c4a6e;
     line-height: 1.6;
@@ -7718,7 +7718,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
     background: #f8fafc;
     border: 1px solid #d7dde3;
     border-left: 4px solid var(--rg-primary);
-    border-radius: 0.5rem;
+    border-radius: 8px;
 }
 
 .rg-cmp-archive-meta__item {
@@ -7728,7 +7728,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
 }
 
 .rg-cmp-archive-meta__label {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 700;
     color: #94a3b8;
 }
@@ -7818,14 +7818,14 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
 }
 
 .rg-cmp-timeline-item__action {
-    font-size: 0.79rem;
+    font-size: 0.8125rem;
     font-weight: 600;
     color: #1e293b;
     line-height: 1.4;
 }
 
 .rg-cmp-timeline-item__meta {
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     color: #6b7280;
     line-height: 1.4;
     margin-top: 0.05rem;
@@ -7836,7 +7836,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
    ────────────────────────────────────────────────────────────── */
 .rg-cmp-reopen-zone {
     border: 2px dashed #fca5a5;
-    border-radius: 0.5rem;
+    border-radius: 8px;
     padding: 1rem 1.25rem;
     background: #fff;
 }
@@ -7850,7 +7850,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
 
 .rg-cmp-reopen-zone__icon {
     color: #dc2626;
-    font-size: 0.9rem;
+    font-size: 0.875rem;
     flex-shrink: 0;
 }
 
@@ -7862,7 +7862,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
 }
 
 .rg-cmp-reopen-zone__body {
-    font-size: 0.79rem;
+    font-size: 0.8125rem;
     color: #374151;
     line-height: 1.65;
     margin-bottom: 0.75rem;
@@ -7883,21 +7883,21 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
     gap: 1rem;
     padding: 0.85rem 1rem;
     margin-bottom: 0.9rem;
-    border: 1px solid #dfe5eb;
-    border-radius: 0.45rem;
+    border: 1px solid #dbe3ea;
+    border-radius: 8px;
     background: #fff;
 }
 
 .rg-scr-kicker {
     margin-bottom: 0.2rem;
     color: #64748b;
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 700;
 }
 
 .rg-scr-decision-strip__title {
-    color: #0f172a;
-    font-size: 0.98rem;
+    color: #111827;
+    font-size: 1rem;
     font-weight: 700;
     line-height: 1.25;
 }
@@ -7918,7 +7918,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
     border-radius: 999px;
     color: #64748b;
     background: #f8fafc;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     font-weight: 700;
     white-space: nowrap;
 }
@@ -7938,8 +7938,8 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
 .rg-scr-panel {
     padding: 1rem;
     margin-bottom: 0.9rem;
-    border: 1px solid #dfe5eb;
-    border-radius: 0.45rem;
+    border: 1px solid #dbe3ea;
+    border-radius: 8px;
     background: #fff;
 }
 
@@ -7953,8 +7953,8 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
 
 .rg-scr-panel__title {
     margin: 0;
-    color: #0f172a;
-    font-size: 0.98rem;
+    color: #111827;
+    font-size: 1rem;
     font-weight: 700;
     line-height: 1.3;
 }
@@ -7962,7 +7962,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
 .rg-scr-panel__subtitle {
     margin: 0.2rem 0 0;
     color: #64748b;
-    font-size: 0.82rem;
+    font-size: 0.8125rem;
     line-height: 1.45;
 }
 
@@ -7975,7 +7975,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
     border-radius: 999px;
     color: #475569;
     background: #f8fafc;
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 700;
     white-space: nowrap;
 }
@@ -7983,7 +7983,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
 .rg-scr-doc-table-wrap {
     overflow-x: auto;
     border: 1px solid #e2e8f0;
-    border-radius: 0.4rem;
+    border-radius: 6px;
 }
 
 .rg-scr-doc-table {
@@ -7996,7 +7996,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
 .rg-scr-doc-table th,
 .rg-scr-doc-table td {
     padding: 0.72rem 0.85rem;
-    border-bottom: 1px solid #edf2f7;
+    border-bottom: 1px solid #f1f5f9;
     vertical-align: middle;
     font-size: 0.8125rem;
 }
@@ -8004,7 +8004,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
 .rg-scr-doc-table th {
     color: #64748b;
     background: #f8fafc;
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 800;
 }
 
@@ -8012,12 +8012,12 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
 
 .rg-scr-doc-table tr.is-muted td {
     color: #94a3b8;
-    background: #fbfdff;
+    background: #ffffff;
 }
 
 .rg-scr-doc-title {
     max-width: 34rem;
-    color: #0f172a;
+    color: #111827;
     font-weight: 650;
     line-height: 1.35;
 }
@@ -8025,14 +8025,14 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
 .rg-scr-doc-meta {
     margin-top: 0.2rem;
     color: #64748b;
-    font-size: 0.76rem;
+    font-size: 0.75rem;
     line-height: 1.35;
 }
 
 .rg-scr-file-name {
     max-width: 22rem;
     overflow: hidden;
-    color: #334155;
+    color: #374151;
     font-weight: 600;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -8051,21 +8051,21 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
     justify-content: center;
     min-height: 2rem;
     padding: 0.25rem 0.65rem;
-    border-radius: 0.35rem;
-    font-size: 0.78rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
     font-weight: 700;
     text-decoration: none;
 }
 
 .rg-scr-primary-link {
-    border: 1px solid #cbd5e1;
-    color: #0f172a;
+    border: 1px solid #cfd6dd;
+    color: #111827;
     background: #fff;
 }
 
 .rg-scr-primary-link:hover {
     border-color: #94a3b8;
-    color: #0f172a;
+    color: #111827;
     background: #f8fafc;
 }
 
@@ -8074,7 +8074,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
     color: #64748b;
 }
 
-.rg-scr-secondary-link:hover { color: #0f172a; }
+.rg-scr-secondary-link:hover { color: #111827; }
 
 .rg-scr-status-select {
     min-width: 9.5rem;
@@ -8082,7 +8082,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
     min-height: 2rem;
     padding-top: 0.25rem;
     padding-bottom: 0.25rem;
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 650;
 }
 
@@ -8095,7 +8095,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
     border-radius: 999px;
     color: #64748b;
     background: #f8fafc;
-    font-size: 0.74rem;
+    font-size: 0.75rem;
     font-weight: 700;
     white-space: nowrap;
 }
@@ -8103,7 +8103,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
 .rg-scr-status-pill.is-absent {
     border-color: #fecaca;
     color: #991b1b;
-    background: #fff1f2;
+    background: #fef2f2;
 }
 
 .rg-scr-status-pill.is-not-applicable {
@@ -8121,7 +8121,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
 .rg-scr-status-pill[data-fixed-status="not_submitted"] {
     border-color: #fecaca;
     color: #991b1b;
-    background: #fff1f2;
+    background: #fef2f2;
 }
 
 .rg-scr-choice-btn.is-disabled,
@@ -8136,7 +8136,7 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
 .rg-scr-optional-label {
     margin-left: 0.25rem;
     color: #94a3b8;
-    font-size: 0.76rem;
+    font-size: 0.75rem;
     font-weight: 500;
 }
 
@@ -8150,14 +8150,14 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
     padding: 0.8rem 0.9rem;
     margin-bottom: 0.9rem;
     border: 1px solid #e2e8f0;
-    border-radius: 0.4rem;
+    border-radius: 6px;
     background: #f8fafc;
 }
 
 .rg-scr-reference-note {
     margin-bottom: 0.65rem;
-    color: #334155;
-    font-size: 0.82rem;
+    color: #374151;
+    font-size: 0.8125rem;
     line-height: 1.45;
 }
 
@@ -8175,14 +8175,14 @@ li:first-child > .rg-del-car-item:first-child .rg-del-rank-badge,
     display: block;
     margin-bottom: 0.12rem;
     color: #64748b;
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     font-weight: 800;
 }
 
 .rg-scr-reference-grid strong {
     display: block;
-    color: #0f172a;
-    font-size: 0.8rem;
+    color: #111827;
+    font-size: 0.8125rem;
     font-weight: 650;
     line-height: 1.35;
 }

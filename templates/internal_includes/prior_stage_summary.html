@@ -45,7 +45,7 @@ independent re-validation step is unchanged.
             <ul class="list-unstyled mb-0">
                 {% for review in prior_screening_record.document_reviews.all %}
                 <li class="d-flex justify-content-between align-items-center py-1"
-                    style="border-bottom:1px solid #eef1f4;"
+                    style="border-bottom:1px solid rgba(100, 116, 139, 0.18);"
                     data-prior-doc-key="{{ review.document_key }}" data-prior-doc-status="{{ review.status }}">
                     <span style="font-size:0.8125rem;">{{ review.requirement_title }}</span>
                     <span class="rg-pill rg-pill--sm rg-pill--{% if review.status == 'complied' %}success{% elif review.status == 'return_for_resubmission' %}warning{% elif review.status == 'not_submitted' %}danger{% else %}neutral{% endif %}">
@@ -64,7 +64,7 @@ independent re-validation step is unchanged.
     {% endif %}
 
     {% if prior_exam_record %}
-        <div class="d-flex flex-wrap gap-4 pt-2" style="border-top:1px solid #eef1f4;">
+        <div class="d-flex flex-wrap gap-4 pt-2" style="border-top:1px solid rgba(100, 116, 139, 0.18);">
             <div>
                 <div class="rg-imeta">Exam status</div>
                 <span class="rg-pill rg-pill--{{ prior_exam_record.exam_status|status_theme }} rg-pill--sm">
