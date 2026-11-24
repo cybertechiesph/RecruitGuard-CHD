@@ -1,10 +1,14 @@
 """Seed the exhibit demo: an office in the middle of hiring, with work waiting for every role.
 
-Everything is synthetic. Applicant addresses use plus-addressing on one inbox the team owns, so
-no notification can ever reach a stranger, and item numbers are marked as samples.
+Everything is synthetic. Applicant addresses are ``first.last@example.com`` (a domain reserved
+for examples, so no notification can ever reach a stranger), and item numbers are marked as
+samples. For a live demonstration that should show real emails arriving, pass ``--inbox NAME``:
+every applicant then gets a plus-address on that one Gmail inbox (``NAME+flast@gmail.com``).
 
 The story is built by driving the real services with the clock moved back, so screening, exam
 and interview dates, case history and audit entries all carry believable dates instead of today.
+The dates are chosen so most cases are still inside the seven-day step limit: one screening case
+is left overdue and two are close to it, so the time flags can be shown without every row being red.
 
 Destructive like ``seed_demo_data``: it deletes all applications and vacancies, and refuses to
 run when DEBUG is False unless ``--force`` is passed. Never point it at real applicant data.
@@ -33,7 +37,6 @@ from recruitment.services import (
     set_application_ete_rating,
 )
 
-INBOX = "cybertechiesph"
 PLANTILLA = PositionPosting.Branch.PLANTILLA
 COS = PositionPosting.Branch.COS
 UNIT = "Management Support Division"
@@ -48,22 +51,23 @@ STAFF_NAMES = {
 PANEL_NAMES = [("Gloria", "Evangelista"), ("Noel", "Dimaano"), ("Cecilia", "Mercado")]
 
 # (title, branch, level, sample item number, first day the vacancy was open, in days ago)
+# PEOPLE lists each applicant with how many days ago they applied.
 OPEN_PLANTILLA = ("Administrative Assistant II", PLANTILLA, 1, "SAMPLE-AA2-001", 6)
-OPEN_COS = ("Administrative Assistant I", COS, 1, "", 12)
-AT_SCREENING = ("Administrative Aide VI", PLANTILLA, 1, "SAMPLE-ADA6-002", 24)
-AT_EXAM = ("Administrative Assistant III", PLANTILLA, 1, "SAMPLE-AA3-001", 30)
-AT_INTERVIEW = ("Administrative Aide IV", PLANTILLA, 1, "SAMPLE-ADA4-003", 42)
-AT_CHIEF = ("Nurse III", PLANTILLA, 2, "SAMPLE-N3-004", 26)
+OPEN_COS = ("Administrative Assistant I", COS, 1, "", 7)
+AT_SCREENING = ("Administrative Aide VI", PLANTILLA, 1, "SAMPLE-ADA6-002", 12)
+AT_EXAM = ("Administrative Assistant III", PLANTILLA, 1, "SAMPLE-AA3-001", 16)
+AT_INTERVIEW = ("Administrative Aide IV", PLANTILLA, 1, "SAMPLE-ADA4-003", 26)
+AT_CHIEF = ("Nurse III", PLANTILLA, 2, "SAMPLE-N3-004", 10)
 AT_DECISION = ("Laboratory Aide II", PLANTILLA, 1, "SAMPLE-LA2-001", 48)
 
 PEOPLE = {
-    OPEN_PLANTILLA: [("Kristine Joy", "Alcantara"), ("Mark Anthony", "Villareal")],
-    OPEN_COS: [("Jessa Mae", "Pangilinan"), ("Ronald", "Magsino")],
-    AT_SCREENING: [("Angelica", "Dimaunahan"), ("John Paul", "Hernandez"), ("Rhea", "Sarmiento")],
-    AT_EXAM: [("Michelle", "Javier"), ("Dennis", "Ilagan")],
-    AT_INTERVIEW: [("Maricel", "Aguilar"), ("Jerome", "Malabanan"), ("Cherry Ann", "Lontok")],
-    AT_CHIEF: [("Patricia Anne", "Laurel"), ("Emmanuel", "Cabrera"), ("Sheila Marie", "Katigbak")],
-    AT_DECISION: [("Roselle", "Macaraig"), ("Arnel", "Tolentino"), ("Lovely", "Barrion")],
+    OPEN_PLANTILLA: [("Kristine Joy", "Alcantara", 3), ("Mark Anthony", "Villareal", 1)],
+    OPEN_COS: [("Jessa Mae", "Pangilinan", 4), ("Ronald", "Magsino", 2)],
+    AT_SCREENING: [("Angelica", "Dimaunahan", 8), ("John Paul", "Hernandez", 5), ("Rhea", "Sarmiento", 4)],
+    AT_EXAM: [("Michelle", "Javier", 6), ("Dennis", "Ilagan", 5)],
+    AT_INTERVIEW: [("Maricel", "Aguilar", 22), ("Jerome", "Malabanan", 20), ("Cherry Ann", "Lontok", 18)],
+    AT_CHIEF: [("Patricia Anne", "Laurel", 5), ("Emmanuel", "Cabrera", 4), ("Sheila Marie", "Katigbak", 3)],
+    AT_DECISION: [("Roselle", "Macaraig", 46), ("Arnel", "Tolentino", 44), ("Lovely", "Barrion", 42)],
 }
 PROFILES = {
     "Administrative Assistant II": ("a bachelor's degree in office administration", "CSC Professional",
@@ -103,6 +107,22 @@ def clock_at(when):
 
 class Command(seed_demo_data.Command):
     help = "Wipe applications and vacancies and load the exhibit demo: work waiting for every role."
+    inbox = ""
+
+    def add_arguments(self, parser):
+        super().add_arguments(parser)
+        parser.add_argument(
+            "--inbox",
+            default="",
+            help=(
+                "Gmail inbox name the team owns. Sample applicants then get NAME+flast@gmail.com "
+                "so a live demo shows real emails arriving. Default: first.last@example.com."
+            ),
+        )
+
+    def handle(self, *args, **options):
+        self.inbox = (options.get("inbox") or "").strip()
+        return super().handle(*args, **options)
 
     # -- the story --------------------------------------------------------------
     def _run(self):
@@ -158,12 +178,12 @@ class Command(seed_demo_data.Command):
     def _at_exam(self):
         """Screened, with the exam coming up on a working day."""
         entry, applications = self._vacancy_with_applicants(AT_EXAM)
-        self._close(entry, days_ago=10)
-        with clock_at(manila(-7, 10)):
+        self._close(entry, days_ago=4)
+        with clock_at(manila(-3, 10)):
             for application in applications:
                 self._finalize_screening(application, self.office)
         exam_day = next_working_day(3)
-        with clock_at(manila(-2, 14)):
+        with clock_at(manila(-1, 14)):
             for application in applications:
                 application.refresh_from_db()
                 save_exam_schedule(
@@ -180,9 +200,9 @@ class Command(seed_demo_data.Command):
     def _at_interview(self):
         """The interview was held yesterday; the rest of the panel has rated, one member has not."""
         entry, applications = self._vacancy_with_applicants(AT_INTERVIEW)
-        self._screen_and_examine(entry, applications, close=-24, screened=-20, examined=-13)
+        self._screen_and_examine(entry, applications, close=-16, screened=-12, examined=-4)
         held_at = manila(-1, 9)
-        with clock_at(manila(-6, 11)):
+        with clock_at(manila(-3, 11)):
             template = self._ensure_published_rating_sheet(applications[0], self.office)
             for application in applications:
                 application.refresh_from_db()
@@ -217,8 +237,8 @@ class Command(seed_demo_data.Command):
     def _at_chief(self):
         """A Level 2 vacancy: the HRM Chief has screened one and has two left."""
         entry, applications = self._vacancy_with_applicants(AT_CHIEF)
-        self._close(entry, days_ago=6)
-        with clock_at(manila(-2, 10)):
+        self._close(entry, days_ago=3)
+        with clock_at(manila(-1, 10)):
             self._finalize_screening(applications[0], self.chief, score="93.00")
         return applications
 
@@ -271,14 +291,19 @@ class Command(seed_demo_data.Command):
             if branch == PLANTILLA:
                 entry.panel_end_users.set([self.end_user])
         applications = []
-        for offset, (first_name, last_name) in enumerate(PEOPLE[vacancy]):
+        for offset, (first_name, last_name, applied_on) in enumerate(PEOPLE[vacancy]):
             self.applicant_index += 1
-            applied_on = max(opened_days_ago - 2 - offset * 2, 0)
+            applied_on = min(applied_on, opened_days_ago)
             with clock_at(manila(-applied_on, 10 + offset, 15 * offset)):
-                email = f"{INBOX}+{first_name[0]}{last_name}@gmail.com".lower().replace(" ", "")
+                email = self._applicant_email(first_name, last_name)
                 applicant = self._create_applicant(self.applicant_index, first_name, last_name, email)
                 applications.append(self._create_application(entry, applicant, first_name, last_name))
         return entry, applications
+
+    def _applicant_email(self, first_name, last_name):
+        if self.inbox:
+            return f"{self.inbox}+{first_name[0]}{last_name}@gmail.com".lower().replace(" ", "")
+        return f"{first_name.split()[0]}.{last_name}@example.com".lower().replace(" ", "")
 
     def _close(self, entry, days_ago):
         with clock_at(manila(-days_ago, 17)):

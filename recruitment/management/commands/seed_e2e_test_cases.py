@@ -88,7 +88,7 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             "--base-email",
-            default="j3r1c02@gmail.com",
+            default="applicant@example.com",
             help="Base email used for deterministic synthetic applicant aliases.",
         )
 
@@ -335,7 +335,7 @@ class Command(BaseCommand):
             position=entry,
             applicant_first_name=first_name,
             applicant_last_name=last_name,
-            applicant_email=applicant.email or self._email_alias("j3r1c02@gmail.com", applicant.pk),
+            applicant_email=applicant.email or self._email_alias("applicant@example.com", applicant.pk),
             applicant_phone=f"0917{application_safe_number(applicant.pk)}",
             performance_rating_applicability=performance_rating_applicability,
             checklist_privacy_consent=True,

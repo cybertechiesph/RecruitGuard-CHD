@@ -173,11 +173,29 @@ class SeedExhibitDemoTests(BaseRecruitmentTestCase):
         open_vacancies = PositionPosting.objects.exclude(status=PositionPosting.EntryStatus.CLOSED)
         self.assertEqual(open_vacancies.count(), 2)
         for application in RecruitmentApplication.objects.all():
-            self.assertTrue(application.applicant_email.startswith("cybertechiesph+"))
+            self.assertTrue(application.applicant_email.endswith("@example.com"))
         stages = set(RecruitmentCase.objects.values_list("current_stage", flat=True))
         self.assertIn(RecruitmentCase.Stage.APPOINTING_AUTHORITY_REVIEW, stages)
         for user in (self.secretariat, self.hrm_chief, self.hrmpsb, self.appointing):
             self.assertTrue(get_queue_for_user(user).exists(), user.role)
+
+    def test_most_cases_are_inside_the_step_time_limit(self):
+        from recruitment.models import RecruitmentCase
+
+        self.seed()
+
+        states = [case.stage_sla_state for case in RecruitmentCase.objects.all()]
+        self.assertEqual(states.count("overdue"), 1, states)
+        self.assertGreaterEqual(states.count("ok"), 12, states)
+
+    def test_an_inbox_name_gives_every_applicant_a_plus_address_on_it(self):
+        from recruitment.models import RecruitmentApplication
+
+        call_command("seed_exhibit_demo", force=True, inbox="teaminbox", stdout=io.StringIO())
+
+        for application in RecruitmentApplication.objects.all():
+            self.assertTrue(application.applicant_email.startswith("teaminbox+"))
+            self.assertTrue(application.applicant_email.endswith("@gmail.com"))
 
     def test_the_signed_in_panel_member_still_has_a_rating_to_give(self):
         from recruitment.models import RecruitmentApplication
