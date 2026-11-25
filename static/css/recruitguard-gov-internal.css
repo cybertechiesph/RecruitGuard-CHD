@@ -225,8 +225,7 @@ html:not([data-theme="dark"]) .rg-wait--paused .rg-wait__note { color: #5f6c78; 
 
 /* case numbers are ordinary text, not typewriter type */
 html .internal-portal-body .rg-itbl .col-ref .fw-bold,
-html .internal-portal-body .rg-cws-header__ref,
-html .internal-portal-body .rg-ref {
+html .internal-portal-body .rg-cws-header__ref{
     font-family: var(--rg-font-sans) !important;
     font-size: 0.875rem !important;
     letter-spacing: 0 !important;
@@ -253,9 +252,6 @@ html .internal-portal-body .rg-queue-chip.is-active {
 html[data-theme="dark"] .internal-portal-body .rg-queue-chip.is-active { border-bottom-color: #6fbf73; color: #a9dd76; }
 
 /* notes and notices: a thin outline, not a thick coloured bar down the left */
-html .internal-portal-body .rg-banner--blocked,
-html .internal-portal-body .rg-banner--locked,
-html .internal-portal-body .rg-banner--observer,
 html .internal-portal-body .rg-branch-note,
 html .internal-portal-body .rg-cmp-archive-meta,
 html .internal-portal-body .rg-cmp-blockers,
@@ -265,21 +261,15 @@ html .internal-portal-body .rg-dec-handoff,
 html .internal-portal-body .rg-dec-permanence-warning,
 html .internal-portal-body .rg-del-car__msg,
 html .internal-portal-body .rg-del-car__summary-notes,
-html .internal-portal-body .rg-del-locked-summary,
 html .internal-portal-body .rg-del-rating-row__justification,
 html .internal-portal-body .rg-del-recorder__msg,
 html .internal-portal-body .rg-exam-validation-alert,
 html .internal-portal-body .rg-fs-actions__msg,
 html .internal-portal-body .rg-fs-deep-lock,
-html .internal-portal-body .rg-icard--accent,
-html .internal-portal-body .rg-icard--alert,
-html .internal-portal-body .rg-icard--hero,
 html .internal-portal-body .rg-int-actionbar__msg,
 html .internal-portal-body .rg-int-readout-notes,
-html .internal-portal-body .rg-int-revise-notice,
 html .internal-portal-body .rg-pipeline-summary,
 html .internal-portal-body .rg-pkt-overview,
-html .internal-portal-body .rg-pkt-section__notes,
 html .internal-portal-body .rg-scr-actionbar__msg,
 html .internal-portal-body .rg-scr-doccheck[data-complete="false"],
 html .internal-portal-body .rg-scr-doccheck[data-complete="true"],
@@ -303,12 +293,9 @@ html .internal-portal-body .rg-context-bar .rg-context-bar__role .rg-pill { colo
 html .internal-portal-body .rg-cmp-req-status-badge,
 html .internal-portal-body .rg-dec-outcome-pill,
 html .internal-portal-body .rg-int-monitor-item__tag,
-html .internal-portal-body .rg-pkt-outcome-pill,
 html .internal-portal-body .rg-pkt-section__badge,
 html .internal-portal-body .rg-sched-event__kind,
-html .internal-portal-body .rg-scr-panel__tag,
 html .internal-portal-body .rg-scr-status-pill,
-html .internal-portal-body .rg-scr-step-state__item,
 html .internal-portal-body .rg-wf-action-btn__badge {
     padding: 0;
     border: 0 !important;
@@ -349,3 +336,23 @@ html[data-theme="dark"] .internal-portal-body .rg-sla-badge {
 html[data-theme="dark"] .internal-portal-body .rg-context-bar .rg-context-bar__role .rg-pill {
     border-color: rgba(255, 255, 255, 0.45) !important;
 }
+
+/* ── Vacancies list: room for the vacancy column, counts on one line ── */
+html .internal-portal-body .rg-entries-table th:first-child { width: 30%; }
+html .internal-portal-body .rg-entries-table [data-portal-funnel] { display: block; line-height: 1.5; }
+html .internal-portal-body .rg-entries-table [data-portal-funnel] .rg-imeta__sep { display: inline-block; vertical-align: middle; margin: 0 0.3rem; }
+html .internal-portal-body .rg-entries-table td { vertical-align: top; }
+html .internal-portal-body .rg-entries-table .rg-itbl-actions { flex-wrap: wrap; justify-content: flex-end; gap: 0.35rem; }
+
+/* ── Panel scores on the assessment page: a plain number, not a disc ── */
+html .internal-portal-body .rg-del-score-badge {
+    width: auto;
+    height: auto;
+    min-width: 3.25rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    align-items: flex-start;
+}
+html .internal-portal-body .rg-entries-table td .rg-imeta span { white-space: nowrap; }
