@@ -582,3 +582,20 @@
     }
     .applicant-portal-body .rg-ta-wrap .rg-ta-help__grid { grid-template-columns: 1fr; }
 }
+
+/* ── Found in the wider check ────────────────────────────────── */
+/* Boxes that centred themselves (the email-code box, the receipt) now sit on the
+   same left edge as everything else on the page. */
+.applicant-portal-body main > .rg-pub-wrap > * { margin-left: 0; margin-right: auto; }
+/* A question asked as a group of choices reads like the other field labels,
+   not like a large light heading. */
+.applicant-portal-body fieldset > legend {
+    float: none;
+    width: auto;
+    margin: 0 0 0.35rem;
+    font-family: var(--rg-font-sans);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    line-height: 1.4;
+    color: var(--rg-gov-ink);
+}

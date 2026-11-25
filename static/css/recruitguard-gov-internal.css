@@ -358,3 +358,18 @@ html .internal-portal-body .rg-del-score-badge {
     align-items: flex-start;
 }
 html .internal-portal-body .rg-entries-table td .rg-imeta span { white-space: nowrap; }
+
+/* ── Found in the wider check ────────────────────────────────── */
+/* Notification drop-down: an unread item is a bold title and a dot, as on the
+   Notifications page; no filled row. */
+html .internal-portal-body .rg-notif__item--unread .rg-notif__item-action { background: none; }
+html .internal-portal-body .rg-notif__item--unread .rg-notif__item-action:hover { background: rgba(100, 116, 139, 0.10); }
+html .internal-portal-body .rg-notif__item--unread .rg-notif__item-title { font-weight: 700; }
+/* Display menu: square choices, like every other control */
+html .internal-portal-body .rg-display-menu__seg,
+html .internal-portal-body .rg-display-menu__opt,
+html .internal-portal-body .rg-display-menu .rg-textsize,
+html .internal-portal-body .rg-display-menu .rg-textsize__btn { border-radius: 3px; }
+
+/* Batch interview: the absence note box was too narrow to show its own hint. */
+html .internal-portal-body td.col-actions input[type="text"].form-control-sm { min-width: 13rem; }
