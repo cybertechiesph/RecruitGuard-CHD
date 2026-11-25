@@ -338,11 +338,13 @@ html[data-theme="dark"] .internal-portal-body .rg-context-bar .rg-context-bar__r
 }
 
 /* ── Vacancies list: room for the vacancy column, counts on one line ── */
-html .internal-portal-body .rg-entries-table th:first-child { width: 30%; }
+html .internal-portal-body .rg-entries-table th:first-child { width: 26%; }
 html .internal-portal-body .rg-entries-table [data-portal-funnel] { display: block; line-height: 1.5; }
 html .internal-portal-body .rg-entries-table [data-portal-funnel] .rg-imeta__sep { display: inline-block; vertical-align: middle; margin: 0 0.3rem; }
 html .internal-portal-body .rg-entries-table td { vertical-align: top; }
-html .internal-portal-body .rg-entries-table .rg-itbl-actions { flex-wrap: wrap; justify-content: flex-end; gap: 0.35rem; }
+html .internal-portal-body .rg-entries-table .rg-itbl-actions { flex-wrap: nowrap; justify-content: flex-end; gap: 0.35rem; }
+html .internal-portal-body .rg-entries-table .col-actions { width: 1%; white-space: nowrap; }
+html .internal-portal-body .rg-entries-table .btn-sm { padding-inline: 0.6rem; }
 
 /* ── Panel scores on the assessment page: a plain number, not a disc ── */
 html .internal-portal-body .rg-del-score-badge {
