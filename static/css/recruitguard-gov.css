@@ -340,24 +340,12 @@
 .applicant-portal-body .rg-help-pad,
 .applicant-portal-body .rg-help-pad__channel,
 .applicant-portal-body .rg-hub-item,
-.applicant-portal-body .rg-intake-confirm,
-.applicant-portal-body .rg-intake-review__card,
-.applicant-portal-body .rg-intake-step,
-.applicant-portal-body .rg-intake-steprail,
 .applicant-portal-body .rg-pds-guide__way,
-.applicant-portal-body .rg-pub-action-card,
-.applicant-portal-body .rg-pub-checklist-box,
-.applicant-portal-body .rg-pub-confirm-box,
-.applicant-portal-body .rg-pub-contact-box,
-.applicant-portal-body .rg-pub-english-only,
 .applicant-portal-body .rg-pub-help-box,
 .applicant-portal-body .rg-pub-info-box,
 .applicant-portal-body .rg-pub-otp-card,
 .applicant-portal-body .rg-pub-position-header,
 .applicant-portal-body .rg-pub-receipt-card,
-.applicant-portal-body .rg-pub-review-card,
-.applicant-portal-body .rg-pub-tips-box,
-.applicant-portal-body .rg-pub-upload-slot,
 .applicant-portal-body .rg-qs-check,
 .applicant-portal-body .rg-ta-action-card,
 .applicant-portal-body .rg-ta-expectation,
@@ -510,8 +498,7 @@
 .applicant-portal-body .rg-pub-chip,
 .applicant-portal-body .rg-pub-badge,
 .applicant-portal-body .rg-doc-card__status,
-.applicant-portal-body .rg-ta-checklist__tag,
-.applicant-portal-body .rg-intake-journey__phase {
+.applicant-portal-body .rg-ta-checklist__tag{
     padding: 0;
     border: 0;
     border-radius: 0;
@@ -520,9 +507,7 @@
 }
 .applicant-portal-body .rg-req-downloads__format::before { content: "("; }
 .applicant-portal-body .rg-req-downloads__format::after { content: ")"; }
-.applicant-portal-body .rg-doc-part__btn,
-.applicant-portal-body .rg-intake-review__view,
-.applicant-portal-body .rg-pub-upload-slot__view { border-radius: 3px; }
+.applicant-portal-body .rg-doc-part__btn{ border-radius: 3px; }
 .applicant-portal-body .rg-journey__step.is-done .rg-journey__num,
 .applicant-portal-body .rg-journey__step.is-current .rg-journey__num {
     background: none;
@@ -563,8 +548,7 @@
 .applicant-portal-body .rg-pub-receipt-id { text-align: left; }
 .applicant-portal-body .rg-pub-receipt-links { justify-content: flex-start; }
 .applicant-portal-body .rg-ta-back,
-.applicant-portal-body .rg-ta-lookup-again-link,
-.applicant-portal-body .rg-hub-back { text-align: left; }
+.applicant-portal-body .rg-ta-lookup-again-link{ text-align: left; }
 
 @media (min-width: 992px) {
     /* status page: main column + a side column for help */

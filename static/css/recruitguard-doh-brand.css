@@ -310,8 +310,7 @@ body.applicant-portal-body {
 }
 
 /* --- Dashboard "Awaiting Your Action" card gets a gold top rule --- */
-.internal-portal-body [class*="rg-dashboard"] [class*="queue"],
-.internal-portal-body .rg-awaiting-card {
+.internal-portal-body [class*="rg-dashboard"] [class*="queue"]{
     border-top: 3px solid var(--rg-brand-gold);
 }
 
@@ -322,13 +321,7 @@ body.applicant-portal-body {
 }
 
 /* --- Decision / submission packet: institutional ribbon --- */
-.rg-packet-header,
-.rg-completion-letterhead {
-    border-top: 4px solid var(--rg-brand-green);
-    border-bottom: 2px solid var(--rg-brand-gold);
-    padding: 1rem 1.25rem;
-    background: #fff;
-}
+
 
 /* --- Small screens: tighten login padding --- */
 @media (max-width: 560px) {
@@ -355,188 +348,13 @@ body.applicant-portal-body {
    ========================================================================== */
 
 /* --- Public topbar: white surface, green underline, seal + wordmark --- */
-.applicant-portal-body .rg-topbar.rg-public-topbar {
-    background: #fff;
-    border-bottom: 3px solid var(--rg-brand-green);
-    box-shadow: 0 1px 0 rgba(14, 47, 20, 0.04), 0 2px 6px rgba(14, 47, 20, 0.04);
-}
-.rg-public-topbar__inner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1.5rem;
-    padding-top: 0.85rem;
-    padding-bottom: 0.85rem;
-}
-.rg-public-brand {
-    display: flex;
-    align-items: center;
-    gap: 1.1rem;
-    text-decoration: none;
-    color: inherit;
-}
-.applicant-portal-body .rg-public-brand {
-    gap: 1.1rem;
-}
-.rg-public-brand::before {
-    content: "";
-    display: block;
-    width: 48px;
-    height: 48px;
-    flex-shrink: 0;
-    background-image: url("/static/img/brand/chd-calabarzon-seal.png?v=20260420-green");
-    background-repeat: no-repeat;
-    background-position: center;
-    background-size: contain;
-}
-.rg-public-brand .rg-brand-copy {
-    display: flex;
-    flex-direction: column;
-    line-height: 1.15;
-}
-.rg-public-brand .rg-brand-kicker {
-    font-size: 0.75rem;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--rg-brand-green);
-}
-.rg-public-brand .rg-brand-agency {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: #2a3642;
-    letter-spacing: 0.01em;
-}
-.rg-public-brand .rg-brand-title {
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--rg-brand-green-ink);
-    letter-spacing: -0.005em;
-}
 
-.rg-public-nav {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-}
-.rg-public-nav .rg-nav-link {
-    display: inline-block;
-    padding: 0.5rem 0.85rem;
-    border-radius: 6px;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: #374151;
-    text-decoration: none;
-    border: 1px solid transparent;
-    transition: background 120ms ease, color 120ms ease;
-}
-.rg-public-nav .rg-nav-link:hover {
-    background: var(--rg-brand-green-soft);
-    color: var(--rg-brand-green);
-}
-.rg-public-nav .rg-nav-link--primary {
-    background: var(--rg-brand-green-soft);
-    color: var(--rg-brand-green);
-    border-color: #cfe0c0;
-}
-
-@media (max-width: 720px) {
-    .rg-public-topbar__inner {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.6rem;
-    }
-    .rg-public-brand::before { width: 40px; height: 40px; }
-    .rg-public-brand .rg-brand-title { font-size: 0.9375rem; }
-}
 
 /* --- Photographic hero (landing page) --- */
-.rg-pub-hero--photo {
-    position: relative;
-    padding: 3.25rem 1rem 2.5rem;
-    text-align: center;
-    color: #fff;
-    background-image:
-        linear-gradient(rgba(14, 47, 20, 0.78), rgba(20, 66, 25, 0.88)),
-        url("/static/img/brand/login-background.jpg?v=20260420-green");
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-    border-bottom: 4px solid var(--rg-brand-gold);
-}
-.rg-pub-hero--photo .rg-pub-wrap {
-    position: relative;
-    z-index: 1;
-}
-.rg-pub-hero--photo .rg-pub-hero__eyebrow {
-    display: inline-block;
-    font-size: 0.75rem;
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--rg-brand-gold);
-    margin-bottom: 0.65rem;
-}
-.rg-pub-hero--photo .rg-pub-hero__title {
-    color: #fff !important;
-    font-size: clamp(1.55rem, 3.2vw, 2.2rem);
-    line-height: 1.2;
-    font-weight: 700;
-    margin-bottom: 0.85rem;
-    text-shadow: 0 2px 14px rgba(0, 0, 0, 0.35);
-}
-.rg-pub-hero--photo .rg-pub-hero__copy {
-    color: rgba(255, 255, 255, 0.92) !important;
-    max-width: 640px;
-    margin: 0 auto 1.5rem;
-    font-size: 1rem;
-    line-height: 1.6;
-}
+
 
 /* --- Hero CTA pair: primary solid green + secondary outlined --- */
-.rg-pub-hero-ctas {
-    display: inline-flex;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-    justify-content: center;
-    margin-top: 0.25rem;
-}
-.rg-pub-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.7rem 1.4rem;
-    border-radius: 6px;
-    font-size: 0.9375rem;
-    font-weight: 700;
-    letter-spacing: 0.01em;
-    text-decoration: none;
-    border: 2px solid transparent;
-    transition: background 140ms ease, color 140ms ease, transform 80ms ease;
-}
-.rg-pub-btn:active { transform: translateY(1px); }
-.rg-pub-btn--primary {
-    background: var(--rg-brand-green);
-    color: #fff;
-    border-color: var(--rg-brand-green-strong);
-    box-shadow: inset 0 -2px 0 var(--rg-brand-gold);
-}
-.rg-pub-btn--primary:hover,
-.rg-pub-btn--primary:focus {
-    background: var(--rg-brand-green-strong);
-    color: #fff;
-}
-.rg-pub-btn--ghost {
-    background: transparent;
-    color: #fff;
-    border-color: rgba(255, 255, 255, 0.75);
-}
-.rg-pub-btn--ghost:hover,
-.rg-pub-btn--ghost:focus {
-    background: rgba(255, 255, 255, 0.12);
-    color: #fff;
-    border-color: #fff;
-}
+
 
 /* --- Trust strip: official-portal chips below hero --- */
 .rg-pub-trust-strip {
@@ -544,133 +362,13 @@ body.applicant-portal-body {
     border-bottom: 1px solid #e2e8f0;
     padding: 0.85rem 1rem;
 }
-.rg-pub-trust-strip__inner {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 1.5rem 2rem;
-    font-size: 0.75rem;
-    color: #4b5563;
-}
-.rg-pub-trust-strip__item {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.45rem;
-    font-weight: 600;
-    letter-spacing: 0.01em;
-}
-.rg-pub-trust-strip__item svg {
-    width: 14px;
-    height: 14px;
-    color: var(--rg-brand-green);
-    flex-shrink: 0;
-}
 
-.rg-pub-home-footer-notes {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 0.6rem 1.25rem;
-    margin: 2rem 0 0;
-    padding: 1rem 0 0;
-    border-top: 1px solid #d7dde3;
-    color: #5f6c78;
-    font-size: 0.75rem;
-    font-weight: 600;
-}
-.rg-pub-home-footer-notes__item {
-    display: inline-flex;
-    align-items: center;
-}
-.rg-pub-home-footer-notes__item + .rg-pub-home-footer-notes__item::before {
-    content: "";
-    width: 4px;
-    height: 4px;
-    margin-right: 1.25rem;
-    border-radius: 999px;
-    background: #cfd6dd;
-}
-.rg-pub-home-footer-notes a {
-    color: var(--rg-brand-green);
-    text-decoration: none;
-}
-.rg-pub-home-footer-notes a:hover { text-decoration: underline; }
 
 /* --- Action-card icon: SVG sized, green ink --- */
-.rg-pub-action-card__icon {
-    width: 44px;
-    height: 44px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--rg-brand-green-soft);
-    color: var(--rg-brand-green);
-    border-radius: 50%;
-    margin-bottom: 0.85rem;
-    font-size: 0 !important;
-    line-height: 0 !important;
-}
-.rg-pub-action-card__icon svg {
-    width: 22px;
-    height: 22px;
-}
-.rg-pub-action-card {
-    border-top: 3px solid transparent;
-    transition: border-color 140ms ease, transform 120ms ease, box-shadow 140ms ease;
-}
-.rg-pub-action-card:hover {
-    border-top-color: var(--rg-brand-gold);
-}
-.rg-pub-action-card__cta {
-    color: var(--rg-brand-green) !important;
-}
+
 
 /* --- Intake-form letterhead: slim official header above form --- */
-.rg-pub-letterhead {
-    background: #fff;
-    border-top: 4px solid var(--rg-brand-green);
-    border-bottom: 2px solid var(--rg-brand-gold);
-    padding: 1rem 1.25rem;
-    margin-bottom: 1.5rem;
-    display: flex;
-    align-items: center;
-    gap: 0.95rem;
-    box-shadow: 0 1px 3px rgba(14, 47, 20, 0.06);
-}
-.rg-pub-letterhead::before {
-    content: "";
-    display: block;
-    width: 52px;
-    height: 52px;
-    flex-shrink: 0;
-    background-image: url("/static/img/brand/chd-calabarzon-seal.png?v=20260420-green");
-    background-repeat: no-repeat;
-    background-position: center;
-    background-size: contain;
-}
-.rg-pub-letterhead__copy {
-    display: flex;
-    flex-direction: column;
-    line-height: 1.2;
-    min-width: 0;
-}
-.rg-pub-letterhead__kicker {
-    font-size: 0.75rem;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--rg-brand-green);
-}
-.rg-pub-letterhead__agency {
-    font-size: 0.875rem;
-    font-weight: 700;
-    color: var(--rg-brand-green-ink);
-}
-.rg-pub-letterhead__subtitle {
-    font-size: 0.75rem;
-    color: #4b5563;
-    margin-top: 0.15rem;
-}
+
 
 /* ==========================================================================
    SCREENING WORKSPACE — 3-step wizard
@@ -1321,42 +1019,7 @@ body.applicant-portal-body {
 }
 
 /* Score-grid disclosure */
-.rg-scr-disclosure {
-    border: 1px solid #e2e8f0;
-    border-radius: 6px;
-    background: #f8fafc;
-}
-.rg-scr-disclosure__summary {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    padding: 0.55rem 0.85rem;
-    cursor: pointer;
-    list-style: none;
-    user-select: none;
-}
-.rg-scr-disclosure__summary::-webkit-details-marker { display: none; }
-.rg-scr-disclosure__title {
-    font-size: 0.875rem;
-    font-weight: 700;
-    color: var(--rg-brand-green-ink);
-}
-.rg-scr-disclosure__hint {
-    flex: 1;
-    font-size: 0.75rem;
-    color: #5f6c78;
-}
-.rg-scr-disclosure__chevron {
-    color: #5f6c78;
-    transition: transform 180ms ease;
-    flex-shrink: 0;
-}
-.rg-scr-disclosure[open] .rg-scr-disclosure__chevron {
-    transform: rotate(180deg);
-}
-.rg-scr-disclosure[open] > .rg-field {
-    padding: 0 0.85rem 0.85rem;
-}
+
 
 /* ==========================================================================
    FINAL SELECTION — lean polish helpers
@@ -1551,34 +1214,8 @@ body.applicant-portal-body {
    The packet's core rg-pkt-* classes live in recruitguard.css; these
    are small additions used in the decision_body rewrite.
    ========================================================================== */
-.rg-pkt-row__meta {
-    color: #6b7280;
-    font-size: 0.75rem;
-    margin-left: 0.4rem;
-}
-.rg-pkt-row__meta--small { font-size: 0.75rem; }
-.rg-pkt-row--multiline { align-items: flex-start; }
-.rg-pkt-row--multiline .rg-pkt-row__label { padding-top: 0.1rem; }
-.rg-pkt-row__value--prose { white-space: pre-line; }
 
-.rg-pkt-section__empty {
-    color: #9aa4af;
-    font-size: 0.8125rem;
-    margin: 0;
-}
-.rg-pkt-section__notes {
-    margin: 0.6rem 0 0;
-    padding: 0.55rem 0.75rem;
-    background: #f8fafc;
-    border-left: 3px solid #cfd6dd;
-    border-radius: 4px;
-    font-size: 0.8125rem;
-    color: #374151;
-    line-height: 1.55;
-    white-space: pre-line;
-}
 
-.rg-decision-card { margin-bottom: 1rem; }
 .rg-dec-confirm-list {
     margin: 0 0 0.85rem;
     padding-left: 1.2rem;
@@ -1990,69 +1627,16 @@ body.applicant-portal-body {
    aesthetic (white cards, green accents, generous spacing).
    ========================================================================== */
 
-.rg-public-topbar__applying {
-    font-size: 0.875rem;
-    color: #5f6c78;
-    text-align: right;
-}
-.rg-public-topbar__applying strong { color: var(--rg-brand-green-ink); }
 
 /* --- Journey indicator (Apply / Verify email / Submitted) --- */
-.rg-intake-journey {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem 0.8rem;
-    align-items: center;
-    margin: 1.25rem 0 0.75rem;
-    font-size: 0.75rem;
-    color: #6b7280;
-}
-.rg-intake-journey__phase {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.2rem 0.55rem;
-    border-radius: 999px;
-    background: #f1f5f9;
-    color: #475569;
-    font-weight: 600;
-    letter-spacing: 0.01em;
-}
-.rg-intake-journey__phase.is-current {
-    background: var(--rg-brand-green-soft);
-    color: var(--rg-brand-green);
-}
-.rg-intake-journey__num {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.1rem;
-    height: 1.1rem;
-    border-radius: 50%;
-    background: #e2e8f0;
-    color: #5f6c78;
-    font-size: 0.75rem;
-    font-weight: 800;
-}
-.rg-intake-journey__phase.is-current .rg-intake-journey__num {
-    background: var(--rg-brand-green);
-    color: #fff;
-}
-.rg-intake-journey__phase.is-done {
-    background: var(--rg-brand-success-soft);
-    color: var(--rg-brand-success-ink);
-}
-.rg-intake-journey__phase.is-done .rg-intake-journey__num {
-    background: var(--rg-brand-success);
-    color: #fff;
-}
+
 
 /* --- OTP page polish ----- */
 .rg-pub-otp-card { background:#fff; border:1px solid #e2e8f0; border-radius: 8px; padding:1.5rem; box-shadow:0 1px 2px rgba(14,47,20,0.04); margin-bottom:1.25rem; }
 .rg-pub-otp-card__title { font-size: 1.25rem; font-weight:700; color:var(--rg-brand-green-ink); margin:0 0 0.4rem; text-align:center; }
 .rg-pub-otp-card__intro { font-size: 0.9375rem; color:#5f6c78; text-align:center; margin-bottom:1rem; }
-.rg-pub-otp-card--verified { text-align:center; }
-.rg-pub-otp-card__checkmark { width:48px; height:48px; margin:0 auto 0.75rem; border-radius:50%; background:var(--rg-brand-success-soft); color:var(--rg-brand-success-ink); display:flex; align-items:center; justify-content:center; }
+
+
 .rg-pub-otp-label { display:block; font-size: 0.875rem; font-weight:600; color:#374151; text-align:center; margin-bottom:0.4rem; }
 .rg-pub-otp-help { font-size: 0.8125rem; color:#9aa4af; text-align:center; margin:0.75rem 0 1.25rem; }
 .rg-pub-otp-resend { margin-top:1.25rem; padding-top:1.25rem; border-top:1px solid #e8edf2; font-size: 0.875rem; color:#4b5563; }
@@ -2067,106 +1651,13 @@ body.applicant-portal-body {
 .rg-pub-message-stack { margin-bottom:1rem; }
 
 /* --- Page heading --- */
-.rg-intake-header {
-    margin-bottom: 1.25rem;
-}
-.rg-intake-header__title {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--rg-brand-green-ink);
-    margin: 0 0 0.35rem;
-    line-height: 1.25;
-}
-.rg-intake-header__copy {
-    font-size: 0.9375rem;
-    color: #4b5563;
-    line-height: 1.55;
-    margin: 0;
-    max-width: 64ch;
-}
+
 
 /* --- Step rail --- */
-.rg-intake-steprail {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    flex-wrap: wrap;
-    margin: 1.25rem 0;
-    padding: 0.6rem 0.85rem;
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-}
-.rg-intake-steprail__item {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    background: transparent;
-    border: none;
-    padding: 0.35rem 0.55rem;
-    border-radius: 6px;
-    cursor: pointer;
-    color: #8a94a0;
-    font-size: 0.875rem;
-    font-weight: 600;
-}
-.rg-intake-steprail__item:hover { background: #f1f5f9; }
-.rg-intake-steprail__num {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.65rem;
-    height: 1.65rem;
-    border-radius: 50%;
-    background: #e2e8f0;
-    color: #6b7280;
-    font-size: 0.8125rem;
-    font-weight: 800;
-    flex-shrink: 0;
-}
-.rg-intake-steprail__item.is-current {
-    color: var(--rg-brand-green-ink);
-}
-.rg-intake-steprail__item.is-current .rg-intake-steprail__num {
-    background: var(--rg-brand-green);
-    color: #fff;
-}
-.rg-intake-steprail__item.is-done { color: var(--rg-brand-green); }
-.rg-intake-steprail__item.is-done .rg-intake-steprail__num {
-    background: var(--rg-brand-green-soft);
-    color: var(--rg-brand-green);
-}
-.rg-intake-steprail__line {
-    flex: 1;
-    min-width: 1rem;
-    height: 2px;
-    background: #e2e8f0;
-    border-radius: 4px;
-}
-@media (max-width: 560px) {
-    .rg-intake-steprail__label { display: none; }
-}
+
 
 /* --- Step card --- */
-.rg-intake-step {
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 1.5rem;
-    box-shadow: 0 1px 2px rgba(14, 47, 20, 0.04);
-}
-.rg-intake-step__heading {
-    font-size: 1.125rem;
-    font-weight: 700;
-    color: var(--rg-brand-green-ink);
-    margin: 0 0 0.35rem;
-}
-.rg-intake-step__subtitle {
-    font-size: 0.875rem;
-    color: #4b5563;
-    margin: 0 0 1.25rem;
-    line-height: 1.55;
-}
+
 
 /* --- 2-column grid for short fields --- */
 .rg-intake-grid {
@@ -2188,29 +1679,7 @@ body.applicant-portal-body {
 }
 
 /* --- Fieldset + radios --- */
-.rg-intake-fieldset legend {
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: #374151;
-    margin-bottom: 0.35rem;
-}
-.rg-intake-radio-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-    margin-top: 0.45rem;
-}
 
-.rg-intake-applicability {
-    margin-bottom: 0.85rem;
-    padding-bottom: 0.85rem;
-    border-bottom: 1px dashed #e2e8f0;
-}
-.rg-intake-applicability legend {
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: #374151;
-}
 
 /* --- Saved-file callout --- */
 .rg-intake-saved-file {
@@ -2228,165 +1697,13 @@ body.applicant-portal-body {
 .rg-intake-saved-file svg { flex-shrink: 0; color: var(--rg-brand-success-ink); }
 
 /* --- Review step (summary cards) --- */
-.rg-intake-review {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    margin-bottom: 1.25rem;
-}
-.rg-intake-review__card {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 1rem 1.1rem;
-}
-.rg-intake-review__heading {
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: #5f6c78;
-    margin: 0 0 0.65rem;
-}
-.rg-intake-review__list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-    margin: 0;
-}
-.rg-intake-review__row {
-    display: grid;
-    grid-template-columns: 12rem 1fr;
-    gap: 0.5rem 0.9rem;
-    align-items: start;
-    font-size: 0.875rem;
-    color: #1b2733;
-    padding: 0.25rem 0;
-    border-bottom: 1px solid #eef1f4;
-}
-.rg-intake-review__row:last-child { border-bottom: 0; }
-.rg-intake-review__row dt {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: #5f6c78;
-    margin: 0;
-}
-.rg-intake-review__row dd {
-    margin: 0;
-    word-break: break-word;
-    white-space: pre-wrap;
-}
-.rg-intake-review__empty {
-    color: #9aa4af;
-    font-style: italic;
-}
-@media (max-width: 560px) {
-    .rg-intake-review__row { grid-template-columns: 1fr; }
-}
 
-.rg-intake-review__docs {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-}
-.rg-intake-review__docs li {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.6rem;
-    padding: 0.45rem 0.6rem;
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 6px;
-    font-size: 0.875rem;
-    color: #1b2733;
-}
-.rg-intake-review__doclabel { min-width: 0; word-break: break-word; }
-.rg-intake-review__status {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: #5f6c78;
-    flex-shrink: 0;
-}
-.rg-intake-review__status.is-ok {
-    color: var(--rg-brand-success-ink);
-    word-break: break-all;
-    text-align: right;
-}
-.rg-intake-review__status.is-missing {
-    color: var(--rg-brand-danger);
-}
 
 /* --- Confirm checkbox block --- */
-.rg-intake-confirm {
-    background: #fffbeb;
-    border: 1px solid #ffdf88;
-    border-radius: 8px;
-    padding: 1rem 1.1rem;
-}
-.rg-intake-confirm__heading {
-    font-size: 0.9375rem;
-    font-weight: 700;
-    color: #8a6407;
-    margin: 0 0 0.6rem;
-}
-.rg-intake-confirm__list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.55rem;
-}
-.rg-intake-confirm .form-check-input.is-invalid {
-    border-color: var(--rg-brand-danger);
-}
-.rg-intake-confirm .form-check-input.is-invalid:focus {
-    box-shadow: 0 0 0 0.2rem rgba(185, 28, 28, 0.16);
-}
-.rg-intake-confirm .form-check-input.is-invalid + .form-check-label {
-    color: var(--rg-brand-danger);
-    font-weight: 600;
-}
+
 
 /* --- Sticky action bar --- */
-.rg-intake-actionbar {
-    position: sticky;
-    bottom: 0;
-    z-index: 30;
-    margin-top: 1.25rem;
-    background: #fff;
-    border-top: 1px solid #e2e8f0;
-    box-shadow: 0 -4px 14px rgba(14, 47, 20, 0.06);
-}
-.rg-intake-actionbar__inner {
-    max-width: 880px;
-    margin: 0 auto;
-    padding: 0.75rem 1rem;
-}
-.rg-intake-actionbar__btns {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-}
-.rg-intake-actionbar__spacer { flex: 1; }
-.rg-intake-actionbar__msg {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    background: #fdeceb;
-    border: 1px solid #f3c4c1;
-    border-left: 3px solid var(--rg-brand-danger);
-    color: #8f231d;
-    border-radius: 6px;
-    padding: 0.5rem 0.7rem;
-    font-size: 0.875rem;
-    font-weight: 600;
-    margin-bottom: 0.55rem;
-}
-.rg-intake-cancel {
-    color: #6b7280 !important;
-    border-color: #d7dde3 !important;
-}
+
 
 /* ==========================================================================
    AUTOSAVE INDICATOR — small text rendered in the sticky action bar.
@@ -2565,55 +1882,7 @@ body.applicant-portal-body {
 .rg-int-encoding-banner svg { flex-shrink: 0; margin-top: 1px; color: #8a6407; }
 
 /* --- Rating score + dial --- */
-.rg-int-score {
-    display: flex;
-    align-items: center;
-    gap: 1.25rem;
-    margin: 0.6rem 0;
-}
-.rg-int-score__field { flex: 1; min-width: 0; }
-.rg-int-score__range {
-    font-size: 0.75rem;
-    color: #9aa4af;
-    font-weight: 400;
-    margin-left: 0.4rem;
-}
-.rg-int-score__dial {
-    flex-shrink: 0;
-    width: 84px;
-    height: 84px;
-    border-radius: 50%;
-    border: 2px solid #e2e8f0;
-    background: #f8fafc;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    transition: border-color 140ms ease, background 140ms ease;
-}
-.rg-int-score__dial.is-passing {
-    border-color: var(--rg-brand-green);
-    background: var(--rg-brand-green-soft);
-}
-.rg-int-score__dial.is-marginal {
-    border-color: var(--rg-brand-gold);
-    background: var(--rg-brand-gold-soft);
-}
-.rg-int-score__val {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #9aa4af;
-    line-height: 1;
-}
-.rg-int-score__val.is-passing { color: var(--rg-brand-green); }
-.rg-int-score__val.is-marginal { color: #8a6407; }
-.rg-int-score__label {
-    font-size: 0.75rem;
-    color: #9aa4af;
-    margin-top: 0.2rem;
-}
-.rg-int-score__label.is-passing { color: var(--rg-brand-green); }
-.rg-int-score__label.is-marginal { color: #8a6407; }
+
 
 /* --- Threshold notice --- */
 .rg-int-threshold {
@@ -2960,12 +2229,7 @@ body.applicant-portal-body {
 .rg-queue-count strong {
     color: var(--rg-brand-green-ink);
 }
-.rg-queue-noresults {
-    padding: 1.5rem;
-    text-align: center;
-    font-size: 0.875rem;
-    color: #8a94a0;
-}
+
 
 /* ==========================================================================
    CASE WORKSPACE — collapsible pipeline summary
@@ -3079,42 +2343,7 @@ html[data-theme="dark"] .rg-pipeline__stage.is-ended .rg-pipeline__label {
     background: #fff;
     border-top: 1px solid #d7dde3;
 }
-.rg-public-footer__stripe {
-    display: flex;
-    height: 4px;
-    width: 100%;
-}
-.rg-public-footer__stripe span {
-    flex: 1;
-    display: block;
-}
-.rg-public-footer__stripe span:nth-child(1) { background: var(--rg-brand-gold); }
-.rg-public-footer__stripe span:nth-child(2) { background: var(--rg-brand-success); }
-.rg-public-footer__stripe span:nth-child(3) { background: var(--rg-brand-health-blue); }
-.rg-public-footer__stripe span:nth-child(4) { background: var(--rg-brand-danger); }
 
-.rg-public-footer__body {
-    padding: 1.5rem 1rem;
-    text-align: center;
-    color: #4b5563;
-}
-.rg-public-footer__agency {
-    font-size: 0.875rem;
-    font-weight: 700;
-    color: var(--rg-brand-green-ink);
-    margin: 0 0 0.2rem;
-}
-.rg-public-footer__meta {
-    font-size: 0.75rem;
-    color: #6b7280;
-    margin: 0;
-}
-.rg-public-footer__meta a {
-    color: var(--rg-brand-green);
-    font-weight: 600;
-    text-decoration: none;
-}
-.rg-public-footer__meta a:hover { text-decoration: underline; }
 
 /* ─────────────────────────────────────────────────────────────────
    Topbar notifications bell + dropdown (Slice D1)
@@ -3402,11 +2631,7 @@ html[data-theme="dark"] .rg-pipeline__stage.is-ended .rg-pipeline__label {
     color: #94a3b8;
     margin-top: 0.15rem;
 }
-.rg-notif-page__meta-tag {
-    font-size: 0.75rem;
-    color: #94a3b8;
-    font-weight: 600;
-}
+
 .rg-notif-page__meta-time { color: #64748b; }
 
 .rg-notif-page__empty {
@@ -3522,12 +2747,7 @@ html[data-theme="dark"] .rg-pipeline__stage.is-ended .rg-pipeline__label {
 ───────────────────────────────────────────────────────────────── */
 
 /* Job-card chips: branch type + level, sit just below the title */
-.rg-pub-job-card__chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-    margin: 0.4rem 0 0.5rem;
-}
+
 .rg-pub-chip {
     display: inline-flex;
     align-items: center;
@@ -3549,17 +2769,7 @@ html[data-theme="dark"] .rg-pipeline__stage.is-ended .rg-pipeline__label {
     color: #92400e;
     border-color: #fde68a;
 }
-.rg-pub-chip--level {
-    background: #eff6ff;
-    color: #1d4ed8;
-    border-color: #bfdbfe;
-}
-.rg-pub-chip--sg {
-    background: #f1f5f9;
-    color: #374151;
-    border-color: #cfd6dd;
-    font-variant-numeric: tabular-nums;
-}
+
 
 /* Job-code reference line above the title — small, secondary, monospace */
 .rg-pub-job-card__ref {
@@ -3571,32 +2781,10 @@ html[data-theme="dark"] .rg-pipeline__stage.is-ended .rg-pipeline__label {
 }
 
 /* Closing-soon badge inside the deadline line */
-.rg-pub-job-card__urgent {
-    display: inline-block;
-    padding: 0.1rem 0.45rem;
-    margin-right: 0.35rem;
-    border-radius: 999px;
-    background: #fee2e2;
-    color: #991b1b;
-    border: 1px solid #fecaca;
-    font-size: 0.75rem;
-    font-weight: 700;
-    vertical-align: middle;
-}
+
 
 /* REV-A: transparent deadline-extension badge on the card deadline line */
-.rg-pub-job-card__extended {
-    display: inline-block;
-    padding: 0.1rem 0.45rem;
-    margin-left: 0.35rem;
-    border-radius: 999px;
-    background: #fef3c7;
-    color: #92400e;
-    border: 1px solid #fde68a;
-    font-size: 0.75rem;
-    font-weight: 700;
-    vertical-align: middle;
-}
+
 
 /* REV-A: extension note inside the vacancy-detail deadline box */
 .rg-pub-deadline-extended {
@@ -3619,21 +2807,8 @@ html[data-theme="dark"] .rg-pipeline__stage.is-ended .rg-pipeline__label {
     border-left: 4px solid var(--rg-brand-green, #16a34a);
     border-radius: 8px;
 }
-.rg-pub-help-box__icon {
-    flex: 0 0 auto;
-    width: 2rem;
-    height: 2rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    background: #f0fdf4;
-    color: var(--rg-brand-green, #16a34a);
-}
-.rg-pub-help-box__icon svg {
-    width: 1.1rem;
-    height: 1.1rem;
-}
+
+
 .rg-pub-help-box__body { min-width: 0; }
 .rg-pub-help-box__title {
     margin: 0 0 0.2rem;
@@ -3655,58 +2830,7 @@ html[data-theme="dark"] .rg-pipeline__stage.is-ended .rg-pipeline__label {
 .rg-pub-help-box__copy a:hover { text-decoration: underline; }
 
 /* "How it works" three-step explainer */
-.rg-pub-howitworks {
-    padding-top: 2.5rem;
-    padding-bottom: 0.5rem;
-}
-.rg-pub-howitworks__heading {
-    font-size: 1.375rem;
-    font-weight: 800;
-    color: var(--rg-brand-green-ink, #14532d);
-    margin: 0 0 1.25rem;
-}
-.rg-pub-howitworks__steps {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-    gap: 1rem;
-}
-.rg-pub-howitworks__step {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.85rem;
-    padding: 1rem 1.15rem;
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-}
-.rg-pub-howitworks__num {
-    flex: 0 0 auto;
-    width: 2.1rem;
-    height: 2.1rem;
-    border-radius: 50%;
-    background: var(--rg-brand-green, #16a34a);
-    color: #ffffff;
-    font-weight: 800;
-    font-size: 1rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-.rg-pub-howitworks__title {
-    margin: 0 0 0.2rem;
-    font-size: 0.9375rem;
-    font-weight: 700;
-    color: #111827;
-}
-.rg-pub-howitworks__copy {
-    margin: 0;
-    font-size: 0.875rem;
-    color: #475569;
-    line-height: 1.5;
-}
+
 
 /* ─────────────────────────────────────────────────────────────────
    Privacy & Data Protection band (RA 10173 assurance, landing page)
@@ -3850,72 +2974,7 @@ html[data-theme="dark"] .rg-pipeline__stage.is-ended .rg-pipeline__label {
 }
 
 /* 3-step pipeline */
-.rg-ta-pipeline {
-    list-style: none;
-    padding: 0;
-    margin: 0 0 1.25rem;
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.5rem;
-    position: relative;
-}
-.rg-ta-pipeline__step {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.35rem;
-    position: relative;
-}
-.rg-ta-pipeline__step::before {
-    content: "";
-    position: absolute;
-    top: 0.95rem;
-    left: -50%;
-    right: 50%;
-    height: 2px;
-    background: #e2e8f0;
-    z-index: 0;
-}
-.rg-ta-pipeline__step:first-child::before { content: none; }
-.rg-ta-pipeline__step--done::before {
-    background: var(--rg-brand-green, #16a34a);
-}
-.rg-ta-pipeline__num {
-    width: 1.9rem;
-    height: 1.9rem;
-    border-radius: 50%;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    font-size: 0.875rem;
-    background: #ffffff;
-    border: 2px solid #cfd6dd;
-    color: #64748b;
-    position: relative;
-    z-index: 1;
-}
-.rg-ta-pipeline__step--done .rg-ta-pipeline__num {
-    background: var(--rg-brand-green, #16a34a);
-    border-color: var(--rg-brand-green, #16a34a);
-    color: #ffffff;
-}
-.rg-ta-pipeline__step--current .rg-ta-pipeline__num {
-    background: #f0fdf4;
-    border-color: var(--rg-brand-green, #16a34a);
-    color: var(--rg-brand-green-ink, #14532d);
-    box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.12);
-}
-.rg-ta-pipeline__label {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: #475569;
-    text-align: center;
-}
-.rg-ta-pipeline__step--current .rg-ta-pipeline__label,
-.rg-ta-pipeline__step--done .rg-ta-pipeline__label {
-    color: #111827;
-}
+
 
 .rg-ta-status-row {
     display: flex;
@@ -4227,10 +3286,7 @@ html[data-theme="dark"] .rg-pipeline__stage.is-ended .rg-pipeline__label {
 }
 
 /* Inline client-side validation error, rendered directly below the field (VAL1) */
-.rg-client-error {
-    margin-top: 0.3rem;
-    font-size: 0.8125rem;
-}
+
 
 /* Inline wizard error (shared module rg-wizard-validation.js, VAL2) */
 .rg-wiz-error {
@@ -4239,57 +3295,14 @@ html[data-theme="dark"] .rg-pipeline__stage.is-ended .rg-pipeline__label {
 }
 
 /* Intake qualification-summary character counter (VAL1) */
-.rg-intake-charcount {
-    margin-top: 0.3rem;
-    font-size: 0.75rem;
-    color: #94a3b8;
-    text-align: right;
-}
-.rg-intake-charcount.is-near {
-    color: #b45309;
-    font-weight: 600;
-}
-.rg-intake-charcount.is-full {
-    color: #b91c1c;
-    font-weight: 700;
-}
+
 
 /* ==========================================================================
    TI-2 — Applicant portal: file preview, Plantilla/COS explainer, mobile fixes
    ========================================================================== */
 
 /* "View" actions next to a picked file (Step 2 chip + Step 3 review list). */
-.rg-pub-upload-slot__view,
-.rg-intake-review__view {
-    background: none;
-    border: 1px solid var(--rg-brand-green, #1b5e20);
-    border-radius: 999px;
-    color: var(--rg-brand-green, #1b5e20);
-    font-size: 0.8125rem;
-    font-weight: 600;
-    line-height: 1.2;
-    padding: 0.3rem 0.8rem;
-    cursor: pointer;
-    flex-shrink: 0;
-}
-.rg-pub-upload-slot__view:hover,
-.rg-intake-review__view:hover {
-    background: var(--rg-brand-green, #1b5e20);
-    color: #fff;
-}
-.rg-pub-upload-slot__view:focus-visible,
-.rg-intake-review__view:focus-visible {
-    outline: 3px solid #1d4ed8;
-    outline-offset: 2px;
-}
-.rg-intake-review__docstate {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    min-width: 0;
-    justify-content: flex-end;
-    flex-wrap: wrap;
-}
+
 
 .rg-intake-preview .modal-header > div { min-width: 0; }
 .rg-intake-preview__meta {
@@ -4374,17 +3387,13 @@ html[data-theme="dark"] .rg-pipeline__stage.is-ended .rg-pipeline__label {
 
 /* Phones: no text below 12px and comfortable tap targets (audited at 375px). */
 @media (max-width: 575.98px) {
-    .applicant-portal-body .rg-brand-kicker,
-    .rg-pub-hero__eyebrow,
-    .rg-pub-chip,
-    .rg-intake-journey__num,
+        .rg-pub-chip,
     .rg-intake-optional {
         font-size: 0.75rem;
     }
 
     .rg-pub-back,
     .rg-pub-breadcrumb a,
-    .rg-public-footer__meta a,
     .rg-help-pad__channel-value {
         display: inline-flex;
         align-items: center;
@@ -4392,7 +3401,6 @@ html[data-theme="dark"] .rg-pipeline__stage.is-ended .rg-pipeline__label {
     }
     /* Links inside running text: enlarge the hit area without moving the text. */
     .rg-pub-help-box__copy a,
-    .rg-pub-home-footer-notes a,
     .rg-help-pad a:not(.rg-help-pad__channel-value),
     .applicant-portal-body .rg-faq__body a {
         padding-block: 0.7rem;
@@ -4408,14 +3416,7 @@ html[data-theme="dark"] .rg-pipeline__stage.is-ended .rg-pipeline__label {
         cursor: pointer;
     }
 
-    .rg-pub-upload-slot__view,
-    .rg-intake-review__view {
-        min-height: 36px;
-        padding-inline: 1rem;
-    }
-    .rg-intake-review__docs li {
-        flex-wrap: wrap;
-    }
+
     .rg-intake-preview__frame { height: 60vh; }
 }
 
@@ -4473,7 +3474,7 @@ html[data-theme="dark"] .rg-pipeline__stage.is-ended .rg-pipeline__label {
     outline: 3px solid #1d4ed8;
     outline-offset: 1px;
 }
-.rg-public-topbar__inner .rg-textsize { flex-shrink: 0; }
+
 
 /* Internal "Display" menu. */
 .rg-display-menu__panel {
@@ -4557,10 +3558,10 @@ html[data-theme="dark"] .rg-pipeline__stage.is-ended .rg-pipeline__label {
 .rg-scr-steprail__item { color: #5f6c78; }                               /* 3.08 -> 5.37 */
 .rg-scr-steprail__num { color: #4b5563; }                                /* 4.06 -> 6.04 on #e2e8f0 */
 .rg-pub-optional-tag { color: #4b5563; }                                 /* 2.34 -> 7.10 */
-.rg-intake-journey__num { color: #374151; }                              /* 4.37 -> 8.30 */
-.rg-intake-steprail__item { color: #5f6c78; }                            /* 3.08 -> 5.37 */
-.rg-intake-steprail__num { color: #374151; }                             /* 3.92 -> 8.30 */
-.rg-intake-charcount { color: #64748b; }                                 /* 2.56 -> 4.76 */
+                              /* 4.37 -> 8.30 */
+                            /* 3.08 -> 5.37 */
+                             /* 3.92 -> 8.30 */
+                                 /* 2.56 -> 4.76 */
 
 @media screen {
     /* Dark theme (internal portal): same pass against the dark surfaces. */
@@ -4979,7 +3980,7 @@ a.rg-sched-event__title { color: var(--rg-brand-green); }
 }
 
 @media print {
-    .rg-public-topbar, .rg-journey, .rg-apply-header__copy, [data-start-form], .rg-public-footer,
+     .rg-journey, .rg-apply-header__copy, [data-start-form], .rg-public-footer,
     .rg-apply-checklist__head .btn, .rg-req-downloads { display: none !important; }
     .rg-apply-card { border: 0; padding: 0; }
 }
@@ -5091,9 +4092,9 @@ a.rg-sched-event__title { color: var(--rg-brand-green); }
 .rg-doc-reuse__hint { display: block; margin-top: 0.3rem; font-size: 0.8125rem; color: #4b5563; }
 
 /* Accessibility pass: nothing smaller than 12px; tap targets at least 24px tall */
-.rg-brand-kicker, .rg-pub-hero__eyebrow, .rg-pub-chip, .rg-pub-job-card__ref,
+ .rg-pub-chip, .rg-pub-job-card__ref,
 .rg-pub-privacy__eyebrow, .rg-req-downloads__format { font-size: max(0.75rem, 12px) !important; }
-.rg-pub-back, .rg-pub-home-footer-notes a, .rg-public-footer a { display: inline-block; min-height: 24px; padding-block: 3px; }
+.rg-pub-back, .rg-public-footer a { display: inline-block; min-height: 24px; padding-block: 3px; }
 .rg-pub-radio-list input[type="radio"], .rg-apply-confirm .form-check-input,
 .rg-qs-check__item input, .rg-ta-withdraw .form-check-input { width: 1.35rem; height: 1.35rem; }
 .rg-pub-radio-list label { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 32px; }
@@ -5104,12 +4105,12 @@ a.rg-sched-event__title { color: var(--rg-brand-green); }
 .rg-langswitch__btn { border: 0; background: transparent; padding: 0.3rem 0.7rem; min-height: 32px; font-size: 0.8125rem; font-weight: 600; color: #374151; }
 .rg-langswitch__btn.is-current { background: #1e5c2d; color: #fff; }
 .rg-langswitch__btn:focus-visible { outline: 3px solid #1d4ed8; outline-offset: -3px; }
-.rg-public-topbar__tools { display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+
 
 /* Plain-language explanations of government terms */
 .rg-pub-jargon { margin: 0.3rem 0 0; font-size: 0.8125rem; color: #4b5563; }
 
-.rg-pub-english-only { margin: 0 0 1rem; padding: 0.55rem 0.8rem; border-radius: 8px; background: #f1f5f9; border: 1px solid #cfd6dd; color: #374151; font-size: 0.875rem; }
+
 .rg-doc-card__note { margin: 0.35rem 0 0; font-size: 0.875rem; color: #7c2d12; background: #fffbeb; border-left: 3px solid #fb923c; padding: 0.3rem 0.55rem; border-radius: 4px; }
 
 /* My Applications */
@@ -5141,28 +4142,14 @@ a.rg-sched-event__title { color: var(--rg-brand-green); }
    One job per row: the title, then one line of plain facts, then the deadline.
    The type, level and salary grade are facts, so they read as text, not pills;
    the "Closing soon" tag stays a pill because it needs attention. */
-.rg-pub-job-card {
-    padding: 0.8rem 1.1rem;
-    border-left-width: 1px;
-}
-.rg-pub-job-card--plantilla,
-.rg-pub-job-card--cos { border-left-color: #d7dde3; }
-.rg-pub-job-card--plantilla:hover,
-.rg-pub-job-card--cos:hover { border-left-color: var(--rg-primary); }
-.rg-pub-job-card__inner { align-items: center; }
-.rg-pub-job-card__body {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    column-gap: 0.55rem;
-    row-gap: 0.2rem;
-}
+
+
 .rg-pub-job-card__title { order: 1; flex: 0 0 100%; margin: 0; font-size: 1rem; }
-.rg-pub-job-card__chips { order: 2; margin: 0; gap: 0; }
-.rg-pub-job-card__meta { order: 3; margin: 0; }
+
+
 /* Line 2 is the facts; line 3 is the deadline with the vacancy code after it. */
-.rg-pub-job-card__body::after { content: ""; order: 4; flex: 0 0 100%; height: 0; }
-.rg-pub-job-card__deadline { order: 5; margin: 0; }
+
+
 .rg-pub-job-card__ref { order: 6; margin: 0; }
 .applicant-portal-body .rg-pub-chip {
     padding: 0;
@@ -5174,28 +4161,23 @@ a.rg-sched-event__title { color: var(--rg-brand-green); }
     letter-spacing: 0;
     font-size: 0.8125rem !important;
 }
-.rg-pub-job-card__chips .rg-pub-chip + .rg-pub-chip::before,
-.rg-pub-job-card__meta::before,
 .rg-pub-job-card__ref::before {
     content: "\00b7";
     margin-right: 0.55rem;
     color: #94a3b8;
     font-weight: 400;
 }
-.rg-pub-job-card__chips .rg-pub-chip + .rg-pub-chip::before { margin-left: 0.55rem; }
+
 @media (max-width: 600px) {
-    .rg-pub-job-card__meta,
-    .rg-pub-job-card__deadline,
-    .rg-pub-job-card__ref { flex: 0 0 100%; }
-    .rg-pub-job-card__meta::before,
-    .rg-pub-job-card__ref::before { content: none; }
+        .rg-pub-job-card__ref { flex: 0 0 100%; }
+        .rg-pub-job-card__ref::before { content: none; }
     /* The whole row is the link, so on a phone the label shrinks to an arrow. */
-    .rg-pub-job-card__action { font-size: 0; }
-    .rg-pub-job-card__action::after { content: "\2192"; font-size: 1.125rem; }
+
+
 }
 
 /* One heading style on the applicant home page. */
-.rg-pub-howitworks__heading { font-size: 1.25rem; font-weight: 700; color: #111827; }
+
 
 /* Track page: the "lost your code" line sits centred under the intro. */
 .rg-ta-intro__copy.rg-hub-alt { margin: 0.75rem auto 0; }
@@ -5223,10 +4205,7 @@ a.rg-sched-event__title { color: var(--rg-brand-green); }
 .rg-pub-optional-tag--required { display: none; }
 
 /* Applicant header on phones: a little less height. */
-@media (max-width: 600px) {
-    .rg-public-topbar__inner { gap: 0.3rem; padding-top: 0.5rem; padding-bottom: 0.5rem; }
-    .rg-public-nav .rg-nav-link { padding: 0.35rem 0.6rem; }
-}
+
 
 /* ==========================================================================
    Case page: everything lines up with the cards
@@ -5295,15 +4274,8 @@ a.rg-sched-event__title { color: var(--rg-brand-green); }
     color: #1f2933;
     font-family: "Public Sans", system-ui, sans-serif;
 }
-.rg-errpage__head {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem 1.5rem;
-    border-bottom: 3px solid var(--rg-brand-green);
-}
-.rg-errpage__office { font-size: 0.8125rem; color: #5f6c78; }
-.rg-errpage__portal { font-size: 1rem; font-weight: 700; color: var(--rg-brand-green-ink); }
+
+
 .rg-errpage__main {
     max-width: 36rem;
     margin: 0 auto;
